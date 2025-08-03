@@ -253,28 +253,20 @@ export default function PurchasesPage() {
                       <Package className="h-4 w-4" />
                       {purchase.contentCount || 0} items
                     </div>
-                    {purchase.environment && (
-                      <span
-                        className={`px-2 py-1 rounded text-xs ${
-                          purchase.environment === "live"
-                            ? "bg-green-500/20 text-green-300"
-                            : "bg-yellow-500/20 text-yellow-300"
-                        }`}
-                      >
-                        {purchase.environment}
-                      </span>
-                    )}
                   </div>
                 </div>
 
                 <div className="flex flex-col gap-2 ml-4">
-                  <Button asChild className="bg-red-600 hover:bg-red-700">
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="bg-transparent border-2 border-white text-white hover:bg-white hover:text-black transition-colors"
+                  >
                     <Link href={purchase.accessUrl}>
                       <Download className="h-4 w-4 mr-2" />
                       Access Content
                     </Link>
                   </Button>
-                  <div className="text-xs text-white/40 text-center">ID: {purchase.sessionId.slice(-8)}</div>
                 </div>
               </div>
             </CardContent>

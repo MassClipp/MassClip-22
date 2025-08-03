@@ -1,599 +1,391 @@
 import { type NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
-import { db } from "@/lib/firebase-admin"
+import { db } from "@/lib/firebase-server"
+import { FieldValue } from "firebase-admin/firestore"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
 })
 
-// Determine environment and webhook secret
-const secretKey = process.env.STRIPE_SECRET_KEY!
-const isProduction = process.env.NODE_ENV === "production"
-const isLiveKey = secretKey?.startsWith("sk_live_")
+const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET!
 
-let webhookSecret: string
-if (isProduction && isLiveKey) {
-  webhookSecret = process.env.STRIPE_WEBHOOK_SECRET_LIVE || process.env.STRIPE_WEBHOOK_SECRET!
-  console.log("🔴 [Stripe Webhook] Using webhook secret for PRODUCTION with live keys")
-} else if (!isProduction && !isLiveKey) {
-  webhookSecret = process.env.STRIPE_WEBHOOK_SECRET_TEST || process.env.STRIPE_WEBHOOK_SECRET!
-  console.log("🟢 [Stripe Webhook] Using webhook secret for DEVELOPMENT with test keys")
-} else {
-  webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
-  console.log("⚠️ [Stripe Webhook] Using general webhook secret")
-}
+export async function POST(req: NextRequest) {
+  const body = await req.text()
+  const sig = req.headers.get("stripe-signature")!
 
-if (!webhookSecret) {
-  throw new Error("Stripe webhook secret is missing. Please set STRIPE_WEBHOOK_SECRET")
-}
+  let event: Stripe.Event
 
-export async function POST(request: NextRequest) {
   try {
-    const body = await request.text()
-    const signature = request.headers.get("stripe-signature")!
+    event = stripe.webhooks.constructEvent(body, sig, endpointSecret)
+  } catch (err: any) {
+    console.error(`❌ Webhook signature verification failed:`, err.message)
+    return NextResponse.json({ error: "Webhook signature verification failed" }, { status: 400 })
+  }
 
-    let event: Stripe.Event
+  console.log(`🎯 Processing webhook event: ${event.type}`)
 
-    try {
-      event = stripe.webhooks.constructEvent(body, signature, webhookSecret)
-      console.log(
-        `✅ [Stripe Webhook] Signature verified for event: ${event.type} in ${isLiveKey ? "LIVE" : "TEST"} mode`,
-      )
-    } catch (err: any) {
-      console.error(`❌ [Stripe Webhook] Webhook signature verification failed:`, {
-        error: err.message,
-        environment: process.env.NODE_ENV,
-        isLiveKey,
-        webhookSecretLength: webhookSecret?.length,
-        hasSignature: !!signature,
-      })
-      return NextResponse.json({ error: "Invalid signature" }, { status: 400 })
-    }
-
-    console.log(`🔔 [Stripe Webhook] Processing event: ${event.type} (${isLiveKey ? "LIVE" : "TEST"} mode)`)
-
-    // Handle checkout.session.completed event - SINGLE SOURCE OF TRUTH
-    if (event.type === "checkout.session.completed") {
-      const session = event.data.object as Stripe.Checkout.Session
-      await handleCheckoutSessionCompleted(session)
+  try {
+    switch (event.type) {
+      case "checkout.session.completed":
+        await handleCheckoutSessionCompleted(event.data.object as Stripe.Checkout.Session)
+        break
+      case "payment_intent.succeeded":
+        await handlePaymentIntentSucceeded(event.data.object as Stripe.PaymentIntent)
+        break
+      default:
+        console.log(`🤷‍♂️ Unhandled event type: ${event.type}`)
     }
 
     return NextResponse.json({ received: true })
   } catch (error) {
-    console.error("❌ [Stripe Webhook] Error handling webhook:", error)
-    return NextResponse.json({ error: "Webhook handler failed" }, { status: 500 })
+    console.error(`❌ Error processing webhook:`, error)
+    return NextResponse.json({ error: "Webhook processing failed" }, { status: 500 })
   }
 }
 
 async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
+  console.log(`💳 Processing checkout session: ${session.id}`)
+
+  const metadata = session.metadata
+  if (!metadata) {
+    console.error("❌ No metadata found in session")
+    return
+  }
+
+  const { itemType, itemId, buyerUid, creatorId } = metadata
+
+  if (itemType === "bundle") {
+    await processBundlePurchase(session, itemId, buyerUid, creatorId)
+  } else if (itemType === "product_box") {
+    await processProductBoxPurchase(session, itemId, buyerUid, creatorId)
+  }
+}
+
+async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent) {
+  console.log(`💰 Processing payment intent: ${paymentIntent.id}`)
+  // Handle payment intent logic if needed
+}
+
+async function processBundlePurchase(
+  session: Stripe.Checkout.Session,
+  bundleId: string,
+  buyerUid: string,
+  creatorId: string,
+) {
+  console.log(`📦 Processing bundle purchase: ${bundleId}`)
+
   try {
-    console.log("🔍 [Webhook] Processing checkout session:", {
-      sessionId: session.id,
-      metadata: session.metadata,
-    })
+    // Fetch complete bundle data from Firestore
+    const bundleRef = db.collection("bundles").doc(bundleId)
+    const bundleDoc = await bundleRef.get()
 
-    const { productBoxId, bundleId, buyerUid, buyerEmail, buyerName, creatorId, contentType } = session.metadata || {}
-
-    // CRITICAL: Must have buyerUid (Firebase user ID)
-    if (!buyerUid) {
-      console.error("❌ [Webhook] CRITICAL: Missing buyerUid in session metadata:", session.id)
+    if (!bundleDoc.exists) {
+      console.error(`❌ Bundle not found: ${bundleId}`)
       return
     }
 
-    const itemId = bundleId || productBoxId
-    if (!itemId) {
-      console.error("❌ [Webhook] Missing product/bundle ID in session:", session.id)
-      return
+    const bundleData = bundleDoc.data()!
+    console.log(`✅ Found bundle data for: ${bundleData.title}`)
+
+    // Fetch detailed content items if they exist
+    let detailedContentItems = bundleData.detailedContentItems || []
+
+    // If detailedContentItems is empty but contentItems exists, fetch the content details
+    if (detailedContentItems.length === 0 && bundleData.contentItems?.length > 0) {
+      console.log(`🔍 Fetching detailed content for ${bundleData.contentItems.length} items`)
+
+      detailedContentItems = await Promise.all(
+        bundleData.contentItems.map(async (contentId: string) => {
+          try {
+            const contentDoc = await db.collection("creator_uploads").doc(contentId).get()
+            if (contentDoc.exists) {
+              const contentData = contentDoc.data()!
+              return {
+                id: contentId,
+                contentType: contentData.contentType || "video",
+                createdAt: contentData.createdAt,
+                creatorId: contentData.creatorId,
+                description: contentData.description || "",
+                downloadCount: contentData.downloadCount || 0,
+                downloadUrl: contentData.downloadUrl || contentData.fileUrl || contentData.publicUrl,
+                duration: contentData.duration || 0,
+                durationFormatted: contentData.durationFormatted || "0:00",
+                fileSize: contentData.fileSize || 0,
+                fileSizeFormatted: contentData.fileSizeFormatted || "0 MB",
+                fileType: contentData.fileType || contentData.mimeType,
+                fileUrl: contentData.fileUrl || contentData.publicUrl,
+                filename: contentData.filename || contentData.title,
+                format: contentData.format || "mp4",
+                isPublic: contentData.isPublic !== false,
+                mimeType: contentData.mimeType || contentData.fileType,
+                previewUrl: contentData.previewUrl || "",
+                publicUrl: contentData.publicUrl || contentData.fileUrl,
+                quality: contentData.quality || "HD",
+                tags: contentData.tags || [],
+                thumbnailUrl: contentData.thumbnailUrl || "",
+                title: contentData.title,
+                uploadedAt: contentData.uploadedAt || contentData.createdAt,
+                viewCount: contentData.viewCount || 0,
+              }
+            }
+            return null
+          } catch (error) {
+            console.error(`❌ Error fetching content ${contentId}:`, error)
+            return null
+          }
+        }),
+      )
+
+      // Filter out null values
+      detailedContentItems = detailedContentItems.filter((item) => item !== null)
     }
 
-    console.log("✅ [Webhook] Session metadata extracted:", {
-      itemId,
-      buyerUid,
-      buyerEmail,
-      contentType,
-    })
+    // Calculate content metadata
+    const contentMetadata = calculateContentMetadata(detailedContentItems)
 
-    // Check if this purchase already exists
-    const existingPurchase = await db.collection("bundlePurchases").doc(session.id).get()
-    if (existingPurchase.exists) {
-      console.log("⚠️ [Webhook] Purchase already processed:", session.id)
-      return
-    }
-
-    // Determine if this is a bundle or product box
-    const isBundle = contentType === "bundle" || !!bundleId
-    const collection = isBundle ? "bundles" : "productBoxes"
-
-    // Get item details with ALL bundle information
-    const itemDoc = await db.collection(collection).doc(itemId).get()
-    if (!itemDoc.exists) {
-      console.error(`❌ [Webhook] ${collection} not found:`, itemId)
-      return
-    }
-    const itemData = itemDoc.data()!
-
-    console.log(`📦 [Webhook] Retrieved ${collection} data:`, {
-      title: itemData.title,
-      hasDetailedContentItems: !!itemData.detailedContentItems,
-      contentItemsCount: itemData.detailedContentItems?.length || 0,
-      hasContentMetadata: !!itemData.contentMetadata,
-    })
-
-    // Get creator details
-    const actualCreatorId = creatorId || itemData.creatorId
-    let creatorData = null
-    if (actualCreatorId) {
-      const creatorDoc = await db.collection("users").doc(actualCreatorId).get()
-      creatorData = creatorDoc.exists ? creatorDoc.data() : null
-    }
-
-    // Get comprehensive content items for this purchase
-    const { contentItems, contentMetadata } = await fetchComprehensiveContentItems(itemId, isBundle, itemData)
-
-    console.log(`📊 [Webhook] Content analysis:`, {
-      totalItems: contentItems.length,
-      totalSize: contentMetadata.totalSize,
-      totalDuration: contentMetadata.totalDuration,
-      contentBreakdown: contentMetadata.contentBreakdown,
-    })
-
-    // Create COMPREHENSIVE purchase record in bundlePurchases
+    // Create comprehensive purchase record with ALL bundle data
     const purchaseData = {
-      // User identification (buyerUid = Firebase user ID)
-      buyerUid: buyerUid,
-      userId: buyerUid, // Same as buyerUid for compatibility
-      userEmail: buyerEmail || session.customer_email || "",
-      userName: buyerName || buyerEmail?.split("@")[0] || "User",
+      // Basic purchase info
+      sessionId: session.id,
+      bundleId,
+      buyerUid,
+      creatorId,
+      creatorName: bundleData.creatorName || "",
+      creatorUsername: bundleData.creatorUsername || "",
+      amount: (session.amount_total || 0) / 100,
+      currency: session.currency || "usd",
+      status: "completed",
+      environment: process.env.NODE_ENV === "production" ? "live" : "test",
+      purchasedAt: FieldValue.serverTimestamp(),
+      accessUrl: `/bundles/${bundleId}`,
 
-      // Item identification
-      itemId: itemId,
-      bundleId: isBundle ? itemId : null,
-      productBoxId: !isBundle ? itemId : null,
-      itemType: isBundle ? "bundle" : "product_box",
+      // Complete bundle data - ALL fields from your specification
+      active: bundleData.active !== false,
+      contentDescriptions: bundleData.contentDescriptions || [],
+      contentItems: bundleData.contentItems || [],
+      contentLastUpdated: bundleData.contentLastUpdated,
+      contentTags: bundleData.contentTags || [],
+      contentThumbnails: bundleData.contentThumbnails || [],
+      contentTitles: bundleData.contentTitles || [],
+      contentUrls: bundleData.contentUrls || [],
+      contents: bundleData.contents || [],
+      coverImage: bundleData.coverImage || bundleData.thumbnailUrl,
+      coverImageUrl: bundleData.coverImageUrl || bundleData.thumbnailUrl,
+      customPreviewThumbnail: bundleData.customPreviewThumbnail || bundleData.thumbnailUrl,
+      description: bundleData.description || "",
+      title: bundleData.title || "",
+      type: bundleData.type || "one_time",
+      thumbnailUrl: bundleData.thumbnailUrl || "",
+      thumbnailUploadedAt: bundleData.thumbnailUploadedAt,
 
-      // Item details (preserve ALL original bundle data)
-      title: itemData.title || "Untitled",
-      description: itemData.description || "",
-      thumbnailUrl: itemData.thumbnailUrl || itemData.customPreviewThumbnail || itemData.coverImageUrl || "",
-      coverImage: itemData.coverImage || itemData.coverImageUrl || "",
-      coverImageUrl: itemData.coverImageUrl || itemData.coverImage || "",
-      customPreviewThumbnail: itemData.customPreviewThumbnail || "",
+      // Stripe integration fields
+      price: bundleData.price || 0,
+      priceId: bundleData.priceId || "",
+      productId: bundleData.productId || "",
+      stripeAccountId: bundleData.stripeAccountId || "",
+      stripePriceId: bundleData.stripePriceId || bundleData.priceId,
+      stripeProductId: bundleData.stripeProductId || bundleData.productId,
 
-      // COMPREHENSIVE content details - ALL the data the user listed
-      active: itemData.active !== false,
-      contentDescriptions: itemData.contentDescriptions || [],
-      contentItems: itemData.contentItems || [], // Original content item IDs
-      contentLastUpdated: itemData.contentLastUpdated || new Date(),
+      // Detailed content items with complete metadata
+      detailedContentItems,
 
-      // Content metadata (calculated from actual content)
+      // Content metadata with calculated statistics
       contentMetadata: {
-        averageDuration: contentMetadata.averageDuration,
-        averageSize: contentMetadata.averageSize,
-        contentBreakdown: contentMetadata.contentBreakdown,
-        formats: contentMetadata.formats,
-        qualities: contentMetadata.qualities,
-        resolutions: contentMetadata.resolutions,
-        totalDuration: contentMetadata.totalDuration,
-        totalDurationFormatted: contentMetadata.totalDurationFormatted,
-        totalItems: contentMetadata.totalItems,
-        totalSize: contentMetadata.totalSize,
-        totalSizeFormatted: contentMetadata.totalSizeFormatted,
+        ...contentMetadata,
+        ...bundleData.contentMetadata,
       },
 
-      contentTags: itemData.contentTags || [],
-      contentThumbnails: itemData.contentThumbnails || [],
-      contentTitles: contentItems.map((item) => item.title),
-      contentUrls: contentItems.map((item) => item.fileUrl).filter(Boolean),
-
-      // DETAILED content items with ALL video information
-      detailedContentItems: contentItems,
-      contents: contentItems, // For compatibility
-      items: contentItems, // For compatibility
-
-      // Legacy fields for compatibility
-      itemNames: contentItems.map((item) => item.title),
-      contentCount: contentItems.length,
-      totalItems: contentItems.length,
-      totalSize: contentMetadata.totalSize,
-
-      // Purchase details
-      sessionId: session.id,
-      amount: session.amount_total ? session.amount_total / 100 : 0,
-      currency: session.currency || itemData.currency || "usd",
-      status: "completed",
-      type: itemData.type || "one_time",
-
-      // Creator details
-      creatorId: actualCreatorId || "",
-      creatorName: creatorData?.displayName || creatorData?.name || "Unknown Creator",
-      creatorUsername: creatorData?.username || "",
-
-      // Stripe details
-      price: itemData.price || 0,
-      priceId: itemData.priceId || itemData.stripePriceId || "",
-      productId: itemData.productId || itemData.stripeProductId || "",
-      stripeAccountId: itemData.stripeAccountId || "",
-      stripePriceId: itemData.stripePriceId || "",
-      stripeProductId: itemData.stripeProductId || "",
-
-      // Access
-      accessUrl: `/${isBundle ? "bundles" : "product-box"}/${itemId}/content`,
-      accessGranted: true,
-
       // Timestamps
-      purchasedAt: new Date(),
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      thumbnailUploadedAt: itemData.thumbnailUploadedAt || null,
-      environment: isLiveKey ? "live" : "test",
+      createdAt: bundleData.createdAt,
+      updatedAt: bundleData.updatedAt || FieldValue.serverTimestamp(),
+
+      // Content count (calculated from actual items)
+      contentCount: detailedContentItems.length,
     }
 
-    console.log("💾 [Webhook] Saving COMPREHENSIVE purchase to bundlePurchases:", {
-      sessionId: session.id,
-      buyerUid: purchaseData.buyerUid,
-      itemId: purchaseData.itemId,
-      itemType: purchaseData.itemType,
-      contentCount: purchaseData.contentCount,
-      totalSize: purchaseData.totalSize,
-      detailedItemsCount: purchaseData.detailedContentItems.length,
-      hasContentMetadata: !!purchaseData.contentMetadata,
+    // Store in bundlePurchases collection
+    await db.collection("bundlePurchases").add(purchaseData)
+
+    // Also store in unified purchases collection for easier querying
+    await db.collection("purchases").add({
+      ...purchaseData,
+      itemType: "bundle",
+      itemId: bundleId,
     })
 
-    // Save to bundlePurchases collection with ALL data
-    await db.collection("bundlePurchases").doc(session.id).set(purchaseData)
-
-    // Update item sales counter
-    await db
-      .collection(collection)
-      .doc(itemId)
-      .update({
-        totalSales: db.FieldValue.increment(1),
-        totalRevenue: db.FieldValue.increment(purchaseData.amount),
-        lastPurchaseAt: new Date(),
-      })
-
-    // Update creator's total sales
-    if (actualCreatorId) {
-      await db
-        .collection("users")
-        .doc(actualCreatorId)
-        .update({
-          totalSales: db.FieldValue.increment(1),
-          totalRevenue: db.FieldValue.increment(purchaseData.amount),
-          lastSaleAt: new Date(),
-        })
-    }
-
-    console.log(`✅ [Webhook] Successfully processed COMPREHENSIVE purchase: ${session.id}`)
-    console.log(`📊 [Webhook] Purchase includes ${purchaseData.detailedContentItems.length} detailed content items`)
+    console.log(`✅ Bundle purchase recorded successfully for bundle: ${bundleId}`)
+    console.log(`📊 Stored ${detailedContentItems.length} detailed content items`)
   } catch (error) {
-    console.error("❌ [Webhook] Error handling checkout.session.completed:", error)
+    console.error(`❌ Error processing bundle purchase:`, error)
     throw error
   }
 }
 
-// Fetch comprehensive content items with ALL metadata
-async function fetchComprehensiveContentItems(
-  itemId: string,
-  isBundle: boolean,
-  itemData: any,
-): Promise<{
-  contentItems: any[]
-  contentMetadata: any
-}> {
-  const items: any[] = []
-  const totalSize = 0
-  const totalDuration = 0
+async function processProductBoxPurchase(
+  session: Stripe.Checkout.Session,
+  productBoxId: string,
+  buyerUid: string,
+  creatorId: string,
+) {
+  console.log(`📦 Processing product box purchase: ${productBoxId}`)
+
+  try {
+    // Fetch product box data
+    const productBoxRef = db.collection("productBoxes").doc(productBoxId)
+    const productBoxDoc = await productBoxRef.get()
+
+    if (!productBoxDoc.exists) {
+      console.error(`❌ Product box not found: ${productBoxId}`)
+      return
+    }
+
+    const productBoxData = productBoxDoc.data()!
+
+    const purchaseData = {
+      sessionId: session.id,
+      productBoxId,
+      buyerUid,
+      creatorId,
+      creatorName: productBoxData.creatorName || "",
+      creatorUsername: productBoxData.creatorUsername || "",
+      title: productBoxData.title || "",
+      description: productBoxData.description || "",
+      thumbnailUrl: productBoxData.thumbnailUrl || "",
+      amount: (session.amount_total || 0) / 100,
+      currency: session.currency || "usd",
+      status: "completed",
+      environment: process.env.NODE_ENV === "production" ? "live" : "test",
+      purchasedAt: FieldValue.serverTimestamp(),
+      accessUrl: `/product-box/${productBoxId}/content`,
+      contentCount: productBoxData.contentCount || 0,
+    }
+
+    await db.collection("productBoxPurchases").add(purchaseData)
+
+    // Also store in unified purchases
+    await db.collection("purchases").add({
+      ...purchaseData,
+      itemType: "product_box",
+      itemId: productBoxId,
+    })
+
+    console.log(`✅ Product box purchase recorded successfully`)
+  } catch (error) {
+    console.error(`❌ Error processing product box purchase:`, error)
+    throw error
+  }
+}
+
+function calculateContentMetadata(detailedContentItems: any[]) {
+  if (!detailedContentItems || detailedContentItems.length === 0) {
+    return {
+      averageDuration: 0,
+      averageSize: 0,
+      contentBreakdown: {
+        audio: 0,
+        documents: 0,
+        images: 0,
+        videos: 0,
+      },
+      formats: [],
+      qualities: [],
+      resolutions: [],
+      totalDuration: 0,
+      totalDurationFormatted: "0:00",
+      totalItems: 0,
+      totalSize: 0,
+      totalSizeFormatted: "0 MB",
+    }
+  }
+
+  const totalItems = detailedContentItems.length
+  let totalDuration = 0
+  let totalSize = 0
   const formats = new Set<string>()
   const qualities = new Set<string>()
   const resolutions = new Set<string>()
-  const contentBreakdown = { videos: 0, audio: 0, images: 0, documents: 0 }
 
-  try {
-    console.log(
-      `📊 [Content Fetch] Starting comprehensive content fetch for ${isBundle ? "bundle" : "product box"}: ${itemId}`,
-    )
+  const contentBreakdown = {
+    audio: 0,
+    documents: 0,
+    images: 0,
+    videos: 0,
+  }
 
-    if (isBundle) {
-      // For bundles, check if detailedContentItems already exists in the bundle
-      if (itemData.detailedContentItems && Array.isArray(itemData.detailedContentItems)) {
-        console.log(
-          `✅ [Content Fetch] Using existing detailedContentItems from bundle (${itemData.detailedContentItems.length} items)`,
-        )
+  detailedContentItems.forEach((item) => {
+    // Duration
+    if (item.duration) {
+      totalDuration += item.duration
+    }
 
-        itemData.detailedContentItems.forEach((item: any) => {
-          const processedItem = processContentItem(item, item.id || `item_${items.length}`)
-          if (processedItem) {
-            items.push(processedItem)
-            updateMetadataCounters(processedItem, {
-              totalSize,
-              totalDuration,
-              formats,
-              qualities,
-              resolutions,
-              contentBreakdown,
-            })
-          }
-        })
-      } else if (itemData.contentItems && Array.isArray(itemData.contentItems)) {
-        // Fallback: fetch individual content items by ID
-        console.log(
-          `📊 [Content Fetch] Fetching individual content items for bundle (${itemData.contentItems.length} IDs)`,
-        )
+    // File size
+    if (item.fileSize) {
+      totalSize += item.fileSize
+    }
 
-        for (const contentItemId of itemData.contentItems) {
-          try {
-            const contentDoc = await db.collection("uploads").doc(contentItemId).get()
-            if (contentDoc.exists) {
-              const contentData = contentDoc.data()!
-              const processedItem = processContentItem(contentData, contentItemId)
-              if (processedItem) {
-                items.push(processedItem)
-                updateMetadataCounters(processedItem, {
-                  totalSize,
-                  totalDuration,
-                  formats,
-                  qualities,
-                  resolutions,
-                  contentBreakdown,
-                })
-              }
-            }
-          } catch (error) {
-            console.warn(`⚠️ [Content Fetch] Error fetching content item ${contentItemId}:`, error)
-          }
-        }
-      } else {
-        // Last resort: treat bundle itself as the content
-        console.log(`📦 [Content Fetch] Using bundle itself as content item`)
-        const bundleItem = processBundleAsContent(itemData, itemId)
-        if (bundleItem) {
-          items.push(bundleItem)
-          updateMetadataCounters(bundleItem, {
-            totalSize,
-            totalDuration,
-            formats,
-            qualities,
-            resolutions,
-            contentBreakdown,
-          })
-        }
-      }
+    // Format
+    if (item.format) {
+      formats.add(item.format)
+    }
+
+    // Quality
+    if (item.quality) {
+      qualities.add(item.quality)
+    }
+
+    // Resolution
+    if (item.resolution) {
+      resolutions.add(item.resolution)
+    }
+
+    // Content type breakdown
+    const contentType = item.contentType || "video"
+    if (contentType === "video") {
+      contentBreakdown.videos++
+    } else if (contentType === "audio") {
+      contentBreakdown.audio++
+    } else if (contentType === "image") {
+      contentBreakdown.images++
     } else {
-      // For product boxes, fetch from uploads collection
-      const uploadsQuery = db.collection("uploads").where("productBoxId", "==", itemId)
-      const uploadsSnapshot = await uploadsQuery.get()
-
-      console.log(`📊 [Content Fetch] Found ${uploadsSnapshot.size} uploads for product box`)
-
-      uploadsSnapshot.forEach((doc) => {
-        const data = doc.data()
-        const processedItem = processContentItem(data, doc.id)
-        if (processedItem) {
-          items.push(processedItem)
-          updateMetadataCounters(processedItem, {
-            totalSize,
-            totalDuration,
-            formats,
-            qualities,
-            resolutions,
-            contentBreakdown,
-          })
-        }
-      })
+      contentBreakdown.documents++
     }
+  })
 
-    // Calculate metadata
-    const contentMetadata = {
-      totalItems: items.length,
-      totalSize: totalSize,
-      totalSizeFormatted: formatFileSize(totalSize),
-      totalDuration: totalDuration,
-      totalDurationFormatted: formatDuration(totalDuration),
-      averageSize: items.length > 0 ? totalSize / items.length : 0,
-      averageDuration: items.length > 0 ? totalDuration / items.length : 0,
-      contentBreakdown: contentBreakdown,
-      formats: Array.from(formats),
-      qualities: Array.from(qualities),
-      resolutions: Array.from(resolutions).filter(Boolean),
+  const averageDuration = totalItems > 0 ? totalDuration / totalItems : 0
+  const averageSize = totalItems > 0 ? totalSize / totalItems : 0
+
+  // Format duration
+  const formatDuration = (seconds: number) => {
+    const hours = Math.floor(seconds / 3600)
+    const minutes = Math.floor((seconds % 3600) / 60)
+    const secs = Math.floor(seconds % 60)
+
+    if (hours > 0) {
+      return `${hours}:${minutes.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
     }
-
-    console.log(`✅ [Content Fetch] Comprehensive fetch complete:`, {
-      totalItems: items.length,
-      totalSize: contentMetadata.totalSizeFormatted,
-      totalDuration: contentMetadata.totalDurationFormatted,
-      contentBreakdown: contentBreakdown,
-    })
-
-    return { contentItems: items, contentMetadata }
-  } catch (error) {
-    console.error(`❌ [Content Fetch] Error fetching comprehensive content:`, error)
-    return { contentItems: [], contentMetadata: getEmptyMetadata() }
+    return `${minutes}:${secs.toString().padStart(2, "0")}`
   }
-}
 
-// Process individual content item with ALL metadata
-function processContentItem(data: any, id: string): any | null {
-  try {
-    const fileUrl = data.fileUrl || data.downloadUrl || data.publicUrl || ""
-
-    if (!fileUrl || !fileUrl.startsWith("http")) {
-      console.warn(`⚠️ [Content Process] Skipping item ${id} - no valid URL`)
-      return null
-    }
-
-    // Determine content type
-    const mimeType = data.mimeType || data.fileType || "application/octet-stream"
-    let contentType: "video" | "audio" | "image" | "document" = "document"
-
-    if (mimeType.startsWith("video/")) {
-      contentType = "video"
-    } else if (mimeType.startsWith("audio/")) {
-      contentType = "audio"
-    } else if (mimeType.startsWith("image/")) {
-      contentType = "image"
-    }
-
-    const title = data.title || data.filename || `Content ${id.slice(-6)}`
-    const fileSize = data.fileSize || 0
-    const duration = data.duration || 0
-
-    // Extract format and quality
-    const format = data.format || getFormatFromMimeType(mimeType)
-    const quality = data.quality || getQualityFromData(data)
-
-    return {
-      // Basic identification
-      id: id,
-      title: title,
-      filename: data.filename || `${title}.${format}`,
-      description: data.description || "",
-
-      // File details
-      fileUrl: fileUrl,
-      downloadUrl: data.downloadUrl || fileUrl,
-      publicUrl: data.publicUrl || fileUrl,
-      fileSize: fileSize,
-      fileSizeFormatted: formatFileSize(fileSize),
-      mimeType: mimeType,
-      fileType: data.fileType || mimeType,
-
-      // Content classification
-      contentType: contentType,
-      format: format,
-      quality: quality,
-
-      // Media metadata
-      duration: duration,
-      durationFormatted: formatDuration(duration),
-      thumbnailUrl: data.thumbnailUrl || "",
-      previewUrl: data.previewUrl || "",
-
-      // Technical details
-      width: data.width || null,
-      height: data.height || null,
-      resolution: data.resolution || (data.height ? `${data.height}p` : null),
-      bitrate: data.bitrate || null,
-      frameRate: data.frameRate || null,
-      codec: data.codec || null,
-
-      // Metadata
-      tags: data.tags || [],
-      isPublic: data.isPublic !== false,
-      viewCount: data.viewCount || 0,
-      downloadCount: data.downloadCount || 0,
-
-      // Timestamps
-      createdAt: data.createdAt || data.uploadedAt || new Date(),
-      uploadedAt: data.uploadedAt || data.createdAt || new Date(),
-
-      // Creator info
-      creatorId: data.creatorId || "",
-    }
-  } catch (error) {
-    console.error(`❌ [Content Process] Error processing item ${id}:`, error)
-    return null
-  }
-}
-
-// Process bundle itself as content item
-function processBundleAsContent(bundleData: any, bundleId: string): any | null {
-  const fileUrl = bundleData.downloadUrl || bundleData.fileUrl || ""
-
-  if (!fileUrl) {
-    return null
+  // Format file size
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return "0 MB"
+    const k = 1024
+    const sizes = ["Bytes", "KB", "MB", "GB"]
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
   }
 
   return {
-    id: bundleId,
-    title: bundleData.title || "Bundle",
-    filename: `${bundleData.title || "bundle"}.zip`,
-    description: bundleData.description || "",
-    fileUrl: fileUrl,
-    downloadUrl: fileUrl,
-    fileSize: bundleData.fileSize || 0,
-    fileSizeFormatted: formatFileSize(bundleData.fileSize || 0),
-    mimeType: bundleData.fileType || "application/zip",
-    fileType: bundleData.fileType || "application/zip",
-    contentType: "document",
-    format: "zip",
-    quality: "Original",
-    duration: 0,
-    durationFormatted: "0:00",
-    thumbnailUrl: bundleData.thumbnailUrl || "",
-    tags: bundleData.contentTags || [],
-    isPublic: bundleData.active !== false,
-    createdAt: bundleData.createdAt || new Date(),
-    creatorId: bundleData.creatorId || "",
-  }
-}
-
-// Update metadata counters
-function updateMetadataCounters(item: any, counters: any) {
-  counters.totalSize += item.fileSize || 0
-  counters.totalDuration += item.duration || 0
-
-  if (item.format) counters.formats.add(item.format)
-  if (item.quality) counters.qualities.add(item.quality)
-  if (item.resolution) counters.resolutions.add(item.resolution)
-
-  if (item.contentType === "video") counters.contentBreakdown.videos++
-  else if (item.contentType === "audio") counters.contentBreakdown.audio++
-  else if (item.contentType === "image") counters.contentBreakdown.images++
-  else counters.contentBreakdown.documents++
-}
-
-// Helper functions
-function formatFileSize(bytes: number): string {
-  if (bytes === 0) return "0 Bytes"
-  const k = 1024
-  const sizes = ["Bytes", "KB", "MB", "GB"]
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
-}
-
-function formatDuration(seconds: number): string {
-  if (seconds === 0) return "0:00"
-  const minutes = Math.floor(seconds / 60)
-  const remainingSeconds = seconds % 60
-  return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
-}
-
-function getFormatFromMimeType(mimeType: string): string {
-  const formats: { [key: string]: string } = {
-    "video/mp4": "mp4",
-    "video/webm": "webm",
-    "video/quicktime": "mov",
-    "audio/mpeg": "mp3",
-    "audio/wav": "wav",
-    "image/jpeg": "jpg",
-    "image/png": "png",
-    "application/pdf": "pdf",
-    "application/zip": "zip",
-  }
-  return formats[mimeType] || "file"
-}
-
-function getQualityFromData(data: any): string {
-  if (data.quality) return data.quality
-  if (data.height >= 1080) return "HD"
-  if (data.height >= 720) return "HD"
-  if (data.height > 0) return "SD"
-  return "Original"
-}
-
-function getEmptyMetadata() {
-  return {
-    totalItems: 0,
-    totalSize: 0,
-    totalSizeFormatted: "0 Bytes",
-    totalDuration: 0,
-    totalDurationFormatted: "0:00",
-    averageSize: 0,
-    averageDuration: 0,
-    contentBreakdown: { videos: 0, audio: 0, images: 0, documents: 0 },
-    formats: [],
-    qualities: [],
-    resolutions: [],
+    averageDuration,
+    averageSize,
+    contentBreakdown,
+    formats: Array.from(formats),
+    qualities: Array.from(qualities),
+    resolutions: Array.from(resolutions),
+    totalDuration,
+    totalDurationFormatted: formatDuration(totalDuration),
+    totalItems,
+    totalSize,
+    totalSizeFormatted: formatFileSize(totalSize),
   }
 }
