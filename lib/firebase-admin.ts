@@ -49,32 +49,42 @@ export function initializeFirebaseAdmin(): App {
   }
 }
 
-// Initialize Firebase Admin SDK
-const firebaseAdminConfig = {
-  credential: cert({
-    projectId: process.env.FIREBASE_PROJECT_ID,
-    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-    privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-  }),
-  projectId: process.env.FIREBASE_PROJECT_ID,
+let adminApp: App
+
+if (getApps().length === 0) {
+  try {
+    // Initialize Firebase Admin with service account
+    adminApp = initializeAdminApp({
+      credential: cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+      }),
+      projectId: process.env.FIREBASE_PROJECT_ID,
+    })
+    console.log("✅ Firebase Admin initialized successfully")
+  } catch (error) {
+    console.error("❌ Firebase Admin initialization error:", error)
+    throw error
+  }
+} else {
+  adminApp = getApps()[0]
+  console.log("✅ Firebase Admin already initialized")
 }
 
-// Initialize the app if it hasn't been initialized yet
-const adminApp = getApps().length === 0 ? initializeAdminApp(firebaseAdminConfig) : getApps()[0]
-
-// Export the services
-export const auth: Auth = getAuth(adminApp)
+// Initialize services
 export const adminDb: Firestore = getFirestore(adminApp)
+export const auth: Auth = getAuth(adminApp)
 export const storage = getStorage(adminApp)
 
-// Export default db for backward compatibility
-export const db: Firestore = adminDb
-
-// Required exports for deployment compatibility
+// Export with the exact names the system expects
 export const adminAuth = auth
 export const firestore = adminDb
 
-// Export the app instance
+// REQUIRED: Export db as a named export (this was missing)
+export const db: Firestore = adminDb
+
+// Default export
 export default adminApp
 
 /**

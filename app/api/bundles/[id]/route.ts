@@ -6,113 +6,102 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const bundleId = params.id
     console.log(`🔍 [Bundle API] Fetching bundle: ${bundleId}`)
 
-    // Get bundle from Firestore
-    const bundleDoc = await adminDb.collection("bundles").doc(bundleId).get()
+    if (!bundleId) {
+      console.error("❌ [Bundle API] Bundle ID is required")
+      return NextResponse.json({ error: "Bundle ID is required" }, { status: 400 })
+    }
+
+    // Try to fetch from bundles collection
+    const bundleRef = adminDb.collection("bundles").doc(bundleId)
+    const bundleDoc = await bundleRef.get()
 
     if (!bundleDoc.exists) {
-      console.log(`❌ [Bundle API] Bundle not found: ${bundleId}`)
+      console.error(`❌ [Bundle API] Bundle not found: ${bundleId}`)
       return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
     }
 
     const bundleData = bundleDoc.data()
-    console.log(`📦 [Bundle API] Raw bundle data:`, bundleData)
+    console.log("📦 [Bundle API] Raw bundle data:", bundleData)
 
     if (!bundleData) {
-      return NextResponse.json({ error: "Bundle data is empty" }, { status: 404 })
+      console.error(`❌ [Bundle API] Bundle data is empty: ${bundleId}`)
+      return NextResponse.json({ error: "Bundle data not found" }, { status: 404 })
     }
 
-    // Enhanced field extraction with multiple fallbacks
-    const extractField = (data: any, fieldNames: string[], defaultValue: any = null) => {
-      for (const fieldName of fieldNames) {
-        if (data[fieldName] !== undefined && data[fieldName] !== null) {
-          return data[fieldName]
+    // Extract bundle information with multiple fallbacks
+    const extractField = (data: any, fields: string[]) => {
+      for (const field of fields) {
+        if (data[field] !== undefined && data[field] !== null && data[field] !== "") {
+          return data[field]
         }
       }
-      return defaultValue
+      return null
     }
 
-    // Extract title with multiple possible field names
-    const title = extractField(bundleData, ["title", "name", "bundleName", "displayName"], "Untitled Bundle")
-
-    // Extract description
-    const description = extractField(bundleData, ["description", "desc", "summary", "about"], "")
-
-    // Extract creator information
-    const creatorId = extractField(bundleData, ["creatorId", "userId", "ownerId", "creator"])
-
-    const creatorUsername = extractField(bundleData, ["creatorUsername", "username", "creatorName", "creator"])
-
-    // Extract pricing
-    const price = extractField(bundleData, ["price", "cost", "amount"], 0)
-
-    // Extract file size with multiple possible formats
-    const fileSize = extractField(bundleData, ["fileSize", "size", "fileSizeBytes", "totalSize", "bundleSize"])
-
-    // Format file size if it's a number
-    let formattedFileSize = "Unknown"
-    if (typeof fileSize === "number" && fileSize > 0) {
-      if (fileSize < 1024) {
-        formattedFileSize = `${fileSize} B`
-      } else if (fileSize < 1024 * 1024) {
-        formattedFileSize = `${(fileSize / 1024).toFixed(1)} KB`
-      } else if (fileSize < 1024 * 1024 * 1024) {
-        formattedFileSize = `${(fileSize / (1024 * 1024)).toFixed(1)} MB`
-      } else {
-        formattedFileSize = `${(fileSize / (1024 * 1024 * 1024)).toFixed(1)} GB`
-      }
-    } else if (typeof fileSize === "string" && fileSize) {
-      formattedFileSize = fileSize
+    // Format file size
+    const formatFileSize = (bytes: any) => {
+      if (!bytes || bytes === "NaN" || isNaN(Number(bytes))) return "Unknown size"
+      const size = Number(bytes)
+      if (size < 1024) return `${size} B`
+      if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
+      if (size < 1024 * 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(1)} MB`
+      return `${(size / (1024 * 1024 * 1024)).toFixed(1)} GB`
     }
 
-    // Extract thumbnail URL
-    const thumbnailUrl = extractField(bundleData, [
-      "thumbnailUrl",
-      "thumbnail",
-      "previewUrl",
-      "customPreviewThumbnail",
-      "image",
-    ])
+    // Extract all possible fields
+    const title = extractField(bundleData, ["title", "name", "bundleName", "displayName", "label"]) || "Untitled Bundle"
 
-    // Extract content items count
-    const contentItems = bundleData.contentItems || bundleData.items || bundleData.files || []
-    const contentCount = Array.isArray(contentItems) ? contentItems.length : 0
+    const description =
+      extractField(bundleData, ["description", "desc", "summary", "details", "info"]) || "No description available"
 
-    // Extract tags
-    const tags = extractField(bundleData, ["tags", "categories", "labels"], [])
+    const price = extractField(bundleData, ["price", "cost", "amount", "value"]) || 0
 
-    // Extract quality
-    const quality = extractField(bundleData, ["quality", "videoQuality", "resolution"])
+    const creatorId = extractField(bundleData, ["creatorId", "creator", "userId", "owner", "uploadedBy"])
 
-    // Extract view count
-    const viewCount = extractField(bundleData, ["viewCount", "views", "totalViews"], 0)
+    const creatorName =
+      extractField(bundleData, ["creatorName", "creatorUsername", "username", "creator", "uploaderName"]) || "Unknown"
 
-    // Extract upload date
-    const uploadedAt = extractField(bundleData, ["uploadedAt", "createdAt", "dateCreated", "timestamp"])
+    const fileSize = extractField(bundleData, ["fileSize", "size", "totalSize", "bundleSize"])
 
-    // Format the response
-    const bundle = {
+    const thumbnailUrl = extractField(bundleData, ["thumbnailUrl", "thumbnail", "image", "previewImage", "coverImage"])
+
+    const quality = extractField(bundleData, ["quality", "resolution", "videoQuality"])
+
+    const views = extractField(bundleData, ["views", "viewCount", "totalViews"]) || 0
+
+    const downloads = extractField(bundleData, ["downloads", "downloadCount", "totalDownloads"]) || 0
+
+    const tags = extractField(bundleData, ["tags", "categories", "keywords"]) || []
+
+    const createdAt = bundleData.createdAt || bundleData.uploadedAt || bundleData.timestamp
+
+    // Build the response
+    const response = {
       id: bundleId,
       title,
       description,
+      price: Number(price),
       creatorId,
-      creatorUsername,
-      price,
-      fileSize: formattedFileSize,
+      creatorName,
+      fileSize: formatFileSize(fileSize),
+      fileSizeBytes: fileSize ? Number(fileSize) : null,
       thumbnailUrl,
-      contentCount,
-      tags: Array.isArray(tags) ? tags : [],
       quality,
-      viewCount,
-      uploadedAt: uploadedAt ? (uploadedAt.toDate ? uploadedAt.toDate().toISOString() : uploadedAt) : null,
-      // Include raw data for debugging
-      _debug: process.env.NODE_ENV === "development" ? bundleData : undefined,
+      views: Number(views),
+      downloads: Number(downloads),
+      tags: Array.isArray(tags) ? tags : [],
+      createdAt: createdAt ? (createdAt.toDate ? createdAt.toDate().toISOString() : createdAt) : null,
+      // Include all original data for debugging
+      _raw: bundleData,
     }
 
-    console.log(`✅ [Bundle API] Formatted bundle:`, bundle)
-
-    return NextResponse.json({ bundle })
+    console.log("✅ [Bundle API] Processed bundle data:", response)
+    return NextResponse.json(response)
   } catch (error) {
-    console.error(`❌ [Bundle API] Error fetching bundle:`, error)
-    return NextResponse.json({ error: "Failed to fetch bundle" }, { status: 500 })
+    console.error("❌ [Bundle API] Error fetching bundle:", error)
+    return NextResponse.json(
+      { error: "Failed to fetch bundle", details: error instanceof Error ? error.message : "Unknown error" },
+      { status: 500 },
+    )
   }
 }

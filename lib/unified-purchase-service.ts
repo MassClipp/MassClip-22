@@ -42,37 +42,29 @@ export interface UnifiedPurchaseItem {
   isPublic?: boolean
 }
 
-export interface UnifiedPurchase {
-  id: string
-  productBoxId?: string
-  bundleId?: string
-  itemId?: string // Add compatibility field
-  productBoxTitle: string
-  productBoxDescription?: string
-  productBoxThumbnail?: string
-  creatorId: string
-  creatorName: string
-  creatorUsername: string
-
-  // Enhanced user identification
-  buyerUid: string
+export interface PurchaseData {
   userId: string
-  userEmail: string
-  userName: string
-  isAuthenticated: boolean
-
-  purchasedAt: Date
+  bundleId?: string
+  productBoxId?: string
+  sessionId: string
   amount: number
   currency: string
-  sessionId: string
-  items: UnifiedPurchaseItem[]
-  itemNames: string[] // Explicit content names
-  contentTitles: string[] // Alternative field name
-  totalItems: number
-  totalSize: number
+  status: "pending" | "completed" | "failed"
+  createdAt: Date
+  completedAt?: Date
+  metadata?: Record<string, any>
 }
 
 export class UnifiedPurchaseService {
+  private static instance: UnifiedPurchaseService
+
+  static getInstance(): UnifiedPurchaseService {
+    if (!UnifiedPurchaseService.instance) {
+      UnifiedPurchaseService.instance = new UnifiedPurchaseService()
+    }
+    return UnifiedPurchaseService.instance
+  }
+
   /**
    * Get the appropriate database instance based on environment
    */
@@ -87,9 +79,34 @@ export class UnifiedPurchaseService {
   }
 
   /**
+   * Clean data for Firestore - remove undefined values
+   */
+  private static cleanDataForFirestore(data: any): any {
+    if (data === null || data === undefined) {
+      return null
+    }
+
+    if (Array.isArray(data)) {
+      return data.map((item) => this.cleanDataForFirestore(item)).filter((item) => item !== undefined)
+    }
+
+    if (typeof data === "object" && data !== null) {
+      const cleaned: any = {}
+      for (const [key, value] of Object.entries(data)) {
+        if (value !== undefined) {
+          cleaned[key] = this.cleanDataForFirestore(value)
+        }
+      }
+      return cleaned
+    }
+
+    return data
+  }
+
+  /**
    * Create a unified purchase record after successful payment
    */
-  static async createUnifiedPurchase(
+  async createUnifiedPurchase(
     userId: string,
     purchaseData: {
       bundleId?: string
@@ -172,11 +189,11 @@ export class UnifiedPurchaseService {
 
       console.log(`📦 [Unified Purchase] Found ${contentItems.length} content items`)
 
-      // Create unified purchase document
-      const unifiedPurchase: UnifiedPurchase = {
+      // Create unified purchase document with cleaned data
+      const unifiedPurchaseData = {
         id: purchaseData.sessionId,
-        bundleId: bundleId || undefined,
-        productBoxId: productBoxId || undefined,
+        bundleId: bundleId || null,
+        productBoxId: productBoxId || null,
         itemId: itemId,
         productBoxTitle: itemData.title || `Untitled ${itemType}`,
         productBoxDescription: itemData.description || "",
@@ -203,13 +220,16 @@ export class UnifiedPurchaseService {
         totalSize: contentItems.reduce((sum, item) => sum + (item.fileSize || 0), 0),
       }
 
+      // Clean the data to remove undefined values
+      const cleanedPurchaseData = this.cleanDataForFirestore(unifiedPurchaseData)
+
       console.log(`💾 [Unified Purchase] Saving unified purchase for ${itemType}:`, {
-        userId: unifiedPurchase.userId,
-        userEmail: unifiedPurchase.userEmail,
-        userName: unifiedPurchase.userName,
+        userId: cleanedPurchaseData.userId,
+        userEmail: cleanedPurchaseData.userEmail,
+        userName: cleanedPurchaseData.userName,
         itemType,
         itemId,
-        itemNames: unifiedPurchase.itemNames,
+        itemNames: cleanedPurchaseData.itemNames,
       })
 
       // Save to userPurchases collection
@@ -220,19 +240,19 @@ export class UnifiedPurchaseService {
           .doc(userId)
           .collection("purchases")
           .doc(purchaseData.sessionId)
-        await purchaseRef.set(unifiedPurchase)
+        await purchaseRef.set(cleanedPurchaseData)
 
         // Also save to appropriate purchases collection for easy access
         const purchasesCollection = isBundle ? "bundlePurchases" : "productBoxPurchases"
-        await db.collection(purchasesCollection).doc(purchaseData.sessionId).set(unifiedPurchase)
+        await db.collection(purchasesCollection).doc(purchaseData.sessionId).set(cleanedPurchaseData)
       } else {
         // Client-side: use Firebase client SDK
         const purchaseRef = doc(db, "userPurchases", userId, "purchases", purchaseData.sessionId)
-        await setDoc(purchaseRef, unifiedPurchase)
+        await setDoc(purchaseRef, cleanedPurchaseData)
 
         // Also save to appropriate purchases collection for easy access
         const purchasesCollection = isBundle ? "bundlePurchases" : "productBoxPurchases"
-        await setDoc(doc(db, purchasesCollection, purchaseData.sessionId), unifiedPurchase)
+        await setDoc(doc(db, purchasesCollection, purchaseData.sessionId), cleanedPurchaseData)
       }
 
       console.log(`✅ [Unified Purchase] Created unified purchase ${purchaseData.sessionId} for ${itemType} ${itemId}`)
@@ -598,12 +618,12 @@ export class UnifiedPurchaseService {
   /**
    * Get all purchases for a user with proper identification
    */
-  static async getUserPurchases(userId: string): Promise<UnifiedPurchase[]> {
+  async getUserPurchases(userId: string): Promise<any[]> {
     try {
       console.log(`🔍 [Unified Purchase] Fetching purchases for user ${userId}`)
 
       const db = this.getDb()
-      const purchases: UnifiedPurchase[] = []
+      const purchases: any[] = []
 
       if (typeof window === "undefined") {
         // Server-side: use Firebase Admin
@@ -615,8 +635,9 @@ export class UnifiedPurchaseService {
           .get()
 
         snapshot.forEach((doc) => {
-          const data = doc.data() as UnifiedPurchase
+          const data = doc.data()
           purchases.push({
+            id: doc.id,
             ...data,
             purchasedAt: data.purchasedAt || new Date(),
             buyerUid: data.buyerUid || userId,
@@ -624,8 +645,8 @@ export class UnifiedPurchaseService {
             userEmail: data.userEmail || "",
             userName: data.userName || "User",
             isAuthenticated: data.isAuthenticated !== false,
-            itemNames: data.itemNames || data.items?.map((item) => item.displayTitle) || [],
-            contentTitles: data.contentTitles || data.items?.map((item) => item.displayTitle) || [],
+            itemNames: data.itemNames || data.items?.map((item: any) => item.displayTitle) || [],
+            contentTitles: data.contentTitles || data.items?.map((item: any) => item.displayTitle) || [],
           })
         })
       } else {
@@ -635,8 +656,9 @@ export class UnifiedPurchaseService {
         const snapshot = await getDocs(purchasesQuery)
 
         snapshot.forEach((doc) => {
-          const data = doc.data() as UnifiedPurchase
+          const data = doc.data()
           purchases.push({
+            id: doc.id,
             ...data,
             purchasedAt: data.purchasedAt || new Date(),
             buyerUid: data.buyerUid || userId,
@@ -644,8 +666,8 @@ export class UnifiedPurchaseService {
             userEmail: data.userEmail || "",
             userName: data.userName || "User",
             isAuthenticated: data.isAuthenticated !== false,
-            itemNames: data.itemNames || data.items?.map((item) => item.displayTitle) || [],
-            contentTitles: data.contentTitles || data.items?.map((item) => item.displayTitle) || [],
+            itemNames: data.itemNames || data.items?.map((item: any) => item.displayTitle) || [],
+            contentTitles: data.contentTitles || data.items?.map((item: any) => item.displayTitle) || [],
           })
         })
       }
@@ -654,14 +676,14 @@ export class UnifiedPurchaseService {
       return purchases
     } catch (error) {
       console.error(`❌ [Unified Purchase] Error fetching user purchases:`, error)
-      return []
+      throw error
     }
   }
 
   /**
    * Get a specific purchase for a user
    */
-  static async getUserPurchase(userId: string, purchaseId: string): Promise<UnifiedPurchase | null> {
+  async getUserPurchase(userId: string, purchaseId: string): Promise<any | null> {
     try {
       const db = this.getDb()
 
@@ -678,8 +700,9 @@ export class UnifiedPurchaseService {
         return null
       }
 
-      const data = purchaseDoc.data() as UnifiedPurchase
+      const data = purchaseDoc.data()
       return {
+        id: purchaseId,
         ...data,
         purchasedAt: data.purchasedAt || new Date(),
         buyerUid: data.buyerUid || userId,
@@ -687,19 +710,19 @@ export class UnifiedPurchaseService {
         userEmail: data.userEmail || "",
         userName: data.userName || "User",
         isAuthenticated: data.isAuthenticated !== false,
-        itemNames: data.itemNames || data.items?.map((item) => item.displayTitle) || [],
-        contentTitles: data.contentTitles || data.items?.map((item) => item.displayTitle) || [],
+        itemNames: data.itemNames || data.items?.map((item: any) => item.displayTitle) || [],
+        contentTitles: data.contentTitles || data.items?.map((item: any) => item.displayTitle) || [],
       }
     } catch (error) {
       console.error(`❌ [Unified Purchase] Error fetching purchase ${purchaseId}:`, error)
-      return null
+      throw error
     }
   }
 
   /**
    * Check if user has purchased a specific product box
    */
-  static async hasUserPurchased(userId: string, productBoxId: string): Promise<boolean> {
+  async hasUserPurchased(userId: string, productBoxId: string): Promise<boolean> {
     try {
       const db = this.getDb()
 
@@ -722,7 +745,105 @@ export class UnifiedPurchaseService {
       return !snapshot.empty
     } catch (error) {
       console.error(`❌ [Unified Purchase] Error checking purchase status:`, error)
-      return false
+      throw error
+    }
+  }
+
+  async createPurchase(data: PurchaseData): Promise<string> {
+    try {
+      console.log("🔄 [Purchase Service] Creating purchase:", data)
+
+      // Clean the data to remove undefined values
+      const cleanedData = this.cleanDataForFirestore({
+        userId: data.userId,
+        bundleId: data.bundleId || null,
+        productBoxId: data.productBoxId || null,
+        sessionId: data.sessionId,
+        amount: data.amount,
+        currency: data.currency,
+        status: data.status,
+        createdAt: data.createdAt,
+        completedAt: data.completedAt || null,
+        metadata: data.metadata || {},
+        type: data.bundleId ? "bundle" : "product_box",
+      })
+
+      console.log("🧹 [Purchase Service] Cleaned data:", cleanedData)
+
+      const purchaseRef = await adminDb.collection("purchases").add(cleanedData)
+
+      console.log("✅ [Purchase Service] Purchase created:", purchaseRef.id)
+      return purchaseRef.id
+    } catch (error) {
+      console.error("❌ [Purchase Service] Error creating purchase:", error)
+      throw error
+    }
+  }
+
+  async completePurchase(purchaseId: string, metadata?: Record<string, any>): Promise<void> {
+    try {
+      console.log("🔄 [Purchase Service] Completing purchase:", purchaseId)
+
+      const cleanedMetadata = this.cleanDataForFirestore(metadata || {})
+
+      await adminDb.collection("purchases").doc(purchaseId).update({
+        status: "completed",
+        completedAt: new Date(),
+        metadata: cleanedMetadata,
+      })
+
+      console.log("✅ [Purchase Service] Purchase completed:", purchaseId)
+    } catch (error) {
+      console.error("❌ [Purchase Service] Error completing purchase:", error)
+      throw error
+    }
+  }
+
+  async addBundleToPurchases(userId: string, bundleId: string, metadata: Record<string, any> = {}): Promise<string> {
+    try {
+      console.log("🔄 [Purchase Service] Adding bundle to purchases:", { userId, bundleId })
+
+      const purchaseData: PurchaseData = {
+        userId,
+        bundleId,
+        sessionId: `manual_${Date.now()}`,
+        amount: 0, // Free bundle
+        currency: "USD",
+        status: "completed",
+        createdAt: new Date(),
+        completedAt: new Date(),
+        metadata: this.cleanDataForFirestore(metadata),
+      }
+
+      const purchaseId = await this.createPurchase(purchaseData)
+      console.log("✅ [Purchase Service] Bundle added to purchases:", purchaseId)
+      return purchaseId
+    } catch (error) {
+      console.error("❌ [Purchase Service] Error adding bundle to purchases:", error)
+      throw error
+    }
+  }
+
+  async checkBundleAccess(userId: string, bundleId: string): Promise<boolean> {
+    try {
+      console.log("🔍 [Purchase Service] Checking bundle access:", { userId, bundleId })
+
+      const snapshot = await adminDb
+        .collection("purchases")
+        .where("userId", "==", userId)
+        .where("bundleId", "==", bundleId)
+        .where("status", "==", "completed")
+        .limit(1)
+        .get()
+
+      const hasAccess = !snapshot.empty
+      console.log(`✅ [Purchase Service] Bundle access check result:`, hasAccess)
+      return hasAccess
+    } catch (error) {
+      console.error("❌ [Purchase Service] Error checking bundle access:", error)
+      throw error
     }
   }
 }
+
+export const purchaseService = UnifiedPurchaseService.getInstance()
