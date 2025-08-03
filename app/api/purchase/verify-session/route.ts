@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/firebase-admin"
 import Stripe from "stripe"
+import { db } from "@/lib/firebase-admin"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
@@ -8,126 +8,55 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 export async function POST(request: NextRequest) {
   try {
-    const { sessionId } = await request.json()
+    console.log("🔍 [Verify Session] Starting session verification...")
+
+    const body = await request.json()
+    const { sessionId } = body
 
     if (!sessionId) {
+      console.error("❌ [Verify Session] Missing sessionId")
       return NextResponse.json({ error: "Session ID is required" }, { status: 400 })
     }
 
-    console.log("🔍 [Purchase Verify] Verifying session:", sessionId)
+    console.log("🔍 [Verify Session] Processing session:", sessionId)
 
-    // First, check if purchase exists in bundlePurchases to get the connected account ID
+    // Get purchase from bundlePurchases collection (single source of truth)
     const purchaseDoc = await db.collection("bundlePurchases").doc(sessionId).get()
 
-    let session: Stripe.Checkout.Session
-    let stripeAccountId: string | undefined
-
-    if (purchaseDoc.exists) {
-      const purchaseData = purchaseDoc.data()!
-      stripeAccountId = purchaseData.stripeAccountId
-      console.log("✅ [Purchase Verify] Found purchase with connected account:", stripeAccountId)
-    }
-
-    // Try to retrieve the session from the correct account
-    try {
-      if (stripeAccountId) {
-        console.log("🔗 [Purchase Verify] Retrieving session from connected account:", stripeAccountId)
-        session = await stripe.checkout.sessions.retrieve(sessionId, {
-          stripeAccount: stripeAccountId,
-        })
-      } else {
-        console.log("🏢 [Purchase Verify] Retrieving session from platform account")
-        session = await stripe.checkout.sessions.retrieve(sessionId)
-      }
-
-      console.log("✅ [Purchase Verify] Stripe session retrieved:", {
-        id: session.id,
-        payment_status: session.payment_status,
-        amount: session.amount_total,
-        account: stripeAccountId || "platform",
-      })
-    } catch (stripeError: any) {
-      console.error("❌ [Purchase Verify] Failed to retrieve session from Stripe:", stripeError)
-
-      // If we have a purchase record but can't get the Stripe session, still return the purchase info
-      if (purchaseDoc.exists) {
-        const purchaseData = purchaseDoc.data()!
-        console.log("⚠️ [Purchase Verify] Using purchase data despite Stripe error")
-
-        return NextResponse.json({
-          success: true,
-          session: {
-            id: sessionId,
-            amount: purchaseData.amount * 100, // Convert back to cents
-            currency: purchaseData.currency || "usd",
-            payment_status: "paid", // Assume paid if we have a purchase record
-            customerEmail: purchaseData.userEmail,
-            created: purchaseData.purchasedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-          },
-          purchase: {
-            userId: purchaseData.buyerUid,
-            userEmail: purchaseData.userEmail,
-            userName: purchaseData.userName,
-            itemId: purchaseData.itemId,
-            amount: purchaseData.amount,
-            currency: purchaseData.currency,
-            type: purchaseData.itemType,
-            status: purchaseData.status,
-          },
-          item: {
-            id: purchaseData.itemId,
-            title: purchaseData.title,
-            description: purchaseData.description,
-            thumbnailUrl: purchaseData.thumbnailUrl,
-            creator: {
-              id: purchaseData.creatorId,
-              name: purchaseData.creatorName,
-              username: purchaseData.creatorUsername,
-            },
-          },
-          warning: "Session retrieved from database due to Stripe API issue",
-        })
-      }
-
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Session not found",
-          details: "Could not retrieve session from Stripe and no purchase record found",
-        },
-        { status: 404 },
-      )
-    }
-
     if (!purchaseDoc.exists) {
-      console.error("❌ [Purchase Verify] Purchase not found in bundlePurchases:", sessionId)
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Purchase not found",
-          details: "This purchase was not found in our records",
-        },
-        { status: 404 },
-      )
+      console.log("❌ [Verify Session] Purchase not found in bundlePurchases:", sessionId)
+      return NextResponse.json({ error: "Purchase not found" }, { status: 404 })
     }
 
     const purchaseData = purchaseDoc.data()!
-    console.log("✅ [Purchase Verify] Purchase found:", {
-      itemId: purchaseData.itemId,
-      buyerUid: purchaseData.buyerUid,
+    console.log("✅ [Verify Session] Purchase found:", {
+      sessionId,
       title: purchaseData.title,
+      buyerUid: purchaseData.buyerUid,
+      amount: purchaseData.amount,
     })
 
+    // Get Stripe session details for additional info
+    let stripeSession = null
+    try {
+      stripeSession = await stripe.checkout.sessions.retrieve(sessionId)
+    } catch (error) {
+      console.warn("⚠️ [Verify Session] Could not retrieve Stripe session:", error)
+    }
+
+    // Return verification response
     return NextResponse.json({
       success: true,
-      session: {
-        id: session.id,
-        amount: session.amount_total || 0,
-        currency: session.currency || "usd",
-        payment_status: session.payment_status,
-        customerEmail: session.customer_email,
-        created: new Date(session.created * 1000).toISOString(),
-      },
+      session: stripeSession
+        ? {
+            id: stripeSession.id,
+            amount: stripeSession.amount_total || 0,
+            currency: stripeSession.currency || "usd",
+            payment_status: stripeSession.payment_status || "paid",
+            customerEmail: stripeSession.customer_email,
+            created: new Date(stripeSession.created * 1000).toISOString(),
+          }
+        : null,
       purchase: {
         userId: purchaseData.buyerUid,
         userEmail: purchaseData.userEmail,
@@ -151,10 +80,9 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error: any) {
-    console.error("❌ [Purchase Verify] Error:", error)
+    console.error("❌ [Verify Session] Error:", error)
     return NextResponse.json(
       {
-        success: false,
         error: "Verification failed",
         details: error.message,
       },

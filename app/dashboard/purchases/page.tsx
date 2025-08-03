@@ -1,126 +1,172 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useAuthContext } from "@/contexts/auth-context"
+import { useEffect, useState } from "react"
+import { useAuth } from "@/contexts/auth-context"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, Download, Calendar, DollarSign, Package, AlertCircle, RefreshCw } from "lucide-react"
+import {
+  ShoppingBag,
+  Eye,
+  DollarSign,
+  Package,
+  User,
+  AlertCircle,
+  RefreshCw,
+  Star,
+  Download,
+  Clock,
+  HardDrive,
+} from "lucide-react"
 import Link from "next/link"
 
 interface Purchase {
   id: string
   sessionId: string
   itemId: string
-  itemType: string
+  itemType: "bundle" | "product_box"
+  bundleId?: string
+  productBoxId?: string
   title: string
   description: string
   thumbnailUrl: string
+  downloadUrl: string
+  fileSize: number
+  fileType: string
+  duration: number
+  creatorId: string
+  creatorName: string
+  creatorUsername: string
   amount: number
   currency: string
+  status: string
   purchasedAt: any
   accessUrl: string
-  creatorName: string
-  contentCount: number
+  accessGranted: boolean
+  downloadCount: number
+  buyerEmail: string
+  buyerName: string
   environment: string
 }
 
 export default function PurchasesPage() {
-  const { user, loading: authLoading } = useAuthContext()
+  const { user } = useAuth()
   const [purchases, setPurchases] = useState<Purchase[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [detailedError, setDetailedError] = useState<any>(null)
+
+  useEffect(() => {
+    if (user) {
+      fetchPurchases()
+    } else {
+      setLoading(false)
+    }
+  }, [user])
 
   const fetchPurchases = async () => {
-    if (!user) {
-      console.log("❌ [Purchases Page] No user found")
-      setError("Please log in to view your purchases")
-      setLoading(false)
-      return
-    }
-
-    console.log("🔍 [Purchases Page] Fetching purchases for user:", user.uid)
-    setLoading(true)
-    setError(null)
-    setDetailedError(null)
-
     try {
-      // Get Firebase auth token
-      const token = await user.getIdToken()
-      console.log("✅ [Purchases Page] Got auth token")
+      setLoading(true)
+      setError(null)
 
+      if (!user) {
+        setPurchases([])
+        return
+      }
+
+      console.log("🔄 [Purchases] Fetching purchases for user:", user.uid)
+
+      // Get user's purchases from bundlePurchases collection
+      const idToken = await user.getIdToken()
       const response = await fetch(`/api/user/purchases?userId=${user.uid}`, {
-        method: "GET",
         headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${idToken}`,
         },
       })
 
-      console.log("📡 [Purchases Page] API response status:", response.status)
-
       if (!response.ok) {
-        const errorData = await response.json()
-        console.error("❌ [Purchases Page] API error:", errorData)
-        setDetailedError(errorData)
-        throw new Error(errorData.details || errorData.error || `HTTP ${response.status}`)
+        throw new Error("Failed to fetch purchases")
       }
 
       const data = await response.json()
-      console.log("✅ [Purchases Page] API response:", data)
+      console.log("📦 [Purchases] Fetched purchases from bundlePurchases:", data.purchases?.length || 0)
 
       setPurchases(data.purchases || [])
-      console.log(`📦 [Purchases Page] Loaded ${data.purchases?.length || 0} purchases`)
     } catch (err: any) {
-      console.error("❌ [Purchases Page] Error fetching purchases:", err)
-      setError(err.message || "Failed to fetch purchases")
+      console.error("❌ [Purchases] Error fetching purchases:", err)
+      setError(err.message)
+      setPurchases([])
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => {
-    if (!authLoading) {
-      fetchPurchases()
-    }
-  }, [user, authLoading])
+  const formatDate = (timestamp: any) => {
+    if (!timestamp) return "Unknown date"
 
-  const formatDate = (date: any) => {
-    if (!date) return "Unknown"
-    const d = date.toDate ? date.toDate() : new Date(date)
-    return d.toLocaleDateString("en-US", {
+    let date: Date
+    if (timestamp.toDate) {
+      date = timestamp.toDate()
+    } else if (timestamp instanceof Date) {
+      date = timestamp
+    } else {
+      date = new Date(timestamp)
+    }
+
+    return date.toLocaleDateString("en-US", {
       year: "numeric",
       month: "short",
       day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     })
   }
 
-  const formatAmount = (amount: number, currency = "usd") => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: currency.toUpperCase(),
-    }).format(amount)
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return "0 B"
+    const k = 1024
+    const sizes = ["B", "KB", "MB", "GB"]
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i]
   }
 
-  if (authLoading || loading) {
+  const formatDuration = (seconds: number): string => {
+    if (seconds === 0) return ""
+    const minutes = Math.floor(seconds / 60)
+    const remainingSeconds = seconds % 60
+    if (minutes === 0) return `${remainingSeconds}s`
+    return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
+  }
+
+  // Loading state
+  if (loading) {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">My Purchases</h1>
-          <p className="text-white/70">Access your purchased content and downloads</p>
+          <Skeleton className="h-8 w-48 mb-2 bg-white/10" />
+          <Skeleton className="h-4 w-96 bg-white/10" />
         </div>
-
-        <div className="flex items-center justify-center py-12">
-          <div className="text-center">
-            <Loader2 className="h-8 w-8 animate-spin text-red-500 mx-auto mb-4" />
-            <p className="text-white/60">Loading your purchases...</p>
-          </div>
+        <div className="grid gap-6">
+          {[1, 2, 3].map((i) => (
+            <Card key={i} className="bg-black/40 backdrop-blur-xl border-white/10">
+              <CardContent className="p-6">
+                <div className="flex items-start space-x-4">
+                  <Skeleton className="w-20 h-20 rounded-lg bg-white/10" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-6 w-3/4 bg-white/10" />
+                    <Skeleton className="h-4 w-1/2 bg-white/10" />
+                    <Skeleton className="h-4 w-1/4 bg-white/10" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       </div>
     )
   }
 
+  // Error state
   if (error) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -136,49 +182,49 @@ export default function PurchasesPage() {
           </AlertDescription>
         </Alert>
 
-        {detailedError && (
-          <Card className="bg-black/40 backdrop-blur-xl border-white/10 mb-6">
-            <CardHeader>
-              <CardTitle className="text-white text-sm">Debug Information</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <pre className="text-xs text-white/60 overflow-auto bg-black/20 p-4 rounded">
-                {JSON.stringify(detailedError, null, 2)}
-              </pre>
-            </CardContent>
-          </Card>
-        )}
-
-        <div className="flex gap-4">
+        <div className="flex space-x-4">
           <Button onClick={fetchPurchases} className="bg-red-600 hover:bg-red-700">
-            <RefreshCw className="h-4 w-4 mr-2" />
+            <RefreshCw className="w-4 h-4 mr-2" />
             Try Again
           </Button>
-          <Button variant="outline" asChild>
+          <Button asChild variant="outline" className="border-white/20 text-white hover:bg-white/10 bg-transparent">
             <Link href="/dashboard">
-              <Package className="h-4 w-4 mr-2" />
+              <Package className="w-4 h-4 mr-2" />
               Back to Dashboard
             </Link>
           </Button>
         </div>
+      </div>
+    )
+  }
 
-        {/* Debug section */}
-        <Card className="bg-black/40 backdrop-blur-xl border-white/10 mt-6">
-          <CardHeader>
-            <CardTitle className="text-white text-sm">Debug Info</CardTitle>
-          </CardHeader>
-          <CardContent className="text-xs text-white/60">
-            <div>User ID: {user?.uid || "Not logged in"}</div>
-            <div>Auth Loading: {authLoading.toString()}</div>
-            <div>Page Loading: {loading.toString()}</div>
-            <div>Error: {error || "None"}</div>
-            <div>Timestamp: {new Date().toISOString()}</div>
+  // Not logged in
+  if (!user) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-white mb-2">My Purchases</h1>
+          <p className="text-white/70">Please log in to view your purchases</p>
+        </div>
+
+        <Card className="bg-black/40 backdrop-blur-xl border-white/10">
+          <CardContent className="p-12 text-center">
+            <User className="h-16 w-16 text-white/30 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-white mb-2">Login Required</h2>
+            <p className="text-white/60 mb-6 max-w-md mx-auto">You need to be logged in to view your purchases.</p>
+            <Button asChild className="bg-red-600 hover:bg-red-700">
+              <Link href="/login">
+                <User className="w-4 h-4 mr-2" />
+                Login
+              </Link>
+            </Button>
           </CardContent>
         </Card>
       </div>
     )
   }
 
+  // Empty state
   if (purchases.length === 0) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -188,126 +234,192 @@ export default function PurchasesPage() {
         </div>
 
         <Card className="bg-black/40 backdrop-blur-xl border-white/10">
-          <CardContent className="py-12 text-center">
-            <Package className="h-12 w-12 text-white/40 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-white mb-2">No purchases yet</h3>
-            <p className="text-white/60 mb-6">
-              You haven't purchased any content yet. Browse our catalog to get started!
+          <CardContent className="p-12 text-center">
+            <ShoppingBag className="h-16 w-16 text-white/30 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-white mb-2">No Purchases Yet</h2>
+            <p className="text-white/60 mb-6 max-w-md mx-auto">
+              You haven't made any purchases yet. Explore our premium content library to find amazing content from
+              talented creators.
             </p>
-            <Button asChild className="bg-red-600 hover:bg-red-700">
-              <Link href="/dashboard/explore">
-                <Package className="h-4 w-4 mr-2" />
-                Browse Content
-              </Link>
-            </Button>
+            <div className="space-y-3">
+              <Button asChild className="bg-red-600 hover:bg-red-700">
+                <Link href="/dashboard/explore">
+                  <Star className="w-4 h-4 mr-2" />
+                  Explore Premium Content
+                </Link>
+              </Button>
+              <Button asChild variant="outline" className="bg-transparent border-white/20 text-white hover:bg-white/10">
+                <Link href="/dashboard">
+                  <Package className="w-4 h-4 mr-2" />
+                  Go to Dashboard
+                </Link>
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
     )
   }
 
+  // Purchases list
   return (
     <div className="container mx-auto px-4 py-8">
+      {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-white mb-2">My Purchases</h1>
-        <p className="text-white/70">Access your purchased content and downloads</p>
+        <p className="text-white/70">
+          {purchases.length} purchase{purchases.length !== 1 ? "s" : ""} • Lifetime access to all content
+        </p>
       </div>
 
+      {/* Purchases Grid */}
       <div className="grid gap-6">
-        {purchases.map((purchase) => (
+        {purchases.map((purchase, index) => (
           <Card
             key={purchase.id}
-            className="bg-black/40 backdrop-blur-xl border-white/10 hover:border-white/20 transition-colors"
+            className="bg-black/40 backdrop-blur-xl border-white/10 hover:border-white/20 transition-all duration-300 overflow-hidden"
+            style={{
+              animationDelay: `${index * 100}ms`,
+              animation: "fadeInUp 0.6s ease-out forwards",
+            }}
           >
             <CardContent className="p-6">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-3">
-                    {purchase.thumbnailUrl && (
-                      <img
-                        src={purchase.thumbnailUrl || "/placeholder.svg"}
-                        alt={purchase.title}
-                        className="w-16 h-16 rounded-lg object-cover bg-white/5"
-                      />
-                    )}
-                    <div>
-                      <h3 className="text-lg font-semibold text-white mb-1">{purchase.title}</h3>
-                      <p className="text-sm text-white/60">by {purchase.creatorName}</p>
+              <div className="flex items-start space-x-4">
+                {/* Thumbnail */}
+                <div className="w-20 h-20 bg-gray-800 rounded-lg overflow-hidden flex-shrink-0">
+                  {purchase.thumbnailUrl ? (
+                    <img
+                      src={purchase.thumbnailUrl || "/placeholder.svg"}
+                      alt={purchase.title}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement
+                        target.src = "/placeholder.svg?height=80&width=80&text=No+Image"
+                      }}
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Package className="h-8 w-8 text-gray-500" />
                     </div>
-                  </div>
-
-                  {purchase.description && (
-                    <p className="text-white/70 text-sm mb-4 line-clamp-2">{purchase.description}</p>
                   )}
-
-                  <div className="flex items-center gap-6 text-sm text-white/60">
-                    <div className="flex items-center gap-1">
-                      <Calendar className="h-4 w-4" />
-                      {formatDate(purchase.purchasedAt)}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <DollarSign className="h-4 w-4" />
-                      {formatAmount(purchase.amount, purchase.currency)}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Package className="h-4 w-4" />
-                      {purchase.contentCount || 0} items
-                    </div>
-                    {purchase.environment && (
-                      <span
-                        className={`px-2 py-1 rounded text-xs ${
-                          purchase.environment === "live"
-                            ? "bg-green-500/20 text-green-300"
-                            : "bg-yellow-500/20 text-yellow-300"
-                        }`}
-                      >
-                        {purchase.environment}
-                      </span>
-                    )}
-                  </div>
                 </div>
 
-                <div className="flex flex-col gap-2 ml-4">
-                  <Button asChild className="bg-red-600 hover:bg-red-700">
-                    <Link href={purchase.accessUrl}>
-                      <Download className="h-4 w-4 mr-2" />
-                      Access Content
+                {/* Purchase Info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex-1">
+                      <h3 className="text-xl font-bold text-white mb-1 line-clamp-1">{purchase.title}</h3>
+                      <p className="text-white/70 text-sm mb-2 line-clamp-2">{purchase.description}</p>
+                      <div className="flex items-center space-x-4 text-sm text-white/60">
+                        <span className="flex items-center">
+                          <User className="h-4 w-4 mr-1" />
+                          {purchase.creatorName}
+                        </span>
+                        <span className="flex items-center">
+                          <DollarSign className="h-4 w-4 mr-1" />${purchase.amount.toFixed(2)}{" "}
+                          {purchase.currency.toUpperCase()}
+                        </span>
+                        <span>{formatDate(purchase.purchasedAt)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* File Details */}
+              <div className="grid grid-cols-3 gap-4 p-4 bg-white/5 rounded-lg mb-4">
+                <div className="text-center">
+                  <div className="text-lg font-bold text-white flex items-center justify-center">
+                    <HardDrive className="h-4 w-4 mr-1" />
+                    {formatFileSize(purchase.fileSize)}
+                  </div>
+                  <div className="text-sm text-white/60">File Size</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-lg font-bold text-white flex items-center justify-center">
+                    <Clock className="h-4 w-4 mr-1" />
+                    {purchase.duration ? formatDuration(purchase.duration) : "N/A"}
+                  </div>
+                  <div className="text-sm text-white/60">Duration</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-lg font-bold text-white flex items-center justify-center">
+                    <Download className="h-4 w-4 mr-1" />
+                    {purchase.downloadCount}
+                  </div>
+                  <div className="text-sm text-white/60">Downloads</div>
+                </div>
+              </div>
+
+              {/* File Type & Environment Info */}
+              <div className="flex items-center space-x-4 text-sm text-white/60 mb-4">
+                <span className="bg-white/10 px-2 py-1 rounded">{purchase.fileType || "Unknown Type"}</span>
+                <span className="bg-white/10 px-2 py-1 rounded">
+                  {purchase.itemType === "bundle" ? "Bundle" : "Product Box"}
+                </span>
+                {purchase.environment && (
+                  <span
+                    className={`px-2 py-1 rounded ${
+                      purchase.environment === "live"
+                        ? "bg-green-500/20 text-green-300"
+                        : "bg-yellow-500/20 text-yellow-300"
+                    }`}
+                  >
+                    {purchase.environment.toUpperCase()}
+                  </span>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex space-x-3">
+                <Button asChild className="bg-red-600 hover:bg-red-700 flex-1">
+                  <Link href={purchase.accessUrl}>
+                    <Eye className="w-4 h-4 mr-2" />
+                    View Content
+                  </Link>
+                </Button>
+                {purchase.downloadUrl && (
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="bg-transparent border-white/20 text-white hover:bg-white/10"
+                  >
+                    <a href={purchase.downloadUrl} target="_blank" rel="noopener noreferrer">
+                      <Download className="w-4 h-4 mr-2" />
+                      Download
+                    </a>
+                  </Button>
+                )}
+                {purchase.creatorUsername && (
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="bg-transparent border-white/20 text-white hover:bg-white/10"
+                  >
+                    <Link href={`/creator/${purchase.creatorUsername}`}>
+                      <User className="w-4 h-4 mr-2" />
+                      Creator
                     </Link>
                   </Button>
-                  <div className="text-xs text-white/40 text-center">ID: {purchase.sessionId.slice(-8)}</div>
-                </div>
+                )}
               </div>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      {/* Debug info for development */}
-      {process.env.NODE_ENV === "development" && (
-        <Card className="bg-black/40 backdrop-blur-xl border-white/10 mt-8">
-          <CardHeader>
-            <CardTitle className="text-white text-sm">Development Debug</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <pre className="text-xs text-white/60 overflow-auto bg-black/20 p-4 rounded">
-              {JSON.stringify(
-                {
-                  userUid: user?.uid,
-                  purchaseCount: purchases.length,
-                  purchases: purchases.map((p) => ({
-                    id: p.id,
-                    title: p.title,
-                    itemType: p.itemType,
-                    amount: p.amount,
-                  })),
-                },
-                null,
-                2,
-              )}
-            </pre>
-          </CardContent>
-        </Card>
-      )}
+      <style jsx>{`
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `}</style>
     </div>
   )
 }
