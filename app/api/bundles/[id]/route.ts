@@ -1,78 +1,79 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getFirestore } from "firebase-admin/firestore"
-import { initializeApp, getApps, cert } from "firebase-admin/app"
-
-// Initialize Firebase Admin if not already initialized
-if (!getApps().length) {
-  initializeApp({
-    credential: cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-    }),
-  })
-}
-
-const db = getFirestore()
+import { db } from "@/lib/firebase-admin"
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+  console.log("🔍 [Bundle API] Fetching bundle:", params.id)
+
   try {
-    const bundleId = params.id
-    console.log(`🔍 [Bundles API] Fetching bundle: ${bundleId}`)
+    const bundleDoc = await db.collection("bundles").doc(params.id).get()
 
-    // Try to find the bundle in different collections
-    const collections = ["productBoxes", "bundles", "creator_product_boxes"]
-    let bundleData = null
-
-    for (const collectionName of collections) {
-      try {
-        const docRef = db.collection(collectionName).doc(bundleId)
-        const doc = await docRef.get()
-
-        if (doc.exists) {
-          bundleData = { id: doc.id, ...doc.data() }
-          console.log(`✅ [Bundles API] Found bundle in ${collectionName}:`, bundleData)
-          break
-        }
-      } catch (error) {
-        console.warn(`⚠️ [Bundles API] Error checking ${collectionName}:`, error)
-      }
-    }
-
-    if (!bundleData) {
-      console.log(`❌ [Bundles API] Bundle not found: ${bundleId}`)
+    if (!bundleDoc.exists) {
+      console.log("❌ [Bundle API] Bundle not found:", params.id)
       return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
     }
 
-    // Try to get content items count
-    let totalItems = 0
-    try {
-      const contentRef = db.collection("productBoxContent").where("productBoxId", "==", bundleId)
-      const contentSnapshot = await contentRef.get()
-      totalItems = contentSnapshot.size
-    } catch (error) {
-      console.warn(`⚠️ [Bundles API] Error getting content count:`, error)
+    const bundleData = bundleDoc.data()!
+    console.log("✅ [Bundle API] Bundle found:", bundleData.title)
+
+    // Get creator info if available
+    let creatorInfo = null
+    if (bundleData.creatorId) {
+      try {
+        const creatorDoc = await db.collection("users").doc(bundleData.creatorId).get()
+        if (creatorDoc.exists) {
+          const creatorData = creatorDoc.data()!
+          creatorInfo = {
+            id: bundleData.creatorId,
+            name: creatorData.displayName || creatorData.name || "Unknown Creator",
+            username: creatorData.username || "",
+            profilePicture: creatorData.profilePicture || "",
+          }
+        }
+      } catch (error) {
+        console.warn("⚠️ [Bundle API] Could not fetch creator info:", error)
+      }
     }
 
     const response = {
-      id: bundleData.id,
-      title: bundleData.title || bundleData.name || "Untitled Bundle",
+      id: params.id,
+      title: bundleData.title || "Untitled Bundle",
       description: bundleData.description || "",
-      thumbnailUrl: bundleData.thumbnailUrl || bundleData.customPreviewThumbnail || bundleData.previewImage,
-      customPreviewThumbnail: bundleData.customPreviewThumbnail,
-      creatorId: bundleData.creatorId || bundleData.userId,
-      creatorUsername: bundleData.creatorUsername || bundleData.username,
+      thumbnailUrl: bundleData.thumbnailUrl || bundleData.customPreviewThumbnail || "",
+      fileUrl: bundleData.downloadUrl || bundleData.fileUrl || "",
+      fileSize: bundleData.fileSize || 0,
+      fileType: bundleData.fileType || bundleData.mimeType || "application/octet-stream",
       price: bundleData.price || 0,
       currency: bundleData.currency || "usd",
-      totalItems,
-      createdAt: bundleData.createdAt,
-      updatedAt: bundleData.updatedAt,
+      creatorId: bundleData.creatorId || "",
+      creatorName: creatorInfo?.name || bundleData.creatorName || "Unknown Creator",
+      creatorUsername: creatorInfo?.username || "",
+      isPublic: bundleData.isPublic !== false,
+      createdAt: bundleData.createdAt || bundleData.uploadedAt || new Date(),
+      updatedAt: bundleData.updatedAt || new Date(),
+      tags: bundleData.tags || [],
+      category: bundleData.category || "",
+      downloadCount: bundleData.downloadCount || 0,
+      viewCount: bundleData.viewCount || 0,
+      contentItems: bundleData.contentItems || [],
+      metadata: {
+        duration: bundleData.duration,
+        resolution: bundleData.resolution,
+        format: bundleData.format,
+        codec: bundleData.codec,
+      },
+      creator: creatorInfo,
     }
 
-    console.log(`✅ [Bundles API] Returning bundle data:`, response)
     return NextResponse.json(response)
   } catch (error: any) {
-    console.error(`❌ [Bundles API] Error:`, error)
-    return NextResponse.json({ error: "Failed to fetch bundle", details: error.message }, { status: 500 })
+    console.error("❌ [Bundle API] Error fetching bundle:", error)
+    return NextResponse.json(
+      {
+        error: "Failed to fetch bundle",
+        details: error.message,
+        code: "FETCH_ERROR",
+      },
+      { status: 500 },
+    )
   }
 }
