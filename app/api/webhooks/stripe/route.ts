@@ -72,7 +72,8 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
       metadata: session.metadata,
     })
 
-    const { productBoxId, bundleId, buyerUid, buyerEmail, buyerName, creatorId, contentType } = session.metadata || {}
+    const { productBoxId, bundleId, buyerUid, buyerEmail, buyerName, creatorId, contentType, stripeAccountId } =
+      session.metadata || {}
 
     // CRITICAL: Must have buyerUid (Firebase user ID)
     if (!buyerUid) {
@@ -86,13 +87,31 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
       return
     }
 
+    // If we have a connected account ID in metadata, retrieve the full session details
+    let fullSession = session
+    if (stripeAccountId && session.id) {
+      try {
+        console.log("🔗 [Webhook] Retrieving full session from connected account:", stripeAccountId)
+        fullSession = await stripe.checkout.sessions.retrieve(session.id, {
+          expand: ["payment_intent", "line_items"],
+          stripeAccount: stripeAccountId,
+        })
+        console.log("✅ [Webhook] Successfully retrieved session from connected account")
+      } catch (error: any) {
+        console.error("❌ [Webhook] Failed to retrieve session from connected account:", error)
+        // Continue with the session data from the webhook event
+      }
+    }
+
     console.log("✅ [Webhook] Session metadata extracted:", {
       itemId,
       buyerUid,
       buyerEmail,
       contentType,
+      stripeAccountId,
     })
 
+    // Rest of the function remains the same...
     // Check if this purchase already exists
     const existingPurchase = await db.collection("bundlePurchases").doc(session.id).get()
     if (existingPurchase.exists) {
@@ -128,7 +147,7 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
       // User identification (buyerUid = Firebase user ID)
       buyerUid: buyerUid,
       userId: buyerUid, // Same as buyerUid for compatibility
-      userEmail: buyerEmail || session.customer_email || "",
+      userEmail: buyerEmail || fullSession.customer_email || "",
       userName: buyerName || buyerEmail?.split("@")[0] || "User",
 
       // Item identification
@@ -151,15 +170,19 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
       totalSize: contentItems.reduce((sum, item) => sum + (item.fileSize || 0), 0),
 
       // Purchase details
-      sessionId: session.id,
-      amount: session.amount_total ? session.amount_total / 100 : 0,
-      currency: session.currency || "usd",
+      sessionId: fullSession.id,
+      amount: fullSession.amount_total ? fullSession.amount_total / 100 : 0,
+      currency: fullSession.currency || "usd",
       status: "completed",
 
       // Creator details
       creatorId: actualCreatorId || "",
       creatorName: creatorData?.displayName || creatorData?.name || "Unknown Creator",
       creatorUsername: creatorData?.username || "",
+
+      // Stripe details
+      stripeAccountId: stripeAccountId || "",
+      paymentIntentId: fullSession.payment_intent?.toString() || "",
 
       // Access
       accessUrl: `/${isBundle ? "bundles" : "product-box"}/${itemId}/content`,
@@ -172,15 +195,16 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
     }
 
     console.log("💾 [Webhook] Saving purchase to bundlePurchases ONLY:", {
-      sessionId: session.id,
+      sessionId: fullSession.id,
       buyerUid: purchaseData.buyerUid,
       itemId: purchaseData.itemId,
       itemType: purchaseData.itemType,
       contentCount: purchaseData.contentCount,
+      stripeAccountId: purchaseData.stripeAccountId,
     })
 
     // Save to bundlePurchases collection ONLY (using sessionId as document ID)
-    await db.collection("bundlePurchases").doc(session.id).set(purchaseData)
+    await db.collection("bundlePurchases").doc(fullSession.id).set(purchaseData)
 
     // Update item sales counter
     await db
@@ -204,7 +228,7 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
         })
     }
 
-    console.log(`✅ [Webhook] Successfully processed purchase: ${session.id}`)
+    console.log(`✅ [Webhook] Successfully processed purchase: ${fullSession.id}`)
   } catch (error) {
     console.error("❌ [Webhook] Error handling checkout.session.completed:", error)
     throw error
