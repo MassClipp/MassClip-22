@@ -2,102 +2,117 @@ import { type NextRequest, NextResponse } from "next/server"
 import { adminDb } from "@/lib/firebase-admin"
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
-  console.log(`🔍 [Bundle API] Fetching bundle: ${params.id}`)
-
   try {
     const bundleId = params.id
+    console.log(`🔍 [Bundle API] Fetching bundle: ${bundleId}`)
 
-    if (!bundleId) {
-      return NextResponse.json(
-        {
-          error: "Bundle ID is required",
-          code: "MISSING_BUNDLE_ID",
-        },
-        { status: 400 },
-      )
-    }
-
-    console.log(`📦 [Bundle API] Looking up bundle in database: ${bundleId}`)
-
-    // Get bundle document from Firestore
+    // Get bundle from Firestore
     const bundleDoc = await adminDb.collection("bundles").doc(bundleId).get()
 
     if (!bundleDoc.exists) {
       console.log(`❌ [Bundle API] Bundle not found: ${bundleId}`)
-      return NextResponse.json(
-        {
-          error: "Bundle not found",
-          code: "BUNDLE_NOT_FOUND",
-        },
-        { status: 404 },
-      )
+      return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
     }
 
-    const bundleData = bundleDoc.data()!
-    console.log(`✅ [Bundle API] Bundle found:`, {
-      id: bundleId,
-      title: bundleData.title,
-      creatorId: bundleData.creatorId,
-    })
+    const bundleData = bundleDoc.data()
+    console.log(`📦 [Bundle API] Raw bundle data:`, bundleData)
 
-    // Get creator information
-    let creatorData = null
-    if (bundleData.creatorId) {
-      try {
-        const creatorDoc = await adminDb.collection("users").doc(bundleData.creatorId).get()
-        if (creatorDoc.exists) {
-          creatorData = creatorDoc.data()
-          console.log(`✅ [Bundle API] Creator found: ${creatorData?.displayName || creatorData?.name}`)
+    if (!bundleData) {
+      return NextResponse.json({ error: "Bundle data is empty" }, { status: 404 })
+    }
+
+    // Enhanced field extraction with multiple fallbacks
+    const extractField = (data: any, fieldNames: string[], defaultValue: any = null) => {
+      for (const fieldName of fieldNames) {
+        if (data[fieldName] !== undefined && data[fieldName] !== null) {
+          return data[fieldName]
         }
-      } catch (error) {
-        console.warn(`⚠️ [Bundle API] Could not fetch creator data:`, error)
       }
+      return defaultValue
     }
 
-    // Count content items if available
-    let contentItemsCount = 0
-    if (bundleData.contentItems && Array.isArray(bundleData.contentItems)) {
-      contentItemsCount = bundleData.contentItems.length
+    // Extract title with multiple possible field names
+    const title = extractField(bundleData, ["title", "name", "bundleName", "displayName"], "Untitled Bundle")
+
+    // Extract description
+    const description = extractField(bundleData, ["description", "desc", "summary", "about"], "")
+
+    // Extract creator information
+    const creatorId = extractField(bundleData, ["creatorId", "userId", "ownerId", "creator"])
+
+    const creatorUsername = extractField(bundleData, ["creatorUsername", "username", "creatorName", "creator"])
+
+    // Extract pricing
+    const price = extractField(bundleData, ["price", "cost", "amount"], 0)
+
+    // Extract file size with multiple possible formats
+    const fileSize = extractField(bundleData, ["fileSize", "size", "fileSizeBytes", "totalSize", "bundleSize"])
+
+    // Format file size if it's a number
+    let formattedFileSize = "Unknown"
+    if (typeof fileSize === "number" && fileSize > 0) {
+      if (fileSize < 1024) {
+        formattedFileSize = `${fileSize} B`
+      } else if (fileSize < 1024 * 1024) {
+        formattedFileSize = `${(fileSize / 1024).toFixed(1)} KB`
+      } else if (fileSize < 1024 * 1024 * 1024) {
+        formattedFileSize = `${(fileSize / (1024 * 1024)).toFixed(1)} MB`
+      } else {
+        formattedFileSize = `${(fileSize / (1024 * 1024 * 1024)).toFixed(1)} GB`
+      }
+    } else if (typeof fileSize === "string" && fileSize) {
+      formattedFileSize = fileSize
     }
 
-    // Prepare bundle information
-    const bundleInfo = {
+    // Extract thumbnail URL
+    const thumbnailUrl = extractField(bundleData, [
+      "thumbnailUrl",
+      "thumbnail",
+      "previewUrl",
+      "customPreviewThumbnail",
+      "image",
+    ])
+
+    // Extract content items count
+    const contentItems = bundleData.contentItems || bundleData.items || bundleData.files || []
+    const contentCount = Array.isArray(contentItems) ? contentItems.length : 0
+
+    // Extract tags
+    const tags = extractField(bundleData, ["tags", "categories", "labels"], [])
+
+    // Extract quality
+    const quality = extractField(bundleData, ["quality", "videoQuality", "resolution"])
+
+    // Extract view count
+    const viewCount = extractField(bundleData, ["viewCount", "views", "totalViews"], 0)
+
+    // Extract upload date
+    const uploadedAt = extractField(bundleData, ["uploadedAt", "createdAt", "dateCreated", "timestamp"])
+
+    // Format the response
+    const bundle = {
       id: bundleId,
-      title: bundleData.title || "Untitled Bundle",
-      description: bundleData.description || "",
-      thumbnailUrl: bundleData.thumbnailUrl || bundleData.customPreviewThumbnail || "",
-      creatorId: bundleData.creatorId || "",
-      creatorName: creatorData?.displayName || creatorData?.name || "Unknown Creator",
-      creatorUsername: creatorData?.username || "",
-      fileSize: bundleData.fileSize || bundleData.size || 0,
-      fileType: bundleData.fileType || bundleData.mimeType || "application/octet-stream",
-      tags: bundleData.tags || [],
-      isPublic: bundleData.isPublic !== false,
-      contentItems: contentItemsCount,
-      downloadUrl: bundleData.downloadUrl || bundleData.fileUrl || "",
-      createdAt: bundleData.createdAt || bundleData.uploadedAt || new Date(),
-      updatedAt: bundleData.updatedAt || new Date(),
+      title,
+      description,
+      creatorId,
+      creatorUsername,
+      price,
+      fileSize: formattedFileSize,
+      thumbnailUrl,
+      contentCount,
+      tags: Array.isArray(tags) ? tags : [],
+      quality,
+      viewCount,
+      uploadedAt: uploadedAt ? (uploadedAt.toDate ? uploadedAt.toDate().toISOString() : uploadedAt) : null,
+      // Include raw data for debugging
+      _debug: process.env.NODE_ENV === "development" ? bundleData : undefined,
     }
 
-    console.log(`📊 [Bundle API] Complete bundle info prepared:`, bundleInfo)
+    console.log(`✅ [Bundle API] Formatted bundle:`, bundle)
 
-    return NextResponse.json({
-      success: true,
-      bundle: bundleInfo,
-      message: "Bundle information retrieved successfully",
-    })
-  } catch (error: any) {
-    console.error(`❌ [Bundle API] Error fetching bundle ${params.id}:`, error)
-    console.error(`❌ [Bundle API] Error stack:`, error.stack)
-
-    return NextResponse.json(
-      {
-        error: "Failed to fetch bundle information",
-        details: error.message || "Unknown error occurred",
-        code: error.code || "INTERNAL_ERROR",
-        stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
-      },
-      { status: 500 },
-    )
+    return NextResponse.json({ bundle })
+  } catch (error) {
+    console.error(`❌ [Bundle API] Error fetching bundle:`, error)
+    return NextResponse.json({ error: "Failed to fetch bundle" }, { status: 500 })
   }
 }

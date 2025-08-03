@@ -1,6 +1,7 @@
 import { initializeApp as initializeAdminApp, getApps, cert, type App } from "firebase-admin/app"
 import { getFirestore, FieldValue, type Firestore } from "firebase-admin/firestore"
 import { getAuth, type Auth, type DecodedIdToken } from "firebase-admin/auth"
+import { getStorage } from "firebase-admin/storage"
 
 /**
  * Initialise the Firebase Admin SDK exactly once (avoids double-init in
@@ -48,20 +49,33 @@ export function initializeFirebaseAdmin(): App {
   }
 }
 
-// Initialize on import
-const adminApp = initializeFirebaseAdmin()
-export const db: Firestore = getFirestore(adminApp)
+// Initialize Firebase Admin SDK
+const firebaseAdminConfig = {
+  credential: cert({
+    projectId: process.env.FIREBASE_PROJECT_ID,
+    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+    privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+  }),
+  projectId: process.env.FIREBASE_PROJECT_ID,
+}
+
+// Initialize the app if it hasn't been initialized yet
+const adminApp = getApps().length === 0 ? initializeAdminApp(firebaseAdminConfig) : getApps()[0]
+
+// Export the services
 export const auth: Auth = getAuth(adminApp)
+export const adminDb: Firestore = getFirestore(adminApp)
+export const storage = getStorage(adminApp)
 
-// Export the required adminDb and adminAuth aliases
-export const adminDb = db
+// Export default db for backward compatibility
+export const db: Firestore = adminDb
+
+// Required exports for deployment compatibility
 export const adminAuth = auth
+export const firestore = adminDb
 
-// Add all the other required exports
-export const firestore = db
-
-// Recommended for better Firestore reliability
-db.settings({ ignoreUndefinedProperties: true })
+// Export the app instance
+export default adminApp
 
 /**
  * Generic retry helper with exponential back-off – useful for flaky Firestore
@@ -134,7 +148,7 @@ export async function getAuthenticatedUser(
  */
 export async function createOrUpdateUserProfile(userId: string, profileData: Record<string, unknown>) {
   return withRetry(async () => {
-    const ref = db.collection("users").doc(userId)
+    const ref = adminDb.collection("users").doc(userId)
     const now = new Date()
 
     try {
@@ -167,4 +181,5 @@ export { FieldValue }
 export const firebaseDb = {
   auth: () => auth,
   firestore: () => firestore,
+  storage: () => storage,
 }
