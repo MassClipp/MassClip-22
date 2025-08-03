@@ -1,7 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
 import { db } from "@/lib/firebase-admin"
-import { UnifiedPurchaseService } from "@/lib/unified-purchase-service"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
@@ -53,10 +52,10 @@ export async function POST(request: NextRequest) {
 
     console.log(`🔔 [Stripe Webhook] Processing event: ${event.type} (${isLiveKey ? "LIVE" : "TEST"} mode)`)
 
-    // Handle checkout.session.completed event with buyer identification
+    // Handle checkout.session.completed event - SINGLE SOURCE OF TRUTH
     if (event.type === "checkout.session.completed") {
       const session = event.data.object as Stripe.Checkout.Session
-      await handleCheckoutSessionCompleted(session, event.account)
+      await handleCheckoutSessionCompleted(session)
     }
 
     return NextResponse.json({ received: true })
@@ -66,42 +65,18 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session, connectedAccountId?: string) {
+async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
   try {
-    console.log("🔍 [Webhook] Processing checkout session with buyer identification:", {
+    console.log("🔍 [Webhook] Processing checkout session:", {
       sessionId: session.id,
-      connectedAccount: connectedAccountId,
       metadata: session.metadata,
     })
 
-    // Extract comprehensive buyer metadata
-    const { productBoxId, bundleId, buyerUid, buyerEmail, buyerName, creatorId, isAuthenticated, contentType } =
-      session.metadata || {}
+    const { productBoxId, bundleId, buyerUid, buyerEmail, buyerName, creatorId, contentType } = session.metadata || {}
 
-    // CRITICAL: Ensure we have buyer identification
+    // CRITICAL: Must have buyerUid (Firebase user ID)
     if (!buyerUid) {
       console.error("❌ [Webhook] CRITICAL: Missing buyerUid in session metadata:", session.id)
-
-      // Try to extract from custom fields if anonymous purchase
-      let extractedBuyerEmail = ""
-      if (session.custom_fields) {
-        const emailField = session.custom_fields.find((field) => field.key === "buyer_email")
-        if (emailField && emailField.text) {
-          extractedBuyerEmail = emailField.text.value
-          console.log("📧 [Webhook] Extracted buyer email from custom fields:", extractedBuyerEmail)
-        }
-      }
-
-      if (!extractedBuyerEmail && !session.customer_email) {
-        console.error("❌ [Webhook] Cannot identify buyer - no UID, email, or custom fields")
-        return
-      }
-
-      // For anonymous purchases, use email as identifier
-      const anonymousBuyerUid = `anonymous_${session.customer_email || extractedBuyerEmail}`
-      console.log("🔄 [Webhook] Using anonymous buyer identifier:", anonymousBuyerUid)
-
-      await processAnonymousPurchase(session, anonymousBuyerUid, extractedBuyerEmail || session.customer_email!)
       return
     }
 
@@ -115,15 +90,12 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session, 
       itemId,
       buyerUid,
       buyerEmail,
-      buyerName,
-      creatorId,
       contentType,
-      isAuthenticated,
     })
 
-    // Check if this purchase has already been processed
-    const existingPurchase = await UnifiedPurchaseService.getUserPurchase(buyerUid, session.id)
-    if (existingPurchase) {
+    // Check if this purchase already exists
+    const existingPurchase = await db.collection("bundlePurchases").doc(session.id).get()
+    if (existingPurchase.exists) {
       console.log("⚠️ [Webhook] Purchase already processed:", session.id)
       return
     }
@@ -148,76 +120,67 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session, 
       creatorData = creatorDoc.exists ? creatorDoc.data() : null
     }
 
-    // Create unified purchase record with comprehensive buyer identification
-    await UnifiedPurchaseService.createUnifiedPurchase(buyerUid, {
-      [isBundle ? "bundleId" : "productBoxId"]: itemId,
-      sessionId: session.id,
-      amount: session.amount_total ? session.amount_total / 100 : 0,
-      currency: session.currency || "usd",
-      creatorId: actualCreatorId || "",
-      userEmail: buyerEmail || session.customer_email || "",
-      userName: buyerName || buyerEmail?.split("@")[0] || "User",
-    })
+    // Get content items for this purchase
+    const contentItems = await fetchContentItems(itemId, isBundle)
 
-    // Create main purchase record with enhanced buyer identification
-    const mainPurchaseData = {
-      // CRITICAL: Comprehensive buyer identification
-      userId: buyerUid,
-      buyerUid,
+    // Create SINGLE purchase record in bundlePurchases ONLY
+    const purchaseData = {
+      // User identification (buyerUid = Firebase user ID)
+      buyerUid: buyerUid,
+      userId: buyerUid, // Same as buyerUid for compatibility
       userEmail: buyerEmail || session.customer_email || "",
       userName: buyerName || buyerEmail?.split("@")[0] || "User",
-      isAuthenticated: isAuthenticated === "true",
 
       // Item identification
-      [isBundle ? "bundleId" : "productBoxId"]: itemId,
-      itemId,
-      sessionId: session.id,
-      paymentIntentId: session.payment_intent,
-
-      // Purchase details
-      amount: session.amount_total ? session.amount_total / 100 : 0,
-      currency: session.currency || "usd",
-      timestamp: new Date(),
-      createdAt: new Date(),
-      purchasedAt: new Date(),
-      status: "completed",
-      type: isBundle ? "bundle" : "product_box",
+      itemId: itemId,
+      bundleId: isBundle ? itemId : null,
+      productBoxId: !isBundle ? itemId : null,
+      itemType: isBundle ? "bundle" : "product_box",
 
       // Item details
-      itemTitle: itemData.title || `Untitled ${isBundle ? "Bundle" : "Product Box"}`,
-      itemDescription: itemData.description || "",
+      title: itemData.title || "Untitled",
+      description: itemData.description || "",
       thumbnailUrl: itemData.thumbnailUrl || itemData.customPreviewThumbnail || "",
 
+      // Content details
+      contents: contentItems,
+      items: contentItems,
+      itemNames: contentItems.map((item) => item.displayTitle),
+      contentCount: contentItems.length,
+      totalItems: contentItems.length,
+      totalSize: contentItems.reduce((sum, item) => sum + (item.fileSize || 0), 0),
+
+      // Purchase details
+      sessionId: session.id,
+      amount: session.amount_total ? session.amount_total / 100 : 0,
+      currency: session.currency || "usd",
+      status: "completed",
+
       // Creator details
-      creatorId: actualCreatorId,
-      creatorName: creatorData?.displayName || creatorData?.name || "",
+      creatorId: actualCreatorId || "",
+      creatorName: creatorData?.displayName || creatorData?.name || "Unknown Creator",
       creatorUsername: creatorData?.username || "",
 
-      // Access and verification
-      accessUrl: `/${isBundle ? "bundle" : "product-box"}/${itemId}/content`,
-      verificationMethod: "webhook_with_buyer_metadata",
-      webhookProcessedAt: new Date(),
+      // Access
+      accessUrl: `/${isBundle ? "bundles" : "product-box"}/${itemId}/content`,
+      accessGranted: true,
+
+      // Timestamps
+      purchasedAt: new Date(),
+      createdAt: new Date(),
       environment: isLiveKey ? "live" : "test",
-      connectedAccountId: connectedAccountId || null,
     }
 
-    // Save to main purchases collection with session ID as document ID
-    await db.collection("purchases").doc(session.id).set(mainPurchaseData)
+    console.log("💾 [Webhook] Saving purchase to bundlePurchases ONLY:", {
+      sessionId: session.id,
+      buyerUid: purchaseData.buyerUid,
+      itemId: purchaseData.itemId,
+      itemType: purchaseData.itemType,
+      contentCount: purchaseData.contentCount,
+    })
 
-    // Save to user's personal purchases if authenticated
-    if (buyerUid !== "anonymous" && !buyerUid.startsWith("anonymous_")) {
-      await db.collection("users").doc(buyerUid).collection("purchases").add(mainPurchaseData)
-
-      // Update user profile
-      await db
-        .collection("users")
-        .doc(buyerUid)
-        .update({
-          lastPurchaseAt: new Date(),
-          totalPurchases: db.FieldValue.increment(1),
-          totalSpent: db.FieldValue.increment(mainPurchaseData.amount),
-        })
-    }
+    // Save to bundlePurchases collection ONLY (using sessionId as document ID)
+    await db.collection("bundlePurchases").doc(session.id).set(purchaseData)
 
     // Update item sales counter
     await db
@@ -225,98 +188,100 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session, 
       .doc(itemId)
       .update({
         totalSales: db.FieldValue.increment(1),
-        totalRevenue: db.FieldValue.increment(mainPurchaseData.amount),
+        totalRevenue: db.FieldValue.increment(purchaseData.amount),
         lastPurchaseAt: new Date(),
       })
 
-    // Record the sale for the creator with buyer identification
+    // Update creator's total sales
     if (actualCreatorId) {
-      await db
-        .collection("users")
-        .doc(actualCreatorId)
-        .collection("sales")
-        .add({
-          ...mainPurchaseData,
-          platformFee: session.amount_total ? (session.amount_total * 0.25) / 100 : 0,
-          netAmount: session.amount_total ? (session.amount_total * 0.75) / 100 : 0,
-          buyerIdentification: {
-            buyerUid,
-            buyerEmail: buyerEmail || session.customer_email || "",
-            buyerName: buyerName || "User",
-            isAuthenticated: isAuthenticated === "true",
-          },
-        })
-
-      // Update creator's total sales
       await db
         .collection("users")
         .doc(actualCreatorId)
         .update({
           totalSales: db.FieldValue.increment(1),
-          totalRevenue: db.FieldValue.increment(mainPurchaseData.amount),
+          totalRevenue: db.FieldValue.increment(purchaseData.amount),
           lastSaleAt: new Date(),
         })
     }
 
-    console.log(`✅ [Webhook] Successfully processed webhook with buyer identification for session: ${session.id}`, {
-      buyerUid,
-      buyerEmail: buyerEmail || session.customer_email,
-      itemId,
-      contentType,
-      environment: isLiveKey ? "LIVE" : "TEST",
-    })
+    console.log(`✅ [Webhook] Successfully processed purchase: ${session.id}`)
   } catch (error) {
     console.error("❌ [Webhook] Error handling checkout.session.completed:", error)
     throw error
   }
 }
 
-// Handle anonymous purchases with email identification
-async function processAnonymousPurchase(
-  session: Stripe.Checkout.Session,
-  anonymousBuyerUid: string,
-  buyerEmail: string,
-) {
+// Fetch content items for the purchase
+async function fetchContentItems(itemId: string, isBundle: boolean): Promise<any[]> {
+  const items: any[] = []
+
   try {
-    console.log("🔄 [Webhook] Processing anonymous purchase:", { anonymousBuyerUid, buyerEmail })
+    if (isBundle) {
+      // For bundles, get the bundle data itself
+      const bundleDoc = await db.collection("bundles").doc(itemId).get()
+      if (bundleDoc.exists) {
+        const bundleData = bundleDoc.data()!
 
-    const { productBoxId, bundleId, creatorId, contentType } = session.metadata || {}
-    const itemId = bundleId || productBoxId
+        if (bundleData.downloadUrl || bundleData.fileUrl) {
+          items.push({
+            id: itemId,
+            title: bundleData.title || "Bundle",
+            displayTitle: bundleData.title || "Bundle",
+            fileUrl: bundleData.downloadUrl || bundleData.fileUrl,
+            fileSize: bundleData.fileSize || 0,
+            displaySize: formatFileSize(bundleData.fileSize || 0),
+            mimeType: bundleData.fileType || "application/zip",
+            contentType: "document",
+            filename: `${bundleData.title || "bundle"}.zip`,
+          })
+        }
+      }
+    } else {
+      // For product boxes, get all content items
+      const uploadsQuery = db.collection("uploads").where("productBoxId", "==", itemId)
+      const uploadsSnapshot = await uploadsQuery.get()
 
-    if (!itemId) {
-      console.error("❌ [Webhook] Missing item ID for anonymous purchase")
-      return
+      uploadsSnapshot.forEach((doc) => {
+        const data = doc.data()
+        if (data.fileUrl) {
+          items.push({
+            id: doc.id,
+            title: data.title || data.filename || "Untitled",
+            displayTitle: data.title || data.filename || "Untitled",
+            fileUrl: data.fileUrl,
+            fileSize: data.fileSize || 0,
+            displaySize: formatFileSize(data.fileSize || 0),
+            mimeType: data.mimeType || "video/mp4",
+            contentType: getContentType(data.mimeType || "video/mp4"),
+            filename: data.filename || `${doc.id}.mp4`,
+            duration: data.duration || 0,
+            thumbnailUrl: data.thumbnailUrl || "",
+          })
+        }
+      })
     }
 
-    // Create purchase record for anonymous buyer
-    const purchaseData = {
-      userId: anonymousBuyerUid,
-      buyerUid: anonymousBuyerUid,
-      userEmail: buyerEmail,
-      userName: buyerEmail.split("@")[0] || "Anonymous User",
-      isAuthenticated: false,
-
-      [contentType === "bundle" ? "bundleId" : "productBoxId"]: itemId,
-      itemId,
-      sessionId: session.id,
-      amount: session.amount_total ? session.amount_total / 100 : 0,
-      currency: session.currency || "usd",
-      status: "completed",
-      type: contentType || "product_box",
-
-      timestamp: new Date(),
-      createdAt: new Date(),
-      purchasedAt: new Date(),
-      verificationMethod: "webhook_anonymous_with_email",
-      environment: isLiveKey ? "live" : "test",
-    }
-
-    // Save anonymous purchase
-    await db.collection("purchases").doc(session.id).set(purchaseData)
-    await db.collection("anonymousPurchases").doc(session.id).set(purchaseData)
-
-    console.log("✅ [Webhook] Anonymous purchase processed:", { anonymousBuyerUid, buyerEmail, itemId })
+    console.log(
+      `📦 [Content Fetch] Found ${items.length} content items for ${isBundle ? "bundle" : "product box"}: ${itemId}`,
+    )
+    return items
   } catch (error) {
-    console.error("❌ [Webhook] Error processing anonymous purchase:", error)
+    console.error("❌ [Content Fetch] Error fetching content items:", error)
+    return []
   }
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes === 0) return "0 Bytes"
+  const k = 1024
+  const sizes = ["Bytes", "KB", "MB", "GB"]
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
+}
+
+function getContentType(mimeType: string): "video" | "audio" | "image" | "document" {
+  if (mimeType.startsWith("video/")) return "video"
+  if (mimeType.startsWith("audio/")) return "audio"
+  if (mimeType.startsWith("image/")) return "image"
+  return "document"
 }
