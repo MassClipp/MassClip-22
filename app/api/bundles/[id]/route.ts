@@ -5,37 +5,50 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   console.log("🔍 [Bundle API] Fetching bundle:", params.id)
 
   try {
-    const bundleDoc = await db.collection("bundles").doc(params.id).get()
+    const bundleId = params.id
+
+    if (!bundleId) {
+      return NextResponse.json({ error: "Bundle ID is required" }, { status: 400 })
+    }
+
+    // Get bundle document
+    const bundleDoc = await db.collection("bundles").doc(bundleId).get()
 
     if (!bundleDoc.exists) {
-      console.log("❌ [Bundle API] Bundle not found:", params.id)
+      console.log("❌ [Bundle API] Bundle not found:", bundleId)
       return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
     }
 
     const bundleData = bundleDoc.data()!
-    console.log("✅ [Bundle API] Bundle found:", bundleData.title)
+    console.log("📦 [Bundle API] Bundle data found:", {
+      id: bundleId,
+      title: bundleData.title,
+      creatorId: bundleData.creatorId,
+    })
 
-    // Get creator info if available
-    let creatorInfo = null
+    // Get creator information
+    let creatorData = null
     if (bundleData.creatorId) {
       try {
         const creatorDoc = await db.collection("users").doc(bundleData.creatorId).get()
         if (creatorDoc.exists) {
-          const creatorData = creatorDoc.data()!
-          creatorInfo = {
+          const creator = creatorDoc.data()!
+          creatorData = {
             id: bundleData.creatorId,
-            name: creatorData.displayName || creatorData.name || "Unknown Creator",
-            username: creatorData.username || "",
-            profilePicture: creatorData.profilePicture || "",
+            name: creator.displayName || creator.name || creator.email?.split("@")[0] || "Unknown Creator",
+            username: creator.username || "",
+            profilePicture: creator.profilePicture || creator.photoURL || "",
           }
+          console.log("👤 [Bundle API] Creator data found:", creatorData.name)
         }
       } catch (error) {
-        console.warn("⚠️ [Bundle API] Could not fetch creator info:", error)
+        console.warn("⚠️ [Bundle API] Could not fetch creator data:", error)
       }
     }
 
-    const response = {
-      id: params.id,
+    // Prepare response data
+    const responseData = {
+      id: bundleId,
       title: bundleData.title || "Untitled Bundle",
       description: bundleData.description || "",
       thumbnailUrl: bundleData.thumbnailUrl || bundleData.customPreviewThumbnail || "",
@@ -45,33 +58,33 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       price: bundleData.price || 0,
       currency: bundleData.currency || "usd",
       creatorId: bundleData.creatorId || "",
-      creatorName: creatorInfo?.name || bundleData.creatorName || "Unknown Creator",
-      creatorUsername: creatorInfo?.username || "",
+      creatorName: creatorData?.name || "Unknown Creator",
+      creatorUsername: creatorData?.username || "",
       isPublic: bundleData.isPublic !== false,
       createdAt: bundleData.createdAt || bundleData.uploadedAt || new Date(),
-      updatedAt: bundleData.updatedAt || new Date(),
       tags: bundleData.tags || [],
       category: bundleData.category || "",
       downloadCount: bundleData.downloadCount || 0,
       viewCount: bundleData.viewCount || 0,
       contentItems: bundleData.contentItems || [],
-      metadata: {
-        duration: bundleData.duration,
-        resolution: bundleData.resolution,
-        format: bundleData.format,
-        codec: bundleData.codec,
-      },
-      creator: creatorInfo,
+      creator: creatorData,
     }
 
-    return NextResponse.json(response)
+    console.log("✅ [Bundle API] Returning bundle data:", {
+      id: responseData.id,
+      title: responseData.title,
+      creator: responseData.creatorName,
+      fileSize: responseData.fileSize,
+      contentItems: responseData.contentItems.length,
+    })
+
+    return NextResponse.json(responseData)
   } catch (error: any) {
     console.error("❌ [Bundle API] Error fetching bundle:", error)
     return NextResponse.json(
       {
         error: "Failed to fetch bundle",
-        details: error.message,
-        code: "FETCH_ERROR",
+        details: error.message || "Unknown error occurred",
       },
       { status: 500 },
     )
