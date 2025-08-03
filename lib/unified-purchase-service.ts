@@ -154,8 +154,8 @@ export class UnifiedPurchaseService {
       // Create unified purchase document
       const unifiedPurchase: UnifiedPurchase = {
         id: purchaseData.sessionId,
-        bundleId: bundleId || null,
-        productBoxId: productBoxId || null,
+        bundleId: bundleId || undefined,
+        productBoxId: productBoxId || undefined,
         itemId: itemId,
         productBoxTitle: itemData.title || `Untitled ${itemType}`,
         productBoxDescription: itemData.description || "",

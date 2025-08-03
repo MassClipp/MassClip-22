@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
 
     // Validate required fields
     if (!userId || !bundleId || !creatorId) {
-      console.error("❌ [Test Add Bundle] Missing required fields")
+      console.error("❌ [Test Add Bundle] Missing required fields:", { userId, bundleId, creatorId })
       return NextResponse.json(
         {
           error: "Missing required fields",
