@@ -4,10 +4,9 @@ import { useEffect, useState } from "react"
 import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
-import { AlertCircle, Package, Eye, Download, Calendar, DollarSign, User, RefreshCw } from "lucide-react"
+import { AlertCircle, RefreshCw } from "lucide-react"
 import Link from "next/link"
+import PurchasesFullScreen from "@/components/purchases-full-screen"
 
 interface Purchase {
   id: string
@@ -221,122 +220,5 @@ export default function PurchasesPage() {
     )
   }
 
-  return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="max-w-4xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">My Purchases</h1>
-            <p className="text-gray-600 mt-1">Access your purchased content and downloads</p>
-          </div>
-          <Button onClick={fetchPurchases} variant="outline" size="sm">
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Refresh
-          </Button>
-        </div>
-
-        {/* Purchases List */}
-        {purchases.length === 0 ? (
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <Package className="h-12 w-12 text-gray-400 mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">No Purchases Yet</h3>
-              <p className="text-gray-600 text-center mb-4">
-                You haven't made any purchases yet. Browse our content to get started!
-              </p>
-              <Button asChild>
-                <Link href="/dashboard/explore">
-                  <Eye className="h-4 w-4 mr-2" />
-                  Explore Content
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-4">
-            {purchases.map((purchase) => (
-              <Card key={purchase.id} className="hover:shadow-md transition-shadow">
-                <CardContent className="p-6">
-                  <div className="flex gap-4">
-                    {/* Thumbnail */}
-                    <div className="flex-shrink-0">
-                      <img
-                        src={purchase.item?.thumbnailUrl || "/placeholder.svg"}
-                        alt={purchase.item?.title || "Purchase"}
-                        className="w-20 h-20 rounded-lg object-cover"
-                        onError={(e) => {
-                          e.currentTarget.src = "/placeholder.svg"
-                        }}
-                      />
-                    </div>
-
-                    {/* Content */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between mb-2">
-                        <div>
-                          <h3 className="font-semibold text-lg text-gray-900 truncate">
-                            {purchase.item?.title || `Purchase ${purchase.id.slice(-8)}`}
-                          </h3>
-                          {purchase.item?.description && (
-                            <p className="text-gray-600 text-sm mt-1 line-clamp-2">{purchase.item.description}</p>
-                          )}
-                        </div>
-                        <Badge
-                          variant={purchase.status === "completed" ? "default" : "secondary"}
-                          className={purchase.status === "completed" ? "bg-green-100 text-green-800" : ""}
-                        >
-                          {purchase.status}
-                        </Badge>
-                      </div>
-
-                      <div className="flex items-center gap-4 text-sm text-gray-600 mb-3">
-                        <div className="flex items-center gap-1">
-                          <DollarSign className="h-4 w-4" />
-                          <span>{formatAmount(purchase.amount, purchase.currency)}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Calendar className="h-4 w-4" />
-                          <span>{formatDate(purchase.createdAt || purchase.purchasedAt)}</span>
-                        </div>
-                        {purchase.creator && (
-                          <div className="flex items-center gap-1">
-                            <User className="h-4 w-4" />
-                            <span>
-                              {purchase.creator.displayName || purchase.creator.name}
-                              {purchase.creator.username && (
-                                <span className="text-gray-400"> (@{purchase.creator.username})</span>
-                              )}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-
-                      <Separator className="my-3" />
-
-                      {/* Actions */}
-                      <div className="flex gap-2">
-                        <Button asChild size="sm">
-                          <Link href={`/${purchase.bundleId ? "bundles" : "product-box"}/${purchase.itemId}/content`}>
-                            <Eye className="h-4 w-4 mr-2" />
-                            View Content
-                          </Link>
-                        </Button>
-                        <Button variant="outline" size="sm" asChild>
-                          <Link href={`/${purchase.bundleId ? "bundles" : "product-box"}/${purchase.itemId}`}>
-                            <Download className="h-4 w-4 mr-2" />
-                            Download
-                          </Link>
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  )
+  return <PurchasesFullScreen className="min-h-screen" purchases={purchases} />
 }
