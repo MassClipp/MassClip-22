@@ -1,5 +1,4 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { headers } from "next/headers"
+import { NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
 import { db } from "@/lib/firebase-admin"
 import { FieldValue } from "firebase-admin/firestore"
@@ -8,199 +7,117 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
 })
 
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
+const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET!
 
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
   const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
   const startTime = Date.now()
 
+  console.log(`🎯 [Webhook ${requestId}] Starting webhook processing`)
+
   try {
-    console.log(`🎯 [Webhook ${requestId}] Starting webhook processing at ${new Date().toISOString()}`)
+    // Get the raw body - this is critical for signature verification
+    const body = await req.text()
+    const sig = req.headers.get('stripe-signature')
 
-    // Get the raw request body as ArrayBuffer (critical for signature verification)
-    const arrayBuffer = await request.arrayBuffer()
-    const body = Buffer.from(arrayBuffer)
-    const bodyString = body.toString('utf8')
+    console.log(`📝 [Webhook ${requestId}] Body length: ${body.length}, Has signature: ${!!sig}`)
 
-    console.log(`📝 [Webhook ${requestId}] Request body length: ${body.length} bytes`)
-
-    // Get the Stripe signature from headers
-    const headersList = headers()
-    const signature = headersList.get("stripe-signature")
-
-    console.log(`🔍 [Webhook ${requestId}] Headers check:`, {
-      hasSignature: !!signature,
-      signatureLength: signature?.length || 0,
-      userAgent: headersList.get("user-agent"),
-      contentType: headersList.get("content-type"),
-    })
-
-    if (!signature) {
-      console.error(`❌ [Webhook ${requestId}] No Stripe signature found`)
-      return NextResponse.json({ error: "No signature" }, { status: 400 })
+    if (!sig) {
+      console.error(`❌ [Webhook ${requestId}] No Stripe signature header`)
+      return new NextResponse('No signature', { status: 400 })
     }
 
-    // Verify the webhook signature using the raw body
     let event: Stripe.Event
+
     try {
-      console.log(`🔐 [Webhook ${requestId}] Attempting signature verification...`)
-      // Use the raw body string for signature verification
-      event = stripe.webhooks.constructEvent(bodyString, signature, webhookSecret)
-      console.log(`✅ [Webhook ${requestId}] Signature verified successfully`)
+      // Verify the webhook signature
+      event = stripe.webhooks.constructEvent(body, sig, endpointSecret)
+      console.log(`✅ [Webhook ${requestId}] Signature verified for event: ${event.type}`)
     } catch (err: any) {
-      console.error(`❌ [Webhook ${requestId}] Signature verification failed:`, {
-        error: err.message,
-        type: err.type,
-        webhookSecretLength: webhookSecret.length,
-        signatureLength: signature.length,
+      console.error(`❌ [Webhook ${requestId}] Signature verification failed: ${err.message}`)
+      console.error(`🔍 [Webhook ${requestId}] Debug info:`, {
         bodyLength: body.length,
+        sigLength: sig?.length,
+        endpointSecretLength: endpointSecret?.length,
+        bodyPreview: body.substring(0, 100),
+        sigPreview: sig?.substring(0, 50),
       })
-      return NextResponse.json({ error: `Webhook signature verification failed: ${err.message}` }, { status: 400 })
+      return new NextResponse(`Webhook Error: ${err.message}`, { status: 400 })
     }
 
-    console.log(`🎯 [Webhook ${requestId}] Processing event: ${event.type} (ID: ${event.id})`)
-    console.log(`📊 [Webhook ${requestId}] Event details:`, {
-      type: event.type,
-      id: event.id,
-      created: new Date(event.created * 1000).toISOString(),
-      livemode: event.livemode,
-      account: event.account || "platform",
-    })
-
-    if (event.type === "checkout.session.completed") {
+    // Handle the checkout.session.completed event
+    if (event.type === 'checkout.session.completed') {
       const session = event.data.object as Stripe.Checkout.Session
 
-      console.log(`💳 [Webhook ${requestId}] Processing checkout session: ${session.id}`)
+      console.log(`💳 [Webhook ${requestId}] Processing session: ${session.id}`)
       console.log(`🔍 [Webhook ${requestId}] Session metadata:`, session.metadata)
-      console.log(`💰 [Webhook ${requestId}] Session details:`, {
-        id: session.id,
-        amount: session.amount_total,
-        currency: session.currency,
-        payment_status: session.payment_status,
-        customer_email: session.customer_details?.email,
-        mode: session.mode,
-      })
 
-      // STEP 1: Extract required metadata
+      // Extract metadata
       const creatorId = session.metadata?.creatorId
       const bundleId = session.metadata?.bundleId
       const buyerUid = session.metadata?.buyerUid || session.client_reference_id || ""
 
-      console.log(`📋 [Webhook ${requestId}] Extracted metadata:`, {
-        creatorId,
-        bundleId,
-        buyerUid,
-        hasMetadata: !!session.metadata,
-        metadataKeys: session.metadata ? Object.keys(session.metadata) : [],
-      })
-
       if (!creatorId || !bundleId) {
-        console.error(`❌ [Webhook ${requestId}] Missing required metadata:`, {
+        console.error(`❌ [Webhook ${requestId}] Missing metadata:`, {
           creatorId,
           bundleId,
           buyerUid,
-          metadata: session.metadata,
+          allMetadata: session.metadata
         })
-        return NextResponse.json({ error: "Missing required metadata" }, { status: 400 })
+        return new NextResponse('Missing required metadata', { status: 400 })
       }
 
-      console.log(
-        `✅ [Webhook ${requestId}] Required metadata found - Creator: ${creatorId}, Bundle: ${bundleId}, Buyer: ${buyerUid}`,
-      )
-
-      // STEP 2: Check if purchase already exists (prevent duplicates)
-      console.log(`🔍 [Webhook ${requestId}] Checking for existing purchase...`)
+      // Check for duplicate processing
       const existingPurchase = await db.collection("bundlePurchases").doc(session.id).get()
       if (existingPurchase.exists) {
-        console.log(`⚠️ [Webhook ${requestId}] Purchase already exists for session: ${session.id}`)
-        return NextResponse.json({ received: true, message: "Purchase already processed" })
+        console.log(`⚠️ [Webhook ${requestId}] Purchase already exists: ${session.id}`)
+        return new NextResponse('Already processed', { status: 200 })
       }
 
-      // STEP 3: Get creator's Stripe account ID
-      console.log(`🔍 [Webhook ${requestId}] Looking up creator: ${creatorId}`)
+      // Get creator data
       const creatorDoc = await db.collection("users").doc(creatorId).get()
-
       if (!creatorDoc.exists) {
         console.error(`❌ [Webhook ${requestId}] Creator not found: ${creatorId}`)
-        return NextResponse.json({ error: "Creator not found" }, { status: 400 })
+        return new NextResponse('Creator not found', { status: 400 })
       }
 
       const creatorData = creatorDoc.data()!
       const creatorStripeAccountId = creatorData.stripeAccountId
 
-      console.log(`👤 [Webhook ${requestId}] Creator data:`, {
-        id: creatorId,
-        name: creatorData.displayName || creatorData.name,
-        hasStripeAccount: !!creatorStripeAccountId,
-        stripeAccountId: creatorStripeAccountId,
-      })
-
       if (!creatorStripeAccountId) {
-        console.error(`❌ [Webhook ${requestId}] Creator has no Stripe account: ${creatorId}`)
-        return NextResponse.json({ error: "Creator Stripe account not found" }, { status: 400 })
+        console.error(`❌ [Webhook ${requestId}] No Stripe account for creator: ${creatorId}`)
+        return new NextResponse('Creator Stripe account not found', { status: 400 })
       }
 
-      console.log(`✅ [Webhook ${requestId}] Creator Stripe account found: ${creatorStripeAccountId}`)
-
-      // STEP 4: Verify session through seller's connected Stripe account
+      // Verify session through connected account
       let verifiedSession: Stripe.Checkout.Session
       try {
-        console.log(`🔍 [Webhook ${requestId}] Verifying session through connected account: ${creatorStripeAccountId}`)
         verifiedSession = await stripe.checkout.sessions.retrieve(session.id, {
           expand: ["line_items", "payment_intent"],
           stripeAccount: creatorStripeAccountId,
         })
         console.log(`✅ [Webhook ${requestId}] Session verified through connected account`)
-        console.log(
-          `💰 [Webhook ${requestId}] Verified amount: ${verifiedSession.amount_total} ${verifiedSession.currency}`,
-        )
       } catch (error: any) {
-        console.error(`❌ [Webhook ${requestId}] Failed to verify session through connected account:`, {
-          error: error.message,
-          type: error.type,
-          code: error.code,
-          sessionId: session.id,
-          stripeAccount: creatorStripeAccountId,
-        })
-        return NextResponse.json({ error: "Session verification failed" }, { status: 400 })
+        console.error(`❌ [Webhook ${requestId}] Session verification failed:`, error.message)
+        return new NextResponse('Session verification failed', { status: 400 })
       }
 
-      // STEP 5: Get bundle with all content information
-      console.log(`🔍 [Webhook ${requestId}] Fetching bundle: ${bundleId}`)
+      // Get bundle data
       const bundleDoc = await db.collection("bundles").doc(bundleId).get()
-
       if (!bundleDoc.exists) {
         console.error(`❌ [Webhook ${requestId}] Bundle not found: ${bundleId}`)
-        return NextResponse.json({ error: "Bundle not found" }, { status: 400 })
+        return new NextResponse('Bundle not found', { status: 400 })
       }
 
       const bundleData = bundleDoc.data()!
-      console.log(`✅ [Webhook ${requestId}] Bundle found: ${bundleData.title}`)
-      console.log(`📦 [Webhook ${requestId}] Bundle structure:`, {
-        title: bundleData.title,
-        hasContent: !!bundleData.content,
-        hasContentItems: !!bundleData.contentItems,
-        hasVideos: !!bundleData.videos,
-        contentLength: bundleData.content?.length || 0,
-        contentItemsLength: bundleData.contentItems?.length || 0,
-        videosLength: bundleData.videos?.length || 0,
-        allKeys: Object.keys(bundleData),
-      })
-
-      // STEP 6: Extract bundle content directly from bundle document
       const bundleContent = bundleData.content || bundleData.contentItems || bundleData.videos || []
 
       if (!Array.isArray(bundleContent) || bundleContent.length === 0) {
-        console.error(`❌ [Webhook ${requestId}] No content found in bundle: ${bundleId}`)
-        console.log(`🔍 [Webhook ${requestId}] Bundle data keys:`, Object.keys(bundleData))
-        console.log(
-          `🔍 [Webhook ${requestId}] Bundle data sample:`,
-          JSON.stringify(bundleData, null, 2).substring(0, 500),
-        )
-        return NextResponse.json({ error: "No bundle content found" }, { status: 400 })
+        console.error(`❌ [Webhook ${requestId}] No content in bundle: ${bundleId}`)
+        return new NextResponse('No bundle content found', { status: 400 })
       }
 
-      // Format content to match required structure
+      // Format content
       const formattedBundleContent = bundleContent.map((item: any, index: number) => ({
         id: item.id || item.videoId || `content_${index}`,
         fileUrl: item.fileUrl || item.videoUrl || item.url || "",
@@ -212,15 +129,12 @@ export async function POST(request: NextRequest) {
         mimeType: item.mimeType || "video/mp4",
       }))
 
-      console.log(`📦 [Webhook ${requestId}] Processed ${formattedBundleContent.length} content items`)
-
-      // STEP 7: Create purchase document with new structure
+      // Create purchase record
       const purchaseData = {
         sessionId: session.id,
-        paymentIntentId:
-          typeof verifiedSession.payment_intent === "string"
-            ? verifiedSession.payment_intent
-            : verifiedSession.payment_intent?.id || "",
+        paymentIntentId: typeof verifiedSession.payment_intent === "string" 
+          ? verifiedSession.payment_intent 
+          : verifiedSession.payment_intent?.id || "",
         creatorId: creatorId,
         creatorStripeAccountId: creatorStripeAccountId,
         bundleId: bundleId,
@@ -233,51 +147,45 @@ export async function POST(request: NextRequest) {
         webhookRequestId: requestId,
       }
 
-      console.log(`💾 [Webhook ${requestId}] Creating purchase document: bundlePurchases/${session.id}`)
       await db.collection("bundlePurchases").doc(session.id).set(purchaseData)
 
       const processingTime = Date.now() - startTime
-      console.log(`✅ [Webhook ${requestId}] Purchase document created successfully in ${processingTime}ms`)
-      console.log(`📊 [Webhook ${requestId}] Purchase summary:`, {
-        sessionId: session.id,
-        bundleId: bundleId,
-        bundleTitle: bundleData.title,
-        creatorId: creatorId,
-        buyerUid: buyerUid,
-        contentItems: formattedBundleContent.length,
-        amount: verifiedSession.amount_total,
-        currency: verifiedSession.currency,
-        processingTime,
-      })
+      console.log(`✅ [Webhook ${requestId}] Purchase created successfully in ${processingTime}ms`)
 
-      return NextResponse.json({
+      return new NextResponse(JSON.stringify({
         received: true,
-        message: "Purchase processed successfully",
         purchaseId: session.id,
         contentItems: formattedBundleContent.length,
         processingTime,
         requestId,
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
       })
     }
 
-    // Handle other event types
+    // Other event types
     console.log(`ℹ️ [Webhook ${requestId}] Unhandled event type: ${event.type}`)
-    return NextResponse.json({ received: true, message: `Unhandled event type: ${event.type}` })
+    return new NextResponse(JSON.stringify({ received: true }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    })
+
   } catch (error: any) {
     const processingTime = Date.now() - startTime
-    console.error(`❌ [Webhook ${requestId}] Processing error after ${processingTime}ms:`, {
+    console.error(`❌ [Webhook ${requestId}] Error after ${processingTime}ms:`, {
       error: error.message,
       stack: error.stack,
-      type: error.constructor.name,
     })
-    return NextResponse.json(
-      {
-        error: "Webhook processing failed",
-        details: error.message,
-        requestId,
-        processingTime,
-      },
-      { status: 500 },
-    )
+
+    return new NextResponse(JSON.stringify({
+      error: 'Webhook processing failed',
+      details: error.message,
+      requestId,
+      processingTime,
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    })
   }
 }
