@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { headers } from "next/headers"
 import Stripe from "stripe"
 import { db } from "@/lib/firebase-admin"
+import { FieldValue } from "firebase-admin/firestore"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
@@ -49,135 +50,155 @@ export async function POST(request: NextRequest) {
       // Extract metadata from session
       const metadata = session.metadata || {}
       const bundleId = metadata.bundleId
-      const productBoxId = metadata.productBoxId
       const creatorId = metadata.creatorId
       const buyerUid = metadata.buyerUid || "anonymous"
 
       console.log(`📦 [Webhook] Metadata:`, {
         bundleId,
-        productBoxId,
         creatorId,
         buyerUid,
       })
 
+      // Validate required fields
       if (!creatorId) {
-        console.error(`❌ [Webhook] No creator ID in metadata for session: ${session.id}`)
+        console.error(`❌ [Webhook] Missing creator ID in metadata for session: ${session.id}`)
         return NextResponse.json({ error: "Missing creator ID" }, { status: 400 })
       }
 
-      if (!bundleId && !productBoxId) {
-        console.error(`❌ [Webhook] No bundle or product box ID in metadata for session: ${session.id}`)
-        return NextResponse.json({ error: "Missing item ID" }, { status: 400 })
+      if (!bundleId) {
+        console.error(`❌ [Webhook] Missing bundle ID in metadata for session: ${session.id}`)
+        return NextResponse.json({ error: "Missing bundle ID" }, { status: 400 })
       }
 
-      // Get creator details and Stripe account ID
-      let creatorData = null
-      let creatorStripeAccountId = null
+      // Get creator's Stripe account ID
+      let creatorStripeAccountId: string | null = null
       try {
         const creatorDoc = await db.collection("users").doc(creatorId).get()
         if (creatorDoc.exists) {
-          creatorData = creatorDoc.data()!
+          const creatorData = creatorDoc.data()!
           creatorStripeAccountId = creatorData.stripeAccountId
           console.log(`✅ [Webhook] Creator found: ${creatorData.displayName} (Stripe: ${creatorStripeAccountId})`)
         } else {
           console.error(`❌ [Webhook] Creator not found: ${creatorId}`)
+          return NextResponse.json({ error: "Creator not found" }, { status: 400 })
         }
       } catch (error) {
         console.error(`❌ [Webhook] Error fetching creator:`, error)
+        return NextResponse.json({ error: "Failed to fetch creator" }, { status: 500 })
       }
 
-      // Get buyer details if authenticated
-      let buyerData = null
-      if (buyerUid && buyerUid !== "anonymous") {
-        try {
-          const buyerDoc = await db.collection("users").doc(buyerUid).get()
-          if (buyerDoc.exists) {
-            buyerData = buyerDoc.data()!
-            console.log(`✅ [Webhook] Buyer found: ${buyerData.displayName}`)
-          }
-        } catch (error) {
-          console.error(`❌ [Webhook] Error fetching buyer:`, error)
-        }
+      if (!creatorStripeAccountId) {
+        console.error(`❌ [Webhook] Creator has no Stripe account ID: ${creatorId}`)
+        return NextResponse.json({ error: "Creator has no Stripe account" }, { status: 400 })
       }
 
-      // Get item details
-      const itemId = bundleId || productBoxId
-      const itemType = bundleId ? "bundles" : "productBoxes"
-      let itemData = null
-
+      // Verify session through seller's connected Stripe account
+      let verifiedSession: Stripe.Checkout.Session
       try {
-        const itemDoc = await db.collection(itemType).doc(itemId).get()
-        if (itemDoc.exists) {
-          itemData = itemDoc.data()!
-          console.log(`✅ [Webhook] Item found: ${itemData.title}`)
+        console.log(`🔗 [Webhook] Verifying session ${session.id} through connected account ${creatorStripeAccountId}`)
+        verifiedSession = await stripe.checkout.sessions.retrieve(session.id, {
+          expand: ["payment_intent", "line_items"],
+          stripeAccount: creatorStripeAccountId,
+        })
+        console.log(`✅ [Webhook] Session verified through connected account`)
+      } catch (error: any) {
+        console.error(`❌ [Webhook] Failed to verify session through connected account:`, error)
+        return NextResponse.json({ error: "Failed to verify session through connected account" }, { status: 400 })
+      }
+
+      // Get bundle content from Firestore
+      const bundleContent: any[] = []
+      try {
+        const bundleDoc = await db.collection("bundles").doc(bundleId).get()
+        if (bundleDoc.exists) {
+          const bundleData = bundleDoc.data()!
+          console.log(`✅ [Webhook] Bundle found: ${bundleData.title}`)
+
+          // Get content items from the bundle's contentItems array
+          if (bundleData.contentItems && Array.isArray(bundleData.contentItems)) {
+            console.log(`📋 [Webhook] Processing ${bundleData.contentItems.length} content items`)
+
+            for (const contentId of bundleData.contentItems) {
+              try {
+                const contentDoc = await db.collection("creatorUploads").doc(contentId).get()
+                if (contentDoc.exists) {
+                  const contentData = contentDoc.data()!
+                  bundleContent.push({
+                    id: contentId,
+                    fileUrl: contentData.fileUrl || contentData.videoUrl || "",
+                    fileSize: contentData.fileSize || 0,
+                    displayTitle: contentData.title || contentData.displayTitle || "Untitled",
+                    displaySize: contentData.displaySize || "0 MB",
+                    duration: contentData.duration || 0,
+                    filename: contentData.filename || contentData.title || "unknown",
+                    mimeType: contentData.mimeType || "video/mp4",
+                  })
+                } else {
+                  console.warn(`⚠️ [Webhook] Content item not found: ${contentId}`)
+                }
+              } catch (error) {
+                console.error(`❌ [Webhook] Error fetching content item ${contentId}:`, error)
+              }
+            }
+          }
+
+          console.log(`✅ [Webhook] Processed ${bundleContent.length} content items`)
         } else {
-          console.error(`❌ [Webhook] Item not found: ${itemId} in ${itemType}`)
+          console.error(`❌ [Webhook] Bundle not found: ${bundleId}`)
+          return NextResponse.json({ error: "Bundle not found" }, { status: 400 })
         }
       } catch (error) {
-        console.error(`❌ [Webhook] Error fetching item:`, error)
+        console.error(`❌ [Webhook] Error fetching bundle content:`, error)
+        return NextResponse.json({ error: "Failed to fetch bundle content" }, { status: 500 })
       }
 
-      // Create purchase record
+      if (bundleContent.length === 0) {
+        console.error(`❌ [Webhook] No bundle content found for bundle: ${bundleId}`)
+        return NextResponse.json({ error: "No bundle content found" }, { status: 400 })
+      }
+
+      // Create purchase document
       const purchaseData = {
-        // Session info
         sessionId: session.id,
         paymentIntentId:
-          typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id,
-
-        // Item info
-        bundleId: bundleId || null,
-        productBoxId: productBoxId || null,
-        itemId: itemId,
-        itemType: bundleId ? "bundle" : "product_box",
-        itemTitle: itemData?.title || "Unknown Item",
-        itemDescription: itemData?.description || "",
-        itemThumbnail: itemData?.thumbnailUrl || itemData?.customPreviewThumbnail || "",
-
-        // Creator info
+          typeof verifiedSession.payment_intent === "string"
+            ? verifiedSession.payment_intent
+            : verifiedSession.payment_intent?.id || "",
         creatorId: creatorId,
-        creatorName: creatorData?.displayName || creatorData?.name || "Unknown Creator",
-        creatorUsername: creatorData?.username || "",
-        creatorStripeAccountId: creatorStripeAccountId, // 🎯 KEY: Store creator's Stripe account ID
-
-        // Buyer info
+        creatorStripeAccountId: creatorStripeAccountId,
+        bundleId: bundleId,
         buyerUid: buyerUid,
-        userId: buyerUid, // Alias for compatibility
-        userEmail: session.customer_details?.email || buyerData?.email || "",
-        userName: buyerData?.displayName || session.customer_details?.name || "Anonymous User",
-        isAuthenticated: buyerUid !== "anonymous",
-
-        // Payment info
-        amount: session.amount_total || 0,
-        currency: session.currency || "usd",
-        paymentStatus: session.payment_status,
-
-        // Status and timestamps
         status: "completed",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-
-        // Webhook tracking
         webhookProcessed: true,
-        webhookEventId: event.id,
-        webhookEventType: event.type,
-        webhookProcessedAt: new Date(),
+        timestamp: FieldValue.serverTimestamp(),
+        bundleContent: bundleContent,
       }
 
       // Save purchase to bundlePurchases collection
-      await db.collection("bundlePurchases").doc(session.id).set(purchaseData)
-      console.log(`✅ [Webhook] Purchase created: ${session.id}`)
-
-      // Also save to user's purchases subcollection if authenticated
-      if (buyerUid && buyerUid !== "anonymous") {
-        await db.collection("userPurchases").doc(buyerUid).collection("purchases").doc(session.id).set(purchaseData)
-        console.log(`✅ [Webhook] Purchase added to user's collection: ${buyerUid}`)
+      try {
+        await db.collection("bundlePurchases").doc(session.id).set(purchaseData)
+        console.log(`✅ [Webhook] Purchase document created: ${session.id}`)
+      } catch (error) {
+        console.error(`❌ [Webhook] Failed to create purchase document:`, error)
+        return NextResponse.json({ error: "Failed to create purchase document" }, { status: 500 })
       }
 
       console.log(`🎉 [Webhook] Purchase fulfillment completed for session: ${session.id}`)
+      console.log(`📊 [Webhook] Purchase summary:`, {
+        sessionId: session.id,
+        bundleId: bundleId,
+        creatorId: creatorId,
+        buyerUid: buyerUid,
+        contentItems: bundleContent.length,
+        amount: verifiedSession.amount_total,
+        currency: verifiedSession.currency,
+      })
+
       return NextResponse.json({
         received: true,
         message: "Purchase processed successfully",
         purchaseId: session.id,
+        contentItems: bundleContent.length,
       })
     }
 
@@ -186,6 +207,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true, message: `Unhandled event type: ${event.type}` })
   } catch (error: any) {
     console.error("❌ [Webhook] Error processing webhook:", error)
-    return NextResponse.json({ error: "Webhook processing failed", details: error.message }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: "Webhook processing failed",
+        details: error.message,
+      },
+      { status: 500 },
+    )
   }
 }
