@@ -1,7 +1,5 @@
 "use client"
 
-import type React from "react"
-
 import { useEffect, useState, useRef } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
@@ -44,12 +42,8 @@ interface PurchaseInfo {
   status: string
 }
 
-// Video player component exactly like creator uploads
-const VideoPlayer = ({
-  content,
-}: {
-  content: BundleContent
-}) => {
+// Video player component exactly like creator-upload-card
+const VideoPlayer = ({ content }: { content: BundleContent }) => {
   const [isPlaying, setIsPlaying] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
   const [isMuted, setIsMuted] = useState(true)
@@ -59,57 +53,38 @@ const VideoPlayer = ({
   const videoUrl = content.fileUrl || content.videoUrl || content.downloadUrl || ""
   const thumbnailUrl = content.thumbnailUrl || ""
 
-  console.log(`🎥 [VideoPlayer] ${content.title}:`, {
-    hasFileUrl: !!content.fileUrl,
-    hasVideoUrl: !!content.videoUrl,
-    hasDownloadUrl: !!content.downloadUrl,
-    finalVideoUrl: videoUrl ? videoUrl.substring(0, 50) + "..." : "MISSING",
-  })
-
-  const togglePlay = (e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-
-    if (!videoUrl) {
-      console.error(`❌ [VideoPlayer] No video URL for: ${content.title}`)
+  const handlePlay = () => {
+    if (!videoRef.current || !videoUrl) {
+      console.error(`❌ [VideoPlayer] No video ref or URL for: ${content.title}`)
       toast({
         title: "Video Error",
-        description: "No video URL available",
+        description: "Unable to play video",
         variant: "destructive",
       })
       return
     }
 
-    if (!videoRef.current) {
-      console.error(`❌ [VideoPlayer] No video ref for: ${content.title}`)
-      return
-    }
+    // Pause all other videos first
+    document.querySelectorAll("video").forEach((video) => {
+      if (video !== videoRef.current) {
+        video.pause()
+        video.currentTime = 0
+      }
+    })
 
     if (isPlaying) {
       videoRef.current.pause()
       videoRef.current.currentTime = 0
       setIsPlaying(false)
-      console.log(`⏸️ [VideoPlayer] Paused: ${content.title}`)
     } else {
-      // Pause all other videos first
-      document.querySelectorAll("video").forEach((v) => {
-        if (v !== videoRef.current) {
-          v.pause()
-          v.currentTime = 0
-        }
-      })
-
-      console.log(`▶️ [VideoPlayer] Playing: ${content.title} from URL: ${videoUrl}`)
-
       videoRef.current.muted = isMuted
       videoRef.current
         .play()
         .then(() => {
           setIsPlaying(true)
-          console.log(`✅ [VideoPlayer] Successfully playing: ${content.title}`)
         })
         .catch((error) => {
-          console.error(`❌ [VideoPlayer] Error playing ${content.title}:`, error)
+          console.error(`❌ [VideoPlayer] Play error for ${content.title}:`, error)
           toast({
             title: "Video Error",
             description: `Failed to play: ${content.title}`,
@@ -119,15 +94,11 @@ const VideoPlayer = ({
     }
   }
 
-  const toggleMute = (e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-
+  const handleMute = () => {
     if (videoRef.current) {
       const newMutedState = !isMuted
       setIsMuted(newMutedState)
       videoRef.current.muted = newMutedState
-      console.log(`🔊 [VideoPlayer] ${newMutedState ? "Muted" : "Unmuted"}: ${content.title}`)
     }
   }
 
@@ -136,17 +107,11 @@ const VideoPlayer = ({
     if (videoRef.current) {
       videoRef.current.currentTime = 0
     }
-    console.log(`🏁 [VideoPlayer] Ended: ${content.title}`)
   }
 
-  const handleVideoError = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
+  const handleVideoError = () => {
     setIsPlaying(false)
-    const error = (e.target as HTMLVideoElement).error
-    console.error(`❌ [VideoPlayer] Video error for ${content.title}:`, {
-      error: error?.message,
-      code: error?.code,
-      url: videoUrl,
-    })
+    console.error(`❌ [VideoPlayer] Video error for: ${content.title}`)
     toast({
       title: "Video Error",
       description: `Failed to load: ${content.title}`,
@@ -154,12 +119,17 @@ const VideoPlayer = ({
     })
   }
 
-  const handleVideoLoadStart = () => {
-    console.log(`🔄 [VideoPlayer] Loading started: ${content.title}`)
-  }
-
-  const handleVideoCanPlay = () => {
-    console.log(`✅ [VideoPlayer] Can play: ${content.title}`)
+  if (!videoUrl) {
+    return (
+      <div className="relative w-full aspect-[9/16] bg-black border border-white/20 overflow-hidden rounded-lg">
+        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-900">
+          <div className="text-center">
+            <AlertCircle className="w-8 h-8 text-red-500 mx-auto mb-2" />
+            <p className="text-red-400 text-xs">No video URL</p>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -168,92 +138,60 @@ const VideoPlayer = ({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {!isPlaying ? (
-        <>
-          {/* Thumbnail */}
-          <div className="w-full h-full">
-            {thumbnailUrl ? (
-              <img
-                src={thumbnailUrl || "/placeholder.svg"}
-                alt={content.title}
-                className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement
-                  target.style.display = "none"
-                  console.log(`⚠️ [VideoPlayer] Thumbnail failed for: ${content.title}`)
-                }}
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-900">
-                <Play className="w-12 h-12 text-zinc-600" />
-              </div>
-            )}
-          </div>
+      {/* Video element - always present, shows upfront */}
+      <video
+        ref={videoRef}
+        src={videoUrl}
+        className="w-full h-full object-cover"
+        onEnded={handleVideoEnd}
+        onError={handleVideoError}
+        controls={false}
+        playsInline
+        muted={isMuted}
+        preload="metadata"
+        poster={thumbnailUrl || undefined}
+      >
+        Your browser does not support the video tag.
+      </video>
 
-          {/* Play button overlay */}
-          <div
-            className={`absolute inset-0 bg-black/60 flex items-center justify-center transition-opacity duration-200 ${
-              isHovered ? "opacity-100" : "opacity-0"
-            }`}
-            onClick={togglePlay}
-          >
-            <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white/30 transition-colors">
-              <Play className="w-8 h-8 text-white ml-1" />
-            </div>
+      {/* Play/Pause overlay - only shows on hover or when not playing */}
+      {(!isPlaying || isHovered) && (
+        <div
+          className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-200 ${
+            isHovered || !isPlaying ? "opacity-100" : "opacity-0"
+          }`}
+          onClick={handlePlay}
+        >
+          <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white/30 transition-colors">
+            {isPlaying ? <div className="w-6 h-6 bg-white rounded-sm" /> : <Play className="w-8 h-8 text-white ml-1" />}
           </div>
-
-          {/* Video info overlay */}
-          {isHovered && (
-            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
-              <p className="text-white text-sm font-medium truncate">{content.title}</p>
-              {content.duration && content.duration > 0 && (
-                <p className="text-gray-300 text-xs">
-                  {Math.floor(content.duration / 60)}:{(content.duration % 60).toString().padStart(2, "0")}
-                </p>
-              )}
-            </div>
-          )}
-        </>
-      ) : (
-        <>
-          <video
-            ref={videoRef}
-            src={videoUrl}
-            className="w-full h-full object-cover"
-            onEnded={handleVideoEnd}
-            onError={handleVideoError}
-            onLoadStart={handleVideoLoadStart}
-            onCanPlay={handleVideoCanPlay}
-            controls={false}
-            playsInline
-            muted={isMuted}
-            crossOrigin="anonymous"
-          >
-            Your browser does not support the video tag.
-          </video>
-
-          {/* Video controls overlay */}
-          <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity bg-black/20">
-            <div className="flex gap-4">
-              <button
-                onClick={togglePlay}
-                className="w-12 h-12 bg-black/50 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-black/70 transition-colors"
-              >
-                <Play className="w-6 h-6 text-white" />
-              </button>
-              <button
-                onClick={toggleMute}
-                className="w-12 h-12 bg-black/50 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-black/70 transition-colors"
-              >
-                {isMuted ? <VolumeX className="w-6 h-6 text-white" /> : <Volume2 className="w-6 h-6 text-white" />}
-              </button>
-            </div>
-          </div>
-        </>
+        </div>
       )}
 
-      {/* Debug info (remove in production) */}
-      {!videoUrl && <div className="absolute top-2 left-2 bg-red-600 text-white text-xs px-2 py-1 rounded">NO URL</div>}
+      {/* Mute button - shows when playing and hovered */}
+      {isPlaying && isHovered && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            handleMute()
+          }}
+          className="absolute top-3 right-3 w-10 h-10 bg-black/50 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-black/70 transition-colors"
+        >
+          {isMuted ? <VolumeX className="w-5 h-5 text-white" /> : <Volume2 className="w-5 h-5 text-white" />}
+        </button>
+      )}
+
+      {/* Video info overlay - shows on hover */}
+      {isHovered && (
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
+          <p className="text-white text-sm font-medium truncate">{content.title}</p>
+          {content.duration && content.duration > 0 && (
+            <p className="text-gray-300 text-xs">
+              {Math.floor(content.duration / 60)}:{(content.duration % 60).toString().padStart(2, "0")}
+            </p>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -317,6 +255,7 @@ export default function BundleContentPage() {
           hasFileUrl: !!content.fileUrl,
           hasVideoUrl: !!content.videoUrl,
           hasDownloadUrl: !!content.downloadUrl,
+          finalUrl: content.fileUrl || content.videoUrl || content.downloadUrl || "MISSING",
         })
       })
     } catch (err) {
