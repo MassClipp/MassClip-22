@@ -7,7 +7,7 @@ import { useParams, useRouter } from "next/navigation"
 import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { ArrowLeft, AlertCircle, Play, Package } from "lucide-react"
+import { ArrowLeft, AlertCircle, Play, Package, Volume2, VolumeX } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { toast } from "@/hooks/use-toast"
 
@@ -22,6 +22,7 @@ interface BundleContent {
   thumbnailUrl?: string
   downloadUrl?: string
   fileUrl?: string
+  videoUrl?: string
   createdAt: string
   metadata?: any
 }
@@ -43,25 +44,32 @@ interface PurchaseInfo {
   status: string
 }
 
-// Video player component similar to creator uploads
+// Video player component exactly like creator uploads
 const VideoPlayer = ({
-  videoUrl,
-  thumbnailUrl,
-  title,
+  content,
 }: {
-  videoUrl: string
-  thumbnailUrl?: string
-  title: string
+  content: BundleContent
 }) => {
   const [isPlaying, setIsPlaying] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
+  const [isMuted, setIsMuted] = useState(true)
   const videoRef = useRef<HTMLVideoElement>(null)
+
+  const videoUrl = content.fileUrl || content.videoUrl || content.downloadUrl || ""
+  const thumbnailUrl = content.thumbnailUrl || ""
 
   const togglePlay = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
 
-    if (!videoRef.current) return
+    if (!videoRef.current || !videoUrl) {
+      toast({
+        title: "Video Error",
+        description: "No video URL available",
+        variant: "destructive",
+      })
+      return
+    }
 
     if (isPlaying) {
       videoRef.current.pause()
@@ -76,7 +84,7 @@ const VideoPlayer = ({
         }
       })
 
-      videoRef.current.muted = false
+      videoRef.current.muted = isMuted
       videoRef.current
         .play()
         .then(() => {
@@ -84,7 +92,23 @@ const VideoPlayer = ({
         })
         .catch((error) => {
           console.error("Error playing video:", error)
+          toast({
+            title: "Video Error",
+            description: "Failed to play video",
+            variant: "destructive",
+          })
         })
+    }
+  }
+
+  const toggleMute = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    if (videoRef.current) {
+      const newMutedState = !isMuted
+      setIsMuted(newMutedState)
+      videoRef.current.muted = newMutedState
     }
   }
 
@@ -95,9 +119,19 @@ const VideoPlayer = ({
     }
   }
 
+  const handleVideoError = () => {
+    setIsPlaying(false)
+    console.error("Video error for:", content.title, "URL:", videoUrl)
+    toast({
+      title: "Video Error",
+      description: `Failed to load: ${content.title}`,
+      variant: "destructive",
+    })
+  }
+
   return (
     <div
-      className="relative w-full aspect-[9/16] bg-zinc-900 border border-zinc-800 overflow-hidden cursor-pointer group"
+      className="relative w-full aspect-[9/16] bg-black border border-white/20 overflow-hidden cursor-pointer group rounded-lg"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
@@ -108,7 +142,7 @@ const VideoPlayer = ({
             {thumbnailUrl ? (
               <img
                 src={thumbnailUrl || "/placeholder.svg"}
-                alt={title}
+                alt={content.title}
                 className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
                 onError={(e) => {
                   const target = e.target as HTMLImageElement
@@ -117,7 +151,7 @@ const VideoPlayer = ({
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-900">
-                <Play className="w-8 h-8 text-zinc-600" />
+                <Play className="w-12 h-12 text-zinc-600" />
               </div>
             )}
           </div>
@@ -129,29 +163,56 @@ const VideoPlayer = ({
             }`}
             onClick={togglePlay}
           >
-            <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center">
+            <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white/30 transition-colors">
               <Play className="w-8 h-8 text-white ml-1" />
             </div>
           </div>
+
+          {/* Video info overlay */}
+          {isHovered && (
+            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
+              <p className="text-white text-sm font-medium truncate">{content.title}</p>
+              {content.duration && (
+                <p className="text-gray-300 text-xs">
+                  {Math.floor(content.duration / 60)}:{(content.duration % 60).toString().padStart(2, "0")}
+                </p>
+              )}
+            </div>
+          )}
         </>
       ) : (
-        <video
-          ref={videoRef}
-          src={videoUrl}
-          controls
-          className="w-full h-full object-cover"
-          onEnded={handleVideoEnd}
-          onError={() => {
-            setIsPlaying(false)
-            toast({
-              title: "Video Error",
-              description: "Failed to load video",
-              variant: "destructive",
-            })
-          }}
-        >
-          Your browser does not support the video tag.
-        </video>
+        <>
+          <video
+            ref={videoRef}
+            src={videoUrl}
+            className="w-full h-full object-cover"
+            onEnded={handleVideoEnd}
+            onError={handleVideoError}
+            controls={false}
+            playsInline
+            muted={isMuted}
+          >
+            Your browser does not support the video tag.
+          </video>
+
+          {/* Video controls overlay */}
+          <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity bg-black/20">
+            <div className="flex gap-4">
+              <button
+                onClick={togglePlay}
+                className="w-12 h-12 bg-black/50 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-black/70 transition-colors"
+              >
+                <Play className="w-6 h-6 text-white" />
+              </button>
+              <button
+                onClick={toggleMute}
+                className="w-12 h-12 bg-black/50 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-black/70 transition-colors"
+              >
+                {isMuted ? <VolumeX className="w-6 h-6 text-white" /> : <Volume2 className="w-6 h-6 text-white" />}
+              </button>
+            </div>
+          </div>
+        </>
       )}
     </div>
   )
@@ -180,6 +241,8 @@ export default function BundleContentPage() {
       setLoading(true)
       setError(null)
 
+      console.log("🔍 [Bundle Content Page] Fetching content for bundle:", bundleId)
+
       const token = await user.getIdToken()
       const response = await fetch(`/api/bundles/${bundleId}/content`, {
         headers: {
@@ -187,28 +250,28 @@ export default function BundleContentPage() {
         },
       })
 
+      console.log("📡 [Bundle Content Page] API response status:", response.status)
+
       if (!response.ok) {
+        const errorData = await response.json()
+        console.error("❌ [Bundle Content Page] API error:", errorData)
+
         if (response.status === 403) {
           throw new Error("You don't have access to this bundle")
         }
-        throw new Error(`Failed to fetch bundle content: ${response.status}`)
+        throw new Error(errorData.error || `Failed to fetch bundle content: ${response.status}`)
       }
 
       const data = await response.json()
-      console.log("Bundle content data:", data)
+      console.log("✅ [Bundle Content Page] API response data:", data)
 
       setBundle(data.bundle)
-
-      // Process contents to ensure video URLs are available - prioritize fileUrl
-      const processedContents = (data.contents || []).map((content: any) => ({
-        ...content,
-        videoUrl: content.fileUrl || content.downloadUrl || content.videoUrl,
-      }))
-
-      setContents(processedContents)
+      setContents(data.contents || [])
       setPurchaseInfo(data.purchaseInfo)
+
+      console.log(`📦 [Bundle Content Page] Set ${data.contents?.length || 0} content items`)
     } catch (err) {
-      console.error("Error fetching bundle content:", err)
+      console.error("❌ [Bundle Content Page] Error:", err)
       setError(err instanceof Error ? err.message : "Failed to fetch bundle content")
     } finally {
       setLoading(false)
@@ -227,12 +290,12 @@ export default function BundleContentPage() {
           <Skeleton className="h-8 w-48 mb-6 bg-gray-800" />
 
           {/* Header skeleton */}
-          <div className="flex items-center gap-6 mb-8 pb-6">
-            <Skeleton className="w-20 h-20 bg-gray-800 rounded-lg flex-shrink-0" />
+          <div className="flex items-center justify-between mb-8 pb-6">
             <div className="flex-1">
               <Skeleton className="h-8 w-64 mb-2 bg-gray-800" />
               <Skeleton className="h-4 w-32 mb-4 bg-gray-800" />
             </div>
+            <Skeleton className="w-20 h-20 bg-gray-800 rounded-lg flex-shrink-0" />
           </div>
 
           {/* Border line */}
@@ -304,7 +367,7 @@ export default function BundleContentPage() {
           </div>
 
           {/* Thumbnail - Top right */}
-          <div className="w-20 h-20 bg-black border border-gray-800/50 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
+          <div className="w-20 h-20 bg-black border border-white/20 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
             {bundle?.thumbnailUrl ? (
               <img
                 src={bundle.thumbnailUrl || "/placeholder.svg"}
@@ -337,7 +400,7 @@ export default function BundleContentPage() {
         {/* Content Grid - 9:16 videos like creator uploads */}
         {contents.length === 0 ? (
           <div className="text-center py-12">
-            <div className="w-16 h-16 mx-auto mb-4 bg-black border border-gray-800/50 rounded-lg flex items-center justify-center">
+            <div className="w-16 h-16 mx-auto mb-4 bg-black border border-white/20 rounded-lg flex items-center justify-center">
               <AlertCircle className="h-8 w-8 text-gray-500" />
             </div>
             <h3 className="text-xl font-semibold mb-2">No content available</h3>
@@ -347,11 +410,7 @@ export default function BundleContentPage() {
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
             {contents.map((content) => (
               <div key={content.id} className="space-y-2">
-                <VideoPlayer
-                  videoUrl={content.fileUrl || content.downloadUrl || ""}
-                  thumbnailUrl={content.thumbnailUrl}
-                  title={content.title}
-                />
+                <VideoPlayer content={content} />
                 <div className="px-1">
                   <h3 className="text-sm font-medium text-white truncate tracking-tight">{content.title}</h3>
                 </div>

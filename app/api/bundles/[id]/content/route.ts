@@ -25,9 +25,12 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ error: "Bundle ID is required" }, { status: 400 })
     }
 
+    console.log(`🔍 [Bundle Content API] Starting request for bundle: ${bundleId}`)
+
     // Get the authorization header
     const authHeader = request.headers.get("Authorization")
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      console.log("❌ [Bundle Content API] No Bearer token in authorization header")
       return NextResponse.json({ error: "Authorization token is required" }, { status: 401 })
     }
 
@@ -38,149 +41,185 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     try {
       decodedToken = await auth.verifyIdToken(token)
     } catch (error) {
-      console.error("Token verification failed:", error)
+      console.error("❌ [Bundle Content API] Token verification failed:", error)
       return NextResponse.json({ error: "Invalid token" }, { status: 401 })
     }
 
     const userUid = decodedToken.uid
-    console.log("User UID from Firebase token:", userUid)
-    console.log("Checking access for bundle:", bundleId)
+    console.log(`👤 [Bundle Content API] User UID: ${userUid}`)
+    console.log(`📦 [Bundle Content API] Bundle ID: ${bundleId}`)
 
-    // First, get bundle info
-    const bundleDoc = await db.collection("bundles").doc(bundleId).get()
-    if (!bundleDoc.exists) {
-      return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
-    }
+    // PRIMARY LOGIC: Look ONLY in bundlePurchases collection
+    // This is the ONLY place bundle content should be stored
+    console.log(`🔍 [Bundle Content API] Searching bundlePurchases collection...`)
 
-    const bundleData = bundleDoc.data()
-    console.log("Bundle data:", bundleData)
+    let purchaseDoc = null
+    let purchaseData = null
 
-    // Check if user has purchased this bundle - try multiple query patterns
-    let hasAccess = false
-    let purchaseInfo = null
-    let bundleContents = []
+    // Method 1: Try document ID pattern (most common)
+    const purchaseDocId = `${userUid}_${bundleId}`
+    console.log(`🔍 [Bundle Content API] Trying document ID: ${purchaseDocId}`)
 
-    // Method 1: Check if user is the creator
-    if (bundleData?.creatorId === userUid || bundleData?.creatorUid === userUid) {
-      console.log("User is the bundle creator, granting access")
-      hasAccess = true
-    }
-
-    // Method 2: Check bundlePurchases collection by document ID
-    if (!hasAccess) {
-      try {
-        const purchaseDocId = `${userUid}_${bundleId}`
-        const purchaseDoc = await db.collection("bundlePurchases").doc(purchaseDocId).get()
-
-        if (purchaseDoc.exists) {
-          console.log("Found purchase by document ID:", purchaseDocId)
-          hasAccess = true
-          purchaseInfo = purchaseDoc.data()
-
-          // Get content from purchase document
-          if (purchaseInfo?.content && Array.isArray(purchaseInfo.content)) {
-            bundleContents = purchaseInfo.content
-          }
-        }
-      } catch (error) {
-        console.error("Error checking purchase by doc ID:", error)
+    try {
+      const docRef = await db.collection("bundlePurchases").doc(purchaseDocId).get()
+      if (docRef.exists) {
+        purchaseDoc = docRef
+        purchaseData = docRef.data()
+        console.log(`✅ [Bundle Content API] Found purchase by document ID!`)
       }
+    } catch (error) {
+      console.log(`⚠️ [Bundle Content API] Error checking document ID:`, error)
     }
 
-    // Method 3: Query bundlePurchases by fields
-    if (!hasAccess) {
-      try {
-        const queryFields = ["buyerUid", "userId", "buyerId", "userUid"]
+    // Method 2: Query by fields if document ID didn't work
+    if (!purchaseDoc) {
+      console.log(`🔍 [Bundle Content API] Document ID not found, trying field queries...`)
 
-        for (const field of queryFields) {
-          if (hasAccess) break
+      const queryFields = ["buyerUid", "userId", "buyerId", "userUid"]
 
-          console.log(`Checking purchases with ${field} = ${userUid} and bundleId = ${bundleId}`)
+      for (const field of queryFields) {
+        if (purchaseDoc) break
 
-          const purchasesQuery = await db
+        console.log(`🔍 [Bundle Content API] Querying with ${field} = ${userUid} and bundleId = ${bundleId}`)
+
+        try {
+          const querySnapshot = await db
             .collection("bundlePurchases")
             .where(field, "==", userUid)
             .where("bundleId", "==", bundleId)
             .limit(1)
             .get()
 
-          if (!purchasesQuery.empty) {
-            console.log(`Found purchase using field ${field}`)
-            hasAccess = true
-            const purchaseDoc = purchasesQuery.docs[0]
-            purchaseInfo = {
-              purchaseId: purchaseDoc.id,
-              ...purchaseDoc.data(),
-            }
-
-            // Get content from purchase document
-            if (purchaseInfo?.content && Array.isArray(purchaseInfo.content)) {
-              bundleContents = purchaseInfo.content
-            }
+          if (!querySnapshot.empty) {
+            purchaseDoc = querySnapshot.docs[0]
+            purchaseData = purchaseDoc.data()
+            console.log(`✅ [Bundle Content API] Found purchase using field: ${field}`)
             break
           }
+        } catch (error) {
+          console.log(`⚠️ [Bundle Content API] Query failed for field ${field}:`, error)
         }
-      } catch (error) {
-        console.error("Error querying bundlePurchases:", error)
       }
     }
 
-    // Method 4: Check alternative purchases collection
-    if (!hasAccess) {
-      try {
-        const altPurchasesQuery = await db
-          .collection("purchases")
-          .where("buyerUid", "==", userUid)
-          .where("bundleId", "==", bundleId)
-          .limit(1)
-          .get()
-
-        if (!altPurchasesQuery.empty) {
-          console.log("Found purchase in alternative collection")
-          hasAccess = true
-          const purchaseDoc = altPurchasesQuery.docs[0]
-          purchaseInfo = {
-            purchaseId: purchaseDoc.id,
-            ...purchaseDoc.data(),
-          }
-
-          // Get content from purchase document
-          if (purchaseInfo?.content && Array.isArray(purchaseInfo.content)) {
-            bundleContents = purchaseInfo.content
-          }
-        }
-      } catch (error) {
-        console.error("Error checking alternative purchases:", error)
-      }
-    }
-
-    if (!hasAccess) {
-      console.log("No valid purchase found for user:", userUid, "bundle:", bundleId)
+    // If no purchase found, user doesn't have access
+    if (!purchaseDoc || !purchaseData) {
+      console.log(`❌ [Bundle Content API] No purchase found for user ${userUid} and bundle ${bundleId}`)
       return NextResponse.json({ error: "You don't have access to this bundle" }, { status: 403 })
     }
 
-    console.log("Access granted! Found contents:", bundleContents.length)
+    console.log(`✅ [Bundle Content API] Purchase found! Document ID: ${purchaseDoc.id}`)
+    console.log(`📄 [Bundle Content API] Full purchase data:`, JSON.stringify(purchaseData, null, 2))
 
-    // Return bundle info and contents
-    return NextResponse.json({
-      hasAccess: true,
-      bundle: {
-        id: bundleId,
-        title: bundleData?.title || "Untitled Bundle",
-        description: bundleData?.description || "",
-        creatorId: bundleData?.creatorId || bundleData?.creatorUid,
-        creatorUsername: bundleData?.creatorUsername || "Unknown Creator",
-        thumbnailUrl: bundleData?.thumbnailUrl || "",
-        price: bundleData?.price || 0,
-        currency: bundleData?.currency || "usd",
-      },
-      contents: bundleContents,
-      purchaseInfo: purchaseInfo,
+    // Extract bundle info from purchase document
+    const bundleInfo = {
+      id: bundleId,
+      title: purchaseData.bundleTitle || purchaseData.title || "Untitled Bundle",
+      description: purchaseData.bundleDescription || purchaseData.description || "",
+      creatorId: purchaseData.creatorId || purchaseData.creatorUid || "",
+      creatorUsername: purchaseData.creatorUsername || purchaseData.creatorName || "Unknown Creator",
+      thumbnailUrl: purchaseData.bundleThumbnailUrl || purchaseData.thumbnailUrl || "",
+      price: purchaseData.price || purchaseData.amount || 0,
+      currency: purchaseData.currency || "usd",
+    }
+
+    console.log(`📦 [Bundle Content API] Extracted bundle info:`, bundleInfo)
+
+    // Extract content from purchase document - check ALL possible field names
+    let bundleContents = []
+    const possibleContentFields = [
+      "content",
+      "contents",
+      "items",
+      "videos",
+      "files",
+      "bundleContent",
+      "bundleContents",
+      "purchasedContent",
+      "purchasedContents",
+      "contentItems",
+      "videoItems",
+      "bundleItems",
+    ]
+
+    console.log(`🔍 [Bundle Content API] Checking for content in these fields:`, possibleContentFields)
+
+    for (const field of possibleContentFields) {
+      if (purchaseData[field] && Array.isArray(purchaseData[field])) {
+        bundleContents = purchaseData[field]
+        console.log(`✅ [Bundle Content API] Found ${bundleContents.length} content items in field: ${field}`)
+        console.log(`📄 [Bundle Content API] Sample content item:`, JSON.stringify(bundleContents[0], null, 2))
+        break
+      } else if (purchaseData[field]) {
+        console.log(`⚠️ [Bundle Content API] Field ${field} exists but is not an array:`, typeof purchaseData[field])
+      }
+    }
+
+    if (bundleContents.length === 0) {
+      console.log(`⚠️ [Bundle Content API] No content found in any field. Available fields:`, Object.keys(purchaseData))
+
+      // Log all fields that contain arrays or objects for debugging
+      Object.keys(purchaseData).forEach((key) => {
+        const value = purchaseData[key]
+        if (Array.isArray(value)) {
+          console.log(`📄 [Bundle Content API] Array field "${key}":`, value.length, "items")
+        } else if (typeof value === "object" && value !== null) {
+          console.log(`📄 [Bundle Content API] Object field "${key}":`, Object.keys(value))
+        }
+      })
+    }
+
+    // Process content to ensure proper structure for 9:16 video display
+    const processedContents = bundleContents.map((content, index) => {
+      const processedContent = {
+        id: content.id || content.contentId || content.videoId || `content_${index}`,
+        title: content.title || content.name || content.filename || `Video ${index + 1}`,
+        description: content.description || "",
+        type: content.type || "video",
+        fileType: content.fileType || content.mimeType || "video/mp4",
+        size: content.size || content.fileSize || 0,
+        duration: content.duration || 0,
+        thumbnailUrl: content.thumbnailUrl || content.thumbnail || content.previewUrl || "",
+        // Priority order for video URL: fileUrl > downloadUrl > videoUrl > url
+        fileUrl: content.fileUrl || content.downloadUrl || content.videoUrl || content.url || "",
+        downloadUrl: content.downloadUrl || content.fileUrl || content.url || "",
+        videoUrl: content.videoUrl || content.fileUrl || content.downloadUrl || content.url || "",
+        createdAt: content.createdAt || content.uploadedAt || new Date().toISOString(),
+        metadata: content.metadata || {},
+      }
+
+      console.log(`📹 [Bundle Content API] Processed content ${index + 1}:`, {
+        id: processedContent.id,
+        title: processedContent.title,
+        hasFileUrl: !!processedContent.fileUrl,
+        hasThumbnail: !!processedContent.thumbnailUrl,
+      })
+
+      return processedContent
     })
+
+    const response = {
+      hasAccess: true,
+      bundle: bundleInfo,
+      contents: processedContents,
+      purchaseInfo: {
+        purchaseId: purchaseDoc.id,
+        purchaseDate: purchaseData.createdAt || purchaseData.purchaseDate,
+        status: purchaseData.status || "completed",
+      },
+    }
+
+    console.log(`✅ [Bundle Content API] Returning response with ${processedContents.length} content items`)
+
+    return NextResponse.json(response)
   } catch (error) {
-    console.error("Bundle content API error:", error)
+    console.error("❌ [Bundle Content API] Unexpected error:", error)
+    console.error("❌ [Bundle Content API] Error stack:", error.stack)
     return NextResponse.json(
-      { error: "Internal server error", details: error instanceof Error ? error.message : "Unknown error" },
+      {
+        error: "Failed to fetch bundle content",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
       { status: 500 },
     )
   }
