@@ -28,8 +28,9 @@ if (!webhookSecret) {
 }
 
 /**
- * SINGLE SOURCE OF TRUTH: Stripe webhook handler for purchase fulfillment
- * This is the ONLY route that should handle purchase fulfillment logic
+ * 🎯 SINGLE SOURCE OF TRUTH: Stripe webhook handler for ALL purchase fulfillment
+ * This is the ONLY route that handles purchase fulfillment logic
+ * All other purchase creation methods have been removed to prevent conflicts
  */
 export async function POST(request: NextRequest) {
   try {
@@ -64,6 +65,11 @@ export async function POST(request: NextRequest) {
       await handleCheckoutSessionCompleted(session)
     }
 
+    // Handle other relevant events
+    if (event.type === "payment_intent.succeeded") {
+      console.log("💰 [Stripe Webhook] Payment intent succeeded - fulfillment handled by checkout.session.completed")
+    }
+
     return NextResponse.json({ received: true })
   } catch (error) {
     console.error("❌ [Stripe Webhook] FULFILLMENT ERROR:", error)
@@ -72,8 +78,9 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * SINGLE SOURCE OF TRUTH: Handle checkout session completion and fulfillment
- * This function is the ONLY place where purchase fulfillment should happen
+ * 🎯 SINGLE SOURCE OF TRUTH: Handle checkout session completion and fulfillment
+ * This function is the ONLY place where purchase fulfillment happens
+ * All other fulfillment methods have been removed
  */
 async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
   try {
@@ -94,6 +101,13 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
     const itemId = bundleId || productBoxId
     if (!itemId) {
       console.error("❌ [Webhook Fulfillment] Missing product/bundle ID in session:", session.id)
+      return
+    }
+
+    // DUPLICATE PREVENTION: Check if this purchase already exists
+    const existingPurchase = await db.collection("bundlePurchases").doc(session.id).get()
+    if (existingPurchase.exists) {
+      console.log("⚠️ [Webhook Fulfillment] Purchase already fulfilled - PREVENTING DUPLICATE:", session.id)
       return
     }
 
@@ -120,13 +134,6 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
       contentType,
       stripeAccountId,
     })
-
-    // Check if this purchase already exists (prevent duplicate fulfillment)
-    const existingPurchase = await db.collection("bundlePurchases").doc(session.id).get()
-    if (existingPurchase.exists) {
-      console.log("⚠️ [Webhook Fulfillment] Purchase already fulfilled:", session.id)
-      return
-    }
 
     // Determine if this is a bundle or product box
     const isBundle = contentType === "bundle" || !!bundleId
@@ -167,13 +174,14 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
 
       // Item details
       title: itemData.title || "Untitled",
+      bundleTitle: itemData.title || "Untitled", // For compatibility
       description: itemData.description || "",
       thumbnailUrl: itemData.thumbnailUrl || itemData.customPreviewThumbnail || "",
 
       // Content details
       contents: contentItems,
       items: contentItems,
-      itemNames: contentItems.map((item) => item.displayTitle),
+      itemNames: contentItems.map((item) => item.displayTitle || item.title),
       contentCount: contentItems.length,
       totalItems: contentItems.length,
       totalSize: contentItems.reduce((sum, item) => sum + (item.fileSize || 0), 0),
@@ -200,12 +208,22 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
       // Timestamps
       purchasedAt: new Date(),
       createdAt: new Date(),
+      completedAt: new Date(),
       environment: isLiveKey ? "live" : "test",
 
-      // Fulfillment tracking
-      fulfilledBy: "stripe_webhook",
+      // Fulfillment tracking - SINGLE SOURCE OF TRUTH
+      fulfilledBy: "stripe_webhook_only",
       fulfilledAt: new Date(),
       singleSourceOfTruth: true,
+      verificationMethod: "stripe_webhook",
+
+      // Metadata for tracking
+      metadata: {
+        webhookEvent: "checkout.session.completed",
+        stripeSessionId: fullSession.id,
+        fulfillmentMethod: "webhook_only",
+        conflictingMethodsRemoved: true,
+      },
     }
 
     console.log("💾 [Webhook Fulfillment] SINGLE SOURCE OF TRUTH - Saving purchase to bundlePurchases:", {
@@ -220,6 +238,17 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
 
     // Save to bundlePurchases collection ONLY (using sessionId as document ID) - SINGLE SOURCE OF TRUTH
     await db.collection("bundlePurchases").doc(fullSession.id).set(purchaseData)
+
+    // Also create in unifiedPurchases for compatibility with existing UI
+    const unifiedPurchaseId = `webhook_${buyerUid}_${itemId}_${Date.now()}`
+    await db
+      .collection("unifiedPurchases")
+      .doc(unifiedPurchaseId)
+      .set({
+        ...purchaseData,
+        id: unifiedPurchaseId,
+        originalSessionId: fullSession.id,
+      })
 
     // Update item sales counter
     await db
@@ -244,13 +273,16 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
     }
 
     console.log(`🎉 [Webhook Fulfillment] SINGLE SOURCE OF TRUTH - Successfully fulfilled purchase: ${fullSession.id}`)
+    console.log(`📊 [Webhook Fulfillment] Purchase details: ${contentItems.length} items, $${purchaseData.amount}`)
   } catch (error) {
     console.error("❌ [Webhook Fulfillment] FULFILLMENT ERROR:", error)
     throw error
   }
 }
 
-// Fetch content items for the purchase
+/**
+ * Fetch content items for the purchase
+ */
 async function fetchContentItems(itemId: string, isBundle: boolean): Promise<any[]> {
   const items: any[] = []
 
@@ -274,6 +306,31 @@ async function fetchContentItems(itemId: string, isBundle: boolean): Promise<any
             filename: `${bundleData.title || "bundle"}.zip`,
           })
         }
+
+        // Also check for individual content items in the bundle
+        if (bundleData.contentItems && Array.isArray(bundleData.contentItems)) {
+          for (const contentId of bundleData.contentItems) {
+            const contentDoc = await db.collection("uploads").doc(contentId).get()
+            if (contentDoc.exists) {
+              const contentData = contentDoc.data()!
+              if (contentData.fileUrl) {
+                items.push({
+                  id: contentDoc.id,
+                  title: contentData.title || contentData.filename || "Untitled",
+                  displayTitle: contentData.title || contentData.filename || "Untitled",
+                  fileUrl: contentData.fileUrl,
+                  fileSize: contentData.fileSize || 0,
+                  displaySize: formatFileSize(contentData.fileSize || 0),
+                  mimeType: contentData.mimeType || "video/mp4",
+                  contentType: getContentType(contentData.mimeType || "video/mp4"),
+                  filename: contentData.filename || `${contentDoc.id}.mp4`,
+                  duration: contentData.duration || 0,
+                  thumbnailUrl: contentData.thumbnailUrl || "",
+                })
+              }
+            }
+          }
+        }
       }
     } else {
       // For product boxes, get all content items
@@ -283,6 +340,29 @@ async function fetchContentItems(itemId: string, isBundle: boolean): Promise<any
       uploadsSnapshot.forEach((doc) => {
         const data = doc.data()
         if (data.fileUrl) {
+          items.push({
+            id: doc.id,
+            title: data.title || data.filename || "Untitled",
+            displayTitle: data.title || data.filename || "Untitled",
+            fileUrl: data.fileUrl,
+            fileSize: data.fileSize || 0,
+            displaySize: formatFileSize(data.fileSize || 0),
+            mimeType: data.mimeType || "video/mp4",
+            contentType: getContentType(data.mimeType || "video/mp4"),
+            filename: data.filename || `${doc.id}.mp4`,
+            duration: data.duration || 0,
+            thumbnailUrl: data.thumbnailUrl || "",
+          })
+        }
+      })
+
+      // Also check productBoxContent collection
+      const productBoxContentQuery = db.collection("productBoxContent").where("productBoxId", "==", itemId)
+      const productBoxContentSnapshot = await productBoxContentQuery.get()
+
+      productBoxContentSnapshot.forEach((doc) => {
+        const data = doc.data()
+        if (data.fileUrl && !items.find((item) => item.id === doc.id)) {
           items.push({
             id: doc.id,
             title: data.title || data.filename || "Untitled",
