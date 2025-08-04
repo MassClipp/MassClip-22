@@ -21,11 +21,23 @@ export async function POST(request: NextRequest) {
     console.log(`🔍 [Verify Session] Verifying session: ${sessionId}`)
 
     // STEP 1: Look for existing purchase in bundlePurchases collection FIRST
-    // This gives us the creator's Stripe account ID needed for session retrieval
+    console.log(`🔍 [Verify Session] Looking up purchase document: bundlePurchases/${sessionId}`)
     const purchaseDoc = await db.collection("bundlePurchases").doc(sessionId).get()
 
     if (!purchaseDoc.exists) {
       console.error(`❌ [Verify Session] No purchase found for session: ${sessionId}`)
+      console.log(`🔍 [Verify Session] Checking if document exists in collection...`)
+
+      // Debug: Check if any purchases exist with this session ID in a query
+      const querySnapshot = await db.collection("bundlePurchases").where("sessionId", "==", sessionId).limit(1).get()
+      if (!querySnapshot.empty) {
+        console.log(`⚠️ [Verify Session] Found purchase via query but not by document ID`)
+        const foundDoc = querySnapshot.docs[0]
+        console.log(`🔍 [Verify Session] Found document ID: ${foundDoc.id}`)
+      } else {
+        console.log(`❌ [Verify Session] No purchase found via query either`)
+      }
+
       return NextResponse.json(
         {
           success: false,
@@ -38,16 +50,25 @@ export async function POST(request: NextRequest) {
 
     const purchaseData = purchaseDoc.data()!
     console.log(`✅ [Verify Session] Found purchase: ${purchaseDoc.id}`)
-    console.log(`🔍 [Verify Session] Creator ID: ${purchaseData.creatorId}`)
+    console.log(`🔍 [Verify Session] Purchase data:`, {
+      creatorId: purchaseData.creatorId,
+      creatorStripeAccountId: purchaseData.creatorStripeAccountId,
+      itemId: purchaseData.bundleId || purchaseData.productBoxId,
+      status: purchaseData.status,
+    })
 
-    // STEP 2: Get creator's Stripe account ID from user profile
-    let creatorStripeAccountId = null
-    if (purchaseData.creatorId) {
+    // STEP 2: Get creator's Stripe account ID
+    let creatorStripeAccountId = purchaseData.creatorStripeAccountId // Try from purchase first
+
+    if (!creatorStripeAccountId && purchaseData.creatorId) {
+      console.log(`🔍 [Verify Session] No Stripe account in purchase, looking up creator: ${purchaseData.creatorId}`)
       const creatorDoc = await db.collection("users").doc(purchaseData.creatorId).get()
       if (creatorDoc.exists) {
         const creatorData = creatorDoc.data()!
         creatorStripeAccountId = creatorData.stripeAccountId
-        console.log(`✅ [Verify Session] Creator Stripe account: ${creatorStripeAccountId}`)
+        console.log(`✅ [Verify Session] Found creator Stripe account: ${creatorStripeAccountId}`)
+      } else {
+        console.error(`❌ [Verify Session] Creator document not found: ${purchaseData.creatorId}`)
       }
     }
 
@@ -69,11 +90,23 @@ export async function POST(request: NextRequest) {
       console.log(`🔍 [Verify Session] Retrieving session from connected account: ${creatorStripeAccountId}`)
       session = await stripe.checkout.sessions.retrieve(sessionId, {
         expand: ["line_items", "payment_intent"],
-        stripeAccount: creatorStripeAccountId, // 🎯 KEY FIX: Use connected account
+        stripeAccount: creatorStripeAccountId,
       })
       console.log(`✅ [Verify Session] Retrieved Stripe session: ${session.id} from connected account`)
+      console.log(`💰 [Verify Session] Session details:`, {
+        amount: session.amount_total,
+        currency: session.currency,
+        payment_status: session.payment_status,
+        customer_email: session.customer_details?.email,
+      })
     } catch (error: any) {
-      console.error(`❌ [Verify Session] Failed to retrieve Stripe session from connected account:`, error)
+      console.error(`❌ [Verify Session] Failed to retrieve Stripe session from connected account:`, error.message)
+      console.log(`🔍 [Verify Session] Error details:`, {
+        type: error.type,
+        code: error.code,
+        decline_code: error.decline_code,
+        param: error.param,
+      })
 
       // Try platform account as fallback (for older purchases)
       try {
@@ -85,13 +118,13 @@ export async function POST(request: NextRequest) {
       } catch (fallbackError: any) {
         console.error(
           `❌ [Verify Session] Failed to retrieve from both connected and platform accounts:`,
-          fallbackError,
+          fallbackError.message,
         )
         return NextResponse.json(
           {
             success: false,
             error: "Invalid session ID",
-            details: "Unable to retrieve session from Stripe. The session may be expired or invalid.",
+            details: `Unable to retrieve session from Stripe. Connected account error: ${error.message}. Platform account error: ${fallbackError.message}`,
           },
           { status: 400 },
         )
@@ -119,10 +152,13 @@ export async function POST(request: NextRequest) {
     const itemType = purchaseData.bundleId ? "bundles" : "productBoxes"
 
     if (itemId) {
+      console.log(`🔍 [Verify Session] Looking up item: ${itemId} in ${itemType}`)
       const itemDoc = await db.collection(itemType).doc(itemId).get()
       if (itemDoc.exists) {
         itemData = itemDoc.data()
         console.log(`✅ [Verify Session] Retrieved item data: ${itemData?.title}`)
+      } else {
+        console.error(`❌ [Verify Session] Item not found: ${itemId} in ${itemType}`)
       }
     }
 
