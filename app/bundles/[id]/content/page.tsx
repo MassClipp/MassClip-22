@@ -55,14 +55,23 @@ const VideoPlayer = ({
   const [isMuted, setIsMuted] = useState(true)
   const videoRef = useRef<HTMLVideoElement>(null)
 
+  // Get the best available video URL
   const videoUrl = content.fileUrl || content.videoUrl || content.downloadUrl || ""
   const thumbnailUrl = content.thumbnailUrl || ""
+
+  console.log(`🎥 [VideoPlayer] ${content.title}:`, {
+    hasFileUrl: !!content.fileUrl,
+    hasVideoUrl: !!content.videoUrl,
+    hasDownloadUrl: !!content.downloadUrl,
+    finalVideoUrl: videoUrl ? videoUrl.substring(0, 50) + "..." : "MISSING",
+  })
 
   const togglePlay = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
 
-    if (!videoRef.current || !videoUrl) {
+    if (!videoUrl) {
+      console.error(`❌ [VideoPlayer] No video URL for: ${content.title}`)
       toast({
         title: "Video Error",
         description: "No video URL available",
@@ -71,10 +80,16 @@ const VideoPlayer = ({
       return
     }
 
+    if (!videoRef.current) {
+      console.error(`❌ [VideoPlayer] No video ref for: ${content.title}`)
+      return
+    }
+
     if (isPlaying) {
       videoRef.current.pause()
       videoRef.current.currentTime = 0
       setIsPlaying(false)
+      console.log(`⏸️ [VideoPlayer] Paused: ${content.title}`)
     } else {
       // Pause all other videos first
       document.querySelectorAll("video").forEach((v) => {
@@ -84,17 +99,20 @@ const VideoPlayer = ({
         }
       })
 
+      console.log(`▶️ [VideoPlayer] Playing: ${content.title} from URL: ${videoUrl}`)
+
       videoRef.current.muted = isMuted
       videoRef.current
         .play()
         .then(() => {
           setIsPlaying(true)
+          console.log(`✅ [VideoPlayer] Successfully playing: ${content.title}`)
         })
         .catch((error) => {
-          console.error("Error playing video:", error)
+          console.error(`❌ [VideoPlayer] Error playing ${content.title}:`, error)
           toast({
             title: "Video Error",
-            description: "Failed to play video",
+            description: `Failed to play: ${content.title}`,
             variant: "destructive",
           })
         })
@@ -109,6 +127,7 @@ const VideoPlayer = ({
       const newMutedState = !isMuted
       setIsMuted(newMutedState)
       videoRef.current.muted = newMutedState
+      console.log(`🔊 [VideoPlayer] ${newMutedState ? "Muted" : "Unmuted"}: ${content.title}`)
     }
   }
 
@@ -117,16 +136,30 @@ const VideoPlayer = ({
     if (videoRef.current) {
       videoRef.current.currentTime = 0
     }
+    console.log(`🏁 [VideoPlayer] Ended: ${content.title}`)
   }
 
-  const handleVideoError = () => {
+  const handleVideoError = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
     setIsPlaying(false)
-    console.error("Video error for:", content.title, "URL:", videoUrl)
+    const error = (e.target as HTMLVideoElement).error
+    console.error(`❌ [VideoPlayer] Video error for ${content.title}:`, {
+      error: error?.message,
+      code: error?.code,
+      url: videoUrl,
+    })
     toast({
       title: "Video Error",
       description: `Failed to load: ${content.title}`,
       variant: "destructive",
     })
+  }
+
+  const handleVideoLoadStart = () => {
+    console.log(`🔄 [VideoPlayer] Loading started: ${content.title}`)
+  }
+
+  const handleVideoCanPlay = () => {
+    console.log(`✅ [VideoPlayer] Can play: ${content.title}`)
   }
 
   return (
@@ -147,6 +180,7 @@ const VideoPlayer = ({
                 onError={(e) => {
                   const target = e.target as HTMLImageElement
                   target.style.display = "none"
+                  console.log(`⚠️ [VideoPlayer] Thumbnail failed for: ${content.title}`)
                 }}
               />
             ) : (
@@ -172,7 +206,7 @@ const VideoPlayer = ({
           {isHovered && (
             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
               <p className="text-white text-sm font-medium truncate">{content.title}</p>
-              {content.duration && (
+              {content.duration && content.duration > 0 && (
                 <p className="text-gray-300 text-xs">
                   {Math.floor(content.duration / 60)}:{(content.duration % 60).toString().padStart(2, "0")}
                 </p>
@@ -188,9 +222,12 @@ const VideoPlayer = ({
             className="w-full h-full object-cover"
             onEnded={handleVideoEnd}
             onError={handleVideoError}
+            onLoadStart={handleVideoLoadStart}
+            onCanPlay={handleVideoCanPlay}
             controls={false}
             playsInline
             muted={isMuted}
+            crossOrigin="anonymous"
           >
             Your browser does not support the video tag.
           </video>
@@ -214,6 +251,9 @@ const VideoPlayer = ({
           </div>
         </>
       )}
+
+      {/* Debug info (remove in production) */}
+      {!videoUrl && <div className="absolute top-2 left-2 bg-red-600 text-white text-xs px-2 py-1 rounded">NO URL</div>}
     </div>
   )
 }
@@ -270,6 +310,15 @@ export default function BundleContentPage() {
       setPurchaseInfo(data.purchaseInfo)
 
       console.log(`📦 [Bundle Content Page] Set ${data.contents?.length || 0} content items`)
+
+      // Log each content item's video URL status
+      data.contents?.forEach((content: BundleContent, index: number) => {
+        console.log(`📹 [Bundle Content Page] Content ${index + 1}: ${content.title}`, {
+          hasFileUrl: !!content.fileUrl,
+          hasVideoUrl: !!content.videoUrl,
+          hasDownloadUrl: !!content.downloadUrl,
+        })
+      })
     } catch (err) {
       console.error("❌ [Bundle Content Page] Error:", err)
       setError(err instanceof Error ? err.message : "Failed to fetch bundle content")

@@ -109,15 +109,114 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     }
 
     console.log(`✅ [Bundle Content API] Purchase found! Document ID: ${purchaseDoc.id}`)
-    console.log(`📄 [Bundle Content API] Full purchase data:`, JSON.stringify(purchaseData, null, 2))
+    console.log(`📄 [Bundle Content API] Full purchase data keys:`, Object.keys(purchaseData))
+
+    // Deep search through ALL fields and nested objects for content
+    let bundleContents = []
+
+    // Function to recursively search for content arrays
+    const findContentArrays = (obj: any, path = ""): any[] => {
+      const results = []
+
+      if (Array.isArray(obj)) {
+        // Check if this array contains video-like objects
+        if (obj.length > 0 && obj[0] && typeof obj[0] === "object") {
+          const firstItem = obj[0]
+          // Look for video-like properties
+          if (
+            firstItem.fileUrl ||
+            firstItem.videoUrl ||
+            firstItem.downloadUrl ||
+            firstItem.title ||
+            firstItem.filename ||
+            firstItem.displayTitle ||
+            firstItem.mimeType ||
+            firstItem.contentType
+          ) {
+            console.log(`🎯 [Bundle Content API] Found content array at path: ${path} with ${obj.length} items`)
+            results.push(...obj)
+          }
+        }
+      } else if (obj && typeof obj === "object") {
+        // Recursively search nested objects
+        for (const [key, value] of Object.entries(obj)) {
+          const newPath = path ? `${path}.${key}` : key
+          results.push(...findContentArrays(value, newPath))
+        }
+      }
+
+      return results
+    }
+
+    // Search through the entire purchase document
+    bundleContents = findContentArrays(purchaseData)
+
+    console.log(`🔍 [Bundle Content API] Found ${bundleContents.length} content items through deep search`)
+
+    // If deep search didn't find anything, try direct field access
+    if (bundleContents.length === 0) {
+      const possibleContentFields = [
+        "content",
+        "contents",
+        "items",
+        "videos",
+        "files",
+        "bundleContent",
+        "bundleContents",
+        "purchasedContent",
+        "purchasedContents",
+        "contentItems",
+        "videoItems",
+        "bundleItems",
+        "data",
+        "videoData",
+        "fileData",
+        "mediaItems",
+        "media",
+      ]
+
+      console.log(`🔍 [Bundle Content API] Deep search failed, trying direct field access...`)
+
+      for (const field of possibleContentFields) {
+        if (purchaseData[field] && Array.isArray(purchaseData[field])) {
+          bundleContents = purchaseData[field]
+          console.log(`✅ [Bundle Content API] Found ${bundleContents.length} content items in field: ${field}`)
+          break
+        }
+      }
+    }
+
+    // Log what we found
+    if (bundleContents.length > 0) {
+      console.log(`📹 [Bundle Content API] Sample content item:`, JSON.stringify(bundleContents[0], null, 2))
+    } else {
+      console.log(`❌ [Bundle Content API] No content found. Available top-level fields:`)
+      Object.keys(purchaseData).forEach((key) => {
+        const value = purchaseData[key]
+        if (Array.isArray(value)) {
+          console.log(`  - ${key}: Array with ${value.length} items`)
+          if (value.length > 0) {
+            console.log(`    First item type: ${typeof value[0]}`)
+            if (typeof value[0] === "object") {
+              console.log(`    First item keys: ${Object.keys(value[0])}`)
+            }
+          }
+        } else if (typeof value === "object" && value !== null) {
+          console.log(`  - ${key}: Object with keys: ${Object.keys(value)}`)
+        } else {
+          console.log(`  - ${key}: ${typeof value}`)
+        }
+      })
+    }
 
     // Extract bundle info from purchase document
     const bundleInfo = {
       id: bundleId,
-      title: purchaseData.bundleTitle || purchaseData.title || "Untitled Bundle",
+      title: purchaseData.bundleTitle || purchaseData.title || purchaseData.displayTitle || "Untitled Bundle",
       description: purchaseData.bundleDescription || purchaseData.description || "",
       creatorId: purchaseData.creatorId || purchaseData.creatorUid || "",
-      creatorUsername: purchaseData.creatorUsername || purchaseData.creatorName || "Unknown Creator",
+      creatorUsername:
+        purchaseData.creatorUsername || purchaseData.creatorName || purchaseData.creator || "Unknown Creator",
       thumbnailUrl: purchaseData.bundleThumbnailUrl || purchaseData.thumbnailUrl || "",
       price: purchaseData.price || purchaseData.amount || 0,
       currency: purchaseData.currency || "usd",
@@ -125,73 +224,33 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     console.log(`📦 [Bundle Content API] Extracted bundle info:`, bundleInfo)
 
-    // Extract content from purchase document - check ALL possible field names
-    let bundleContents = []
-    const possibleContentFields = [
-      "content",
-      "contents",
-      "items",
-      "videos",
-      "files",
-      "bundleContent",
-      "bundleContents",
-      "purchasedContent",
-      "purchasedContents",
-      "contentItems",
-      "videoItems",
-      "bundleItems",
-    ]
-
-    console.log(`🔍 [Bundle Content API] Checking for content in these fields:`, possibleContentFields)
-
-    for (const field of possibleContentFields) {
-      if (purchaseData[field] && Array.isArray(purchaseData[field])) {
-        bundleContents = purchaseData[field]
-        console.log(`✅ [Bundle Content API] Found ${bundleContents.length} content items in field: ${field}`)
-        console.log(`📄 [Bundle Content API] Sample content item:`, JSON.stringify(bundleContents[0], null, 2))
-        break
-      } else if (purchaseData[field]) {
-        console.log(`⚠️ [Bundle Content API] Field ${field} exists but is not an array:`, typeof purchaseData[field])
-      }
-    }
-
-    if (bundleContents.length === 0) {
-      console.log(`⚠️ [Bundle Content API] No content found in any field. Available fields:`, Object.keys(purchaseData))
-
-      // Log all fields that contain arrays or objects for debugging
-      Object.keys(purchaseData).forEach((key) => {
-        const value = purchaseData[key]
-        if (Array.isArray(value)) {
-          console.log(`📄 [Bundle Content API] Array field "${key}":`, value.length, "items")
-        } else if (typeof value === "object" && value !== null) {
-          console.log(`📄 [Bundle Content API] Object field "${key}":`, Object.keys(value))
-        }
-      })
-    }
-
     // Process content to ensure proper structure for 9:16 video display
     const processedContents = bundleContents.map((content, index) => {
+      // Handle all possible field names for video URLs
+      const videoUrl =
+        content.fileUrl || content.videoUrl || content.downloadUrl || content.url || content.src || content.link || ""
+
       const processedContent = {
-        id: content.id || content.contentId || content.videoId || `content_${index}`,
-        title: content.title || content.name || content.filename || `Video ${index + 1}`,
-        description: content.description || "",
-        type: content.type || "video",
-        fileType: content.fileType || content.mimeType || "video/mp4",
-        size: content.size || content.fileSize || 0,
+        id: content.id || content.contentId || content.videoId || content._id || `content_${index}`,
+        title: content.title || content.displayTitle || content.name || content.filename || `Video ${index + 1}`,
+        description: content.description || content.desc || "",
+        type: content.type || content.contentType || "video",
+        fileType: content.fileType || content.mimeType || content.contentType || "video/mp4",
+        size: content.size || content.fileSize || content.displaySize || 0,
         duration: content.duration || 0,
-        thumbnailUrl: content.thumbnailUrl || content.thumbnail || content.previewUrl || "",
-        // Priority order for video URL: fileUrl > downloadUrl > videoUrl > url
-        fileUrl: content.fileUrl || content.downloadUrl || content.videoUrl || content.url || "",
-        downloadUrl: content.downloadUrl || content.fileUrl || content.url || "",
-        videoUrl: content.videoUrl || content.fileUrl || content.downloadUrl || content.url || "",
-        createdAt: content.createdAt || content.uploadedAt || new Date().toISOString(),
-        metadata: content.metadata || {},
+        thumbnailUrl: content.thumbnailUrl || content.thumbnail || content.previewUrl || content.thumb || "",
+        fileUrl: videoUrl,
+        downloadUrl: videoUrl,
+        videoUrl: videoUrl,
+        createdAt: content.createdAt || content.uploadedAt || content.timestamp || new Date().toISOString(),
+        metadata: content.metadata || content.meta || {},
       }
 
       console.log(`📹 [Bundle Content API] Processed content ${index + 1}:`, {
         id: processedContent.id,
         title: processedContent.title,
-        hasFileUrl: !!processedContent.fileUrl,
+        hasVideoUrl: !!processedContent.fileUrl,
+        videoUrl: processedContent.fileUrl ? processedContent.fileUrl.substring(0, 50) + "..." : "MISSING",
         hasThumbnail: !!processedContent.thumbnailUrl,
       })
 
