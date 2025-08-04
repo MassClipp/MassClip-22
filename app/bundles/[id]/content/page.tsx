@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation"
 import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { ArrowLeft, AlertCircle, Play, Package, Volume2, VolumeX } from "lucide-react"
+import { ArrowLeft, AlertCircle, Play, Package, Volume2, VolumeX, Pause } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { toast } from "@/hooks/use-toast"
 
@@ -42,7 +42,7 @@ interface PurchaseInfo {
   status: string
 }
 
-// Video player component exactly like creator-upload-card
+// Video player component with hover effects and smaller play button
 const VideoPlayer = ({ content }: { content: BundleContent }) => {
   const [isPlaying, setIsPlaying] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
@@ -74,7 +74,6 @@ const VideoPlayer = ({ content }: { content: BundleContent }) => {
 
     if (isPlaying) {
       videoRef.current.pause()
-      videoRef.current.currentTime = 0
       setIsPlaying(false)
     } else {
       videoRef.current.muted = isMuted
@@ -134,7 +133,9 @@ const VideoPlayer = ({ content }: { content: BundleContent }) => {
 
   return (
     <div
-      className="relative w-full aspect-[9/16] bg-black border border-white/20 overflow-hidden cursor-pointer group rounded-lg"
+      className={`relative w-full aspect-[9/16] bg-black overflow-hidden cursor-pointer group rounded-lg transition-all duration-300 ${
+        isHovered ? "border border-white/60" : "border border-white/20"
+      }`}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
@@ -154,16 +155,14 @@ const VideoPlayer = ({ content }: { content: BundleContent }) => {
         Your browser does not support the video tag.
       </video>
 
-      {/* Play/Pause overlay - only shows on hover or when not playing */}
-      {(!isPlaying || isHovered) && (
+      {/* Play/Pause overlay - only shows on hover */}
+      {isHovered && (
         <div
-          className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-200 ${
-            isHovered || !isPlaying ? "opacity-100" : "opacity-0"
-          }`}
+          className="absolute inset-0 bg-black/30 flex items-center justify-center transition-opacity duration-200"
           onClick={handlePlay}
         >
-          <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white/30 transition-colors">
-            {isPlaying ? <div className="w-6 h-6 bg-white rounded-sm" /> : <Play className="w-8 h-8 text-white ml-1" />}
+          <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white/30 transition-colors">
+            {isPlaying ? <Pause className="w-5 h-5 text-white" /> : <Play className="w-5 h-5 text-white ml-0.5" />}
           </div>
         </div>
       )}
@@ -175,22 +174,10 @@ const VideoPlayer = ({ content }: { content: BundleContent }) => {
             e.stopPropagation()
             handleMute()
           }}
-          className="absolute top-3 right-3 w-10 h-10 bg-black/50 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-black/70 transition-colors"
+          className="absolute top-3 right-3 w-8 h-8 bg-black/50 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-black/70 transition-colors"
         >
-          {isMuted ? <VolumeX className="w-5 h-5 text-white" /> : <Volume2 className="w-5 h-5 text-white" />}
+          {isMuted ? <VolumeX className="w-4 h-4 text-white" /> : <Volume2 className="w-4 h-4 text-white" />}
         </button>
-      )}
-
-      {/* Video info overlay - shows on hover */}
-      {isHovered && (
-        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
-          <p className="text-white text-sm font-medium truncate">{content.title}</p>
-          {content.duration && content.duration > 0 && (
-            <p className="text-gray-300 text-xs">
-              {Math.floor(content.duration / 60)}:{(content.duration % 60).toString().padStart(2, "0")}
-            </p>
-          )}
-        </div>
       )}
     </div>
   )
@@ -312,7 +299,7 @@ export default function BundleContentPage() {
         }}
       >
         <div className="max-w-7xl mx-auto">
-          <Button onClick={() => router.back()} variant="ghost" className="mb-6 text-gray-400 hover:text-white">
+          <Button onClick={() => router.back()} variant="ghost" className="mb-6 text-gray-400">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Purchases
           </Button>
@@ -336,8 +323,8 @@ export default function BundleContentPage() {
       }}
     >
       <div className="max-w-7xl mx-auto">
-        {/* Back Button */}
-        <Button onClick={() => router.back()} variant="ghost" className="mb-6 text-gray-400 hover:text-white">
+        {/* Back Button - No hover effect */}
+        <Button onClick={() => router.back()} variant="ghost" className="mb-6 text-gray-400">
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Purchases
         </Button>
