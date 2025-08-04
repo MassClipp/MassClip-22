@@ -1,251 +1,129 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useParams, useRouter } from "next/navigation"
-import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
+import { useRouter } from "next/navigation"
+import { useAuthState } from "react-firebase-hooks/auth"
+import { auth } from "@/firebase/config"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Skeleton } from "@/components/ui/skeleton"
-import { ArrowLeft, Download, AlertCircle, Play } from "lucide-react"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { toast } from "@/hooks/use-toast"
+import { ArrowLeft, Download, Play, Loader2 } from "lucide-react"
+import Image from "next/image"
 
 interface BundleContent {
   id: string
   title: string
-  description?: string
+  description: string
   type: string
   fileType: string
   size: number
-  duration?: number
-  thumbnailUrl?: string
-  downloadUrl?: string
-  videoUrl?: string
+  duration: number
+  thumbnailUrl: string
+  downloadUrl: string
+  videoUrl: string
   createdAt: string
-  metadata?: any
+  metadata: any
 }
 
-interface BundleInfo {
+interface Bundle {
   id: string
   title: string
-  description?: string
+  description: string
   creatorId: string
   creatorUsername: string
-  thumbnailUrl?: string
+  thumbnailUrl: string
   price: number
   currency: string
 }
 
-interface PurchaseInfo {
-  purchaseId: string
-  purchaseDate: string
-  status: string
+interface BundleData {
+  bundle: Bundle
+  contents: BundleContent[]
+  purchaseInfo: any
+  hasAccess: boolean
 }
 
-// Simple video player component
-const VideoPlayer = ({
-  videoUrl,
-  thumbnailUrl,
-  title,
-}: {
-  videoUrl: string
-  thumbnailUrl?: string
-  title: string
-}) => {
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [showControls, setShowControls] = useState(false)
-
-  const handlePlay = () => {
-    setIsPlaying(true)
-  }
-
-  return (
-    <div
-      className="relative w-full aspect-[9/16] bg-black border border-gray-800/50 overflow-hidden cursor-pointer group"
-      onMouseEnter={() => setShowControls(true)}
-      onMouseLeave={() => setShowControls(false)}
-    >
-      {!isPlaying ? (
-        <>
-          {/* Thumbnail */}
-          <div className="w-full h-full">
-            {thumbnailUrl ? (
-              <img
-                src={thumbnailUrl || "/placeholder.svg"}
-                alt={title}
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement
-                  target.style.display = "none"
-                }}
-              />
-            ) : (
-              <div className="w-full h-full bg-black flex items-center justify-center">
-                <Play className="h-12 w-12 text-gray-500" />
-              </div>
-            )}
-          </div>
-
-          {/* Play button overlay */}
-          <div
-            className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-            onClick={handlePlay}
-          >
-            <div className="w-16 h-16 bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center">
-              <Play className="h-8 w-8 text-white ml-1" />
-            </div>
-          </div>
-        </>
-      ) : (
-        <video
-          src={videoUrl}
-          controls={showControls}
-          autoPlay
-          className="w-full h-full object-cover"
-          onError={() => {
-            setIsPlaying(false)
-            toast({
-              title: "Video Error",
-              description: "Failed to load video",
-              variant: "destructive",
-            })
-          }}
-        >
-          Your browser does not support the video tag.
-        </video>
-      )}
-    </div>
-  )
-}
-
-export default function BundleContentPage() {
-  const params = useParams()
-  const router = useRouter()
-  const { user, loading: authLoading } = useFirebaseAuth()
-  const [bundle, setBundle] = useState<BundleInfo | null>(null)
-  const [contents, setContents] = useState<BundleContent[]>([])
-  const [purchaseInfo, setPurchaseInfo] = useState<PurchaseInfo | null>(null)
-  const [loading, setLoading] = useState(true)
+export default function BundleContentPage({ params }: { params: { id: string } }) {
+  const [user, loading] = useAuthState(auth)
+  const [bundleData, setBundleData] = useState<BundleData | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-
-  const bundleId = params.id as string
+  const router = useRouter()
 
   useEffect(() => {
-    if (user && bundleId) {
-      fetchBundleContent()
+    if (loading) return
+
+    if (!user) {
+      router.push("/login")
+      return
     }
-  }, [user, bundleId])
+
+    fetchBundleContent()
+  }, [user, loading, router, params.id])
 
   const fetchBundleContent = async () => {
     try {
-      setLoading(true)
+      setIsLoading(true)
       setError(null)
 
-      const token = await user.getIdToken()
-      const response = await fetch(`/api/bundles/${bundleId}/content`, {
+      const token = await user?.getIdToken()
+
+      const response = await fetch(`/api/bundles/${params.id}/content`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       })
 
       if (!response.ok) {
-        if (response.status === 403) {
-          throw new Error("You don't have access to this bundle")
-        }
-        throw new Error(`Failed to fetch bundle content: ${response.status}`)
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to fetch bundle content")
       }
 
       const data = await response.json()
-      console.log("Bundle content data:", data)
-
-      setBundle(data.bundle)
-
-      // Process contents to ensure video URLs are available
-      const processedContents = (data.contents || []).map((content: any) => ({
-        ...content,
-        videoUrl: content.downloadUrl || content.videoUrl || content.fileUrl,
-      }))
-
-      setContents(processedContents)
-      setPurchaseInfo(data.purchaseInfo)
-    } catch (err) {
-      console.error("Error fetching bundle content:", err)
-      setError(err instanceof Error ? err.message : "Failed to fetch bundle content")
+      setBundleData(data)
+    } catch (error: any) {
+      console.error("Error fetching bundle content:", error)
+      setError(error.message || "Failed to load bundle content")
     } finally {
-      setLoading(false)
+      setIsLoading(false)
     }
   }
 
-  const handleDownloadAll = async () => {
-    try {
-      const token = await user.getIdToken()
-      const response = await fetch(`/api/bundles/${bundleId}/download`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to download bundle")
-      }
-
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = `${bundle?.title || "bundle"}.zip`
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
-
-      toast({
-        title: "Download started",
-        description: "Your bundle is being downloaded.",
-      })
-    } catch (err) {
-      console.error("Download error:", err)
-      toast({
-        title: "Download failed",
-        description: "Failed to download the bundle. Please try again.",
-        variant: "destructive",
-      })
+  const handleDownload = (content: BundleContent) => {
+    if (content.downloadUrl) {
+      window.open(content.downloadUrl, "_blank")
     }
   }
 
-  if (authLoading || loading) {
+  const handlePlay = (content: BundleContent) => {
+    if (content.videoUrl) {
+      window.open(content.videoUrl, "_blank")
+    }
+  }
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return "Unknown size"
+    const k = 1024
+    const sizes = ["Bytes", "KB", "MB", "GB"]
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
+  }
+
+  const formatDuration = (seconds: number) => {
+    if (!seconds) return "Unknown duration"
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins}:${secs.toString().padStart(2, "0")}`
+  }
+
+  if (loading || isLoading) {
     return (
       <div
-        className="min-h-screen text-white p-6"
+        className="min-h-screen flex items-center justify-center"
         style={{
-          background: `linear-gradient(135deg, #0d0d0d 0%, #1a1a1a 30%, #262626 50%, #1a1a1a 70%, #0d0d0d 100%)`,
+          background: "linear-gradient(135deg, #0d0d0d 0%, #1a1a1a 30%, #262626 50%, #1a1a1a 70%, #0d0d0d 100%)",
         }}
       >
-        <div className="max-w-7xl mx-auto">
-          <Skeleton className="h-8 w-48 mb-6 bg-gray-800" />
-
-          {/* Header skeleton */}
-          <div className="flex items-center gap-6 mb-8 pb-6">
-            <Skeleton className="w-20 h-20 bg-gray-800 rounded-lg flex-shrink-0" />
-            <div className="flex-1">
-              <Skeleton className="h-8 w-64 mb-2 bg-gray-800" />
-              <Skeleton className="h-4 w-32 mb-4 bg-gray-800" />
-              <Skeleton className="h-10 w-48 bg-gray-800" />
-            </div>
-          </div>
-
-          {/* Border line */}
-          <div className="border-t border-gray-800/50 mb-8"></div>
-
-          {/* Video grid skeleton */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-            {[...Array(12)].map((_, i) => (
-              <div key={i} className="space-y-2">
-                <Skeleton className="w-full aspect-[9/16] bg-gray-800 rounded-lg" />
-                <Skeleton className="h-4 w-full bg-gray-800" />
-              </div>
-            ))}
-          </div>
-        </div>
+        <Loader2 className="h-8 w-8 animate-spin text-white" />
       </div>
     )
   }
@@ -253,123 +131,168 @@ export default function BundleContentPage() {
   if (error) {
     return (
       <div
-        className="min-h-screen text-white p-6"
+        className="min-h-screen flex items-center justify-center"
         style={{
-          background: `linear-gradient(135deg, #0d0d0d 0%, #1a1a1a 30%, #262626 50%, #1a1a1a 70%, #0d0d0d 100%)`,
+          background: "linear-gradient(135deg, #0d0d0d 0%, #1a1a1a 30%, #262626 50%, #1a1a1a 70%, #0d0d0d 100%)",
         }}
       >
-        <div className="max-w-7xl mx-auto">
-          <Button onClick={() => router.back()} variant="ghost" className="mb-6 text-gray-400 hover:text-white">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Purchases
-          </Button>
-          <Alert variant="destructive" className="bg-red-900/20 border-red-800">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-          <Button onClick={fetchBundleContent} className="mt-4 bg-white text-black hover:bg-gray-200">
-            Try Again
-          </Button>
+        <div className="text-center max-w-md">
+          <div className="bg-red-900/20 border border-red-500/50 rounded-lg p-6 mb-6">
+            <p className="text-red-400 mb-4">{error}</p>
+            <Button onClick={fetchBundleContent} variant="outline" className="mr-4 bg-transparent">
+              Try Again
+            </Button>
+            <Button onClick={() => router.push("/dashboard/purchases")} variant="outline">
+              Back to Purchases
+            </Button>
+          </div>
         </div>
+      </div>
+    )
+  }
+
+  if (!bundleData) {
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center"
+        style={{
+          background: "linear-gradient(135deg, #0d0d0d 0%, #1a1a1a 30%, #262626 50%, #1a1a1a 70%, #0d0d0d 100%)",
+        }}
+      >
+        <p className="text-gray-400">No bundle data found</p>
       </div>
     )
   }
 
   return (
     <div
-      className="min-h-screen text-white p-6"
+      className="min-h-screen"
       style={{
-        background: `linear-gradient(135deg, #0d0d0d 0%, #1a1a1a 30%, #262626 50%, #1a1a1a 70%, #0d0d0d 100%)`,
+        background: "linear-gradient(135deg, #0d0d0d 0%, #1a1a1a 30%, #262626 50%, #1a1a1a 70%, #0d0d0d 100%)",
       }}
     >
-      <div className="max-w-7xl mx-auto">
-        {/* Back Button */}
-        <Button onClick={() => router.back()} variant="ghost" className="mb-6 text-gray-400 hover:text-white">
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Purchases
-        </Button>
+      <div className="container mx-auto px-4 py-8">
+        {/* Header */}
+        <div className="flex items-center gap-4 mb-8">
+          <Button
+            onClick={() => router.push("/dashboard/purchases")}
+            variant="outline"
+            size="sm"
+            className="border-gray-600 text-gray-300 hover:bg-gray-800"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Purchases
+          </Button>
+        </div>
 
-        {/* Bundle Header - Thumbnail top left, title next to it */}
-        <div className="flex items-center gap-6 mb-8 pb-6">
-          {/* 1:1 Thumbnail - Curved corners */}
-          <div className="w-20 h-20 bg-black border border-gray-800/50 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
-            {bundle?.thumbnailUrl ? (
-              <img
-                src={bundle.thumbnailUrl || "/placeholder.svg"}
-                alt={bundle.title}
-                className="w-full h-full object-cover rounded-lg"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement
-                  target.style.display = "none"
-                  const parent = target.parentElement
-                  if (parent) {
-                    parent.innerHTML = `
-                      <div class="w-full h-full flex items-center justify-center bg-black rounded-lg">
-                        <svg class="h-8 w-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
-                        </svg>
-                      </div>
-                    `
-                  }
-                }}
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center bg-black rounded-lg">
-                <svg className="h-8 w-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
-                  ></path>
-                </svg>
+        {/* Bundle Info */}
+        <div className="mb-8">
+          <div className="flex items-start gap-6">
+            {bundleData.bundle.thumbnailUrl && (
+              <div className="flex-shrink-0">
+                <Image
+                  src={bundleData.bundle.thumbnailUrl || "/placeholder.svg"}
+                  alt={bundleData.bundle.title}
+                  width={120}
+                  height={120}
+                  className="rounded-lg object-cover"
+                />
               </div>
             )}
-          </div>
-
-          {/* Title and Info */}
-          <div className="flex-1">
-            <h1 className="text-3xl font-bold mb-2 tracking-tight">{bundle?.title}</h1>
-            <div className="flex items-center gap-4 text-gray-400 text-sm mb-4">
-              <span>{contents.length} videos</span>
-              <span>•</span>
-              <span>by {bundle?.creatorUsername}</span>
+            <div className="flex-1">
+              <h1 className="text-3xl font-bold text-white mb-2">{bundleData.bundle.title}</h1>
+              <p className="text-gray-400 mb-4">{bundleData.bundle.description}</p>
+              <div className="flex items-center gap-4 text-sm text-gray-500">
+                <span>BY {bundleData.bundle.creatorUsername?.toUpperCase()}</span>
+                <span>${(bundleData.bundle.price / 100).toFixed(2)}</span>
+                <span>{bundleData.contents.length} ITEMS</span>
+              </div>
             </div>
-            <Button onClick={handleDownloadAll} className="bg-white text-black hover:bg-gray-200 rounded-lg">
-              <Download className="h-4 w-4 mr-2" />
-              Download All
-            </Button>
           </div>
         </div>
 
-        {/* Thin border line underneath */}
-        <div className="border-t border-gray-800/50 mb-8"></div>
+        {/* Content Grid */}
+        <div className="grid gap-6">
+          <h2 className="text-2xl font-semibold text-white">Bundle Contents</h2>
 
-        {/* Content Grid - 9:16 videos */}
-        {contents.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="w-16 h-16 mx-auto mb-4 bg-black border border-gray-800/50 rounded-lg flex items-center justify-center">
-              <AlertCircle className="h-8 w-8 text-gray-500" />
+          {bundleData.contents.length === 0 ? (
+            <Card className="bg-gray-900/50 border-gray-700">
+              <CardContent className="p-8 text-center">
+                <p className="text-gray-400">No content available in this bundle</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4">
+              {bundleData.contents.map((content) => (
+                <Card
+                  key={content.id}
+                  className="bg-gradient-to-r from-[#0d0d0d] via-[#1a1a1a] to-[#0d0d0d] border-white/20 hover:border-white/40 transition-all duration-300 rounded-lg"
+                >
+                  <CardContent className="p-6">
+                    <div className="flex items-center gap-6">
+                      {/* Thumbnail */}
+                      <div className="flex-shrink-0">
+                        <div className="w-20 h-20 rounded-lg overflow-hidden bg-gray-800">
+                          {content.thumbnailUrl ? (
+                            <Image
+                              src={content.thumbnailUrl || "/placeholder.svg"}
+                              alt={content.title}
+                              width={80}
+                              height={80}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <Play className="w-6 h-6 text-gray-500" />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Content Info */}
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-lg font-semibold text-white mb-1 truncate">{content.title}</h3>
+                        {content.description && (
+                          <p className="text-gray-400 text-sm mb-2 line-clamp-2">{content.description}</p>
+                        )}
+                        <div className="flex items-center gap-4 text-xs text-gray-500">
+                          <span>{content.type?.toUpperCase() || "VIDEO"}</span>
+                          <span>{formatFileSize(content.size)}</span>
+                          {content.duration > 0 && <span>{formatDuration(content.duration)}</span>}
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex-shrink-0 flex gap-2">
+                        {content.videoUrl && (
+                          <Button
+                            onClick={() => handlePlay(content)}
+                            size="sm"
+                            className="bg-white text-black hover:bg-gray-200"
+                          >
+                            <Play className="w-4 h-4 mr-1" />
+                            Play
+                          </Button>
+                        )}
+                        {content.downloadUrl && (
+                          <Button
+                            onClick={() => handleDownload(content)}
+                            size="sm"
+                            variant="outline"
+                            className="border-gray-600 text-gray-300 hover:bg-gray-800"
+                          >
+                            <Download className="w-4 h-4 mr-1" />
+                            Download
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
-            <h3 className="text-xl font-semibold mb-2">No content available</h3>
-            <p className="text-gray-400">This bundle doesn't have any content items yet.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-            {contents.map((content) => (
-              <div key={content.id} className="space-y-2">
-                <VideoPlayer
-                  videoUrl={content.videoUrl || content.downloadUrl || ""}
-                  thumbnailUrl={content.thumbnailUrl}
-                  title={content.title}
-                />
-                <div className="px-1">
-                  <h3 className="text-sm font-medium text-white truncate tracking-tight">{content.title}</h3>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   )
