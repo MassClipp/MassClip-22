@@ -6,6 +6,10 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
 })
 
+/**
+ * READ-ONLY: Get session details from Stripe and database
+ * This route only reads data - it does NOT handle fulfillment
+ */
 export async function POST(request: NextRequest) {
   try {
     const { sessionId } = await request.json()
@@ -14,7 +18,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Session ID is required" }, { status: 400 })
     }
 
-    console.log("🔍 [Purchase Verify] Verifying session:", sessionId)
+    console.log("📖 [Get Session Details] READ-ONLY session lookup:", sessionId)
 
     // First, check if purchase exists in bundlePurchases to get the connected account ID
     const purchaseDoc = await db.collection("bundlePurchases").doc(sessionId).get()
@@ -25,34 +29,34 @@ export async function POST(request: NextRequest) {
     if (purchaseDoc.exists) {
       const purchaseData = purchaseDoc.data()!
       stripeAccountId = purchaseData.stripeAccountId
-      console.log("✅ [Purchase Verify] Found purchase with connected account:", stripeAccountId)
+      console.log("✅ [Get Session Details] Found purchase with connected account:", stripeAccountId)
     }
 
     // Try to retrieve the session from the correct account
     try {
       if (stripeAccountId) {
-        console.log("🔗 [Purchase Verify] Retrieving session from connected account:", stripeAccountId)
+        console.log("🔗 [Get Session Details] Retrieving session from connected account:", stripeAccountId)
         session = await stripe.checkout.sessions.retrieve(sessionId, {
           stripeAccount: stripeAccountId,
         })
       } else {
-        console.log("🏢 [Purchase Verify] Retrieving session from platform account")
+        console.log("🏢 [Get Session Details] Retrieving session from platform account")
         session = await stripe.checkout.sessions.retrieve(sessionId)
       }
 
-      console.log("✅ [Purchase Verify] Stripe session retrieved:", {
+      console.log("✅ [Get Session Details] Stripe session retrieved:", {
         id: session.id,
         payment_status: session.payment_status,
         amount: session.amount_total,
         account: stripeAccountId || "platform",
       })
     } catch (stripeError: any) {
-      console.error("❌ [Purchase Verify] Failed to retrieve session from Stripe:", stripeError)
+      console.error("❌ [Get Session Details] Failed to retrieve session from Stripe:", stripeError)
 
       // If we have a purchase record but can't get the Stripe session, still return the purchase info
       if (purchaseDoc.exists) {
         const purchaseData = purchaseDoc.data()!
-        console.log("⚠️ [Purchase Verify] Using purchase data despite Stripe error")
+        console.log("⚠️ [Get Session Details] Using purchase data despite Stripe error")
 
         return NextResponse.json({
           success: true,
@@ -86,6 +90,7 @@ export async function POST(request: NextRequest) {
             },
           },
           warning: "Session retrieved from database due to Stripe API issue",
+          note: "READ-ONLY: This route only reads session data",
         })
       }
 
@@ -100,7 +105,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!purchaseDoc.exists) {
-      console.error("❌ [Purchase Verify] Purchase not found in bundlePurchases:", sessionId)
+      console.error("❌ [Get Session Details] Purchase not found in bundlePurchases:", sessionId)
       return NextResponse.json(
         {
           success: false,
@@ -112,7 +117,7 @@ export async function POST(request: NextRequest) {
     }
 
     const purchaseData = purchaseDoc.data()!
-    console.log("✅ [Purchase Verify] Purchase found:", {
+    console.log("✅ [Get Session Details] Purchase found:", {
       itemId: purchaseData.itemId,
       buyerUid: purchaseData.buyerUid,
       title: purchaseData.title,
@@ -149,13 +154,14 @@ export async function POST(request: NextRequest) {
           username: purchaseData.creatorUsername,
         },
       },
+      note: "READ-ONLY: This route only reads session data",
     })
   } catch (error: any) {
-    console.error("❌ [Purchase Verify] Error:", error)
+    console.error("❌ [Get Session Details] Error:", error)
     return NextResponse.json(
       {
         success: false,
-        error: "Verification failed",
+        error: "Failed to get session details",
         details: error.message,
       },
       { status: 500 },

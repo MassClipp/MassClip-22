@@ -1,21 +1,25 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/firebase-admin"
 
+/**
+ * READ-ONLY: Get anonymous purchases by session ID or email
+ * This route only reads data - it does NOT handle fulfillment
+ */
 export async function GET(request: NextRequest) {
   try {
-    console.log("🔍 [Anonymous Purchases] Fetching anonymous purchases...")
+    console.log("📖 [Get Anonymous Purchases] Starting read-only request...")
 
     const url = new URL(request.url)
     const sessionId = url.searchParams.get("sessionId")
     const email = url.searchParams.get("email")
 
-    console.log("📝 [Anonymous Purchases] Query params:", { sessionId, email })
+    console.log("📝 [Get Anonymous Purchases] Query params:", { sessionId, email })
 
     const purchases = []
 
     // Strategy 1: Look up by session ID
     if (sessionId) {
-      console.log("🔍 [Anonymous Purchases] Looking up by session ID:", sessionId)
+      console.log("🔍 [Get Anonymous Purchases] Looking up by session ID:", sessionId)
 
       // Check multiple collections for the session
       const collections = ["bundlePurchases", "unifiedPurchases", "sessionPurchases"]
@@ -26,7 +30,7 @@ export async function GET(request: NextRequest) {
 
           if (purchaseDoc.exists) {
             const purchaseData = purchaseDoc.data()
-            console.log(`✅ [Anonymous Purchases] Found purchase in ${collectionName}:`, purchaseData?.productBoxTitle)
+            console.log(`✅ [Get Anonymous Purchases] Found purchase in ${collectionName}:`, purchaseData?.title)
 
             purchases.push({
               id: purchaseDoc.id,
@@ -37,14 +41,14 @@ export async function GET(request: NextRequest) {
             break // Found it, no need to check other collections
           }
         } catch (error) {
-          console.warn(`⚠️ [Anonymous Purchases] Error checking ${collectionName}:`, error)
+          console.warn(`⚠️ [Get Anonymous Purchases] Error checking ${collectionName}:`, error)
         }
       }
     }
 
     // Strategy 2: Look up by email if no session ID or no results
     if (purchases.length === 0 && email) {
-      console.log("🔍 [Anonymous Purchases] Looking up by email:", email)
+      console.log("🔍 [Get Anonymous Purchases] Looking up by email:", email)
 
       try {
         const emailQuery = await db
@@ -56,7 +60,7 @@ export async function GET(request: NextRequest) {
 
         emailQuery.forEach((doc) => {
           const purchaseData = doc.data()
-          console.log(`✅ [Anonymous Purchases] Found purchase by email:`, purchaseData?.productBoxTitle)
+          console.log(`✅ [Get Anonymous Purchases] Found purchase by email:`, purchaseData?.title)
 
           purchases.push({
             id: doc.id,
@@ -66,13 +70,13 @@ export async function GET(request: NextRequest) {
           })
         })
       } catch (error) {
-        console.warn("⚠️ [Anonymous Purchases] Error querying by email:", error)
+        console.warn("⚠️ [Get Anonymous Purchases] Error querying by email:", error)
       }
     }
 
     // Strategy 3: Check recent purchases from cookies/session
     if (purchases.length === 0) {
-      console.log("🔍 [Anonymous Purchases] Checking recent session purchases...")
+      console.log("🔍 [Get Anonymous Purchases] Checking recent session purchases...")
 
       try {
         // Get recent purchases from the last 7 days
@@ -87,7 +91,7 @@ export async function GET(request: NextRequest) {
 
         recentQuery.forEach((doc) => {
           const purchaseData = doc.data()
-          console.log(`✅ [Anonymous Purchases] Found recent purchase:`, purchaseData?.productBoxTitle)
+          console.log(`✅ [Get Anonymous Purchases] Found recent purchase:`, purchaseData?.title)
 
           purchases.push({
             id: doc.id,
@@ -97,20 +101,21 @@ export async function GET(request: NextRequest) {
           })
         })
       } catch (error) {
-        console.warn("⚠️ [Anonymous Purchases] Error querying recent purchases:", error)
+        console.warn("⚠️ [Get Anonymous Purchases] Error querying recent purchases:", error)
       }
     }
 
-    console.log(`📊 [Anonymous Purchases] Found ${purchases.length} purchases`)
+    console.log(`📊 [Get Anonymous Purchases] Found ${purchases.length} purchases`)
 
     return NextResponse.json({
       success: true,
       purchases: purchases,
       count: purchases.length,
       queryMethod: sessionId ? "sessionId" : email ? "email" : "recent",
+      note: "READ-ONLY: This route only reads purchase data",
     })
   } catch (error) {
-    console.error("❌ [Anonymous Purchases] Error:", error)
+    console.error("❌ [Get Anonymous Purchases] Error:", error)
     return NextResponse.json(
       {
         success: false,

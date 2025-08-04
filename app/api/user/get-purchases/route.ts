@@ -2,32 +2,36 @@ import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/firebase-admin"
 import { auth } from "@/lib/firebase-admin"
 
+/**
+ * READ-ONLY: Get user's purchases from bundlePurchases collection
+ * This route only reads data - it does NOT handle fulfillment
+ */
 export async function GET(request: NextRequest) {
-  console.log("🔄 [Purchases API] Starting request processing...")
+  console.log("📖 [Get Purchases] Starting read-only request...")
 
   try {
     // Get user ID from query params
     const searchParams = request.nextUrl.searchParams
     const userId = searchParams.get("userId")
-    console.log("📋 [Purchases API] Query userId:", userId)
+    console.log("📋 [Get Purchases] Query userId:", userId)
 
     // Get auth token from header
     const authHeader = request.headers.get("authorization")
-    console.log("🔐 [Purchases API] Auth header present:", !!authHeader)
+    console.log("🔐 [Get Purchases] Auth header present:", !!authHeader)
 
     let authenticatedUserId: string | null = null
 
     // Verify auth token if provided
     if (authHeader && authHeader.startsWith("Bearer ")) {
       const token = authHeader.substring(7)
-      console.log("🔍 [Purchases API] Attempting to verify token...")
+      console.log("🔍 [Get Purchases] Attempting to verify token...")
 
       try {
         const decodedToken = await auth.verifyIdToken(token)
         authenticatedUserId = decodedToken.uid
-        console.log("✅ [Purchases API] Authenticated user:", authenticatedUserId)
+        console.log("✅ [Get Purchases] Authenticated user:", authenticatedUserId)
       } catch (tokenError: any) {
-        console.error("❌ [Purchases API] Token verification failed:", tokenError.message)
+        console.error("❌ [Get Purchases] Token verification failed:", tokenError.message)
         return NextResponse.json(
           {
             error: "Authentication failed",
@@ -39,11 +43,11 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Use provided userId or authenticated UserId (they're the same - Firebase user ID)
+    // Use provided userId or authenticated UserId
     const buyerUid = userId || authenticatedUserId
 
     if (!buyerUid) {
-      console.error("❌ [Purchases API] No user ID provided")
+      console.error("❌ [Get Purchases] No user ID provided")
       return NextResponse.json(
         {
           error: "User ID required",
@@ -54,15 +58,15 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    console.log("🔍 [Purchases API] Fetching purchases for buyerUid:", buyerUid)
+    console.log("🔍 [Get Purchases] Fetching purchases for buyerUid:", buyerUid)
 
     // Test Firebase connection first
     try {
-      console.log("🔍 [Purchases API] Testing Firebase connection...")
+      console.log("🔍 [Get Purchases] Testing Firebase connection...")
       const testQuery = await db.collection("bundlePurchases").limit(1).get()
-      console.log("✅ [Purchases API] Firebase connection successful, collection has", testQuery.size, "documents")
+      console.log("✅ [Get Purchases] Firebase connection successful, collection has", testQuery.size, "documents")
     } catch (connectionError: any) {
-      console.error("❌ [Purchases API] Firebase connection failed:", connectionError.message)
+      console.error("❌ [Get Purchases] Firebase connection failed:", connectionError.message)
       return NextResponse.json(
         {
           error: "Database connection failed",
@@ -75,7 +79,7 @@ export async function GET(request: NextRequest) {
 
     // Query bundlePurchases collection with fallback for missing index
     try {
-      console.log("🔍 [Purchases API] Querying bundlePurchases for buyerUid:", buyerUid)
+      console.log("🔍 [Get Purchases] Querying bundlePurchases for buyerUid:", buyerUid)
 
       let purchasesSnapshot
 
@@ -87,15 +91,15 @@ export async function GET(request: NextRequest) {
           .orderBy("purchasedAt", "desc")
           .get()
       } catch (indexError: any) {
-        console.warn("⚠️ [Purchases API] Index missing, falling back to simple query:", indexError.message)
+        console.warn("⚠️ [Get Purchases] Index missing, falling back to simple query:", indexError.message)
 
         // Fallback to simple query without ordering if index is missing
         purchasesSnapshot = await db.collection("bundlePurchases").where("buyerUid", "==", buyerUid).get()
 
-        console.log("✅ [Purchases API] Fallback query successful")
+        console.log("✅ [Get Purchases] Fallback query successful")
       }
 
-      console.log(`📊 [Purchases API] Query completed. Found ${purchasesSnapshot.size} purchases`)
+      console.log(`📊 [Get Purchases] Query completed. Found ${purchasesSnapshot.size} purchases`)
 
       const purchases: any[] = []
       const docs = purchasesSnapshot.docs
@@ -113,7 +117,7 @@ export async function GET(request: NextRequest) {
 
       docs.forEach((doc) => {
         const data = doc.data()
-        console.log(`📦 [Purchases API] Processing purchase: ${doc.id} - ${data.title}`)
+        console.log(`📦 [Get Purchases] Processing purchase: ${doc.id} - ${data.title}`)
 
         purchases.push({
           id: doc.id,
@@ -156,7 +160,7 @@ export async function GET(request: NextRequest) {
         })
       })
 
-      console.log("✅ [Purchases API] Successfully processed", purchases.length, "purchases")
+      console.log("✅ [Get Purchases] Successfully processed", purchases.length, "purchases")
 
       return NextResponse.json({
         purchases,
@@ -166,11 +170,12 @@ export async function GET(request: NextRequest) {
           queryExecuted: true,
           indexUsed: purchasesSnapshot.docs.length > 0 ? "optimized" : "fallback",
           timestamp: new Date().toISOString(),
+          note: "READ-ONLY: This route only reads purchase data",
         },
       })
     } catch (queryError: any) {
-      console.error("❌ [Purchases API] Firestore query failed:", queryError)
-      console.error("❌ [Purchases API] Query error details:", {
+      console.error("❌ [Get Purchases] Firestore query failed:", queryError)
+      console.error("❌ [Get Purchases] Query error details:", {
         code: queryError.code,
         message: queryError.message,
         stack: queryError.stack,
@@ -199,8 +204,8 @@ export async function GET(request: NextRequest) {
       )
     }
   } catch (error: any) {
-    console.error("❌ [Purchases API] Unexpected error:", error)
-    console.error("❌ [Purchases API] Error stack:", error.stack)
+    console.error("❌ [Get Purchases] Unexpected error:", error)
+    console.error("❌ [Get Purchases] Error stack:", error.stack)
 
     return NextResponse.json(
       {

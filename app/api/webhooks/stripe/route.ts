@@ -27,6 +27,10 @@ if (!webhookSecret) {
   throw new Error("Stripe webhook secret is missing. Please set STRIPE_WEBHOOK_SECRET")
 }
 
+/**
+ * SINGLE SOURCE OF TRUTH: Stripe webhook handler for purchase fulfillment
+ * This is the ONLY route that should handle purchase fulfillment logic
+ */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.text()
@@ -37,7 +41,7 @@ export async function POST(request: NextRequest) {
     try {
       event = stripe.webhooks.constructEvent(body, signature, webhookSecret)
       console.log(
-        `✅ [Stripe Webhook] Signature verified for event: ${event.type} in ${isLiveKey ? "LIVE" : "TEST"} mode`,
+        `✅ [Stripe Webhook] SINGLE SOURCE OF TRUTH - Signature verified for event: ${event.type} in ${isLiveKey ? "LIVE" : "TEST"} mode`,
       )
     } catch (err: any) {
       console.error(`❌ [Stripe Webhook] Webhook signature verification failed:`, {
@@ -50,9 +54,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid signature" }, { status: 400 })
     }
 
-    console.log(`🔔 [Stripe Webhook] Processing event: ${event.type} (${isLiveKey ? "LIVE" : "TEST"} mode)`)
+    console.log(
+      `🔔 [Stripe Webhook] FULFILLMENT HANDLER - Processing event: ${event.type} (${isLiveKey ? "LIVE" : "TEST"} mode)`,
+    )
 
-    // Handle checkout.session.completed event - SINGLE SOURCE OF TRUTH
+    // Handle checkout.session.completed event - SINGLE SOURCE OF TRUTH FOR FULFILLMENT
     if (event.type === "checkout.session.completed") {
       const session = event.data.object as Stripe.Checkout.Session
       await handleCheckoutSessionCompleted(session)
@@ -60,14 +66,18 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ received: true })
   } catch (error) {
-    console.error("❌ [Stripe Webhook] Error handling webhook:", error)
+    console.error("❌ [Stripe Webhook] FULFILLMENT ERROR:", error)
     return NextResponse.json({ error: "Webhook handler failed" }, { status: 500 })
   }
 }
 
+/**
+ * SINGLE SOURCE OF TRUTH: Handle checkout session completion and fulfillment
+ * This function is the ONLY place where purchase fulfillment should happen
+ */
 async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
   try {
-    console.log("🔍 [Webhook] Processing checkout session:", {
+    console.log("🎯 [Webhook Fulfillment] SINGLE SOURCE OF TRUTH - Processing checkout session:", {
       sessionId: session.id,
       metadata: session.metadata,
     })
@@ -77,13 +87,13 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
 
     // CRITICAL: Must have buyerUid (Firebase user ID)
     if (!buyerUid) {
-      console.error("❌ [Webhook] CRITICAL: Missing buyerUid in session metadata:", session.id)
+      console.error("❌ [Webhook Fulfillment] CRITICAL: Missing buyerUid in session metadata:", session.id)
       return
     }
 
     const itemId = bundleId || productBoxId
     if (!itemId) {
-      console.error("❌ [Webhook] Missing product/bundle ID in session:", session.id)
+      console.error("❌ [Webhook Fulfillment] Missing product/bundle ID in session:", session.id)
       return
     }
 
@@ -91,19 +101,19 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
     let fullSession = session
     if (stripeAccountId && session.id) {
       try {
-        console.log("🔗 [Webhook] Retrieving full session from connected account:", stripeAccountId)
+        console.log("🔗 [Webhook Fulfillment] Retrieving full session from connected account:", stripeAccountId)
         fullSession = await stripe.checkout.sessions.retrieve(session.id, {
           expand: ["payment_intent", "line_items"],
           stripeAccount: stripeAccountId,
         })
-        console.log("✅ [Webhook] Successfully retrieved session from connected account")
+        console.log("✅ [Webhook Fulfillment] Successfully retrieved session from connected account")
       } catch (error: any) {
-        console.error("❌ [Webhook] Failed to retrieve session from connected account:", error)
+        console.error("❌ [Webhook Fulfillment] Failed to retrieve session from connected account:", error)
         // Continue with the session data from the webhook event
       }
     }
 
-    console.log("✅ [Webhook] Session metadata extracted:", {
+    console.log("✅ [Webhook Fulfillment] FULFILLMENT METADATA extracted:", {
       itemId,
       buyerUid,
       buyerEmail,
@@ -111,11 +121,10 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
       stripeAccountId,
     })
 
-    // Rest of the function remains the same...
-    // Check if this purchase already exists
+    // Check if this purchase already exists (prevent duplicate fulfillment)
     const existingPurchase = await db.collection("bundlePurchases").doc(session.id).get()
     if (existingPurchase.exists) {
-      console.log("⚠️ [Webhook] Purchase already processed:", session.id)
+      console.log("⚠️ [Webhook Fulfillment] Purchase already fulfilled:", session.id)
       return
     }
 
@@ -126,7 +135,7 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
     // Get item details
     const itemDoc = await db.collection(collection).doc(itemId).get()
     if (!itemDoc.exists) {
-      console.error(`❌ [Webhook] ${collection} not found:`, itemId)
+      console.error(`❌ [Webhook Fulfillment] ${collection} not found:`, itemId)
       return
     }
     const itemData = itemDoc.data()!
@@ -142,7 +151,7 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
     // Get content items for this purchase
     const contentItems = await fetchContentItems(itemId, isBundle)
 
-    // Create SINGLE purchase record in bundlePurchases ONLY
+    // Create SINGLE purchase record in bundlePurchases ONLY - SINGLE SOURCE OF TRUTH
     const purchaseData = {
       // User identification (buyerUid = Firebase user ID)
       buyerUid: buyerUid,
@@ -192,18 +201,24 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
       purchasedAt: new Date(),
       createdAt: new Date(),
       environment: isLiveKey ? "live" : "test",
+
+      // Fulfillment tracking
+      fulfilledBy: "stripe_webhook",
+      fulfilledAt: new Date(),
+      singleSourceOfTruth: true,
     }
 
-    console.log("💾 [Webhook] Saving purchase to bundlePurchases ONLY:", {
+    console.log("💾 [Webhook Fulfillment] SINGLE SOURCE OF TRUTH - Saving purchase to bundlePurchases:", {
       sessionId: fullSession.id,
       buyerUid: purchaseData.buyerUid,
       itemId: purchaseData.itemId,
       itemType: purchaseData.itemType,
       contentCount: purchaseData.contentCount,
       stripeAccountId: purchaseData.stripeAccountId,
+      fulfilledBy: purchaseData.fulfilledBy,
     })
 
-    // Save to bundlePurchases collection ONLY (using sessionId as document ID)
+    // Save to bundlePurchases collection ONLY (using sessionId as document ID) - SINGLE SOURCE OF TRUTH
     await db.collection("bundlePurchases").doc(fullSession.id).set(purchaseData)
 
     // Update item sales counter
@@ -228,9 +243,9 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
         })
     }
 
-    console.log(`✅ [Webhook] Successfully processed purchase: ${fullSession.id}`)
+    console.log(`🎉 [Webhook Fulfillment] SINGLE SOURCE OF TRUTH - Successfully fulfilled purchase: ${fullSession.id}`)
   } catch (error) {
-    console.error("❌ [Webhook] Error handling checkout.session.completed:", error)
+    console.error("❌ [Webhook Fulfillment] FULFILLMENT ERROR:", error)
     throw error
   }
 }
