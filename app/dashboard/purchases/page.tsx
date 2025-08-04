@@ -108,154 +108,149 @@ export default function PurchasesPage() {
 
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen bg-black text-white p-6">
-        <div className="max-w-4xl mx-auto">
-          <Skeleton className="h-12 w-64 mb-8 bg-gray-800/50" />
-          <div className="space-y-4">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="bg-gradient-to-r from-gray-900 to-gray-800 border border-white/10 rounded-lg p-6">
-                <div className="flex gap-6">
-                  <Skeleton className="w-24 h-24 bg-gray-700/50 rounded-lg flex-shrink-0" />
-                  <div className="flex-1">
-                    <Skeleton className="h-6 w-48 mb-2 bg-gray-700/50" />
-                    <Skeleton className="h-4 w-32 mb-2 bg-gray-700/50" />
-                    <Skeleton className="h-4 w-24 mb-4 bg-gray-700/50" />
-                    <Skeleton className="h-6 w-20 mb-4 bg-gray-700/50" />
-                    <Skeleton className="h-10 w-32 bg-gray-700/50" />
-                  </div>
+      <>
+        <Skeleton className="h-12 w-64 mb-8 bg-gray-800/50" />
+        <div className="space-y-4">
+          {[...Array(3)].map((_, i) => (
+            <div
+              key={i}
+              className="bg-gradient-to-r from-black via-gray-900 to-black border border-white/20 rounded-lg p-6"
+            >
+              <div className="flex gap-6">
+                <Skeleton className="w-24 h-24 bg-gray-700/50 rounded-lg flex-shrink-0" />
+                <div className="flex-1">
+                  <Skeleton className="h-6 w-48 mb-2 bg-gray-700/50" />
+                  <Skeleton className="h-4 w-32 mb-2 bg-gray-700/50" />
+                  <Skeleton className="h-4 w-24 mb-4 bg-gray-700/50" />
+                  <Skeleton className="h-6 w-20 mb-4 bg-gray-700/50" />
+                  <Skeleton className="h-10 w-32 bg-gray-700/50" />
                 </div>
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
         </div>
-      </div>
+      </>
     )
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-black text-white p-6">
-        <div className="max-w-4xl mx-auto">
-          <h1 className="text-4xl font-bold mb-8 text-white">My Purchases</h1>
-          <Alert variant="destructive" className="bg-red-900/20 border-red-800 mb-4">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-          <Button onClick={fetchPurchases} className="bg-white text-black hover:bg-gray-200">
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Try Again
-          </Button>
-        </div>
-      </div>
+      <>
+        <h1 className="text-4xl font-bold mb-8 text-white">My Purchases</h1>
+        <Alert variant="destructive" className="bg-red-900/20 border-red-800 mb-4">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+        <Button onClick={fetchPurchases} className="bg-white text-black hover:bg-gray-200">
+          <RefreshCw className="h-4 w-4 mr-2" />
+          Try Again
+        </Button>
+      </>
     )
   }
 
   return (
-    <div className="min-h-screen bg-black text-white p-6">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <h1 className="text-4xl font-bold mb-8 text-white">My Purchases</h1>
+    <>
+      {/* Header */}
+      <h1 className="text-4xl font-bold mb-8 text-white">My Purchases</h1>
 
-        {/* Content */}
-        <AnimatePresence mode="wait">
-          {purchases.length === 0 ? (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="flex items-center justify-center h-96"
-            >
-              <div className="max-w-md mx-auto text-center">
-                <div className="w-24 h-24 mx-auto mb-6 bg-gradient-to-r from-gray-900 to-gray-800 rounded-full flex items-center justify-center border border-white/10">
-                  <Package className="h-12 w-12 text-gray-400" />
-                </div>
-                <h3 className="text-2xl font-semibold mb-4 text-white">No purchases yet</h3>
-                <p className="text-gray-400 mb-8 text-lg">Start exploring premium content to build your collection.</p>
-                <Button asChild className="bg-white text-black hover:bg-gray-200 h-12 px-8 text-lg">
-                  <Link href="/dashboard/explore">Explore Content</Link>
-                </Button>
-              </div>
-            </motion.div>
-          ) : (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
-              {purchases.map((purchase, index) => (
-                <motion.div
-                  key={purchase.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                  className="bg-gradient-to-r from-gray-900 to-gray-800 border border-white/10 rounded-lg p-6 hover:border-white/20 transition-all duration-300"
-                >
-                  <div className="flex gap-6">
-                    {/* 1:1 Thumbnail - Top Left */}
-                    <div className="w-24 h-24 bg-gray-800 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
-                      {getThumbnailUrl(purchase) ? (
-                        <img
-                          src={getThumbnailUrl(purchase) || "/placeholder.svg"}
-                          alt={purchase.title}
-                          className="w-full h-full object-cover rounded-lg"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement
-                            target.style.display = "none"
-                            const parent = target.parentElement
-                            if (parent) {
-                              parent.innerHTML = `
-                                <div class="w-full h-full flex items-center justify-center bg-gray-800 rounded-lg">
-                                  <svg class="h-8 w-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
-                                  </svg>
-                                </div>
-                              `
-                            }
-                          }}
-                        />
-                      ) : (
-                        <Package className="h-8 w-8 text-gray-400" />
+      {/* Content */}
+      <AnimatePresence mode="wait">
+        {purchases.length === 0 ? (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="text-center py-12"
+          >
+            <div className="max-w-md mx-auto">
+              <Package className="h-16 w-16 mx-auto mb-6 text-gray-400" />
+              <h3 className="text-2xl font-semibold mb-4 text-white">No purchases yet</h3>
+              <p className="text-gray-400 mb-8 text-lg">Start exploring premium content to build your collection.</p>
+              <Button asChild className="bg-white text-black hover:bg-gray-200 h-12 px-8 text-lg">
+                <Link href="/dashboard/explore">Explore Content</Link>
+              </Button>
+            </div>
+          </motion.div>
+        ) : (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
+            {purchases.map((purchase, index) => (
+              <motion.div
+                key={purchase.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.1 }}
+                className="bg-gradient-to-r from-black via-gray-900 to-black border border-white/20 rounded-lg p-6 hover:border-white/30 transition-all duration-300"
+              >
+                <div className="flex gap-6">
+                  {/* 1:1 Thumbnail - Top Left */}
+                  <div className="w-24 h-24 bg-gray-800 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
+                    {getThumbnailUrl(purchase) ? (
+                      <img
+                        src={getThumbnailUrl(purchase) || "/placeholder.svg"}
+                        alt={purchase.title}
+                        className="w-full h-full object-cover rounded-lg"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement
+                          target.style.display = "none"
+                          const parent = target.parentElement
+                          if (parent) {
+                            parent.innerHTML = `
+                              <div class="w-full h-full flex items-center justify-center bg-gray-800 rounded-lg">
+                                <svg class="h-8 w-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                                </svg>
+                              </div>
+                            `
+                          }
+                        }}
+                      />
+                    ) : (
+                      <Package className="h-8 w-8 text-gray-400" />
+                    )}
+                  </div>
+
+                  {/* Content Info */}
+                  <div className="flex-1 flex flex-col justify-between">
+                    {/* Title and Description */}
+                    <div>
+                      <h3 className="text-xl font-semibold text-white mb-1">{purchase.title}</h3>
+                      {purchase.description && (
+                        <p className="text-gray-400 text-sm mb-2 line-clamp-2">{purchase.description}</p>
+                      )}
+                      <p className="text-gray-500 text-xs mb-1">by {purchase.creatorUsername}</p>
+                      {purchase.metadata?.contentCount !== undefined && (
+                        <p className="text-gray-500 text-xs">
+                          {purchase.metadata.contentCount} item{purchase.metadata.contentCount !== 1 ? "s" : ""}
+                        </p>
                       )}
                     </div>
 
-                    {/* Content Info */}
-                    <div className="flex-1 flex flex-col justify-between">
-                      {/* Title and Description */}
+                    {/* Price and Button */}
+                    <div className="flex items-end justify-between mt-4">
                       <div>
-                        <h3 className="text-xl font-semibold text-white mb-1">{purchase.title}</h3>
-                        {purchase.description && (
-                          <p className="text-gray-400 text-sm mb-2 line-clamp-2">{purchase.description}</p>
-                        )}
-                        <p className="text-gray-500 text-xs mb-1">by {purchase.creatorUsername}</p>
-                        {purchase.metadata?.contentCount !== undefined && (
-                          <p className="text-gray-500 text-xs">
-                            {purchase.metadata.contentCount} item{purchase.metadata.contentCount !== 1 ? "s" : ""}
-                          </p>
-                        )}
+                        <span className="text-2xl font-bold text-white">${purchase.price.toFixed(2)}</span>
                       </div>
-
-                      {/* Price and Button */}
-                      <div className="flex items-end justify-between mt-4">
-                        <div>
-                          <span className="text-2xl font-bold text-white">${purchase.price.toFixed(2)}</span>
-                        </div>
-                        <Button asChild className="bg-white text-black hover:bg-gray-200 font-medium px-6 py-2">
-                          <Link
-                            href={
-                              purchase.type === "bundle"
-                                ? `/bundles/${purchase.bundleId}/content`
-                                : `/product-box/${purchase.productBoxId}/content`
-                            }
-                          >
-                            <Eye className="h-4 w-4 mr-2" />
-                            Access Content
-                          </Link>
-                        </Button>
-                      </div>
+                      <Button asChild className="bg-white text-black hover:bg-gray-200 font-medium px-6 py-2">
+                        <Link
+                          href={
+                            purchase.type === "bundle"
+                              ? `/bundles/${purchase.bundleId}/content`
+                              : `/product-box/${purchase.productBoxId}/content`
+                          }
+                        >
+                          <Eye className="h-4 w-4 mr-2" />
+                          Access Content
+                        </Link>
+                      </Button>
                     </div>
                   </div>
-                </motion.div>
-              ))}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-    </div>
+                </div>
+              </motion.div>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   )
 }

@@ -5,10 +5,9 @@ import { useParams, useRouter } from "next/navigation"
 import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { ArrowLeft, Download, AlertCircle } from "lucide-react"
+import { ArrowLeft, Download, AlertCircle, Play } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { toast } from "@/hooks/use-toast"
-import EnhancedVideoCard from "@/components/enhanced-video-card"
 
 interface BundleContent {
   id: string
@@ -20,6 +19,7 @@ interface BundleContent {
   duration?: number
   thumbnailUrl?: string
   downloadUrl?: string
+  videoUrl?: string
   createdAt: string
   metadata?: any
 }
@@ -39,6 +39,82 @@ interface PurchaseInfo {
   purchaseId: string
   purchaseDate: string
   status: string
+}
+
+// Simple video player component
+const VideoPlayer = ({
+  videoUrl,
+  thumbnailUrl,
+  title,
+}: {
+  videoUrl: string
+  thumbnailUrl?: string
+  title: string
+}) => {
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [showControls, setShowControls] = useState(false)
+
+  const handlePlay = () => {
+    setIsPlaying(true)
+  }
+
+  return (
+    <div
+      className="relative w-full aspect-[9/16] bg-gray-900 rounded-lg overflow-hidden cursor-pointer group"
+      onMouseEnter={() => setShowControls(true)}
+      onMouseLeave={() => setShowControls(false)}
+    >
+      {!isPlaying ? (
+        <>
+          {/* Thumbnail */}
+          <div className="w-full h-full">
+            {thumbnailUrl ? (
+              <img
+                src={thumbnailUrl || "/placeholder.svg"}
+                alt={title}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement
+                  target.style.display = "none"
+                }}
+              />
+            ) : (
+              <div className="w-full h-full bg-gray-800 flex items-center justify-center">
+                <Play className="h-12 w-12 text-gray-400" />
+              </div>
+            )}
+          </div>
+
+          {/* Play button overlay */}
+          <div
+            className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+            onClick={handlePlay}
+          >
+            <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center">
+              <Play className="h-8 w-8 text-white ml-1" />
+            </div>
+          </div>
+        </>
+      ) : (
+        <video
+          src={videoUrl}
+          controls={showControls}
+          autoPlay
+          className="w-full h-full object-cover"
+          onError={() => {
+            setIsPlaying(false)
+            toast({
+              title: "Video Error",
+              description: "Failed to load video",
+              variant: "destructive",
+            })
+          }}
+        >
+          Your browser does not support the video tag.
+        </video>
+      )}
+    </div>
+  )
 }
 
 export default function BundleContentPage() {
@@ -82,7 +158,14 @@ export default function BundleContentPage() {
       console.log("Bundle content data:", data)
 
       setBundle(data.bundle)
-      setContents(data.contents || [])
+
+      // Process contents to ensure video URLs are available
+      const processedContents = (data.contents || []).map((content: any) => ({
+        ...content,
+        videoUrl: content.downloadUrl || content.videoUrl || content.fileUrl,
+      }))
+
+      setContents(processedContents)
       setPurchaseInfo(data.purchaseInfo)
     } catch (err) {
       console.error("Error fetching bundle content:", err)
@@ -131,7 +214,7 @@ export default function BundleContentPage() {
 
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen bg-black text-white p-6">
+      <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black text-white p-6">
         <div className="max-w-7xl mx-auto">
           <Skeleton className="h-8 w-48 mb-6 bg-gray-800" />
 
@@ -164,7 +247,7 @@ export default function BundleContentPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-black text-white p-6">
+      <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black text-white p-6">
         <div className="max-w-7xl mx-auto">
           <Button onClick={() => router.back()} variant="ghost" className="mb-6 text-gray-400 hover:text-white">
             <ArrowLeft className="h-4 w-4 mr-2" />
@@ -183,7 +266,7 @@ export default function BundleContentPage() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white p-6">
+    <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black text-white p-6">
       <div className="max-w-7xl mx-auto">
         {/* Back Button */}
         <Button onClick={() => router.back()} variant="ghost" className="mb-6 text-gray-400 hover:text-white">
@@ -247,7 +330,7 @@ export default function BundleContentPage() {
         {/* Thin border line underneath */}
         <div className="border-t border-white/10 mb-8"></div>
 
-        {/* Content Grid - 9:16 videos like creator uploads */}
+        {/* Content Grid - 9:16 videos */}
         {contents.length === 0 ? (
           <div className="text-center py-12">
             <div className="w-16 h-16 mx-auto mb-4 bg-gray-800 rounded-full flex items-center justify-center">
@@ -260,16 +343,10 @@ export default function BundleContentPage() {
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
             {contents.map((content) => (
               <div key={content.id} className="space-y-2">
-                <EnhancedVideoCard
-                  id={content.id}
-                  title={content.title}
-                  fileUrl={content.downloadUrl || ""}
+                <VideoPlayer
+                  videoUrl={content.videoUrl || content.downloadUrl || ""}
                   thumbnailUrl={content.thumbnailUrl}
-                  fileSize={content.size}
-                  mimeType={content.fileType}
-                  aspectRatio="video"
-                  showControls={true}
-                  className="w-full"
+                  title={content.title}
                 />
                 <div className="px-1">
                   <h3 className="text-sm font-medium text-white truncate">{content.title}</h3>
