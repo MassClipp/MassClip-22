@@ -114,21 +114,22 @@ export default function PurchasesPage() {
           {[...Array(3)].map((_, i) => (
             <div
               key={i}
-              className="bg-[#0d0d0d] border border-gray-800/50 rounded-none p-6"
+              className="bg-[#0d0d0d] border border-white/20 rounded-lg p-6"
               style={{
                 background: `linear-gradient(135deg, #0d0d0d 0%, #1a1a1a 50%, #0d0d0d 100%)`,
-                borderImage: `linear-gradient(135deg, #333333, #666666, #333333) 1`,
               }}
             >
-              <div className="flex gap-6">
-                <Skeleton className="w-24 h-24 bg-gray-700/50 rounded-none flex-shrink-0" />
-                <div className="flex-1">
-                  <Skeleton className="h-6 w-48 mb-2 bg-gray-700/50" />
-                  <Skeleton className="h-4 w-32 mb-2 bg-gray-700/50" />
-                  <Skeleton className="h-4 w-24 mb-4 bg-gray-700/50" />
-                  <Skeleton className="h-6 w-20 mb-4 bg-gray-700/50" />
-                  <Skeleton className="h-10 w-32 bg-gray-700/50" />
+              <div className="flex flex-col gap-4">
+                <div className="flex gap-6">
+                  <Skeleton className="w-24 h-24 bg-gray-700/50 rounded-lg flex-shrink-0" />
+                  <div className="flex-1">
+                    <Skeleton className="h-6 w-48 mb-2 bg-gray-700/50" />
+                    <Skeleton className="h-4 w-32 mb-2 bg-gray-700/50" />
+                    <Skeleton className="h-4 w-24 mb-4 bg-gray-700/50" />
+                    <Skeleton className="h-6 w-20 bg-gray-700/50" />
+                  </div>
                 </div>
+                <Skeleton className="h-10 w-full bg-gray-700/50" />
               </div>
             </div>
           ))}
@@ -184,7 +185,7 @@ export default function PurchasesPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1 }}
-                className="relative overflow-hidden rounded-none border border-gray-800/50 hover:border-gray-600/50 transition-all duration-300"
+                className="relative overflow-hidden rounded-lg border border-white/20 hover:border-white/40 transition-all duration-300"
                 style={{
                   background: `linear-gradient(135deg, #0d0d0d 0%, #1a1a1a 30%, #262626 50%, #1a1a1a 70%, #0d0d0d 100%)`,
                 }}
@@ -198,77 +199,82 @@ export default function PurchasesPage() {
                 />
 
                 <div className="relative p-6">
-                  <div className="flex gap-6">
-                    {/* 1:1 Thumbnail - Sharp edges, no rounding */}
-                    <div className="w-24 h-24 bg-black border border-gray-700/50 flex items-center justify-center overflow-hidden flex-shrink-0">
-                      {getThumbnailUrl(purchase) ? (
-                        <img
-                          src={getThumbnailUrl(purchase) || "/placeholder.svg"}
-                          alt={purchase.title}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement
-                            target.style.display = "none"
-                            const parent = target.parentElement
-                            if (parent) {
-                              parent.innerHTML = `
-                                <div class="w-full h-full flex items-center justify-center bg-black">
-                                  <svg class="h-8 w-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
-                                  </svg>
-                                </div>
-                              `
-                            }
-                          }}
-                        />
-                      ) : (
-                        <Package className="h-8 w-8 text-gray-500" />
-                      )}
-                    </div>
-
-                    {/* Content Info */}
-                    <div className="flex-1 flex flex-col justify-between">
-                      {/* Title and Description */}
-                      <div>
-                        <h3 className="text-xl font-semibold text-white mb-1 tracking-tight">{purchase.title}</h3>
-                        {purchase.description && (
-                          <p className="text-gray-400 text-sm mb-2 line-clamp-2 leading-relaxed">
-                            {purchase.description}
-                          </p>
-                        )}
-                        <p className="text-gray-500 text-xs mb-1 uppercase tracking-wider">
-                          by {purchase.creatorUsername}
-                        </p>
-                        {purchase.metadata?.contentCount !== undefined && (
-                          <p className="text-gray-500 text-xs uppercase tracking-wider">
-                            {purchase.metadata.contentCount} item{purchase.metadata.contentCount !== 1 ? "s" : ""}
-                          </p>
+                  <div className="flex flex-col gap-4">
+                    {/* Top section with thumbnail and info */}
+                    <div className="flex gap-6">
+                      {/* 1:1 Thumbnail - Curved corners */}
+                      <div className="w-24 h-24 bg-black border border-gray-700/50 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
+                        {getThumbnailUrl(purchase) ? (
+                          <img
+                            src={getThumbnailUrl(purchase) || "/placeholder.svg"}
+                            alt={purchase.title}
+                            className="w-full h-full object-cover rounded-lg"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement
+                              target.style.display = "none"
+                              const parent = target.parentElement
+                              if (parent) {
+                                parent.innerHTML = `
+                                  <div class="w-full h-full flex items-center justify-center bg-black rounded-lg">
+                                    <svg class="h-8 w-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                                    </svg>
+                                  </div>
+                                `
+                              }
+                            }}
+                          />
+                        ) : (
+                          <Package className="h-8 w-8 text-gray-500" />
                         )}
                       </div>
 
-                      {/* Price and Button */}
-                      <div className="flex items-end justify-between mt-4">
+                      {/* Content Info */}
+                      <div className="flex-1 flex flex-col justify-between">
+                        {/* Title and Description */}
                         <div>
+                          <h3 className="text-xl font-semibold text-white mb-1 tracking-tight">{purchase.title}</h3>
+                          {purchase.description && (
+                            <p className="text-gray-400 text-sm mb-2 line-clamp-2 leading-relaxed">
+                              {purchase.description}
+                            </p>
+                          )}
+                          <p className="text-gray-500 text-xs mb-1 uppercase tracking-wider">
+                            by {purchase.creatorUsername}
+                          </p>
+                          {purchase.metadata?.contentCount !== undefined && (
+                            <p className="text-gray-500 text-xs uppercase tracking-wider">
+                              {purchase.metadata.contentCount} item{purchase.metadata.contentCount !== 1 ? "s" : ""}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Price */}
+                        <div className="mt-2">
                           <span className="text-2xl font-bold text-white tracking-tight">
                             ${purchase.price.toFixed(2)}
                           </span>
                         </div>
-                        <Button
-                          asChild
-                          className="bg-white text-black hover:bg-gray-200 font-medium px-6 py-2 rounded-none border-0 transition-all duration-200 hover:shadow-lg"
-                        >
-                          <Link
-                            href={
-                              purchase.type === "bundle"
-                                ? `/bundles/${purchase.bundleId}/content`
-                                : `/product-box/${purchase.productBoxId}/content`
-                            }
-                          >
-                            <Eye className="h-4 w-4 mr-2" />
-                            Access Content
-                          </Link>
-                        </Button>
                       </div>
+                    </div>
+
+                    {/* Bottom section with full-width button */}
+                    <div className="flex justify-center">
+                      <Button
+                        asChild
+                        className="bg-white text-black hover:bg-gray-200 font-medium px-8 py-2 rounded-lg border-0 transition-all duration-200 hover:shadow-lg w-full max-w-xs"
+                      >
+                        <Link
+                          href={
+                            purchase.type === "bundle"
+                              ? `/bundles/${purchase.bundleId}/content`
+                              : `/product-box/${purchase.productBoxId}/content`
+                          }
+                        >
+                          <Eye className="h-4 w-4 mr-2" />
+                          Access Content
+                        </Link>
+                      </Button>
                     </div>
                   </div>
                 </div>

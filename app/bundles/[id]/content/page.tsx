@@ -214,13 +214,18 @@ export default function BundleContentPage() {
 
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black text-white p-6">
+      <div
+        className="min-h-screen text-white p-6"
+        style={{
+          background: `linear-gradient(135deg, #0d0d0d 0%, #1a1a1a 30%, #262626 50%, #1a1a1a 70%, #0d0d0d 100%)`,
+        }}
+      >
         <div className="max-w-7xl mx-auto">
           <Skeleton className="h-8 w-48 mb-6 bg-gray-800" />
 
           {/* Header skeleton */}
           <div className="flex items-center gap-6 mb-8 pb-6">
-            <Skeleton className="w-20 h-20 bg-gray-800 rounded-none flex-shrink-0" />
+            <Skeleton className="w-20 h-20 bg-gray-800 rounded-lg flex-shrink-0" />
             <div className="flex-1">
               <Skeleton className="h-8 w-64 mb-2 bg-gray-800" />
               <Skeleton className="h-4 w-32 mb-4 bg-gray-800" />
@@ -235,7 +240,7 @@ export default function BundleContentPage() {
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
             {[...Array(12)].map((_, i) => (
               <div key={i} className="space-y-2">
-                <Skeleton className="w-full aspect-[9/16] bg-gray-800 rounded-none" />
+                <Skeleton className="w-full aspect-[9/16] bg-gray-800 rounded-lg" />
                 <Skeleton className="h-4 w-full bg-gray-800" />
               </div>
             ))}
@@ -247,7 +252,12 @@ export default function BundleContentPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black text-white p-6">
+      <div
+        className="min-h-screen text-white p-6"
+        style={{
+          background: `linear-gradient(135deg, #0d0d0d 0%, #1a1a1a 30%, #262626 50%, #1a1a1a 70%, #0d0d0d 100%)`,
+        }}
+      >
         <div className="max-w-7xl mx-auto">
           <Button onClick={() => router.back()} variant="ghost" className="mb-6 text-gray-400 hover:text-white">
             <ArrowLeft className="h-4 w-4 mr-2" />
@@ -266,7 +276,12 @@ export default function BundleContentPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black text-white p-6">
+    <div
+      className="min-h-screen text-white p-6"
+      style={{
+        background: `linear-gradient(135deg, #0d0d0d 0%, #1a1a1a 30%, #262626 50%, #1a1a1a 70%, #0d0d0d 100%)`,
+      }}
+    >
       <div className="max-w-7xl mx-auto">
         {/* Back Button */}
         <Button onClick={() => router.back()} variant="ghost" className="mb-6 text-gray-400 hover:text-white">
@@ -276,20 +291,20 @@ export default function BundleContentPage() {
 
         {/* Bundle Header - Thumbnail top left, title next to it */}
         <div className="flex items-center gap-6 mb-8 pb-6">
-          {/* 1:1 Thumbnail - Sharp edges */}
-          <div className="w-20 h-20 bg-black border border-gray-800/50 flex items-center justify-center overflow-hidden flex-shrink-0">
+          {/* 1:1 Thumbnail - Curved corners */}
+          <div className="w-20 h-20 bg-black border border-gray-800/50 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
             {bundle?.thumbnailUrl ? (
               <img
                 src={bundle.thumbnailUrl || "/placeholder.svg"}
                 alt={bundle.title}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover rounded-lg"
                 onError={(e) => {
                   const target = e.target as HTMLImageElement
                   target.style.display = "none"
                   const parent = target.parentElement
                   if (parent) {
                     parent.innerHTML = `
-                      <div class="w-full h-full flex items-center justify-center bg-black">
+                      <div class="w-full h-full flex items-center justify-center bg-black rounded-lg">
                         <svg class="h-8 w-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
                         </svg>
@@ -299,7 +314,7 @@ export default function BundleContentPage() {
                 }}
               />
             ) : (
-              <div className="w-full h-full flex items-center justify-center bg-black">
+              <div className="w-full h-full flex items-center justify-center bg-black rounded-lg">
                 <svg className="h-8 w-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
                     strokeLinecap="round"
@@ -320,7 +335,7 @@ export default function BundleContentPage() {
               <span>•</span>
               <span>by {bundle?.creatorUsername}</span>
             </div>
-            <Button onClick={handleDownloadAll} className="bg-white text-black hover:bg-gray-200 rounded-none">
+            <Button onClick={handleDownloadAll} className="bg-white text-black hover:bg-gray-200 rounded-lg">
               <Download className="h-4 w-4 mr-2" />
               Download All
             </Button>
@@ -333,7 +348,7 @@ export default function BundleContentPage() {
         {/* Content Grid - 9:16 videos */}
         {contents.length === 0 ? (
           <div className="text-center py-12">
-            <div className="w-16 h-16 mx-auto mb-4 bg-black border border-gray-800/50 flex items-center justify-center">
+            <div className="w-16 h-16 mx-auto mb-4 bg-black border border-gray-800/50 rounded-lg flex items-center justify-center">
               <AlertCircle className="h-8 w-8 text-gray-500" />
             </div>
             <h3 className="text-xl font-semibold mb-2">No content available</h3>
