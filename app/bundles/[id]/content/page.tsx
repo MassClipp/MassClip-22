@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { AlertCircle, Download, ArrowLeft, Play, FileText, ImageIcon, Music, Video } from "lucide-react"
+import { AlertCircle, Download, Play, FileText, ImageIcon, Video, Music, Archive, ArrowLeft } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import Link from "next/link"
 import { toast } from "@/hooks/use-toast"
@@ -16,28 +16,31 @@ interface BundleContent {
   id: string
   title: string
   description?: string
+  type: string
+  size?: number
+  url?: string
   thumbnailUrl?: string
-  creatorId: string
-  creatorUsername: string
-  items: Array<{
-    id: string
-    title: string
-    type: string
-    size?: number
-    url?: string
-    thumbnailUrl?: string
-  }>
-  totalItems: number
-  totalSize: number
+  createdAt?: any
+}
+
+interface Bundle {
+  id: string
+  title: string
+  description?: string
   price: number
-  currency: string
+  creatorId: string
+  creatorName?: string
+  thumbnailUrl?: string
+  contents: BundleContent[]
+  totalSize?: number
+  contentCount: number
 }
 
 export default function BundleContentPage() {
   const params = useParams()
   const bundleId = params.id as string
   const { user, loading: authLoading } = useFirebaseAuth()
-  const [bundle, setBundle] = useState<BundleContent | null>(null)
+  const [bundle, setBundle] = useState<Bundle | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [hasAccess, setHasAccess] = useState(false)
@@ -78,24 +81,28 @@ export default function BundleContentPage() {
     }
   }
 
-  const handleDownloadBundle = async () => {
+  const handleDownload = async (contentId?: string) => {
     try {
       const token = await user.getIdToken()
-      const response = await fetch(`/api/bundles/${bundleId}/download`, {
+      const endpoint = contentId
+        ? `/api/bundles/${bundleId}/content/${contentId}/download`
+        : `/api/bundles/${bundleId}/download`
+
+      const response = await fetch(endpoint, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       })
 
       if (!response.ok) {
-        throw new Error("Failed to download bundle")
+        throw new Error("Failed to download content")
       }
 
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
-      a.download = `${bundle?.title || "bundle"}.zip`
+      a.download = contentId ? `${contentId}.zip` : `${bundle?.title || "bundle"}.zip`
       document.body.appendChild(a)
       a.click()
       window.URL.revokeObjectURL(url)
@@ -103,13 +110,13 @@ export default function BundleContentPage() {
 
       toast({
         title: "Download started",
-        description: `${bundle?.title} is being downloaded.`,
+        description: contentId ? "Content item is being downloaded." : "Bundle is being downloaded.",
       })
     } catch (err) {
       console.error("Download error:", err)
       toast({
         title: "Download failed",
-        description: "Failed to download the bundle. Please try again.",
+        description: "Failed to download the content. Please try again.",
         variant: "destructive",
       })
     }
@@ -121,27 +128,37 @@ export default function BundleContentPage() {
       case "mp4":
       case "mov":
       case "avi":
-        return <Video className="h-5 w-5 text-blue-400" />
+        return <Video className="h-5 w-5" />
+      case "image":
+      case "jpg":
+      case "jpeg":
+      case "png":
+      case "gif":
+        return <ImageIcon className="h-5 w-5" />
       case "audio":
       case "mp3":
       case "wav":
-        return <Music className="h-5 w-5 text-green-400" />
-      case "image":
-      case "jpg":
-      case "png":
-      case "gif":
-        return <ImageIcon className="h-5 w-5 text-purple-400" />
+      case "flac":
+        return <Music className="h-5 w-5" />
+      case "document":
+      case "pdf":
+      case "doc":
+      case "docx":
+        return <FileText className="h-5 w-5" />
+      case "archive":
+      case "zip":
+      case "rar":
+        return <Archive className="h-5 w-5" />
       default:
-        return <FileText className="h-5 w-5 text-gray-400" />
+        return <FileText className="h-5 w-5" />
     }
   }
 
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return "0 Bytes"
-    const k = 1024
+  const formatFileSize = (bytes?: number) => {
+    if (!bytes) return "Unknown size"
     const sizes = ["Bytes", "KB", "MB", "GB"]
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
+    const i = Math.floor(Math.log(bytes) / Math.log(1024))
+    return Math.round((bytes / Math.pow(1024, i)) * 100) / 100 + " " + sizes[i]
   }
 
   if (authLoading || loading) {
@@ -153,17 +170,18 @@ export default function BundleContentPage() {
             <Card>
               <CardHeader>
                 <Skeleton className="h-8 w-64 mb-2" />
-                <Skeleton className="h-4 w-48" />
+                <Skeleton className="h-4 w-96" />
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {[...Array(5)].map((_, i) => (
+                  {[...Array(3)].map((_, i) => (
                     <div key={i} className="flex items-center gap-4 p-4 border rounded-lg">
-                      <Skeleton className="h-12 w-12" />
+                      <Skeleton className="h-10 w-10" />
                       <div className="flex-1">
                         <Skeleton className="h-5 w-48 mb-2" />
                         <Skeleton className="h-4 w-24" />
                       </div>
+                      <Skeleton className="h-9 w-24" />
                     </div>
                   ))}
                 </div>
@@ -191,7 +209,7 @@ export default function BundleContentPage() {
             <AlertDescription>{error}</AlertDescription>
           </Alert>
 
-          <div className="mt-6 flex gap-4">
+          <div className="mt-6 space-x-4">
             <Button onClick={fetchBundleContent} variant="outline">
               Try Again
             </Button>
@@ -233,44 +251,90 @@ export default function BundleContentPage() {
           </Link>
         </Button>
 
-        <Card>
-          <CardHeader>
-            <div className="flex items-start justify-between">
-              <div>
-                <CardTitle className="text-2xl mb-2">{bundle.title}</CardTitle>
-                <CardDescription className="text-base">
-                  By {bundle.creatorUsername} • {bundle.totalItems} items • {formatFileSize(bundle.totalSize)}
-                </CardDescription>
-              </div>
-              <Button onClick={handleDownloadBundle} className="bg-blue-600 hover:bg-blue-700">
-                <Download className="h-4 w-4 mr-2" />
-                Download All
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Bundle Contents</h3>
-              {bundle.items.map((item, index) => (
-                <div key={item.id || index} className="flex items-center gap-4 p-4 border rounded-lg hover:bg-gray-50">
-                  <div className="flex-shrink-0">{getFileIcon(item.type)}</div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className="font-medium truncate">{item.title}</h4>
-                    <div className="flex items-center gap-4 text-sm text-gray-500">
-                      <Badge variant="secondary" className="text-xs">
-                        {item.type.toUpperCase()}
-                      </Badge>
-                      {item.size && <span>{formatFileSize(item.size)}</span>}
-                    </div>
+        <div className="grid gap-6">
+          {/* Bundle Header */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <CardTitle className="text-2xl mb-2">{bundle.title}</CardTitle>
+                  {bundle.description && <CardDescription className="text-base">{bundle.description}</CardDescription>}
+                  <div className="flex items-center gap-4 mt-4">
+                    <Badge variant="secondary">{bundle.contentCount} items</Badge>
+                    {bundle.totalSize && <Badge variant="outline">{formatFileSize(bundle.totalSize)}</Badge>}
+                    {bundle.creatorName && (
+                      <span className="text-sm text-muted-foreground">by {bundle.creatorName}</span>
+                    )}
                   </div>
-                  <Button variant="ghost" size="sm">
-                    <Play className="h-4 w-4" />
-                  </Button>
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+                {bundle.thumbnailUrl && (
+                  <img
+                    src={bundle.thumbnailUrl || "/placeholder.svg"}
+                    alt={bundle.title}
+                    className="w-24 h-24 object-cover rounded-lg"
+                  />
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Button onClick={() => handleDownload()} className="w-full sm:w-auto">
+                <Download className="h-4 w-4 mr-2" />
+                Download All Content
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Content List */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Bundle Contents</CardTitle>
+              <CardDescription>All items included in this bundle</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {bundle.contents && bundle.contents.length > 0 ? (
+                <div className="space-y-4">
+                  {bundle.contents.map((content, index) => (
+                    <div
+                      key={content.id || index}
+                      className="flex items-center gap-4 p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex-shrink-0 w-10 h-10 bg-muted rounded-lg flex items-center justify-center">
+                        {getFileIcon(content.type)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-medium truncate">{content.title}</h4>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Badge variant="outline" className="text-xs">
+                            {content.type}
+                          </Badge>
+                          {content.size && <span>{formatFileSize(content.size)}</span>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {content.url && (
+                          <Button variant="outline" size="sm" onClick={() => window.open(content.url, "_blank")}>
+                            <Play className="h-4 w-4 mr-1" />
+                            View
+                          </Button>
+                        )}
+                        <Button variant="outline" size="sm" onClick={() => handleDownload(content.id)}>
+                          <Download className="h-4 w-4 mr-1" />
+                          Download
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <AlertCircle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-medium mb-2">No content available</h3>
+                  <p className="text-muted-foreground">This bundle doesn't have any content items yet.</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   )

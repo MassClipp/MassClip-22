@@ -1,80 +1,103 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db, auth } from "@/lib/firebase-admin"
+import { db } from "@/lib/firebase-admin"
+import { getAuth } from "firebase-admin/auth"
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
+    const bundleId = params.id
+
+    // Get auth token
     const authHeader = request.headers.get("authorization")
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const token = authHeader.split("Bearer ")[1]
-    const decodedToken = await auth.verifyIdToken(token)
+    const decodedToken = await getAuth().verifyIdToken(token)
     const userId = decodedToken.uid
-    const bundleId = params.id
 
     console.log(`🔍 [Bundle Content API] User ${userId} requesting bundle ${bundleId}`)
 
     // Check if user has purchased this bundle
-    const purchaseQuery = await db
+    const purchaseSnapshot = await db
       .collection("bundlePurchases")
       .where("buyerUid", "==", userId)
       .where("bundleId", "==", bundleId)
       .where("status", "==", "completed")
       .get()
 
-    if (purchaseQuery.empty) {
+    if (purchaseSnapshot.empty) {
       console.log(`❌ [Bundle Content API] User ${userId} has not purchased bundle ${bundleId}`)
-      return NextResponse.json({ error: "Access denied. Bundle not purchased." }, { status: 403 })
+      return NextResponse.json({ error: "Access denied. You must purchase this bundle first." }, { status: 403 })
     }
 
-    // Get bundle details
+    // Get bundle information
     const bundleDoc = await db.collection("bundles").doc(bundleId).get()
     if (!bundleDoc.exists) {
       return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
     }
 
     const bundleData = bundleDoc.data()
-    const purchaseData = purchaseQuery.docs[0].data()
+    console.log(`✅ [Bundle Content API] Found bundle:`, bundleData?.title)
 
-    // Get creator info
-    let creatorUsername = "Unknown Creator"
+    // Get creator information
+    let creatorName = "Unknown Creator"
     if (bundleData?.creatorId) {
       try {
         const creatorDoc = await db.collection("users").doc(bundleData.creatorId).get()
         if (creatorDoc.exists) {
           const creatorData = creatorDoc.data()
-          creatorUsername = creatorData?.username || creatorData?.displayName || creatorData?.name || "Unknown Creator"
+          creatorName = creatorData?.username || creatorData?.displayName || creatorData?.name || "Unknown Creator"
         }
       } catch (error) {
         console.warn(`⚠️ [Bundle Content API] Could not fetch creator info:`, error)
       }
     }
 
-    const bundle = {
-      id: bundleId,
-      title: bundleData?.title || purchaseData.bundleTitle || "Untitled Bundle",
-      description: bundleData?.description || purchaseData.description || "",
-      thumbnailUrl: bundleData?.thumbnailUrl || purchaseData.bundleThumbnail || "",
-      creatorId: bundleData?.creatorId || purchaseData.creatorId || "",
-      creatorUsername,
-      items: purchaseData.contents || bundleData?.items || [],
-      totalItems: purchaseData.contentCount || bundleData?.totalItems || 0,
-      totalSize: purchaseData.totalSize || bundleData?.totalSize || 0,
-      price: purchaseData.amount || bundleData?.price || 0,
-      currency: purchaseData.currency || "usd",
+    // Get bundle contents
+    let contents: any[] = []
+    if (bundleData?.contents && Array.isArray(bundleData.contents)) {
+      contents = bundleData.contents
+    } else {
+      // Try to get contents from a separate collection if they exist
+      try {
+        const contentsSnapshot = await db.collection("bundleContents").where("bundleId", "==", bundleId).get()
+
+        contents = contentsSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }))
+      } catch (error) {
+        console.warn(`⚠️ [Bundle Content API] Could not fetch bundle contents:`, error)
+      }
     }
 
-    console.log(`✅ [Bundle Content API] Returning bundle content for ${bundleId}`)
+    const bundle = {
+      id: bundleId,
+      title: bundleData?.title || "Untitled Bundle",
+      description: bundleData?.description || "",
+      price: bundleData?.price || 0,
+      creatorId: bundleData?.creatorId || "",
+      creatorName,
+      thumbnailUrl: bundleData?.thumbnailUrl || null,
+      contents,
+      totalSize: bundleData?.totalSize || 0,
+      contentCount: contents.length,
+      createdAt: bundleData?.createdAt || null,
+    }
+
+    console.log(`✅ [Bundle Content API] Returning bundle with ${contents.length} items`)
 
     return NextResponse.json({
       success: true,
       bundle,
+      hasAccess: true,
     })
   } catch (error: any) {
     console.error("❌ [Bundle Content API] Error:", error)
     return NextResponse.json(
       {
+        success: false,
         error: "Failed to fetch bundle content",
         details: error.message,
       },
