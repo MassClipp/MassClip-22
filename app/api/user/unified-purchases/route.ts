@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/firebase-admin"
-import { getAuth } from "firebase-admin/auth"
+import { db, auth } from "@/lib/firebase-admin"
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,7 +9,7 @@ export async function GET(request: NextRequest) {
     }
 
     const token = authHeader.split("Bearer ")[1]
-    const decodedToken = await getAuth().verifyIdToken(token)
+    const decodedToken = await auth.verifyIdToken(token)
     const userId = decodedToken.uid
 
     console.log(`🔍 [Unified Purchases API] Fetching purchases for user: ${userId}`)
