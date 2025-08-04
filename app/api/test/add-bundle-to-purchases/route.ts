@@ -1,143 +1,117 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { adminDb } from "@/lib/firebase-admin"
 import { UnifiedPurchaseService } from "@/lib/unified-purchase-service"
 
 export async function POST(request: NextRequest) {
-  console.log("🛒 [Test Add Bundle] Starting bundle purchase addition...")
-
   try {
+    console.log("🔄 [Add Bundle to Purchases] Starting request")
+
     const body = await request.json()
-    console.log("📋 [Test Add Bundle] Request body:", body)
+    const { userId, bundleId } = body
 
-    const {
-      userId,
-      userEmail,
-      userName,
-      bundleId,
-      bundleTitle,
-      bundleDescription,
-      bundleThumbnail,
-      creatorId,
-      creatorName,
-      creatorUsername,
-      amount,
-      currency = "usd",
-      sessionId,
-      environment = "test",
-    } = body
+    console.log("📝 [Add Bundle to Purchases] Request data:", { userId, bundleId })
 
-    // Validate required fields
-    if (!userId || !bundleId || !creatorId) {
-      console.error("❌ [Test Add Bundle] Missing required fields:", { userId, bundleId, creatorId })
+    if (!userId || !bundleId) {
       return NextResponse.json(
-        {
-          error: "Missing required fields",
-          details: "userId, bundleId, and creatorId are required",
-          code: "MISSING_FIELDS",
-        },
+        { error: "Missing required fields", details: "userId and bundleId are required" },
         { status: 400 },
       )
     }
 
-    console.log("🔄 [Test Add Bundle] Creating unified purchase with details:", {
-      userId,
-      userEmail,
-      userName,
-      bundleId,
-      bundleTitle,
-      creatorId,
-      creatorName,
-      amount,
-      currency,
-      sessionId,
-    })
+    // First, verify the bundle exists
+    console.log("🔍 [Add Bundle to Purchases] Checking if bundle exists...")
+    const bundleDoc = await adminDb.collection("bundles").doc(bundleId).get()
 
-    // Create the unified purchase using the service
-    const purchaseId = await UnifiedPurchaseService.createUnifiedPurchase(userId, {
-      bundleId,
-      sessionId: sessionId || `test_${bundleId}_${Date.now()}`,
-      amount: amount || 999, // Default to $9.99 in cents
-      currency,
-      creatorId,
-      userEmail,
-      userName,
-    })
-
-    console.log("✅ [Test Add Bundle] Purchase created successfully:", purchaseId)
-
-    // Prepare detailed response for logging/implementation
-    const purchaseDetails = {
-      // Purchase identifiers
-      purchaseId,
-      sessionId: sessionId || `test_${bundleId}_${Date.now()}`,
-
-      // User information
-      buyer: {
-        uid: userId,
-        email: userEmail,
-        name: userName,
-        isAuthenticated: true,
-      },
-
-      // Bundle information
-      bundle: {
-        id: bundleId,
-        title: bundleTitle,
-        description: bundleDescription,
-        thumbnailUrl: bundleThumbnail,
-      },
-
-      // Creator information
-      creator: {
-        id: creatorId,
-        name: creatorName,
-        username: creatorUsername,
-      },
-
-      // Purchase details
-      payment: {
-        amount,
-        currency,
-        amountFormatted: `$${(amount / 100).toFixed(2)}`,
-        timestamp: new Date().toISOString(),
-      },
-
-      // Environment info
-      environment,
-      testPurchase: true,
-
-      // Implementation notes
-      implementationNotes: {
-        message: "This data structure should be used in the real checkout flow",
-        requiredFields: ["userId", "bundleId", "creatorId", "sessionId", "amount"],
-        unifiedPurchaseService: "Use UnifiedPurchaseService.createUnifiedPurchase()",
-        webhookIntegration: "This should be called from Stripe webhook after successful payment",
-      },
+    if (!bundleDoc.exists) {
+      console.error(`❌ [Add Bundle to Purchases] Bundle ${bundleId} not found`)
+      return NextResponse.json(
+        { error: "Bundle not found", details: `Bundle with ID ${bundleId} does not exist` },
+        { status: 404 },
+      )
     }
 
-    console.log("📊 [Test Add Bundle] Complete purchase details for implementation:", purchaseDetails)
+    const bundleData = bundleDoc.data()!
+    console.log("📦 [Add Bundle to Purchases] Bundle found:", {
+      title: bundleData.title,
+      creatorId: bundleData.creatorId,
+      price: bundleData.price,
+    })
 
-    // Return success response with detailed information
+    // Get creator information
+    const creatorId = bundleData.creatorId || "unknown"
+    let creatorData = null
+
+    if (creatorId !== "unknown") {
+      try {
+        const creatorDoc = await adminDb.collection("users").doc(creatorId).get()
+        if (creatorDoc.exists) {
+          creatorData = creatorDoc.data()
+          console.log("👤 [Add Bundle to Purchases] Creator found:", {
+            name: creatorData?.displayName || creatorData?.name,
+            username: creatorData?.username,
+          })
+        }
+      } catch (error) {
+        console.warn("⚠️ [Add Bundle to Purchases] Could not fetch creator data:", error)
+      }
+    }
+
+    // Get user information if possible
+    let userEmail = ""
+    let userName = "User"
+
+    try {
+      const { auth } = await import("@/lib/firebase-admin")
+      const userRecord = await auth.getUser(userId)
+      userEmail = userRecord.email || ""
+      userName = userRecord.displayName || userRecord.email?.split("@")[0] || "User"
+      console.log("👤 [Add Bundle to Purchases] User found:", { userName, userEmail })
+    } catch (error) {
+      console.warn("⚠️ [Add Bundle to Purchases] Could not fetch user data:", error)
+      // Continue without user data
+    }
+
+    // Create the purchase using UnifiedPurchaseService
+    const sessionId = `manual_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
+    console.log("💾 [Add Bundle to Purchases] Creating unified purchase...")
+
+    const purchaseId = await UnifiedPurchaseService.createUnifiedPurchase(userId, {
+      bundleId,
+      sessionId,
+      amount: bundleData.price || 0,
+      currency: "USD",
+      creatorId,
+      userEmail,
+      userName,
+    })
+
+    console.log("✅ [Add Bundle to Purchases] Purchase created successfully:", purchaseId)
+
+    // Return success response with bundle and purchase details
     return NextResponse.json({
       success: true,
       message: "Bundle added to purchases successfully",
-      purchaseId,
-      purchaseDetails,
-      implementationGuide: {
-        step1: "In Stripe webhook, extract session data",
-        step2: "Get bundle and creator information from database",
-        step3: "Call UnifiedPurchaseService.createUnifiedPurchase() with this data structure",
-        step4: "Send confirmation email to buyer with purchase details",
+      data: {
+        purchaseId,
+        sessionId,
+        userId,
+        bundleId,
+        bundleTitle: bundleData.title || "Untitled Bundle",
+        bundleDescription: bundleData.description || "",
+        creatorName: creatorData?.displayName || creatorData?.name || "Unknown Creator",
+        amount: bundleData.price || 0,
+        currency: "USD",
+        purchasedAt: new Date().toISOString(),
       },
     })
   } catch (error: any) {
-    console.error("❌ [Test Add Bundle] Error adding bundle to purchases:", error)
-    console.error("❌ [Test Add Bundle] Error stack:", error.stack)
+    console.error("❌ [Add Bundle to Purchases] Error:", error)
 
     return NextResponse.json(
       {
         error: "Failed to add bundle to purchases",
-        details: error.message || "Unknown error occurred",
-        code: error.code || "INTERNAL_ERROR",
+        details: error.message,
         stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
       },
       { status: 500 },
