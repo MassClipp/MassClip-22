@@ -2,15 +2,11 @@
 
 import { useEffect, useState } from "react"
 import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
-import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Card, CardContent } from "@/components/ui/card"
-import { AlertCircle, Search, Package, Calendar, ExternalLink, Play, Eye, RefreshCw } from "lucide-react"
+import { AlertCircle, Package, Eye, RefreshCw } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import Link from "next/link"
-import { toast } from "@/hooks/use-toast"
 import { motion, AnimatePresence } from "framer-motion"
 
 interface Purchase {
@@ -38,15 +34,11 @@ interface Purchase {
   }
 }
 
-type TabType = "downloads" | "orders"
-
 export default function PurchasesPage() {
   const { user, loading: authLoading } = useFirebaseAuth()
   const [purchases, setPurchases] = useState<Purchase[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [searchQuery, setSearchQuery] = useState("")
-  const [activeTab, setActiveTab] = useState<TabType>("downloads")
 
   useEffect(() => {
     if (user) {
@@ -105,71 +97,6 @@ export default function PurchasesPage() {
     }
   }
 
-  const handleDownload = async (purchase: Purchase) => {
-    try {
-      const token = await user.getIdToken()
-      const endpoint =
-        purchase.type === "bundle"
-          ? `/api/bundles/${purchase.bundleId}/download`
-          : `/api/product-box/${purchase.productBoxId}/direct-content`
-
-      const response = await fetch(endpoint, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to download content")
-      }
-
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = `${purchase.title || "content"}.zip`
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
-
-      toast({
-        title: "Download started",
-        description: `${purchase.title} is being downloaded.`,
-      })
-    } catch (err) {
-      console.error("Download error:", err)
-      toast({
-        title: "Download failed",
-        description: "Failed to download the content. Please try again.",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const filteredPurchases = purchases.filter((purchase) => {
-    const matchesSearch =
-      searchQuery === "" ||
-      (purchase.title && purchase.title.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (purchase.description && purchase.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (purchase.creatorUsername && purchase.creatorUsername.toLowerCase().includes(searchQuery.toLowerCase()))
-
-    const matchesTab = activeTab === "downloads" ? purchase.status === "completed" : true
-
-    return matchesSearch && matchesTab
-  })
-
-  const getContentIcon = (type: string) => {
-    switch (type) {
-      case "bundle":
-        return <Package className="h-8 w-8 text-white" />
-      case "subscription":
-        return <Calendar className="h-8 w-8 text-white" />
-      default:
-        return <Play className="h-8 w-8 text-white" />
-    }
-  }
-
   const getThumbnailUrl = (purchase: Purchase) => {
     return (
       purchase.thumbnailUrl ||
@@ -181,141 +108,87 @@ export default function PurchasesPage() {
 
   if (authLoading || loading) {
     return (
-      <>
-        <div className="mb-8">
-          <Skeleton className="h-12 w-64 mb-6 bg-gray-800/50" />
-          <div className="flex gap-8 mb-8">
-            <Skeleton className="h-8 w-24 bg-gray-800/50" />
-            <Skeleton className="h-8 w-24 bg-gray-800/50" />
+      <div className="min-h-screen bg-black text-white p-6">
+        <div className="max-w-4xl mx-auto">
+          <Skeleton className="h-12 w-64 mb-8 bg-gray-800/50" />
+          <div className="space-y-4">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="bg-gradient-to-r from-gray-900 to-gray-800 border border-white/10 rounded-lg p-6">
+                <div className="flex gap-6">
+                  <Skeleton className="w-24 h-24 bg-gray-700/50 rounded-lg flex-shrink-0" />
+                  <div className="flex-1">
+                    <Skeleton className="h-6 w-48 mb-2 bg-gray-700/50" />
+                    <Skeleton className="h-4 w-32 mb-2 bg-gray-700/50" />
+                    <Skeleton className="h-4 w-24 mb-4 bg-gray-700/50" />
+                    <Skeleton className="h-6 w-20 mb-4 bg-gray-700/50" />
+                    <Skeleton className="h-10 w-32 bg-gray-700/50" />
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {[...Array(8)].map((_, i) => (
-            <Card key={i} className="bg-gray-900/50 border-gray-700">
-              <CardContent className="p-4">
-                <Skeleton className="h-48 w-full mb-4 bg-gray-700/50 rounded-lg" />
-                <Skeleton className="h-6 w-full mb-2 bg-gray-700/50" />
-                <Skeleton className="h-4 w-3/4 mb-4 bg-gray-700/50" />
-                <Skeleton className="h-6 w-20 mb-4 bg-gray-700/50" />
-                <Skeleton className="h-10 w-full bg-gray-700/50" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </>
+      </div>
     )
   }
 
   if (error) {
     return (
-      <>
-        <Alert variant="destructive" className="bg-red-900/20 border-red-800 mb-4">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-        <Button onClick={fetchPurchases} className="bg-red-600 hover:bg-red-700" variant="default">
-          <RefreshCw className="h-4 w-4 mr-2" />
-          Try Again
-        </Button>
-      </>
+      <div className="min-h-screen bg-black text-white p-6">
+        <div className="max-w-4xl mx-auto">
+          <h1 className="text-4xl font-bold mb-8 text-white">My Purchases</h1>
+          <Alert variant="destructive" className="bg-red-900/20 border-red-800 mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+          <Button onClick={fetchPurchases} className="bg-white text-black hover:bg-gray-200">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Try Again
+          </Button>
+        </div>
+      </div>
     )
   }
 
   return (
-    <>
-      {/* Header Section */}
-      <div className="mb-8">
+    <div className="min-h-screen bg-black text-white p-6">
+      <div className="max-w-4xl mx-auto">
+        {/* Header */}
         <h1 className="text-4xl font-bold mb-8 text-white">My Purchases</h1>
 
-        {/* Tabs */}
-        <div className="flex gap-8 mb-8 border-b border-gray-800/50">
-          <button
-            onClick={() => setActiveTab("downloads")}
-            className={`text-xl font-medium pb-4 border-b-2 transition-all duration-200 ${
-              activeTab === "downloads"
-                ? "text-white border-white"
-                : "text-gray-400 border-transparent hover:text-gray-200 hover:border-gray-500"
-            }`}
-          >
-            Downloads
-          </button>
-          <button
-            onClick={() => setActiveTab("orders")}
-            className={`text-xl font-medium pb-4 border-b-2 transition-all duration-200 ${
-              activeTab === "orders"
-                ? "text-white border-white"
-                : "text-gray-400 border-transparent hover:text-gray-200 hover:border-gray-500"
-            }`}
-          >
-            Orders
-          </button>
-        </div>
-
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-          <Input
-            placeholder="Search your purchases..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-12 bg-gray-900/50 border-gray-700 text-white placeholder:text-gray-400 h-14 text-lg rounded-xl focus:border-gray-500 focus:ring-1 focus:ring-gray-500 w-full"
-          />
-        </div>
-      </div>
-
-      {/* Content Section */}
-      <AnimatePresence mode="wait">
-        {filteredPurchases.length === 0 ? (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="flex items-center justify-center h-96"
-          >
-            <div className="max-w-md mx-auto text-center">
-              <div className="w-24 h-24 mx-auto mb-6 bg-gray-900 rounded-full flex items-center justify-center border border-gray-700">
-                <Package className="h-12 w-12 text-gray-400" />
-              </div>
-              <h3 className="text-2xl font-semibold mb-4 text-white">
-                {searchQuery
-                  ? "No purchases match your search"
-                  : activeTab === "downloads"
-                    ? "No downloads yet"
-                    : "No orders yet"}
-              </h3>
-              <p className="text-gray-400 mb-8 text-lg">
-                {searchQuery
-                  ? "Try adjusting your search to find what you're looking for."
-                  : "Start exploring premium content to build your collection."}
-              </p>
-              {!searchQuery && (
-                <Button asChild className="bg-red-600 hover:bg-red-700 h-12 px-8 text-lg">
-                  <Link href="/dashboard/explore">
-                    <ExternalLink className="h-5 w-5 mr-2" />
-                    Explore Content
-                  </Link>
+        {/* Content */}
+        <AnimatePresence mode="wait">
+          {purchases.length === 0 ? (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="flex items-center justify-center h-96"
+            >
+              <div className="max-w-md mx-auto text-center">
+                <div className="w-24 h-24 mx-auto mb-6 bg-gradient-to-r from-gray-900 to-gray-800 rounded-full flex items-center justify-center border border-white/10">
+                  <Package className="h-12 w-12 text-gray-400" />
+                </div>
+                <h3 className="text-2xl font-semibold mb-4 text-white">No purchases yet</h3>
+                <p className="text-gray-400 mb-8 text-lg">Start exploring premium content to build your collection.</p>
+                <Button asChild className="bg-white text-black hover:bg-gray-200 h-12 px-8 text-lg">
+                  <Link href="/dashboard/explore">Explore Content</Link>
                 </Button>
-              )}
-            </div>
-          </motion.div>
-        ) : (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
-          >
-            {filteredPurchases.map((purchase, index) => (
-              <motion.div
-                key={purchase.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05 }}
-              >
-                <Card className="bg-gray-900/50 border-gray-700 hover:bg-gray-900/70 transition-all duration-300 h-full flex flex-col">
-                  <CardContent className="p-4 flex flex-col h-full">
-                    {/* Thumbnail - Top */}
-                    <div className="w-full h-48 bg-gray-800 rounded-lg mb-4 flex items-center justify-center overflow-hidden">
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
+              {purchases.map((purchase, index) => (
+                <motion.div
+                  key={purchase.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                  className="bg-gradient-to-r from-gray-900 to-gray-800 border border-white/10 rounded-lg p-6 hover:border-white/20 transition-all duration-300"
+                >
+                  <div className="flex gap-6">
+                    {/* 1:1 Thumbnail - Top Left */}
+                    <div className="w-24 h-24 bg-gray-800 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
                       {getThumbnailUrl(purchase) ? (
                         <img
                           src={getThumbnailUrl(purchase) || "/placeholder.svg"}
@@ -337,66 +210,52 @@ export default function PurchasesPage() {
                           }}
                         />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-gray-800 rounded-lg">
-                          {getContentIcon(purchase.type || "product_box")}
+                        <Package className="h-8 w-8 text-gray-400" />
+                      )}
+                    </div>
+
+                    {/* Content Info */}
+                    <div className="flex-1 flex flex-col justify-between">
+                      {/* Title and Description */}
+                      <div>
+                        <h3 className="text-xl font-semibold text-white mb-1">{purchase.title}</h3>
+                        {purchase.description && (
+                          <p className="text-gray-400 text-sm mb-2 line-clamp-2">{purchase.description}</p>
+                        )}
+                        <p className="text-gray-500 text-xs mb-1">by {purchase.creatorUsername}</p>
+                        {purchase.metadata?.contentCount !== undefined && (
+                          <p className="text-gray-500 text-xs">
+                            {purchase.metadata.contentCount} item{purchase.metadata.contentCount !== 1 ? "s" : ""}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Price and Button */}
+                      <div className="flex items-end justify-between mt-4">
+                        <div>
+                          <span className="text-2xl font-bold text-white">${purchase.price.toFixed(2)}</span>
                         </div>
-                      )}
+                        <Button asChild className="bg-white text-black hover:bg-gray-200 font-medium px-6 py-2">
+                          <Link
+                            href={
+                              purchase.type === "bundle"
+                                ? `/bundles/${purchase.bundleId}/content`
+                                : `/product-box/${purchase.productBoxId}/content`
+                            }
+                          >
+                            <Eye className="h-4 w-4 mr-2" />
+                            Access Content
+                          </Link>
+                        </Button>
+                      </div>
                     </div>
-
-                    {/* Content Info - Middle */}
-                    <div className="flex-1 mb-4">
-                      <h3 className="text-xl font-semibold text-white mb-2 line-clamp-2">{purchase.title}</h3>
-                      {purchase.description && (
-                        <p className="text-gray-400 text-sm mb-3 line-clamp-3">{purchase.description}</p>
-                      )}
-                      <p className="text-gray-500 text-xs mb-2">by {purchase.creatorUsername}</p>
-                      {purchase.metadata?.contentCount !== undefined && (
-                        <p className="text-gray-500 text-xs">
-                          {purchase.metadata.contentCount} item{purchase.metadata.contentCount !== 1 ? "s" : ""}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Price */}
-                    <div className="mb-4">
-                      <span className="text-2xl font-bold text-white">${purchase.price.toFixed(2)}</span>
-                      {activeTab === "orders" && (
-                        <Badge
-                          variant={purchase.status === "completed" ? "default" : "secondary"}
-                          className={`ml-2 ${
-                            purchase.status === "completed" ? "bg-green-600 text-white" : "bg-gray-700 text-gray-300"
-                          }`}
-                        >
-                          {purchase.status}
-                        </Badge>
-                      )}
-                    </div>
-
-                    {/* Access Button - Bottom */}
-                    {purchase.status === "completed" && activeTab === "downloads" && (
-                      <Button
-                        asChild
-                        className="w-full bg-red-600 hover:bg-red-700 text-white h-12 text-lg font-medium"
-                      >
-                        <Link
-                          href={
-                            purchase.type === "bundle"
-                              ? `/bundles/${purchase.bundleId}/content`
-                              : `/product-box/${purchase.productBoxId}/content`
-                          }
-                        >
-                          <Eye className="h-5 w-5 mr-2" />
-                          Access Content
-                        </Link>
-                      </Button>
-                    )}
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </>
+                  </div>
+                </motion.div>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </div>
   )
 }

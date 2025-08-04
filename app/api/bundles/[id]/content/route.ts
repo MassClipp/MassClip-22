@@ -14,12 +14,14 @@ if (!getApps().length) {
   })
 }
 
-const auth = getAuth()
 const db = getFirestore()
+const auth = getAuth()
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
+    const bundleId = params.id
     const authHeader = request.headers.get("authorization")
+
     if (!authHeader?.startsWith("Bearer ")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
@@ -28,31 +30,26 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const decodedToken = await auth.verifyIdToken(token)
     const userId = decodedToken.uid
 
-    const bundleId = params.id
-
     // First, verify the user has purchased this bundle
-    const purchasesQuery = await db
-      .collection("bundlePurchases")
+    const bundlePurchasesRef = db.collection("bundlePurchases")
+    const purchaseQuery = await bundlePurchasesRef
       .where("userId", "==", userId)
       .where("bundleId", "==", bundleId)
       .where("status", "==", "completed")
       .limit(1)
       .get()
 
-    if (purchasesQuery.empty) {
-      return NextResponse.json({ error: "Bundle not purchased or access denied" }, { status: 403 })
+    if (purchaseQuery.empty) {
+      return NextResponse.json({ error: "Access denied. Bundle not purchased." }, { status: 403 })
     }
 
-    const purchaseDoc = purchasesQuery.docs[0]
+    const purchaseDoc = purchaseQuery.docs[0]
     const purchaseData = purchaseDoc.data()
 
-    console.log("Purchase data fields:", Object.keys(purchaseData))
-    console.log("Purchase data:", JSON.stringify(purchaseData, null, 2))
-
-    // Get bundle info from the purchase data
-    const bundleInfo = {
+    // Get bundle info from the purchase data or bundles collection
+    let bundleInfo = {
       id: bundleId,
-      title: purchaseData.title || purchaseData.bundleTitle || "Untitled Bundle",
+      title: purchaseData.title || purchaseData.bundleTitle || "Unknown Bundle",
       description: purchaseData.description || purchaseData.bundleDescription || "",
       creatorId: purchaseData.creatorId || "",
       creatorUsername: purchaseData.creatorUsername || "Unknown Creator",
@@ -61,51 +58,91 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       currency: purchaseData.currency || "usd",
     }
 
-    // Get content from the purchase data - try multiple possible field names
-    let contents = []
-
-    if (purchaseData.contents && Array.isArray(purchaseData.contents)) {
-      contents = purchaseData.contents
-    } else if (purchaseData.items && Array.isArray(purchaseData.items)) {
-      contents = purchaseData.items
-    } else if (purchaseData.bundleContents && Array.isArray(purchaseData.bundleContents)) {
-      contents = purchaseData.bundleContents
-    } else if (purchaseData.contentItems && Array.isArray(purchaseData.contentItems)) {
-      contents = purchaseData.contentItems
-    } else if (purchaseData.content && Array.isArray(purchaseData.content)) {
-      contents = purchaseData.content
+    // Try to get additional bundle info from bundles collection if available
+    try {
+      const bundleDoc = await db.collection("bundles").doc(bundleId).get()
+      if (bundleDoc.exists) {
+        const bundleData = bundleDoc.data()
+        bundleInfo = {
+          ...bundleInfo,
+          title: bundleData?.title || bundleInfo.title,
+          description: bundleData?.description || bundleInfo.description,
+          thumbnailUrl: bundleData?.thumbnailUrl || bundleInfo.thumbnailUrl,
+        }
+      }
+    } catch (error) {
+      console.log("Could not fetch bundle info from bundles collection:", error)
     }
 
-    console.log("Found contents:", contents.length, "items")
-    console.log("Contents preview:", contents.slice(0, 2))
+    // Extract content from purchase data
+    let contents: any[] = []
+
+    // Try different possible field names for content
+    const possibleContentFields = [
+      "contents",
+      "items",
+      "bundleContents",
+      "contentItems",
+      "content",
+      "bundleItems",
+      "videos",
+      "files",
+    ]
+
+    for (const field of possibleContentFields) {
+      if (purchaseData[field] && Array.isArray(purchaseData[field])) {
+        contents = purchaseData[field]
+        break
+      }
+    }
+
+    // If no content found in arrays, check if content is stored as individual fields
+    if (contents.length === 0) {
+      // Look for content in nested objects
+      if (purchaseData.metadata?.contents) {
+        contents = purchaseData.metadata.contents
+      } else if (purchaseData.bundleData?.contents) {
+        contents = purchaseData.bundleData.contents
+      }
+    }
 
     // Normalize content items
     const normalizedContents = contents.map((item: any, index: number) => ({
-      id: item.id || item.contentId || item.uploadId || `item-${index}`,
-      title: item.title || item.name || item.filename || `Content ${index + 1}`,
+      id: item.id || item.contentId || item.videoId || `content-${index}`,
+      title: item.title || item.name || `Content ${index + 1}`,
       description: item.description || "",
-      type: item.type || item.contentType || "video",
+      type: item.type || "video",
       fileType: item.fileType || item.mimeType || "video/mp4",
-      size: item.size || 0,
+      size: item.size || item.fileSize || 0,
       duration: item.duration || 0,
       thumbnailUrl: item.thumbnailUrl || item.thumbnail || "",
-      downloadUrl: item.downloadUrl || item.url || "",
+      downloadUrl: item.downloadUrl || item.url || item.fileUrl || "",
       createdAt: item.createdAt || new Date().toISOString(),
       metadata: item.metadata || {},
     }))
 
-    return NextResponse.json({
+    const response = {
       bundle: bundleInfo,
       contents: normalizedContents,
-      totalItems: normalizedContents.length,
       purchaseInfo: {
         purchaseId: purchaseDoc.id,
-        purchaseDate: purchaseData.createdAt,
-        status: purchaseData.status,
+        purchaseDate: purchaseData.createdAt || new Date().toISOString(),
+        status: purchaseData.status || "completed",
       },
-    })
+      debug: {
+        purchaseDataKeys: Object.keys(purchaseData),
+        foundContentField: possibleContentFields.find((field) => purchaseData[field]),
+        contentCount: normalizedContents.length,
+        rawPurchaseData: purchaseData, // Include for debugging
+      },
+    }
+
+    return NextResponse.json(response)
   } catch (error) {
     console.error("Error fetching bundle content:", error)
-    return NextResponse.json({ error: "Failed to fetch bundle content" }, { status: 500 })
+    return NextResponse.json(
+      { error: "Internal server error", details: error instanceof Error ? error.message : "Unknown error" },
+      { status: 500 },
+    )
   }
 }
