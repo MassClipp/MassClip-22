@@ -59,6 +59,15 @@ export default function PurchasesPage() {
       })
 
       console.log("📡 [Purchases Page] API response status:", response.status)
+      console.log("📡 [Purchases Page] API response headers:", Object.fromEntries(response.headers.entries()))
+
+      // Check if response is HTML (error page) instead of JSON
+      const contentType = response.headers.get("content-type")
+      if (!contentType || !contentType.includes("application/json")) {
+        const textResponse = await response.text()
+        console.error("❌ [Purchases Page] Received HTML instead of JSON:", textResponse.substring(0, 200))
+        throw new Error("Server returned HTML instead of JSON. Check if the API route exists.")
+      }
 
       if (!response.ok) {
         const errorData = await response.json()
@@ -100,7 +109,7 @@ export default function PurchasesPage() {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: currency.toUpperCase(),
-    }).format(amount)
+    }).format(amount / 100) // Convert from cents
   }
 
   if (authLoading || loading) {
@@ -172,6 +181,7 @@ export default function PurchasesPage() {
             <div>Auth Loading: {authLoading.toString()}</div>
             <div>Page Loading: {loading.toString()}</div>
             <div>Error: {error || "None"}</div>
+            <div>API Endpoint: /api/user/purchases</div>
             <div>Timestamp: {new Date().toISOString()}</div>
           </CardContent>
         </Card>

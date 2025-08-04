@@ -31,23 +31,6 @@ export class UnifiedPurchaseService {
         }
       }
 
-      // Check unifiedPurchases collection as fallback
-      const unifiedPurchasesQuery = await db
-        .collection("unifiedPurchases")
-        .where("userId", "==", userId)
-        .where("paymentIntentId", "==", paymentIntentId)
-        .limit(1)
-        .get()
-
-      if (!unifiedPurchasesQuery.empty) {
-        const purchaseDoc = unifiedPurchasesQuery.docs[0]
-        console.log(`✅ [Purchase Service] Found purchase in unifiedPurchases: ${purchaseDoc.id}`)
-        return {
-          id: purchaseDoc.id,
-          ...purchaseDoc.data(),
-        }
-      }
-
       console.log(`❌ [Purchase Service] No purchase found for payment intent: ${paymentIntentId}`)
       return null
     } catch (error) {
@@ -74,23 +57,6 @@ export class UnifiedPurchaseService {
             id: bundlePurchaseDoc.id,
             ...purchaseData,
           }
-        }
-      }
-
-      // Check unifiedPurchases collection as fallback
-      const unifiedPurchasesQuery = await db
-        .collection("unifiedPurchases")
-        .where("userId", "==", userId)
-        .where("sessionId", "==", sessionId)
-        .limit(1)
-        .get()
-
-      if (!unifiedPurchasesQuery.empty) {
-        const purchaseDoc = unifiedPurchasesQuery.docs[0]
-        console.log(`✅ [Purchase Service] Found purchase in unifiedPurchases: ${purchaseDoc.id}`)
-        return {
-          id: purchaseDoc.id,
-          ...purchaseDoc.data(),
         }
       }
 
