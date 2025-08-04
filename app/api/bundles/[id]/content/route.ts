@@ -9,23 +9,47 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     // Get bundle data
     const bundleDoc = await db.collection("bundles").doc(bundleId).get()
     if (!bundleDoc.exists) {
+      console.log(`❌ [Bundle Content API] Bundle not found: ${bundleId}`)
       return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
     }
 
     const bundleData = bundleDoc.data()!
+    console.log(`✅ [Bundle Content API] Found bundle:`, bundleData)
 
     // Get creator info
     let creatorData = null
     if (bundleData.creatorId) {
-      const creatorDoc = await db.collection("users").doc(bundleData.creatorId).get()
-      if (creatorDoc.exists) {
-        creatorData = creatorDoc.data()
+      try {
+        const creatorDoc = await db.collection("users").doc(bundleData.creatorId).get()
+        if (creatorDoc.exists) {
+          creatorData = creatorDoc.data()
+        }
+      } catch (error) {
+        console.warn(`⚠️ [Bundle Content API] Could not fetch creator info:`, error)
       }
     }
 
-    // For bundles, the content is typically the bundle file itself
+    // Process bundle contents
     const contents = []
-    if (bundleData.downloadUrl || bundleData.fileUrl) {
+
+    // If bundle has contents array, process each item
+    if (bundleData.contents && Array.isArray(bundleData.contents)) {
+      for (const content of bundleData.contents) {
+        contents.push({
+          id: content.id || `content-${contents.length}`,
+          title: content.displayTitle || content.title || "Untitled Content",
+          fileUrl: content.fileUrl || content.downloadUrl || "",
+          mimeType: content.contentType || content.mimeType || "application/octet-stream",
+          fileSize: content.fileSize || 0,
+          contentType: getContentType(content.contentType || content.mimeType || ""),
+          displayTitle: content.displayTitle || content.title || "Untitled Content",
+          displaySize: formatFileSize(content.fileSize || 0),
+          displayDuration: content.duration ? formatDuration(content.duration) : undefined,
+          thumbnailUrl: content.thumbnailUrl || null,
+        })
+      }
+    } else if (bundleData.downloadUrl || bundleData.fileUrl) {
+      // Fallback: treat the bundle itself as content
       contents.push({
         id: bundleId,
         title: bundleData.title || "Bundle Content",
@@ -44,21 +68,23 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       id: bundleId,
       title: bundleData.title || "Untitled Bundle",
       description: bundleData.description || "",
-      creatorName: creatorData?.displayName || creatorData?.name || "Unknown Creator",
-      createdAt: bundleData.createdAt || new Date().toISOString(),
+      creatorName: creatorData?.displayName || creatorData?.name || creatorData?.username || "Unknown Creator",
+      createdAt: bundleData.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
       contents,
       totalSize: bundleData.fileSize || 0,
       contentCount: contents.length,
     }
 
+    console.log(`✅ [Bundle Content API] Returning response:`, response)
     return NextResponse.json(response)
   } catch (error: any) {
     console.error("❌ [Bundle Content API] Error:", error)
-    return NextResponse.json({ error: "Failed to fetch bundle content" }, { status: 500 })
+    return NextResponse.json({ error: "Failed to fetch bundle content", details: error.message }, { status: 500 })
   }
 }
 
 function getContentType(mimeType: string): "video" | "audio" | "image" | "document" {
+  if (!mimeType) return "document"
   if (mimeType.startsWith("video/")) return "video"
   if (mimeType.startsWith("audio/")) return "audio"
   if (mimeType.startsWith("image/")) return "image"
