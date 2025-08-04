@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
-    serverComponentsExternalPackages: ['@firebase/app-types'],
+    serverComponentsExternalPackages: ['firebase-admin'],
   },
   eslint: {
     ignoreDuringBuilds: true,
@@ -21,21 +21,8 @@ const nextConfig = {
     ],
     unoptimized: true,
   },
-  // Critical: Configure body size limits for webhooks
-  api: {
-    bodyParser: {
-      sizeLimit: '1mb',
-    },
-  },
-  // Ensure raw body handling for webhooks
-  async rewrites() {
-    return [
-      {
-        source: '/api/webhooks/stripe',
-        destination: '/api/webhooks/stripe',
-      },
-    ]
-  },
+  // Remove API configuration that might interfere with webhooks
+  output: process.env.NODE_ENV === 'production' ? 'standalone' : undefined,
 }
 
 export default nextConfig

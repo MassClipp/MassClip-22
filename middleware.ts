@@ -14,10 +14,9 @@ export function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // CRITICAL: Do not process webhook routes at all
-  if (pathname === "/api/webhooks/stripe") {
-    console.log("🔍 Middleware: Webhook route - passing through untouched")
-    // Return immediately without any processing
+  // CRITICAL: Completely bypass middleware for webhook routes
+  if (pathname.startsWith("/api/webhooks/")) {
+    console.log("🔍 Middleware: Webhook route detected - bypassing all processing")
     return NextResponse.next()
   }
 
@@ -26,7 +25,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // Allow access to purchase success page
+  // Allow public access to purchase success page
   if (pathname === "/purchase-success") {
     return NextResponse.next()
   }
@@ -37,8 +36,6 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // Exclude webhook routes from middleware entirely
-  matcher: [
-    "/((?!api/webhooks|_next/static|_next/image|favicon.ico).*)",
-  ],
+  // Completely exclude webhook routes from middleware
+  matcher: ["/((?!api/webhooks|_next/static|_next/image|favicon.ico).*)"],
 }
