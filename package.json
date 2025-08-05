@@ -68,6 +68,7 @@
     "nodemailer": "latest",
     "openai": "latest",
     "path": "latest",
+    "path-to-test-secret": "latest",
     "prisma": "latest",
     "react": "^19",
     "react-day-picker": "latest",
