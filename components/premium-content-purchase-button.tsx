@@ -1,119 +1,127 @@
 "use client"
 
+import type React from "react"
+
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { useToast } from "@/components/ui/use-toast"
-import { Loader2, ShoppingCart, Lock } from "lucide-react"
+import { useAuth } from "@/contexts/auth-context"
+import { toast } from "@/hooks/use-toast"
+import { Loader2, ShoppingCart } from "lucide-react"
 
 interface PremiumContentPurchaseButtonProps {
-  creatorId: string
-  priceId: string
-  productName: string
+  bundleId?: string
+  productBoxId?: string
   price: number
-  currency: string
-  creatorUsername?: string
+  title: string
+  creatorId: string
   className?: string
-  size?: "sm" | "default" | "lg"
+  children?: React.ReactNode
 }
 
-export default function PremiumContentPurchaseButton({
-  creatorId,
-  priceId,
-  productName,
+export function PremiumContentPurchaseButton({
+  bundleId,
+  productBoxId,
   price,
-  currency,
-  creatorUsername,
-  className,
-  size = "default",
+  title,
+  creatorId,
+  className = "",
+  children,
 }: PremiumContentPurchaseButtonProps) {
-  const [loading, setLoading] = useState(false)
-  const { toast } = useToast()
-
-  const formatPrice = (amount: number, currency: string) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: currency.toUpperCase(),
-    }).format(amount / 100)
-  }
+  const [isLoading, setIsLoading] = useState(false)
+  const { user } = useAuth()
 
   const handlePurchase = async () => {
     try {
-      setLoading(true)
+      setIsLoading(true)
 
-      const response = await fetch("/api/stripe/checkout/premium", {
+      // Get the Firebase ID token for authentication
+      let idToken = ""
+      if (user) {
+        try {
+          idToken = await user.getIdToken()
+          console.log("🔑 [Purchase Button] Got auth token for user:", user.uid)
+        } catch (error) {
+          console.error("❌ [Purchase Button] Failed to get auth token:", error)
+          toast({
+            title: "Authentication Error",
+            description: "Please try signing in again",
+            variant: "destructive",
+          })
+          return
+        }
+      } else {
+        console.log("⚠️ [Purchase Button] No user authenticated, proceeding as anonymous")
+      }
+
+      const itemId = bundleId || productBoxId
+      if (!itemId) {
+        throw new Error("No product or bundle ID provided")
+      }
+
+      console.log("🛒 [Purchase Button] Starting checkout:", {
+        itemId,
+        userUid: user?.uid || "anonymous",
+        hasToken: !!idToken,
+      })
+
+      // Create checkout session with authentication token
+      const response = await fetch("/api/stripe/create-checkout-session", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          priceId,
-          creatorId,
-          successUrl: `${window.location.origin}/purchase/success?creator=${creatorUsername || creatorId}`,
+          bundleId: itemId,
+          idToken, // CRITICAL: Include the Firebase auth token
+          successUrl: `${window.location.origin}/purchase-success?session_id={CHECKOUT_SESSION_ID}`,
           cancelUrl: window.location.href,
         }),
       })
 
       if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || "Failed to create checkout session")
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to create checkout session")
       }
 
-      const data = await response.json()
+      const { url, sessionId, buyerUid } = await response.json()
 
-      if (data.url) {
-        // Redirect to Stripe checkout
-        window.location.href = data.url
+      console.log("✅ [Purchase Button] Checkout session created:", {
+        sessionId,
+        buyerUid,
+        hasUrl: !!url,
+      })
+
+      // Redirect to Stripe Checkout
+      if (url) {
+        window.location.href = url
       } else {
         throw new Error("No checkout URL received")
       }
-    } catch (error) {
-      console.error("Error creating checkout session:", error)
+    } catch (error: any) {
+      console.error("❌ [Purchase Button] Purchase failed:", error)
       toast({
         title: "Purchase Failed",
-        description: error instanceof Error ? error.message : "Failed to start checkout process",
+        description: error.message || "Failed to start checkout process",
         variant: "destructive",
       })
     } finally {
-      setLoading(false)
+      setIsLoading(false)
     }
   }
 
   return (
-    <Button
-      onClick={handlePurchase}
-      disabled={loading}
-      size={size}
-      className={`bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black font-medium shadow-lg shadow-amber-900/20 ${className}`}
-    >
-      {loading ? (
+    <Button onClick={handlePurchase} disabled={isLoading} className={className}>
+      {isLoading ? (
         <>
-          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           Processing...
         </>
       ) : (
         <>
-          <ShoppingCart className="h-4 w-4 mr-2" />
-          Buy {formatPrice(price, currency)}
+          <ShoppingCart className="mr-2 h-4 w-4" />
+          {children || `Purchase for $${price}`}
         </>
       )}
-    </Button>
-  )
-}
-
-// Alternative locked state button for when no products are available
-export function LockedContentButton({
-  className,
-  size = "default",
-}: { className?: string; size?: "sm" | "default" | "lg" }) {
-  return (
-    <Button
-      disabled
-      size={size}
-      variant="outline"
-      className={`border-zinc-700 text-zinc-500 cursor-not-allowed ${className}`}
-    >
-      <Lock className="h-4 w-4 mr-2" />
-      Premium Content
     </Button>
   )
 }

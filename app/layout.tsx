@@ -12,7 +12,6 @@ import { TikTokBrowserBanner } from "@/components/tiktok-browser-banner"
 import { FullscreenBlocker } from "@/components/fullscreen-blocker"
 import { ZoomPrevention } from "@/components/zoom-prevention"
 import { Providers } from "@/components/providers"
-import { MaintenanceMode } from "@/components/maintenance-mode"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -28,9 +27,6 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  // Check if maintenance mode is enabled
-  const isMaintenanceMode = process.env.NEXT_PUBLIC_MAINTENANCE_MODE === "true"
-
   return (
     <html lang="en" className="prevent-zoom">
       <head>
@@ -66,20 +62,16 @@ export default function RootLayout({
         />
       </head>
       <body className={`${inter.className} prevent-zoom`}>
-        {isMaintenanceMode ? (
-          <MaintenanceMode />
-        ) : (
-          <Providers>
-            <AuthProvider>
-              <DownloadLimitProvider>
-                <ZoomPrevention />
-                <FullscreenBlocker />
-                <TikTokBrowserBanner />
-                {children}
-              </DownloadLimitProvider>
-            </AuthProvider>
-          </Providers>
-        )}
+        <Providers>
+          <AuthProvider>
+            <DownloadLimitProvider>
+              <ZoomPrevention />
+              <FullscreenBlocker />
+              <TikTokBrowserBanner />
+              {children}
+            </DownloadLimitProvider>
+          </AuthProvider>
+        </Providers>
         <Toaster />
       </body>
     </html>

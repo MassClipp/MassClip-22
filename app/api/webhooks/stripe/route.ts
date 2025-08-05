@@ -1,142 +1,92 @@
 import { type NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
-import { headers } from "next/headers"
+import { processCheckoutSessionCompleted } from "@/lib/stripe/webhook-processor"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
 })
 
-const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET!
+// Use the correct environment variable name
+const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET_LIVE!
 
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
+  console.log("🚀 Stripe webhook received")
+
   try {
-    const body = await request.text()
-    const headersList = headers()
-    const sig = headersList.get("stripe-signature")!
+    // Get raw body as text
+    const body = await req.text()
+    const signature = req.headers.get("stripe-signature")
 
-    console.log("🔔 [Stripe Webhook] Received webhook")
+    if (!signature) {
+      console.error("❌ Missing Stripe signature")
+      return NextResponse.json({ error: "Missing signature" }, { status: 400 })
+    }
+
+    // Validate webhook secret
+    if (!webhookSecret || !webhookSecret.startsWith("whsec_")) {
+      console.error("❌ Invalid webhook secret format")
+      console.error("- Looking for: STRIPE_WEBHOOK_SECRET_LIVE")
+      console.error("- Found:", !!webhookSecret)
+      return NextResponse.json({ error: "Invalid webhook secret" }, { status: 500 })
+    }
+
+    console.log("🔍 Webhook verification details:")
+    console.log("- Body length:", body.length)
+    console.log("- Has signature:", !!signature)
+    console.log("- Using STRIPE_WEBHOOK_SECRET_LIVE")
+    console.log("- Webhook secret format: whsec_***")
 
     let event: Stripe.Event
+
     try {
-      event = stripe.webhooks.constructEvent(body, sig, endpointSecret)
-      console.log("✅ [Stripe Webhook] Event verified:", event.type)
+      event = stripe.webhooks.constructEvent(body, signature, webhookSecret)
+      console.log("✅ Webhook signature verified successfully!")
     } catch (err: any) {
-      console.error("❌ [Stripe Webhook] Signature verification failed:", err.message)
-      return NextResponse.json({ error: "Webhook signature verification failed" }, { status: 400 })
-    }
+      console.error("❌ Webhook signature verification failed:")
+      console.error("- Error message:", err.message)
+      console.error("- Error type:", err.type)
 
-    // Handle successful payment
-    if (event.type === "checkout.session.completed") {
-      const session = event.data.object as Stripe.Checkout.Session
-      console.log("💳 [Stripe Webhook] Processing completed checkout session:", session.id)
-      console.log("💳 [Stripe Webhook] Session metadata:", session.metadata)
-      console.log("💳 [Stripe Webhook] Customer details:", {
-        customer: session.customer,
-        customer_email: session.customer_details?.email,
-        customer_name: session.customer_details?.name,
-      })
-
-      // Extract purchase details from session
-      const productBoxId = session.metadata?.productBoxId || session.metadata?.bundleId
-      const buyerUid = session.metadata?.buyerUid || session.metadata?.userId || session.client_reference_id
-      const userEmail = session.customer_details?.email || session.metadata?.userEmail
-      const userName = session.customer_details?.name || session.metadata?.userName
-
-      console.log("📊 [Stripe Webhook] Extracted purchase details:", {
-        productBoxId,
-        buyerUid,
-        userEmail,
-        userName,
-        amount: session.amount_total,
-        currency: session.currency,
-      })
-
-      if (!productBoxId) {
-        console.error("❌ [Stripe Webhook] No productBoxId found in session metadata")
-        return NextResponse.json({ error: "Missing product information" }, { status: 400 })
-      }
-
-      // Call purchase completion endpoint with comprehensive data
-      try {
-        const completionResponse = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/purchase/complete`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
+      return NextResponse.json(
+        {
+          error: `Webhook signature verification failed: ${err.message}`,
+          debug: {
+            hasSecret: !!webhookSecret,
+            hasSignature: !!signature,
+            bodyLength: body.length,
+            secretFormat: webhookSecret.startsWith("whsec_") ? "correct" : "invalid",
+            errorType: err.type,
           },
-          body: JSON.stringify({
-            buyerUid: buyerUid || "anonymous",
-            productBoxId,
-            sessionId: session.id,
-            amount: session.amount_total ? session.amount_total / 100 : 0, // Convert from cents
-            currency: session.currency || "usd",
-            userEmail,
-            userName,
-            customerDetails: session.customer_details,
-            metadata: session.metadata,
-          }),
-        })
-
-        if (!completionResponse.ok) {
-          const errorText = await completionResponse.text()
-          console.error("❌ [Stripe Webhook] Purchase completion failed:", errorText)
-          throw new Error(`Purchase completion failed: ${errorText}`)
-        }
-
-        const completionResult = await completionResponse.json()
-        console.log("✅ [Stripe Webhook] Purchase completion successful:", completionResult)
-      } catch (error) {
-        console.error("❌ [Stripe Webhook] Error calling purchase completion:", error)
-        // Don't return error here - we still want to acknowledge the webhook
-      }
+        },
+        { status: 400 },
+      )
     }
 
-    // Handle payment intent succeeded (alternative event)
-    if (event.type === "payment_intent.succeeded") {
-      const paymentIntent = event.data.object as Stripe.PaymentIntent
-      console.log("💰 [Stripe Webhook] Payment intent succeeded:", paymentIntent.id)
-      console.log("💰 [Stripe Webhook] Payment intent metadata:", paymentIntent.metadata)
+    console.log(`🎯 Processing event: ${event.type} (${event.id})`)
 
-      // Extract details from payment intent
-      const productBoxId = paymentIntent.metadata?.productBoxId || paymentIntent.metadata?.bundleId
-      const buyerUid = paymentIntent.metadata?.buyerUid || paymentIntent.metadata?.userId
-      const userEmail = paymentIntent.metadata?.userEmail
-      const userName = paymentIntent.metadata?.userName
-
-      if (productBoxId && buyerUid) {
-        console.log("📊 [Stripe Webhook] Processing payment intent completion")
-
+    switch (event.type) {
+      case "checkout.session.completed":
         try {
-          const completionResponse = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/purchase/complete`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              buyerUid,
-              productBoxId,
-              sessionId: paymentIntent.id,
-              amount: paymentIntent.amount ? paymentIntent.amount / 100 : 0,
-              currency: paymentIntent.currency || "usd",
-              userEmail,
-              userName,
-              metadata: paymentIntent.metadata,
-            }),
-          })
+          const result = await processCheckoutSessionCompleted(event.data.object as Stripe.Checkout.Session)
 
-          if (completionResponse.ok) {
-            const result = await completionResponse.json()
-            console.log("✅ [Stripe Webhook] Payment intent completion successful:", result)
+          if (result.alreadyProcessed) {
+            return NextResponse.json({ received: true, message: "Already processed" })
           }
-        } catch (error) {
-          console.error("❌ [Stripe Webhook] Error processing payment intent:", error)
-        }
-      }
-    }
 
-    console.log("✅ [Stripe Webhook] Webhook processed successfully")
-    return NextResponse.json({ received: true })
-  } catch (error) {
-    console.error("❌ [Stripe Webhook] Webhook processing error:", error)
-    return NextResponse.json({ error: "Webhook processing failed" }, { status: 500 })
+          return NextResponse.json({
+            received: true,
+            message: "Purchase processed successfully",
+            ...result,
+          })
+        } catch (error: any) {
+          console.error("❌ Error processing checkout session:", error.message)
+          return NextResponse.json({ error: error.message }, { status: 400 })
+        }
+      default:
+        console.log(`ℹ️ Unhandled event type: ${event.type}`)
+        return NextResponse.json({ received: true })
+    }
+  } catch (error: any) {
+    console.error("❌ Webhook processing error:", error)
+    return NextResponse.json({ error: "Webhook processing failed", details: error.message }, { status: 500 })
   }
 }
