@@ -9,13 +9,49 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET!
 
+// Helper function to convert ReadableStream to Buffer
+async function streamToBuffer(stream: ReadableStream<Uint8Array>): Promise<Buffer> {
+  const reader = stream.getReader()
+  const chunks: Uint8Array[] = []
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (value) chunks.push(value)
+    }
+  } finally {
+    reader.releaseLock()
+  }
+
+  // Combine all chunks into a single buffer
+  const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0)
+  const buffer = new Uint8Array(totalLength)
+  let offset = 0
+
+  for (const chunk of chunks) {
+    buffer.set(chunk, offset)
+    offset += chunk.length
+  }
+
+  return Buffer.from(buffer)
+}
+
 export async function POST(req: NextRequest) {
   console.log("🚀 Webhook received")
 
   try {
-    // Get the raw body as bytes - this is the key fix
-    const buf = await req.arrayBuffer()
-    const rawBody = new Uint8Array(buf)
+    // Get the raw body using the most reliable method for Next.js App Router
+    let rawBody: Buffer
+
+    if (req.body) {
+      // If body is available as a ReadableStream, convert it to Buffer
+      rawBody = await streamToBuffer(req.body)
+    } else {
+      // Fallback to arrayBuffer method
+      const arrayBuffer = await req.arrayBuffer()
+      rawBody = Buffer.from(arrayBuffer)
+    }
 
     // Get signature from headers
     const sig = req.headers.get("stripe-signature")
@@ -27,6 +63,7 @@ export async function POST(req: NextRequest) {
 
     console.log("🔍 Debug info:")
     console.log("- Raw body length:", rawBody.length)
+    console.log("- Raw body type:", typeof rawBody)
     console.log("- Signature present:", !!sig)
     console.log("- Webhook secret present:", !!endpointSecret)
     console.log("- Webhook secret starts with whsec_:", endpointSecret.startsWith("whsec_"))
@@ -34,7 +71,7 @@ export async function POST(req: NextRequest) {
     let event: Stripe.Event
 
     try {
-      // Use the raw bytes directly for signature verification
+      // Use the raw Buffer directly for signature verification
       event = stripe.webhooks.constructEvent(rawBody, sig, endpointSecret)
       console.log("✅ Webhook signature verified successfully")
     } catch (err: any) {
@@ -46,12 +83,8 @@ export async function POST(req: NextRequest) {
       console.error("Debug details:")
       console.error("- Signature header length:", sig.length)
       console.error("- Signature preview:", sig.substring(0, 50))
-      console.error(
-        "- Raw body first 100 bytes:",
-        Array.from(rawBody.slice(0, 100))
-          .map((b) => String.fromCharCode(b))
-          .join(""),
-      )
+      console.error("- Raw body first 100 chars:", rawBody.toString("utf8", 0, 100))
+      console.error("- Raw body as hex (first 50 bytes):", rawBody.subarray(0, 50).toString("hex"))
 
       return NextResponse.json(
         {
@@ -61,6 +94,8 @@ export async function POST(req: NextRequest) {
             hasSignature: !!sig,
             bodyLength: rawBody.length,
             secretFormat: endpointSecret.startsWith("whsec_") ? "correct" : "incorrect",
+            bodyType: typeof rawBody,
+            isBuffer: Buffer.isBuffer(rawBody),
           },
         },
         { status: 400 },
