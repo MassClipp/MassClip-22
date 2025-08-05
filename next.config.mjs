@@ -3,7 +3,7 @@ const nextConfig = {
   experimental: {
     serverComponentsExternalPackages: ['firebase-admin'],
   },
-  // Minimal configuration to avoid any body parsing interference
+  // Minimal configuration to avoid interference
   async headers() {
     return [
       {
@@ -12,10 +12,6 @@ const nextConfig = {
           {
             key: 'Cache-Control',
             value: 'no-cache, no-store, must-revalidate',
-          },
-          {
-            key: 'X-Webhook-Handler',
-            value: 'stripe',
           },
         ],
       },

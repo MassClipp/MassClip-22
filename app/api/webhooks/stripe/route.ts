@@ -9,6 +9,39 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET!
 
+// Helper function to read raw body from request
+async function getRawBody(request: NextRequest): Promise<Buffer> {
+  const chunks: Uint8Array[] = []
+
+  if (!request.body) {
+    throw new Error("No request body")
+  }
+
+  const reader = request.body.getReader()
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (value) chunks.push(value)
+    }
+  } finally {
+    reader.releaseLock()
+  }
+
+  // Combine all chunks
+  const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0)
+  const combined = new Uint8Array(totalLength)
+  let offset = 0
+
+  for (const chunk of chunks) {
+    combined.set(chunk, offset)
+    offset += chunk.length
+  }
+
+  return Buffer.from(combined)
+}
+
 export async function POST(req: NextRequest) {
   console.log("🚀 Webhook received")
 
@@ -21,42 +54,48 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No stripe-signature header" }, { status: 400 })
     }
 
-    // Try the most direct approach - clone the request and read as text
-    const clonedRequest = req.clone()
-    const bodyText = await clonedRequest.text()
+    // Get raw body using stream reader
+    let rawBody: Buffer
+    try {
+      rawBody = await getRawBody(req)
+    } catch (error: any) {
+      console.error("❌ Failed to read raw body:", error.message)
+      return NextResponse.json({ error: "Failed to read request body" }, { status: 400 })
+    }
 
     console.log("🔍 Debug info:")
-    console.log("- Body text length:", bodyText.length)
-    console.log("- Body text type:", typeof bodyText)
+    console.log("- Raw body length:", rawBody.length)
+    console.log("- Raw body is Buffer:", Buffer.isBuffer(rawBody))
     console.log("- Signature present:", !!sig)
     console.log("- Webhook secret present:", !!endpointSecret)
-    console.log("- Webhook secret starts with whsec_:", endpointSecret.startsWith("whsec_"))
+    console.log("- Webhook secret format:", endpointSecret.startsWith("whsec_") ? "correct" : "incorrect")
 
     let event: Stripe.Event
 
     try {
-      // Use the text directly - Stripe's library can handle string input
-      event = stripe.webhooks.constructEvent(bodyText, sig, endpointSecret)
+      // Use the raw Buffer directly for signature verification
+      event = stripe.webhooks.constructEvent(rawBody, sig, endpointSecret)
       console.log("✅ Webhook signature verified successfully")
     } catch (err: any) {
       console.error("❌ Webhook signature verification failed:")
       console.error("- Error message:", err.message)
       console.error("- Error type:", err.type)
 
-      // Try alternative approaches for debugging
+      // Detailed debugging
       console.error("Debug details:")
       console.error("- Signature header:", sig)
-      console.error("- Body text preview:", bodyText.substring(0, 200))
-      console.error("- Body text ends with:", bodyText.substring(bodyText.length - 50))
+      console.error("- Raw body as string preview:", rawBody.toString("utf8", 0, 200))
+      console.error("- Raw body as hex (first 100 bytes):", rawBody.subarray(0, 100).toString("hex"))
+      console.error("- Webhook secret preview:", endpointSecret.substring(0, 20) + "...")
 
-      // Try with Buffer conversion as backup
+      // Try with different encodings as last resort
       try {
-        console.log("🔄 Trying with Buffer conversion...")
-        const bodyBuffer = Buffer.from(bodyText, "utf8")
-        event = stripe.webhooks.constructEvent(bodyBuffer, sig, endpointSecret)
-        console.log("✅ Webhook signature verified with Buffer conversion")
-      } catch (bufferErr: any) {
-        console.error("❌ Buffer conversion also failed:", bufferErr.message)
+        console.log("🔄 Trying alternative signature verification...")
+        const bodyAsString = rawBody.toString("utf8")
+        event = stripe.webhooks.constructEvent(bodyAsString, sig, endpointSecret)
+        console.log("✅ Alternative signature verification succeeded")
+      } catch (altErr: any) {
+        console.error("❌ Alternative verification also failed:", altErr.message)
 
         return NextResponse.json(
           {
@@ -64,12 +103,13 @@ export async function POST(req: NextRequest) {
             debug: {
               hasSecret: !!endpointSecret,
               hasSignature: !!sig,
-              bodyLength: bodyText.length,
+              bodyLength: rawBody.length,
               secretFormat: endpointSecret.startsWith("whsec_") ? "correct" : "incorrect",
-              bodyType: typeof bodyText,
+              isBuffer: Buffer.isBuffer(rawBody),
               signaturePreview: sig.substring(0, 50),
-              bodyPreview: bodyText.substring(0, 100),
-              bufferAttemptFailed: true,
+              bodyPreview: rawBody.toString("utf8", 0, 100),
+              hexPreview: rawBody.subarray(0, 50).toString("hex"),
+              alternativeAttemptFailed: true,
             },
           },
           { status: 400 },
