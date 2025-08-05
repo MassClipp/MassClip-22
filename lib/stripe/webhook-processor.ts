@@ -60,43 +60,78 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
   console.log(`📦 Bundle data retrieved from bundles collection:`, {
     id: bundleId,
     title: bundleData.title,
-    contentCount: bundleData.content?.length || 0,
+    price: bundleData.price,
+    detailedContentItemsCount: bundleData.detailedContentItems?.length || 0,
   })
 
-  // Extract content from bundles collection (PRIMARY SOURCE)
-  const bundleContent = bundleData.content || bundleData.contentItems || bundleData.videos || []
+  // Extract content from detailedContentItems (THE CORRECT FIELD WITH ALL DATA)
+  const bundleContent = bundleData.detailedContentItems || []
 
   if (!Array.isArray(bundleContent) || bundleContent.length === 0) {
-    throw new Error(`No content found in bundle: ${bundleId}`)
+    console.error(`❌ No detailedContentItems found in bundle: ${bundleId}`)
+    console.error(`Available fields:`, Object.keys(bundleData))
+    throw new Error(`No detailedContentItems found in bundle: ${bundleId}`)
   }
 
-  // Format content with ALL data from bundles collection
+  // Format content with ALL data from detailedContentItems
   const formattedBundleContent = bundleContent.map((item: any, index: number) => {
-    console.log(`📄 Processing content item ${index}:`, {
-      id: item.id || item.videoId,
-      title: item.title || item.displayTitle,
-      hasFileUrl: !!(item.fileUrl || item.videoUrl || item.url),
+    console.log(`📄 Processing detailedContentItem ${index}:`, {
+      id: item.id,
+      title: item.title,
+      fileUrl: item.fileUrl,
+      downloadUrl: item.downloadUrl,
       fileSize: item.fileSize,
+      fileSizeFormatted: item.fileSizeFormatted,
     })
 
     return {
-      id: item.id || item.videoId || `content_${index}`,
-      fileUrl: item.fileUrl || item.videoUrl || item.url || "",
+      // Core identifiers
+      id: item.id || `content_${index}`,
+
+      // File URLs (use downloadUrl as primary, fileUrl as fallback)
+      fileUrl: item.downloadUrl || item.fileUrl || item.publicUrl || "",
+      downloadUrl: item.downloadUrl || item.fileUrl || item.publicUrl || "",
+      publicUrl: item.publicUrl || item.fileUrl || "",
+
+      // File information
       fileSize: item.fileSize || 0,
-      displayTitle: item.title || item.displayTitle || `Video ${index + 1}`,
-      displaySize: item.displaySize || formatFileSize(item.fileSize || 0),
-      duration: item.duration || 0,
+      fileSizeFormatted: item.fileSizeFormatted || formatFileSize(item.fileSize || 0),
+      displaySize: item.fileSizeFormatted || formatFileSize(item.fileSize || 0),
+
+      // Content details
+      title: item.title || `Video ${index + 1}`,
+      displayTitle: item.title || `Video ${index + 1}`,
       filename: item.filename || item.title || `video_${index + 1}`,
-      mimeType: item.mimeType || "video/mp4",
-      // Include any additional metadata from bundles collection
-      thumbnailUrl: item.thumbnailUrl || item.thumbnail || "",
       description: item.description || "",
-      tags: item.tags || [],
+
+      // Media properties
+      duration: item.duration || 0,
+      durationFormatted: item.durationFormatted || "0:00",
+      mimeType: item.mimeType || item.fileType || "video/mp4",
+      format: item.format || "mp4",
       quality: item.quality || "HD",
+
+      // Visual assets
+      thumbnailUrl: item.thumbnailUrl || "",
+      previewUrl: item.previewUrl || "",
+
+      // Metadata
+      tags: item.tags || [],
+      contentType: item.contentType || "video",
+      isPublic: item.isPublic || false,
+
+      // Stats
+      viewCount: item.viewCount || 0,
+      downloadCount: item.downloadCount || 0,
+
+      // Timestamps
+      createdAt: item.createdAt || item.uploadedAt || null,
+      uploadedAt: item.uploadedAt || null,
     }
   })
 
-  console.log(`✅ Formatted ${formattedBundleContent.length} content items from bundles collection`)
+  console.log(`✅ Formatted ${formattedBundleContent.length} content items from detailedContentItems`)
+  console.log(`📊 Total bundle size: ${bundleData.contentMetadata?.totalSizeFormatted || "Unknown"}`)
 
   // Create comprehensive purchase record with ALL bundle data
   const purchaseData = {
@@ -120,11 +155,32 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
     bundleTitle: bundleData.title || "Untitled Bundle",
     bundleDescription: bundleData.description || "",
     bundlePrice: bundleData.price || 0,
-    bundleThumbnail: bundleData.thumbnail || bundleData.thumbnailUrl || "",
-    bundleTags: bundleData.tags || [],
-    bundleCreatedAt: bundleData.createdAt || null,
+    bundleThumbnail: bundleData.thumbnailUrl || bundleData.coverImageUrl || bundleData.customPreviewThumbnail || "",
+    bundleCoverImage: bundleData.coverImage || bundleData.coverImageUrl || "",
+    bundleType: bundleData.type || "one_time",
+    bundleCurrency: bundleData.currency || "usd",
 
-    // Content from bundles collection (PRIMARY SOURCE)
+    // Bundle metadata from contentMetadata
+    bundleContentMetadata: bundleData.contentMetadata || {},
+    bundleTotalSize: bundleData.contentMetadata?.totalSize || 0,
+    bundleTotalSizeFormatted: bundleData.contentMetadata?.totalSizeFormatted || "0 MB",
+    bundleTotalItems: bundleData.contentMetadata?.totalItems || formattedBundleContent.length,
+    bundleTotalDuration: bundleData.contentMetadata?.totalDuration || 0,
+    bundleTotalDurationFormatted: bundleData.contentMetadata?.totalDurationFormatted || "0:00",
+
+    // Content breakdown
+    bundleContentBreakdown: bundleData.contentMetadata?.contentBreakdown || {},
+    bundleFormats: bundleData.contentMetadata?.formats || [],
+    bundleQualities: bundleData.contentMetadata?.qualities || [],
+
+    // Content arrays for quick reference
+    contentTitles: bundleData.contentTitles || [],
+    contentDescriptions: bundleData.contentDescriptions || [],
+    contentTags: bundleData.contentTags || [],
+    contentThumbnails: bundleData.contentThumbnails || [],
+    contentUrls: bundleData.contentUrls || [],
+
+    // Content from detailedContentItems (PRIMARY SOURCE WITH ALL DATA)
     bundleContent: formattedBundleContent,
     contentCount: formattedBundleContent.length,
 
@@ -134,8 +190,17 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
 
     // Purchase metadata
     purchaseAmount: session.amount_total || 0,
-    currency: session.currency || "usd",
+    currency: session.currency || bundleData.currency || "usd",
     paymentStatus: session.payment_status || "paid",
+
+    // Stripe product info
+    stripeProductId: bundleData.stripeProductId || bundleData.productId || "",
+    stripePriceId: bundleData.stripePriceId || bundleData.priceId || "",
+
+    // Timestamps
+    bundleCreatedAt: bundleData.createdAt || null,
+    bundleUpdatedAt: bundleData.updatedAt || null,
+    contentLastUpdated: bundleData.contentLastUpdated || null,
   }
 
   // Save purchase record
@@ -145,9 +210,11 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
     sessionId: session.id,
     bundleId: bundleId,
     bundleTitle: bundleData.title,
+    bundlePrice: bundleData.price,
     creatorId: creatorId,
     contentItems: formattedBundleContent.length,
-    totalFileSize: formattedBundleContent.reduce((sum, item) => sum + (item.fileSize || 0), 0),
+    totalFileSize: bundleData.contentMetadata?.totalSizeFormatted || "Unknown",
+    firstItemFileUrl: formattedBundleContent[0]?.fileUrl || "No URL",
   })
 
   return {
@@ -155,8 +222,10 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
     sessionId: session.id,
     bundleId: bundleId,
     bundleTitle: bundleData.title,
+    bundlePrice: bundleData.price,
     contentItems: formattedBundleContent.length,
     purchaseAmount: session.amount_total || 0,
+    totalBundleSize: bundleData.contentMetadata?.totalSizeFormatted || "Unknown",
   }
 }
 
