@@ -4,6 +4,18 @@ import type { NextRequest } from "next/server"
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
+  // Log all webhook requests for debugging
+  if (pathname.startsWith("/api/webhooks/")) {
+    console.log("🔍 Middleware: Webhook request detected")
+    console.log("- Path:", pathname)
+    console.log("- Method:", request.method)
+    console.log("- Headers:", Object.fromEntries(request.headers.entries()))
+    console.log("- Timestamp:", new Date().toISOString())
+
+    // Completely bypass middleware for webhooks
+    return NextResponse.next()
+  }
+
   // Skip middleware for static files and special Next.js routes
   if (
     pathname.startsWith("/_next/") ||
@@ -11,12 +23,6 @@ export function middleware(request: NextRequest) {
     pathname.includes(".") ||
     pathname === "/favicon.ico"
   ) {
-    return NextResponse.next()
-  }
-
-  // CRITICAL: Completely bypass middleware for webhook routes
-  if (pathname.startsWith("/api/webhooks/")) {
-    console.log("🔍 Middleware: Webhook route detected - bypassing all processing")
     return NextResponse.next()
   }
 
@@ -30,12 +36,9 @@ export function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // TEMPORARILY DISABLE AUTH CHECKS
-  console.log("🔍 Middleware: Allowing access to:", pathname)
   return NextResponse.next()
 }
 
 export const config = {
-  // Completely exclude webhook routes from middleware
-  matcher: ["/((?!api/webhooks|_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 }
