@@ -3,11 +3,11 @@ const nextConfig = {
   experimental: {
     serverComponentsExternalPackages: ['firebase-admin'],
   },
-  // Minimal configuration to avoid interference
+  // Force all API routes to be dynamic
   async headers() {
     return [
       {
-        source: '/api/webhooks/stripe',
+        source: '/api/:path*',
         headers: [
           {
             key: 'Cache-Control',
@@ -17,6 +17,12 @@ const nextConfig = {
       },
     ]
   },
+  // Ensure proper environment variable handling
+  env: {
+    CUSTOM_KEY: process.env.CUSTOM_KEY,
+  },
+  // Handle static export issues
+  output: process.env.NODE_ENV === 'production' ? 'standalone' : undefined,
   eslint: {
     ignoreDuringBuilds: true,
   },

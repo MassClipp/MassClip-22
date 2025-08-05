@@ -11,9 +11,6 @@ importers:
       '@auth/core':
         specifier: latest
         version: 0.40.0(nodemailer@7.0.5)
-      '@auth/firebase-adapter':
-        specifier: latest
-        version: 2.10.0(firebase-admin@13.4.0)(nodemailer@7.0.5)
       '@aws-sdk/client-s3':
         specifier: latest
         version: 3.859.0
@@ -178,7 +175,7 @@ importers:
         version: 7.0.5
       openai:
         specifier: latest
-        version: 5.11.0(ws@8.18.3)(zod@3.24.1)
+        version: 5.12.0(ws@8.18.3)(zod@3.24.1)
       path:
         specifier: latest
         version: 0.12.7
@@ -284,11 +281,6 @@ packages:
         optional: true
       nodemailer:
         optional: true
-
-  '@auth/firebase-adapter@2.10.0':
-    resolution: {integrity: sha512-fGYF1+nZHY4ljVu71i+V215FAiKBxiG8YET59QFzvGhrfcelxZYDZkfp31TZ1ICIZ3olqBTdtsSWaJ1r1oyMQg==}
-    peerDependencies:
-      firebase-admin: ^12.0.0
 
   '@aws-crypto/crc32@5.2.0':
     resolution: {integrity: sha512-nLbCWqQNgUiwwtFsen1AdzAtvuLRsQS8rYgMuxCrdKf9kOssamGLuPwyTY9wyYblNr9+1XM8v6zoDTPPSIeANg==}
@@ -3272,8 +3264,8 @@ packages:
   once@1.4.0:
     resolution: {integrity: sha512-lNaJgI+2Q5URQBkccEKHTQOPaXdUxnZZElQTZY0MFUAuaEqe1E+Nyvgdz/aIyNi6Z9MzO5dv1H8n58/GELp3+w==}
 
-  openai@5.11.0:
-    resolution: {integrity: sha512-+AuTc5pVjlnTuA9zvn8rA/k+1RluPIx9AD4eDcnutv6JNwHHZxIhkFy+tmMKCvmMFDQzfA/r1ujvPWB19DQkYg==}
+  openai@5.12.0:
+    resolution: {integrity: sha512-vUdt02xiWgOHiYUmW0Hj1Qu9OKAiVQu5Bd547ktVCiMKC1BkB5L3ImeEnCyq3WpRKR6ZTaPgekzqdozwdPs7Lg==}
     hasBin: true
     peerDependencies:
       ws: ^8.18.0
@@ -4062,15 +4054,6 @@ snapshots:
       preact-render-to-string: 6.5.11(preact@10.24.3)
     optionalDependencies:
       nodemailer: 7.0.5
-
-  '@auth/firebase-adapter@2.10.0(firebase-admin@13.4.0)(nodemailer@7.0.5)':
-    dependencies:
-      '@auth/core': 0.40.0(nodemailer@7.0.5)
-      firebase-admin: 13.4.0
-    transitivePeerDependencies:
-      - '@simplewebauthn/browser'
-      - '@simplewebauthn/server'
-      - nodemailer
 
   '@aws-crypto/crc32@5.2.0':
     dependencies:
@@ -8055,7 +8038,7 @@ snapshots:
       wrappy: 1.0.2
     optional: true
 
-  openai@5.11.0(ws@8.18.3)(zod@3.24.1):
+  openai@5.12.0(ws@8.18.3)(zod@3.24.1):
     optionalDependencies:
       ws: 8.18.3
       zod: 3.24.1
