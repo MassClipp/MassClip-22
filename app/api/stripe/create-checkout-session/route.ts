@@ -39,36 +39,41 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     console.log("📝 [Checkout API] Request body:", { ...body, idToken: body.idToken ? "[REDACTED]" : "MISSING" })
 
-    const { idToken, priceId, bundleId, successUrl, cancelUrl } = body
+    const { idToken, priceId, bundleId, successUrl, cancelUrl, productBoxId } = body
 
-    if (!priceId || !bundleId) {
-      console.error("❌ [Checkout API] Missing required parameters")
-      return NextResponse.json({ error: "Missing required parameters" }, { status: 400 })
+    // Determine what we're selling
+    const itemId = bundleId || productBoxId
+    if (!itemId) {
+      console.error("❌ [Checkout API] Missing item ID")
+      return NextResponse.json({ error: "Missing product or bundle ID" }, { status: 400 })
     }
 
-    let userId: string | null = null
-    let userEmail: string | null = null
+    // Get buyer information from authentication
+    let buyerUid = "anonymous"
+    let buyerEmail = ""
+    let buyerName = ""
 
-    // If idToken is provided, verify it
     if (idToken) {
       try {
         const decodedToken = await auth.verifyIdToken(idToken)
-        userId = decodedToken.uid
-        userEmail = decodedToken.email || null
-        console.log("✅ [Checkout API] Token verified for user:", userId)
+        buyerUid = decodedToken.uid
+        buyerEmail = decodedToken.email || ""
+        buyerName = decodedToken.name || decodedToken.email?.split("@")[0] || ""
+        console.log("✅ [Checkout API] Authenticated buyer:", { buyerUid, buyerEmail })
       } catch (error) {
         console.error("❌ [Checkout API] Token verification failed:", error)
-        return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
+        // Continue as anonymous buyer
+        buyerUid = "anonymous"
       }
     } else {
-      console.log("⚠️ [Checkout API] No idToken provided, proceeding without user authentication")
+      console.log("⚠️ [Checkout API] No authentication token, proceeding as anonymous buyer")
     }
 
     // Get bundle details from bundles collection
-    console.log("📦 [Checkout API] Fetching bundle:", bundleId)
-    const bundleDoc = await db.collection("bundles").doc(bundleId).get()
+    console.log("📦 [Checkout API] Fetching item:", itemId)
+    const bundleDoc = await db.collection("bundles").doc(itemId).get()
     if (!bundleDoc.exists) {
-      console.error("❌ [Checkout API] Bundle not found:", bundleId)
+      console.error("❌ [Checkout API] Bundle not found:", itemId)
       return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
     }
 
@@ -89,7 +94,7 @@ export async function POST(request: NextRequest) {
     const stripeAccountId = bundle.stripeAccountId
 
     if (!stripeAccountId) {
-      console.error("❌ [Checkout API] No Stripe account ID for bundle:", bundleId)
+      console.error("❌ [Checkout API] No Stripe account ID for bundle:", itemId)
       return NextResponse.json(
         {
           error: "Bundle not available for purchase",
@@ -100,7 +105,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!bundleStripePriceId) {
-      console.error("❌ [Checkout API] No Stripe price ID for bundle:", bundleId)
+      console.error("❌ [Checkout API] No Stripe price ID for bundle:", itemId)
       return NextResponse.json(
         {
           error: "Bundle pricing not configured",
@@ -111,15 +116,15 @@ export async function POST(request: NextRequest) {
     }
 
     // Use the bundle's stored price ID instead of validating against the provided one
-    // This prevents mismatches due to field name inconsistencies
     const finalPriceId = bundleStripePriceId
 
-    console.log("💳 [Checkout API] Creating checkout session with:", {
+    console.log("💳 [Checkout API] Creating checkout session with buyer info:", {
       finalPriceId,
-      bundleId,
+      bundleId: itemId,
       stripeAccountId,
-      providedPriceId: priceId,
-      bundleStoredPriceId: bundleStripePriceId,
+      buyerUid,
+      buyerEmail,
+      isAuthenticated: buyerUid !== "anonymous",
     })
 
     // Get the current domain from headers
@@ -127,15 +132,20 @@ export async function POST(request: NextRequest) {
     const protocol = request.headers.get("x-forwarded-proto") || "https"
     const currentDomain = `${protocol}://${host}`
 
+    // CRITICAL: Include comprehensive buyer metadata
     const sessionMetadata: any = {
-      bundleId: bundleId,
+      bundleId: itemId,
+      productBoxId: itemId, // For compatibility
       creatorId: bundle.creatorId || "",
+      buyerUid, // CRITICAL: Buyer identification
+      buyerEmail,
+      buyerName,
+      isAuthenticated: buyerUid !== "anonymous" ? "true" : "false",
+      contentType: "bundle",
+      itemTitle: bundle.title || "Digital Content",
       originalDomain: currentDomain,
       timestamp: new Date().toISOString(),
-    }
-
-    if (userId) {
-      sessionMetadata.userId = userId
+      stripeAccountId: stripeAccountId, // CRITICAL: For webhook to retrieve session from correct account
     }
 
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
@@ -147,7 +157,8 @@ export async function POST(request: NextRequest) {
         },
       ],
       mode: "payment",
-      success_url: successUrl || `${currentDomain}/purchase-success?session_id={CHECKOUT_SESSION_ID}`,
+      success_url:
+        successUrl || `${currentDomain}/purchase-success?session_id={CHECKOUT_SESSION_ID}&buyer_uid=${buyerUid}`,
       cancel_url: cancelUrl || `${currentDomain}/creator/${bundle.creatorId}`,
       metadata: sessionMetadata,
       payment_intent_data: {
@@ -157,13 +168,27 @@ export async function POST(request: NextRequest) {
     }
 
     // Add customer email if available
-    if (userEmail) {
-      sessionParams.customer_email = userEmail
+    if (buyerEmail) {
+      sessionParams.customer_email = buyerEmail
     }
 
-    console.log("🔄 [Checkout API] Creating Stripe session with params:", {
+    // For anonymous buyers, collect email
+    if (buyerUid === "anonymous") {
+      sessionParams.custom_fields = [
+        {
+          key: "buyer_email",
+          label: { type: "custom", custom: "Email Address" },
+          type: "text",
+          optional: false,
+        },
+      ]
+    }
+
+    console.log("🔄 [Checkout API] Creating Stripe session with buyer metadata:", {
       priceId: finalPriceId,
       stripeAccount: stripeAccountId,
+      buyerUid,
+      buyerEmail,
       successUrl: sessionParams.success_url,
       cancelUrl: sessionParams.cancel_url,
     })
@@ -172,16 +197,19 @@ export async function POST(request: NextRequest) {
       stripeAccount: stripeAccountId,
     })
 
-    console.log("✅ [Checkout API] Session created successfully:")
+    console.log("✅ [Checkout API] Session created successfully with buyer identification:")
     console.log("   Session ID:", session.id)
+    console.log("   Buyer UID:", buyerUid)
+    console.log("   Buyer Email:", buyerEmail)
     console.log("   Checkout URL:", session.url)
-    console.log("   Success URL:", session.success_url)
-    console.log("   Cancel URL:", session.cancel_url)
+    console.log("   Metadata:", session.metadata)
 
     return NextResponse.json({
       success: true,
       url: session.url,
       sessionId: session.id,
+      buyerUid,
+      metadata: session.metadata,
     })
   } catch (error: any) {
     console.error("❌ [Checkout API] Session creation failed:", error)

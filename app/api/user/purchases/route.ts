@@ -2,241 +2,282 @@ import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/firebase-admin"
 import { auth } from "@/lib/firebase-admin"
 
+/**
+ * READ-ONLY: Get user's purchases from bundlePurchases collection
+ * This route only reads data - it does NOT handle fulfillment
+ */
 export async function GET(request: NextRequest) {
+  console.log("📖 [Get Purchases] Starting read-only request...")
+
   try {
     // Get user ID from query params
     const searchParams = request.nextUrl.searchParams
     const userId = searchParams.get("userId")
+    console.log("📋 [Get Purchases] Query userId:", userId)
 
     // Get auth token from header
     const authHeader = request.headers.get("authorization")
+    console.log("🔐 [Get Purchases] Auth header present:", !!authHeader)
 
     let authenticatedUserId: string | null = null
 
     // Verify auth token if provided
     if (authHeader && authHeader.startsWith("Bearer ")) {
       const token = authHeader.substring(7)
+      console.log("🔍 [Get Purchases] Attempting to verify token...")
+
       try {
         const decodedToken = await auth.verifyIdToken(token)
         authenticatedUserId = decodedToken.uid
-        console.log("✅ [Purchases API] Authenticated user:", authenticatedUserId)
-      } catch (error) {
-        console.error("❌ [Purchases API] Error verifying auth token:", error)
+        console.log("✅ [Get Purchases] Authenticated user:", authenticatedUserId)
+      } catch (tokenError: any) {
+        console.error("❌ [Get Purchases] Token verification failed:", tokenError.message)
+        return NextResponse.json(
+          {
+            error: "Authentication failed",
+            details: tokenError.message,
+            code: "AUTH_TOKEN_INVALID",
+          },
+          { status: 401 },
+        )
       }
     }
 
     // Use provided userId or authenticated UserId
-    const finalUserId = userId || authenticatedUserId
+    const buyerUid = userId || authenticatedUserId
 
-    if (!finalUserId) {
-      console.error("❌ [Purchases API] No user ID provided")
-      return NextResponse.json({ error: "User ID is required" }, { status: 400 })
+    if (!buyerUid) {
+      console.error("❌ [Get Purchases] No user ID provided")
+      return NextResponse.json(
+        {
+          error: "User ID required",
+          details: "Either provide userId parameter or valid auth token",
+          code: "MISSING_USER_ID",
+        },
+        { status: 400 },
+      )
     }
 
-    console.log("🔍 [Purchases API] Fetching purchases for user:", finalUserId)
+    console.log("🔍 [Get Purchases] Fetching purchases for buyerUid:", buyerUid)
 
-    // Check ALL possible locations for purchases with more thorough queries
-    const allPurchases = []
-
-    // Location 1: Main purchases collection by document ID (sessionId)
+    // Test Firebase connection first
     try {
-      console.log("🔍 [Purchases API] Checking main purchases collection...")
-      const mainPurchasesSnapshot = await db.collection("purchases").get()
-
-      console.log(`📊 [Purchases API] Total documents in purchases collection: ${mainPurchasesSnapshot.size}`)
-
-      mainPurchasesSnapshot.forEach((doc) => {
-        const data = doc.data()
-        // Check if this purchase belongs to our user
-        if (data.userId === finalUserId || data.buyerUid === finalUserId) {
-          console.log(`✅ [Purchases API] Found purchase in main collection:`, doc.id, data)
-          allPurchases.push({
-            id: doc.id,
-            source: "main_collection",
-            ...data,
-            purchasedAt:
-              data.createdAt?.toDate?.() || data.timestamp?.toDate?.() || new Date(data.purchasedAt || Date.now()),
-          })
-        }
-      })
-    } catch (error) {
-      console.warn("⚠️ [Purchases API] Error checking main purchases collection:", error)
+      console.log("🔍 [Get Purchases] Testing Firebase connection...")
+      const testQuery = await db.collection("bundlePurchases").limit(1).get()
+      console.log("✅ [Get Purchases] Firebase connection successful, collection has", testQuery.size, "documents")
+    } catch (connectionError: any) {
+      console.error("❌ [Get Purchases] Firebase connection failed:", connectionError.message)
+      return NextResponse.json(
+        {
+          error: "Database connection failed",
+          details: connectionError.message,
+          code: "FIREBASE_CONNECTION_ERROR",
+        },
+        { status: 500 },
+      )
     }
 
-    // Location 2: userPurchases/{userId}/purchases (unified collection)
+    // Query bundlePurchases collection with fallback for missing index
     try {
-      console.log("🔍 [Purchases API] Checking userPurchases collection...")
-      const unifiedPurchasesSnapshot = await db
-        .collection("userPurchases")
-        .doc(finalUserId)
-        .collection("purchases")
-        .get()
+      console.log("🔍 [Get Purchases] Querying bundlePurchases for buyerUid:", buyerUid)
 
-      console.log(`📊 [Purchases API] userPurchases found ${unifiedPurchasesSnapshot.size} items`)
+      let purchasesSnapshot
+      let indexUsed = "none"
 
-      unifiedPurchasesSnapshot.forEach((doc) => {
-        const data = doc.data()
-        // Avoid duplicates
-        const existingPurchase = allPurchases.find((p) => p.sessionId === data.sessionId || p.id === doc.id)
-        if (!existingPurchase) {
-          console.log(`✅ [Purchases API] Found purchase in unified collection:`, doc.id, data)
-          allPurchases.push({
-            id: doc.id,
-            source: "unified",
-            ...data,
-            purchasedAt: data.purchasedAt?.toDate?.() || new Date(data.purchasedAt || Date.now()),
-          })
-        }
-      })
-    } catch (error) {
-      console.warn("⚠️ [Purchases API] Error checking userPurchases:", error)
-    }
-
-    // Location 3: users/{userId}/purchases subcollection
-    try {
-      console.log("🔍 [Purchases API] Checking users subcollection...")
-      const userPurchasesSnapshot = await db.collection("users").doc(finalUserId).collection("purchases").get()
-
-      console.log(`📊 [Purchases API] users subcollection found ${userPurchasesSnapshot.size} items`)
-
-      userPurchasesSnapshot.forEach((doc) => {
-        const data = doc.data()
-        // Avoid duplicates
-        const existingPurchase = allPurchases.find((p) => p.sessionId === data.sessionId || p.id === doc.id)
-        if (!existingPurchase) {
-          console.log(`✅ [Purchases API] Found purchase in users subcollection:`, doc.id, data)
-          allPurchases.push({
-            id: doc.id,
-            source: "legacy_user",
-            ...data,
-            purchasedAt:
-              data.timestamp?.toDate?.() || data.createdAt?.toDate?.() || new Date(data.purchasedAt || Date.now()),
-          })
-        }
-      })
-    } catch (error) {
-      console.warn("⚠️ [Purchases API] Error checking users subcollection:", error)
-    }
-
-    console.log(`📊 [Purchases API] Total unique purchases found: ${allPurchases.length}`)
-
-    if (allPurchases.length === 0) {
-      console.log("📭 [Purchases API] No purchases found in any location")
-
-      // Additional debugging - check if user exists and has any data
       try {
-        const userDoc = await db.collection("users").doc(finalUserId).get()
-        if (userDoc.exists) {
-          console.log("👤 [Purchases API] User document exists:", userDoc.data())
-        } else {
-          console.log("❌ [Purchases API] User document does not exist")
+        // Try the optimized query with createdAt ordering first
+        console.log("🔍 [Get Purchases] Attempting query with createdAt ordering...")
+        purchasesSnapshot = await db
+          .collection("bundlePurchases")
+          .where("buyerUid", "==", buyerUid)
+          .orderBy("createdAt", "desc")
+          .get()
+        indexUsed = "createdAt"
+        console.log("✅ [Get Purchases] Query with createdAt successful")
+      } catch (createdAtError: any) {
+        console.warn("⚠️ [Get Purchases] createdAt index missing, trying purchasedAt:", createdAtError.message)
+
+        try {
+          // Try with purchasedAt ordering
+          purchasesSnapshot = await db
+            .collection("bundlePurchases")
+            .where("buyerUid", "==", buyerUid)
+            .orderBy("purchasedAt", "desc")
+            .get()
+          indexUsed = "purchasedAt"
+          console.log("✅ [Get Purchases] Query with purchasedAt successful")
+        } catch (purchasedAtError: any) {
+          console.warn("⚠️ [Get Purchases] purchasedAt index missing, using simple query:", purchasedAtError.message)
+
+          // Fallback to simple query without ordering if indexes are missing
+          purchasesSnapshot = await db.collection("bundlePurchases").where("buyerUid", "==", buyerUid).get()
+          indexUsed = "simple"
+          console.log("✅ [Get Purchases] Simple query successful")
         }
-      } catch (error) {
-        console.warn("⚠️ [Purchases API] Error checking user document:", error)
       }
 
-      return NextResponse.json({ purchases: [] })
-    }
+      console.log(
+        `📊 [Get Purchases] Query completed using ${indexUsed} index. Found ${purchasesSnapshot.size} purchases`,
+      )
 
-    // Now fetch related data for each purchase
-    const productBoxIds = new Set()
-    const creatorIds = new Set()
+      const purchases: any[] = []
+      const docs = purchasesSnapshot.docs
 
-    allPurchases.forEach((purchase) => {
-      if (purchase.productBoxId) {
-        productBoxIds.add(purchase.productBoxId)
+      // Sort manually if we used the simple query
+      if (docs.length > 0 && indexUsed === "simple") {
+        console.log("🔄 [Get Purchases] Manually sorting results...")
+        docs.sort((a, b) => {
+          const aData = a.data()
+          const bData = b.data()
+          const aDate = aData.createdAt || aData.purchasedAt || new Date(0)
+          const bDate = bData.createdAt || bData.purchasedAt || new Date(0)
+
+          const aTime = aDate.toDate ? aDate.toDate().getTime() : new Date(aDate).getTime()
+          const bTime = bDate.toDate ? bDate.toDate().getTime() : new Date(bDate).getTime()
+
+          return bTime - aTime // Descending order (newest first)
+        })
       }
-      if (purchase.creatorId) {
-        creatorIds.add(purchase.creatorId)
-      }
-    })
 
-    console.log("🔍 [Purchases API] Product box IDs:", Array.from(productBoxIds))
-    console.log("🔍 [Purchases API] Creator IDs:", Array.from(creatorIds))
+      docs.forEach((doc) => {
+        const data = doc.data()
+        console.log(`📦 [Get Purchases] Processing purchase: ${doc.id} - ${data.title}`)
 
-    // Batch fetch product boxes
-    const productBoxesMap = new Map()
-    if (productBoxIds.size > 0) {
-      const productBoxesPromises = Array.from(productBoxIds).map((id) => db.collection("productBoxes").doc(id).get())
-      const productBoxDocs = await Promise.all(productBoxesPromises)
+        purchases.push({
+          id: doc.id,
+          sessionId: data.sessionId || doc.id,
+          itemId: data.itemId || data.bundleId || data.productBoxId,
+          itemType: data.itemType || (data.bundleId ? "bundle" : "productBox"),
+          bundleId: data.bundleId,
+          productBoxId: data.productBoxId,
+          title: data.title || "Untitled Purchase",
+          description: data.description || "",
+          thumbnailUrl: data.thumbnailUrl || "",
 
-      productBoxDocs.forEach((doc) => {
-        if (doc.exists) {
-          const data = doc.data()
-          productBoxesMap.set(doc.id, data)
-          console.log("📦 [Purchases API] Found product box:", doc.id, data?.title)
+          // Content details
+          contents: data.contents || data.items || [],
+          itemNames: data.itemNames || [],
+          contentCount: data.contentCount || data.totalItems || 0,
+          totalItems: data.totalItems || 0,
+          totalSize: data.totalSize || 0,
 
-          // Also collect creator ID from product box if not already collected
-          if (data?.creatorId) {
-            creatorIds.add(data.creatorId)
-          }
-        }
+          // Creator details
+          creatorId: data.creatorId || "",
+          creatorName: data.creatorName || "Unknown Creator",
+          creatorUsername: data.creatorUsername || "",
+
+          // Purchase details
+          amount: data.amount || 0,
+          currency: data.currency || "usd",
+          status: data.status || "completed",
+          purchasedAt: data.purchasedAt || data.createdAt || new Date(),
+          createdAt: data.createdAt || data.purchasedAt || new Date(),
+
+          // Access
+          accessUrl: data.accessUrl || `/bundles/${data.itemId || data.bundleId}`,
+          accessGranted: data.accessGranted !== false,
+
+          // User details
+          buyerUid: data.buyerUid,
+          userEmail: data.userEmail || "",
+          userName: data.userName || "",
+          environment: data.environment || "unknown",
+
+          // Metadata
+          source: data.source || "webhook",
+          webhookProcessed: data.webhookProcessed || false,
+        })
       })
-    }
 
-    // Batch fetch creators
-    const creatorsMap = new Map()
-    if (creatorIds.size > 0) {
-      const creatorsPromises = Array.from(creatorIds).map((id) => db.collection("users").doc(id).get())
-      const creatorDocs = await Promise.all(creatorsPromises)
+      console.log("✅ [Get Purchases] Successfully processed", purchases.length, "purchases")
 
-      creatorDocs.forEach((doc) => {
-        if (doc.exists) {
-          const data = doc.data()
-          creatorsMap.set(doc.id, data)
-          console.log("👤 [Purchases API] Found creator:", doc.id, data?.displayName || data?.username)
-        }
+      return NextResponse.json({
+        success: true,
+        purchases,
+        debug: {
+          buyerUid,
+          totalFound: purchases.length,
+          queryExecuted: true,
+          indexUsed,
+          timestamp: new Date().toISOString(),
+          note: "READ-ONLY: This route only reads purchase data",
+          indexInstructions:
+            indexUsed === "simple"
+              ? {
+                  message: "For better performance, create Firestore indexes",
+                  indexes: [
+                    {
+                      collection: "bundlePurchases",
+                      fields: [
+                        { field: "buyerUid", order: "ASCENDING" },
+                        { field: "createdAt", order: "DESCENDING" },
+                      ],
+                    },
+                    {
+                      collection: "bundlePurchases",
+                      fields: [
+                        { field: "buyerUid", order: "ASCENDING" },
+                        { field: "purchasedAt", order: "DESCENDING" },
+                      ],
+                    },
+                  ],
+                }
+              : null,
+        },
       })
-    }
+    } catch (queryError: any) {
+      console.error("❌ [Get Purchases] Firestore query failed:", queryError)
+      console.error("❌ [Get Purchases] Query error details:", {
+        code: queryError.code,
+        message: queryError.message,
+        stack: queryError.stack,
+      })
 
-    // Process and normalize all purchases
-    const normalizedPurchases = allPurchases.map((purchase) => {
-      const productBoxId = purchase.productBoxId || purchase.itemId
-      const productBox = productBoxId ? productBoxesMap.get(productBoxId) : null
-
-      // Determine creator ID from purchase or product box
-      const creatorId = purchase.creatorId || (productBox ? productBox.creatorId : null)
-      const creator = creatorId ? creatorsMap.get(creatorId) : null
-
-      return {
-        id: purchase.id,
-        type: "product_box",
-        itemId: productBoxId,
-        itemTitle: productBox ? productBox.title : purchase.itemTitle || purchase.productBoxTitle || "Unknown Product",
-        itemDescription: productBox
-          ? productBox.description
-          : purchase.itemDescription || purchase.productBoxDescription || null,
-        creatorId: creatorId,
-        creatorName: creator
-          ? creator.displayName || creator.username || "Unknown Creator"
-          : purchase.creatorName || "Unknown Creator",
-        creatorUsername: creator ? creator.username : purchase.creatorUsername || null,
-        price: purchase.amount || 0,
-        currency: purchase.currency || "usd",
-        purchasedAt: purchase.purchasedAt,
-        status: purchase.status || "completed",
-        thumbnailUrl: productBox ? productBox.thumbnailUrl || productBox.customPreviewThumbnail : null,
-        customPreviewThumbnail: productBox ? productBox.customPreviewThumbnail : null,
-        accessUrl: productBoxId ? `/product-box/${productBoxId}/content` : null,
-        sessionId: purchase.sessionId,
-        source: purchase.source,
-        // Include items if available (for unified purchases)
-        items: purchase.items || [],
-        totalItems: purchase.totalItems || (purchase.items ? purchase.items.length : 0),
+      // Check if it's an index error
+      if (queryError.code === "failed-precondition" || queryError.message?.includes("index")) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Database index required",
+            details:
+              "Firestore needs composite indexes for this query. The query will work but may be slower without indexes.",
+            code: "MISSING_INDEX",
+            indexUrl: `https://console.firebase.google.com/project/${process.env.FIREBASE_PROJECT_ID}/firestore/indexes`,
+            requiredIndexes: [
+              {
+                collection: "bundlePurchases",
+                fields: [
+                  { field: "buyerUid", order: "ASCENDING" },
+                  { field: "createdAt", order: "DESCENDING" },
+                ],
+              },
+            ],
+          },
+          { status: 500 },
+        )
       }
-    })
 
-    // Sort by purchase date (newest first)
-    normalizedPurchases.sort((a, b) => new Date(b.purchasedAt).getTime() - new Date(a.purchasedAt).getTime())
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Database query failed",
+          details: queryError.message,
+          code: queryError.code || "FIRESTORE_QUERY_ERROR",
+        },
+        { status: 500 },
+      )
+    }
+  } catch (error: any) {
+    console.error("❌ [Get Purchases] Unexpected error:", error)
+    console.error("❌ [Get Purchases] Error stack:", error.stack)
 
-    console.log("✅ [Purchases API] Returning", normalizedPurchases.length, "normalized purchases")
-    return NextResponse.json({ purchases: normalizedPurchases })
-  } catch (error) {
-    console.error("❌ [Purchases API] Error fetching user purchases:", error)
     return NextResponse.json(
       {
-        error: "Failed to fetch purchases",
-        details: error instanceof Error ? error.message : "Unknown error",
+        success: false,
+        error: "Internal server error",
+        details: error.message || "Unknown error occurred",
+        code: "INTERNAL_ERROR",
+        stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
       },
       { status: 500 },
     )

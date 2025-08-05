@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { useAuth } from "@/contexts/auth-context"
+import { validateEarningsData, createDefaultEarningsData } from "@/lib/format-utils"
 
 interface StripeEarningsData {
   totalEarnings: number
@@ -10,174 +11,148 @@ interface StripeEarningsData {
   last30DaysEarnings: number
   pendingPayout: number
   availableBalance: number
-  nextPayoutDate: Date | null
-  payoutSchedule: string
-  accountStatus: {
-    chargesEnabled: boolean
-    payoutsEnabled: boolean
-    detailsSubmitted: boolean
-    requirementsCount: number
-    currentlyDue: string[]
-    pastDue: string[]
-  }
-  recentTransactions: any[]
-  payoutHistory: any[]
-  monthlyBreakdown: {
-    month: string
-    earnings: number
-    transactionCount: number
-  }[]
   salesMetrics: {
     totalSales: number
     thisMonthSales: number
     last30DaysSales: number
     averageTransactionValue: number
-    conversionRate: number
   }
-  balanceBreakdown: {
-    available: { amount: number; currency: string }[]
-    pending: { amount: number; currency: string }[]
-    reserved: { amount: number; currency: string }[]
+  accountStatus: {
+    chargesEnabled: boolean
+    payoutsEnabled: boolean
+    detailsSubmitted: boolean
+    requirementsCount: number
   }
-  error?: string | null
+  recentTransactions: any[]
+  payoutHistory: any[]
+  monthlyBreakdown: any[]
 }
 
 export function useStripeEarnings() {
   const { user } = useAuth()
-  const [data, setData] = useState<StripeEarningsData | null>(null)
+  const [data, setData] = useState<StripeEarningsData>(createDefaultEarningsData())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
-  const fetchEarnings = useCallback(
-    async (forceRefresh = false) => {
-      if (!user) return
-
-      try {
-        setLoading(true)
-        setError(null)
-
-        const token = await user.getIdToken()
-        const endpoint = forceRefresh ? "/api/dashboard/earnings?refresh=true" : "/api/dashboard/earnings"
-
-        const response = await fetch(endpoint, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "x-user-id": user.uid,
-          },
-        })
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-        }
-
-        const result = await response.json()
-
-        // Handle the new API response format
-        if (result.error) {
-          throw new Error(result.error)
-        }
-
-        // Convert the dashboard earnings format to the expected Stripe format
-        const convertedData: StripeEarningsData = {
-          totalEarnings: result.totalRevenue || 0,
-          thisMonthEarnings: result.thisMonthRevenue || 0,
-          lastMonthEarnings: 0, // Not available in current format
-          last30DaysEarnings: result.last30DaysRevenue || 0,
-          pendingPayout: 0,
-          availableBalance: 0,
-          nextPayoutDate: null,
-          payoutSchedule: "monthly",
-          accountStatus: {
-            chargesEnabled: true,
-            payoutsEnabled: true,
-            detailsSubmitted: true,
-            requirementsCount: 0,
-            currentlyDue: [],
-            pastDue: [],
-          },
-          recentTransactions:
-            result.recentSales?.map((sale: any) => ({
-              id: sale.id,
-              amount: sale.amount,
-              net: sale.amount,
-              fee: 0,
-              type: "payment",
-              description: sale.productBoxTitle || "Sale",
-              created: new Date(sale.createdAt),
-              status: sale.status || "succeeded",
-              currency: "USD",
-              source: null,
-            })) || [],
-          payoutHistory: [],
-          monthlyBreakdown: [],
-          salesMetrics: {
-            totalSales: result.totalSales || 0,
-            thisMonthSales: result.thisMonthSales || 0,
-            last30DaysSales: result.last30DaysSales || 0,
-            averageTransactionValue: result.averageTransactionValue || 0,
-            conversionRate: 0,
-          },
-          balanceBreakdown: {
-            available: [],
-            pending: [],
-            reserved: [],
-          },
-          error: null,
-        }
-
-        setData(convertedData)
-        setLastUpdated(new Date())
-      } catch (err) {
-        console.error("Error fetching earnings:", err)
-        setError(err instanceof Error ? err.message : "Unknown error occurred")
-      } finally {
-        setLoading(false)
-      }
-    },
-    [user],
-  )
-
-  const syncData = useCallback(async () => {
-    if (!user) return
+  const fetchEarnings = useCallback(async () => {
+    if (!user) {
+      console.log("🔄 No user, setting defaults")
+      setLoading(false)
+      setError("User not authenticated")
+      setData(createDefaultEarningsData())
+      return
+    }
 
     try {
-      // Just refresh the data since we don't have a separate sync endpoint
-      await fetchEarnings(true)
+      setLoading(true)
+      setError(null)
+
+      console.log("🔄 Fetching earnings data for user:", user.uid)
+
+      const token = await user.getIdToken()
+      const response = await fetch("/api/dashboard/earnings", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const result = await response.json()
+      console.log("📊 Raw API response received:", {
+        hasData: !!result,
+        keys: result ? Object.keys(result) : [],
+        totalEarnings: result?.totalEarnings,
+        salesMetrics: result?.salesMetrics,
+      })
+
+      // Use our bulletproof validation function
+      const validatedData = validateEarningsData(result)
+
+      console.log("✅ Validated earnings data:", {
+        totalEarnings: validatedData.totalEarnings,
+        totalSales: validatedData.salesMetrics.totalSales,
+        allFieldsValid: {
+          totalEarnings: typeof validatedData.totalEarnings === "number" && isFinite(validatedData.totalEarnings),
+          thisMonthEarnings:
+            typeof validatedData.thisMonthEarnings === "number" && isFinite(validatedData.thisMonthEarnings),
+          averageTransactionValue:
+            typeof validatedData.salesMetrics.averageTransactionValue === "number" &&
+            isFinite(validatedData.salesMetrics.averageTransactionValue),
+        },
+      })
+
+      setData(validatedData)
+      setLastUpdated(new Date())
+    } catch (err) {
+      console.error("❌ Error fetching earnings:", err)
+      setError(err instanceof Error ? err.message : "Failed to fetch earnings data")
+
+      // Always ensure we have valid data, even on error
+      setData(createDefaultEarningsData())
+    } finally {
+      setLoading(false)
+    }
+  }, [user])
+
+  const refresh = useCallback(async () => {
+    console.log("🔄 Manual refresh triggered")
+    await fetchEarnings()
+  }, [fetchEarnings])
+
+  const syncData = useCallback(async () => {
+    if (!user) {
+      throw new Error("User not authenticated")
+    }
+
+    try {
+      console.log("🔄 Syncing data...")
+      const token = await user.getIdToken()
+      const response = await fetch("/api/dashboard/sync-stats", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to sync data: ${response.status}`)
+      }
+
+      // Refresh data after sync
+      await fetchEarnings()
     } catch (err) {
       console.error("Error syncing data:", err)
       throw err
     }
   }, [user, fetchEarnings])
 
-  const refresh = useCallback(() => {
-    return fetchEarnings(true)
-  }, [fetchEarnings])
-
-  // Initial fetch
   useEffect(() => {
-    fetchEarnings()
-  }, [fetchEarnings])
+    if (user) {
+      console.log("🔄 User changed, fetching earnings")
+      fetchEarnings()
+    } else {
+      console.log("🔄 No user, resetting to defaults")
+      setLoading(false)
+      setData(createDefaultEarningsData())
+      setError(null)
+    }
+  }, [user, fetchEarnings])
 
-  // Auto-refresh every 5 minutes
-  useEffect(() => {
-    const interval = setInterval(
-      () => {
-        fetchEarnings()
-      },
-      5 * 60 * 1000,
-    ) // 5 minutes
-
-    return () => clearInterval(interval)
-  }, [fetchEarnings])
+  // Final safety check - ensure data is never null/undefined
+  const safeData = data || createDefaultEarningsData()
 
   return {
-    data,
+    data: safeData, // Guaranteed to be a valid StripeEarningsData object with all numbers validated
     loading,
     error,
     lastUpdated,
     refresh,
     syncData,
-    isConnected: data !== null && !data.error,
   }
 }
