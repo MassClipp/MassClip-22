@@ -2,15 +2,10 @@ import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
 export function middleware(request: NextRequest) {
-  // For Stripe webhooks, we absolutely must not modify the request
+  // For Stripe webhooks, completely bypass any middleware processing
   if (request.nextUrl.pathname === "/api/webhooks/stripe") {
-    // Pass through with no modifications whatsoever
-    const response = NextResponse.next()
-
-    // Add a header to confirm middleware processed this
-    response.headers.set("x-middleware-processed", "true")
-
-    return response
+    // Return immediately without any processing
+    return NextResponse.next()
   }
 
   // Continue with normal processing for other routes
@@ -19,7 +14,7 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Only match API routes
-    "/api/:path*",
+    // Only match API routes, but exclude webhook routes from processing
+    "/api/((?!webhooks/stripe).)*",
   ],
 }

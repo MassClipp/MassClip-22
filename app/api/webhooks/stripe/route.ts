@@ -9,51 +9,11 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET!
 
-// Helper function to convert ReadableStream to Buffer
-async function streamToBuffer(stream: ReadableStream<Uint8Array>): Promise<Buffer> {
-  const reader = stream.getReader()
-  const chunks: Uint8Array[] = []
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      if (value) chunks.push(value)
-    }
-  } finally {
-    reader.releaseLock()
-  }
-
-  // Combine all chunks into a single buffer
-  const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0)
-  const buffer = new Uint8Array(totalLength)
-  let offset = 0
-
-  for (const chunk of chunks) {
-    buffer.set(chunk, offset)
-    offset += chunk.length
-  }
-
-  return Buffer.from(buffer)
-}
-
 export async function POST(req: NextRequest) {
   console.log("🚀 Webhook received")
 
   try {
-    // Get the raw body using the most reliable method for Next.js App Router
-    let rawBody: Buffer
-
-    if (req.body) {
-      // If body is available as a ReadableStream, convert it to Buffer
-      rawBody = await streamToBuffer(req.body)
-    } else {
-      // Fallback to arrayBuffer method
-      const arrayBuffer = await req.arrayBuffer()
-      rawBody = Buffer.from(arrayBuffer)
-    }
-
-    // Get signature from headers
+    // Get signature first
     const sig = req.headers.get("stripe-signature")
 
     if (!sig) {
@@ -61,9 +21,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No stripe-signature header" }, { status: 400 })
     }
 
+    // Try the most direct approach - clone the request and read as text
+    const clonedRequest = req.clone()
+    const bodyText = await clonedRequest.text()
+
     console.log("🔍 Debug info:")
-    console.log("- Raw body length:", rawBody.length)
-    console.log("- Raw body type:", typeof rawBody)
+    console.log("- Body text length:", bodyText.length)
+    console.log("- Body text type:", typeof bodyText)
     console.log("- Signature present:", !!sig)
     console.log("- Webhook secret present:", !!endpointSecret)
     console.log("- Webhook secret starts with whsec_:", endpointSecret.startsWith("whsec_"))
@@ -71,35 +35,46 @@ export async function POST(req: NextRequest) {
     let event: Stripe.Event
 
     try {
-      // Use the raw Buffer directly for signature verification
-      event = stripe.webhooks.constructEvent(rawBody, sig, endpointSecret)
+      // Use the text directly - Stripe's library can handle string input
+      event = stripe.webhooks.constructEvent(bodyText, sig, endpointSecret)
       console.log("✅ Webhook signature verified successfully")
     } catch (err: any) {
       console.error("❌ Webhook signature verification failed:")
       console.error("- Error message:", err.message)
       console.error("- Error type:", err.type)
 
-      // Additional debugging
+      // Try alternative approaches for debugging
       console.error("Debug details:")
-      console.error("- Signature header length:", sig.length)
-      console.error("- Signature preview:", sig.substring(0, 50))
-      console.error("- Raw body first 100 chars:", rawBody.toString("utf8", 0, 100))
-      console.error("- Raw body as hex (first 50 bytes):", rawBody.subarray(0, 50).toString("hex"))
+      console.error("- Signature header:", sig)
+      console.error("- Body text preview:", bodyText.substring(0, 200))
+      console.error("- Body text ends with:", bodyText.substring(bodyText.length - 50))
 
-      return NextResponse.json(
-        {
-          error: `Webhook Error: ${err.message}`,
-          debug: {
-            hasSecret: !!endpointSecret,
-            hasSignature: !!sig,
-            bodyLength: rawBody.length,
-            secretFormat: endpointSecret.startsWith("whsec_") ? "correct" : "incorrect",
-            bodyType: typeof rawBody,
-            isBuffer: Buffer.isBuffer(rawBody),
+      // Try with Buffer conversion as backup
+      try {
+        console.log("🔄 Trying with Buffer conversion...")
+        const bodyBuffer = Buffer.from(bodyText, "utf8")
+        event = stripe.webhooks.constructEvent(bodyBuffer, sig, endpointSecret)
+        console.log("✅ Webhook signature verified with Buffer conversion")
+      } catch (bufferErr: any) {
+        console.error("❌ Buffer conversion also failed:", bufferErr.message)
+
+        return NextResponse.json(
+          {
+            error: `Webhook Error: ${err.message}`,
+            debug: {
+              hasSecret: !!endpointSecret,
+              hasSignature: !!sig,
+              bodyLength: bodyText.length,
+              secretFormat: endpointSecret.startsWith("whsec_") ? "correct" : "incorrect",
+              bodyType: typeof bodyText,
+              signaturePreview: sig.substring(0, 50),
+              bodyPreview: bodyText.substring(0, 100),
+              bufferAttemptFailed: true,
+            },
           },
-        },
-        { status: 400 },
-      )
+          { status: 400 },
+        )
+      }
     }
 
     console.log(`🎯 Processing event: ${event.type} (ID: ${event.id})`)
