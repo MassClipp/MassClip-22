@@ -47,7 +47,6 @@
     "@radix-ui/react-toggle-group": "latest",
     "@radix-ui/react-tooltip": "latest",
     "@tanstack/react-query": "latest",
-    "@types/micro": "latest",
     "autoprefixer": "^10.4.20",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -90,6 +89,7 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@types/micro": "latest",
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
