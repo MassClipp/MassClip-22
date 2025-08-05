@@ -11,19 +11,11 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
 
-// This is crucial for Next.js App Router - we need to export this config
-// to prevent the body from being parsed automatically
-export const config = {
-  api: {
-    // Disable body parsing, we need the raw body for signature verification
-    bodyParser: false,
-  },
-}
-
 export async function POST(request: NextRequest) {
   try {
-    // Get the raw request body as text - this is critical for signature verification
-    const rawBody = await request.text()
+    // Get the raw request body as an ArrayBuffer first, then convert to Buffer
+    const arrayBuffer = await request.arrayBuffer()
+    const rawBody = Buffer.from(arrayBuffer)
 
     // Get the Stripe signature from headers
     const headersList = headers()
@@ -34,7 +26,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No signature" }, { status: 400 })
     }
 
-    // Verify the webhook signature
+    // Verify the webhook signature using the raw Buffer
     let event: Stripe.Event
     try {
       event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret)

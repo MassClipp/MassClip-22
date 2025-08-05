@@ -2,9 +2,16 @@ import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
 export function middleware(request: NextRequest) {
-  // Skip body parsing for webhook routes to preserve raw body for signature verification
-  if (request.nextUrl.pathname.startsWith("/api/webhooks/stripe")) {
-    return NextResponse.next()
+  // For Stripe webhook routes, we need to preserve the raw body
+  // Don't apply any middleware that might parse or modify the body
+  if (request.nextUrl.pathname === "/api/webhooks/stripe") {
+    // Create a new response that preserves the original request
+    const response = NextResponse.next()
+
+    // Add headers to help with debugging
+    response.headers.set("x-webhook-route", "true")
+
+    return response
   }
 
   // Continue with normal middleware processing for other routes
@@ -14,9 +21,9 @@ export function middleware(request: NextRequest) {
 // Configure middleware to run on specific paths
 export const config = {
   matcher: [
-    // Apply to all API routes
+    // Match all API routes
     "/api/:path*",
-    // Exclude webhook routes from any body parsing middleware
-    "/((?!api/webhooks/stripe).*)",
+    // But specifically handle webhook routes differently
+    "/api/webhooks/:path*",
   ],
 }
