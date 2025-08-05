@@ -1,30 +1,27 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 
-export async function GET(req: NextRequest) {
-  console.log("🧪 TEST WEBHOOK ENDPOINT HIT")
-  console.log("Method:", req.method)
-  console.log("URL:", req.url)
-  console.log("Timestamp:", new Date().toISOString())
+export async function GET() {
+  console.log("🧪 Test endpoint hit at:", new Date().toISOString())
 
   return NextResponse.json({
-    message: "Test webhook endpoint working",
-    method: req.method,
+    status: "working",
+    message: "Test endpoint is functioning",
     timestamp: new Date().toISOString(),
-    url: req.url,
+    environment: {
+      hasStripeKey: !!process.env.STRIPE_SECRET_KEY,
+      hasLiveWebhookSecret: !!process.env.STRIPE_WEBHOOK_SECRET_LIVE,
+      hasTestWebhookSecret: !!process.env.STRIPE_WEBHOOK_SECRET_TEST,
+      nodeEnv: process.env.NODE_ENV,
+    },
   })
 }
 
-export async function POST(req: NextRequest) {
-  console.log("🧪 TEST WEBHOOK POST ENDPOINT HIT")
-  console.log("Method:", req.method)
-  console.log("URL:", req.url)
-  console.log("Headers:", Object.fromEntries(req.headers.entries()))
-  console.log("Timestamp:", new Date().toISOString())
+export async function POST() {
+  console.log("🧪 Test POST endpoint hit at:", new Date().toISOString())
 
   return NextResponse.json({
-    message: "Test webhook POST endpoint working",
-    method: req.method,
+    status: "working",
+    message: "Test POST endpoint is functioning",
     timestamp: new Date().toISOString(),
-    url: req.url,
   })
 }

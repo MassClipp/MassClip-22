@@ -17,7 +17,7 @@ if (!getApps().length) {
 
 const db = getFirestore()
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-06-20",
+  apiVersion: "2024-12-18.acacia",
 })
 
 export async function POST(req: NextRequest) {
@@ -70,6 +70,7 @@ export async function POST(req: NextRequest) {
 
     // Check environment variables
     const liveSecret = process.env.STRIPE_WEBHOOK_SECRET_LIVE
+    const testSecret = process.env.STRIPE_WEBHOOK_SECRET_TEST
     const defaultSecret = process.env.STRIPE_WEBHOOK_SECRET
 
     console.log("🔑 Environment check:")
@@ -361,7 +362,10 @@ export async function POST(req: NextRequest) {
 
 // Handle other HTTP methods
 export async function GET() {
-  return NextResponse.json({ message: "Webhook endpoint is working", method: "GET" })
+  return NextResponse.json({
+    message: "Webhook endpoint is working",
+    timestamp: new Date().toISOString(),
+  })
 }
 
 export async function OPTIONS() {
