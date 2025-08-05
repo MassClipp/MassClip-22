@@ -36,24 +36,14 @@ export function useStripeEarnings() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
   const fetchEarnings = useCallback(async () => {
-    if (!user) {
-      console.log("🔄 No user, setting defaults")
-      setLoading(false)
-      setError("User not authenticated")
-      setData(createDefaultEarningsData())
-      return
-    }
-
     try {
       setLoading(true)
       setError(null)
 
-      console.log("🔄 Fetching earnings data for user:", user.uid)
+      console.log("🔄 Fetching earnings data")
 
-      const token = await user.getIdToken()
       const response = await fetch("/api/dashboard/earnings", {
         headers: {
-          Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
       })
@@ -97,7 +87,7 @@ export function useStripeEarnings() {
     } finally {
       setLoading(false)
     }
-  }, [user])
+  }, [])
 
   const refresh = useCallback(async () => {
     console.log("🔄 Manual refresh triggered")
@@ -105,17 +95,11 @@ export function useStripeEarnings() {
   }, [fetchEarnings])
 
   const syncData = useCallback(async () => {
-    if (!user) {
-      throw new Error("User not authenticated")
-    }
-
     try {
       console.log("🔄 Syncing data...")
-      const token = await user.getIdToken()
       const response = await fetch("/api/dashboard/sync-stats", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
       })
@@ -130,19 +114,12 @@ export function useStripeEarnings() {
       console.error("Error syncing data:", err)
       throw err
     }
-  }, [user, fetchEarnings])
+  }, [fetchEarnings])
 
   useEffect(() => {
-    if (user) {
-      console.log("🔄 User changed, fetching earnings")
-      fetchEarnings()
-    } else {
-      console.log("🔄 No user, resetting to defaults")
-      setLoading(false)
-      setData(createDefaultEarningsData())
-      setError(null)
-    }
-  }, [user, fetchEarnings])
+    console.log("🔄 Fetching earnings on mount")
+    fetchEarnings()
+  }, [fetchEarnings])
 
   // Final safety check - ensure data is never null/undefined
   const safeData = data || createDefaultEarningsData()

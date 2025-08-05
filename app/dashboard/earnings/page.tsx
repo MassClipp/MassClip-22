@@ -13,6 +13,7 @@ import {
   formatPercentage,
   formatDateTime,
   calculatePercentageChange,
+  createDefaultEarningsData,
 } from "@/lib/format-utils"
 
 interface EarningsData {
@@ -64,18 +65,33 @@ export default function EarningsPage() {
       const endpoint = "/api/dashboard/earnings"
       const method = forceRefresh ? "POST" : "GET"
 
-      const response = await fetch(endpoint, { method })
+      const response = await fetch(endpoint, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
+
       const data = await response.json()
 
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to fetch earnings data")
+      // Always set data, even if there's an error
+      setEarningsData(data)
+
+      if (data.error && !data.isDemo) {
+        setError(data.error)
       }
 
-      setEarningsData(data)
       console.log("Earnings data loaded:", data)
     } catch (err) {
       console.error("Error fetching earnings:", err)
       setError(err instanceof Error ? err.message : "Failed to load earnings data")
+
+      // Set fallback data
+      setEarningsData({
+        ...createDefaultEarningsData(),
+        isDemo: true,
+        error: "Failed to connect to server",
+      })
     } finally {
       setLoading(false)
       setRefreshing(false)
