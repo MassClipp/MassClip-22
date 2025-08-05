@@ -35,23 +35,48 @@ export async function GET(request: NextRequest, { params }: { params: { creatorI
     const bundlesQuery = bundlesRef.where("creatorId", "==", creatorId).where("active", "==", true)
     const bundlesSnapshot = await bundlesQuery.get()
 
-    console.log(`📦 [Premium Content API] Found ${bundlesSnapshot.size} active bundles`)
+    console.log(`📦 [Premium Content API] Found ${bundlesSnapshot.docs.length} bundles`)
 
     const premiumContent: any[] = []
 
     for (const doc of bundlesSnapshot.docs) {
       const data = doc.data()
 
-      // Get the best available thumbnail URL with priority order
-      const thumbnailUrl =
-        data.customPreviewThumbnail || data.coverImage || data.coverImageUrl || data.thumbnailUrl || null
+      console.log(`📦 [Premium Content API] Processing bundle: ${doc.id}`, {
+        title: data.title,
+        price: data.price,
+        priceId: data.priceId,
+        stripePriceId: data.stripePriceId,
+        productId: data.productId,
+        stripeProductId: data.stripeProductId,
+        contentItems: data.contentItems?.length || 0,
+      })
 
-      console.log(`🖼️ [Premium Content API] Bundle ${doc.id} thumbnail URLs:`, {
-        customPreviewThumbnail: data.customPreviewThumbnail,
+      // Get the correct price ID - check both possible field names
+      const stripePriceId = data.priceId || data.stripePriceId
+      const stripeProductId = data.productId || data.stripeProductId
+
+      // Only include bundles that have proper Stripe integration
+      if (!stripePriceId) {
+        console.warn(`⚠️ [Premium Content API] Skipping bundle ${doc.id} - no Stripe price ID`)
+        continue
+      }
+
+      // Get thumbnail URL with multiple fallback options
+      const thumbnailUrl =
+        data.coverImage ||
+        data.customPreviewThumbnail ||
+        data.thumbnail ||
+        data.thumbnailUrl ||
+        (data.contentThumbnails && data.contentThumbnails.length > 0 ? data.contentThumbnails[0] : null)
+
+      console.log(`🖼️ [Premium Content API] Thumbnail for ${doc.id}:`, {
         coverImage: data.coverImage,
-        coverImageUrl: data.coverImageUrl,
+        customPreviewThumbnail: data.customPreviewThumbnail,
+        thumbnail: data.thumbnail,
         thumbnailUrl: data.thumbnailUrl,
-        selectedUrl: thumbnailUrl,
+        contentThumbnails: data.contentThumbnails?.length || 0,
+        finalThumbnail: thumbnailUrl,
       })
 
       const bundleItem = {
@@ -60,28 +85,34 @@ export async function GET(request: NextRequest, { params }: { params: { creatorI
         description: data.description || "",
         price: data.price || 0,
         currency: data.currency || "usd",
-        thumbnailUrl: thumbnailUrl,
-        customPreviewThumbnail: data.customPreviewThumbnail,
-        coverImage: data.coverImage,
-        coverImageUrl: data.coverImageUrl,
         type: "bundle",
         isPremium: true,
         contentCount: data.contentItems?.length || 0,
-        stripePriceId: data.priceId || data.stripePriceId,
-        stripeProductId: data.productId || data.stripeProductId,
+
+        // Stripe integration - use consistent field names
+        stripePriceId: stripePriceId,
+        stripeProductId: stripeProductId,
+
+        // Thumbnail with comprehensive fallbacks
+        thumbnailUrl: thumbnailUrl,
+
+        // Content metadata
+        contentItems: data.contentItems || [],
+        contentMetadata: data.contentMetadata || {},
+
+        // Timestamps
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,
-        active: data.active !== false,
       }
 
-      premiumContent.push(bundleItem)
-
-      console.log(`✅ [Premium Content API] Processed bundle: ${bundleItem.title}`, {
-        id: bundleItem.id,
+      console.log(`✅ [Premium Content API] Added bundle: ${doc.id}`, {
+        title: bundleItem.title,
+        stripePriceId: bundleItem.stripePriceId,
         thumbnailUrl: bundleItem.thumbnailUrl,
-        price: bundleItem.price,
         contentCount: bundleItem.contentCount,
       })
+
+      premiumContent.push(bundleItem)
     }
 
     // Sort by creation date (newest first)
@@ -92,7 +123,7 @@ export async function GET(request: NextRequest, { params }: { params: { creatorI
       return bTime - aTime
     })
 
-    console.log(`🎯 [Premium Content API] Returning ${premiumContent.length} premium content items`)
+    console.log(`✅ [Premium Content API] Returning ${premiumContent.length} premium content items`)
 
     return NextResponse.json({
       success: true,

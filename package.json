@@ -10,7 +10,6 @@
   },
   "dependencies": {
     "@auth/core": "latest",
-    "@auth/firebase-adapter": "latest",
     "@aws-sdk/client-s3": "latest",
     "@aws-sdk/s3-request-presigner": "latest",
     "@chakra-ui/react": "latest",
@@ -61,7 +60,6 @@
     "fs": "latest",
     "input-otp": "latest",
     "lucide-react": "^0.454.0",
-    "micro": "latest",
     "next": "15.2.4",
     "next-auth": "latest",
     "next-themes": "latest",
@@ -89,7 +87,6 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
-    "@types/micro": "latest",
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",

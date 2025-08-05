@@ -3,7 +3,7 @@
 import type React from "react"
 import { createContext, useContext, useEffect, useState } from "react"
 import { type User, onAuthStateChanged, signOut as firebaseSignOut } from "firebase/auth"
-import { auth } from "@/firebase/config"
+import { auth } from "@/lib/firebase"
 
 interface AuthContextType {
   user: User | null
@@ -53,5 +53,5 @@ export function useAuth() {
   return context
 }
 
-// Export as useAuthContext for compatibility
+// Named export for compatibility
 export const useAuthContext = useAuth
