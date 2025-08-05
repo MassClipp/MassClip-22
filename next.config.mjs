@@ -1,7 +1,21 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
-    serverComponentsExternalPackages: ["firebase-admin"],
+    serverComponentsExternalPackages: ['firebase-admin'],
+  },
+  // Minimal configuration to avoid interference
+  async headers() {
+    return [
+      {
+        source: '/api/webhooks/stripe',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-cache, no-store, must-revalidate',
+          },
+        ],
+      },
+    ]
   },
   eslint: {
     ignoreDuringBuilds: true,
@@ -10,16 +24,7 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   images: {
-    domains: [
-      "lh3.googleusercontent.com",
-      "firebasestorage.googleapis.com",
-      "storage.googleapis.com",
-    ],
     unoptimized: true,
-  },
-  // Ensure no body parsing interference
-  async rewrites() {
-    return []
   },
 }
 

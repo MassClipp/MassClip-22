@@ -1,77 +1,145 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/auth"
-import { db } from "@/lib/firebase-server"
+import { db } from "@/lib/firebase-admin"
 import { StripeEarningsService } from "@/lib/stripe-earnings-service"
-import { validateEarningsData } from "@/lib/format-utils"
 
 export async function GET(request: NextRequest) {
   try {
-    console.log("🔍 Starting earnings API request...")
+    console.log("[EarningsAPI] Starting earnings data fetch")
 
-    // Get authenticated session
+    // Get user session
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) {
-      console.log("❌ No authenticated session found")
+      console.log("[EarningsAPI] No valid session found")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const userId = session.user.id
-    console.log("✅ Authenticated user:", userId)
+    console.log(`[EarningsAPI] Fetching earnings for user: ${userId}`)
 
-    // Get user profile from Firestore
+    // Get user's Stripe account ID from Firestore
     const userDoc = await db.collection("users").doc(userId).get()
-    if (!userDoc.exists) {
-      console.log("❌ User profile not found in Firestore")
-      return NextResponse.json({ error: "User profile not found" }, { status: 404 })
-    }
-
     const userData = userDoc.data()
-    const stripeAccountId = userData?.stripeAccountId
 
-    if (!stripeAccountId) {
-      console.log("⚠️ No Stripe account connected for user")
-      return NextResponse.json(
-        {
-          error: "No Stripe account connected",
-          message: "Please connect your Stripe account to view earnings",
-          needsStripeConnection: true,
-          data: validateEarningsData(null),
+    if (!userData?.stripeAccountId) {
+      console.log(`[EarningsAPI] No Stripe account found for user ${userId}`)
+      return NextResponse.json({
+        error: "No Stripe account connected",
+        isDemo: true,
+        demoData: {
+          totalEarnings: 0,
+          thisMonthEarnings: 0,
+          lastMonthEarnings: 0,
+          last30DaysEarnings: 0,
+          pendingPayout: 0,
+          availableBalance: 0,
+          salesMetrics: {
+            totalSales: 0,
+            thisMonthSales: 0,
+            last30DaysSales: 0,
+            averageTransactionValue: 0,
+            conversionRate: 0,
+          },
+          accountStatus: {
+            chargesEnabled: false,
+            payoutsEnabled: false,
+            detailsSubmitted: false,
+            requirementsCount: 0,
+            currentlyDue: [],
+            pastDue: [],
+          },
+          recentTransactions: [],
+          payoutHistory: [],
+          monthlyBreakdown: [],
         },
-        { status: 200 },
-      )
+      })
     }
 
-    console.log("💳 Found Stripe account:", stripeAccountId)
+    const stripeAccountId = userData.stripeAccountId
+    console.log(`[EarningsAPI] Found Stripe account: ${stripeAccountId}`)
 
-    // Fetch real earnings data from Stripe
-    const stripeEarningsService = new StripeEarningsService()
-    const earningsData = await stripeEarningsService.getEarningsData(stripeAccountId)
+    // Fetch earnings data from Stripe
+    const earningsData = await StripeEarningsService.getEarningsData(stripeAccountId)
 
-    console.log("📊 Raw Stripe earnings data:", earningsData)
+    if (!earningsData) {
+      console.log(`[EarningsAPI] Failed to fetch earnings data for account ${stripeAccountId}`)
+      return NextResponse.json({ error: "Failed to fetch earnings data" }, { status: 500 })
+    }
 
-    // Validate and format the data
-    const validatedData = validateEarningsData(earningsData)
-    console.log("✅ Validated earnings data:", validatedData)
+    console.log(`[EarningsAPI] Successfully fetched earnings data:`, {
+      totalEarnings: earningsData.totalEarnings,
+      thisMonthEarnings: earningsData.thisMonthEarnings,
+      availableBalance: earningsData.availableBalance,
+      totalSales: earningsData.salesMetrics.totalSales,
+      accountStatus: earningsData.accountStatus,
+    })
 
+    // Return the earnings data with metadata
     return NextResponse.json({
-      success: true,
-      data: validatedData,
-      dataSource: "stripe",
+      ...earningsData,
+      isDemo: false,
+      stripeAccountId,
       lastUpdated: new Date().toISOString(),
     })
   } catch (error) {
-    console.error("💥 Earnings API error:", error)
-
-    // Return safe fallback data on error
+    console.error("[EarningsAPI] Error fetching earnings:", error)
     return NextResponse.json(
       {
-        error: "Failed to fetch earnings data",
-        message: error instanceof Error ? error.message : "Unknown error occurred",
-        data: validateEarningsData(null),
-        dataSource: "fallback",
+        error: "Internal server error",
+        message: error instanceof Error ? error.message : "Unknown error",
       },
-      { status: 200 },
+      { status: 500 },
+    )
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    console.log("[EarningsAPI] Force refresh earnings data")
+
+    // Get user session
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const userId = session.user.id
+
+    // Get user's Stripe account ID
+    const userDoc = await db.collection("users").doc(userId).get()
+    const userData = userDoc.data()
+
+    if (!userData?.stripeAccountId) {
+      return NextResponse.json({ error: "No Stripe account connected" }, { status: 400 })
+    }
+
+    const stripeAccountId = userData.stripeAccountId
+
+    // Force refresh earnings data
+    const earningsData = await StripeEarningsService.forceRefresh(stripeAccountId)
+
+    if (!earningsData) {
+      return NextResponse.json({ error: "Failed to refresh earnings data" }, { status: 500 })
+    }
+
+    console.log(`[EarningsAPI] Successfully refreshed earnings data for account ${stripeAccountId}`)
+
+    return NextResponse.json({
+      ...earningsData,
+      isDemo: false,
+      stripeAccountId,
+      lastUpdated: new Date().toISOString(),
+      refreshed: true,
+    })
+  } catch (error) {
+    console.error("[EarningsAPI] Error refreshing earnings:", error)
+    return NextResponse.json(
+      {
+        error: "Internal server error",
+        message: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
     )
   }
 }
