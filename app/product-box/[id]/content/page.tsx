@@ -424,8 +424,8 @@ export default function ProductBoxContentPage() {
                 </div>
               </div>
 
-              {/* Download Button - Bottom Right - Only visible on hover */}
-              <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+              {/* Download Button - Bottom Right - Always visible on hover */}
+              <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10">
                 <Button
                   onClick={(e) => {
                     e.stopPropagation()
@@ -433,7 +433,7 @@ export default function ProductBoxContentPage() {
                   }}
                   size="sm"
                   disabled={downloadingItems.has(item.id)}
-                  className="h-8 w-8 p-0 bg-black/70 hover:bg-black/90 text-white border-0 rounded-full"
+                  className="h-8 w-8 p-0 bg-black/80 hover:bg-black/90 text-white border-0 rounded-full shadow-lg"
                 >
                   {downloadingItems.has(item.id) ? (
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
@@ -540,11 +540,27 @@ export default function ProductBoxContentPage() {
           </Button>
         </div>
 
-        <div className="max-w-4xl">
-          <h1 className="text-3xl font-bold text-white mb-2">{bundleData?.title}</h1>
-          <p className="text-gray-400 text-lg">
-            {items.length} premium file{items.length !== 1 ? "s" : ""} unlocked
-          </p>
+        <div className="flex items-start gap-6 max-w-4xl">
+          <div className="flex-1">
+            <h1 className="text-3xl font-bold text-white mb-2">{bundleData?.title}</h1>
+            <p className="text-gray-400 text-lg">
+              {items.length} premium file{items.length !== 1 ? "s" : ""} unlocked
+            </p>
+          </div>
+
+          {/* Bundle Thumbnail */}
+          {bundleData?.thumbnail && (
+            <div className="flex-shrink-0">
+              <img
+                src={bundleData.thumbnail || "/placeholder.svg"}
+                alt={bundleData.title}
+                className="w-24 h-24 rounded-lg object-cover border border-gray-700"
+                onError={(e) => {
+                  e.currentTarget.style.display = "none"
+                }}
+              />
+            </div>
+          )}
         </div>
       </div>
 
