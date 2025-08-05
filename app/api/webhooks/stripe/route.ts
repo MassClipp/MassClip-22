@@ -1,4 +1,3 @@
-import { headers } from "next/headers"
 import { type NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
 import { db } from "@/lib/firebase-admin"
@@ -8,77 +7,59 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
 })
 
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
+// Use the correct environment variable name
+const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET_LIVE!
 
 export async function POST(req: NextRequest) {
   console.log("🚀 Stripe webhook received")
 
   try {
-    // Get the raw body as ArrayBuffer and convert to Buffer
-    const arrayBuffer = await req.arrayBuffer()
-    const body = Buffer.from(arrayBuffer)
-
-    const headersList = headers()
-    const signature = headersList.get("stripe-signature")
+    // Get raw body as text
+    const body = await req.text()
+    const signature = req.headers.get("stripe-signature")
 
     if (!signature) {
       console.error("❌ Missing Stripe signature")
       return NextResponse.json({ error: "Missing signature" }, { status: 400 })
     }
 
-    console.log("🔍 Webhook verification attempt:")
+    // Validate webhook secret
+    if (!webhookSecret || !webhookSecret.startsWith("whsec_")) {
+      console.error("❌ Invalid webhook secret format")
+      console.error("- Looking for: STRIPE_WEBHOOK_SECRET_LIVE")
+      console.error("- Found:", !!webhookSecret)
+      return NextResponse.json({ error: "Invalid webhook secret" }, { status: 500 })
+    }
+
+    console.log("🔍 Webhook verification details:")
     console.log("- Body length:", body.length)
-    console.log("- Body is Buffer:", Buffer.isBuffer(body))
     console.log("- Has signature:", !!signature)
-    console.log("- Has webhook secret:", !!webhookSecret)
-    console.log("- Webhook secret format:", webhookSecret.startsWith("whsec_") ? "correct" : "incorrect")
-    console.log("- Body hex preview:", body.subarray(0, 50).toString("hex"))
-    console.log("- Body string preview:", body.toString("utf8", 0, 100))
+    console.log("- Using STRIPE_WEBHOOK_SECRET_LIVE")
+    console.log("- Webhook secret format: whsec_***")
 
     let event: Stripe.Event
 
     try {
-      // Use Buffer directly for signature verification
       event = stripe.webhooks.constructEvent(body, signature, webhookSecret)
       console.log("✅ Webhook signature verified successfully!")
     } catch (err: any) {
       console.error("❌ Webhook signature verification failed:")
-      console.error("- Error:", err.message)
-      console.error("- Type:", err.type)
+      console.error("- Error message:", err.message)
+      console.error("- Error type:", err.type)
 
-      // Try with string conversion as fallback
-      try {
-        console.log("🔄 Trying string conversion fallback...")
-        const bodyString = body.toString("utf8")
-        event = stripe.webhooks.constructEvent(bodyString, signature, webhookSecret)
-        console.log("✅ String conversion fallback succeeded!")
-      } catch (fallbackErr: any) {
-        console.error("❌ String conversion fallback also failed:", fallbackErr.message)
-
-        // Enhanced debugging
-        console.error("Final debug info:")
-        console.error("- Signature preview:", signature.substring(0, 100))
-        console.error("- Body as Buffer length:", body.length)
-        console.error("- Body as string length:", body.toString("utf8").length)
-        console.error("- Webhook secret preview:", webhookSecret.substring(0, 20) + "...")
-        console.error("- ArrayBuffer length:", arrayBuffer.byteLength)
-
-        return NextResponse.json(
-          {
-            error: `Webhook signature verification failed: ${err.message}`,
-            debug: {
-              hasSecret: !!webhookSecret,
-              hasSignature: !!signature,
-              bodyLength: body.length,
-              arrayBufferLength: arrayBuffer.byteLength,
-              secretFormat: webhookSecret.startsWith("whsec_") ? "correct" : "invalid",
-              isBuffer: Buffer.isBuffer(body),
-              stringFallbackFailed: true,
-            },
+      return NextResponse.json(
+        {
+          error: `Webhook signature verification failed: ${err.message}`,
+          debug: {
+            hasSecret: !!webhookSecret,
+            hasSignature: !!signature,
+            bodyLength: body.length,
+            secretFormat: webhookSecret.startsWith("whsec_") ? "correct" : "invalid",
+            errorType: err.type,
           },
-          { status: 400 },
-        )
-      }
+        },
+        { status: 400 },
+      )
     }
 
     console.log(`🎯 Processing event: ${event.type} (${event.id})`)
