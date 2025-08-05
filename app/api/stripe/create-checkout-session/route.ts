@@ -1,8 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
-import Stripe from "stripe"
-import { getFirestore } from "firebase-admin/firestore"
 import { initializeApp, getApps, cert } from "firebase-admin/app"
 import { getAuth } from "firebase-admin/auth"
+import { getFirestore } from "firebase-admin/firestore"
+import Stripe from "stripe"
 
 // Initialize Firebase Admin
 if (!getApps().length) {
@@ -26,6 +26,8 @@ if (!getApps().length) {
 
 const db = getFirestore()
 const auth = getAuth()
+
+// Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
 })
@@ -35,122 +37,94 @@ export async function POST(request: NextRequest) {
     console.log("🚀 [Checkout API] Starting checkout session creation...")
 
     const body = await request.json()
-    console.log("📝 [Checkout API] Request body:", { ...body, buyerToken: body.buyerToken ? "[REDACTED]" : "MISSING" })
+    console.log("📝 [Checkout API] Request body:", { ...body, idToken: body.idToken ? "[REDACTED]" : "MISSING" })
 
-    const { idToken, buyerToken, priceId, bundleId, productBoxId, successUrl, cancelUrl, price, title, creatorId } =
-      body
+    const { idToken, priceId, bundleId, successUrl, cancelUrl, productBoxId } = body
 
-    // Use either idToken or buyerToken for authentication
-    const authToken = idToken || buyerToken
-
-    if (!authToken) {
-      console.error("❌ [Checkout API] No authentication token provided")
-      return NextResponse.json({ error: "Authentication required. Please log in to make a purchase." }, { status: 401 })
+    // Determine what we're selling
+    const itemId = bundleId || productBoxId
+    if (!itemId) {
+      console.error("❌ [Checkout API] Missing item ID")
+      return NextResponse.json({ error: "Missing product or bundle ID" }, { status: 400 })
     }
 
-    // Validate required fields
-    if (!bundleId && !productBoxId) {
-      console.error("❌ [Checkout API] Missing product/bundle ID")
-      return NextResponse.json({ error: "Product or bundle ID is required" }, { status: 400 })
-    }
+    // Get buyer information from authentication
+    let buyerUid = "anonymous"
+    let buyerEmail = ""
+    let buyerName = ""
 
-    if (!creatorId) {
-      console.error("❌ [Checkout API] Missing creator ID")
-      return NextResponse.json({ error: "Creator ID is required" }, { status: 400 })
-    }
-
-    let userId: string | null = null
-    let userEmail: string | null = null
-
-    // Verify authentication token and get buyer UID
-    try {
-      const decodedToken = await auth.verifyIdToken(authToken)
-      userId = decodedToken.uid
-      userEmail = decodedToken.email || null
-      console.log("✅ [Checkout API] Token verified for buyer:", userId)
-    } catch (error) {
-      console.error("❌ [Checkout API] Token verification failed:", error)
-      return NextResponse.json({ error: "Invalid authentication token. Please log in again." }, { status: 401 })
-    }
-
-    if (!userId) {
-      console.error("❌ [Checkout API] No user ID in token")
-      return NextResponse.json({ error: "Invalid user authentication" }, { status: 401 })
-    }
-
-    // Get buyer information from database
-    const buyerDoc = await db.collection("users").doc(userId).get()
-    if (!buyerDoc.exists) {
-      console.error("❌ [Checkout API] Buyer not found in database:", userId)
-      return NextResponse.json({ error: "User account not found. Please create an account first." }, { status: 404 })
-    }
-
-    const buyerData = buyerDoc.data()!
-
-    // Get product/bundle details
-    let itemData: any = null
-    let itemPrice = 0
-    let itemTitle = ""
-    let stripeAccountId = ""
-
-    if (bundleId) {
-      console.log("📦 [Checkout API] Fetching bundle:", bundleId)
-      const bundleDoc = await db.collection("bundles").doc(bundleId).get()
-      if (!bundleDoc.exists) {
-        console.error("❌ [Checkout API] Bundle not found:", bundleId)
-        return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
+    if (idToken) {
+      try {
+        const decodedToken = await auth.verifyIdToken(idToken)
+        buyerUid = decodedToken.uid
+        buyerEmail = decodedToken.email || ""
+        buyerName = decodedToken.name || decodedToken.email?.split("@")[0] || ""
+        console.log("✅ [Checkout API] Authenticated buyer:", { buyerUid, buyerEmail })
+      } catch (error) {
+        console.error("❌ [Checkout API] Token verification failed:", error)
+        // Continue as anonymous buyer
+        buyerUid = "anonymous"
       }
-      itemData = bundleDoc.data()!
-      itemPrice = itemData.price || price || 0
-      itemTitle = itemData.title || title || "Bundle"
-      stripeAccountId = itemData.stripeAccountId || ""
-    } else if (productBoxId) {
-      console.log("📦 [Checkout API] Fetching product box:", productBoxId)
-      const productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
-      if (!productBoxDoc.exists) {
-        console.error("❌ [Checkout API] Product box not found:", productBoxId)
-        return NextResponse.json({ error: "Product box not found" }, { status: 404 })
-      }
-      itemData = productBoxDoc.data()!
-      itemPrice = itemData.price || price || 0
-      itemTitle = itemData.title || title || "Product Box"
-      stripeAccountId = itemData.stripeAccountId || ""
+    } else {
+      console.log("⚠️ [Checkout API] No authentication token, proceeding as anonymous buyer")
     }
+
+    // Get bundle details from bundles collection
+    console.log("📦 [Checkout API] Fetching item:", itemId)
+    const bundleDoc = await db.collection("bundles").doc(itemId).get()
+    if (!bundleDoc.exists) {
+      console.error("❌ [Checkout API] Bundle not found:", itemId)
+      return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
+    }
+
+    const bundle = bundleDoc.data()!
+    console.log("✅ [Checkout API] Bundle found:", {
+      title: bundle.title,
+      price: bundle.price,
+      priceId: bundle.priceId,
+      stripePriceId: bundle.stripePriceId,
+      productId: bundle.productId,
+      stripeProductId: bundle.stripeProductId,
+      creatorId: bundle.creatorId,
+      stripeAccountId: bundle.stripeAccountId,
+    })
+
+    // Get the correct price ID from bundle - check both possible field names
+    const bundleStripePriceId = bundle.priceId || bundle.stripePriceId
+    const stripeAccountId = bundle.stripeAccountId
 
     if (!stripeAccountId) {
-      // Get creator's Stripe account ID
-      const creatorDoc = await db.collection("users").doc(creatorId).get()
-      if (!creatorDoc.exists) {
-        console.error("❌ [Checkout API] Creator not found:", creatorId)
-        return NextResponse.json({ error: "Creator not found" }, { status: 404 })
-      }
-      const creatorData = creatorDoc.data()!
-      stripeAccountId = creatorData.stripeAccountId || ""
-    }
-
-    if (!stripeAccountId) {
-      console.error("❌ [Checkout API] No Stripe account ID for creator:", creatorId)
+      console.error("❌ [Checkout API] No Stripe account ID for bundle:", itemId)
       return NextResponse.json(
         {
-          error: "Creator has not connected their Stripe account",
-          details: "The creator needs to set up Stripe integration to accept payments",
+          error: "Bundle not available for purchase",
+          details: "Creator has not set up Stripe integration",
         },
         { status: 400 },
       )
     }
 
-    if (!itemPrice || itemPrice <= 0) {
-      console.error("❌ [Checkout API] Invalid price:", itemPrice)
-      return NextResponse.json({ error: "Invalid item price" }, { status: 400 })
+    if (!bundleStripePriceId) {
+      console.error("❌ [Checkout API] No Stripe price ID for bundle:", itemId)
+      return NextResponse.json(
+        {
+          error: "Bundle pricing not configured",
+          details: "Bundle does not have a valid price ID",
+        },
+        { status: 400 },
+      )
     }
 
-    console.log("💳 [Checkout API] Creating checkout session with:", {
-      buyerUid: userId,
-      creatorId,
-      bundleId: bundleId || null,
-      productBoxId: productBoxId || null,
-      price: itemPrice,
+    // Use the bundle's stored price ID instead of validating against the provided one
+    const finalPriceId = bundleStripePriceId
+
+    console.log("💳 [Checkout API] Creating checkout session with buyer info:", {
+      finalPriceId,
+      bundleId: itemId,
       stripeAccountId,
+      buyerUid,
+      buyerEmail,
+      isAuthenticated: buyerUid !== "anonymous",
     })
 
     // Get the current domain from headers
@@ -158,83 +132,84 @@ export async function POST(request: NextRequest) {
     const protocol = request.headers.get("x-forwarded-proto") || "https"
     const currentDomain = `${protocol}://${host}`
 
-    // Create comprehensive metadata with buyer UID (CRITICAL for preventing anonymous purchases)
+    // CRITICAL: Include comprehensive buyer metadata
     const sessionMetadata: any = {
-      buyerUid: userId, // CRITICAL: Always include buyer UID
-      buyerEmail: userEmail || buyerData.email || "",
-      buyerName: buyerData.displayName || buyerData.name || "",
-      creatorId: creatorId,
+      bundleId: itemId,
+      productBoxId: itemId, // For compatibility
+      creatorId: bundle.creatorId || "",
+      buyerUid, // CRITICAL: Buyer identification
+      buyerEmail,
+      buyerName,
+      isAuthenticated: buyerUid !== "anonymous" ? "true" : "false",
+      contentType: "bundle",
+      itemTitle: bundle.title || "Digital Content",
       originalDomain: currentDomain,
       timestamp: new Date().toISOString(),
-      purchaseType: bundleId ? "bundle" : "product_box",
-    }
-
-    // Add specific item ID
-    if (bundleId) {
-      sessionMetadata.bundleId = bundleId
-    }
-    if (productBoxId) {
-      sessionMetadata.productBoxId = productBoxId
+      stripeAccountId: stripeAccountId, // CRITICAL: For webhook to retrieve session from correct account
     }
 
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       payment_method_types: ["card"],
       line_items: [
         {
-          price_data: {
-            currency: "usd",
-            product_data: {
-              name: itemTitle,
-              description: itemData.description || "",
-              images: itemData.thumbnailUrl ? [itemData.thumbnailUrl] : [],
-              metadata: {
-                buyerUid: userId, // Also include in product metadata
-                creatorId: creatorId,
-                ...(bundleId && { bundleId }),
-                ...(productBoxId && { productBoxId }),
-              },
-            },
-            unit_amount: Math.round(itemPrice * 100), // Convert to cents
-          },
+          price: finalPriceId,
           quantity: 1,
         },
       ],
       mode: "payment",
       success_url:
-        successUrl || `${currentDomain}/purchase-success?session_id={CHECKOUT_SESSION_ID}&buyer_uid=${userId}`,
-      cancel_url: cancelUrl || `${currentDomain}/creator/${creatorId}`,
+        successUrl || `${currentDomain}/purchase-success?session_id={CHECKOUT_SESSION_ID}&buyer_uid=${buyerUid}`,
+      cancel_url: cancelUrl || `${currentDomain}/creator/${bundle.creatorId}`,
       metadata: sessionMetadata,
       payment_intent_data: {
-        metadata: sessionMetadata, // Also include in payment intent metadata
-        application_fee_amount: Math.round(itemPrice * 100 * 0.1), // 10% platform fee
+        metadata: sessionMetadata,
       },
-      customer_email: userEmail || buyerData.email,
+      allow_promotion_codes: true,
     }
 
-    console.log("🔄 [Checkout API] Creating Stripe session with params:", {
-      price: itemPrice,
+    // Add customer email if available
+    if (buyerEmail) {
+      sessionParams.customer_email = buyerEmail
+    }
+
+    // For anonymous buyers, collect email
+    if (buyerUid === "anonymous") {
+      sessionParams.custom_fields = [
+        {
+          key: "buyer_email",
+          label: { type: "custom", custom: "Email Address" },
+          type: "text",
+          optional: false,
+        },
+      ]
+    }
+
+    console.log("🔄 [Checkout API] Creating Stripe session with buyer metadata:", {
+      priceId: finalPriceId,
       stripeAccount: stripeAccountId,
+      buyerUid,
+      buyerEmail,
       successUrl: sessionParams.success_url,
       cancelUrl: sessionParams.cancel_url,
-      buyerUid: userId,
     })
 
     const session = await stripe.checkout.sessions.create(sessionParams, {
       stripeAccount: stripeAccountId,
     })
 
-    console.log("✅ [Checkout API] Session created successfully:")
+    console.log("✅ [Checkout API] Session created successfully with buyer identification:")
     console.log("   Session ID:", session.id)
+    console.log("   Buyer UID:", buyerUid)
+    console.log("   Buyer Email:", buyerEmail)
     console.log("   Checkout URL:", session.url)
-    console.log("   Buyer UID:", userId)
-    console.log("   Success URL:", session.success_url)
-    console.log("   Cancel URL:", session.cancel_url)
+    console.log("   Metadata:", session.metadata)
 
     return NextResponse.json({
       success: true,
       url: session.url,
       sessionId: session.id,
-      buyerUid: userId, // Return buyer UID for verification
+      buyerUid,
+      metadata: session.metadata,
     })
   } catch (error: any) {
     console.error("❌ [Checkout API] Session creation failed:", error)
