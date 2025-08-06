@@ -59,13 +59,6 @@ export default function StripeCallbackPage() {
   const errorDescription = searchParams.get("error_description")
   const debugInfoParam = searchParams.get("debug_info")
 
-  // New OAuth flow parameters
-  const fullySetup = searchParams.get("fully_setup") === "true"
-  const actionRequired = searchParams.get("action_required") === "true"
-  const stripeAccountId = searchParams.get("stripe_account_id")
-  const oauthError = searchParams.get("error")
-  const oauthErrorDescription = searchParams.get("error_description")
-
   // Parse debug info if available
   useEffect(() => {
     if (debugInfoParam) {
@@ -183,15 +176,10 @@ export default function StripeCallbackPage() {
       error,
       errorDescription,
       hasDebugInfo: !!debugInfoParam,
-      fullySetup,
-      actionRequired,
-      stripeAccountId,
-      oauthError,
-      oauthErrorDescription,
     })
 
     const processCallback = async () => {
-      if (success || completed || refresh || fullySetup || actionRequired) {
+      if (success || completed || refresh) {
         // Simulate processing time for better UX
         await new Promise((resolve) => setTimeout(resolve, 1500))
         setIsProcessing(false)
@@ -213,7 +201,7 @@ export default function StripeCallbackPage() {
     }
 
     processCallback()
-  }, [success, completed, refresh, error, errorDescription, fullySetup, actionRequired, stripeAccountId, oauthError, oauthErrorDescription])
+  }, [success, completed, refresh, error, errorDescription])
 
   const handleRetry = () => {
     console.log("🔄 [Callback Page] User clicked retry")
@@ -271,34 +259,34 @@ export default function StripeCallbackPage() {
     }
   }, [success, countdown, router])
 
-  if (oauthError) {
+  if (error) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center p-4">
-        <Card className="max-w-md w-full border-red-800 bg-zinc-900 text-white">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <Card className="max-w-md w-full border-red-200 bg-red-50">
           <CardHeader className="text-center">
-            <div className="w-12 h-12 bg-red-800/20 rounded-full flex items-center justify-center mx-auto mb-4">
-              <AlertCircle className="w-6 h-6 text-red-400" />
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertCircle className="w-6 h-6 text-red-600" />
             </div>
-            <CardTitle className="text-red-400">Connection Failed</CardTitle>
-            <CardDescription className="text-zinc-400">
+            <CardTitle className="text-red-800">Connection Failed</CardTitle>
+            <CardDescription className="text-red-600">
               There was an issue connecting your Stripe account
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="p-3 bg-zinc-800 rounded-lg border border-red-800/40">
-              <p className="text-sm text-zinc-300">{decodeURIComponent(oauthErrorDescription || oauthError)}</p>
+            <div className="p-3 bg-red-100 rounded-lg border border-red-200">
+              <p className="text-sm text-red-700">{decodeURIComponent(error)}</p>
             </div>
             <div className="flex gap-3">
-              <Button
+              <Button 
                 onClick={() => router.push("/dashboard/connect-stripe")}
-                className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                className="flex-1"
               >
                 Try Again
               </Button>
-              <Button
+              <Button 
                 onClick={() => router.push("/dashboard")}
                 variant="outline"
-                className="flex-1 text-zinc-300 border-zinc-700 hover:bg-zinc-700/20"
+                className="flex-1"
               >
                 Go to Dashboard
               </Button>
@@ -309,36 +297,51 @@ export default function StripeCallbackPage() {
     )
   }
 
-  if (fullySetup) {
+  if (success) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center p-4">
-        <Card className="max-w-lg w-full border-green-800 bg-zinc-900 text-white">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <Card className="max-w-lg w-full border-green-200 bg-green-50">
           <CardHeader className="text-center">
-            <div className="w-16 h-16 bg-green-800/20 rounded-full flex items-center justify-center mx-auto mb-4">
-              <CheckCircle className="w-8 h-8 text-green-400" />
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle className="w-8 h-8 text-green-600" />
             </div>
-            <CardTitle className="text-green-400 text-2xl">Successfully Connected!</CardTitle>
-            <CardDescription className="text-zinc-400">
+            <CardTitle className="text-green-800 text-2xl">Successfully Connected!</CardTitle>
+            <CardDescription className="text-green-600">
               Your Stripe account has been connected to MassClip
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Account Info */}
-            <div className="bg-zinc-800 p-4 rounded-lg border border-green-800/40">
-              <h3 className="font-semibold mb-3 text-zinc-300">Account Details</h3>
+            <div className="bg-white p-4 rounded-lg border border-green-200">
+              <h3 className="font-semibold mb-3">Account Details</h3>
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
-                  <span className="text-zinc-400">Account ID</span>
-                  <Badge variant="outline" className="text-zinc-300 border-zinc-700">{stripeAccountId?.slice(-8)}</Badge>
+                  <span className="text-gray-600">Account ID</span>
+                  <Badge variant="outline">{accountId?.slice(-8)}</Badge>
                 </div>
-                {/* Removed chargesEnabled and detailsSubmitted */}
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600">Charges Enabled</span>
+                  {chargesEnabled ? (
+                    <CheckCircle className="h-5 w-5 text-green-600" />
+                  ) : (
+                    <AlertCircle className="h-5 w-5 text-yellow-600" />
+                  )}
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600">Details Submitted</span>
+                  {detailsSubmitted ? (
+                    <CheckCircle className="h-5 w-5 text-green-600" />
+                  ) : (
+                    <AlertCircle className="h-5 w-5 text-yellow-600" />
+                  )}
+                </div>
               </div>
             </div>
 
             {/* Next Steps */}
-            <div className="bg-blue-900/20 p-4 rounded-lg border border-blue-800/40">
-              <h3 className="font-semibold text-blue-400 mb-2">What's Next?</h3>
-              <ul className="text-sm text-blue-300 space-y-1">
+            <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+              <h3 className="font-semibold text-blue-800 mb-2">What's Next?</h3>
+              <ul className="text-sm text-blue-700 space-y-1">
                 <li>• Start creating premium content and bundles</li>
                 <li>• Set your pricing and payment options</li>
                 <li>• Track your earnings in the dashboard</li>
@@ -348,9 +351,9 @@ export default function StripeCallbackPage() {
 
             {/* Action Buttons */}
             <div className="flex gap-3">
-              <Button
+              <Button 
                 onClick={() => router.push("/dashboard/earnings")}
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                className="flex-1 bg-green-600 hover:bg-green-700"
               >
                 <DollarSign className="mr-2 h-4 w-4" />
                 View Earnings
@@ -358,10 +361,10 @@ export default function StripeCallbackPage() {
                   <span className="ml-2 text-xs">({countdown}s)</span>
                 )}
               </Button>
-              <Button
+              <Button 
                 onClick={() => router.push("/dashboard")}
                 variant="outline"
-                className="flex-1 text-zinc-300 border-zinc-700 hover:bg-zinc-700/20"
+                className="flex-1"
               >
                 Dashboard
                 <ArrowRight className="ml-2 h-4 w-4" />
@@ -370,7 +373,7 @@ export default function StripeCallbackPage() {
 
             {/* Auto-redirect notice */}
             {countdown > 0 && (
-              <p className="text-center text-sm text-zinc-500">
+              <p className="text-center text-sm text-gray-500">
                 Redirecting to earnings dashboard in {countdown} seconds...
               </p>
             )}
@@ -405,7 +408,7 @@ export default function StripeCallbackPage() {
   }
 
   const isFullySetup = accountStatus?.isFullyEnabled && !accountStatus?.actionsRequired
-  const hasRequirements = accountStatus?.actionsRequired || actionRequired
+  const hasRequirements = accountStatus?.actionsRequired
   const hasActionUrl = accountStatus?.actionUrl
   const isRecovered = recovered === "true"
   const wasAlreadyConnected = alreadyConnected === "true"
@@ -419,8 +422,6 @@ export default function StripeCallbackPage() {
     connected: accountStatus?.connected,
     isRecovered,
     wasAlreadyConnected,
-    fullySetup,
-    actionRequired,
   })
 
   return (
@@ -431,7 +432,7 @@ export default function StripeCallbackPage() {
           <div className="flex flex-col items-center space-y-6">
             {/* Status icon */}
             <div className="relative">
-              {isFullySetup || fullySetup ? (
+              {isFullySetup ? (
                 <>
                   <div className="absolute inset-0 bg-green-500/30 rounded-full blur-lg" />
                   <div className="relative bg-green-500/10 rounded-full p-4 border border-green-500/20">
@@ -464,7 +465,7 @@ export default function StripeCallbackPage() {
                     ? "Connection Recovered!"
                     : wasAlreadyConnected
                       ? "Already Connected!"
-                      : isFullySetup || fullySetup
+                      : isFullySetup
                         ? "Setup Complete!"
                         : "Connection Successful"}
               </h1>
@@ -475,7 +476,7 @@ export default function StripeCallbackPage() {
                     ? "Your existing Stripe connection was found and restored successfully."
                     : wasAlreadyConnected
                       ? "Your Stripe account was already connected to your profile."
-                      : isFullySetup || fullySetup
+                      : isFullySetup
                         ? "Your Stripe account is fully configured and ready to receive payments."
                         : "Your Stripe account has been connected, but additional setup may be required."}
               </p>
