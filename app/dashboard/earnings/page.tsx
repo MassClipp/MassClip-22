@@ -272,11 +272,6 @@ export default function EarningsPage() {
     }
   }, [user])
 
-  const handleStripeConnectionSuccess = () => {
-    console.log("🎉 Stripe connection successful, refreshing status...")
-    checkStripeStatus()
-  }
-
   const handleRefresh = () => {
     if (stripeStatus?.connected && stripeStatus?.chargesEnabled && stripeStatus?.detailsSubmitted) {
       fetchEarningsData(true)
@@ -288,10 +283,10 @@ export default function EarningsPage() {
   // Show loading while checking auth or Stripe status
   if (authLoading || checkingStripe) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-screen bg-gray-900">
         <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-          <p className="text-muted-foreground">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-white" />
+          <p className="text-gray-400">
             {authLoading ? "Loading..." : "Checking Stripe connection..."}
           </p>
         </div>
@@ -302,10 +297,10 @@ export default function EarningsPage() {
   // Show login prompt if not authenticated
   if (!user) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Card className="w-full max-w-md">
+      <div className="flex items-center justify-center min-h-screen bg-gray-900">
+        <Card className="w-full max-w-md bg-gray-800 border-gray-700">
           <CardContent className="pt-6">
-            <p className="text-center text-muted-foreground">Please log in to continue</p>
+            <p className="text-center text-gray-400">Please log in to continue</p>
           </CardContent>
         </Card>
       </div>
@@ -315,70 +310,79 @@ export default function EarningsPage() {
   // Show Stripe connection setup if not connected or not fully set up
   if (!stripeStatus?.connected || !stripeStatus?.chargesEnabled || !stripeStatus?.detailsSubmitted) {
     return (
-      <div className="min-h-screen bg-gray-900 text-white">
-        <div className="container mx-auto py-16 px-4 max-w-6xl">
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white">
+        <div className="fixed inset-0 bg-[url('/noise.png')] opacity-[0.03] mix-blend-soft-light pointer-events-none"></div>
+        <div className="relative z-10 container mx-auto py-16 px-4 max-w-6xl">
           {/* Header */}
-          <div className="text-center mb-12">
-            <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-blue-500/25">
-              <CreditCard className="w-8 h-8 text-white" />
+          <div className="text-center mb-16">
+            <div className="w-20 h-20 bg-gradient-to-br from-blue-500 via-blue-600 to-blue-700 rounded-full flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-blue-500/30 ring-4 ring-blue-500/20">
+              <CreditCard className="w-10 h-10 text-white" />
             </div>
-            <h1 className="text-4xl font-bold mb-4">Connect Your Stripe Account</h1>
-            <p className="text-xl text-gray-400">Start accepting payments and track your earnings</p>
+            <h1 className="text-5xl font-bold mb-6 bg-gradient-to-r from-white via-gray-100 to-gray-300 bg-clip-text text-transparent">
+              Connect Your Stripe Account
+            </h1>
+            <p className="text-xl text-gray-300 max-w-2xl mx-auto leading-relaxed">
+              Start accepting payments and track your earnings with our integrated payment solution
+            </p>
           </div>
 
           {/* Benefits Grid */}
-          <div className="grid md:grid-cols-3 gap-8 mb-16">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-green-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-green-500/25">
-                <span className="text-2xl font-bold text-white">$</span>
+          <div className="grid md:grid-cols-3 gap-8 mb-20">
+            <div className="text-center group">
+              <div className="w-20 h-20 bg-gradient-to-br from-green-500 via-green-600 to-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-green-500/30 ring-4 ring-green-500/20 group-hover:scale-110 transition-transform duration-300">
+                <span className="text-3xl font-bold text-white">$</span>
               </div>
-              <h3 className="text-xl font-semibold mb-2">Accept Payments</h3>
-              <p className="text-gray-400">Process payments from customers worldwide securely</p>
+              <h3 className="text-2xl font-semibold mb-3 text-white">Accept Payments</h3>
+              <p className="text-gray-300 leading-relaxed">Process payments from customers worldwide with enterprise-grade security</p>
             </div>
 
-            <div className="text-center">
-              <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-500/25">
-                <Globe className="w-8 h-8 text-white" />
+            <div className="text-center group">
+              <div className="w-20 h-20 bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-blue-500/30 ring-4 ring-blue-500/20 group-hover:scale-110 transition-transform duration-300">
+                <Globe className="w-10 h-10 text-white" />
               </div>
-              <h3 className="text-xl font-semibold mb-2">Global Reach</h3>
-              <p className="text-gray-400">Supported in 40+ countries with local payment methods</p>
+              <h3 className="text-2xl font-semibold mb-3 text-white">Global Reach</h3>
+              <p className="text-gray-300 leading-relaxed">Supported in 40+ countries with local payment methods and currencies</p>
             </div>
 
-            <div className="text-center">
-              <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-purple-500/25">
-                <Shield className="w-8 h-8 text-white" />
+            <div className="text-center group">
+              <div className="w-20 h-20 bg-gradient-to-br from-purple-500 via-purple-600 to-violet-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-purple-500/30 ring-4 ring-purple-500/20 group-hover:scale-110 transition-transform duration-300">
+                <Shield className="w-10 h-10 text-white" />
               </div>
-              <h3 className="text-xl font-semibold mb-2">Secure & Reliable</h3>
-              <p className="text-gray-400">Bank-level security with PCI compliance</p>
+              <h3 className="text-2xl font-semibold mb-3 text-white">Secure & Reliable</h3>
+              <p className="text-gray-300 leading-relaxed">Bank-level security with PCI compliance and fraud protection</p>
             </div>
           </div>
 
           {/* Connection Options */}
-          <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+          <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto mb-20">
             {/* Create New Account */}
-            <Card className="bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700/50 shadow-xl">
-              <CardHeader className="pb-4">
-                <div className="flex items-center gap-3 mb-2">
-                  <CreditCard className="h-6 w-6 text-blue-400" />
-                  <CardTitle className="text-xl text-white">Create New Stripe Account</CardTitle>
+            <Card className="bg-gradient-to-br from-gray-800/80 via-gray-800/60 to-gray-900/80 border-gray-600/50 shadow-2xl backdrop-blur-sm hover:shadow-blue-500/20 transition-all duration-300 group">
+              <CardHeader className="pb-6">
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center shadow-lg">
+                    <CreditCard className="h-6 w-6 text-white" />
+                  </div>
+                  <CardTitle className="text-2xl text-white group-hover:text-blue-300 transition-colors">
+                    Create New Stripe Account
+                  </CardTitle>
                 </div>
-                <CardDescription className="text-gray-400">
-                  Set up a new Stripe account to start accepting payments
+                <CardDescription className="text-gray-300 text-base leading-relaxed">
+                  Set up a new Stripe account to start accepting payments instantly
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <CheckCircle className="h-5 w-5 text-green-400" />
-                    <span className="text-gray-300">Quick 5-minute setup</span>
+              <CardContent className="space-y-8">
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4">
+                    <CheckCircle className="h-6 w-6 text-green-400 flex-shrink-0" />
+                    <span className="text-gray-200 text-lg">Quick 5-minute setup</span>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <CheckCircle className="h-5 w-5 text-green-400" />
-                    <span className="text-gray-300">2.9% + 30¢ per transaction</span>
+                  <div className="flex items-center gap-4">
+                    <CheckCircle className="h-6 w-6 text-green-400 flex-shrink-0" />
+                    <span className="text-gray-200 text-lg">2.9% + 30¢ per transaction</span>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <CheckCircle className="h-5 w-5 text-green-400" />
-                    <span className="text-gray-300">Automatic payouts to your bank</span>
+                  <div className="flex items-center gap-4">
+                    <CheckCircle className="h-6 w-6 text-green-400 flex-shrink-0" />
+                    <span className="text-gray-200 text-lg">Automatic payouts to your bank</span>
                   </div>
                 </div>
                 
@@ -399,54 +403,56 @@ export default function EarningsPage() {
                     }
                   }}
                   disabled={loading}
-                  className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg"
+                  className="w-full bg-gradient-to-r from-blue-600 via-blue-700 to-blue-800 hover:from-blue-700 hover:via-blue-800 hover:to-blue-900 text-white shadow-xl hover:shadow-2xl hover:shadow-blue-500/30 transition-all duration-300 text-lg py-6"
                   size="lg"
                 >
                   {loading ? (
                     <>
-                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      <Loader2 className="mr-3 h-6 w-6 animate-spin" />
                       Creating Account...
                     </>
                   ) : (
                     <>
-                      <ExternalLink className="mr-2 h-5 w-5" />
+                      <ExternalLink className="mr-3 h-6 w-6" />
                       Create Stripe Account
                     </>
                   )}
                 </Button>
                 
-                <p className="text-sm text-gray-500 text-center">
-                  You'll be redirected to Stripe to complete setup
+                <p className="text-sm text-gray-400 text-center leading-relaxed">
+                  You'll be redirected to Stripe to complete the secure setup process
                 </p>
               </CardContent>
             </Card>
 
             {/* Connect Existing Account */}
-            <Card className="bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700/50 shadow-xl">
-              <CardHeader className="pb-4">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="w-6 h-6 bg-gradient-to-br from-green-400 to-green-500 rounded flex items-center justify-center">
-                    <ExternalLink className="h-4 w-4 text-white" />
+            <Card className="bg-gradient-to-br from-gray-800/80 via-gray-800/60 to-gray-900/80 border-gray-600/50 shadow-2xl backdrop-blur-sm hover:shadow-green-500/20 transition-all duration-300 group">
+              <CardHeader className="pb-6">
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-green-600 rounded-lg flex items-center justify-center shadow-lg">
+                    <ExternalLink className="h-6 w-6 text-white" />
                   </div>
-                  <CardTitle className="text-xl text-white">Already Have a Stripe Account?</CardTitle>
+                  <CardTitle className="text-2xl text-white group-hover:text-green-300 transition-colors">
+                    Already Have a Stripe Account?
+                  </CardTitle>
                 </div>
-                <CardDescription className="text-gray-400">
+                <CardDescription className="text-gray-300 text-base leading-relaxed">
                   Securely connect your existing Stripe account through Stripe Connect
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <CheckCircle className="h-5 w-5 text-green-400" />
-                    <span className="text-gray-300">Secure OAuth connection</span>
+              <CardContent className="space-y-8">
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4">
+                    <CheckCircle className="h-6 w-6 text-green-400 flex-shrink-0" />
+                    <span className="text-gray-200 text-lg">Secure OAuth connection</span>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <CheckCircle className="h-5 w-5 text-green-400" />
-                    <span className="text-gray-300">No manual account IDs needed</span>
+                  <div className="flex items-center gap-4">
+                    <CheckCircle className="h-6 w-6 text-green-400 flex-shrink-0" />
+                    <span className="text-gray-200 text-lg">No manual account IDs needed</span>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <CheckCircle className="h-5 w-5 text-green-400" />
-                    <span className="text-gray-300">Stripe handles account verification</span>
+                  <div className="flex items-center gap-4">
+                    <CheckCircle className="h-6 w-6 text-green-400 flex-shrink-0" />
+                    <span className="text-gray-200 text-lg">Stripe handles account verification</span>
                   </div>
                 </div>
                 
@@ -467,23 +473,23 @@ export default function EarningsPage() {
                     }
                   }}
                   disabled={loading}
-                  className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white shadow-lg"
+                  className="w-full bg-gradient-to-r from-green-600 via-green-700 to-green-800 hover:from-green-700 hover:via-green-800 hover:to-green-900 text-white shadow-xl hover:shadow-2xl hover:shadow-green-500/30 transition-all duration-300 text-lg py-6"
                   size="lg"
                 >
                   {loading ? (
                     <>
-                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      <Loader2 className="mr-3 h-6 w-6 animate-spin" />
                       Connecting...
                     </>
                   ) : (
                     <>
-                      <ExternalLink className="mr-2 h-5 w-5" />
+                      <ExternalLink className="mr-3 h-6 w-6" />
                       Connect with Stripe
                     </>
                   )}
                 </Button>
                 
-                <p className="text-sm text-gray-500 text-center">
+                <p className="text-sm text-gray-400 text-center leading-relaxed">
                   Stripe will detect your existing account and connect it securely
                 </p>
               </CardContent>
@@ -492,17 +498,17 @@ export default function EarningsPage() {
 
           {/* Error Display */}
           {error && (
-            <Card className="mt-8 max-w-2xl mx-auto border-red-600 bg-red-900/20">
-              <CardContent className="p-6">
-                <div className="flex items-center gap-3 text-red-400">
-                  <ExternalLink className="h-5 w-5" />
-                  <span>Error: {error}</span>
+            <Card className="mt-12 max-w-2xl mx-auto border-red-500/50 bg-red-900/20 backdrop-blur-sm">
+              <CardContent className="p-8">
+                <div className="flex items-center gap-4 text-red-300">
+                  <AlertCircle className="h-6 w-6 flex-shrink-0" />
+                  <span className="text-lg">Error: {error}</span>
                 </div>
                 <Button 
                   onClick={() => setError(null)} 
                   variant="outline" 
                   size="sm" 
-                  className="mt-4 border-red-600 text-red-400 hover:bg-red-900/40"
+                  className="mt-6 border-red-500/50 text-red-300 hover:bg-red-900/40 hover:border-red-400"
                 >
                   Dismiss
                 </Button>
@@ -511,37 +517,39 @@ export default function EarningsPage() {
           )}
 
           {/* How It Works Section */}
-          <div className="mt-16 text-center">
-            <h2 className="text-2xl font-bold mb-8 flex items-center justify-center gap-3">
-              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg shadow-blue-500/25">
-                <span className="text-sm font-bold">?</span>
+          <div className="mt-24 text-center">
+            <h2 className="text-3xl font-bold mb-12 flex items-center justify-center gap-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 rounded-full flex items-center justify-center shadow-xl shadow-blue-500/30">
+                <span className="text-lg font-bold text-white">?</span>
               </div>
-              How It Works
+              <span className="bg-gradient-to-r from-white via-gray-100 to-gray-300 bg-clip-text text-transparent">
+                How It Works
+              </span>
             </h2>
             
-            <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
-              <div className="text-center">
-                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 text-xl font-bold shadow-lg shadow-blue-500/25">
+            <div className="grid md:grid-cols-3 gap-12 max-w-5xl mx-auto">
+              <div className="text-center group">
+                <div className="w-16 h-16 bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 rounded-full flex items-center justify-center mx-auto mb-6 text-2xl font-bold shadow-xl shadow-blue-500/30 group-hover:scale-110 transition-transform duration-300">
                   1
                 </div>
-                <h3 className="text-lg font-semibold mb-2">Choose Your Option</h3>
-                <p className="text-gray-400">Create a new account or connect an existing one</p>
+                <h3 className="text-xl font-semibold mb-4 text-white">Choose Your Option</h3>
+                <p className="text-gray-300 leading-relaxed">Create a new account or connect an existing one with just a few clicks</p>
               </div>
               
-              <div className="text-center">
-                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 text-xl font-bold shadow-lg shadow-blue-500/25">
+              <div className="text-center group">
+                <div className="w-16 h-16 bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 rounded-full flex items-center justify-center mx-auto mb-6 text-2xl font-bold shadow-xl shadow-blue-500/30 group-hover:scale-110 transition-transform duration-300">
                   2
                 </div>
-                <h3 className="text-lg font-semibold mb-2">Complete Setup</h3>
-                <p className="text-gray-400">Follow Stripe's secure onboarding process</p>
+                <h3 className="text-xl font-semibold mb-4 text-white">Complete Setup</h3>
+                <p className="text-gray-300 leading-relaxed">Follow Stripe's secure onboarding process to verify your account</p>
               </div>
               
-              <div className="text-center">
-                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 text-xl font-bold shadow-lg shadow-blue-500/25">
+              <div className="text-center group">
+                <div className="w-16 h-16 bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 rounded-full flex items-center justify-center mx-auto mb-6 text-2xl font-bold shadow-xl shadow-blue-500/30 group-hover:scale-110 transition-transform duration-300">
                   3
                 </div>
-                <h3 className="text-lg font-semibold mb-2">Start Earning</h3>
-                <p className="text-gray-400">Begin accepting payments and tracking earnings</p>
+                <h3 className="text-xl font-semibold mb-4 text-white">Start Earning</h3>
+                <p className="text-gray-300 leading-relaxed">Begin accepting payments and tracking your earnings immediately</p>
               </div>
             </div>
           </div>
@@ -553,24 +561,26 @@ export default function EarningsPage() {
   // Show loading while fetching earnings data
   if (loading) {
     return (
-      <div className="container mx-auto p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-3xl font-bold">Earnings Dashboard</h1>
-            <p className="text-muted-foreground">Track your revenue and performance</p>
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black">
+        <div className="container mx-auto p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h1 className="text-3xl font-bold text-white">Earnings Dashboard</h1>
+              <p className="text-gray-400">Track your revenue and performance</p>
+            </div>
           </div>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {[...Array(4)].map((_, i) => (
-            <Card key={i}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Loading...</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="h-8 bg-muted animate-pulse rounded"></div>
-              </CardContent>
-            </Card>
-          ))}
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {[...Array(4)].map((_, i) => (
+              <Card key={i} className="bg-gray-800 border-gray-700">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium text-gray-300">Loading...</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-8 bg-gray-700 animate-pulse rounded"></div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </div>
       </div>
     )
@@ -638,381 +648,383 @@ export default function EarningsPage() {
   }
 
   return (
-    <div className="container mx-auto p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold">Earnings Dashboard</h1>
-          <p className="text-muted-foreground">Track your revenue and performance</p>
-          <div className="flex items-center gap-2 mt-2">
-            {getDataSourceBadge()}
-            {safeData.stripeAccountId && <Badge variant="outline">Account: {safeData.stripeAccountId.slice(-6)}</Badge>}
-            {safeData.message && <Badge variant="outline">{safeData.message}</Badge>}
-            {debugInfo && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowDebug(!showDebug)}
-                className="ml-2"
-              >
-                <Bug className="mr-2 h-4 w-4" />
-                Debug Info
-              </Button>
-            )}
-          </div>
-        </div>
-        <Button onClick={handleRefresh} disabled={refreshing} variant="outline">
-          <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-          Refresh
-        </Button>
-      </div>
-
-      {/* Debug Information Panel */}
-      {debugInfo && showDebug && (
-        <Card className="mb-6 border-blue-200 bg-blue-50">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Bug className="h-5 w-5" />
-              Debug Information
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {debugInfo.logs && (
-                <div>
-                  <h4 className="font-semibold mb-2">Execution Log:</h4>
-                  <div className="bg-gray-100 p-3 rounded text-sm font-mono max-h-60 overflow-y-auto">
-                    {debugInfo.logs.map((log: any, index: number) => (
-                      <div key={index} className="mb-1">
-                        <span className="text-blue-600">[{log.step}]</span> {log.action}
-                        {log.timestamp && <span className="text-gray-500 ml-2">({new Date(log.timestamp).toLocaleTimeString()})</span>}
-                        {log.error && <span className="text-red-600 ml-2">ERROR: {log.error}</span>}
-                        {log.data && (
-                          <pre className="ml-4 text-xs text-gray-600">
-                            {JSON.stringify(log.data, null, 2)}
-                          </pre>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {debugInfo.importErrors && (
-                <div>
-                  <h4 className="font-semibold mb-2 text-red-600">Import Errors:</h4>
-                  <div className="bg-red-50 p-3 rounded">
-                    {debugInfo.importErrors.map((error: string, index: number) => (
-                      <div key={index} className="text-red-700 text-sm">{error}</div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {debugInfo.importStatus && (
-                <div>
-                  <h4 className="font-semibold mb-2">Import Status:</h4>
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    {Object.entries(debugInfo.importStatus).map(([key, status]) => (
-                      <div key={key} className="flex justify-between">
-                        <span>{key}:</span>
-                        <span className={status === "✅ success" ? "text-green-600" : "text-red-600"}>
-                          {status as string}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {debugInfo.errorDetails && (
-                <div>
-                  <h4 className="font-semibold mb-2 text-red-600">Error Details:</h4>
-                  <div className="bg-red-50 p-3 rounded text-sm">
-                    <div><strong>Name:</strong> {debugInfo.errorDetails.name}</div>
-                    <div><strong>Message:</strong> {debugInfo.errorDetails.message}</div>
-                    {debugInfo.errorDetails.stack && (
-                      <details className="mt-2">
-                        <summary className="cursor-pointer">Stack Trace</summary>
-                        <pre className="mt-2 text-xs bg-white p-2 rounded overflow-x-auto">
-                          {debugInfo.errorDetails.stack}
-                        </pre>
-                      </details>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {debugInfo.environment && (
-                <div>
-                  <h4 className="font-semibold mb-2">Environment:</h4>
-                  <div className="text-sm">
-                    <div>Node Version: {debugInfo.environment.nodeVersion}</div>
-                    <div>Platform: {debugInfo.environment.platform}</div>
-                    <div>Timestamp: {debugInfo.environment.timestamp}</div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Error Display */}
-      {error && (
-        <Card className="mb-6 border-red-200 bg-red-50">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-red-600">
-              <XCircle className="h-5 w-5" />
-              <span>Error: {error}</span>
-            </div>
-            <Button onClick={() => fetchEarningsData()} className="mt-4" variant="outline">
-              Try Again
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Key Metrics */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Earnings</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(safeData.totalEarnings)}</div>
-            <p className="text-xs text-muted-foreground">All-time revenue</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">This Month</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(safeData.thisMonthEarnings)}</div>
-            <p className="text-xs text-muted-foreground">{formatPercentage(monthlyGrowth)} from last month</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Available Balance</CardTitle>
-            <CreditCard className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(safeData.availableBalance)}</div>
-            <p className="text-xs text-muted-foreground">Ready for payout</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Sales</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatNumber(safeData.salesMetrics.totalSales)}</div>
-            <p className="text-xs text-muted-foreground">
-              {formatCurrency(safeData.salesMetrics.averageTransactionValue)} avg order
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Demo Mode Notice */}
-      {safeData.isDemo && (
-        <Card className="mb-6 border-blue-200 bg-blue-50">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2">
-              <Info className="h-5 w-5 text-blue-600" />
-              <div>
-                <h3 className="font-semibold text-blue-800">Demo Mode Active</h3>
-                <p className="text-sm text-blue-700">
-                  This is sample data for demonstration purposes. Connect your Stripe account to see real earnings.
-                </p>
-                {safeData.error && (
-                  <p className="text-sm text-blue-600 mt-1">
-                    Reason: {safeData.error}
-                  </p>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Account Status Alert */}
-      {safeData.accountStatus.requirementsCount > 0 && (
-        <Card className="mb-6 border-yellow-200 bg-yellow-50">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-yellow-600" />
-              <div>
-                <h3 className="font-semibold text-yellow-800">Account Setup Required</h3>
-                <p className="text-sm text-yellow-700">
-                  {safeData.accountStatus.requirementsCount} requirement(s) need attention to enable full functionality.
-                </p>
-                {safeData.accountStatus.currentlyDue.length > 0 && (
-                  <p className="text-xs text-yellow-600 mt-1">
-                    Currently due: {safeData.accountStatus.currentlyDue.join(", ")}
-                  </p>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Detailed Tabs */}
-      <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="transactions">Transactions</TabsTrigger>
-          <TabsTrigger value="analytics">Analytics</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="overview" className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>Recent Performance</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex justify-between">
-                  <span>Last 30 Days</span>
-                  <span className="font-semibold">{formatCurrency(safeData.last30DaysEarnings)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>This Month Sales</span>
-                  <span className="font-semibold">{formatNumber(safeData.salesMetrics.thisMonthSales)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Last 30 Days Sales</span>
-                  <span className="font-semibold">{formatNumber(safeData.salesMetrics.last30DaysSales)}</span>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Payout Information</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex justify-between">
-                  <span>Pending Payout</span>
-                  <span className="font-semibold">{formatCurrency(safeData.pendingPayout)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Available Balance</span>
-                  <span className="font-semibold text-green-600">{formatCurrency(safeData.availableBalance)}</span>
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <span>Account Status</span>
-                  {getAccountStatusBadge()}
-                </div>
-                <Button className="w-full bg-transparent" variant="outline">
-                  <CreditCard className="mr-2 h-4 w-4" />
-                  Manage Payouts
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white">
+      <div className="container mx-auto p-6">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-3xl font-bold text-white">Earnings Dashboard</h1>
+            <p className="text-gray-400">Track your revenue and performance</p>
+            <div className="flex items-center gap-2 mt-2">
+              {getDataSourceBadge()}
+              {safeData.stripeAccountId && <Badge variant="outline">Account: {safeData.stripeAccountId.slice(-6)}</Badge>}
+              {safeData.message && <Badge variant="outline">{safeData.message}</Badge>}
+              {debugInfo && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowDebug(!showDebug)}
+                  className="ml-2"
+                >
+                  <Bug className="mr-2 h-4 w-4" />
+                  Debug Info
                 </Button>
-              </CardContent>
-            </Card>
+              )}
+            </div>
           </div>
-        </TabsContent>
+          <Button onClick={handleRefresh} disabled={refreshing} variant="outline">
+            <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+        </div>
 
-        <TabsContent value="transactions" className="space-y-4">
-          <Card>
+        {/* Debug Information Panel */}
+        {debugInfo && showDebug && (
+          <Card className="mb-6 border-blue-200 bg-blue-50">
             <CardHeader>
-              <CardTitle>Recent Transactions</CardTitle>
-              <CardDescription>Your latest payment transactions</CardDescription>
+              <CardTitle className="flex items-center gap-2">
+                <Bug className="h-5 w-5" />
+                Debug Information
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              {safeData.recentTransactions.length > 0 ? (
-                <div className="space-y-4">
-                  {safeData.recentTransactions.slice(0, 10).map((transaction, index) => (
-                    <div
-                      key={transaction.id || index}
-                      className="flex items-center justify-between p-3 border rounded-lg"
-                    >
-                      <div>
-                        <p className="font-medium">{transaction.description}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {formatDateTime(transaction.created)} • {transaction.type}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-semibold">{formatCurrency(transaction.net)}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {transaction.status === "available" ? (
-                            <CheckCircle className="inline h-3 w-3 text-green-500 mr-1" />
-                          ) : (
-                            <AlertCircle className="inline h-3 w-3 text-yellow-500 mr-1" />
+              <div className="space-y-4">
+                {debugInfo.logs && (
+                  <div>
+                    <h4 className="font-semibold mb-2">Execution Log:</h4>
+                    <div className="bg-gray-100 p-3 rounded text-sm font-mono max-h-60 overflow-y-auto">
+                      {debugInfo.logs.map((log: any, index: number) => (
+                        <div key={index} className="mb-1">
+                          <span className="text-blue-600">[{log.step}]</span> {log.action}
+                          {log.timestamp && <span className="text-gray-500 ml-2">({new Date(log.timestamp).toLocaleTimeString()})</span>}
+                          {log.error && <span className="text-red-600 ml-2">ERROR: {log.error}</span>}
+                          {log.data && (
+                            <pre className="ml-4 text-xs text-gray-600">
+                              {JSON.stringify(log.data, null, 2)}
+                            </pre>
                           )}
-                          {transaction.status}
-                        </p>
-                      </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-center text-muted-foreground py-8">No transactions found</p>
-              )}
+                  </div>
+                )}
+
+                {debugInfo.importErrors && (
+                  <div>
+                    <h4 className="font-semibold mb-2 text-red-600">Import Errors:</h4>
+                    <div className="bg-red-50 p-3 rounded">
+                      {debugInfo.importErrors.map((error: string, index: number) => (
+                        <div key={index} className="text-red-700 text-sm">{error}</div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {debugInfo.importStatus && (
+                  <div>
+                    <h4 className="font-semibold mb-2">Import Status:</h4>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      {Object.entries(debugInfo.importStatus).map(([key, status]) => (
+                        <div key={key} className="flex justify-between">
+                          <span>{key}:</span>
+                          <span className={status === "✅ success" ? "text-green-600" : "text-red-600"}>
+                            {status as string}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {debugInfo.errorDetails && (
+                  <div>
+                    <h4 className="font-semibold mb-2 text-red-600">Error Details:</h4>
+                    <div className="bg-red-50 p-3 rounded text-sm">
+                      <div><strong>Name:</strong> {debugInfo.errorDetails.name}</div>
+                      <div><strong>Message:</strong> {debugInfo.errorDetails.message}</div>
+                      {debugInfo.errorDetails.stack && (
+                        <details className="mt-2">
+                          <summary className="cursor-pointer">Stack Trace</summary>
+                          <pre className="mt-2 text-xs bg-white p-2 rounded overflow-x-auto">
+                            {debugInfo.errorDetails.stack}
+                          </pre>
+                        </details>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {debugInfo.environment && (
+                  <div>
+                    <h4 className="font-semibold mb-2">Environment:</h4>
+                    <div className="text-sm">
+                      <div>Node Version: {debugInfo.environment.nodeVersion}</div>
+                      <div>Platform: {debugInfo.environment.platform}</div>
+                      <div>Timestamp: {debugInfo.environment.timestamp}</div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
-        </TabsContent>
+        )}
 
-        <TabsContent value="analytics" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Account Health</CardTitle>
-              <CardDescription>Your Stripe account status and capabilities</CardDescription>
+        {/* Error Display */}
+        {error && (
+          <Card className="mb-6 border-red-200 bg-red-50">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 text-red-600">
+                <XCircle className="h-5 w-5" />
+                <span>Error: {error}</span>
+              </div>
+              <Button onClick={() => fetchEarningsData()} className="mt-4" variant="outline">
+                Try Again
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Key Metrics */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
+          <Card className="bg-gray-800 border-gray-700">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-gray-300">Total Earnings</CardTitle>
+              <DollarSign className="h-4 w-4 text-gray-400" />
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="flex items-center justify-between">
-                  <span>Charges Enabled</span>
-                  {safeData.accountStatus.chargesEnabled ? (
-                    <CheckCircle className="h-5 w-5 text-green-500" />
-                  ) : (
-                    <XCircle className="h-5 w-5 text-red-500" />
+            <CardContent>
+              <div className="text-2xl font-bold text-white">{formatCurrency(safeData.totalEarnings)}</div>
+              <p className="text-xs text-gray-400">All-time revenue</p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gray-800 border-gray-700">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-gray-300">This Month</CardTitle>
+              <TrendingUp className="h-4 w-4 text-gray-400" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-white">{formatCurrency(safeData.thisMonthEarnings)}</div>
+              <p className="text-xs text-gray-400">{formatPercentage(monthlyGrowth)} from last month</p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gray-800 border-gray-700">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-gray-300">Available Balance</CardTitle>
+              <CreditCard className="h-4 w-4 text-gray-400" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-white">{formatCurrency(safeData.availableBalance)}</div>
+              <p className="text-xs text-gray-400">Ready for payout</p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gray-800 border-gray-700">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-gray-300">Total Sales</CardTitle>
+              <Users className="h-4 w-4 text-gray-400" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-white">{formatNumber(safeData.salesMetrics.totalSales)}</div>
+              <p className="text-xs text-gray-400">
+                {formatCurrency(safeData.salesMetrics.averageTransactionValue)} avg order
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Demo Mode Notice */}
+        {safeData.isDemo && (
+          <Card className="mb-6 border-blue-200 bg-blue-50">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2">
+                <Info className="h-5 w-5 text-blue-600" />
+                <div>
+                  <h3 className="font-semibold text-blue-800">Demo Mode Active</h3>
+                  <p className="text-sm text-blue-700">
+                    This is sample data for demonstration purposes. Connect your Stripe account to see real earnings.
+                  </p>
+                  {safeData.error && (
+                    <p className="text-sm text-blue-600 mt-1">
+                      Reason: {safeData.error}
+                    </p>
                   )}
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Payouts Enabled</span>
-                  {safeData.accountStatus.payoutsEnabled ? (
-                    <CheckCircle className="h-5 w-5 text-green-500" />
-                  ) : (
-                    <XCircle className="h-5 w-5 text-red-500" />
-                  )}
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Details Submitted</span>
-                  {safeData.accountStatus.detailsSubmitted ? (
-                    <CheckCircle className="h-5 w-5 text-green-500" />
-                  ) : (
-                    <XCircle className="h-5 w-5 text-red-500" />
-                  )}
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Requirements</span>
-                  <Badge variant={safeData.accountStatus.requirementsCount > 0 ? "destructive" : "default"}>
-                    {safeData.accountStatus.requirementsCount} pending
-                  </Badge>
                 </div>
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
-      </Tabs>
+        )}
 
-      {/* Footer Info */}
-      {safeData.lastUpdated && (
-        <div className="mt-6 text-center text-sm text-muted-foreground">
-          Last updated: {formatDateTime(safeData.lastUpdated)}
-        </div>
-      )}
+        {/* Account Status Alert */}
+        {safeData.accountStatus.requirementsCount > 0 && (
+          <Card className="mb-6 border-yellow-200 bg-yellow-50">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-yellow-600" />
+                <div>
+                  <h3 className="font-semibold text-yellow-800">Account Setup Required</h3>
+                  <p className="text-sm text-yellow-700">
+                    {safeData.accountStatus.requirementsCount} requirement(s) need attention to enable full functionality.
+                  </p>
+                  {safeData.accountStatus.currentlyDue.length > 0 && (
+                    <p className="text-xs text-yellow-600 mt-1">
+                      Currently due: {safeData.accountStatus.currentlyDue.join(", ")}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Detailed Tabs */}
+        <Tabs defaultValue="overview" className="space-y-4">
+          <TabsList className="bg-gray-800 border-gray-700">
+            <TabsTrigger value="overview" className="text-gray-300 data-[state=active]:text-white">Overview</TabsTrigger>
+            <TabsTrigger value="transactions" className="text-gray-300 data-[state=active]:text-white">Transactions</TabsTrigger>
+            <TabsTrigger value="analytics" className="text-gray-300 data-[state=active]:text-white">Analytics</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="overview" className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <Card className="bg-gray-800 border-gray-700">
+                <CardHeader>
+                  <CardTitle className="text-white">Recent Performance</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex justify-between">
+                    <span className="text-gray-300">Last 30 Days</span>
+                    <span className="font-semibold text-white">{formatCurrency(safeData.last30DaysEarnings)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-300">This Month Sales</span>
+                    <span className="font-semibold text-white">{formatNumber(safeData.salesMetrics.thisMonthSales)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-300">Last 30 Days Sales</span>
+                    <span className="font-semibold text-white">{formatNumber(safeData.salesMetrics.last30DaysSales)}</span>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-gray-800 border-gray-700">
+                <CardHeader>
+                  <CardTitle className="text-white">Payout Information</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex justify-between">
+                    <span className="text-gray-300">Pending Payout</span>
+                    <span className="font-semibold text-white">{formatCurrency(safeData.pendingPayout)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-300">Available Balance</span>
+                    <span className="font-semibold text-green-400">{formatCurrency(safeData.availableBalance)}</span>
+                  </div>
+                  <Separator className="bg-gray-600" />
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-300">Account Status</span>
+                    {getAccountStatusBadge()}
+                  </div>
+                  <Button className="w-full bg-transparent border-gray-600 text-gray-300 hover:bg-gray-700" variant="outline">
+                    <CreditCard className="mr-2 h-4 w-4" />
+                    Manage Payouts
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="transactions" className="space-y-4">
+            <Card className="bg-gray-800 border-gray-700">
+              <CardHeader>
+                <CardTitle className="text-white">Recent Transactions</CardTitle>
+                <CardDescription className="text-gray-400">Your latest payment transactions</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {safeData.recentTransactions.length > 0 ? (
+                  <div className="space-y-4">
+                    {safeData.recentTransactions.slice(0, 10).map((transaction, index) => (
+                      <div
+                        key={transaction.id || index}
+                        className="flex items-center justify-between p-3 border border-gray-600 rounded-lg bg-gray-700/50"
+                      >
+                        <div>
+                          <p className="font-medium text-white">{transaction.description}</p>
+                          <p className="text-sm text-gray-400">
+                            {formatDateTime(transaction.created)} • {transaction.type}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-semibold text-white">{formatCurrency(transaction.net)}</p>
+                          <p className="text-sm text-gray-400">
+                            {transaction.status === "available" ? (
+                              <CheckCircle className="inline h-3 w-3 text-green-500 mr-1" />
+                            ) : (
+                              <AlertCircle className="inline h-3 w-3 text-yellow-500 mr-1" />
+                            )}
+                            {transaction.status}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-center text-gray-400 py-8">No transactions found</p>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="analytics" className="space-y-4">
+            <Card className="bg-gray-800 border-gray-700">
+              <CardHeader>
+                <CardTitle className="text-white">Account Health</CardTitle>
+                <CardDescription className="text-gray-400">Your Stripe account status and capabilities</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-300">Charges Enabled</span>
+                    {safeData.accountStatus.chargesEnabled ? (
+                      <CheckCircle className="h-5 w-5 text-green-500" />
+                    ) : (
+                      <XCircle className="h-5 w-5 text-red-500" />
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-300">Payouts Enabled</span>
+                    {safeData.accountStatus.payoutsEnabled ? (
+                      <CheckCircle className="h-5 w-5 text-green-500" />
+                    ) : (
+                      <XCircle className="h-5 w-5 text-red-500" />
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-300">Details Submitted</span>
+                    {safeData.accountStatus.detailsSubmitted ? (
+                      <CheckCircle className="h-5 w-5 text-green-500" />
+                    ) : (
+                      <XCircle className="h-5 w-5 text-red-500" />
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-300">Requirements</span>
+                    <Badge variant={safeData.accountStatus.requirementsCount > 0 ? "destructive" : "default"}>
+                      {safeData.accountStatus.requirementsCount} pending
+                    </Badge>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+
+        {/* Footer Info */}
+        {safeData.lastUpdated && (
+          <div className="mt-6 text-center text-sm text-gray-400">
+            Last updated: {formatDateTime(safeData.lastUpdated)}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
