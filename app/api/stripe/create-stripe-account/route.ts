@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
-import { adminDb } from "@/lib/firebase-admin"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
@@ -8,55 +7,49 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId, email } = await request.json()
-
+    const { userId } = await request.json()
+    
     if (!userId) {
-      return NextResponse.json({ error: "User ID is required" }, { status: 400 })
+      return NextResponse.json(
+        { error: "User ID is required" },
+        { status: 400 }
+      )
     }
-
-    // Check if user already has a Stripe account
-    const userDoc = await adminDb.collection("users").doc(userId).get()
-    const userData = userDoc.data()
-
-    if (userData?.stripeAccountId) {
-      return NextResponse.json({
-        accountId: userData.stripeAccountId,
-        message: "Account already exists",
-      })
-    }
-
-    // Create new Stripe Express account
+    
+    console.log(`🔄 Creating Stripe Express account for user: ${userId}`)
+    
+    // Create Express account
     const account = await stripe.accounts.create({
       type: "express",
-      country: "US",
-      email: email,
-      capabilities: {
-        card_payments: { requested: true },
-        transfers: { requested: true },
-      },
-      business_profile: {
-        product_description: "Digital content and services",
+      metadata: {
+        userId: userId,
+        platform: "massclip",
       },
     })
-
-    // Save account ID to Firestore
-    await adminDb.collection("users").doc(userId).update({
-      stripeAccountId: account.id,
-      stripeAccountStatus: "pending",
-      stripeChargesEnabled: false,
-      stripePayoutsEnabled: false,
-      stripeDetailsSubmitted: false,
-      updatedAt: new Date(),
+    
+    console.log(`✅ Created Stripe account: ${account.id}`)
+    
+    // Create account link for onboarding
+    const accountLink = await stripe.accountLinks.create({
+      account: account.id,
+      refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/connect-stripe?refresh=true`,
+      return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/connect-stripe/callback?success=true&account_id=${account.id}`,
+      type: "account_onboarding",
     })
-
-    console.log("Created Stripe account:", account.id, "for user:", userId)
-
+    
+    console.log(`✅ Created account onboarding link`)
+    
     return NextResponse.json({
       accountId: account.id,
-      message: "Account created successfully",
+      url: accountLink.url,
+      message: "Stripe account created successfully"
     })
+    
   } catch (error) {
-    console.error("Error creating Stripe account:", error)
-    return NextResponse.json({ error: "Failed to create Stripe account" }, { status: 500 })
+    console.error("❌ Error creating Stripe account:", error)
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Failed to create Stripe account" },
+      { status: 500 }
+    )
   }
 }
