@@ -8,7 +8,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
 import { RefreshCw, DollarSign, TrendingUp, CreditCard, Users, AlertCircle, CheckCircle, XCircle, Bug, Info, Loader2, ExternalLink, Globe, Shield } from 'lucide-react'
 import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
-import { StripeConnectionDark } from "@/components/stripe-connection-dark"
 
 // Safe formatting functions
 function formatCurrency(amount: number): string {
