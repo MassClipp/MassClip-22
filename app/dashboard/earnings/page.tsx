@@ -312,36 +312,36 @@ export default function EarningsPage() {
     return (
       <div className="min-h-screen">
         {/* Hero Section - Full Width */}
-        <div className="text-center py-24">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-blue-600 rounded-full mb-8">
+        <div className="text-center py-16">
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full mb-6 shadow-lg">
             <CreditCard className="w-10 h-10 text-white" />
           </div>
-          <h1 className="text-5xl font-bold text-white mb-6">
+          <h1 className="text-4xl font-bold text-white mb-4">
             Connect Your Stripe Account
           </h1>
-          <p className="text-xl text-gray-400 mb-16">
+          <p className="text-lg text-gray-400 mb-12">
             Start accepting payments and track your earnings
           </p>
         </div>
 
         {/* Benefits Section - Full Width */}
-        <div className="grid grid-cols-3 gap-16 px-32 mb-24">
+        <div className="grid grid-cols-3 gap-12 px-24 mb-16">
           <div className="text-center">
-            <div className="w-16 h-16 bg-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
+            <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-green-700 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
               <DollarSign className="w-8 h-8 text-white" />
             </div>
             <h3 className="text-2xl font-semibold text-white mb-4">Accept Payments</h3>
             <p className="text-gray-400 text-lg">Process payments from customers worldwide</p>
           </div>
           <div className="text-center">
-            <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-6">
+            <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
               <Globe className="w-8 h-8 text-white" />
             </div>
             <h3 className="text-2xl font-semibold text-white mb-4">Global Reach</h3>
             <p className="text-gray-400 text-lg">Supported in 40+ countries</p>
           </div>
           <div className="text-center">
-            <div className="w-16 h-16 bg-purple-600 rounded-full flex items-center justify-center mx-auto mb-6">
+            <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-purple-700 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
               <Shield className="w-8 h-8 text-white" />
             </div>
             <h3 className="text-2xl font-semibold text-white mb-4">Secure & Reliable</h3>
@@ -354,7 +354,7 @@ export default function EarningsPage() {
           {/* Create New Account */}
           <Card className="bg-gray-800/30 border-gray-700/50 p-8">
             <div className="flex items-center gap-4 mb-6">
-              <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center">
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-700 rounded-xl flex items-center justify-center shadow-lg">
                 <CreditCard className="w-6 h-6 text-white" />
               </div>
               <div>
@@ -418,7 +418,7 @@ export default function EarningsPage() {
           {/* Connect Existing Account */}
           <Card className="bg-gray-800/30 border-gray-700/50 p-8">
             <div className="flex items-center gap-4 mb-6">
-              <div className="w-12 h-12 bg-green-600 rounded-xl flex items-center justify-center">
+              <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-green-700 rounded-xl flex items-center justify-center shadow-lg">
                 <ExternalLink className="w-6 h-6 text-white" />
               </div>
               <div>
@@ -481,15 +481,15 @@ export default function EarningsPage() {
         </div>
 
         {/* How It Works Section */}
-        <div className="text-center py-16">
+        <div className="text-center py-12">
           <div className="flex items-center justify-center gap-4 mb-12">
             <Info className="w-8 h-8 text-blue-400" />
             <h2 className="text-3xl font-bold text-white">How It Works</h2>
           </div>
           
-          <div className="grid grid-cols-3 gap-16 px-32">
+          <div className="grid grid-cols-3 gap-12 px-24">
             <div className="text-center">
-              <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-6 text-2xl font-bold text-white">
+              <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl font-bold text-white shadow-lg">
                 1
               </div>
               <h3 className="text-xl font-semibold mb-4 text-white">Choose Your Option</h3>
@@ -497,7 +497,7 @@ export default function EarningsPage() {
             </div>
             
             <div className="text-center">
-              <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-6 text-2xl font-bold text-white">
+              <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl font-bold text-white shadow-lg">
                 2
               </div>
               <h3 className="text-xl font-semibold mb-4 text-white">Complete Setup</h3>
@@ -505,7 +505,7 @@ export default function EarningsPage() {
             </div>
             
             <div className="text-center">
-              <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-6 text-2xl font-bold text-white">
+              <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl font-bold text-white shadow-lg">
                 3
               </div>
               <h3 className="text-xl font-semibold mb-4 text-white">Start Earning</h3>
@@ -726,8 +726,8 @@ export default function EarningsPage() {
           <Card className="bg-gray-800/50 border-gray-700 hover:bg-gray-800/70 transition-colors">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-gray-300">Total Earnings</CardTitle>
-              <div className="w-8 h-8 bg-green-600/20 rounded-lg flex items-center justify-center">
-                <DollarSign className="h-4 w-4 text-green-400" />
+              <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-green-700 rounded-lg flex items-center justify-center shadow-sm">
+                <DollarSign className="h-4 w-4 text-white" />
               </div>
             </CardHeader>
             <CardContent>
@@ -739,8 +739,8 @@ export default function EarningsPage() {
           <Card className="bg-gray-800/50 border-gray-700 hover:bg-gray-800/70 transition-colors">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-gray-300">This Month</CardTitle>
-              <div className="w-8 h-8 bg-blue-600/20 rounded-lg flex items-center justify-center">
-                <TrendingUp className="h-4 w-4 text-blue-400" />
+              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-700 rounded-lg flex items-center justify-center shadow-sm">
+                <TrendingUp className="h-4 w-4 text-white" />
               </div>
             </CardHeader>
             <CardContent>
@@ -752,8 +752,8 @@ export default function EarningsPage() {
           <Card className="bg-gray-800/50 border-gray-700 hover:bg-gray-800/70 transition-colors">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-gray-300">Available Balance</CardTitle>
-              <div className="w-8 h-8 bg-purple-600/20 rounded-lg flex items-center justify-center">
-                <CreditCard className="h-4 w-4 text-purple-400" />
+              <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-purple-700 rounded-lg flex items-center justify-center shadow-sm">
+                <CreditCard className="h-4 w-4 text-white" />
               </div>
             </CardHeader>
             <CardContent>
@@ -765,8 +765,8 @@ export default function EarningsPage() {
           <Card className="bg-gray-800/50 border-gray-700 hover:bg-gray-800/70 transition-colors">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-gray-300">Total Sales</CardTitle>
-              <div className="w-8 h-8 bg-orange-600/20 rounded-lg flex items-center justify-center">
-                <BarChart3 className="h-4 w-4 text-orange-400" />
+              <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-orange-700 rounded-lg flex items-center justify-center shadow-sm">
+                <BarChart3 className="h-4 w-4 text-white" />
               </div>
             </CardHeader>
             <CardContent>
