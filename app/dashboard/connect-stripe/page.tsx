@@ -81,7 +81,7 @@ export default function ConnectStripePage() {
       <div className="container mx-auto py-16 px-4 max-w-6xl">
         {/* Header */}
         <div className="text-center mb-12">
-          <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-6">
+          <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-blue-500/25">
             <CreditCard className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-4xl font-bold mb-4">Connect Your Stripe Account</h1>
@@ -91,15 +91,15 @@ export default function ConnectStripePage() {
         {/* Benefits Grid */}
         <div className="grid md:grid-cols-3 gap-8 mb-16">
           <div className="text-center">
-            <div className="w-16 h-16 bg-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
-              <CreditCard className="w-8 h-8 text-white" />
+            <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-green-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-green-500/25">
+              <span className="text-2xl font-bold text-white">$</span>
             </div>
             <h3 className="text-xl font-semibold mb-2">Accept Payments</h3>
             <p className="text-gray-400">Process payments from customers worldwide securely</p>
           </div>
 
           <div className="text-center">
-            <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-500/25">
               <Globe className="w-8 h-8 text-white" />
             </div>
             <h3 className="text-xl font-semibold mb-2">Global Reach</h3>
@@ -107,7 +107,7 @@ export default function ConnectStripePage() {
           </div>
 
           <div className="text-center">
-            <div className="w-16 h-16 bg-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-purple-500/25">
               <Shield className="w-8 h-8 text-white" />
             </div>
             <h3 className="text-xl font-semibold mb-2">Secure & Reliable</h3>
@@ -118,7 +118,7 @@ export default function ConnectStripePage() {
         {/* Connection Options */}
         <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
           {/* Create New Account */}
-          <Card className="bg-gray-800 border-gray-700">
+          <Card className="bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700/50 shadow-xl">
             <CardHeader className="pb-4">
               <div className="flex items-center gap-3 mb-2">
                 <CreditCard className="h-6 w-6 text-blue-400" />
@@ -147,7 +147,7 @@ export default function ConnectStripePage() {
               <Button 
                 onClick={handleCreateAccount} 
                 disabled={loading}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg"
                 size="lg"
               >
                 {loading ? (
@@ -170,10 +170,12 @@ export default function ConnectStripePage() {
           </Card>
 
           {/* Connect Existing Account */}
-          <Card className="bg-gray-800 border-gray-700">
+          <Card className="bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700/50 shadow-xl">
             <CardHeader className="pb-4">
               <div className="flex items-center gap-3 mb-2">
-                <Shield className="h-6 w-6 text-green-400" />
+                <div className="w-6 h-6 bg-gradient-to-br from-green-400 to-green-500 rounded flex items-center justify-center">
+                  <ExternalLink className="h-4 w-4 text-white" />
+                </div>
                 <CardTitle className="text-xl text-white">Already Have a Stripe Account?</CardTitle>
               </div>
               <CardDescription className="text-gray-400">
@@ -199,7 +201,7 @@ export default function ConnectStripePage() {
               <Button 
                 onClick={handleConnectExisting} 
                 disabled={loading}
-                className="w-full bg-green-600 hover:bg-green-700 text-white"
+                className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white shadow-lg"
                 size="lg"
               >
                 {loading ? (
@@ -245,7 +247,7 @@ export default function ConnectStripePage() {
         {/* How It Works Section */}
         <div className="mt-16 text-center">
           <h2 className="text-2xl font-bold mb-8 flex items-center justify-center gap-3">
-            <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg shadow-blue-500/25">
               <span className="text-sm font-bold">?</span>
             </div>
             How It Works
@@ -253,7 +255,7 @@ export default function ConnectStripePage() {
           
           <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
             <div className="text-center">
-              <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 text-xl font-bold">
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 text-xl font-bold shadow-lg shadow-blue-500/25">
                 1
               </div>
               <h3 className="text-lg font-semibold mb-2">Choose Your Option</h3>
@@ -261,7 +263,7 @@ export default function ConnectStripePage() {
             </div>
             
             <div className="text-center">
-              <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 text-xl font-bold">
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 text-xl font-bold shadow-lg shadow-blue-500/25">
                 2
               </div>
               <h3 className="text-lg font-semibold mb-2">Complete Setup</h3>
@@ -269,7 +271,7 @@ export default function ConnectStripePage() {
             </div>
             
             <div className="text-center">
-              <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 text-xl font-bold">
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 text-xl font-bold shadow-lg shadow-blue-500/25">
                 3
               </div>
               <h3 className="text-lg font-semibold mb-2">Start Earning</h3>
