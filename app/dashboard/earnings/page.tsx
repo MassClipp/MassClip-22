@@ -6,14 +6,49 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
-import { RefreshCw, DollarSign, TrendingUp, CreditCard, Users, AlertCircle, CheckCircle, XCircle } from "lucide-react"
-import {
-  formatCurrency,
-  formatNumber,
-  formatPercentage,
-  formatDateTime,
-  calculatePercentageChange,
-} from "@/lib/format-utils"
+import { RefreshCw, DollarSign, TrendingUp, CreditCard, Users, AlertCircle, CheckCircle, XCircle, Bug, Info } from 'lucide-react'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+
+// Safe formatting functions
+function formatCurrency(amount: number): string {
+  if (typeof amount !== "number" || isNaN(amount)) return "$0.00"
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(amount)
+}
+
+function formatNumber(value: number): string {
+  if (typeof value !== "number" || isNaN(value)) return "0"
+  return new Intl.NumberFormat("en-US").format(value)
+}
+
+function formatPercentage(value: number): string {
+  if (typeof value !== "number" || isNaN(value)) return "0%"
+  return `${value >= 0 ? "+" : ""}${value.toFixed(1)}%`
+}
+
+function formatDateTime(date: Date | string): string {
+  try {
+    const dateObj = typeof date === "string" ? new Date(date) : date
+    if (isNaN(dateObj.getTime())) return "Invalid Date"
+    return dateObj.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    })
+  } catch {
+    return "Invalid Date"
+  }
+}
+
+function calculatePercentageChange(current: number, previous: number): number {
+  if (typeof current !== "number" || typeof previous !== "number") return 0
+  if (previous === 0) return current > 0 ? 100 : 0
+  return ((current - previous) / previous) * 100
+}
 
 interface EarningsData {
   totalEarnings: number
@@ -42,8 +77,11 @@ interface EarningsData {
   monthlyBreakdown: any[]
   error?: string
   isDemo?: boolean
+  message?: string
   stripeAccountId?: string
   lastUpdated?: string
+  debug?: any
+  demoData?: any
 }
 
 export default function EarningsPage() {
@@ -51,31 +89,112 @@ export default function EarningsPage() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [debugInfo, setDebugInfo] = useState<any>(null)
+  const [showDebug, setShowDebug] = useState(false)
 
   const fetchEarningsData = async (forceRefresh = false) => {
     try {
       setError(null)
+      setDebugInfo(null)
+      
       if (forceRefresh) {
         setRefreshing(true)
       } else {
         setLoading(true)
       }
 
+      console.log("🔍 Fetching earnings data...")
+
       const endpoint = "/api/dashboard/earnings"
       const method = forceRefresh ? "POST" : "GET"
 
-      const response = await fetch(endpoint, { method })
-      const data = await response.json()
+      console.log(`🔍 Making ${method} request to ${endpoint}`)
+
+      const response = await fetch(endpoint, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
+
+      console.log(`🔍 Response status: ${response.status}`)
+      console.log(`🔍 Response headers:`, Object.fromEntries(response.headers.entries()))
+
+      const responseText = await response.text()
+      console.log(`🔍 Raw response:`, responseText)
+
+      let data
+      try {
+        data = JSON.parse(responseText)
+      } catch (parseError) {
+        console.error("🔍 JSON parse error:", parseError)
+        throw new Error(`Invalid JSON response: ${responseText.substring(0, 200)}...`)
+      }
+
+      console.log("🔍 Parsed response data:", data)
+
+      // Store debug information
+      if (data.debug) {
+        setDebugInfo(data.debug)
+        console.log("🔍 Debug info received:", data.debug)
+      }
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to fetch earnings data")
+        console.error("🔍 API Error - Status:", response.status)
+        console.error("🔍 API Error - Data:", data)
+        
+        // If we have demo data in the error response, use it
+        if (data.demoData) {
+          setEarningsData({
+            ...data.demoData,
+            isDemo: true,
+            error: data.error,
+            message: data.message,
+            debug: data.debug,
+            lastUpdated: data.lastUpdated,
+          })
+          return
+        }
+        
+        throw new Error(`HTTP ${response.status}: ${data.error || data.message || 'Unknown error'}`)
       }
 
       setEarningsData(data)
-      console.log("Earnings data loaded:", data)
+      console.log("🔍 Earnings data set successfully")
     } catch (err) {
-      console.error("Error fetching earnings:", err)
+      console.error("🔍 Error fetching earnings:", err)
       setError(err instanceof Error ? err.message : "Failed to load earnings data")
+      
+      // Set fallback demo data
+      setEarningsData({
+        totalEarnings: 0,
+        thisMonthEarnings: 0,
+        lastMonthEarnings: 0,
+        last30DaysEarnings: 0,
+        pendingPayout: 0,
+        availableBalance: 0,
+        salesMetrics: {
+          totalSales: 0,
+          thisMonthSales: 0,
+          last30DaysSales: 0,
+          averageTransactionValue: 0,
+          conversionRate: 0,
+        },
+        accountStatus: {
+          chargesEnabled: false,
+          payoutsEnabled: false,
+          detailsSubmitted: false,
+          requirementsCount: 0,
+          currentlyDue: [],
+          pastDue: [],
+        },
+        recentTransactions: [],
+        payoutHistory: [],
+        monthlyBreakdown: [],
+        isDemo: true,
+        error: err instanceof Error ? err.message : "Unknown error",
+        lastUpdated: new Date().toISOString(),
+      })
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -115,30 +234,6 @@ export default function EarningsPage() {
     )
   }
 
-  if (error && !earningsData) {
-    return (
-      <div className="container mx-auto p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-3xl font-bold">Earnings Dashboard</h1>
-            <p className="text-muted-foreground">Track your revenue and performance</p>
-          </div>
-        </div>
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center gap-2 text-destructive">
-              <XCircle className="h-5 w-5" />
-              <span>Error: {error}</span>
-            </div>
-            <Button onClick={() => fetchEarningsData()} className="mt-4">
-              Try Again
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
   const data = earningsData!
   const monthlyGrowth = calculatePercentageChange(data.thisMonthEarnings, data.lastMonthEarnings)
 
@@ -174,6 +269,18 @@ export default function EarningsPage() {
           <div className="flex items-center gap-2 mt-2">
             {getDataSourceBadge()}
             {data.stripeAccountId && <Badge variant="outline">Account: {data.stripeAccountId.slice(-6)}</Badge>}
+            {data.message && <Badge variant="outline">{data.message}</Badge>}
+            {debugInfo && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowDebug(!showDebug)}
+                className="ml-2"
+              >
+                <Bug className="mr-2 h-4 w-4" />
+                Debug Info
+              </Button>
+            )}
           </div>
         </div>
         <Button onClick={handleRefresh} disabled={refreshing} variant="outline">
@@ -181,6 +288,112 @@ export default function EarningsPage() {
           Refresh
         </Button>
       </div>
+
+      {/* Debug Information Panel */}
+      {debugInfo && showDebug && (
+        <Card className="mb-6 border-blue-200 bg-blue-50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Bug className="h-5 w-5" />
+              Debug Information
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {debugInfo.logs && (
+                <div>
+                  <h4 className="font-semibold mb-2">Execution Log:</h4>
+                  <div className="bg-gray-100 p-3 rounded text-sm font-mono max-h-60 overflow-y-auto">
+                    {debugInfo.logs.map((log: any, index: number) => (
+                      <div key={index} className="mb-1">
+                        <span className="text-blue-600">[{log.step}]</span> {log.action}
+                        {log.timestamp && <span className="text-gray-500 ml-2">({new Date(log.timestamp).toLocaleTimeString()})</span>}
+                        {log.error && <span className="text-red-600 ml-2">ERROR: {log.error}</span>}
+                        {log.data && (
+                          <pre className="ml-4 text-xs text-gray-600">
+                            {JSON.stringify(log.data, null, 2)}
+                          </pre>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {debugInfo.importErrors && (
+                <div>
+                  <h4 className="font-semibold mb-2 text-red-600">Import Errors:</h4>
+                  <div className="bg-red-50 p-3 rounded">
+                    {debugInfo.importErrors.map((error: string, index: number) => (
+                      <div key={index} className="text-red-700 text-sm">{error}</div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {debugInfo.importStatus && (
+                <div>
+                  <h4 className="font-semibold mb-2">Import Status:</h4>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    {Object.entries(debugInfo.importStatus).map(([key, status]) => (
+                      <div key={key} className="flex justify-between">
+                        <span>{key}:</span>
+                        <span className={status === "✅ success" ? "text-green-600" : "text-red-600"}>
+                          {status as string}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {debugInfo.errorDetails && (
+                <div>
+                  <h4 className="font-semibold mb-2 text-red-600">Error Details:</h4>
+                  <div className="bg-red-50 p-3 rounded text-sm">
+                    <div><strong>Name:</strong> {debugInfo.errorDetails.name}</div>
+                    <div><strong>Message:</strong> {debugInfo.errorDetails.message}</div>
+                    {debugInfo.errorDetails.stack && (
+                      <details className="mt-2">
+                        <summary className="cursor-pointer">Stack Trace</summary>
+                        <pre className="mt-2 text-xs bg-white p-2 rounded overflow-x-auto">
+                          {debugInfo.errorDetails.stack}
+                        </pre>
+                      </details>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {debugInfo.environment && (
+                <div>
+                  <h4 className="font-semibold mb-2">Environment:</h4>
+                  <div className="text-sm">
+                    <div>Node Version: {debugInfo.environment.nodeVersion}</div>
+                    <div>Platform: {debugInfo.environment.platform}</div>
+                    <div>Timestamp: {debugInfo.environment.timestamp}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Error Display */}
+      {error && (
+        <Card className="mb-6 border-red-200 bg-red-50">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 text-red-600">
+              <XCircle className="h-5 w-5" />
+              <span>Error: {error}</span>
+            </div>
+            <Button onClick={() => fetchEarningsData()} className="mt-4" variant="outline">
+              Try Again
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Key Metrics */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
@@ -230,6 +443,28 @@ export default function EarningsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Demo Mode Notice */}
+      {data.isDemo && (
+        <Card className="mb-6 border-blue-200 bg-blue-50">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2">
+              <Info className="h-5 w-5 text-blue-600" />
+              <div>
+                <h3 className="font-semibold text-blue-800">Demo Mode Active</h3>
+                <p className="text-sm text-blue-700">
+                  This is sample data for demonstration purposes. Connect your Stripe account to see real earnings.
+                </p>
+                {data.error && (
+                  <p className="text-sm text-blue-600 mt-1">
+                    Reason: {data.error}
+                  </p>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Account Status Alert */}
       {data.accountStatus.requirementsCount > 0 && (
@@ -319,8 +554,11 @@ export default function EarningsPage() {
             <CardContent>
               {data.recentTransactions.length > 0 ? (
                 <div className="space-y-4">
-                  {data.recentTransactions.slice(0, 10).map((transaction) => (
-                    <div key={transaction.id} className="flex items-center justify-between p-3 border rounded-lg">
+                  {data.recentTransactions.slice(0, 10).map((transaction, index) => (
+                    <div
+                      key={transaction.id || index}
+                      className="flex items-center justify-between p-3 border rounded-lg"
+                    >
                       <div>
                         <p className="font-medium">{transaction.description}</p>
                         <p className="text-sm text-muted-foreground">
