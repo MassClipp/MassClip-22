@@ -1,33 +1,51 @@
-'use client'
+"use client"
 
 import { useState, useEffect } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { useAuth } from '@/contexts/auth-context'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
-import { Loader2, CreditCard, CheckCircle, AlertCircle, ExternalLink } from 'lucide-react'
-import { useAuth } from '@/contexts/auth-context'
+import { Loader2, ExternalLink, AlertCircle, CheckCircle, CreditCard, Globe, Shield, Zap } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
-import { useRouter } from 'next/navigation'
 
 interface StripeAccountStatus {
   connected: boolean
-  charges_enabled: boolean
-  payouts_enabled: boolean
-  details_submitted: boolean
+  chargesEnabled: boolean
+  payoutsEnabled: boolean
+  detailsSubmitted: boolean
   requirements?: string[]
-  account_id?: string
+  accountId?: string
 }
 
 export default function ConnectStripePage() {
-  const { user } = useAuth()
-  const { toast } = useToast()
+  const { user, loading: authLoading } = useAuth()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const { toast } = useToast()
   
   const [accountStatus, setAccountStatus] = useState<StripeAccountStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [connecting, setConnecting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Check for error parameters in URL
+  useEffect(() => {
+    const errorParam = searchParams.get('error')
+    const messageParam = searchParams.get('message')
+    
+    if (errorParam && messageParam) {
+      setError(decodeURIComponent(messageParam))
+      
+      // Show toast notification for the error
+      toast({
+        title: "Connection Failed",
+        description: decodeURIComponent(messageParam),
+        variant: "destructive",
+      })
+    }
+  }, [searchParams, toast])
 
   // Fetch current account status
   const fetchAccountStatus = async () => {
@@ -36,39 +54,60 @@ export default function ConnectStripePage() {
     try {
       setError(null)
       const response = await fetch('/api/stripe/connect/status', {
+        method: 'POST',
         headers: {
+          'Content-Type': 'application/json',
           'Authorization': `Bearer ${await user.getIdToken()}`
-        }
+        },
+        body: JSON.stringify({ refresh: false })
       })
 
       if (response.ok) {
         const data = await response.json()
         setAccountStatus(data)
+        console.log('✅ Account status loaded:', data)
       } else {
         // No account connected yet
         setAccountStatus({
           connected: false,
-          charges_enabled: false,
-          payouts_enabled: false,
-          details_submitted: false
+          chargesEnabled: false,
+          payoutsEnabled: false,
+          detailsSubmitted: false
         })
       }
     } catch (error: any) {
       console.error('Error fetching account status:', error)
       setError(error.message || 'Failed to load account status')
+      // Set default status on error
+      setAccountStatus({
+        connected: false,
+        chargesEnabled: false,
+        payoutsEnabled: false,
+        detailsSubmitted: false
+      })
     } finally {
       setLoading(false)
     }
   }
 
-  // Connect to Stripe
+  // Connect to Stripe using OAuth
   const handleConnectStripe = async () => {
-    if (!user) return
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to connect your Stripe account.",
+        variant: "destructive",
+      })
+      return
+    }
 
     try {
       setConnecting(true)
       setError(null)
 
+      console.log('🔄 Initiating Stripe Connect OAuth...')
+
+      // Call API to generate OAuth URL
       const response = await fetch('/api/stripe/connect/oauth', {
         method: 'POST',
         headers: {
@@ -81,22 +120,25 @@ export default function ConnectStripePage() {
       })
 
       if (!response.ok) {
-        throw new Error('Failed to generate Stripe Connect URL')
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to generate connection URL')
       }
 
-      const { url } = await response.json()
+      const { authUrl } = await response.json()
       
-      // Redirect to Stripe Connect
-      window.location.href = url
+      console.log('🔗 Redirecting to Stripe Connect OAuth:', authUrl)
+
+      // Redirect to Stripe OAuth
+      window.location.href = authUrl
+
     } catch (error: any) {
-      console.error('Error connecting to Stripe:', error)
-      setError(error.message || 'Failed to connect to Stripe')
+      console.error('Error generating Stripe Connect URL:', error)
+      setError(error.message || 'Failed to generate connection URL')
       toast({
-        title: "Connection Failed",
-        description: error.message || "Failed to connect to Stripe. Please try again.",
+        title: "Connection Error",
+        description: error.message || "Failed to generate connection URL",
         variant: "destructive",
       })
-    } finally {
       setConnecting(false)
     }
   }
@@ -107,15 +149,18 @@ export default function ConnectStripePage() {
 
     try {
       setLoading(true)
-      const response = await fetch('/api/stripe/connect/refresh-status', {
+      const response = await fetch('/api/stripe/connect/status', {
         method: 'POST',
         headers: {
+          'Content-Type': 'application/json',
           'Authorization': `Bearer ${await user.getIdToken()}`
-        }
+        },
+        body: JSON.stringify({ refresh: true })
       })
 
       if (response.ok) {
-        await fetchAccountStatus()
+        const data = await response.json()
+        setAccountStatus(data)
         toast({
           title: "Status Updated",
           description: "Your Stripe account status has been refreshed.",
@@ -128,34 +173,64 @@ export default function ConnectStripePage() {
         description: "Failed to refresh account status. Please try again.",
         variant: "destructive",
       })
+    } finally {
+      setLoading(false)
     }
   }
 
   useEffect(() => {
-    fetchAccountStatus()
+    if (user) {
+      fetchAccountStatus()
+    }
   }, [user])
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
-      <div className="container mx-auto px-4 py-8 max-w-2xl">
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="text-center space-y-4">
-            <Loader2 className="h-8 w-8 text-zinc-500 animate-spin mx-auto" />
-            <p className="text-zinc-400">Loading account status...</p>
-          </div>
+      <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
+        <div className="text-center space-y-4">
+          <Loader2 className="h-8 w-8 text-zinc-500 animate-spin mx-auto" />
+          <p className="text-lg font-medium text-white">Loading...</p>
         </div>
       </div>
     )
   }
 
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
+        <Card className="w-full max-w-md bg-zinc-900/60 border-zinc-800/50">
+          <CardHeader className="text-center">
+            <AlertCircle className="h-12 w-12 text-amber-500 mx-auto mb-4" />
+            <CardTitle className="text-xl text-white">Authentication Required</CardTitle>
+            <CardDescription className="text-zinc-400">
+              Please log in to connect your Stripe account
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button 
+              onClick={() => router.push('/login')}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              Go to Login
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   return (
-    <div className="container mx-auto px-4 py-8 max-w-2xl">
+    <div className="container mx-auto px-4 py-8 max-w-4xl">
       <div className="space-y-8">
         {/* Header */}
         <div className="text-center space-y-4">
-          <h1 className="text-3xl font-bold tracking-tight text-white">Connect with Stripe</h1>
-          <p className="text-zinc-400 max-w-md mx-auto">
-            Connect your Stripe account to start receiving payments for your content
+          <div className="p-4 bg-blue-600/10 rounded-full w-20 h-20 mx-auto flex items-center justify-center">
+            <CreditCard className="h-10 w-10 text-blue-500" />
+          </div>
+          <h1 className="text-3xl font-bold tracking-tight text-white">Connect Your Stripe Account</h1>
+          <p className="text-lg text-zinc-400 max-w-2xl mx-auto">
+            Start accepting payments and receiving payouts by connecting your Stripe account.
+            Choose to create a new account or connect an existing one.
           </p>
         </div>
 
@@ -237,22 +312,22 @@ export default function ConnectStripePage() {
                   
                   <div className="flex items-center justify-between p-3 bg-zinc-800/50 rounded-lg">
                     <span className="text-zinc-300">Charges Enabled</span>
-                    <Badge variant={accountStatus.charges_enabled ? "default" : "secondary"}>
-                      {accountStatus.charges_enabled ? "Enabled" : "Disabled"}
+                    <Badge variant={accountStatus.chargesEnabled ? "default" : "secondary"}>
+                      {accountStatus.chargesEnabled ? "Enabled" : "Disabled"}
                     </Badge>
                   </div>
                   
                   <div className="flex items-center justify-between p-3 bg-zinc-800/50 rounded-lg">
                     <span className="text-zinc-300">Payouts Enabled</span>
-                    <Badge variant={accountStatus.payouts_enabled ? "default" : "secondary"}>
-                      {accountStatus.payouts_enabled ? "Enabled" : "Disabled"}
+                    <Badge variant={accountStatus.payoutsEnabled ? "default" : "secondary"}>
+                      {accountStatus.payoutsEnabled ? "Enabled" : "Disabled"}
                     </Badge>
                   </div>
                   
                   <div className="flex items-center justify-between p-3 bg-zinc-800/50 rounded-lg">
                     <span className="text-zinc-300">Details Submitted</span>
-                    <Badge variant={accountStatus.details_submitted ? "default" : "secondary"}>
-                      {accountStatus.details_submitted ? "Complete" : "Incomplete"}
+                    <Badge variant={accountStatus.detailsSubmitted ? "default" : "secondary"}>
+                      {accountStatus.detailsSubmitted ? "Complete" : "Incomplete"}
                     </Badge>
                   </div>
                 </div>
@@ -296,32 +371,48 @@ export default function ConnectStripePage() {
           </CardContent>
         </Card>
 
-        {/* Info Card */}
-        <Card className="bg-zinc-900/60 border-zinc-800/50">
-          <CardHeader>
-            <CardTitle className="text-white text-lg">Why Connect Stripe?</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-3 text-zinc-300">
-              <li className="flex items-start gap-3">
-                <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
-                <span>Receive payments directly from customers</span>
-              </li>
-              <li className="flex items-start gap-3">
-                <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
-                <span>Automatic payouts to your bank account</span>
-              </li>
-              <li className="flex items-start gap-3">
-                <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
-                <span>Detailed transaction and earnings reports</span>
-              </li>
-              <li className="flex items-start gap-3">
-                <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
-                <span>Secure and PCI compliant payment processing</span>
-              </li>
-            </ul>
-          </CardContent>
-        </Card>
+        {/* Benefits Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <Card className="bg-zinc-900/60 border-zinc-800/50 text-center">
+            <CardContent className="p-6">
+              <div className="p-3 bg-green-600/10 rounded-full w-12 h-12 mx-auto mb-4 flex items-center justify-center">
+                <CreditCard className="h-6 w-6 text-green-500" />
+              </div>
+              <h3 className="font-semibold text-white mb-2">Process payments from customers worldwide</h3>
+              <p className="text-sm text-zinc-400">Accept payments in multiple currencies</p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-zinc-900/60 border-zinc-800/50 text-center">
+            <CardContent className="p-6">
+              <div className="p-3 bg-blue-600/10 rounded-full w-12 h-12 mx-auto mb-4 flex items-center justify-center">
+                <Globe className="h-6 w-6 text-blue-500" />
+              </div>
+              <h3 className="font-semibold text-white mb-2">Supported in 40+ countries</h3>
+              <p className="text-sm text-zinc-400">Global payment processing</p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-zinc-900/60 border-zinc-800/50 text-center">
+            <CardContent className="p-6">
+              <div className="p-3 bg-purple-600/10 rounded-full w-12 h-12 mx-auto mb-4 flex items-center justify-center">
+                <Shield className="h-6 w-6 text-purple-500" />
+              </div>
+              <h3 className="font-semibold text-white mb-2">Bank-level security and encryption</h3>
+              <p className="text-sm text-zinc-400">Your data is protected</p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-zinc-900/60 border-zinc-800/50 text-center">
+            <CardContent className="p-6">
+              <div className="p-3 bg-orange-600/10 rounded-full w-12 h-12 mx-auto mb-4 flex items-center justify-center">
+                <Zap className="h-6 w-6 text-orange-500" />
+              </div>
+              <h3 className="font-semibold text-white mb-2">Automatic daily payouts to your bank</h3>
+              <p className="text-sm text-zinc-400">Fast and reliable transfers</p>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   )

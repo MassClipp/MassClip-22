@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
-import { db } from "@/lib/firebase-admin"
+import { adminDb } from "@/lib/firebase-admin"
+import { FieldValue } from "firebase-admin/firestore"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
@@ -34,13 +35,34 @@ export async function POST(request: NextRequest) {
       const buyerUid = session.metadata?.buyerUid
       const bundleId = session.metadata?.bundleId || session.metadata?.productBoxId
       const itemType = session.metadata?.itemType || "bundle"
+      const creatorId = session.metadata?.creatorId
 
-      if (!buyerUid || !bundleId) {
-        console.error("❌ [Webhook] Missing required metadata:", { buyerUid, bundleId })
+      if (!buyerUid || !bundleId || !creatorId) {
+        console.error("❌ [Webhook] Missing required metadata:", { buyerUid, bundleId, creatorId })
         return NextResponse.json({ error: "Missing metadata" }, { status: 400 })
       }
 
-      console.log("🔍 [Webhook] Looking up bundle/item:", bundleId)
+      // Verify the creator has a connected Stripe account
+      const creatorAccountDoc = await adminDb.collection("connectedStripeAccounts").doc(creatorId).get()
+      
+      if (!creatorAccountDoc.exists) {
+        console.error("❌ [Webhook] Creator has no connected Stripe account:", creatorId)
+        return NextResponse.json({ error: "Creator account not found" }, { status: 404 })
+      }
+
+      const creatorAccountData = creatorAccountDoc.data()!
+      const expectedStripeAccountId = creatorAccountData.stripeAccountId
+
+      // Verify the session came from the correct connected account
+      if (session.account !== expectedStripeAccountId) {
+        console.error("❌ [Webhook] Session account mismatch:", {
+          sessionAccount: session.account,
+          expectedAccount: expectedStripeAccountId
+        })
+        return NextResponse.json({ error: "Account mismatch" }, { status: 400 })
+      }
+
+      console.log(`✅ [Webhook] Verified session from connected account: ${expectedStripeAccountId}`)
 
       // Look up the bundle/item in Firestore
       let itemData: any = null
@@ -48,13 +70,13 @@ export async function POST(request: NextRequest) {
 
       try {
         // Try bundles collection first
-        const bundleDoc = await db.collection("bundles").doc(bundleId).get()
+        const bundleDoc = await adminDb.collection("bundles").doc(bundleId).get()
         if (bundleDoc.exists) {
           itemData = { id: bundleDoc.id, ...bundleDoc.data() }
           console.log("✅ [Webhook] Found bundle:", itemData.title)
         } else {
           // Try productBoxes collection
-          const productBoxDoc = await db.collection("productBoxes").doc(bundleId).get()
+          const productBoxDoc = await adminDb.collection("productBoxes").doc(bundleId).get()
           if (productBoxDoc.exists) {
             itemData = { id: productBoxDoc.id, ...productBoxDoc.data() }
             console.log("✅ [Webhook] Found product box:", itemData.title)
@@ -66,13 +88,11 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: "Item not found" }, { status: 404 })
         }
 
-        // Look up creator data
-        if (itemData.creatorId) {
-          const creatorDoc = await db.collection("users").doc(itemData.creatorId).get()
-          if (creatorDoc.exists) {
-            creatorData = creatorDoc.data()
-            console.log("✅ [Webhook] Found creator:", creatorData.displayName || creatorData.username)
-          }
+        // Look up creator data from users collection (for display info)
+        const creatorDoc = await adminDb.collection("users").doc(creatorId).get()
+        if (creatorDoc.exists) {
+          creatorData = creatorDoc.data()
+          console.log("✅ [Webhook] Found creator:", creatorData.displayName || creatorData.username)
         }
       } catch (error) {
         console.error("❌ [Webhook] Error looking up item/creator:", error)
@@ -103,8 +123,9 @@ export async function POST(request: NextRequest) {
         fileType: itemData.fileType || "",
         duration: itemData.duration || 0,
 
-        // Creator information
-        creatorId: itemData.creatorId || "",
+        // Creator information (from connectedStripeAccounts)
+        creatorId: creatorId,
+        creatorStripeAccountId: expectedStripeAccountId,
         creatorName: creatorData?.displayName || creatorData?.username || "Unknown Creator",
         creatorUsername: creatorData?.username || "",
 
@@ -128,29 +149,30 @@ export async function POST(request: NextRequest) {
 
       try {
         // Write to bundlePurchases collection
-        await db.collection("bundlePurchases").doc(session.id).set(purchaseData)
+        await adminDb.collection("bundlePurchases").doc(session.id).set(purchaseData)
         console.log("✅ [Webhook] Created purchase record in bundlePurchases:", session.id)
 
-        // Update creator's sales stats
-        if (itemData.creatorId) {
-          const creatorRef = db.collection("users").doc(itemData.creatorId)
+        // Update creator's sales stats in users collection (for backward compatibility)
+        if (creatorData) {
+          const creatorRef = adminDb.collection("users").doc(creatorId)
           await creatorRef.update({
-            totalSales: (creatorData?.totalSales || 0) + purchaseData.amount,
-            totalPurchases: (creatorData?.totalPurchases || 0) + 1,
+            totalSales: (creatorData.totalSales || 0) + purchaseData.amount,
+            totalPurchases: (creatorData.totalPurchases || 0) + 1,
             lastSaleAt: new Date(),
           })
-          console.log("✅ [Webhook] Updated creator sales stats")
+          console.log("✅ [Webhook] Updated creator sales stats in users collection")
         }
 
         // Update item download/purchase count
         const itemRef =
-          itemType === "bundle" ? db.collection("bundles").doc(bundleId) : db.collection("productBoxes").doc(bundleId)
+          itemType === "bundle" ? adminDb.collection("bundles").doc(bundleId) : adminDb.collection("productBoxes").doc(bundleId)
 
         await itemRef.update({
           downloadCount: (itemData.downloadCount || 0) + 1,
           lastPurchaseAt: new Date(),
         })
         console.log("✅ [Webhook] Updated item stats")
+
       } catch (error) {
         console.error("❌ [Webhook] Error creating purchase record:", error)
         return NextResponse.json({ error: "Failed to create purchase record" }, { status: 500 })
