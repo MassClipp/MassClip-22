@@ -313,7 +313,7 @@ export default function EarningsPage() {
       <div className="min-h-screen">
         {/* Hero Section - Compact */}
         <div className="text-center py-12">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full mb-4 shadow-lg">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-pink-500 to-purple-700 rounded-full mb-4 shadow-lg">
             <CreditCard className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-3xl font-bold text-white mb-3">
@@ -326,29 +326,23 @@ export default function EarningsPage() {
 
         {/* Benefits Section - Individual Cards */}
         <div className="grid grid-cols-3 gap-6 px-16 mb-12">
-          <Card className="bg-gray-800/30 border-gray-700/50 text-center p-6">
-            <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-green-700 rounded-full flex items-center justify-center mx-auto mb-3 shadow-lg">
-              <DollarSign className="w-6 h-6 text-white" />
-            </div>
+          <div className="border border-gray-700/50 rounded-lg text-center p-4 bg-transparent">
+            <DollarSign className="w-8 h-8 text-green-400 mx-auto mb-3" />
             <h3 className="text-lg font-semibold text-white mb-2">Accept Payments</h3>
             <p className="text-gray-400 text-sm">Process payments from customers worldwide</p>
-          </Card>
+          </div>
           
-          <Card className="bg-gray-800/30 border-gray-700/50 text-center p-6">
-            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full flex items-center justify-center mx-auto mb-3 shadow-lg">
-              <Globe className="w-6 h-6 text-white" />
-            </div>
+          <div className="border border-gray-700/50 rounded-lg text-center p-4 bg-transparent">
+            <Globe className="w-8 h-8 text-blue-400 mx-auto mb-3" />
             <h3 className="text-lg font-semibold text-white mb-2">Global Reach</h3>
             <p className="text-gray-400 text-sm">Supported in 40+ countries</p>
-          </Card>
+          </div>
           
-          <Card className="bg-gray-800/30 border-gray-700/50 text-center p-6">
-            <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-700 rounded-full flex items-center justify-center mx-auto mb-3 shadow-lg">
-              <Shield className="w-6 h-6 text-white" />
-            </div>
+          <div className="border border-gray-700/50 rounded-lg text-center p-4 bg-transparent">
+            <Shield className="w-8 h-8 text-purple-400 mx-auto mb-3" />
             <h3 className="text-lg font-semibold text-white mb-2">Secure & Reliable</h3>
             <p className="text-gray-400 text-sm">Bank-level security and encryption</p>
-          </Card>
+          </div>
         </div>
 
         {/* Connection Cards - Compact */}
