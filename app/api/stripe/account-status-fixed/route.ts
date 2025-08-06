@@ -1,69 +1,94 @@
 import { type NextRequest, NextResponse } from "next/server"
-import Stripe from "stripe"
+import { stripe } from "@/lib/stripe"
 import { adminDb, getAuthenticatedUser } from "@/lib/firebase-admin"
-import { FieldValue } from "firebase-admin/firestore"
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-06-20",
-})
 
 export async function GET(request: NextRequest) {
   try {
-    console.log("🔍 [Account Status] Starting account status check...")
+    console.log("🔍 [Account Status Fixed] Starting account status check...")
 
-    // Get authenticated user
-    const authUser = await getAuthenticatedUser(request.headers)
-    const userId = authUser.uid
+    // Try to get authenticated user from Firebase token
+    let userId: string
+    try {
+      const authUser = await getAuthenticatedUser(request.headers)
+      userId = authUser.uid
+      console.log(`🔍 [Account Status Fixed] Authenticated via Firebase: ${userId}`)
+    } catch (authError) {
+      // Fall back to query parameter for debugging
+      const searchParams = request.nextUrl.searchParams
+      const debugUserId = searchParams.get("userId")
 
-    console.log(`🔍 [Account Status] Checking status for user: ${userId}`)
-
-    // Get Stripe account from connectedStripeAccounts collection
-    const accountDoc = await adminDb.collection("connectedStripeAccounts").doc(userId).get()
-
-    if (!accountDoc.exists) {
-      console.log(`❌ [Account Status] No connected Stripe account found for user: ${userId}`)
-      return NextResponse.json({
-        connected: false,
-        error: "No Stripe account connected",
-        actionsRequired: false,
-        charges_enabled: false,
-        payouts_enabled: false,
-        details_submitted: false,
-        requirements: {
-          currently_due: [],
-          past_due: [],
-          eventually_due: [],
-          pending_verification: [],
-        },
-      })
+      if (debugUserId) {
+        userId = debugUserId
+        console.log(`🔍 [Account Status Fixed] Using debug userId: ${userId}`)
+      } else {
+        console.error("❌ [Account Status Fixed] No authentication found")
+        return NextResponse.json(
+          {
+            error: "Unauthorized - no Firebase token or debug userId",
+            connected: false,
+            actionsRequired: false,
+          },
+          { status: 401 },
+        )
+      }
     }
 
-    const accountData = accountDoc.data()!
-    const stripeAccountId = accountData.stripeAccountId
+    console.log(`🔍 [Account Status Fixed] Checking status for user: ${userId}`)
 
-    console.log(`🔍 [Account Status] Found account: ${stripeAccountId}`)
+    // Get user's Stripe account ID from Firestore
+    const userDoc = await adminDb.collection("users").doc(userId).get()
 
-    // Fetch fresh account details from Stripe
+    if (!userDoc.exists) {
+      console.error("❌ [Account Status Fixed] User document not found")
+      return NextResponse.json(
+        {
+          error: "User not found",
+          connected: false,
+          actionsRequired: false,
+        },
+        { status: 404 },
+      )
+    }
+
+    const userData = userDoc.data()
+    const stripeAccountId = userData?.stripeAccountId
+
+    console.log(`🔍 [Account Status Fixed] User data found. StripeAccountId: ${stripeAccountId}`)
+
+    if (!stripeAccountId) {
+      console.error("❌ [Account Status Fixed] No Stripe account ID found for user")
+      return NextResponse.json(
+        {
+          connected: false,
+          error: "No Stripe account connected",
+          actionsRequired: false,
+          charges_enabled: false,
+          payouts_enabled: false,
+          details_submitted: false,
+          requirements: {
+            currently_due: [],
+            past_due: [],
+            eventually_due: [],
+            pending_verification: [],
+          },
+        },
+        { status: 200 },
+      )
+    }
+
+    console.log(`🔍 [Account Status Fixed] Fetching account details from Stripe for: ${stripeAccountId}`)
+
+    // Fetch account details from Stripe
     const account = await stripe.accounts.retrieve(stripeAccountId)
 
-    console.log(`📊 [Account Status] Fresh Stripe account data:`, {
+    console.log(`📊 [Account Status Fixed] Raw Stripe account data:`, {
       id: account.id,
       charges_enabled: account.charges_enabled,
       payouts_enabled: account.payouts_enabled,
       details_submitted: account.details_submitted,
-      requirements: account.requirements,
-    })
-
-    // Update our stored data with fresh info
-    await adminDb.collection("connectedStripeAccounts").doc(userId).update({
-      charges_enabled: account.charges_enabled,
-      payouts_enabled: account.payouts_enabled,
-      details_submitted: account.details_submitted,
-      requirements: account.requirements?.currently_due || [],
-      country: account.country,
       business_type: account.business_type,
-      default_currency: account.default_currency,
-      updatedAt: FieldValue.serverTimestamp(),
+      country: account.country,
+      requirements: account.requirements,
     })
 
     // Determine if actions are required
@@ -74,23 +99,33 @@ export async function GET(request: NextRequest) {
     const actionsRequired = hasCurrentlyDue || hasPastDue || hasPendingVerification
     const isFullyEnabled = account.charges_enabled && account.payouts_enabled && account.details_submitted
 
+    console.log(`📊 [Account Status Fixed] Computed status:`, {
+      isFullyEnabled,
+      actionsRequired,
+      hasCurrentlyDue,
+      hasPastDue,
+      hasPendingVerification,
+    })
+
     // Create account link if actions are required
     let actionUrl = null
     if (actionsRequired) {
       try {
+        console.log(`🔗 [Account Status Fixed] Creating account link for required actions`)
         const accountLink = await stripe.accountLinks.create({
           account: stripeAccountId,
-          refresh_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/connect-stripe?refresh=true`,
-          return_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/earnings?completed=true`,
+          refresh_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/connect-stripe/callback?refresh=true`,
+          return_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/connect-stripe/callback?completed=true`,
           type: "account_onboarding",
         })
         actionUrl = accountLink.url
+        console.log(`✅ [Account Status Fixed] Account link created successfully`)
       } catch (linkError) {
-        console.error("❌ [Account Status] Error creating account link:", linkError)
+        console.error("❌ [Account Status Fixed] Error creating account link:", linkError)
       }
     }
 
-    // Format requirements with descriptions
+    // Get human-readable requirement descriptions
     const getRequirementDescription = (requirement: string) => {
       const descriptions: Record<string, string> = {
         "individual.ssn_last_4": "Social Security Number (last 4 digits)",
@@ -144,11 +179,26 @@ export async function GET(request: NextRequest) {
       business_type: account.business_type,
     }
 
-    console.log(`✅ [Account Status] Response prepared for user: ${userId}`)
-    return NextResponse.json(response)
+    console.log(`✅ [Account Status Fixed] Final response:`, {
+      connected: response.connected,
+      isFullyEnabled: response.isFullyEnabled,
+      actionsRequired: response.actionsRequired,
+      hasActionUrl: !!response.actionUrl,
+      charges_enabled: response.charges_enabled,
+      payouts_enabled: response.payouts_enabled,
+      requirementCounts: {
+        currently_due: response.requirements.currently_due.length,
+        past_due: response.requirements.past_due.length,
+        eventually_due: response.requirements.eventually_due.length,
+        pending_verification: response.requirements.pending_verification.length,
+      },
+    })
 
+    return NextResponse.json(response)
   } catch (error: any) {
-    console.error("❌ [Account Status] Error:", error)
+    console.error("❌ [Account Status Fixed] Error checking account status:", error)
+    console.error("❌ [Account Status Fixed] Error stack:", error.stack)
+
     return NextResponse.json(
       {
         error: "Failed to check account status",
@@ -165,7 +215,7 @@ export async function GET(request: NextRequest) {
           pending_verification: [],
         },
       },
-      { status: 500 }
+      { status: 500 },
     )
   }
 }

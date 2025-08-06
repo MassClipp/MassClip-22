@@ -42,7 +42,7 @@ export function StripeConnectOnboarding() {
       setChecking(true)
       setError(null)
 
-      const response = await fetch("/api/stripe/connect/status", {
+      const response = await fetch("/api/stripe/connect/status-check", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

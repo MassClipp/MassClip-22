@@ -1,7 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
-import { adminDb, getAuthenticatedUser } from "@/lib/firebase-admin"
-import { FieldValue } from "firebase-admin/firestore"
+import { adminDb } from "@/lib/firebase-admin"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
@@ -9,25 +8,20 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("🔄 [Stripe Onboard] Starting onboarding process...")
+    const { userId } = await request.json()
 
-    // Get authenticated user
-    const authUser = await getAuthenticatedUser(request.headers)
-    const userId = authUser.uid
+    if (!userId) {
+      return NextResponse.json({ error: "User ID is required" }, { status: 400 })
+    }
 
-    console.log(`🔄 [Stripe Onboard] Creating account for user: ${userId}`)
+    // Check if user already has a Stripe account
+    const userDoc = await adminDb.collection("users").doc(userId).get()
+    const userData = userDoc.data()
 
-    // Check if user already has a connected Stripe account
-    const existingAccountDoc = await adminDb.collection("connectedStripeAccounts").doc(userId).get()
-    
-    let accountId: string
+    let accountId = userData?.stripeAccountId
 
-    if (existingAccountDoc.exists) {
-      const existingData = existingAccountDoc.data()!
-      accountId = existingData.stripeAccountId
-      console.log(`✅ [Stripe Onboard] Using existing Stripe account: ${accountId}`)
-    } else {
-      // Create new Stripe Express account
+    // Create Stripe account if it doesn't exist
+    if (!accountId) {
       const account = await stripe.accounts.create({
         type: "express",
         country: "US",
@@ -35,54 +29,29 @@ export async function POST(request: NextRequest) {
           card_payments: { requested: true },
           transfers: { requested: true },
         },
-        metadata: {
-          userId: userId,
-          platform: "massclip",
-        },
       })
 
       accountId = account.id
-      console.log(`✅ [Stripe Onboard] Created new Stripe account: ${accountId}`)
 
-      // Save the account to connectedStripeAccounts collection
-      await adminDb.collection("connectedStripeAccounts").doc(userId).set({
+      // Save the account ID to Firestore
+      await adminDb.collection("users").doc(userId).update({
         stripeAccountId: accountId,
-        userId: userId,
-        email: authUser.email || "",
-        charges_enabled: account.charges_enabled,
-        payouts_enabled: account.payouts_enabled,
-        details_submitted: account.details_submitted,
-        country: account.country,
-        business_type: account.business_type,
-        default_currency: account.default_currency,
-        requirements: account.requirements?.currently_due || [],
-        createdAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
+        stripeAccountStatus: "pending",
+        updatedAt: new Date(),
       })
-
-      console.log(`✅ [Stripe Onboard] Saved account to connectedStripeAccounts collection`)
     }
 
-    // Create account link for onboarding
+    // Create account link for onboarding - redirect to frontend callback page
     const accountLink = await stripe.accountLinks.create({
       account: accountId,
       refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/connect-stripe?refresh=true`,
-      return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/earnings?onboarding=success`,
+      return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/connect-stripe/callback?state=${userId}`,
       type: "account_onboarding",
     })
 
-    console.log(`✅ [Stripe Onboard] Created account link successfully`)
-
-    return NextResponse.json({ 
-      url: accountLink.url,
-      accountId: accountId
-    })
-
-  } catch (error: any) {
-    console.error("❌ [Stripe Onboard] Error:", error)
-    return NextResponse.json(
-      { error: "Failed to create onboarding link", details: error.message },
-      { status: 500 }
-    )
+    return NextResponse.json({ url: accountLink.url })
+  } catch (error) {
+    console.error("Error creating Stripe onboarding link:", error)
+    return NextResponse.json({ error: "Failed to create onboarding link" }, { status: 500 })
   }
 }

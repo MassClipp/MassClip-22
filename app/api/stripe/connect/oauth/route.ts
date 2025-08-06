@@ -1,51 +1,42 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { getAuthenticatedUser } from "@/lib/firebase-admin"
+import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("🔄 [Stripe OAuth] Generating OAuth URL...")
+    const { userId } = await request.json()
 
-    // Get authenticated user
-    const authUser = await getAuthenticatedUser(request.headers)
-    const userId = authUser.uid
-
-    const { returnUrl } = await request.json()
-
-    console.log(`🔄 [Stripe OAuth] Generating OAuth URL for user: ${userId}`)
-
-    // Generate Stripe Connect OAuth URL
-    const clientId = process.env.STRIPE_CLIENT_ID
-    if (!clientId) {
-      throw new Error("STRIPE_CLIENT_ID environment variable is not set")
+    if (!userId) {
+      return NextResponse.json({ error: "User ID is required" }, { status: 400 })
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL
-    const redirectUri = `${baseUrl}/api/stripe/connect-callback`
+    console.log(`🔄 [OAuth Init] Generating OAuth URL for user: ${userId}`)
+
+    const clientId = process.env.STRIPE_CLIENT_ID
+    if (!clientId) {
+      console.error("❌ [OAuth Init] Missing STRIPE_CLIENT_ID")
+      return NextResponse.json({ error: "Stripe client ID not configured" }, { status: 500 })
+    }
+
+    // Use our new callback route
+    const redirectUri = `${process.env.NEXT_PUBLIC_SITE_URL}/api/stripe/connect/callback`
     
-    const state = Buffer.from(JSON.stringify({
-      userId,
-      returnUrl: returnUrl || '/dashboard/earnings?onboarding=success'
-    })).toString('base64')
-
-    const authUrl = new URL('https://connect.stripe.com/oauth/authorize')
-    authUrl.searchParams.set('response_type', 'code')
-    authUrl.searchParams.set('client_id', clientId)
-    authUrl.searchParams.set('scope', 'read_write')
-    authUrl.searchParams.set('redirect_uri', redirectUri)
-    authUrl.searchParams.set('state', state)
-
-    console.log(`✅ [Stripe OAuth] Generated OAuth URL successfully`)
-
-    return NextResponse.json({
-      authUrl: authUrl.toString(),
-      message: "OAuth URL generated successfully"
+    // Encode user ID in state parameter
+    const state = encodeURIComponent(JSON.stringify({ userId }))
+    
+    const params = new URLSearchParams({
+      response_type: "code",
+      client_id: clientId,
+      scope: "read_write",
+      redirect_uri: redirectUri,
+      state: state,
     })
-
-  } catch (error: any) {
-    console.error("❌ [Stripe OAuth] Error:", error)
-    return NextResponse.json(
-      { error: error.message || "Failed to generate OAuth URL" },
-      { status: 500 }
-    )
+    
+    const authUrl = `https://connect.stripe.com/oauth/authorize?${params.toString()}`
+    
+    console.log(`✅ [OAuth Init] Generated OAuth URL for user: ${userId}`)
+    
+    return NextResponse.json({ authUrl })
+  } catch (error) {
+    console.error("❌ [OAuth Init] Error generating OAuth URL:", error)
+    return NextResponse.json({ error: "Failed to generate OAuth URL" }, { status: 500 })
   }
 }
