@@ -6,7 +6,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { DollarSign, TrendingUp, Calendar, CreditCard, AlertCircle, CheckCircle, ExternalLink, RefreshCw, Download } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
 import { useAuth } from '@/contexts/auth-context'
@@ -24,7 +23,7 @@ interface EarningsData {
     created: number
     description: string
   }>
-  stripeAccountStatus: {
+  stripeAccountStatus?: {
     connected: boolean
     charges_enabled: boolean
     payouts_enabled: boolean
@@ -72,10 +71,43 @@ export function EarningsContent() {
       }
 
       const data = await response.json()
-      setEarnings(data)
+      
+      // Ensure stripeAccountStatus has default values
+      const processedData: EarningsData = {
+        totalEarnings: data.totalEarnings || 0,
+        monthlyEarnings: data.monthlyEarnings || 0,
+        pendingPayouts: data.pendingPayouts || 0,
+        completedPayouts: data.completedPayouts || 0,
+        recentTransactions: data.recentTransactions || [],
+        stripeAccountStatus: {
+          connected: data.stripeAccountStatus?.connected || false,
+          charges_enabled: data.stripeAccountStatus?.charges_enabled || false,
+          payouts_enabled: data.stripeAccountStatus?.payouts_enabled || false,
+          details_submitted: data.stripeAccountStatus?.details_submitted || false,
+          requirements: data.stripeAccountStatus?.requirements || []
+        }
+      }
+      
+      setEarnings(processedData)
     } catch (error: any) {
       console.error('Error fetching earnings:', error)
       setError(error.message || 'Failed to load earnings data')
+      
+      // Set default earnings data on error
+      setEarnings({
+        totalEarnings: 0,
+        monthlyEarnings: 0,
+        pendingPayouts: 0,
+        completedPayouts: 0,
+        recentTransactions: [],
+        stripeAccountStatus: {
+          connected: false,
+          charges_enabled: false,
+          payouts_enabled: false,
+          details_submitted: false,
+          requirements: []
+        }
+      })
     } finally {
       setLoading(false)
     }
@@ -139,30 +171,40 @@ export function EarningsContent() {
     )
   }
 
-  if (error) {
+  if (error && !earnings) {
     return (
       <div className="container mx-auto px-4 py-8 max-w-6xl">
         <Alert className="border-red-600 bg-red-600/10">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription className="text-red-200">
             {error}
+            <Button
+              onClick={fetchEarnings}
+              variant="link"
+              className="p-0 h-auto ml-2 text-red-200 underline"
+            >
+              Try again
+            </Button>
           </AlertDescription>
         </Alert>
       </div>
     )
   }
 
-  if (!earnings) {
-    return (
-      <div className="container mx-auto px-4 py-8 max-w-6xl">
-        <Alert className="border-amber-600 bg-amber-600/10">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription className="text-amber-200">
-            No earnings data available. Please try refreshing the page.
-          </AlertDescription>
-        </Alert>
-      </div>
-    )
+  // Use default values if earnings is still null
+  const safeEarnings = earnings || {
+    totalEarnings: 0,
+    monthlyEarnings: 0,
+    pendingPayouts: 0,
+    completedPayouts: 0,
+    recentTransactions: [],
+    stripeAccountStatus: {
+      connected: false,
+      charges_enabled: false,
+      payouts_enabled: false,
+      details_submitted: false,
+      requirements: []
+    }
   }
 
   const formatCurrency = (amount: number, currency = 'USD') => {
@@ -200,8 +242,18 @@ export function EarningsContent() {
           </Button>
         </div>
 
+        {/* Error Alert */}
+        {error && (
+          <Alert className="border-amber-600 bg-amber-600/10">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription className="text-amber-200">
+              {error} - Showing cached data.
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Stripe Account Status */}
-        {!earnings.stripeAccountStatus.connected && (
+        {!safeEarnings.stripeAccountStatus?.connected && (
           <Alert className="border-amber-600 bg-amber-600/10">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription className="text-amber-200">
@@ -219,7 +271,7 @@ export function EarningsContent() {
           </Alert>
         )}
 
-        {earnings.stripeAccountStatus.connected && !earnings.stripeAccountStatus.details_submitted && (
+        {safeEarnings.stripeAccountStatus?.connected && !safeEarnings.stripeAccountStatus?.details_submitted && (
           <Alert className="border-blue-600 bg-blue-600/10">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription className="text-blue-200">
@@ -247,7 +299,7 @@ export function EarningsContent() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-white">
-                {formatCurrency(earnings.totalEarnings)}
+                {formatCurrency(safeEarnings.totalEarnings)}
               </div>
               <p className="text-xs text-zinc-500">All time revenue</p>
             </CardContent>
@@ -260,7 +312,7 @@ export function EarningsContent() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-white">
-                {formatCurrency(earnings.monthlyEarnings)}
+                {formatCurrency(safeEarnings.monthlyEarnings)}
               </div>
               <p className="text-xs text-zinc-500">Current month</p>
             </CardContent>
@@ -273,7 +325,7 @@ export function EarningsContent() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-white">
-                {formatCurrency(earnings.pendingPayouts)}
+                {formatCurrency(safeEarnings.pendingPayouts)}
               </div>
               <p className="text-xs text-zinc-500">Processing</p>
             </CardContent>
@@ -286,7 +338,7 @@ export function EarningsContent() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-white">
-                {formatCurrency(earnings.completedPayouts)}
+                {formatCurrency(safeEarnings.completedPayouts)}
               </div>
               <p className="text-xs text-zinc-500">Paid out</p>
             </CardContent>
@@ -305,34 +357,34 @@ export function EarningsContent() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="flex items-center justify-between">
                 <span className="text-zinc-400">Account Connected</span>
-                <Badge variant={earnings.stripeAccountStatus.connected ? "default" : "secondary"}>
-                  {earnings.stripeAccountStatus.connected ? "Connected" : "Not Connected"}
+                <Badge variant={safeEarnings.stripeAccountStatus?.connected ? "default" : "secondary"}>
+                  {safeEarnings.stripeAccountStatus?.connected ? "Connected" : "Not Connected"}
                 </Badge>
               </div>
               
               <div className="flex items-center justify-between">
                 <span className="text-zinc-400">Charges Enabled</span>
-                <Badge variant={earnings.stripeAccountStatus.charges_enabled ? "default" : "secondary"}>
-                  {earnings.stripeAccountStatus.charges_enabled ? "Enabled" : "Disabled"}
+                <Badge variant={safeEarnings.stripeAccountStatus?.charges_enabled ? "default" : "secondary"}>
+                  {safeEarnings.stripeAccountStatus?.charges_enabled ? "Enabled" : "Disabled"}
                 </Badge>
               </div>
               
               <div className="flex items-center justify-between">
                 <span className="text-zinc-400">Payouts Enabled</span>
-                <Badge variant={earnings.stripeAccountStatus.payouts_enabled ? "default" : "secondary"}>
-                  {earnings.stripeAccountStatus.payouts_enabled ? "Enabled" : "Disabled"}
+                <Badge variant={safeEarnings.stripeAccountStatus?.payouts_enabled ? "default" : "secondary"}>
+                  {safeEarnings.stripeAccountStatus?.payouts_enabled ? "Enabled" : "Disabled"}
                 </Badge>
               </div>
             </div>
 
-            {earnings.stripeAccountStatus.requirements && earnings.stripeAccountStatus.requirements.length > 0 && (
+            {safeEarnings.stripeAccountStatus?.requirements && safeEarnings.stripeAccountStatus.requirements.length > 0 && (
               <Alert className="border-amber-600 bg-amber-600/10">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription className="text-amber-200">
                   <div className="space-y-2">
                     <p className="font-medium">Action Required:</p>
                     <ul className="list-disc list-inside space-y-1">
-                      {earnings.stripeAccountStatus.requirements.map((req, index) => (
+                      {safeEarnings.stripeAccountStatus.requirements.map((req, index) => (
                         <li key={index} className="text-sm">{req}</li>
                       ))}
                     </ul>
@@ -357,7 +409,7 @@ export function EarningsContent() {
             </Button>
           </CardHeader>
           <CardContent>
-            {earnings.recentTransactions.length === 0 ? (
+            {safeEarnings.recentTransactions.length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-zinc-400">No transactions yet</p>
                 <p className="text-sm text-zinc-500 mt-2">
@@ -366,7 +418,7 @@ export function EarningsContent() {
               </div>
             ) : (
               <div className="space-y-4">
-                {earnings.recentTransactions.map((transaction) => (
+                {safeEarnings.recentTransactions.map((transaction) => (
                   <div key={transaction.id} className="flex items-center justify-between py-3 border-b border-zinc-800 last:border-0">
                     <div className="space-y-1">
                       <p className="text-sm font-medium text-white">
