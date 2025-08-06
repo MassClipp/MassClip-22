@@ -58,6 +58,46 @@ function debugImports() {
   return debugInfo
 }
 
+// Create zero earnings data for unconnected accounts
+function createZeroEarningsData() {
+  return {
+    totalEarnings: 0,
+    thisMonthEarnings: 0,
+    lastMonthEarnings: 0,
+    last30DaysEarnings: 0,
+    pendingPayout: 0,
+    availableBalance: 0,
+    nextPayoutDate: null,
+    payoutSchedule: "monthly",
+    salesMetrics: {
+      totalSales: 0,
+      thisMonthSales: 0,
+      last30DaysSales: 0,
+      averageTransactionValue: 0,
+      conversionRate: 0,
+    },
+    accountStatus: {
+      chargesEnabled: false,
+      payoutsEnabled: false,
+      detailsSubmitted: false,
+      requirementsCount: 0,
+      currentlyDue: [],
+      pastDue: [],
+    },
+    recentTransactions: [],
+    payoutHistory: [],
+    monthlyBreakdown: [],
+    balanceBreakdown: {
+      available: [],
+      pending: [],
+      reserved: [],
+    },
+    isDemo: false,
+    isUnconnected: true,
+    message: "Connect your Stripe account to view earnings data",
+  }
+}
+
 export async function GET(request: NextRequest) {
   const debugLog: any[] = []
   
@@ -78,40 +118,7 @@ export async function GET(request: NextRequest) {
           importErrors: importDebug.errors,
           importStatus: importDebug.imports,
         },
-        demoData: {
-          totalEarnings: 0,
-          thisMonthEarnings: 0,
-          lastMonthEarnings: 0,
-          last30DaysEarnings: 0,
-          pendingPayout: 0,
-          availableBalance: 0,
-          nextPayoutDate: null,
-          payoutSchedule: "monthly",
-          salesMetrics: {
-            totalSales: 0,
-            thisMonthSales: 0,
-            last30DaysSales: 0,
-            averageTransactionValue: 0,
-            conversionRate: 0,
-          },
-          accountStatus: {
-            chargesEnabled: false,
-            payoutsEnabled: false,
-            detailsSubmitted: false,
-            requirementsCount: 0,
-            currentlyDue: [],
-            pastDue: [],
-          },
-          recentTransactions: [],
-          payoutHistory: [],
-          monthlyBreakdown: [],
-          balanceBreakdown: {
-            available: [],
-            pending: [],
-            reserved: [],
-          },
-        },
-        isDemo: true,
+        ...createZeroEarningsData(),
         lastUpdated: new Date().toISOString(),
       }, { status: 500 })
     }
@@ -134,55 +141,7 @@ export async function GET(request: NextRequest) {
           logs: debugLog,
           authError: authError instanceof Error ? authError.message : 'unknown auth error',
         },
-        demoData: {
-          totalEarnings: 1250.75,
-          thisMonthEarnings: 320.5,
-          lastMonthEarnings: 280.25,
-          last30DaysEarnings: 420.8,
-          pendingPayout: 170.25,
-          availableBalance: 150.25,
-          nextPayoutDate: null,
-          payoutSchedule: "monthly",
-          salesMetrics: {
-            totalSales: 45,
-            thisMonthSales: 12,
-            last30DaysSales: 18,
-            averageTransactionValue: 27.79,
-            conversionRate: 0,
-          },
-          accountStatus: {
-            chargesEnabled: false,
-            payoutsEnabled: false,
-            detailsSubmitted: false,
-            requirementsCount: 0,
-            currentlyDue: [],
-            pastDue: [],
-          },
-          recentTransactions: [
-            {
-              id: "demo_txn_1",
-              amount: 29.99,
-              net: 28.42,
-              fee: 1.57,
-              type: "payment",
-              description: "Premium Content Purchase",
-              created: new Date(),
-              status: "available",
-              currency: "USD",
-            },
-          ],
-          payoutHistory: [],
-          monthlyBreakdown: [
-            { month: "Jan 2025", earnings: 280.25, transactionCount: 10 },
-            { month: "Feb 2025", earnings: 320.5, transactionCount: 12 },
-          ],
-          balanceBreakdown: {
-            available: [{ amount: 150.25, currency: "USD" }],
-            pending: [{ amount: 170.25, currency: "USD" }],
-            reserved: [],
-          },
-        },
-        isDemo: true,
+        ...createZeroEarningsData(),
         lastUpdated: new Date().toISOString(),
       })
     }
@@ -198,18 +157,21 @@ export async function GET(request: NextRequest) {
     const userId = session.user.id
     debugLog.push({ step: "6", action: "Valid session found", userId, timestamp: new Date().toISOString() })
 
-    // Try Firebase
+    // Try Firebase to get user's Stripe connection status
     let userData = null
+    let stripeAccountId = null
     try {
       debugLog.push({ step: "7", action: "Attempting Firebase connection", timestamp: new Date().toISOString() })
       const { db } = require("@/lib/firebase-admin")
       const userDoc = await db.collection("users").doc(userId).get()
       userData = userDoc.data()
+      stripeAccountId = userData?.stripeAccountId
       debugLog.push({ 
         step: "7.1", 
         action: "Firebase query successful", 
         userExists: userDoc.exists,
-        hasStripeAccount: !!userData?.stripeAccountId,
+        hasStripeAccount: !!stripeAccountId,
+        stripeAccountId: stripeAccountId ? `${stripeAccountId.slice(0, 8)}...` : null,
         timestamp: new Date().toISOString()
       })
     } catch (firebaseError) {
@@ -225,118 +187,142 @@ export async function GET(request: NextRequest) {
           logs: debugLog,
           firebaseError: firebaseError instanceof Error ? firebaseError.message : 'unknown firebase error',
         },
-        demoData: {
-          totalEarnings: 1250.75,
-          thisMonthEarnings: 320.5,
-          lastMonthEarnings: 280.25,
-          last30DaysEarnings: 420.8,
-          pendingPayout: 170.25,
-          availableBalance: 150.25,
-          nextPayoutDate: null,
-          payoutSchedule: "monthly",
-          salesMetrics: {
-            totalSales: 45,
-            thisMonthSales: 12,
-            last30DaysSales: 18,
-            averageTransactionValue: 0,
-            conversionRate: 0,
-          },
-          accountStatus: {
-            chargesEnabled: false,
-            payoutsEnabled: false,
-            detailsSubmitted: false,
-            requirementsCount: 0,
-            currentlyDue: [],
-            pastDue: [],
-          },
-          recentTransactions: [
-            {
-              id: "demo_txn_1",
-              amount: 29.99,
-              net: 28.42,
-              fee: 1.57,
-              type: "payment",
-              description: "Premium Content Purchase",
-              created: new Date(),
-              status: "available",
-              currency: "USD",
-            },
-          ],
-          payoutHistory: [],
-          monthlyBreakdown: [
-            { month: "Jan 2025", earnings: 280.25, transactionCount: 10 },
-            { month: "Feb 2025", earnings: 320.5, transactionCount: 12 },
-          ],
-          balanceBreakdown: {
-            available: [{ amount: 150.25, currency: "USD" }],
-            pending: [{ amount: 170.25, currency: "USD" }],
-            reserved: [],
-          },
-        },
-        isDemo: true,
+        ...createZeroEarningsData(),
         lastUpdated: new Date().toISOString(),
       }, { status: 500 })
     }
 
-    debugLog.push({ step: "8", action: "Preparing response", timestamp: new Date().toISOString() })
-
-    // Return successful response with debug info
-    return NextResponse.json({
-      totalEarnings: 1250.75,
-      thisMonthEarnings: 320.5,
-      lastMonthEarnings: 280.25,
-      last30DaysEarnings: 420.8,
-      pendingPayout: 170.25,
-      availableBalance: 150.25,
-      nextPayoutDate: null,
-      payoutSchedule: "monthly",
-      salesMetrics: {
-        totalSales: 45,
-        thisMonthSales: 12,
-        last30DaysSales: 18,
-        averageTransactionValue: 27.79,
-        conversionRate: 0,
-      },
-      accountStatus: {
-        chargesEnabled: false,
-        payoutsEnabled: false,
-        detailsSubmitted: false,
-        requirementsCount: 0,
-        currentlyDue: [],
-        pastDue: [],
-      },
-      recentTransactions: [
-        {
-          id: "demo_txn_1",
-          amount: 29.99,
-          net: 28.42,
-          fee: 1.57,
-          type: "payment",
-          description: "Premium Content Purchase",
-          created: new Date().toISOString(),
-          status: "available",
-          currency: "USD",
+    // Check if user has a connected Stripe account
+    if (!stripeAccountId) {
+      debugLog.push({ step: "8", action: "No Stripe account connected - returning zero data", timestamp: new Date().toISOString() })
+      return NextResponse.json({
+        ...createZeroEarningsData(),
+        stripeAccountId: null,
+        lastUpdated: new Date().toISOString(),
+        debug: {
+          logs: debugLog,
+          success: true,
+          reason: "No Stripe account connected",
+          totalSteps: debugLog.length,
         },
-      ],
-      payoutHistory: [],
-      monthlyBreakdown: [
-        { month: "Jan 2025", earnings: 280.25, transactionCount: 10 },
-        { month: "Feb 2025", earnings: 320.5, transactionCount: 12 },
-      ],
-      balanceBreakdown: {
-        available: [{ amount: 150.25, currency: "USD" }],
-        pending: [{ amount: 170.25, currency: "USD" }],
-        reserved: [],
-      },
-      isDemo: true,
-      stripeAccountId: userData?.stripeAccountId || "demo_account",
-      lastUpdated: new Date().toISOString(),
-      debug: {
-        logs: debugLog,
-        success: true,
-        totalSteps: debugLog.length,
-      },
-    })
+      })
+    }
+
+    // Verify Stripe account is properly set up
+    debugLog.push({ step: "9", action: "Checking Stripe account status", stripeAccountId: `${stripeAccountId.slice(0, 8)}...`, timestamp: new Date().toISOString() })
+    
+    // Check if account is charges_enabled and details_submitted
+    const stripeChargesEnabled = userData?.stripeChargesEnabled || false
+    const stripeDetailsSubmitted = userData?.stripeDetailsSubmitted || false
+    const stripePayoutsEnabled = userData?.stripePayoutsEnabled || false
+
+    if (!stripeChargesEnabled || !stripeDetailsSubmitted) {
+      debugLog.push({ 
+        step: "9.1", 
+        action: "Stripe account not fully set up - returning zero data", 
+        chargesEnabled: stripeChargesEnabled,
+        detailsSubmitted: stripeDetailsSubmitted,
+        payoutsEnabled: stripePayoutsEnabled,
+        timestamp: new Date().toISOString()
+      })
+      return NextResponse.json({
+        ...createZeroEarningsData(),
+        stripeAccountId,
+        accountStatus: {
+          chargesEnabled: stripeChargesEnabled,
+          payoutsEnabled: stripePayoutsEnabled,
+          detailsSubmitted: stripeDetailsSubmitted,
+          requirementsCount: 0,
+          currentlyDue: [],
+          pastDue: [],
+        },
+        lastUpdated: new Date().toISOString(),
+        debug: {
+          logs: debugLog,
+          success: true,
+          reason: "Stripe account not fully set up",
+          totalSteps: debugLog.length,
+        },
+      })
+    }
+
+    // Only now try to fetch real Stripe data
+    debugLog.push({ step: "10", action: "Fetching real Stripe earnings data", timestamp: new Date().toISOString() })
+    
+    try {
+      const { StripeEarningsService } = require("@/lib/stripe-earnings-service")
+      const earningsData = await StripeEarningsService.getEarningsData(stripeAccountId)
+      
+      if (!earningsData) {
+        debugLog.push({ step: "10.1", action: "No earnings data returned from Stripe - returning zero data", timestamp: new Date().toISOString() })
+        return NextResponse.json({
+          ...createZeroEarningsData(),
+          stripeAccountId,
+          accountStatus: {
+            chargesEnabled: stripeChargesEnabled,
+            payoutsEnabled: stripePayoutsEnabled,
+            detailsSubmitted: stripeDetailsSubmitted,
+            requirementsCount: 0,
+            currentlyDue: [],
+            pastDue: [],
+          },
+          lastUpdated: new Date().toISOString(),
+          debug: {
+            logs: debugLog,
+            success: true,
+            reason: "No earnings data from Stripe",
+            totalSteps: debugLog.length,
+          },
+        })
+      }
+
+      debugLog.push({ step: "10.2", action: "Successfully retrieved Stripe earnings data", timestamp: new Date().toISOString() })
+
+      // Return real Stripe data
+      return NextResponse.json({
+        ...earningsData,
+        stripeAccountId,
+        isDemo: false,
+        isUnconnected: false,
+        lastUpdated: new Date().toISOString(),
+        debug: {
+          logs: debugLog,
+          success: true,
+          reason: "Real Stripe data",
+          totalSteps: debugLog.length,
+        },
+      })
+
+    } catch (stripeError) {
+      debugLog.push({ 
+        step: "10.3", 
+        action: "Error fetching Stripe data - returning zero data", 
+        error: stripeError instanceof Error ? stripeError.message : 'unknown stripe error',
+        timestamp: new Date().toISOString()
+      })
+      
+      return NextResponse.json({
+        ...createZeroEarningsData(),
+        stripeAccountId,
+        error: stripeError instanceof Error ? stripeError.message : 'Unknown Stripe error',
+        accountStatus: {
+          chargesEnabled: stripeChargesEnabled,
+          payoutsEnabled: stripePayoutsEnabled,
+          detailsSubmitted: stripeDetailsSubmitted,
+          requirementsCount: 0,
+          currentlyDue: [],
+          pastDue: [],
+        },
+        lastUpdated: new Date().toISOString(),
+        debug: {
+          logs: debugLog,
+          success: false,
+          reason: "Stripe API error",
+          stripeError: stripeError instanceof Error ? stripeError.message : 'unknown stripe error',
+          totalSteps: debugLog.length,
+        },
+      })
+    }
 
   } catch (error) {
     debugLog.push({ 
@@ -365,40 +351,7 @@ export async function GET(request: NextRequest) {
           timestamp: new Date().toISOString(),
         },
       },
-      demoData: {
-        totalEarnings: 0,
-        thisMonthEarnings: 0,
-        lastMonthEarnings: 0,
-        last30DaysEarnings: 0,
-        pendingPayout: 0,
-        availableBalance: 0,
-        nextPayoutDate: null,
-        payoutSchedule: "monthly",
-        salesMetrics: {
-          totalSales: 0,
-          thisMonthSales: 0,
-          last30DaysSales: 0,
-          averageTransactionValue: 0,
-          conversionRate: 0,
-        },
-        accountStatus: {
-          chargesEnabled: false,
-          payoutsEnabled: false,
-          detailsSubmitted: false,
-          requirementsCount: 0,
-          currentlyDue: [],
-          pastDue: [],
-        },
-        recentTransactions: [],
-        payoutHistory: [],
-        monthlyBreakdown: [],
-        balanceBreakdown: {
-          available: [],
-          pending: [],
-          reserved: [],
-        },
-      },
-      isDemo: true,
+      ...createZeroEarningsData(),
       lastUpdated: new Date().toISOString(),
     }, { status: 500 })
   }

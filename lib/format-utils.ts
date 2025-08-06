@@ -2,6 +2,44 @@
  * Utility functions for formatting numbers, dates, and other data
  */
 
+export interface StripeEarningsData {
+  totalEarnings: number
+  thisMonthEarnings: number
+  lastMonthEarnings: number
+  last30DaysEarnings: number
+  pendingPayout: number
+  availableBalance: number
+  nextPayoutDate: Date | null
+  payoutSchedule: string
+  salesMetrics: {
+    totalSales: number
+    thisMonthSales: number
+    last30DaysSales: number
+    averageTransactionValue: number
+    conversionRate: number
+  }
+  accountStatus: {
+    chargesEnabled: boolean
+    payoutsEnabled: boolean
+    detailsSubmitted: boolean
+    requirementsCount: number
+    currentlyDue: string[]
+    pastDue: string[]
+  }
+  recentTransactions: any[]
+  payoutHistory: any[]
+  monthlyBreakdown: any[]
+  balanceBreakdown: {
+    available: { amount: number; currency: string }[]
+    pending: { amount: number; currency: string }[]
+    reserved: { amount: number; currency: string }[]
+  }
+  error?: string | null
+  isDemo?: boolean
+  isUnconnected?: boolean
+  message?: string
+}
+
 /**
  * Safely convert a value to a number, returning 0 for invalid inputs
  */
@@ -145,53 +183,9 @@ export function calculatePercentageChange(current: number, previous: number): nu
 }
 
 /**
- * Validate and sanitize earnings data structure
+ * Creates default earnings data with all zeros - for unconnected accounts
  */
-export function validateEarningsData(data: any): any {
-  if (!data || typeof data !== "object") {
-    return createDefaultEarningsData()
-  }
-
-  return {
-    totalEarnings: safeNumber(data.totalEarnings),
-    thisMonthEarnings: safeNumber(data.thisMonthEarnings),
-    lastMonthEarnings: safeNumber(data.lastMonthEarnings),
-    last30DaysEarnings: safeNumber(data.last30DaysEarnings),
-    pendingPayout: safeNumber(data.pendingPayout),
-    availableBalance: safeNumber(data.availableBalance),
-    nextPayoutDate: data.nextPayoutDate || null,
-    payoutSchedule: data.payoutSchedule || "monthly",
-    accountStatus: {
-      chargesEnabled: Boolean(data.accountStatus?.chargesEnabled),
-      payoutsEnabled: Boolean(data.accountStatus?.payoutsEnabled),
-      detailsSubmitted: Boolean(data.accountStatus?.detailsSubmitted),
-      requirementsCount: safeNumber(data.accountStatus?.requirementsCount),
-      currentlyDue: Array.isArray(data.accountStatus?.currentlyDue) ? data.accountStatus.currentlyDue : [],
-      pastDue: Array.isArray(data.accountStatus?.pastDue) ? data.accountStatus.pastDue : [],
-    },
-    salesMetrics: {
-      totalSales: safeNumber(data.salesMetrics?.totalSales),
-      thisMonthSales: safeNumber(data.salesMetrics?.thisMonthSales),
-      last30DaysSales: safeNumber(data.salesMetrics?.last30DaysSales),
-      averageTransactionValue: safeNumber(data.salesMetrics?.averageTransactionValue),
-      conversionRate: safeNumber(data.salesMetrics?.conversionRate),
-    },
-    recentTransactions: Array.isArray(data.recentTransactions) ? data.recentTransactions : [],
-    payoutHistory: Array.isArray(data.payoutHistory) ? data.payoutHistory : [],
-    monthlyBreakdown: Array.isArray(data.monthlyBreakdown) ? data.monthlyBreakdown : [],
-    balanceBreakdown: {
-      available: Array.isArray(data.balanceBreakdown?.available) ? data.balanceBreakdown.available : [],
-      pending: Array.isArray(data.balanceBreakdown?.pending) ? data.balanceBreakdown.pending : [],
-      reserved: Array.isArray(data.balanceBreakdown?.reserved) ? data.balanceBreakdown.reserved : [],
-    },
-    error: data.error || null,
-  }
-}
-
-/**
- * Create default earnings data structure
- */
-export function createDefaultEarningsData(): any {
+export function createDefaultEarningsData(): StripeEarningsData {
   return {
     totalEarnings: 0,
     thisMonthEarnings: 0,
@@ -201,6 +195,13 @@ export function createDefaultEarningsData(): any {
     availableBalance: 0,
     nextPayoutDate: null,
     payoutSchedule: "monthly",
+    salesMetrics: {
+      totalSales: 0,
+      thisMonthSales: 0,
+      last30DaysSales: 0,
+      averageTransactionValue: 0,
+      conversionRate: 0,
+    },
     accountStatus: {
       chargesEnabled: false,
       payoutsEnabled: false,
@@ -208,13 +209,6 @@ export function createDefaultEarningsData(): any {
       requirementsCount: 0,
       currentlyDue: [],
       pastDue: [],
-    },
-    salesMetrics: {
-      totalSales: 0,
-      thisMonthSales: 0,
-      last30DaysSales: 0,
-      averageTransactionValue: 0,
-      conversionRate: 0,
     },
     recentTransactions: [],
     payoutHistory: [],
@@ -224,6 +218,80 @@ export function createDefaultEarningsData(): any {
       pending: [],
       reserved: [],
     },
-    error: null,
+    isDemo: false,
+    isUnconnected: true,
+    message: "Connect your Stripe account to view earnings data",
   }
+}
+
+/**
+ * Validates and sanitizes earnings data to ensure all numbers are valid
+ */
+export function validateEarningsData(data: any): StripeEarningsData {
+  if (!data || typeof data !== 'object') {
+    console.warn("Invalid earnings data received, using defaults")
+    return createDefaultEarningsData()
+  }
+
+  // Helper function to safely get array
+  const safeArray = (value: any): any[] => {
+    return Array.isArray(value) ? value : []
+  }
+
+  // Helper function to safely get object
+  const safeObject = (value: any, defaults: any): any => {
+    return value && typeof value === 'object' ? { ...defaults, ...value } : defaults
+  }
+
+  const validated: StripeEarningsData = {
+    totalEarnings: safeNumber(data.totalEarnings),
+    thisMonthEarnings: safeNumber(data.thisMonthEarnings),
+    lastMonthEarnings: safeNumber(data.lastMonthEarnings),
+    last30DaysEarnings: safeNumber(data.last30DaysEarnings),
+    pendingPayout: safeNumber(data.pendingPayout),
+    availableBalance: safeNumber(data.availableBalance),
+    nextPayoutDate: data.nextPayoutDate ? new Date(data.nextPayoutDate) : null,
+    payoutSchedule: typeof data.payoutSchedule === 'string' ? data.payoutSchedule : "monthly",
+    salesMetrics: safeObject(data.salesMetrics, {
+      totalSales: 0,
+      thisMonthSales: 0,
+      last30DaysSales: 0,
+      averageTransactionValue: 0,
+      conversionRate: 0,
+    }),
+    accountStatus: safeObject(data.accountStatus, {
+      chargesEnabled: false,
+      payoutsEnabled: false,
+      detailsSubmitted: false,
+      requirementsCount: 0,
+      currentlyDue: [],
+      pastDue: [],
+    }),
+    recentTransactions: safeArray(data.recentTransactions),
+    payoutHistory: safeArray(data.payoutHistory),
+    monthlyBreakdown: safeArray(data.monthlyBreakdown),
+    balanceBreakdown: safeObject(data.balanceBreakdown, {
+      available: [],
+      pending: [],
+      reserved: [],
+    }),
+    error: data.error || null,
+    isDemo: Boolean(data.isDemo),
+    isUnconnected: Boolean(data.isUnconnected),
+    message: data.message || null,
+  }
+
+  // Ensure salesMetrics numbers are valid
+  validated.salesMetrics.totalSales = safeNumber(validated.salesMetrics.totalSales)
+  validated.salesMetrics.thisMonthSales = safeNumber(validated.salesMetrics.thisMonthSales)
+  validated.salesMetrics.last30DaysSales = safeNumber(validated.salesMetrics.last30DaysSales)
+  validated.salesMetrics.averageTransactionValue = safeNumber(validated.salesMetrics.averageTransactionValue)
+  validated.salesMetrics.conversionRate = safeNumber(validated.salesMetrics.conversionRate)
+
+  // Ensure accountStatus numbers are valid
+  validated.accountStatus.requirementsCount = safeNumber(validated.accountStatus.requirementsCount)
+  validated.accountStatus.currentlyDue = safeArray(validated.accountStatus.currentlyDue)
+  validated.accountStatus.pastDue = safeArray(validated.accountStatus.pastDue)
+
+  return validated
 }
