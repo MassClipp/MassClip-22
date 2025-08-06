@@ -311,70 +311,72 @@ export default function EarningsPage() {
   if (!stripeStatus?.connected || !stripeStatus?.chargesEnabled || !stripeStatus?.detailsSubmitted) {
     return (
       <div className="min-h-screen">
-        {/* Hero Section - Full Width */}
-        <div className="text-center py-16">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full mb-6 shadow-lg">
-            <CreditCard className="w-10 h-10 text-white" />
+        {/* Hero Section - Compact */}
+        <div className="text-center py-12">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full mb-4 shadow-lg">
+            <CreditCard className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-4xl font-bold text-white mb-4">
+          <h1 className="text-3xl font-bold text-white mb-3">
             Connect Your Stripe Account
           </h1>
-          <p className="text-lg text-gray-400 mb-12">
+          <p className="text-gray-400 mb-8">
             Start accepting payments and track your earnings
           </p>
         </div>
 
-        {/* Benefits Section - Full Width */}
-        <div className="grid grid-cols-3 gap-12 px-24 mb-16">
-          <div className="text-center">
-            <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-green-700 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
-              <DollarSign className="w-8 h-8 text-white" />
+        {/* Benefits Section - Individual Cards */}
+        <div className="grid grid-cols-3 gap-6 px-16 mb-12">
+          <Card className="bg-gray-800/30 border-gray-700/50 text-center p-6">
+            <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-green-700 rounded-full flex items-center justify-center mx-auto mb-3 shadow-lg">
+              <DollarSign className="w-6 h-6 text-white" />
             </div>
-            <h3 className="text-2xl font-semibold text-white mb-4">Accept Payments</h3>
-            <p className="text-gray-400 text-lg">Process payments from customers worldwide</p>
-          </div>
-          <div className="text-center">
-            <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
-              <Globe className="w-8 h-8 text-white" />
+            <h3 className="text-lg font-semibold text-white mb-2">Accept Payments</h3>
+            <p className="text-gray-400 text-sm">Process payments from customers worldwide</p>
+          </Card>
+          
+          <Card className="bg-gray-800/30 border-gray-700/50 text-center p-6">
+            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full flex items-center justify-center mx-auto mb-3 shadow-lg">
+              <Globe className="w-6 h-6 text-white" />
             </div>
-            <h3 className="text-2xl font-semibold text-white mb-4">Global Reach</h3>
-            <p className="text-gray-400 text-lg">Supported in 40+ countries</p>
-          </div>
-          <div className="text-center">
-            <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-purple-700 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
-              <Shield className="w-8 h-8 text-white" />
+            <h3 className="text-lg font-semibold text-white mb-2">Global Reach</h3>
+            <p className="text-gray-400 text-sm">Supported in 40+ countries</p>
+          </Card>
+          
+          <Card className="bg-gray-800/30 border-gray-700/50 text-center p-6">
+            <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-700 rounded-full flex items-center justify-center mx-auto mb-3 shadow-lg">
+              <Shield className="w-6 h-6 text-white" />
             </div>
-            <h3 className="text-2xl font-semibold text-white mb-4">Secure & Reliable</h3>
-            <p className="text-gray-400 text-lg">Bank-level security and encryption</p>
-          </div>
+            <h3 className="text-lg font-semibold text-white mb-2">Secure & Reliable</h3>
+            <p className="text-gray-400 text-sm">Bank-level security and encryption</p>
+          </Card>
         </div>
 
-        {/* Connection Cards - Full Width */}
-        <div className="grid grid-cols-2 gap-8 px-16 mb-16">
+        {/* Connection Cards - Compact */}
+        <div className="grid grid-cols-2 gap-6 px-16 mb-12">
           {/* Create New Account */}
-          <Card className="bg-gray-800/30 border-gray-700/50 p-8">
-            <div className="flex items-center gap-4 mb-6">
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-700 rounded-xl flex items-center justify-center shadow-lg">
-                <CreditCard className="w-6 h-6 text-white" />
+          <Card className="bg-gray-800/30 border-gray-700/50 p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-700 rounded-lg flex items-center justify-center shadow-lg">
+                <CreditCard className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h3 className="text-2xl font-semibold text-white">Create New Stripe Account</h3>
-                <p className="text-gray-400">Set up a new Stripe account to start accepting payments</p>
+                <h3 className="text-lg font-semibold text-white">Create New Stripe Account</h3>
+                <p className="text-gray-400 text-sm">Set up a new Stripe account to start accepting payments</p>
               </div>
             </div>
             
-            <div className="space-y-4 mb-8">
-              <div className="flex items-center gap-3">
-                <CheckCircle className="w-5 h-5 text-green-400" />
-                <span className="text-gray-300">Quick 5-minute setup</span>
+            <div className="space-y-2 mb-6">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-green-400" />
+                <span className="text-gray-300 text-sm">Quick 5-minute setup</span>
               </div>
-              <div className="flex items-center gap-3">
-                <CheckCircle className="w-5 h-5 text-green-400" />
-                <span className="text-gray-300">2.9% + 30¢ per transaction</span>
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-green-400" />
+                <span className="text-gray-300 text-sm">2.9% + 30¢ per transaction</span>
               </div>
-              <div className="flex items-center gap-3">
-                <CheckCircle className="w-5 h-5 text-green-400" />
-                <span className="text-gray-300">Automatic payouts to your bank</span>
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-green-400" />
+                <span className="text-gray-300 text-sm">Automatic payouts to your bank</span>
               </div>
             </div>
             
@@ -395,50 +397,50 @@ export default function EarningsPage() {
                 }
               }}
               disabled={loading}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 text-lg"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3"
             >
               {loading ? (
                 <>
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Creating Account...
                 </>
               ) : (
                 <>
-                  <ExternalLink className="mr-2 h-5 w-5" />
+                  <ExternalLink className="mr-2 h-4 w-4" />
                   Create Stripe Account
                 </>
               )}
             </Button>
             
-            <p className="text-sm text-gray-500 text-center mt-4">
+            <p className="text-xs text-gray-500 text-center mt-3">
               You'll be redirected to Stripe to complete setup
             </p>
           </Card>
 
           {/* Connect Existing Account */}
-          <Card className="bg-gray-800/30 border-gray-700/50 p-8">
-            <div className="flex items-center gap-4 mb-6">
-              <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-green-700 rounded-xl flex items-center justify-center shadow-lg">
-                <ExternalLink className="w-6 h-6 text-white" />
+          <Card className="bg-gray-800/30 border-gray-700/50 p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-green-700 rounded-lg flex items-center justify-center shadow-lg">
+                <ExternalLink className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h3 className="text-2xl font-semibold text-white">Already Have a Stripe Account?</h3>
-                <p className="text-gray-400">Securely connect your existing Stripe account through Stripe Connect</p>
+                <h3 className="text-lg font-semibold text-white">Already Have a Stripe Account?</h3>
+                <p className="text-gray-400 text-sm">Securely connect your existing Stripe account through Stripe Connect</p>
               </div>
             </div>
             
-            <div className="space-y-4 mb-8">
-              <div className="flex items-center gap-3">
-                <CheckCircle className="w-5 h-5 text-green-400" />
-                <span className="text-gray-300">Secure OAuth connection</span>
+            <div className="space-y-2 mb-6">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-green-400" />
+                <span className="text-gray-300 text-sm">Secure OAuth connection</span>
               </div>
-              <div className="flex items-center gap-3">
-                <CheckCircle className="w-5 h-5 text-green-400" />
-                <span className="text-gray-300">No manual account IDs needed</span>
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-green-400" />
+                <span className="text-gray-300 text-sm">No manual account IDs needed</span>
               </div>
-              <div className="flex items-center gap-3">
-                <CheckCircle className="w-5 h-5 text-green-400" />
-                <span className="text-gray-300">Stripe handles account verification</span>
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-green-400" />
+                <span className="text-gray-300 text-sm">Stripe handles account verification</span>
               </div>
             </div>
             
@@ -459,75 +461,75 @@ export default function EarningsPage() {
                 }
               }}
               disabled={loading}
-              className="w-full bg-green-600 hover:bg-green-700 text-white py-4 text-lg"
+              className="w-full bg-green-600 hover:bg-green-700 text-white py-3"
             >
               {loading ? (
                 <>
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Connecting...
                 </>
               ) : (
                 <>
-                  <ExternalLink className="mr-2 h-5 w-5" />
+                  <ExternalLink className="mr-2 h-4 w-4" />
                   Connect with Stripe
                 </>
               )}
             </Button>
             
-            <p className="text-sm text-gray-500 text-center mt-4">
+            <p className="text-xs text-gray-500 text-center mt-3">
               Stripe will detect your existing account and connect it securely
             </p>
           </Card>
         </div>
 
-        {/* How It Works Section */}
-        <div className="text-center py-12">
-          <div className="flex items-center justify-center gap-4 mb-12">
-            <Info className="w-8 h-8 text-blue-400" />
-            <h2 className="text-3xl font-bold text-white">How It Works</h2>
+        {/* How It Works Section - Compact */}
+        <div className="text-center py-8">
+          <div className="flex items-center justify-center gap-3 mb-8">
+            <Info className="w-6 h-6 text-blue-400" />
+            <h2 className="text-2xl font-bold text-white">How It Works</h2>
           </div>
           
-          <div className="grid grid-cols-3 gap-12 px-24">
+          <div className="grid grid-cols-3 gap-8 px-20">
             <div className="text-center">
-              <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl font-bold text-white shadow-lg">
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full flex items-center justify-center mx-auto mb-3 text-lg font-bold text-white shadow-lg">
                 1
               </div>
-              <h3 className="text-xl font-semibold mb-4 text-white">Choose Your Option</h3>
-              <p className="text-gray-400">Create a new account or connect an existing one</p>
+              <h3 className="text-lg font-semibold mb-2 text-white">Choose Your Option</h3>
+              <p className="text-gray-400 text-sm">Create a new account or connect an existing one</p>
             </div>
             
             <div className="text-center">
-              <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl font-bold text-white shadow-lg">
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full flex items-center justify-center mx-auto mb-3 text-lg font-bold text-white shadow-lg">
                 2
               </div>
-              <h3 className="text-xl font-semibold mb-4 text-white">Complete Setup</h3>
-              <p className="text-gray-400">Follow Stripe's secure onboarding process</p>
+              <h3 className="text-lg font-semibold mb-2 text-white">Complete Setup</h3>
+              <p className="text-gray-400 text-sm">Follow Stripe's secure onboarding process</p>
             </div>
             
             <div className="text-center">
-              <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl font-bold text-white shadow-lg">
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full flex items-center justify-center mx-auto mb-3 text-lg font-bold text-white shadow-lg">
                 3
               </div>
-              <h3 className="text-xl font-semibold mb-4 text-white">Start Earning</h3>
-              <p className="text-gray-400">Begin accepting payments immediately</p>
+              <h3 className="text-lg font-semibold mb-2 text-white">Start Earning</h3>
+              <p className="text-gray-400 text-sm">Begin accepting payments immediately</p>
             </div>
           </div>
         </div>
 
         {/* Error Display */}
         {error && (
-          <div className="px-16 pb-16">
+          <div className="px-16 pb-8">
             <Card className="border-red-600/50 bg-red-900/20">
-              <CardContent className="p-6">
+              <CardContent className="p-4">
                 <div className="flex items-center gap-3 text-red-400">
-                  <AlertCircle className="h-6 w-6" />
-                  <span className="text-lg">Error: {error}</span>
+                  <AlertCircle className="h-5 w-5" />
+                  <span>Error: {error}</span>
                 </div>
                 <Button 
                   onClick={() => setError(null)} 
                   variant="outline" 
                   size="sm" 
-                  className="mt-4 border-red-600/50 text-red-400 hover:bg-red-900/40"
+                  className="mt-3 border-red-600/50 text-red-400 hover:bg-red-900/40"
                 >
                   Dismiss
                 </Button>
