@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { doc, getDoc } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
+import { adminDb } from '@/lib/firebase-admin'
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,32 +16,32 @@ export async function GET(request: NextRequest) {
       checks: []
     }
 
-    // Check if Firestore is available
+    // Check if Firebase Admin is available
     debugInfo.checks.push({
-      name: 'Firestore availability',
-      status: !!db ? 'PASS' : 'FAIL',
-      details: !!db ? 'Firestore instance available' : 'Firestore instance not available'
+      name: 'Firebase Admin availability',
+      status: !!adminDb ? 'PASS' : 'FAIL',
+      details: !!adminDb ? 'Firebase Admin instance available' : 'Firebase Admin instance not available'
     })
 
-    if (!db) {
+    if (!adminDb) {
       return NextResponse.json({ 
-        error: 'Firestore not available',
+        error: 'Firebase Admin not available',
         debug: debugInfo
       }, { status: 500 })
     }
 
     // Check connectedStripeAccounts collection
     try {
-      const accountRef = doc(db, 'connectedStripeAccounts', userId)
-      const accountSnap = await getDoc(accountRef)
+      const accountRef = adminDb.collection('connectedStripeAccounts').doc(userId)
+      const accountSnap = await accountRef.get()
       
       debugInfo.checks.push({
         name: 'Connected account document',
-        status: accountSnap.exists() ? 'PASS' : 'FAIL',
-        details: accountSnap.exists() ? 'Document exists' : 'Document does not exist'
+        status: accountSnap.exists ? 'PASS' : 'FAIL',
+        details: accountSnap.exists ? 'Document exists' : 'Document does not exist'
       })
 
-      if (accountSnap.exists()) {
+      if (accountSnap.exists) {
         const accountData = accountSnap.data()
         debugInfo.connectedAccount = {
           exists: true,
@@ -67,16 +66,16 @@ export async function GET(request: NextRequest) {
 
     // Check users collection
     try {
-      const userRef = doc(db, 'users', userId)
-      const userSnap = await getDoc(userRef)
+      const userRef = adminDb.collection('users').doc(userId)
+      const userSnap = await userRef.get()
       
       debugInfo.checks.push({
         name: 'User document',
-        status: userSnap.exists() ? 'PASS' : 'FAIL',
-        details: userSnap.exists() ? 'Document exists' : 'Document does not exist'
+        status: userSnap.exists ? 'PASS' : 'FAIL',
+        details: userSnap.exists ? 'Document exists' : 'Document does not exist'
       })
 
-      if (userSnap.exists()) {
+      if (userSnap.exists) {
         const userData = userSnap.data()
         debugInfo.userDocument = {
           exists: true,
@@ -99,7 +98,10 @@ export async function GET(request: NextRequest) {
     debugInfo.environment = {
       hasStripeSecretKey: !!process.env.STRIPE_SECRET_KEY,
       hasStripeClientId: !!process.env.STRIPE_CLIENT_ID,
-      siteUrl: process.env.NEXT_PUBLIC_SITE_URL
+      siteUrl: process.env.NEXT_PUBLIC_SITE_URL,
+      hasFirebaseProjectId: !!process.env.FIREBASE_PROJECT_ID,
+      hasFirebaseClientEmail: !!process.env.FIREBASE_CLIENT_EMAIL,
+      hasFirebasePrivateKey: !!process.env.FIREBASE_PRIVATE_KEY
     }
 
     return NextResponse.json(debugInfo)

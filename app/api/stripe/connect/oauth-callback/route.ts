@@ -1,5 +1,76 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { storeConnectedAccount } from '@/lib/stripe/storeConnectedAccount'
+import { adminDb } from '@/lib/firebase-admin'
+import { doc, setDoc, updateDoc } from 'firebase/firestore'
+
+// Server-side function to store connected account using Admin SDK
+async function storeConnectedAccountServer(
+  userId: string,
+  oauthData: any,
+  accountData: any
+) {
+  try {
+    const now = new Date().toISOString()
+    
+    const connectedAccountRecord = {
+      // Core OAuth data
+      userId,
+      stripe_user_id: oauthData.stripe_user_id,
+      access_token: oauthData.access_token,
+      refresh_token: oauthData.refresh_token,
+      livemode: oauthData.livemode,
+      scope: oauthData.scope,
+      
+      // Account status
+      charges_enabled: accountData.charges_enabled,
+      payouts_enabled: accountData.payouts_enabled,
+      details_submitted: accountData.details_submitted,
+      
+      // Account details
+      country: accountData.country,
+      email: accountData.email,
+      business_type: accountData.business_type,
+      default_currency: accountData.default_currency || 'usd',
+      account_type: accountData.type || 'standard',
+      
+      // Requirements and capabilities
+      requirements_currently_due: accountData.requirements?.currently_due || [],
+      requirements_past_due: accountData.requirements?.past_due || [],
+      requirements_pending_verification: accountData.requirements?.pending_verification || [],
+      disabled_reason: accountData.requirements?.disabled_reason,
+      
+      // Capabilities
+      card_payments_capability: accountData.capabilities?.card_payments,
+      transfers_capability: accountData.capabilities?.transfers,
+      
+      // Business info
+      business_name: accountData.business_profile?.name,
+      business_url: accountData.business_profile?.url,
+      
+      // Platform metadata
+      connected: true,
+      connectedAt: now,
+      lastUpdated: now,
+      lastSyncedAt: now
+    }
+
+    // Store in connectedStripeAccounts collection using Admin SDK
+    const accountRef = adminDb.collection('connectedStripeAccounts').doc(userId)
+    await accountRef.set(connectedAccountRecord, { merge: true })
+
+    // Update user record with connection status
+    const userRef = adminDb.collection('users').doc(userId)
+    await userRef.update({
+      stripeConnected: true,
+      connectedAccountId: oauthData.stripe_user_id,
+      stripeConnectionUpdatedAt: now
+    })
+
+    return connectedAccountRecord
+  } catch (error) {
+    console.error('❌ Failed to store connected account (server):', error)
+    throw error
+  }
+}
 
 export async function GET(request: NextRequest) {
   const debugLog: any[] = []
@@ -188,11 +259,9 @@ export async function GET(request: NextRequest) {
     console.log('🔄 [OAuth Callback] Storing connected account data')
     debugLog.push({ step: 12, action: 'Starting data storage', timestamp: new Date().toISOString() })
 
-    // Store the connected account data using our utility
+    // Store the connected account data using Admin SDK
     try {
-      const storedData = await storeConnectedAccount(userId, oauthData, accountData, {
-        updateUserRecord: true
-      })
+      const storedData = await storeConnectedAccountServer(userId, oauthData, accountData)
       
       debugLog.push({ 
         step: 13, 
@@ -207,7 +276,7 @@ export async function GET(request: NextRequest) {
       console.log('✅ [OAuth Callback] Successfully stored connected account data')
       
     } catch (storageError) {
-      debugLog.push({ step: 13, action: 'Data storage failed', error: storageError, timestamp: new Date().toISOString() })
+      debugLog.push({ step: 13, action: 'Data storage failed', error: String(storageError), timestamp: new Date().toISOString() })
       console.error('❌ [OAuth Callback] Storage error:', storageError)
       
       return NextResponse.redirect(
