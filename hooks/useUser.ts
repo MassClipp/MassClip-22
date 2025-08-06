@@ -1,115 +1,77 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState, useEffect } from 'react'
 import { User } from 'firebase/auth'
-import { useAuthState } from 'react-firebase-hooks/auth'
-import { auth } from '@/lib/firebase'
+import { useAuth } from '@/contexts/auth-context'
 
 export interface UserProfile {
   uid: string
   email: string | null
   displayName: string | null
   photoURL: string | null
-  username?: string
+  emailVerified: boolean
   stripeAccountId?: string
-  stripeAccountStatus?: {
-    details_submitted: boolean
-    charges_enabled: boolean
-    payouts_enabled: boolean
-    requirements?: any
-    last_updated: string
-  }
-  plan?: string
+  stripeAccountStatus?: string
   createdAt?: string
   updatedAt?: string
 }
 
 export function useUser() {
-  const [user, loading, error] = useAuthState(auth)
-  const [profile, setProfile] = useState<UserProfile | null>(null)
-  const [profileLoading, setProfileLoading] = useState(true)
-  const [profileError, setProfileError] = useState<string | null>(null)
+  const { user: authUser, loading: authLoading } = useAuth()
+  const [user, setUser] = useState<UserProfile | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const fetchUserProfile = async (firebaseUser: User) => {
-      try {
-        setProfileLoading(true)
-        setProfileError(null)
+    if (authLoading) {
+      return
+    }
 
-        const response = await fetch('/api/user-profile', {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        })
+    if (!authUser) {
+      setUser(null)
+      setLoading(false)
+      return
+    }
 
-        if (!response.ok) {
-          throw new Error('Failed to fetch user profile')
+    // Convert Firebase User to UserProfile
+    const userProfile: UserProfile = {
+      uid: authUser.uid,
+      email: authUser.email,
+      displayName: authUser.displayName,
+      photoURL: authUser.photoURL,
+      emailVerified: authUser.emailVerified,
+    }
+
+    setUser(userProfile)
+    setLoading(false)
+  }, [authUser, authLoading])
+
+  const refreshUser = async () => {
+    if (!authUser) return
+
+    try {
+      setError(null)
+      // Optionally fetch additional user data from your API
+      const response = await fetch('/api/user/profile', {
+        headers: {
+          'Authorization': `Bearer ${await authUser.getIdToken()}`
         }
+      })
 
+      if (response.ok) {
         const profileData = await response.json()
-        
-        setProfile({
-          uid: firebaseUser.uid,
-          email: firebaseUser.email,
-          displayName: firebaseUser.displayName,
-          photoURL: firebaseUser.photoURL,
-          ...profileData
-        })
-      } catch (err) {
-        console.error('Error fetching user profile:', err)
-        setProfileError(err instanceof Error ? err.message : 'Failed to load profile')
-        
-        // Fallback to basic Firebase user data
-        setProfile({
-          uid: firebaseUser.uid,
-          email: firebaseUser.email,
-          displayName: firebaseUser.displayName,
-          photoURL: firebaseUser.photoURL,
-        })
-      } finally {
-        setProfileLoading(false)
+        setUser(prev => prev ? { ...prev, ...profileData } : null)
       }
-    }
-
-    if (user && !loading) {
-      fetchUserProfile(user)
-    } else if (!user && !loading) {
-      setProfile(null)
-      setProfileLoading(false)
-      setProfileError(null)
-    }
-  }, [user, loading])
-
-  const refreshProfile = async () => {
-    if (user) {
-      await fetchUserProfile(user)
+    } catch (err: any) {
+      console.error('Error refreshing user profile:', err)
+      setError(err.message || 'Failed to refresh user profile')
     }
   }
 
   return {
     user,
-    profile,
-    loading: loading || profileLoading,
-    error: error || profileError,
-    refreshProfile
+    loading: loading || authLoading,
+    error,
+    refreshUser
   }
-}
-
-// Helper hook for checking if user is authenticated
-export function useAuth() {
-  const { user, loading, error } = useUser()
-  
-  return {
-    user,
-    isAuthenticated: !!user,
-    loading,
-    error
-  }
-}
-
-// Helper hook for getting user ID
-export function useUserId() {
-  const { user } = useUser()
-  return user?.uid || null
 }

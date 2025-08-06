@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/contexts/auth-context'
-import { generateStripeConnectUrl } from '@/lib/stripe-connect-service'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -51,16 +50,29 @@ export default function ConnectStripePage() {
       setConnecting(true)
       setError(null)
 
-      // Generate OAuth URL
-      const oauthUrl = generateStripeConnectUrl(user.uid)
-      
-      console.log('🔗 Redirecting to Stripe Connect OAuth:', {
-        userId: user.uid.slice(0, 8) + '...',
-        url: oauthUrl.slice(0, 50) + '...',
+      // Call API to generate OAuth URL
+      const response = await fetch('/api/stripe/connect/generate-url', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${await user.getIdToken()}`
+        },
+        body: JSON.stringify({
+          userId: user.uid,
+          returnUrl: '/dashboard/earnings?onboarding=success'
+        })
       })
 
+      if (!response.ok) {
+        throw new Error('Failed to generate connection URL')
+      }
+
+      const { url } = await response.json()
+      
+      console.log('🔗 Redirecting to Stripe Connect OAuth')
+
       // Redirect to Stripe OAuth
-      window.location.href = oauthUrl
+      window.location.href = url
 
     } catch (error: any) {
       console.error('Error generating Stripe Connect URL:', error)
