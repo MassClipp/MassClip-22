@@ -1,554 +1,284 @@
-"use client"
+'use client'
 
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
-import { Loader2, CreditCard, Globe, Shield, CheckCircle, ExternalLink, AlertCircle, RefreshCw, DollarSign, Users, TrendingUp, Lock, Zap, ArrowRight } from 'lucide-react'
-import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
+import { useState, useEffect } from 'react'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Loader2, CheckCircle, AlertCircle, ExternalLink } from 'lucide-react'
+import { useAuth } from '@/hooks/use-firebase-auth'
 
-interface StripeConnectionStatus {
-  connected: boolean
-  accountId?: string
-  chargesEnabled: boolean
-  payoutsEnabled: boolean
-  detailsSubmitted: boolean
-  status: string
-  country?: string
-  email?: string
-  businessType?: string
-  defaultCurrency?: string
-  requirements?: {
+interface StripeAccount {
+  stripe_user_id: string
+  charges_enabled: boolean
+  payouts_enabled: boolean
+  details_submitted: boolean
+  country: string
+  email: string
+  business_type?: string
+  livemode: boolean
+  connectedAt: string
+  lastUpdated: string
+  requirements: {
     currently_due: string[]
     past_due: string[]
     pending_verification: string[]
   }
-  livemode?: boolean
+}
+
+interface ConnectionStatus {
+  connected: boolean
+  fullySetup: boolean
+  account?: StripeAccount
 }
 
 export function StripeConnectOnboarding() {
-  const { user, loading: authLoading } = useFirebaseAuth()
-  const [stripeStatus, setStripeStatus] = useState<StripeConnectionStatus | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [checking, setChecking] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const { user } = useAuth()
+  const [status, setStatus] = useState<ConnectionStatus | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [connecting, setConnecting] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
 
-  // Check connection status
   const checkConnectionStatus = async (refresh = false) => {
     if (!user?.uid) return
 
     try {
-      setChecking(true)
-      setError(null)
+      if (refresh) setRefreshing(true)
+      else setLoading(true)
 
-      const response = await fetch("/api/stripe/connect/status-check", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ 
-          userId: user.uid,
-          refresh 
-        }),
-      })
+      const response = await fetch(`/api/stripe/connect/status-check?userId=${user.uid}&refresh=${refresh}`)
+      const data = await response.json()
 
       if (response.ok) {
-        const data = await response.json()
-        setStripeStatus(data)
+        setStatus(data)
       } else {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Failed to check connection status")
+        console.error('Failed to check connection status:', data.error)
+        setStatus({ connected: false, fullySetup: false })
       }
-    } catch (err) {
-      console.error("Error checking connection status:", err)
-      setError(err instanceof Error ? err.message : "Failed to check connection")
-      setStripeStatus({
-        connected: false,
-        chargesEnabled: false,
-        payoutsEnabled: false,
-        detailsSubmitted: false,
-        status: "error"
-      })
+    } catch (error) {
+      console.error('Error checking connection status:', error)
+      setStatus({ connected: false, fullySetup: false })
     } finally {
-      setChecking(false)
+      setLoading(false)
+      setRefreshing(false)
     }
   }
 
-  // Handle OAuth connection
-  const handleOAuthConnect = async () => {
+  const handleConnect = async () => {
     if (!user?.uid) return
 
     try {
-      setLoading(true)
-      setError(null)
+      setConnecting(true)
 
-      const response = await fetch("/api/stripe/connect/oauth", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ userId: user.uid }),
+      const response = await fetch('/api/stripe/connect/oauth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.uid })
       })
 
       const data = await response.json()
 
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to initiate connection")
-      }
-
-      if (data.authUrl) {
+      if (response.ok && data.authUrl) {
         // Redirect to Stripe OAuth
         window.location.href = data.authUrl
+      } else {
+        console.error('Failed to generate OAuth URL:', data.error)
+        alert('Failed to start connection process. Please try again.')
       }
-    } catch (err) {
-      console.error("Error initiating OAuth:", err)
-      setError(err instanceof Error ? err.message : "Failed to connect")
+    } catch (error) {
+      console.error('Error starting connection:', error)
+      alert('An error occurred. Please try again.')
     } finally {
-      setLoading(false)
+      setConnecting(false)
     }
   }
 
-  // Handle Express account creation
-  const handleCreateAccount = async () => {
-    if (!user?.uid) return
-
-    try {
-      setLoading(true)
-      setError(null)
-
-      const response = await fetch("/api/stripe/create-stripe-account", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ userId: user.uid }),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to create account")
-      }
-
-      if (data.url) {
-        // Redirect to Stripe onboarding
-        window.location.href = data.url
-      }
-    } catch (err) {
-      console.error("Error creating account:", err)
-      setError(err instanceof Error ? err.message : "Failed to create account")
-    } finally {
-      setLoading(false)
-    }
+  const handleRefresh = () => {
+    checkConnectionStatus(true)
   }
 
   useEffect(() => {
-    if (user) {
+    if (user?.uid) {
       checkConnectionStatus()
     }
-  }, [user])
+  }, [user?.uid])
 
-  // Loading states
-  if (authLoading || checking) {
+  if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-500" />
-          <p className="text-gray-400">
-            {authLoading ? "Loading..." : "Checking connection status..."}
-          </p>
-        </div>
-      </div>
-    )
-  }
-
-  if (!user) {
-    return (
-      <Card className="max-w-md mx-auto">
-        <CardContent className="pt-6 text-center">
-          <p className="text-gray-400">Please log in to continue</p>
+      <Card className="w-full max-w-2xl mx-auto">
+        <CardContent className="flex items-center justify-center p-8">
+          <Loader2 className="h-8 w-8 animate-spin" />
+          <span className="ml-2">Checking connection status...</span>
         </CardContent>
       </Card>
     )
   }
 
-  // Show connected status
-  if (stripeStatus?.connected) {
+  if (!status) {
     return (
-      <div className="max-w-4xl mx-auto space-y-6">
-        {/* Connection Status Header */}
-        <Card className="border-green-200 bg-green-50/50">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                  <CheckCircle className="w-6 h-6 text-green-600" />
-                </div>
-                <div>
-                  <CardTitle className="text-green-800">Stripe Account Connected</CardTitle>
-                  <CardDescription className="text-green-600">
-                    Account ID: {stripeStatus.accountId?.slice(-8)}
-                  </CardDescription>
-                </div>
-              </div>
-              <Button
-                onClick={() => checkConnectionStatus(true)}
-                variant="outline"
-                size="sm"
-                disabled={checking}
-                className="border-green-600 text-green-600 hover:bg-green-50"
-              >
-                <RefreshCw className={`mr-2 h-4 w-4 ${checking ? "animate-spin" : ""}`} />
-                Refresh
-              </Button>
-            </div>
-          </CardHeader>
-        </Card>
-
-        {/* Account Details */}
-        <div className="grid md:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Shield className="h-5 w-5 text-blue-600" />
-                Account Status
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600">Charges Enabled</span>
-                {stripeStatus.chargesEnabled ? (
-                  <CheckCircle className="h-5 w-5 text-green-600" />
-                ) : (
-                  <AlertCircle className="h-5 w-5 text-red-600" />
-                )}
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600">Payouts Enabled</span>
-                {stripeStatus.payoutsEnabled ? (
-                  <CheckCircle className="h-5 w-5 text-green-600" />
-                ) : (
-                  <AlertCircle className="h-5 w-5 text-red-600" />
-                )}
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600">Details Submitted</span>
-                {stripeStatus.detailsSubmitted ? (
-                  <CheckCircle className="h-5 w-5 text-green-600" />
-                ) : (
-                  <AlertCircle className="h-5 w-5 text-red-600" />
-                )}
-              </div>
-              <Separator />
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600">Status</span>
-                <Badge variant={stripeStatus.status === "active" ? "default" : "secondary"}>
-                  {stripeStatus.status}
-                </Badge>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Globe className="h-5 w-5 text-purple-600" />
-                Account Details
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {stripeStatus.email && (
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Email</span>
-                  <span className="font-medium">{stripeStatus.email}</span>
-                </div>
-              )}
-              {stripeStatus.country && (
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Country</span>
-                  <span className="font-medium">{stripeStatus.country.toUpperCase()}</span>
-                </div>
-              )}
-              {stripeStatus.defaultCurrency && (
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Currency</span>
-                  <span className="font-medium">{stripeStatus.defaultCurrency.toUpperCase()}</span>
-                </div>
-              )}
-              <div className="flex justify-between">
-                <span className="text-gray-600">Mode</span>
-                <Badge variant={stripeStatus.livemode ? "default" : "secondary"}>
-                  {stripeStatus.livemode ? "Live" : "Test"}
-                </Badge>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Requirements Alert */}
-        {stripeStatus.requirements && (
-          stripeStatus.requirements.currently_due.length > 0 || 
-          stripeStatus.requirements.past_due.length > 0
-        ) && (
-          <Card className="border-yellow-200 bg-yellow-50">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <AlertCircle className="h-5 w-5 text-yellow-600" />
-                <div>
-                  <h3 className="font-semibold text-yellow-800">Action Required</h3>
-                  <p className="text-sm text-yellow-700 mt-1">
-                    Your Stripe account needs additional information to enable full functionality.
-                  </p>
-                  {stripeStatus.requirements.currently_due.length > 0 && (
-                    <p className="text-xs text-yellow-600 mt-1">
-                      Currently due: {stripeStatus.requirements.currently_due.join(", ")}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Quick Actions */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
-            <CardDescription>Manage your Stripe integration</CardDescription>
-          </CardHeader>
-          <CardContent className="flex gap-4">
-            <Button variant="outline" className="flex-1">
-              <ExternalLink className="mr-2 h-4 w-4" />
-              Stripe Dashboard
-            </Button>
-            <Button variant="outline" className="flex-1">
-              <DollarSign className="mr-2 h-4 w-4" />
-              View Earnings
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  // Show connection options
-  return (
-    <div className="max-w-6xl mx-auto space-y-8">
-      {/* Hero Section */}
-      <div className="text-center py-8">
-        <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full mb-4 shadow-lg">
-          <CreditCard className="w-8 h-8 text-white" />
-        </div>
-        <h1 className="text-3xl font-bold text-gray-900 mb-3">
-          Connect Your Stripe Account
-        </h1>
-        <p className="text-gray-600 mb-8 max-w-2xl mx-auto">
-          Start accepting payments and receiving payouts by connecting your Stripe account. 
-          Choose to create a new account or connect an existing one.
-        </p>
-      </div>
-
-      {/* Benefits Grid */}
-      <div className="grid md:grid-cols-4 gap-6 mb-12">
-        <div className="text-center p-6 border border-gray-200 rounded-lg bg-white shadow-sm">
-          <DollarSign className="w-8 h-8 text-green-500 mx-auto mb-3" />
-          <h3 className="font-semibold mb-2">Accept Payments</h3>
-          <p className="text-sm text-gray-600">Process payments from customers worldwide</p>
-        </div>
-        
-        <div className="text-center p-6 border border-gray-200 rounded-lg bg-white shadow-sm">
-          <Globe className="w-8 h-8 text-blue-500 mx-auto mb-3" />
-          <h3 className="font-semibold mb-2">Global Reach</h3>
-          <p className="text-sm text-gray-600">Supported in 40+ countries</p>
-        </div>
-        
-        <div className="text-center p-6 border border-gray-200 rounded-lg bg-white shadow-sm">
-          <Shield className="w-8 h-8 text-purple-500 mx-auto mb-3" />
-          <h3 className="font-semibold mb-2">Secure & Reliable</h3>
-          <p className="text-sm text-gray-600">Bank-level security and encryption</p>
-        </div>
-
-        <div className="text-center p-6 border border-gray-200 rounded-lg bg-white shadow-sm">
-          <Zap className="w-8 h-8 text-orange-500 mx-auto mb-3" />
-          <h3 className="font-semibold mb-2">Fast Payouts</h3>
-          <p className="text-sm text-gray-600">Automatic daily payouts to your bank</p>
-        </div>
-      </div>
-
-      {/* Connection Options */}
-      <div className="grid md:grid-cols-2 gap-8">
-        {/* Create New Account */}
-        <Card className="border-blue-200 bg-blue-50/50 shadow-lg">
-          <CardHeader className="text-center">
-            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-700 rounded-lg flex items-center justify-center mx-auto mb-4 shadow-md">
-              <CreditCard className="w-6 h-6 text-white" />
-            </div>
-            <CardTitle className="text-xl">Create New Stripe Account</CardTitle>
-            <CardDescription>
-              Set up a new Stripe account with guided onboarding
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
-                <span className="text-sm">Quick 5-minute setup process</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
-                <span className="text-sm">2.9% + 30¢ per successful charge</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
-                <span className="text-sm">Automatic daily payouts to your bank</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
-                <span className="text-sm">Built-in fraud protection</span>
-              </div>
-            </div>
-            
-            <Button 
-              onClick={handleCreateAccount}
-              disabled={loading}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 shadow-md"
-              size="lg"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  Creating Account...
-                </>
-              ) : (
-                <>
-                  <ExternalLink className="mr-2 h-5 w-5" />
-                  Create Stripe Account
-                </>
-              )}
-            </Button>
-            
-            <p className="text-xs text-gray-500 text-center">
-              You'll be redirected to Stripe to complete the setup process
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Connect Existing Account */}
-        <Card className="border-green-200 bg-green-50/50 shadow-lg">
-          <CardHeader className="text-center">
-            <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-green-700 rounded-lg flex items-center justify-center mx-auto mb-4 shadow-md">
-              <Lock className="w-6 h-6 text-white" />
-            </div>
-            <CardTitle className="text-xl">Connect Existing Account</CardTitle>
-            <CardDescription>
-              Securely link your existing Stripe account via OAuth
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
-                <span className="text-sm">Secure OAuth 2.0 connection</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
-                <span className="text-sm">No manual account IDs needed</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
-                <span className="text-sm">Stripe handles all verification</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
-                <span className="text-sm">Keep your existing settings</span>
-              </div>
-            </div>
-            
-            <Button 
-              onClick={handleOAuthConnect}
-              disabled={loading}
-              variant="outline"
-              className="w-full border-green-600 text-green-600 hover:bg-green-600 hover:text-white py-3 shadow-md"
-              size="lg"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  Connecting...
-                </>
-              ) : (
-                <>
-                  <ExternalLink className="mr-2 h-5 w-5" />
-                  Connect with Stripe
-                </>
-              )}
-            </Button>
-            
-            <p className="text-xs text-gray-500 text-center">
-              Stripe will securely authenticate and connect your account
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* How It Works */}
-      <Card className="bg-gray-50">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl">How It Works</CardTitle>
-          <CardDescription>Simple 3-step process to start earning</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid md:grid-cols-3 gap-8">
-            <div className="text-center">
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full flex items-center justify-center mx-auto mb-4 text-lg font-bold text-white shadow-lg">
-                1
-              </div>
-              <h3 className="text-lg font-semibold mb-2">Choose Your Option</h3>
-              <p className="text-gray-600 text-sm">Create a new account or connect an existing one</p>
-            </div>
-            
-            <div className="text-center">
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full flex items-center justify-center mx-auto mb-4 text-lg font-bold text-white shadow-lg">
-                2
-              </div>
-              <h3 className="text-lg font-semibold mb-2">Complete Setup</h3>
-              <p className="text-gray-600 text-sm">Follow Stripe's secure onboarding process</p>
-            </div>
-            
-            <div className="text-center">
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full flex items-center justify-center mx-auto mb-4 text-lg font-bold text-white shadow-lg">
-                3
-              </div>
-              <h3 className="text-lg font-semibold mb-2">Start Earning</h3>
-              <p className="text-gray-600 text-sm">Begin accepting payments immediately</p>
-            </div>
+      <Card className="w-full max-w-2xl mx-auto">
+        <CardContent className="p-8">
+          <div className="text-center text-red-600">
+            Failed to check connection status. Please refresh the page.
           </div>
         </CardContent>
       </Card>
+    )
+  }
 
-      {/* Error Display */}
-      {error && (
-        <Card className="border-red-200 bg-red-50">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3 text-red-700">
-              <AlertCircle className="h-5 w-5" />
-              <div>
-                <h3 className="font-semibold">Connection Error</h3>
-                <p className="text-sm mt-1">{error}</p>
+  return (
+    <div className="w-full max-w-2xl mx-auto space-y-6">
+      {/* Connection Status Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            Stripe Account Connection
+            {status.connected ? (
+              <CheckCircle className="h-5 w-5 text-green-600" />
+            ) : (
+              <AlertCircle className="h-5 w-5 text-yellow-600" />
+            )}
+          </CardTitle>
+          <CardDescription>
+            {status.connected 
+              ? 'Your Stripe account is connected to MassClip'
+              : 'Connect your Stripe account to start receiving payments'
+            }
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {status.connected && status.account ? (
+            <div className="space-y-4">
+              {/* Account Status */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="flex items-center gap-2">
+                  <Badge variant={status.account.charges_enabled ? "default" : "secondary"}>
+                    {status.account.charges_enabled ? "✓" : "✗"} Charges
+                  </Badge>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant={status.account.payouts_enabled ? "default" : "secondary"}>
+                    {status.account.payouts_enabled ? "✓" : "✗"} Payouts
+                  </Badge>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant={status.account.details_submitted ? "default" : "secondary"}>
+                    {status.account.details_submitted ? "✓" : "✗"} Details
+                  </Badge>
+                </div>
+              </div>
+
+              {/* Account Details */}
+              <div className="bg-gray-50 p-4 rounded-lg space-y-2">
+                <div><strong>Account ID:</strong> {status.account.stripe_user_id}</div>
+                <div><strong>Email:</strong> {status.account.email}</div>
+                <div><strong>Country:</strong> {status.account.country}</div>
+                <div><strong>Mode:</strong> {status.account.livemode ? 'Live' : 'Test'}</div>
+                <div><strong>Connected:</strong> {new Date(status.account.connectedAt).toLocaleDateString()}</div>
+                <div><strong>Last Updated:</strong> {new Date(status.account.lastUpdated).toLocaleDateString()}</div>
+              </div>
+
+              {/* Status Message */}
+              {status.fullySetup ? (
+                <div className="bg-green-50 border border-green-200 p-4 rounded-lg">
+                  <div className="flex items-center gap-2 text-green-800">
+                    <CheckCircle className="h-5 w-5" />
+                    <strong>Account fully set up!</strong>
+                  </div>
+                  <p className="text-green-700 mt-1">
+                    You can now receive payments through MassClip.
+                  </p>
+                </div>
+              ) : (
+                <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
+                  <div className="flex items-center gap-2 text-yellow-800">
+                    <AlertCircle className="h-5 w-5" />
+                    <strong>Setup incomplete</strong>
+                  </div>
+                  <p className="text-yellow-700 mt-1">
+                    Please complete your Stripe account setup to start receiving payments.
+                  </p>
+                  {status.account.requirements.currently_due.length > 0 && (
+                    <p className="text-yellow-600 text-sm mt-2">
+                      Required: {status.account.requirements.currently_due.join(', ')}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex gap-2">
+                <Button 
+                  onClick={handleRefresh} 
+                  disabled={refreshing}
+                  variant="outline"
+                >
+                  {refreshing ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Refreshing...
+                    </>
+                  ) : (
+                    'Refresh Status'
+                  )}
+                </Button>
+                
+                {!status.fullySetup && (
+                  <Button 
+                    onClick={() => window.open(`https://dashboard.stripe.com/connect/accounts/${status.account?.stripe_user_id}`, '_blank')}
+                    variant="outline"
+                  >
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    Complete Setup
+                  </Button>
+                )}
               </div>
             </div>
-            <Button 
-              onClick={() => setError(null)} 
-              variant="outline" 
-              size="sm" 
-              className="mt-3 border-red-300 text-red-700 hover:bg-red-100"
-            >
-              Dismiss
-            </Button>
-          </CardContent>
-        </Card>
-      )}
+          ) : (
+            <div className="text-center space-y-4">
+              <p className="text-gray-600">
+                Connect your Stripe account to start accepting payments on MassClip.
+              </p>
+              
+              <Button 
+                onClick={handleConnect} 
+                disabled={connecting}
+                size="lg"
+                className="w-full md:w-auto"
+              >
+                {connecting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Connecting...
+                  </>
+                ) : (
+                  'Connect with Stripe'
+                )}
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Help Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Need Help?</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-gray-600 mb-4">
+            If you're having trouble connecting your Stripe account, here are some common solutions:
+          </p>
+          <ul className="list-disc list-inside space-y-2 text-sm text-gray-600">
+            <li>Make sure you have a valid Stripe account</li>
+            <li>Check that your browser allows popups from this site</li>
+            <li>Try refreshing the page and connecting again</li>
+            <li>Contact support if the issue persists</li>
+          </ul>
+        </CardContent>
+      </Card>
     </div>
   )
 }
+
+// Export as default and named export
+export default StripeConnectOnboarding

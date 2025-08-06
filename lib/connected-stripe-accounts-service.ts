@@ -1,218 +1,163 @@
-import { adminDb } from "@/lib/firebase-admin"
-import { FieldValue } from "firebase-admin/firestore"
+import { doc, getDoc, setDoc, deleteDoc, updateDoc } from 'firebase/firestore'
+import { db } from '@/lib/firebase'
 
 export interface ConnectedStripeAccount {
-  // OAuth tokens and metadata
+  userId: string
   stripe_user_id: string
   access_token: string
-  refresh_token?: string | null
+  refresh_token?: string
   livemode: boolean
   scope: string
   
-  // Account status and capabilities
+  // Account status
   charges_enabled: boolean
   payouts_enabled: boolean
   details_submitted: boolean
   
-  // Account metadata
-  country?: string | null
-  email?: string | null
-  business_type?: string | null
-  type?: string | null
+  // Account details
+  country: string
+  email: string
+  business_type?: string
   default_currency: string
   
-  // Platform metadata
-  userId: string
-  connected: boolean
-  connectedAt: FirebaseFirestore.Timestamp
-  updatedAt: FirebaseFirestore.Timestamp
-  
-  // Additional metadata
-  business_profile?: {
-    name?: string | null
-    url?: string | null
-    support_email?: string | null
-  } | null
-  
-  requirements?: {
+  // Requirements
+  requirements: {
     currently_due: string[]
     past_due: string[]
     pending_verification: string[]
-    eventually_due: string[]
-  } | null
+  }
   
-  stripe_account_data?: any
+  // Metadata
+  connected: boolean
+  connectedAt: string
+  lastUpdated: string
+  
+  // Full Stripe account data
+  stripeAccountData?: any
 }
 
-/**
- * Get connected Stripe account by user ID
- */
-export async function getConnectedStripeAccount(userId: string): Promise<ConnectedStripeAccount | null> {
-  try {
-    console.log(`🔍 [Connected Accounts] Getting account for user: ${userId}`)
-    
-    const docRef = adminDb.collection("connectedStripeAccounts").doc(userId)
-    const docSnapshot = await docRef.get()
-    
-    if (!docSnapshot.exists) {
-      console.log(`ℹ️ [Connected Accounts] No connected account found for user: ${userId}`)
+export class ConnectedStripeAccountsService {
+  
+  static async getAccount(userId: string): Promise<ConnectedStripeAccount | null> {
+    try {
+      if (!db) throw new Error('Firestore not initialized')
+      
+      const docRef = doc(db, 'connectedStripeAccounts', userId)
+      const docSnap = await getDoc(docRef)
+      
+      if (docSnap.exists()) {
+        return docSnap.data() as ConnectedStripeAccount
+      }
+      
+      return null
+    } catch (error) {
+      console.error('Error getting connected account:', error)
       return null
     }
-    
-    const data = docSnapshot.data() as ConnectedStripeAccount
-    console.log(`✅ [Connected Accounts] Found connected account: ${data.stripe_user_id}`)
-    
-    return data
-  } catch (error) {
-    console.error(`❌ [Connected Accounts] Error getting account for user ${userId}:`, error)
-    throw error
   }
-}
-
-/**
- * Check if user has a connected and active Stripe account
- */
-export async function hasActiveStripeAccount(userId: string): Promise<boolean> {
-  try {
-    const account = await getConnectedStripeAccount(userId)
-    
-    if (!account || !account.connected) {
+  
+  static async saveAccount(userId: string, accountData: Partial<ConnectedStripeAccount>): Promise<boolean> {
+    try {
+      if (!db) throw new Error('Firestore not initialized')
+      
+      const docRef = doc(db, 'connectedStripeAccounts', userId)
+      await setDoc(docRef, {
+        ...accountData,
+        userId,
+        lastUpdated: new Date().toISOString(),
+      }, { merge: true })
+      
+      return true
+    } catch (error) {
+      console.error('Error saving connected account:', error)
       return false
     }
-    
-    // Account is active if charges are enabled and details are submitted
-    return account.charges_enabled && account.details_submitted
-  } catch (error) {
-    console.error(`❌ [Connected Accounts] Error checking active status for user ${userId}:`, error)
-    return false
   }
-}
-
-/**
- * Update connected account data (for refreshing from Stripe)
- */
-export async function updateConnectedStripeAccount(
-  userId: string, 
-  updateData: Partial<ConnectedStripeAccount>
-): Promise<void> {
-  try {
-    console.log(`🔄 [Connected Accounts] Updating account for user: ${userId}`)
-    
-    const docRef = adminDb.collection("connectedStripeAccounts").doc(userId)
-    
-    await docRef.update({
-      ...updateData,
-      updatedAt: FieldValue.serverTimestamp(),
-    })
-    
-    console.log(`✅ [Connected Accounts] Updated account for user: ${userId}`)
-  } catch (error) {
-    console.error(`❌ [Connected Accounts] Error updating account for user ${userId}:`, error)
-    throw error
+  
+  static async updateAccount(userId: string, updates: Partial<ConnectedStripeAccount>): Promise<boolean> {
+    try {
+      if (!db) throw new Error('Firestore not initialized')
+      
+      const docRef = doc(db, 'connectedStripeAccounts', userId)
+      await updateDoc(docRef, {
+        ...updates,
+        lastUpdated: new Date().toISOString(),
+      })
+      
+      return true
+    } catch (error) {
+      console.error('Error updating connected account:', error)
+      return false
+    }
   }
-}
-
-/**
- * Delete connected account
- */
-export async function deleteConnectedStripeAccount(userId: string): Promise<void> {
-  try {
-    console.log(`🗑️ [Connected Accounts] Deleting account for user: ${userId}`)
-    
-    await adminDb.collection("connectedStripeAccounts").doc(userId).delete()
-    
-    console.log(`✅ [Connected Accounts] Deleted account for user: ${userId}`)
-  } catch (error) {
-    console.error(`❌ [Connected Accounts] Error deleting account for user ${userId}:`, error)
-    throw error
+  
+  static async deleteAccount(userId: string): Promise<boolean> {
+    try {
+      if (!db) throw new Error('Firestore not initialized')
+      
+      const docRef = doc(db, 'connectedStripeAccounts', userId)
+      await deleteDoc(docRef)
+      
+      return true
+    } catch (error) {
+      console.error('Error deleting connected account:', error)
+      return false
+    }
   }
-}
-
-/**
- * Get all connected accounts (for admin purposes)
- */
-export async function getAllConnectedAccounts(): Promise<ConnectedStripeAccount[]> {
-  try {
-    console.log("🔍 [Connected Accounts] Getting all connected accounts")
-    
-    const snapshot = await adminDb.collection("connectedStripeAccounts").get()
-    
-    const accounts: ConnectedStripeAccount[] = []
-    snapshot.forEach((doc) => {
-      accounts.push(doc.data() as ConnectedStripeAccount)
-    })
-    
-    console.log(`✅ [Connected Accounts] Found ${accounts.length} connected accounts`)
-    return accounts
-  } catch (error) {
-    console.error("❌ [Connected Accounts] Error getting all accounts:", error)
-    throw error
-  }
-}
-
-/**
- * Refresh account data from Stripe
- */
-export async function refreshStripeAccountData(userId: string): Promise<ConnectedStripeAccount | null> {
-  try {
-    console.log(`🔄 [Connected Accounts] Refreshing Stripe data for user: ${userId}`)
-    
-    const existingAccount = await getConnectedStripeAccount(userId)
-    if (!existingAccount) {
-      console.log(`ℹ️ [Connected Accounts] No existing account to refresh for user: ${userId}`)
+  
+  static async refreshAccountFromStripe(userId: string): Promise<ConnectedStripeAccount | null> {
+    try {
+      const account = await this.getAccount(userId)
+      if (!account || !account.access_token) {
+        return null
+      }
+      
+      // Fetch fresh data from Stripe
+      const response = await fetch(`https://api.stripe.com/v1/accounts/${account.stripe_user_id}`, {
+        headers: {
+          'Authorization': `Bearer ${account.access_token}`,
+          'Stripe-Version': '2023-10-16',
+        },
+      })
+      
+      if (!response.ok) {
+        console.error('Failed to refresh account from Stripe')
+        return account
+      }
+      
+      const stripeData = await response.json()
+      
+      // Update account with fresh data
+      const updatedAccount: Partial<ConnectedStripeAccount> = {
+        charges_enabled: stripeData.charges_enabled || false,
+        payouts_enabled: stripeData.payouts_enabled || false,
+        details_submitted: stripeData.details_submitted || false,
+        country: stripeData.country || account.country,
+        email: stripeData.email || account.email,
+        business_type: stripeData.business_type || account.business_type,
+        default_currency: stripeData.default_currency || account.default_currency,
+        requirements: {
+          currently_due: stripeData.requirements?.currently_due || [],
+          past_due: stripeData.requirements?.past_due || [],
+          pending_verification: stripeData.requirements?.pending_verification || [],
+        },
+        stripeAccountData: stripeData,
+      }
+      
+      await this.updateAccount(userId, updatedAccount)
+      
+      return { ...account, ...updatedAccount } as ConnectedStripeAccount
+    } catch (error) {
+      console.error('Error refreshing account from Stripe:', error)
       return null
     }
-    
-    // Get fresh data from Stripe
-    const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY)
-    const accountDetails = await stripe.accounts.retrieve(existingAccount.stripe_user_id)
-    
-    // Update with fresh data
-    const updateData: Partial<ConnectedStripeAccount> = {
-      charges_enabled: accountDetails.charges_enabled || false,
-      payouts_enabled: accountDetails.payouts_enabled || false,
-      details_submitted: accountDetails.details_submitted || false,
-      country: accountDetails.country || null,
-      email: accountDetails.email || null,
-      business_type: accountDetails.business_type || null,
-      type: accountDetails.type || null,
-      default_currency: accountDetails.default_currency || "usd",
-      
-      business_profile: accountDetails.business_profile ? {
-        name: accountDetails.business_profile.name || null,
-        url: accountDetails.business_profile.url || null,
-        support_email: accountDetails.business_profile.support_email || null,
-      } : null,
-      
-      requirements: accountDetails.requirements ? {
-        currently_due: accountDetails.requirements.currently_due || [],
-        past_due: accountDetails.requirements.past_due || [],
-        pending_verification: accountDetails.requirements.pending_verification || [],
-        eventually_due: accountDetails.requirements.eventually_due || [],
-      } : null,
-      
-      stripe_account_data: {
-        id: accountDetails.id,
-        object: accountDetails.object,
-        business_type: accountDetails.business_type,
-        capabilities: accountDetails.capabilities,
-        charges_enabled: accountDetails.charges_enabled,
-        country: accountDetails.country,
-        created: accountDetails.created,
-        default_currency: accountDetails.default_currency,
-        details_submitted: accountDetails.details_submitted,
-        email: accountDetails.email,
-        payouts_enabled: accountDetails.payouts_enabled,
-        type: accountDetails.type,
-      },
-    }
-    
-    await updateConnectedStripeAccount(userId, updateData)
-    
-    // Return updated account
-    return await getConnectedStripeAccount(userId)
-  } catch (error) {
-    console.error(`❌ [Connected Accounts] Error refreshing account for user ${userId}:`, error)
-    throw error
+  }
+  
+  static isAccountFullySetup(account: ConnectedStripeAccount): boolean {
+    return account.charges_enabled && 
+           account.payouts_enabled && 
+           account.details_submitted &&
+           account.requirements.currently_due.length === 0 &&
+           account.requirements.past_due.length === 0
   }
 }

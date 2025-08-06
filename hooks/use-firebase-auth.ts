@@ -225,3 +225,6 @@ export function useFirebaseAuth() {
     signOut,
   }
 }
+
+// Export useAuth as an alias for useFirebaseAuth
+export const useAuth = useFirebaseAuth
