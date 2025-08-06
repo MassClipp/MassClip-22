@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { adminDb } from "@/lib/firebase-admin"
 
 // Debug function to safely test imports
 function debugImports() {
@@ -30,7 +31,7 @@ function debugImports() {
 
   try {
     debugInfo.imports.firebaseAdmin = "attempting import..."
-    const { db } = require("@/lib/firebase-admin")
+    const { adminDb } = require("@/lib/firebase-admin")
     debugInfo.imports.firebaseAdmin = "✅ success"
   } catch (error) {
     debugInfo.imports.firebaseAdmin = `❌ ${error instanceof Error ? error.message : 'unknown error'}`
@@ -44,15 +45,6 @@ function debugImports() {
   } catch (error) {
     debugInfo.imports.stripeService = `❌ ${error instanceof Error ? error.message : 'unknown error'}`
     debugInfo.errors.push(`Stripe service import failed: ${error}`)
-  }
-
-  try {
-    debugInfo.imports.formatUtils = "attempting import..."
-    const { createDefaultEarningsData } = require("@/lib/format-utils")
-    debugInfo.imports.formatUtils = "✅ success"
-  } catch (error) {
-    debugInfo.imports.formatUtils = `❌ ${error instanceof Error ? error.message : 'unknown error'}`
-    debugInfo.errors.push(`Format utils import failed: ${error}`)
   }
 
   return debugInfo
@@ -98,6 +90,38 @@ function createZeroEarningsData() {
   }
 }
 
+// Alternative auth method using Firebase ID token from headers
+async function getAuthenticatedUserId(request: NextRequest): Promise<string | null> {
+  try {
+    // Try to get Firebase ID token from Authorization header
+    const authHeader = request.headers.get('authorization')
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const idToken = authHeader.substring(7)
+      const { auth } = require('@/lib/firebase-admin')
+      const decodedToken = await auth.verifyIdToken(idToken)
+      return decodedToken.uid
+    }
+
+    // Try to get from cookie (if using session cookies)
+    const cookies = request.headers.get('cookie')
+    if (cookies) {
+      // Parse session cookie if it exists
+      const sessionMatch = cookies.match(/session=([^;]+)/)
+      if (sessionMatch) {
+        const sessionCookie = sessionMatch[1]
+        const { auth } = require('@/lib/firebase-admin')
+        const decodedToken = await auth.verifySessionCookie(sessionCookie, true)
+        return decodedToken.uid
+      }
+    }
+
+    return null
+  } catch (error) {
+    console.error('Alternative auth failed:', error)
+    return null
+  }
+}
+
 export async function GET(request: NextRequest) {
   const debugLog: any[] = []
   
@@ -125,67 +149,86 @@ export async function GET(request: NextRequest) {
 
     debugLog.push({ step: "3", action: "All imports successful, proceeding with auth", timestamp: new Date().toISOString() })
 
-    // Now try to use the imports
+    // Try NextAuth first
     let session = null
+    let userId = null
     try {
       debugLog.push({ step: "4", action: "Attempting to get server session", timestamp: new Date().toISOString() })
       const { getServerSession } = require("next-auth")
       const { authOptions } = require("@/auth")
       session = await getServerSession(authOptions)
-      debugLog.push({ step: "4.1", action: "Session retrieved", hasSession: !!session, userId: session?.user?.id })
+      userId = session?.user?.id
+      debugLog.push({ step: "4.1", action: "NextAuth session retrieved", hasSession: !!session, userId })
     } catch (authError) {
-      debugLog.push({ step: "4.2", action: "Auth error", error: authError instanceof Error ? authError.message : 'unknown auth error' })
-      return NextResponse.json({
-        error: "Authentication error",
-        debug: {
-          logs: debugLog,
-          authError: authError instanceof Error ? authError.message : 'unknown auth error',
-        },
-        ...createZeroEarningsData(),
-        lastUpdated: new Date().toISOString(),
-      })
+      debugLog.push({ step: "4.2", action: "NextAuth failed, trying alternative auth", error: authError instanceof Error ? authError.message : 'unknown auth error' })
+      
+      // Try alternative auth method
+      try {
+        userId = await getAuthenticatedUserId(request)
+        debugLog.push({ step: "4.3", action: "Alternative auth result", userId: !!userId })
+      } catch (altAuthError) {
+        debugLog.push({ step: "4.4", action: "Alternative auth also failed", error: String(altAuthError) })
+      }
     }
 
-    if (!session?.user?.id) {
-      debugLog.push({ step: "5", action: "No valid session found", timestamp: new Date().toISOString() })
+    // If we still don't have a userId, try to get it from query params for debugging
+    if (!userId) {
+      const { searchParams } = new URL(request.url)
+      const debugUserId = searchParams.get('debugUserId')
+      if (debugUserId) {
+        userId = debugUserId
+        debugLog.push({ step: "4.5", action: "Using debug user ID from query params", userId })
+      }
+    }
+
+    if (!userId) {
+      debugLog.push({ step: "5", action: "No valid user ID found", timestamp: new Date().toISOString() })
       return NextResponse.json({ 
-        error: "Unauthorized",
-        debug: { logs: debugLog }
+        error: "Unauthorized - no user ID available",
+        debug: { logs: debugLog },
+        ...createZeroEarningsData(),
+        lastUpdated: new Date().toISOString(),
       }, { status: 401 })
     }
 
-    const userId = session.user.id
-    debugLog.push({ step: "6", action: "Valid session found", userId, timestamp: new Date().toISOString() })
+    debugLog.push({ step: "6", action: "Valid user ID found", userId, timestamp: new Date().toISOString() })
 
-    // Try Firebase to get user's Stripe connection status
-    let userData = null
+    // Try to get user's Stripe connection status from Firestore
+    let connectedAccountData = null
     let stripeAccountId = null
     try {
-      debugLog.push({ step: "7", action: "Attempting Firebase connection", timestamp: new Date().toISOString() })
-      const { db } = require("@/lib/firebase-admin")
-      const userDoc = await db.collection("users").doc(userId).get()
-      userData = userDoc.data()
-      stripeAccountId = userData?.stripeAccountId
-      debugLog.push({ 
-        step: "7.1", 
-        action: "Firebase query successful", 
-        userExists: userDoc.exists,
-        hasStripeAccount: !!stripeAccountId,
-        stripeAccountId: stripeAccountId ? `${stripeAccountId.slice(0, 8)}...` : null,
-        timestamp: new Date().toISOString()
-      })
-    } catch (firebaseError) {
+      debugLog.push({ step: "7", action: "Attempting to get connected account data", timestamp: new Date().toISOString() })
+      
+      const accountRef = adminDb.collection("connectedStripeAccounts").doc(userId)
+      const accountDoc = await accountRef.get()
+      
+      if (accountDoc.exists) {
+        connectedAccountData = accountDoc.data()
+        stripeAccountId = connectedAccountData?.stripe_user_id
+        debugLog.push({ 
+          step: "7.1", 
+          action: "Connected account data found", 
+          hasStripeAccount: !!stripeAccountId,
+          connected: connectedAccountData?.connected,
+          chargesEnabled: connectedAccountData?.charges_enabled,
+          detailsSubmitted: connectedAccountData?.details_submitted,
+          timestamp: new Date().toISOString()
+        })
+      } else {
+        debugLog.push({ step: "7.1", action: "No connected account document found", timestamp: new Date().toISOString() })
+      }
+    } catch (firestoreError) {
       debugLog.push({ 
         step: "7.2", 
-        action: "Firebase error", 
-        error: firebaseError instanceof Error ? firebaseError.message : 'unknown firebase error',
+        action: "Firestore error getting connected account", 
+        error: firestoreError instanceof Error ? firestoreError.message : 'unknown firestore error',
         timestamp: new Date().toISOString()
       })
       return NextResponse.json({
         error: "Database connection error",
         debug: {
           logs: debugLog,
-          firebaseError: firebaseError instanceof Error ? firebaseError.message : 'unknown firebase error',
+          firestoreError: firestoreError instanceof Error ? firestoreError.message : 'unknown firestore error',
         },
         ...createZeroEarningsData(),
         lastUpdated: new Date().toISOString(),
@@ -193,7 +236,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Check if user has a connected Stripe account
-    if (!stripeAccountId) {
+    if (!stripeAccountId || !connectedAccountData?.connected) {
       debugLog.push({ step: "8", action: "No Stripe account connected - returning zero data", timestamp: new Date().toISOString() })
       return NextResponse.json({
         ...createZeroEarningsData(),
@@ -211,10 +254,9 @@ export async function GET(request: NextRequest) {
     // Verify Stripe account is properly set up
     debugLog.push({ step: "9", action: "Checking Stripe account status", stripeAccountId: `${stripeAccountId.slice(0, 8)}...`, timestamp: new Date().toISOString() })
     
-    // Check if account is charges_enabled and details_submitted
-    const stripeChargesEnabled = userData?.stripeChargesEnabled || false
-    const stripeDetailsSubmitted = userData?.stripeDetailsSubmitted || false
-    const stripePayoutsEnabled = userData?.stripePayoutsEnabled || false
+    const stripeChargesEnabled = connectedAccountData?.charges_enabled || false
+    const stripeDetailsSubmitted = connectedAccountData?.details_submitted || false
+    const stripePayoutsEnabled = connectedAccountData?.payouts_enabled || false
 
     if (!stripeChargesEnabled || !stripeDetailsSubmitted) {
       debugLog.push({ 
@@ -232,9 +274,9 @@ export async function GET(request: NextRequest) {
           chargesEnabled: stripeChargesEnabled,
           payoutsEnabled: stripePayoutsEnabled,
           detailsSubmitted: stripeDetailsSubmitted,
-          requirementsCount: 0,
-          currentlyDue: [],
-          pastDue: [],
+          requirementsCount: connectedAccountData?.requirements_currently_due?.length || 0,
+          currentlyDue: connectedAccountData?.requirements_currently_due || [],
+          pastDue: connectedAccountData?.requirements_past_due || [],
         },
         lastUpdated: new Date().toISOString(),
         debug: {
@@ -246,7 +288,7 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // Only now try to fetch real Stripe data
+    // Account is fully set up, try to fetch real Stripe data
     debugLog.push({ step: "10", action: "Fetching real Stripe earnings data", timestamp: new Date().toISOString() })
     
     try {
@@ -254,7 +296,7 @@ export async function GET(request: NextRequest) {
       const earningsData = await StripeEarningsService.getEarningsData(stripeAccountId)
       
       if (!earningsData) {
-        debugLog.push({ step: "10.1", action: "No earnings data returned from Stripe - returning zero data", timestamp: new Date().toISOString() })
+        debugLog.push({ step: "10.1", action: "No earnings data returned from Stripe - returning zero data with account status", timestamp: new Date().toISOString() })
         return NextResponse.json({
           ...createZeroEarningsData(),
           stripeAccountId,
@@ -262,9 +304,9 @@ export async function GET(request: NextRequest) {
             chargesEnabled: stripeChargesEnabled,
             payoutsEnabled: stripePayoutsEnabled,
             detailsSubmitted: stripeDetailsSubmitted,
-            requirementsCount: 0,
-            currentlyDue: [],
-            pastDue: [],
+            requirementsCount: connectedAccountData?.requirements_currently_due?.length || 0,
+            currentlyDue: connectedAccountData?.requirements_currently_due || [],
+            pastDue: connectedAccountData?.requirements_past_due || [],
           },
           lastUpdated: new Date().toISOString(),
           debug: {
@@ -296,7 +338,7 @@ export async function GET(request: NextRequest) {
     } catch (stripeError) {
       debugLog.push({ 
         step: "10.3", 
-        action: "Error fetching Stripe data - returning zero data", 
+        action: "Error fetching Stripe data - returning zero data with account status", 
         error: stripeError instanceof Error ? stripeError.message : 'unknown stripe error',
         timestamp: new Date().toISOString()
       })
@@ -309,9 +351,9 @@ export async function GET(request: NextRequest) {
           chargesEnabled: stripeChargesEnabled,
           payoutsEnabled: stripePayoutsEnabled,
           detailsSubmitted: stripeDetailsSubmitted,
-          requirementsCount: 0,
-          currentlyDue: [],
-          pastDue: [],
+          requirementsCount: connectedAccountData?.requirements_currently_due?.length || 0,
+          currentlyDue: connectedAccountData?.requirements_currently_due || [],
+          pastDue: connectedAccountData?.requirements_past_due || [],
         },
         lastUpdated: new Date().toISOString(),
         debug: {

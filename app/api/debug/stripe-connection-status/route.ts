@@ -1,116 +1,160 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { adminDb } from '@/lib/firebase-admin'
+import { type NextRequest, NextResponse } from "next/server"
+import { adminDb } from "@/lib/firebase-admin"
 
 export async function GET(request: NextRequest) {
+  const debugLog: any[] = []
+  
   try {
+    debugLog.push({ step: 1, action: "Starting connection status check", timestamp: new Date().toISOString() })
+
+    // Get userId from query params for debugging
     const { searchParams } = new URL(request.url)
     const userId = searchParams.get('userId')
+    const refresh = searchParams.get('refresh') === 'true'
+
+    debugLog.push({ step: 2, action: "Extracted parameters", data: { userId: !!userId, refresh }, timestamp: new Date().toISOString() })
 
     if (!userId) {
-      return NextResponse.json({ error: 'userId parameter required' }, { status: 400 })
+      return NextResponse.json({
+        error: "User ID is required for debugging",
+        debug: { logs: debugLog }
+      }, { status: 400 })
     }
 
-    const debugInfo: any = {
-      timestamp: new Date().toISOString(),
-      userId,
-      checks: []
-    }
+    // Test Firestore availability
+    debugLog.push({ step: 3, action: "Testing Firestore availability", timestamp: new Date().toISOString() })
+    
+    const checks = []
 
-    // Check if Firebase Admin is available
-    debugInfo.checks.push({
-      name: 'Firebase Admin availability',
-      status: !!adminDb ? 'PASS' : 'FAIL',
-      details: !!adminDb ? 'Firebase Admin instance available' : 'Firebase Admin instance not available'
-    })
-
-    if (!adminDb) {
-      return NextResponse.json({ 
-        error: 'Firebase Admin not available',
-        debug: debugInfo
-      }, { status: 500 })
-    }
-
-    // Check connectedStripeAccounts collection
     try {
+      // Test basic Firestore connection
+      const testDoc = adminDb.collection('_test').doc('connection')
+      await testDoc.set({ test: true, timestamp: new Date() }, { merge: true })
+      checks.push({
+        name: "Firestore availability",
+        status: "PASS",
+        details: "Firestore instance available"
+      })
+      debugLog.push({ step: 3.1, action: "Firestore availability test passed", timestamp: new Date().toISOString() })
+    } catch (firestoreError) {
+      checks.push({
+        name: "Firestore availability", 
+        status: "ERROR",
+        details: `Error: ${firestoreError}`
+      })
+      debugLog.push({ step: 3.1, action: "Firestore availability test failed", error: String(firestoreError), timestamp: new Date().toISOString() })
+    }
+
+    // Test connected account document
+    try {
+      debugLog.push({ step: 4, action: "Checking connected account document", userId, timestamp: new Date().toISOString() })
+      
       const accountRef = adminDb.collection('connectedStripeAccounts').doc(userId)
-      const accountSnap = await accountRef.get()
+      const accountDoc = await accountRef.get()
       
-      debugInfo.checks.push({
-        name: 'Connected account document',
-        status: accountSnap.exists ? 'PASS' : 'FAIL',
-        details: accountSnap.exists ? 'Document exists' : 'Document does not exist'
-      })
-
-      if (accountSnap.exists) {
-        const accountData = accountSnap.data()
-        debugInfo.connectedAccount = {
-          exists: true,
-          stripe_user_id: accountData?.stripe_user_id,
-          connected: accountData?.connected,
-          charges_enabled: accountData?.charges_enabled,
-          payouts_enabled: accountData?.payouts_enabled,
-          details_submitted: accountData?.details_submitted,
-          connectedAt: accountData?.connectedAt,
-          lastUpdated: accountData?.lastUpdated
-        }
+      if (accountDoc.exists) {
+        const accountData = accountDoc.data()
+        checks.push({
+          name: "Connected account document",
+          status: "PASS", 
+          details: `Document exists with ${Object.keys(accountData || {}).length} fields`,
+          data: {
+            connected: accountData?.connected,
+            charges_enabled: accountData?.charges_enabled,
+            details_submitted: accountData?.details_submitted,
+            stripe_user_id: accountData?.stripe_user_id,
+            connectedAt: accountData?.connectedAt
+          }
+        })
+        debugLog.push({ step: 4.1, action: "Connected account document found", data: accountData, timestamp: new Date().toISOString() })
       } else {
-        debugInfo.connectedAccount = { exists: false }
+        checks.push({
+          name: "Connected account document",
+          status: "NOT_FOUND",
+          details: "No connected account document found for this user"
+        })
+        debugLog.push({ step: 4.1, action: "Connected account document not found", timestamp: new Date().toISOString() })
       }
-    } catch (error) {
-      debugInfo.checks.push({
-        name: 'Connected account document',
-        status: 'ERROR',
-        details: `Error reading document: ${error}`
+    } catch (accountError) {
+      checks.push({
+        name: "Connected account document",
+        status: "ERROR", 
+        details: `Error reading document: ${accountError}`
       })
+      debugLog.push({ step: 4.1, action: "Error reading connected account document", error: String(accountError), timestamp: new Date().toISOString() })
     }
 
-    // Check users collection
+    // Test user document
     try {
-      const userRef = adminDb.collection('users').doc(userId)
-      const userSnap = await userRef.get()
+      debugLog.push({ step: 5, action: "Checking user document", userId, timestamp: new Date().toISOString() })
       
-      debugInfo.checks.push({
-        name: 'User document',
-        status: userSnap.exists ? 'PASS' : 'FAIL',
-        details: userSnap.exists ? 'Document exists' : 'Document does not exist'
-      })
-
-      if (userSnap.exists) {
-        const userData = userSnap.data()
-        debugInfo.userDocument = {
-          exists: true,
-          stripeConnected: userData?.stripeConnected,
-          connectedAccountId: userData?.connectedAccountId,
-          stripeConnectionUpdatedAt: userData?.stripeConnectionUpdatedAt
-        }
+      const userRef = adminDb.collection('users').doc(userId)
+      const userDoc = await userRef.get()
+      
+      if (userDoc.exists) {
+        const userData = userDoc.data()
+        checks.push({
+          name: "User document",
+          status: "PASS",
+          details: `User document exists with ${Object.keys(userData || {}).length} fields`,
+          data: {
+            stripeConnected: userData?.stripeConnected,
+            connectedAccountId: userData?.connectedAccountId,
+            stripeConnectionUpdatedAt: userData?.stripeConnectionUpdatedAt
+          }
+        })
+        debugLog.push({ step: 5.1, action: "User document found", data: userData, timestamp: new Date().toISOString() })
       } else {
-        debugInfo.userDocument = { exists: false }
+        checks.push({
+          name: "User document",
+          status: "NOT_FOUND",
+          details: "No user document found"
+        })
+        debugLog.push({ step: 5.1, action: "User document not found", timestamp: new Date().toISOString() })
       }
-    } catch (error) {
-      debugInfo.checks.push({
-        name: 'User document',
-        status: 'ERROR',
-        details: `Error reading document: ${error}`
+    } catch (userError) {
+      checks.push({
+        name: "User document",
+        status: "ERROR",
+        details: `Error reading document: ${userError}`
       })
+      debugLog.push({ step: 5.1, action: "Error reading user document", error: String(userError), timestamp: new Date().toISOString() })
     }
 
     // Environment check
-    debugInfo.environment = {
+    const environment = {
       hasStripeSecretKey: !!process.env.STRIPE_SECRET_KEY,
       hasStripeClientId: !!process.env.STRIPE_CLIENT_ID,
-      siteUrl: process.env.NEXT_PUBLIC_SITE_URL,
-      hasFirebaseProjectId: !!process.env.FIREBASE_PROJECT_ID,
-      hasFirebaseClientEmail: !!process.env.FIREBASE_CLIENT_EMAIL,
-      hasFirebasePrivateKey: !!process.env.FIREBASE_PRIVATE_KEY
+      siteUrl: process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_VERCEL_URL
     }
 
-    return NextResponse.json(debugInfo)
+    debugLog.push({ step: 6, action: "Environment check completed", data: environment, timestamp: new Date().toISOString() })
+
+    return NextResponse.json({
+      timestamp: new Date().toISOString(),
+      userId,
+      checks,
+      environment,
+      debug: {
+        logs: debugLog,
+        totalSteps: debugLog.length
+      }
+    })
 
   } catch (error) {
-    return NextResponse.json({ 
-      error: 'Debug check failed',
+    debugLog.push({ step: "ERROR", action: "Unexpected error", error: String(error), timestamp: new Date().toISOString() })
+    
+    return NextResponse.json({
+      error: "Debug check failed",
       message: String(error),
-      timestamp: new Date().toISOString()
+      debug: {
+        logs: debugLog,
+        errorDetails: error instanceof Error ? {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        } : { message: String(error) }
+      }
     }, { status: 500 })
   }
 }
