@@ -6,8 +6,10 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
-import { RefreshCw, DollarSign, TrendingUp, CreditCard, Users, AlertCircle, CheckCircle, XCircle, Bug, Info } from 'lucide-react'
+import { RefreshCw, DollarSign, TrendingUp, CreditCard, Users, AlertCircle, CheckCircle, XCircle, Bug, Info, Loader2 } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { StripeConnectionSetup } from "@/components/stripe-connection-setup"
+import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 
 // Safe formatting functions
 function formatCurrency(amount: number): string {
@@ -50,6 +52,15 @@ function calculatePercentageChange(current: number, previous: number): number {
   return ((current - previous) / previous) * 100
 }
 
+interface StripeConnectionStatus {
+  connected: boolean
+  accountId?: string
+  chargesEnabled: boolean
+  payoutsEnabled: boolean
+  detailsSubmitted: boolean
+  status: string
+}
+
 interface EarningsData {
   totalEarnings: number
   thisMonthEarnings: number
@@ -85,12 +96,68 @@ interface EarningsData {
 }
 
 export default function EarningsPage() {
+  const { user, loading: authLoading } = useFirebaseAuth()
+  const [stripeStatus, setStripeStatus] = useState<StripeConnectionStatus | null>(null)
+  const [checkingStripe, setCheckingStripe] = useState(true)
   const [earningsData, setEarningsData] = useState<EarningsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [debugInfo, setDebugInfo] = useState<any>(null)
   const [showDebug, setShowDebug] = useState(false)
+
+  // Check Stripe connection status
+  const checkStripeStatus = async () => {
+    if (!user?.uid) return
+
+    try {
+      setCheckingStripe(true)
+      console.log("🔍 Checking Stripe connection status...")
+
+      const response = await fetch("/api/stripe/connect/status", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ userId: user.uid }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log("🔍 Stripe status:", data)
+        setStripeStatus(data)
+        
+        // Only fetch earnings if Stripe is properly connected
+        if (data.connected && data.chargesEnabled && data.detailsSubmitted) {
+          await fetchEarningsData()
+        } else {
+          setLoading(false)
+        }
+      } else {
+        console.log("🔍 No Stripe connection found")
+        setStripeStatus({
+          connected: false,
+          chargesEnabled: false,
+          payoutsEnabled: false,
+          detailsSubmitted: false,
+          status: "not_connected"
+        })
+        setLoading(false)
+      }
+    } catch (error) {
+      console.error("🔍 Error checking Stripe status:", error)
+      setStripeStatus({
+        connected: false,
+        chargesEnabled: false,
+        payoutsEnabled: false,
+        detailsSubmitted: false,
+        status: "error"
+      })
+      setLoading(false)
+    } finally {
+      setCheckingStripe(false)
+    }
+  }
 
   const fetchEarningsData = async (forceRefresh = false) => {
     try {
@@ -202,13 +269,57 @@ export default function EarningsPage() {
   }
 
   useEffect(() => {
-    fetchEarningsData()
-  }, [])
+    if (user) {
+      checkStripeStatus()
+    }
+  }, [user])
 
-  const handleRefresh = () => {
-    fetchEarningsData(true)
+  const handleStripeConnectionSuccess = () => {
+    console.log("🎉 Stripe connection successful, refreshing status...")
+    checkStripeStatus()
   }
 
+  const handleRefresh = () => {
+    if (stripeStatus?.connected && stripeStatus?.chargesEnabled && stripeStatus?.detailsSubmitted) {
+      fetchEarningsData(true)
+    } else {
+      checkStripeStatus()
+    }
+  }
+
+  // Show loading while checking auth or Stripe status
+  if (authLoading || checkingStripe) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <p className="text-muted-foreground">
+            {authLoading ? "Loading..." : "Checking Stripe connection..."}
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show login prompt if not authenticated
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-6">
+            <p className="text-center text-muted-foreground">Please log in to continue</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // Show Stripe connection setup if not connected or not fully set up
+  if (!stripeStatus?.connected || !stripeStatus?.chargesEnabled || !stripeStatus?.detailsSubmitted) {
+    return <StripeConnectionSetup userId={user.uid} onSuccess={handleStripeConnectionSuccess} />
+  }
+
+  // Show loading while fetching earnings data
   if (loading) {
     return (
       <div className="container mx-auto p-6">

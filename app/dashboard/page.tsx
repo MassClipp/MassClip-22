@@ -3,23 +3,20 @@
 import { useState } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { useProfileInitialization } from "@/hooks/use-profile-initialization"
-import { useStripeConnection } from "@/hooks/use-stripe-connection"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { DollarSign, Package, TrendingUp, Video, RefreshCw, Activity, Calendar } from 'lucide-react'
+import { DollarSign, Package, TrendingUp, Video, RefreshCw, Activity, Calendar } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
 import { useVideoStatsAPI } from "@/hooks/use-video-stats-api"
 import { useStripeDashboardSales } from "@/hooks/use-stripe-dashboard-sales"
 import { SalesForecastCard } from "@/components/sales-forecast-card"
 import ProfileViewStats from "@/components/profile-view-stats"
-import { StripeConnectOnboarding } from "@/components/stripe-connect-onboarding"
 
 export default function DashboardPage() {
   const { user } = useAuth()
   const { isInitializing, isComplete, username, error } = useProfileInitialization()
-  const { status: stripeStatus, loading: stripeLoading, isConnected } = useStripeConnection()
   const router = useRouter()
   const { toast } = useToast()
 
@@ -28,7 +25,7 @@ export default function DashboardPage() {
   // Use API-based video statistics (avoids Firestore index issues)
   const videoStats = useVideoStatsAPI()
 
-  // Use live dashboard sales data - but only if Stripe is connected
+  // Use live dashboard sales data
   const salesData = useStripeDashboardSales()
 
   // Manual refresh function
@@ -50,8 +47,8 @@ export default function DashboardPage() {
     }
   }
 
-  // Show loading state while profile is being initialized or checking Stripe connection
-  if (isInitializing || stripeLoading || videoStats.loading) {
+  // Show loading state while profile is being initialized or stats are loading
+  if (isInitializing || videoStats.loading || salesData.loading) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -112,11 +109,6 @@ export default function DashboardPage() {
     )
   }
 
-  // Show Stripe connection page if not connected
-  if (!isConnected) {
-    return <StripeConnectOnboarding />
-  }
-
   // Show dashboard with fallback data if there are API errors but we have some data
   if (videoStats.error && !videoStats.loading) {
     console.warn("Video stats API error:", videoStats.error)
@@ -133,11 +125,6 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2 mt-1">
             <Activity className="h-3 w-3 text-green-500" />
             <span className="text-xs text-green-500">Live Data</span>
-            {stripeStatus?.account && (
-              <span className="text-xs text-blue-500">
-                • Stripe Connected ({stripeStatus.account.email})
-              </span>
-            )}
           </div>
         </div>
         <div className="flex gap-3">
@@ -205,7 +192,7 @@ export default function DashboardPage() {
 
       {/* Main Content Grid */}
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Financial Forecast - Only show if Stripe is connected */}
+        {/* Financial Forecast - Replaces Sales Performance */}
         <div className="lg:col-span-2">
           <SalesForecastCard />
         </div>
