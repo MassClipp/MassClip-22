@@ -235,14 +235,49 @@ export default function EarningsPage() {
   }
 
   const data = earningsData!
-  const monthlyGrowth = calculatePercentageChange(data.thisMonthEarnings, data.lastMonthEarnings)
+
+  // After the data assignment, add safety checks
+  const safeData = {
+    totalEarnings: data?.totalEarnings || 0,
+    thisMonthEarnings: data?.thisMonthEarnings || 0,
+    lastMonthEarnings: data?.lastMonthEarnings || 0,
+    last30DaysEarnings: data?.last30DaysEarnings || 0,
+    pendingPayout: data?.pendingPayout || 0,
+    availableBalance: data?.availableBalance || 0,
+    salesMetrics: {
+      totalSales: data?.salesMetrics?.totalSales || 0,
+      thisMonthSales: data?.salesMetrics?.thisMonthSales || 0,
+      last30DaysSales: data?.salesMetrics?.last30DaysSales || 0,
+      averageTransactionValue: data?.salesMetrics?.averageTransactionValue || 0,
+      conversionRate: data?.salesMetrics?.conversionRate || 0,
+    },
+    accountStatus: {
+      chargesEnabled: data?.accountStatus?.chargesEnabled || false,
+      payoutsEnabled: data?.accountStatus?.payoutsEnabled || false,
+      detailsSubmitted: data?.accountStatus?.detailsSubmitted || false,
+      requirementsCount: data?.accountStatus?.requirementsCount || 0,
+      currentlyDue: data?.accountStatus?.currentlyDue || [],
+      pastDue: data?.accountStatus?.pastDue || [],
+    },
+    recentTransactions: data?.recentTransactions || [],
+    payoutHistory: data?.payoutHistory || [],
+    monthlyBreakdown: data?.monthlyBreakdown || [],
+    error: data?.error,
+    isDemo: data?.isDemo,
+    message: data?.message,
+    stripeAccountId: data?.stripeAccountId,
+    lastUpdated: data?.lastUpdated,
+    debug: data?.debug,
+  }
+
+  const monthlyGrowth = calculatePercentageChange(safeData.thisMonthEarnings, safeData.lastMonthEarnings)
 
   // Determine data source badge
   const getDataSourceBadge = () => {
-    if (data.error) {
+    if (safeData.error) {
       return <Badge variant="destructive">Error</Badge>
     }
-    if (data.isDemo) {
+    if (safeData.isDemo) {
       return <Badge variant="secondary">Demo Data</Badge>
     }
     return <Badge variant="default">Live Data</Badge>
@@ -250,7 +285,7 @@ export default function EarningsPage() {
 
   // Account status badge
   const getAccountStatusBadge = () => {
-    const { accountStatus } = data
+    const { accountStatus } = safeData
     if (!accountStatus.chargesEnabled || !accountStatus.payoutsEnabled) {
       return <Badge variant="destructive">Setup Required</Badge>
     }
@@ -268,8 +303,8 @@ export default function EarningsPage() {
           <p className="text-muted-foreground">Track your revenue and performance</p>
           <div className="flex items-center gap-2 mt-2">
             {getDataSourceBadge()}
-            {data.stripeAccountId && <Badge variant="outline">Account: {data.stripeAccountId.slice(-6)}</Badge>}
-            {data.message && <Badge variant="outline">{data.message}</Badge>}
+            {safeData.stripeAccountId && <Badge variant="outline">Account: {safeData.stripeAccountId.slice(-6)}</Badge>}
+            {safeData.message && <Badge variant="outline">{safeData.message}</Badge>}
             {debugInfo && (
               <Button
                 variant="outline"
@@ -403,7 +438,7 @@ export default function EarningsPage() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(data.totalEarnings)}</div>
+            <div className="text-2xl font-bold">{formatCurrency(safeData.totalEarnings)}</div>
             <p className="text-xs text-muted-foreground">All-time revenue</p>
           </CardContent>
         </Card>
@@ -414,7 +449,7 @@ export default function EarningsPage() {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(data.thisMonthEarnings)}</div>
+            <div className="text-2xl font-bold">{formatCurrency(safeData.thisMonthEarnings)}</div>
             <p className="text-xs text-muted-foreground">{formatPercentage(monthlyGrowth)} from last month</p>
           </CardContent>
         </Card>
@@ -425,7 +460,7 @@ export default function EarningsPage() {
             <CreditCard className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(data.availableBalance)}</div>
+            <div className="text-2xl font-bold">{formatCurrency(safeData.availableBalance)}</div>
             <p className="text-xs text-muted-foreground">Ready for payout</p>
           </CardContent>
         </Card>
@@ -436,16 +471,16 @@ export default function EarningsPage() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatNumber(data.salesMetrics.totalSales)}</div>
+            <div className="text-2xl font-bold">{formatNumber(safeData.salesMetrics.totalSales)}</div>
             <p className="text-xs text-muted-foreground">
-              {formatCurrency(data.salesMetrics.averageTransactionValue)} avg order
+              {formatCurrency(safeData.salesMetrics.averageTransactionValue)} avg order
             </p>
           </CardContent>
         </Card>
       </div>
 
       {/* Demo Mode Notice */}
-      {data.isDemo && (
+      {safeData.isDemo && (
         <Card className="mb-6 border-blue-200 bg-blue-50">
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
@@ -455,9 +490,9 @@ export default function EarningsPage() {
                 <p className="text-sm text-blue-700">
                   This is sample data for demonstration purposes. Connect your Stripe account to see real earnings.
                 </p>
-                {data.error && (
+                {safeData.error && (
                   <p className="text-sm text-blue-600 mt-1">
-                    Reason: {data.error}
+                    Reason: {safeData.error}
                   </p>
                 )}
               </div>
@@ -467,7 +502,7 @@ export default function EarningsPage() {
       )}
 
       {/* Account Status Alert */}
-      {data.accountStatus.requirementsCount > 0 && (
+      {safeData.accountStatus.requirementsCount > 0 && (
         <Card className="mb-6 border-yellow-200 bg-yellow-50">
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
@@ -475,11 +510,11 @@ export default function EarningsPage() {
               <div>
                 <h3 className="font-semibold text-yellow-800">Account Setup Required</h3>
                 <p className="text-sm text-yellow-700">
-                  {data.accountStatus.requirementsCount} requirement(s) need attention to enable full functionality.
+                  {safeData.accountStatus.requirementsCount} requirement(s) need attention to enable full functionality.
                 </p>
-                {data.accountStatus.currentlyDue.length > 0 && (
+                {safeData.accountStatus.currentlyDue.length > 0 && (
                   <p className="text-xs text-yellow-600 mt-1">
-                    Currently due: {data.accountStatus.currentlyDue.join(", ")}
+                    Currently due: {safeData.accountStatus.currentlyDue.join(", ")}
                   </p>
                 )}
               </div>
@@ -505,15 +540,15 @@ export default function EarningsPage() {
               <CardContent className="space-y-4">
                 <div className="flex justify-between">
                   <span>Last 30 Days</span>
-                  <span className="font-semibold">{formatCurrency(data.last30DaysEarnings)}</span>
+                  <span className="font-semibold">{formatCurrency(safeData.last30DaysEarnings)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>This Month Sales</span>
-                  <span className="font-semibold">{formatNumber(data.salesMetrics.thisMonthSales)}</span>
+                  <span className="font-semibold">{formatNumber(safeData.salesMetrics.thisMonthSales)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Last 30 Days Sales</span>
-                  <span className="font-semibold">{formatNumber(data.salesMetrics.last30DaysSales)}</span>
+                  <span className="font-semibold">{formatNumber(safeData.salesMetrics.last30DaysSales)}</span>
                 </div>
               </CardContent>
             </Card>
@@ -525,11 +560,11 @@ export default function EarningsPage() {
               <CardContent className="space-y-4">
                 <div className="flex justify-between">
                   <span>Pending Payout</span>
-                  <span className="font-semibold">{formatCurrency(data.pendingPayout)}</span>
+                  <span className="font-semibold">{formatCurrency(safeData.pendingPayout)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Available Balance</span>
-                  <span className="font-semibold text-green-600">{formatCurrency(data.availableBalance)}</span>
+                  <span className="font-semibold text-green-600">{formatCurrency(safeData.availableBalance)}</span>
                 </div>
                 <Separator />
                 <div className="flex items-center justify-between">
@@ -552,9 +587,9 @@ export default function EarningsPage() {
               <CardDescription>Your latest payment transactions</CardDescription>
             </CardHeader>
             <CardContent>
-              {data.recentTransactions.length > 0 ? (
+              {safeData.recentTransactions.length > 0 ? (
                 <div className="space-y-4">
-                  {data.recentTransactions.slice(0, 10).map((transaction, index) => (
+                  {safeData.recentTransactions.slice(0, 10).map((transaction, index) => (
                     <div
                       key={transaction.id || index}
                       className="flex items-center justify-between p-3 border rounded-lg"
@@ -596,7 +631,7 @@ export default function EarningsPage() {
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="flex items-center justify-between">
                   <span>Charges Enabled</span>
-                  {data.accountStatus.chargesEnabled ? (
+                  {safeData.accountStatus.chargesEnabled ? (
                     <CheckCircle className="h-5 w-5 text-green-500" />
                   ) : (
                     <XCircle className="h-5 w-5 text-red-500" />
@@ -604,7 +639,7 @@ export default function EarningsPage() {
                 </div>
                 <div className="flex items-center justify-between">
                   <span>Payouts Enabled</span>
-                  {data.accountStatus.payoutsEnabled ? (
+                  {safeData.accountStatus.payoutsEnabled ? (
                     <CheckCircle className="h-5 w-5 text-green-500" />
                   ) : (
                     <XCircle className="h-5 w-5 text-red-500" />
@@ -612,7 +647,7 @@ export default function EarningsPage() {
                 </div>
                 <div className="flex items-center justify-between">
                   <span>Details Submitted</span>
-                  {data.accountStatus.detailsSubmitted ? (
+                  {safeData.accountStatus.detailsSubmitted ? (
                     <CheckCircle className="h-5 w-5 text-green-500" />
                   ) : (
                     <XCircle className="h-5 w-5 text-red-500" />
@@ -620,8 +655,8 @@ export default function EarningsPage() {
                 </div>
                 <div className="flex items-center justify-between">
                   <span>Requirements</span>
-                  <Badge variant={data.accountStatus.requirementsCount > 0 ? "destructive" : "default"}>
-                    {data.accountStatus.requirementsCount} pending
+                  <Badge variant={safeData.accountStatus.requirementsCount > 0 ? "destructive" : "default"}>
+                    {safeData.accountStatus.requirementsCount} pending
                   </Badge>
                 </div>
               </div>
@@ -631,9 +666,9 @@ export default function EarningsPage() {
       </Tabs>
 
       {/* Footer Info */}
-      {data.lastUpdated && (
+      {safeData.lastUpdated && (
         <div className="mt-6 text-center text-sm text-muted-foreground">
-          Last updated: {formatDateTime(data.lastUpdated)}
+          Last updated: {formatDateTime(safeData.lastUpdated)}
         </div>
       )}
     </div>

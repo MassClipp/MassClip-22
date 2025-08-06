@@ -238,7 +238,7 @@ export async function GET(request: NextRequest) {
             totalSales: 45,
             thisMonthSales: 12,
             last30DaysSales: 18,
-            averageTransactionValue: 27.79,
+            averageTransactionValue: 0,
             conversionRate: 0,
           },
           accountStatus: {
@@ -313,7 +313,7 @@ export async function GET(request: NextRequest) {
           fee: 1.57,
           type: "payment",
           description: "Premium Content Purchase",
-          created: new Date(),
+          created: new Date().toISOString(),
           status: "available",
           currency: "USD",
         },
