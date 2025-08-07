@@ -76,6 +76,18 @@ export const firestore = adminDb
 // REQUIRED: Export db as a named export (this was missing)
 export const db: Firestore = adminDb
 
+// REQUIRED: Export admin object with methods that match Firebase Admin SDK usage patterns
+export const admin = {
+  auth: () => auth,
+  firestore: () => adminDb,
+  storage: () => storage,
+  app: () => adminApp,
+  // Direct access to services for convenience
+  authService: auth,
+  firestoreService: adminDb,
+  storageService: storage,
+}
+
 // Default export
 export default adminApp
 

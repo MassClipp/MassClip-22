@@ -40,6 +40,7 @@ interface EarningsData {
   }
   isDemo: boolean
   isUnconnected: boolean
+  accountNotReady?: boolean
   message?: string
   error?: string
   stripeAccountId?: string | null
