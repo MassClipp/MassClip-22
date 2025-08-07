@@ -32,6 +32,27 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
 })
 
+// Helper function to get connected Stripe account
+async function getConnectedStripeAccount(userId: string) {
+  try {
+    const connectedAccountDoc = await db.collection("connectedStripeAccounts").doc(userId).get()
+    if (connectedAccountDoc.exists) {
+      const accountData = connectedAccountDoc.data()
+      console.log(`✅ [Checkout] Found connected Stripe account:`, {
+        userId,
+        stripe_user_id: accountData?.stripe_user_id,
+        charges_enabled: accountData?.charges_enabled,
+        details_submitted: accountData?.details_submitted,
+      })
+      return accountData
+    }
+    return null
+  } catch (error) {
+    console.error(`❌ [Checkout] Error fetching connected account:`, error)
+    return null
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     console.log("🚀 [Checkout API] Starting checkout session creation...")
@@ -39,7 +60,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     console.log("📝 [Checkout API] Request body:", { ...body, idToken: body.idToken ? "[REDACTED]" : "MISSING" })
 
-    const { idToken, priceId, bundleId, successUrl, cancelUrl, productBoxId } = body
+    const { idToken, priceId, bundleId, successUrl, cancelUrl, productBoxId, customerEmail, buyerUserId } = body
 
     // Determine what we're selling
     const itemId = bundleId || productBoxId
@@ -93,29 +114,32 @@ export async function POST(request: NextRequest) {
     const bundleStripePriceId = bundle.priceId || bundle.stripePriceId
     const stripeAccountId = bundle.stripeAccountId
 
-    if (!stripeAccountId) {
-      console.error("❌ [Checkout API] No Stripe account ID for bundle:", itemId)
+    // Get creator's connected Stripe account
+    const connectedAccount = await getConnectedStripeAccount(bundle.creatorId)
+    
+    if (!connectedAccount || !connectedAccount.stripe_user_id) {
       return NextResponse.json(
         {
-          error: "Bundle not available for purchase",
-          details: "Creator has not set up Stripe integration",
+          error: "Creator's Stripe account not connected",
+          code: "CREATOR_NO_STRIPE_ACCOUNT",
+          message: "The creator has not connected their Stripe account yet",
         },
         { status: 400 },
       )
     }
 
-    if (!bundleStripePriceId) {
-      console.error("❌ [Checkout API] No Stripe price ID for bundle:", itemId)
+    // Verify account is properly set up
+    if (!connectedAccount.charges_enabled || !connectedAccount.details_submitted) {
       return NextResponse.json(
         {
-          error: "Bundle pricing not configured",
-          details: "Bundle does not have a valid price ID",
+          error: "Creator's Stripe account setup incomplete",
+          code: "CREATOR_STRIPE_ACCOUNT_INCOMPLETE",
+          message: "The creator's Stripe account setup is not complete",
         },
         { status: 400 },
       )
     }
 
-    // Use the bundle's stored price ID instead of validating against the provided one
     const finalPriceId = bundleStripePriceId
 
     console.log("💳 [Checkout API] Creating checkout session with buyer info:", {
@@ -158,8 +182,8 @@ export async function POST(request: NextRequest) {
       ],
       mode: "payment",
       success_url:
-        successUrl || `${currentDomain}/purchase-success?session_id={CHECKOUT_SESSION_ID}&buyer_uid=${buyerUid}`,
-      cancel_url: cancelUrl || `${currentDomain}/creator/${bundle.creatorId}`,
+        successUrl || `${process.env.NEXT_PUBLIC_SITE_URL}/purchase-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: cancelUrl || `${process.env.NEXT_PUBLIC_SITE_URL}/bundles/${itemId}`,
       metadata: sessionMetadata,
       payment_intent_data: {
         metadata: sessionMetadata,
@@ -168,8 +192,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Add customer email if available
-    if (buyerEmail) {
-      sessionParams.customer_email = buyerEmail
+    if (customerEmail) {
+      sessionParams.customer_email = customerEmail
     }
 
     // For anonymous buyers, collect email

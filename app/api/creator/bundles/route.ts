@@ -356,6 +356,27 @@ async function getDetailedContentMetadata(contentId: string): Promise<DetailedCo
   }
 }
 
+// Helper function to get connected Stripe account
+async function getConnectedStripeAccount(userId: string) {
+  try {
+    const connectedAccountDoc = await db.collection("connectedStripeAccounts").doc(userId).get()
+    if (connectedAccountDoc.exists) {
+      const accountData = connectedAccountDoc.data()
+      console.log(`✅ [Bundles] Found connected Stripe account:`, {
+        userId,
+        stripe_user_id: accountData?.stripe_user_id,
+        charges_enabled: accountData?.charges_enabled,
+        details_submitted: accountData?.details_submitted,
+      })
+      return accountData
+    }
+    return null
+  } catch (error) {
+    console.error(`❌ [Bundles] Error fetching connected account:`, error)
+    return null
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const authHeader = request.headers.get("authorization")
@@ -505,19 +526,17 @@ export async function POST(request: NextRequest) {
     console.log(`🔍 [Bundles API] Creating bundle for user: ${userId} with ${contentIds.length} content items`)
     console.log(`🔍 [Bundles API] Content IDs to process:`, contentIds)
 
-    // Get user's Stripe account info
-    const userDoc = await db.collection("users").doc(userId).get()
-    const userData = userDoc.data()
-    const stripeAccountId = userData?.stripeAccountId
-
-    if (!stripeAccountId) {
+    // Check connected Stripe account instead of users collection
+    const connectedAccount = await getConnectedStripeAccount(userId)
+    
+    if (!connectedAccount || !connectedAccount.stripe_user_id) {
       return NextResponse.json(
         {
           error: "Stripe account not connected",
           code: "NO_STRIPE_ACCOUNT",
           message: "Please connect your Stripe account before creating bundles",
           suggestedActions: [
-            "Go to Dashboard > Settings > Stripe",
+            "Go to Dashboard > Connect Stripe",
             "Complete Stripe account setup",
             "Verify your account is active",
           ],
@@ -525,6 +544,25 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       )
     }
+
+    // Verify account is properly set up
+    if (!connectedAccount.charges_enabled || !connectedAccount.details_submitted) {
+      return NextResponse.json(
+        {
+          error: "Stripe account setup incomplete",
+          code: "STRIPE_ACCOUNT_INCOMPLETE",
+          message: "Your Stripe account setup is not complete. Please finish the onboarding process.",
+          suggestedActions: [
+            "Complete your Stripe account verification",
+            "Submit all required business information",
+            "Verify your bank account details",
+          ],
+        },
+        { status: 400 },
+      )
+    }
+
+    const stripeAccountId = connectedAccount.stripe_user_id
 
     // Get detailed metadata for initial content items if provided
     const detailedContentItems: DetailedContentItem[] = []
@@ -556,12 +594,12 @@ export async function POST(request: NextRequest) {
     const imageCount = detailedContentItems.filter((item) => item.contentType === "image").length
     const documentCount = detailedContentItems.filter((item) => item.contentType === "document").length
 
-    // Create Stripe product and price
+    // Create Stripe product and price using connected account
     let stripeProductId: string | null = null
     let stripePriceId: string | null = null
 
     try {
-      console.log(`💳 [Bundles API] Creating Stripe product for account: ${stripeAccountId}`)
+      console.log(`💳 [Bundles API] Creating Stripe product for connected account: ${stripeAccountId}`)
 
       // Create product in connected account
       const product = await stripe.products.create(
