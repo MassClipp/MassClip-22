@@ -1,504 +1,385 @@
-"use client"
+'use client'
 
-import { useState } from "react"
-import { useAuth } from "@/contexts/auth-context"
-import {
-  Loader2,
-  DollarSign,
-  RefreshCw,
-  TrendingUp,
-  AlertCircle,
-  ExternalLink,
-  Calendar,
-  Clock,
-  Upload,
-  BarChart3,
-  Wallet,
-  ArrowUpRight,
-  ArrowDownRight,
-  Activity,
-  Unlink,
-} from "lucide-react"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Progress } from "@/components/ui/progress"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { formatDistanceToNow } from "date-fns"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Progress } from "@/components/ui/progress"
+import { Separator } from "@/components/ui/separator"
 import { useStripeEarnings } from "@/hooks/use-stripe-earnings"
-import { useToast } from "@/components/ui/use-toast"
-import { useRouter } from "next/navigation"
-import { formatCurrency, formatPercentage, formatInteger, safeNumber, validateEarningsData } from "@/lib/format-utils"
+import { DollarSign, TrendingUp, CreditCard, BarChart3, RefreshCw, AlertCircle, CheckCircle, ExternalLink, Bug } from 'lucide-react'
+import { useState } from "react"
 
-export default function EarningsPageContent() {
-  const { user } = useAuth()
-  const { toast } = useToast()
-  const { data: rawData, loading, error, lastUpdated, refresh, syncData } = useStripeEarnings()
-  const [syncing, setSyncing] = useState(false)
-  const [unlinking, setUnlinking] = useState(false)
-  const router = useRouter()
+export default function EarningsContent() {
+  const { earningsData, isLoading, error, refetch } = useStripeEarnings()
+  const [showDebug, setShowDebug] = useState(false)
 
-  // Validate and clean the data using our bulletproof utilities
-  const data = validateEarningsData(rawData)
-
-  const handleSync = async () => {
-    try {
-      setSyncing(true)
-      await syncData()
-      toast({
-        title: "Sync Complete",
-        description: "Stripe data has been synchronized successfully.",
-      })
-    } catch (error) {
-      toast({
-        title: "Sync Error",
-        description: "Failed to sync Stripe data. Please try again.",
-        variant: "destructive",
-      })
-    } finally {
-      setSyncing(false)
-    }
-  }
-
-  const handleRefresh = async () => {
-    try {
-      await refresh()
-      toast({
-        title: "Data Refreshed",
-        description: "Latest earnings data has been fetched from Stripe.",
-      })
-    } catch (error) {
-      toast({
-        title: "Refresh Error",
-        description: "Failed to refresh data. Please try again.",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const handleUnlinkStripe = async () => {
-    if (
-      !confirm("Are you sure you want to unlink your Stripe account? This will disable payments and earnings tracking.")
-    ) {
-      return
-    }
-
-    if (!user) {
-      toast({
-        title: "Authentication Error",
-        description: "You must be logged in to unlink your Stripe account.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    try {
-      setUnlinking(true)
-
-      const token = await user.getIdToken()
-
-      const response = await fetch("/api/stripe/disconnect", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Failed to unlink Stripe account")
-      }
-
-      const result = await response.json()
-
-      toast({
-        title: "Stripe Account Unlinked",
-        description: result.message || "Your Stripe account has been successfully disconnected.",
-      })
-
-      router.refresh()
-    } catch (error: any) {
-      console.error("Unlink error:", error)
-      toast({
-        title: "Unlink Error",
-        description: error.message || "Failed to unlink Stripe account. Please try again.",
-        variant: "destructive",
-      })
-    } finally {
-      setUnlinking(false)
-    }
-  }
-
-  if (loading && !data) {
+  if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
-        <div className="text-center space-y-4">
-          <Loader2 className="h-8 w-8 text-zinc-500 animate-spin mx-auto" />
-          <div className="space-y-2">
-            <p className="text-lg font-medium text-white">Loading earnings data...</p>
-            <p className="text-sm text-zinc-400">Fetching your financial overview</p>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">Earnings</h1>
+            <p className="text-muted-foreground">Financial overview and performance metrics</p>
           </div>
+        </div>
+        
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Loading...</CardTitle>
+                <div className="h-4 w-4 bg-muted rounded" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">--</div>
+                <p className="text-xs text-muted-foreground">Loading data...</p>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       </div>
     )
   }
 
-  // All values are now guaranteed to be safe numbers
-  const totalEarnings = data.totalEarnings
-  const thisMonthEarnings = data.thisMonthEarnings
-  const lastMonthEarnings = data.lastMonthEarnings
-  const last30DaysEarnings = data.last30DaysEarnings
-  const pendingPayout = data.pendingPayout
-  const availableBalance = data.availableBalance
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">Earnings</h1>
+            <p className="text-muted-foreground flex items-center gap-2">
+              Financial overview and performance metrics
+              <Badge variant="destructive">Error</Badge>
+            </p>
+          </div>
+          <Button onClick={refetch} variant="outline" size="sm">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Retry
+          </Button>
+        </div>
+        
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-destructive" />
+              Error Loading Earnings Data
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground mb-4">{error}</p>
+            <Button onClick={refetch}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Try Again
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
-  const totalSales = data.salesMetrics.totalSales
-  const thisMonthSales = data.salesMetrics.thisMonthSales
-  const last30DaysSales = data.salesMetrics.last30DaysSales
-  const averageTransactionValue = data.salesMetrics.averageTransactionValue
+  if (!earningsData) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">Earnings</h1>
+            <p className="text-muted-foreground">Financial overview and performance metrics</p>
+          </div>
+        </div>
+        
+        <Card>
+          <CardHeader>
+            <CardTitle>No Data Available</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground">Unable to load earnings data at this time.</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
-  const monthlyGrowth = thisMonthEarnings > lastMonthEarnings
-  const growthPercentage =
-    lastMonthEarnings > 0
-      ? formatPercentage(((thisMonthEarnings - lastMonthEarnings) / lastMonthEarnings) * 100)
-      : "0.0"
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+    }).format(amount)
+  }
 
-  // Generate chart data with safe calculations
-  const chartData = [
-    { month: "Jul", earnings: Math.max(totalEarnings * 0.1, 0) },
-    { month: "Aug", earnings: Math.max(totalEarnings * 0.3, 0) },
-    { month: "Sep", earnings: Math.max(totalEarnings * 0.5, 0) },
-    { month: "Oct", earnings: Math.max(totalEarnings * 0.7, 0) },
-    { month: "Nov", earnings: Math.max(totalEarnings * 0.9, 0) },
-    { month: "Dec", earnings: totalEarnings },
-  ]
-
-  const maxEarnings = Math.max(...chartData.map((d) => safeNumber(d.earnings, 0)), 1)
+  const getAccountStatusBadge = () => {
+    if (earningsData.isUnconnected) {
+      return <Badge variant="destructive">Not Connected</Badge>
+    }
+    
+    if (!earningsData.accountStatus.chargesEnabled || !earningsData.accountStatus.detailsSubmitted) {
+      return <Badge variant="destructive">Setup Required</Badge>
+    }
+    
+    return <Badge variant="default" className="bg-green-600">Active</Badge>
+  }
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-        <div className="space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight text-white">Earnings Dashboard</h1>
-          <p className="text-zinc-400">Financial overview and transaction history</p>
-          {lastUpdated && (
-            <div className="flex items-center gap-2 text-sm text-zinc-500">
-              <Clock className="h-4 w-4" />
-              <span>Last updated: {formatDistanceToNow(lastUpdated, { addSuffix: true })}</span>
-            </div>
-          )}
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Earnings</h1>
+          <p className="text-muted-foreground flex items-center gap-2">
+            Financial overview and performance metrics
+            {getAccountStatusBadge()}
+          </p>
         </div>
-
-        <div className="flex gap-3">
-          <Button
-            variant="outline"
-            onClick={() => router.push("/debug-earnings")}
-            className="border-zinc-700 hover:bg-zinc-800 bg-transparent"
-          >
-            <AlertCircle className="h-4 w-4 mr-2" />
+        <div className="flex gap-2">
+          <Button onClick={() => setShowDebug(!showDebug)} variant="outline" size="sm">
+            <Bug className="h-4 w-4 mr-2" />
             Debug
           </Button>
-
-          <Button
-            variant="outline"
-            onClick={handleSync}
-            disabled={syncing || loading}
-            className="border-zinc-700 hover:bg-zinc-800 bg-transparent"
-          >
-            {syncing ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Syncing...
-              </>
-            ) : (
-              <>
-                <TrendingUp className="h-4 w-4 mr-2" />
-                Sync Data
-              </>
-            )}
-          </Button>
-
-          <Button
-            variant="outline"
-            onClick={handleRefresh}
-            disabled={loading}
-            className="border-zinc-700 hover:bg-zinc-800 bg-transparent"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Refreshing...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Refresh
-              </>
-            )}
+          <Button onClick={refetch} variant="outline" size="sm">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
           </Button>
         </div>
       </div>
 
-      {/* Error Alert */}
-      {error && (
-        <Alert className="border-amber-600 bg-amber-600/10">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription className="text-amber-200">
-            {error}
-            <Button
-              variant="link"
-              className="p-0 h-auto ml-2 text-amber-200 underline"
-              onClick={() => router.push("/debug-earnings")}
-            >
-              Debug this issue
-            </Button>
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="bg-zinc-900/60 border-zinc-800/50">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm text-zinc-400 font-medium">Total Earnings</p>
-                  <Badge variant="secondary" className="bg-zinc-800 text-zinc-300 border-zinc-700">
-                    All Time
-                  </Badge>
-                </div>
-                <p className="text-3xl font-bold text-white">${formatCurrency(totalEarnings)}</p>
-                <p className="text-xs text-zinc-400 flex items-center gap-1">
-                  <BarChart3 className="h-3 w-3" />
-                  {formatInteger(totalSales)} total sales
-                </p>
-              </div>
-              <div className="p-3 bg-zinc-800/50 rounded-xl">
-                <DollarSign className="h-8 w-8 text-zinc-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-zinc-900/60 border-zinc-800/50">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm text-zinc-400 font-medium">This Month</p>
-                  {monthlyGrowth ? (
-                    <div className="flex items-center gap-1 text-xs text-green-400">
-                      <ArrowUpRight className="h-3 w-3" />+{growthPercentage}%
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-1 text-xs text-red-400">
-                      <ArrowDownRight className="h-3 w-3" />
-                      {growthPercentage}%
-                    </div>
-                  )}
-                </div>
-                <p className="text-3xl font-bold text-white">${formatCurrency(thisMonthEarnings)}</p>
-                <p className="text-xs text-zinc-400 flex items-center gap-1">
-                  <Activity className="h-3 w-3" />
-                  {formatInteger(thisMonthSales)} sales
-                </p>
-              </div>
-              <div className="p-3 bg-zinc-800/50 rounded-xl">
-                <Calendar className="h-8 w-8 text-zinc-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-zinc-900/60 border-zinc-800/50">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm text-zinc-400 font-medium">Available Balance</p>
-                  <Badge variant="secondary" className="bg-zinc-800 text-zinc-300 border-zinc-700">
-                    Ready
-                  </Badge>
-                </div>
-                <p className="text-3xl font-bold text-white">${formatCurrency(availableBalance)}</p>
-                <p className="text-xs text-zinc-400">Ready for payout</p>
-              </div>
-              <div className="p-3 bg-zinc-800/50 rounded-xl">
-                <Wallet className="h-8 w-8 text-zinc-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-zinc-900/60 border-zinc-800/50">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm text-zinc-400 font-medium">Pending Payout</p>
-                  <Badge variant="secondary" className="bg-zinc-800 text-zinc-300 border-zinc-700">
-                    Processing
-                  </Badge>
-                </div>
-                <p className="text-3xl font-bold text-white">${formatCurrency(pendingPayout)}</p>
-                <p className="text-xs text-zinc-400">In processing</p>
-              </div>
-              <div className="p-3 bg-zinc-800/50 rounded-xl">
-                <Clock className="h-8 w-8 text-zinc-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Charts and Data */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Financial Performance Chart */}
-        <Card className="bg-zinc-900/60 border-zinc-800/50">
-          <CardHeader className="pb-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-zinc-800/50 rounded-lg">
-                <TrendingUp className="h-5 w-5 text-zinc-400" />
-              </div>
-              <div>
-                <CardTitle className="text-xl text-white">Financial Performance</CardTitle>
-                <CardDescription className="text-zinc-400">Revenue trends and projections</CardDescription>
-              </div>
-            </div>
+      {showDebug && earningsData.debug && (
+        <Card className="border-blue-200 bg-blue-50/50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Bug className="h-5 w-5 text-blue-600" />
+              Debug Information
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div className="flex items-end justify-between h-48 px-4 py-2 bg-zinc-800/30 rounded-lg">
-                {chartData.map((item, index) => {
-                  const itemEarnings = safeNumber(item.earnings, 0)
-                  const heightPercentage = maxEarnings > 0 ? (itemEarnings / maxEarnings) * 160 : 8
-                  const safeHeight = Math.max(heightPercentage, 8)
-
-                  return (
-                    <div key={item.month} className="flex flex-col items-center gap-2">
-                      <div
-                        className="w-8 bg-gradient-to-t from-green-600 to-green-400 rounded-t-sm transition-all duration-300 hover:from-green-500 hover:to-green-300"
-                        style={{ height: `${safeHeight}px` }}
-                      />
-                      <span className="text-xs text-zinc-400 font-medium">{item.month}</span>
-                      <span className="text-xs text-zinc-500">${formatCurrency(itemEarnings, { decimals: 0 })}</span>
+              <div>
+                <h4 className="font-medium mb-2">Execution Log:</h4>
+                <div className="bg-slate-900 text-green-400 p-4 rounded-lg text-sm font-mono max-h-64 overflow-y-auto">
+                  {earningsData.debug.logs?.map((log: any, index: number) => (
+                    <div key={index} className="mb-1">
+                      <span className="text-blue-400">[{log.step}]</span> {log.action} 
+                      {log.timestamp && <span className="text-gray-500"> ({new Date(log.timestamp).toLocaleTimeString()})</span>}
+                      {log.error && <span className="text-red-400"> ERROR: {log.error}</span>}
+                      {log.userId && <span className="text-yellow-400"> User: {log.userId}</span>}
+                      {log.stripeAccountId && <span className="text-purple-400"> Stripe: {log.stripeAccountId}</span>}
                     </div>
-                  )
-                })}
+                  ))}
+                </div>
               </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-zinc-400">6-month earnings trend</span>
-                <span className="text-green-400 font-medium">↗ Growing</span>
-              </div>
+              {earningsData.debug.reason && (
+                <div>
+                  <strong>Result:</strong> {earningsData.debug.reason}
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
-
-        {/* Sales Metrics */}
-        <Card className="bg-zinc-900/60 border-zinc-800/50">
-          <CardHeader className="pb-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-zinc-800/50 rounded-lg">
-                <BarChart3 className="h-5 w-5 text-zinc-400" />
-              </div>
-              <div>
-                <CardTitle className="text-xl text-white">Sales Metrics</CardTitle>
-                <CardDescription className="text-zinc-400">Performance indicators</CardDescription>
-              </div>
-            </div>
+      )}
+      
+      {/* Main Metrics */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Earnings</CardTitle>
+            <DollarSign className="h-4 w-4 text-green-600" />
           </CardHeader>
-          <CardContent className="space-y-8">
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-zinc-300 font-medium">Average Transaction Value</span>
-                <span className="text-lg font-bold text-white">${formatCurrency(averageTransactionValue)}</span>
-              </div>
-              <div className="space-y-2">
-                <Progress value={Math.min(averageTransactionValue * 4, 100)} className="h-2 bg-zinc-800" />
-                <p className="text-xs text-zinc-500">Target: $25.00 per transaction</p>
-              </div>
-            </div>
+          <CardContent>
+            <div className="text-2xl font-bold">{formatCurrency(earningsData.totalEarnings)}</div>
+            <p className="text-xs text-muted-foreground">All-time revenue</p>
+          </CardContent>
+        </Card>
 
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-zinc-300 font-medium">Last 30 Days Sales</span>
-                <span className="text-lg font-bold text-white">{formatInteger(last30DaysSales)}</span>
-              </div>
-              <div className="space-y-2">
-                <Progress value={Math.min(last30DaysSales * 5, 100)} className="h-2 bg-zinc-800" />
-                <p className="text-xs text-zinc-500">Target: 20 sales per month</p>
-              </div>
-            </div>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">This Month</CardTitle>
+            <TrendingUp className="h-4 w-4 text-blue-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{formatCurrency(earningsData.thisMonthEarnings)}</div>
+            <p className="text-xs text-muted-foreground">
+              +0.0% from last month
+            </p>
+          </CardContent>
+        </Card>
 
-            <div className="grid grid-cols-2 gap-4 pt-4">
-              <div className="text-center p-4 bg-zinc-800/50 rounded-xl">
-                <p className="text-2xl font-bold text-white">${formatCurrency(last30DaysEarnings)}</p>
-                <p className="text-xs text-zinc-400 mt-1">Last 30 Days</p>
-              </div>
-              <div className="text-center p-4 bg-zinc-800/50 rounded-xl">
-                <p className="text-2xl font-bold text-white">{formatInteger(totalSales)}</p>
-                <p className="text-xs text-zinc-400 mt-1">Total Sales</p>
-              </div>
-            </div>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Available Balance</CardTitle>
+            <CreditCard className="h-4 w-4 text-purple-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{formatCurrency(earningsData.availableBalance)}</div>
+            <p className="text-xs text-muted-foreground">Ready for payout</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Sales</CardTitle>
+            <BarChart3 className="h-4 w-4 text-orange-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{earningsData.salesMetrics.totalSales}</div>
+            <p className="text-xs text-muted-foreground">
+              {formatCurrency(earningsData.salesMetrics.averageTransactionValue)} avg order
+            </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Quick Actions */}
-      <Card className="bg-zinc-900/60 border-zinc-800/50">
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-zinc-800/50 rounded-lg">
-              <Activity className="h-5 w-5 text-zinc-400" />
-            </div>
-            <div>
-              <CardTitle className="text-xl text-white">Quick Actions</CardTitle>
-              <CardDescription className="text-zinc-400">Manage your content and earnings</CardDescription>
-            </div>
+      {/* Tabs for detailed views */}
+      <Tabs defaultValue="overview" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="transactions">Transactions</TabsTrigger>
+          <TabsTrigger value="analytics">Analytics</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent Performance</CardTitle>
+                <CardDescription>Your earnings breakdown</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">Last 30 Days</span>
+                  <span className="font-medium">{formatCurrency(earningsData.last30DaysEarnings)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">This Month Sales</span>
+                  <span className="font-medium">{earningsData.salesMetrics.thisMonthSales}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">Last 30 Days Sales</span>
+                  <span className="font-medium">{earningsData.salesMetrics.last30DaysSales}</span>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Payout Information</CardTitle>
+                <CardDescription>Balance and payout status</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">Pending Payout</span>
+                  <span className="font-medium">{formatCurrency(earningsData.pendingPayout)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">Available Balance</span>
+                  <span className="font-medium text-green-600">{formatCurrency(earningsData.availableBalance)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">Account Status</span>
+                  <div className="flex items-center gap-2">
+                    {earningsData.accountStatus.chargesEnabled && earningsData.accountStatus.detailsSubmitted ? (
+                      <Badge variant="default" className="bg-green-600">Setup Required</Badge>
+                    ) : (
+                      <Badge variant="destructive">Setup Required</Badge>
+                    )}
+                  </div>
+                </div>
+                <Button className="w-full" variant="outline">
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Stripe Dashboard
+                </Button>
+              </CardContent>
+            </Card>
           </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Button
-              onClick={() => router.push("/dashboard/upload")}
-              className="w-full justify-start bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white"
-            >
-              <Upload className="h-4 w-4 mr-2" />
-              Upload New Content
-            </Button>
+        </TabsContent>
 
-            <Button
-              onClick={() => window.open("https://dashboard.stripe.com", "_blank")}
-              variant="outline"
-              className="w-full justify-start border-zinc-700 hover:bg-zinc-800 text-white"
-            >
-              <ExternalLink className="h-4 w-4 mr-2" />
-              Stripe Dashboard
-            </Button>
-
-            <Button
-              onClick={handleUnlinkStripe}
-              disabled={unlinking || !user}
-              variant="outline"
-              className="w-full justify-start border-red-700/50 hover:bg-red-900/20 text-red-400 hover:text-red-300 bg-transparent"
-            >
-              {unlinking ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Unlinking...
-                </>
+        <TabsContent value="transactions" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Recent Transactions</CardTitle>
+              <CardDescription>Your latest payment activity</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {earningsData.recentTransactions.length > 0 ? (
+                <div className="space-y-4">
+                  {earningsData.recentTransactions.map((transaction, index) => (
+                    <div key={index} className="flex items-center justify-between p-4 border rounded-lg">
+                      <div>
+                        <p className="font-medium">{transaction.description}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {new Date(transaction.created).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-medium">{formatCurrency(transaction.amount)}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Net: {formatCurrency(transaction.net)}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               ) : (
-                <>
-                  <Unlink className="h-4 w-4 mr-2" />
-                  Unlink Stripe Account
-                </>
+                <p className="text-muted-foreground text-center py-8">
+                  No transactions yet. Start selling to see your payment history here.
+                </p>
               )}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="analytics" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Sales Analytics</CardTitle>
+              <CardDescription>Performance insights and trends</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <h4 className="font-medium mb-2">Monthly Breakdown</h4>
+                  {earningsData.monthlyBreakdown.length > 0 ? (
+                    <div className="space-y-2">
+                      {earningsData.monthlyBreakdown.map((month, index) => (
+                        <div key={index} className="flex items-center justify-between">
+                          <span className="text-sm">{month.month}</span>
+                          <div className="text-right">
+                            <div className="font-medium">{formatCurrency(month.earnings)}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {month.transactionCount} sales
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground text-sm">No monthly data available yet.</p>
+                  )}
+                </div>
+                
+                <div>
+                  <h4 className="font-medium mb-2">Key Metrics</h4>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">Average Order Value</span>
+                      <span className="font-medium">
+                        {formatCurrency(earningsData.salesMetrics.averageTransactionValue)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">Conversion Rate</span>
+                      <span className="font-medium">
+                        {earningsData.salesMetrics.conversionRate.toFixed(1)}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      <div className="text-xs text-muted-foreground text-center">
+        Last updated: {new Date(earningsData.lastUpdated).toLocaleString()}
+      </div>
     </div>
   )
 }
