@@ -3,6 +3,7 @@ import { initializeApp, getApps, cert } from "firebase-admin/app"
 import { getAuth } from "firebase-admin/auth"
 import { getFirestore } from "firebase-admin/firestore"
 import Stripe from "stripe"
+import { getPlatformFeePercentage, calculatePlatformFee } from "@/lib/subscription"
 
 // Initialize Firebase Admin
 if (!getApps().length) {
@@ -53,6 +54,21 @@ async function getConnectedStripeAccount(userId: string) {
   }
 }
 
+// Helper function to get user's subscription plan
+async function getUserPlan(userId: string): Promise<string> {
+  try {
+    const userDoc = await db.collection("users").doc(userId).get()
+    if (userDoc.exists) {
+      const userData = userDoc.data()
+      return userData?.plan || "free"
+    }
+    return "free"
+  } catch (error) {
+    console.error(`❌ [Checkout] Error fetching user plan:`, error)
+    return "free"
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     console.log("🚀 [Checkout API] Starting checkout session creation...")
@@ -73,6 +89,7 @@ export async function POST(request: NextRequest) {
     let buyerUid = "anonymous"
     let buyerEmail = ""
     let buyerName = ""
+    let buyerPlan = "free"
 
     if (idToken) {
       try {
@@ -80,14 +97,19 @@ export async function POST(request: NextRequest) {
         buyerUid = decodedToken.uid
         buyerEmail = decodedToken.email || ""
         buyerName = decodedToken.name || decodedToken.email?.split("@")[0] || ""
-        console.log("✅ [Checkout API] Authenticated buyer:", { buyerUid, buyerEmail })
+        
+        // Get buyer's subscription plan for platform fee calculation
+        buyerPlan = await getUserPlan(buyerUid)
+        
+        console.log("✅ [Checkout API] Authenticated buyer:", { buyerUid, buyerEmail, buyerPlan })
       } catch (error) {
         console.error("❌ [Checkout API] Token verification failed:", error)
-        // Continue as anonymous buyer
+        // Continue as anonymous buyer with free plan
         buyerUid = "anonymous"
+        buyerPlan = "free"
       }
     } else {
-      console.log("⚠️ [Checkout API] No authentication token, proceeding as anonymous buyer")
+      console.log("⚠️ [Checkout API] No authentication token, proceeding as anonymous buyer with free plan")
     }
 
     // Get bundle details from bundles collection
@@ -142,12 +164,32 @@ export async function POST(request: NextRequest) {
 
     const finalPriceId = bundleStripePriceId
 
-    console.log("💳 [Checkout API] Creating checkout session with buyer info:", {
+    // Calculate platform fee based on buyer's plan
+    const bundlePrice = bundle.price || 0 // Price in dollars
+    const bundlePriceCents = Math.round(bundlePrice * 100) // Convert to cents
+    const platformFeePercentage = getPlatformFeePercentage(buyerPlan)
+    const platformFeeCents = calculatePlatformFee(bundlePriceCents, buyerPlan)
+    const creatorEarningsCents = bundlePriceCents - platformFeeCents
+
+    console.log("💰 [Checkout API] Platform fee calculation:", {
+      buyerPlan,
+      bundlePrice: bundlePrice,
+      bundlePriceCents,
+      platformFeePercentage,
+      platformFeeCents,
+      creatorEarningsCents,
+      platformFeeDollars: platformFeeCents / 100,
+      creatorEarningsDollars: creatorEarningsCents / 100,
+    })
+
+    console.log("💳 [Checkout API] Creating checkout session with buyer info and platform fee:", {
       finalPriceId,
       bundleId: itemId,
       stripeAccountId,
       buyerUid,
       buyerEmail,
+      buyerPlan,
+      platformFeeCents,
       isAuthenticated: buyerUid !== "anonymous",
     })
 
@@ -156,7 +198,7 @@ export async function POST(request: NextRequest) {
     const protocol = request.headers.get("x-forwarded-proto") || "https"
     const currentDomain = `${protocol}://${host}`
 
-    // CRITICAL: Include comprehensive buyer metadata
+    // CRITICAL: Include comprehensive buyer metadata with platform fee info
     const sessionMetadata: any = {
       bundleId: itemId,
       productBoxId: itemId, // For compatibility
@@ -164,12 +206,19 @@ export async function POST(request: NextRequest) {
       buyerUid, // CRITICAL: Buyer identification
       buyerEmail,
       buyerName,
+      buyerPlan, // CRITICAL: For platform fee calculation
       isAuthenticated: buyerUid !== "anonymous" ? "true" : "false",
       contentType: "bundle",
       itemTitle: bundle.title || "Digital Content",
       originalDomain: currentDomain,
       timestamp: new Date().toISOString(),
       stripeAccountId: stripeAccountId, // CRITICAL: For webhook to retrieve session from correct account
+      
+      // Platform fee information
+      platformFeePercentage: platformFeePercentage.toString(),
+      platformFeeCents: platformFeeCents.toString(),
+      creatorEarningsCents: creatorEarningsCents.toString(),
+      bundlePriceCents: bundlePriceCents.toString(),
     }
 
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
@@ -187,6 +236,8 @@ export async function POST(request: NextRequest) {
       metadata: sessionMetadata,
       payment_intent_data: {
         metadata: sessionMetadata,
+        // CRITICAL: Apply platform fee using application_fee_amount
+        application_fee_amount: platformFeeCents,
       },
       allow_promotion_codes: true,
     }
@@ -208,11 +259,14 @@ export async function POST(request: NextRequest) {
       ]
     }
 
-    console.log("🔄 [Checkout API] Creating Stripe session with buyer metadata:", {
+    console.log("🔄 [Checkout API] Creating Stripe session with buyer metadata and platform fee:", {
       priceId: finalPriceId,
       stripeAccount: stripeAccountId,
       buyerUid,
       buyerEmail,
+      buyerPlan,
+      platformFeeCents,
+      applicationFeeAmount: platformFeeCents,
       successUrl: sessionParams.success_url,
       cancelUrl: sessionParams.cancel_url,
     })
@@ -221,10 +275,13 @@ export async function POST(request: NextRequest) {
       stripeAccount: stripeAccountId,
     })
 
-    console.log("✅ [Checkout API] Session created successfully with buyer identification:")
+    console.log("✅ [Checkout API] Session created successfully with platform fee:")
     console.log("   Session ID:", session.id)
     console.log("   Buyer UID:", buyerUid)
+    console.log("   Buyer Plan:", buyerPlan)
     console.log("   Buyer Email:", buyerEmail)
+    console.log("   Platform Fee:", `$${(platformFeeCents / 100).toFixed(2)} (${platformFeePercentage}%)`)
+    console.log("   Creator Earnings:", `$${(creatorEarningsCents / 100).toFixed(2)}`)
     console.log("   Checkout URL:", session.url)
     console.log("   Metadata:", session.metadata)
 
@@ -233,6 +290,9 @@ export async function POST(request: NextRequest) {
       url: session.url,
       sessionId: session.id,
       buyerUid,
+      buyerPlan,
+      platformFee: platformFeeCents / 100,
+      creatorEarnings: creatorEarningsCents / 100,
       metadata: session.metadata,
     })
   } catch (error: any) {

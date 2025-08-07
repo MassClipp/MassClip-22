@@ -72,12 +72,18 @@ export async function GET(request: NextRequest) {
       console.log(`⚠️ [Earnings] No connected Stripe account found for user: ${userId}`)
       return NextResponse.json({
         totalEarnings: 0,
+        grossSales: 0,
+        totalPlatformFees: 0,
         thisMonth: 0,
+        thisMonthGross: 0,
+        thisMonthPlatformFees: 0,
         availableBalance: 0,
         totalSales: 0,
         avgOrderValue: 0,
         monthlyGrowth: 0,
         last30Days: 0,
+        last30DaysGross: 0,
+        last30DaysPlatformFees: 0,
         thisMonthSales: 0,
         last30DaysSales: 0,
         pendingPayout: 0,
@@ -88,6 +94,84 @@ export async function GET(request: NextRequest) {
     }
 
     const stripeAccountId = connectedAccount.stripe_user_id
+
+    // Get date ranges
+    const now = new Date()
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0)
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+
+    // Get earnings data from bundlePurchases collection (includes platform fee breakdown)
+    console.log(`📊 [Earnings] Fetching purchase data from bundlePurchases collection...`)
+    
+    const allPurchasesQuery = await db
+      .collection("bundlePurchases")
+      .where("creatorId", "==", userId)
+      .where("status", "==", "completed")
+      .get()
+
+    let totalEarnings = 0
+    let grossSales = 0
+    let totalPlatformFees = 0
+    let thisMonth = 0
+    let thisMonthGross = 0
+    let thisMonthPlatformFees = 0
+    let lastMonth = 0
+    let lastMonthGross = 0
+    let last30Days = 0
+    let last30DaysGross = 0
+    let last30DaysPlatformFees = 0
+    let totalSales = 0
+    let thisMonthSales = 0
+    let last30DaysSales = 0
+
+    allPurchasesQuery.forEach((doc) => {
+      const purchase = doc.data()
+      const purchaseDate = purchase.timestamp?.toDate() || new Date()
+      
+      // Use creator earnings (after platform fees) for earnings calculations
+      const creatorEarnings = purchase.creatorEarningsDollars || purchase.creatorEarningsCents / 100 || 0
+      const grossAmount = purchase.purchaseAmountDollars || purchase.purchaseAmount / 100 || 0
+      const platformFee = purchase.platformFeeDollars || purchase.platformFeeCents / 100 || 0
+
+      // Add to totals
+      totalEarnings += creatorEarnings
+      grossSales += grossAmount
+      totalPlatformFees += platformFee
+      totalSales += 1
+
+      // This month
+      if (purchaseDate >= startOfMonth) {
+        thisMonth += creatorEarnings
+        thisMonthGross += grossAmount
+        thisMonthPlatformFees += platformFee
+        thisMonthSales += 1
+      }
+
+      // Last month
+      if (purchaseDate >= startOfLastMonth && purchaseDate <= endOfLastMonth) {
+        lastMonth += creatorEarnings
+        lastMonthGross += grossAmount
+      }
+
+      // Last 30 days
+      if (purchaseDate >= thirtyDaysAgo) {
+        last30Days += creatorEarnings
+        last30DaysGross += grossAmount
+        last30DaysPlatformFees += platformFee
+        last30DaysSales += 1
+      }
+    })
+
+    console.log(`💰 [Earnings] Purchase data summary:`, {
+      totalPurchases: allPurchasesQuery.size,
+      totalEarnings: totalEarnings.toFixed(2),
+      grossSales: grossSales.toFixed(2),
+      totalPlatformFees: totalPlatformFees.toFixed(2),
+      thisMonthEarnings: thisMonth.toFixed(2),
+      thisMonthGross: thisMonthGross.toFixed(2),
+    })
 
     // Fetch balance from Stripe
     let balance
@@ -104,92 +188,55 @@ export async function GET(request: NextRequest) {
     const availableBalance = balance.available?.reduce((sum, bal) => sum + bal.amount, 0) / 100 || 0
     const pendingPayout = balance.pending?.reduce((sum, bal) => sum + bal.amount, 0) / 100 || 0
 
-    // Get date ranges
-    const now = new Date()
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0)
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
-
-    // Fetch payment intents from Stripe for earnings calculation
-    let totalEarnings = 0
-    let thisMonth = 0
-    let lastMonth = 0
-    let last30Days = 0
-    let totalSales = 0
-    let thisMonthSales = 0
-    let last30DaysSales = 0
-
-    try {
-      // Get all successful payment intents
-      const paymentIntents = await stripe.paymentIntents.list(
-        {
-          limit: 100,
-          created: {
-            gte: Math.floor(startOfLastMonth.getTime() / 1000),
-          },
-        },
-        {
-          stripeAccount: stripeAccountId,
-        }
-      )
-
-      for (const pi of paymentIntents.data) {
-        if (pi.status === "succeeded") {
-          const amount = pi.amount / 100 // Convert to dollars
-          const createdDate = new Date(pi.created * 1000)
-
-          totalEarnings += amount
-          totalSales += 1
-
-          if (createdDate >= startOfMonth) {
-            thisMonth += amount
-            thisMonthSales += 1
-          }
-
-          if (createdDate >= startOfLastMonth && createdDate <= endOfLastMonth) {
-            lastMonth += amount
-          }
-
-          if (createdDate >= thirtyDaysAgo) {
-            last30Days += amount
-            last30DaysSales += 1
-          }
-        }
-      }
-    } catch (error) {
-      console.error(`❌ [Earnings] Error fetching payment intents:`, error)
-    }
-
-    // Calculate growth percentage
+    // Calculate growth percentage (based on net earnings)
     const monthlyGrowth = lastMonth > 0 ? ((thisMonth - lastMonth) / lastMonth) * 100 : thisMonth > 0 ? 100 : 0
 
-    // Calculate average order value
-    const avgOrderValue = totalSales > 0 ? totalEarnings / totalSales : 0
+    // Calculate average order value (based on gross sales)
+    const avgOrderValue = totalSales > 0 ? grossSales / totalSales : 0
 
     // Determine account status
     const accountStatus = connectedAccount.charges_enabled && connectedAccount.details_submitted ? "Active" : "Pending"
 
     const earningsData = {
+      // Net earnings (after platform fees)
       totalEarnings,
       thisMonth,
-      availableBalance,
-      totalSales,
-      avgOrderValue,
-      monthlyGrowth,
       last30Days,
+      
+      // Gross sales (before platform fees)
+      grossSales,
+      thisMonthGross,
+      last30DaysGross,
+      
+      // Platform fees
+      totalPlatformFees,
+      thisMonthPlatformFees,
+      last30DaysPlatformFees,
+      
+      // Stripe balance
+      availableBalance,
+      pendingPayout,
+      
+      // Sales metrics
+      totalSales,
       thisMonthSales,
       last30DaysSales,
-      pendingPayout,
+      avgOrderValue,
+      monthlyGrowth,
+      
+      // Account info
       accountStatus,
       stripeAccountId,
       connectedAccountData: connectedAccount,
     }
 
     console.log(`✅ [Earnings] Data compiled successfully:`, {
-      totalEarnings,
-      thisMonth,
-      availableBalance,
+      totalEarnings: totalEarnings.toFixed(2),
+      grossSales: grossSales.toFixed(2),
+      totalPlatformFees: totalPlatformFees.toFixed(2),
+      thisMonth: thisMonth.toFixed(2),
+      thisMonthGross: thisMonthGross.toFixed(2),
+      availableBalance: availableBalance.toFixed(2),
       totalSales,
       accountStatus,
     })

@@ -2,6 +2,7 @@ import { db } from "@/lib/firebase-admin"
 import { FieldValue } from "firebase-admin/firestore"
 import Stripe from "stripe"
 import { getConnectedStripeAccount } from "@/lib/connected-stripe-accounts-service"
+import { getPlatformFeePercentage, calculatePlatformFee } from "@/lib/subscription"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
@@ -14,6 +15,7 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
   const creatorId = session.metadata?.creatorId
   const bundleId = session.metadata?.bundleId
   const buyerUid = session.metadata?.buyerUid || session.client_reference_id || ""
+  const buyerPlan = session.metadata?.buyerPlan || "free"
 
   if (!creatorId || !bundleId) {
     throw new Error(`Missing required metadata: creatorId=${creatorId}, bundleId=${bundleId}`)
@@ -66,6 +68,40 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
     })
     throw new Error(`Session verification failed: ${error.message}`)
   }
+
+  // Calculate platform fee information
+  const totalAmountCents = session.amount_total || 0
+  const platformFeePercentage = getPlatformFeePercentage(buyerPlan)
+  
+  // Get platform fee from metadata if available, otherwise calculate
+  let platformFeeCents = 0
+  let creatorEarningsCents = totalAmountCents
+
+  if (session.metadata?.platformFeeCents) {
+    platformFeeCents = parseInt(session.metadata.platformFeeCents)
+    creatorEarningsCents = parseInt(session.metadata.creatorEarningsCents || "0")
+  } else {
+    // Fallback calculation if metadata is missing
+    platformFeeCents = calculatePlatformFee(totalAmountCents, buyerPlan)
+    creatorEarningsCents = totalAmountCents - platformFeeCents
+  }
+
+  // Get application fee from payment intent if available
+  let actualApplicationFeeCents = 0
+  if (verifiedSession.payment_intent && typeof verifiedSession.payment_intent === 'object') {
+    actualApplicationFeeCents = verifiedSession.payment_intent.application_fee_amount || 0
+  }
+
+  console.log(`💰 Platform fee calculation for purchase:`, {
+    buyerPlan,
+    totalAmountCents,
+    platformFeePercentage,
+    platformFeeCents,
+    creatorEarningsCents,
+    actualApplicationFeeCents,
+    platformFeeDollars: platformFeeCents / 100,
+    creatorEarningsDollars: creatorEarningsCents / 100,
+  })
 
   // GET ALL BUNDLE INFORMATION FROM BUNDLES COLLECTION (PRIMARY SOURCE)
   const bundleDoc = await db.collection("bundles").doc(bundleId).get()
@@ -150,7 +186,7 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
   console.log(`✅ Formatted ${formattedBundleContent.length} content items from detailedContentItems`)
   console.log(`📊 Total bundle size: ${bundleData.contentMetadata?.totalSizeFormatted || "Unknown"}`)
 
-  // Create comprehensive purchase record with ALL bundle data
+  // Create comprehensive purchase record with ALL bundle data AND platform fee information
   const purchaseData = {
     // Session info
     sessionId: session.id,
@@ -164,9 +200,25 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
     creatorStripeAccountId: creatorStripeAccountId,
     bundleId: bundleId,
     buyerUid: buyerUid,
+    buyerPlan: buyerPlan,
     status: "completed",
     webhookProcessed: true,
     timestamp: FieldValue.serverTimestamp(),
+
+    // Financial information with platform fees
+    purchaseAmount: totalAmountCents, // Total amount in cents
+    purchaseAmountDollars: totalAmountCents / 100, // Total amount in dollars
+    currency: session.currency || bundleData.currency || "usd",
+    paymentStatus: session.payment_status || "paid",
+    
+    // Platform fee breakdown
+    platformFeePercentage: platformFeePercentage,
+    platformFeeCents: platformFeeCents,
+    platformFeeDollars: platformFeeCents / 100,
+    creatorEarningsCents: creatorEarningsCents,
+    creatorEarningsDollars: creatorEarningsCents / 100,
+    actualApplicationFeeCents: actualApplicationFeeCents,
+    actualApplicationFeeDollars: actualApplicationFeeCents / 100,
 
     // Bundle information from bundles collection (PRIMARY SOURCE)
     bundleTitle: bundleData.title || "Untitled Bundle",
@@ -205,11 +257,6 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
     creatorUsername: creatorData.username || creatorData.displayName || "Unknown Creator",
     creatorDisplayName: creatorData.displayName || creatorData.username || "Unknown Creator",
 
-    // Purchase metadata
-    purchaseAmount: session.amount_total || 0,
-    currency: session.currency || bundleData.currency || "usd",
-    paymentStatus: session.payment_status || "paid",
-
     // Stripe product info
     stripeProductId: bundleData.stripeProductId || bundleData.productId || "",
     stripePriceId: bundleData.stripePriceId || bundleData.priceId || "",
@@ -229,7 +276,7 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
   // Save purchase record
   await db.collection("bundlePurchases").doc(session.id).set(purchaseData)
 
-  console.log(`✅ Purchase processed successfully with complete bundle data:`, {
+  console.log(`✅ Purchase processed successfully with complete bundle data and platform fees:`, {
     sessionId: session.id,
     bundleId: bundleId,
     bundleTitle: bundleData.title,
@@ -239,6 +286,10 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
     contentItems: formattedBundleContent.length,
     totalFileSize: bundleData.contentMetadata?.totalSizeFormatted || "Unknown",
     firstItemFileUrl: formattedBundleContent[0]?.fileUrl || "No URL",
+    buyerPlan: buyerPlan,
+    platformFee: `$${(platformFeeCents / 100).toFixed(2)} (${platformFeePercentage}%)`,
+    creatorEarnings: `$${(creatorEarningsCents / 100).toFixed(2)}`,
+    totalAmount: `$${(totalAmountCents / 100).toFixed(2)}`,
   })
 
   return {
@@ -248,7 +299,11 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
     bundleTitle: bundleData.title,
     bundlePrice: bundleData.price,
     contentItems: formattedBundleContent.length,
-    purchaseAmount: session.amount_total || 0,
+    purchaseAmount: totalAmountCents,
+    platformFeeCents: platformFeeCents,
+    creatorEarningsCents: creatorEarningsCents,
+    platformFeePercentage: platformFeePercentage,
+    buyerPlan: buyerPlan,
     totalBundleSize: bundleData.contentMetadata?.totalSizeFormatted || "Unknown",
     creatorStripeAccountId: creatorStripeAccountId,
   }
