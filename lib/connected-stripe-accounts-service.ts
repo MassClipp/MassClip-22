@@ -35,7 +35,8 @@ export interface ConnectedStripeAccount {
     payouts?: {
       schedule?: {
         interval: string
-        delay_days: number
+        monthly_anchor?: number
+        weekly_anchor?: string
       }
     }
   }
@@ -47,13 +48,6 @@ export interface ConnectedStripeAccount {
 export class ConnectedStripeAccountsService {
   static async saveConnectedAccount(userId: string, stripeAccount: Stripe.Account): Promise<void> {
     try {
-      console.log(`💾 Saving connected account for user ${userId}:`, {
-        accountId: stripeAccount.id,
-        email: stripeAccount.email,
-        chargesEnabled: stripeAccount.charges_enabled,
-        payoutsEnabled: stripeAccount.payouts_enabled
-      })
-
       const accountData: ConnectedStripeAccount = {
         stripeAccountId: stripeAccount.id,
         email: stripeAccount.email || "",
@@ -75,29 +69,29 @@ export class ConnectedStripeAccountsService {
           card_payments: stripeAccount.capabilities?.card_payments || "inactive",
           transfers: stripeAccount.capabilities?.transfers || "inactive",
         },
-        business_profile: {
-          name: stripeAccount.business_profile?.name || undefined,
-          url: stripeAccount.business_profile?.url || undefined,
-          support_email: stripeAccount.business_profile?.support_email || undefined,
-        },
-        settings: {
-          payouts: {
-            schedule: {
-              interval: stripeAccount.settings?.payouts?.schedule?.interval || "daily",
-              delay_days: stripeAccount.settings?.payouts?.schedule?.delay_days || 2,
-            },
-          },
-        },
+        business_profile: stripeAccount.business_profile ? {
+          name: stripeAccount.business_profile.name || undefined,
+          url: stripeAccount.business_profile.url || undefined,
+          support_email: stripeAccount.business_profile.support_email || undefined,
+        } : undefined,
+        settings: stripeAccount.settings ? {
+          payouts: stripeAccount.settings.payouts ? {
+            schedule: stripeAccount.settings.payouts.schedule ? {
+              interval: stripeAccount.settings.payouts.schedule.interval,
+              monthly_anchor: stripeAccount.settings.payouts.schedule.monthly_anchor || undefined,
+              weekly_anchor: stripeAccount.settings.payouts.schedule.weekly_anchor || undefined,
+            } : undefined,
+          } : undefined,
+        } : undefined,
         created: stripeAccount.created,
         updated: Date.now(),
         lastSyncedAt: Date.now(),
       }
 
       await db.collection("connectedStripeAccounts").doc(userId).set(accountData, { merge: true })
-
-      console.log(`✅ Connected account saved successfully for user ${userId}`)
+      console.log(`✅ Connected Stripe account saved for user: ${userId}`)
     } catch (error) {
-      console.error(`❌ Error saving connected account for user ${userId}:`, error)
+      console.error("❌ Error saving connected Stripe account:", error)
       throw error
     }
   }
@@ -105,23 +99,12 @@ export class ConnectedStripeAccountsService {
   static async getConnectedAccount(userId: string): Promise<ConnectedStripeAccount | null> {
     try {
       const doc = await db.collection("connectedStripeAccounts").doc(userId).get()
-      
       if (!doc.exists) {
-        console.log(`ℹ️ No connected account found for user ${userId}`)
         return null
       }
-
-      const data = doc.data() as ConnectedStripeAccount
-      console.log(`✅ Found connected account for user ${userId}:`, {
-        accountId: data.stripeAccountId,
-        email: data.email,
-        chargesEnabled: data.charges_enabled,
-        payoutsEnabled: data.payouts_enabled
-      })
-
-      return data
+      return doc.data() as ConnectedStripeAccount
     } catch (error) {
-      console.error(`❌ Error getting connected account for user ${userId}:`, error)
+      console.error("❌ Error getting connected Stripe account:", error)
       throw error
     }
   }
@@ -129,20 +112,20 @@ export class ConnectedStripeAccountsService {
   static async refreshAccountFromStripe(userId: string): Promise<ConnectedStripeAccount | null> {
     try {
       const existingAccount = await this.getConnectedAccount(userId)
-      
       if (!existingAccount) {
-        console.log(`ℹ️ No existing account to refresh for user ${userId}`)
         return null
       }
 
-      console.log(`🔄 Refreshing account from Stripe for user ${userId}`)
-      
+      // Fetch fresh data from Stripe
       const stripeAccount = await stripe.accounts.retrieve(existingAccount.stripeAccountId)
+      
+      // Save updated data
       await this.saveConnectedAccount(userId, stripeAccount)
       
+      // Return fresh data
       return await this.getConnectedAccount(userId)
     } catch (error) {
-      console.error(`❌ Error refreshing account for user ${userId}:`, error)
+      console.error("❌ Error refreshing connected Stripe account:", error)
       throw error
     }
   }
@@ -150,29 +133,49 @@ export class ConnectedStripeAccountsService {
   static async deleteConnectedAccount(userId: string): Promise<void> {
     try {
       await db.collection("connectedStripeAccounts").doc(userId).delete()
-      console.log(`✅ Connected account deleted for user ${userId}`)
+      console.log(`✅ Connected Stripe account deleted for user: ${userId}`)
     } catch (error) {
-      console.error(`❌ Error deleting connected account for user ${userId}:`, error)
+      console.error("❌ Error deleting connected Stripe account:", error)
       throw error
     }
   }
 
-  static async getAllConnectedAccounts(): Promise<{ userId: string; account: ConnectedStripeAccount }[]> {
+  static async listAllConnectedAccounts(): Promise<{ userId: string; account: ConnectedStripeAccount }[]> {
     try {
       const snapshot = await db.collection("connectedStripeAccounts").get()
       const accounts: { userId: string; account: ConnectedStripeAccount }[] = []
-
-      snapshot.forEach((doc) => {
+      
+      snapshot.forEach(doc => {
         accounts.push({
           userId: doc.id,
-          account: doc.data() as ConnectedStripeAccount,
+          account: doc.data() as ConnectedStripeAccount
         })
       })
-
-      console.log(`✅ Retrieved ${accounts.length} connected accounts`)
+      
       return accounts
     } catch (error) {
-      console.error(`❌ Error getting all connected accounts:`, error)
+      console.error("❌ Error listing connected Stripe accounts:", error)
+      throw error
+    }
+  }
+
+  static async batchRefreshAccounts(): Promise<void> {
+    try {
+      const accounts = await this.listAllConnectedAccounts()
+      console.log(`🔄 Refreshing ${accounts.length} connected accounts...`)
+      
+      for (const { userId, account } of accounts) {
+        try {
+          await this.refreshAccountFromStripe(userId)
+          console.log(`✅ Refreshed account for user: ${userId}`)
+        } catch (error) {
+          console.error(`❌ Failed to refresh account for user ${userId}:`, error)
+        }
+      }
+      
+      console.log(`✅ Batch refresh completed`)
+    } catch (error) {
+      console.error("❌ Error in batch refresh:", error)
       throw error
     }
   }
@@ -183,5 +186,7 @@ export async function getConnectedStripeAccount(userId: string): Promise<Connect
   return ConnectedStripeAccountsService.getConnectedAccount(userId)
 }
 
-// Export the class for other uses
-export default ConnectedStripeAccountsService
+// Export other commonly used functions
+export const saveConnectedStripeAccount = ConnectedStripeAccountsService.saveConnectedAccount
+export const refreshConnectedStripeAccount = ConnectedStripeAccountsService.refreshAccountFromStripe
+export const deleteConnectedStripeAccount = ConnectedStripeAccountsService.deleteConnectedAccount

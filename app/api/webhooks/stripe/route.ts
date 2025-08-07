@@ -6,7 +6,8 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
 })
 
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
+// Use the correct environment variable name
+const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET_LIVE!
 
 export async function POST(request: NextRequest) {
   console.log("🎣 Stripe webhook received")
@@ -20,6 +21,7 @@ export async function POST(request: NextRequest) {
     console.log("- Body length:", body.length)
     console.log("- Has signature:", !!signature)
     console.log("- Has webhook secret:", !!webhookSecret)
+    console.log("- Using STRIPE_WEBHOOK_SECRET_LIVE")
 
     if (!signature) {
       console.error("❌ No Stripe signature found in headers")
@@ -49,7 +51,8 @@ export async function POST(request: NextRequest) {
           hasSecret: !!webhookSecret,
           hasSignature: !!signature,
           bodyLength: body.length,
-          errorType: err.type
+          errorType: err.type,
+          usingSecret: "STRIPE_WEBHOOK_SECRET_LIVE"
         }
       }, { status: 400 })
     }
