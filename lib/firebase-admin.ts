@@ -76,6 +76,9 @@ export const firestore = adminDb
 // REQUIRED: Export db as a named export (this was missing)
 export const db: Firestore = adminDb
 
+// REQUIRED: Add the missing getFirebaseAdminAuth export
+export const getFirebaseAdminAuth = () => auth
+
 // REQUIRED: Export admin object with methods that match Firebase Admin SDK usage patterns
 export const admin = {
   auth: () => auth,
