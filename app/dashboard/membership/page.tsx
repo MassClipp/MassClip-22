@@ -65,6 +65,12 @@ export default function MembershipPage() {
                 <CheckCircle2 className="mr-3 mt-0.5 h-5 w-5 flex-shrink-0 text-green-500" />
                 <span className="text-white">Limited organization features</span>
               </li>
+              <li className="flex items-start">
+                <CheckCircle2 className="mr-3 mt-0.5 h-5 w-5 flex-shrink-0 text-orange-400" />
+                <span className="text-white">
+                  <strong>20% platform fee</strong> on sales
+                </span>
+              </li>
             </ul>
 
             {isProUser ? (
@@ -130,6 +136,12 @@ export default function MembershipPage() {
                 <CheckCircle2 className="mr-3 mt-0.5 h-5 w-5 flex-shrink-0 text-green-500" />
                 <span className="text-white">Priority support</span>
               </li>
+              <li className="flex items-start">
+                <CheckCircle2 className="mr-3 mt-0.5 h-5 w-5 flex-shrink-0 text-green-500" />
+                <span className="text-white">
+                  <strong>Only 10% platform fee</strong> on sales
+                </span>
+              </li>
             </ul>
 
             {isProUser ? (
@@ -158,10 +170,20 @@ export default function MembershipPage() {
         <div className="space-y-4">
           <Card className="overflow-hidden border-zinc-800/50 bg-gradient-to-b from-zinc-900/50 to-black/70 transition-all duration-300 hover:border-zinc-700/70">
             <div className="p-6">
+              <h4 className="mb-3 text-lg font-medium text-white">What are platform fees?</h4>
+              <p className="text-zinc-400">
+                Platform fees are charged on each sale to cover payment processing, hosting, and platform maintenance. 
+                Free users pay 20% while Creator Pro users enjoy a reduced 10% fee, helping you keep more of your earnings.
+              </p>
+            </div>
+          </Card>
+
+          <Card className="overflow-hidden border-zinc-800/50 bg-gradient-to-b from-zinc-900/50 to-black/70 transition-all duration-300 hover:border-zinc-700/70">
+            <div className="p-6">
               <h4 className="mb-3 text-lg font-medium text-white">Can I cancel my subscription?</h4>
               <p className="text-zinc-400">
                 Yes, you can cancel your subscription anytime. You'll continue to have access until the end of your
-                billing period.
+                billing period, after which you'll return to the Free plan with 20% platform fees.
               </p>
             </div>
           </Card>
@@ -180,7 +202,7 @@ export default function MembershipPage() {
               <h4 className="mb-3 text-lg font-medium text-white">How do I get started?</h4>
               <p className="text-zinc-400">
                 Simply click the "Upgrade to Creator Pro" button, complete the checkout process, and you'll have
-                immediate access to all Creator Pro features.
+                immediate access to all Creator Pro features including the reduced 10% platform fee.
               </p>
             </div>
           </Card>

@@ -12,6 +12,7 @@ export interface SubscriptionData {
     premiumContent: boolean
     noWatermark: boolean
     prioritySupport: boolean
+    platformFeePercentage: number
   }
 }
 
@@ -26,6 +27,7 @@ export async function checkSubscription(userId?: string): Promise<SubscriptionDa
           premiumContent: false,
           noWatermark: false,
           prioritySupport: false,
+          platformFeePercentage: 20,
         },
       }
     }
@@ -41,6 +43,7 @@ export async function checkSubscription(userId?: string): Promise<SubscriptionDa
           premiumContent: false,
           noWatermark: false,
           prioritySupport: false,
+          platformFeePercentage: 20,
         },
       }
     }
@@ -54,6 +57,7 @@ export async function checkSubscription(userId?: string): Promise<SubscriptionDa
       premiumContent: plan === "pro" || plan === "creator_pro",
       noWatermark: plan === "pro" || plan === "creator_pro",
       prioritySupport: plan === "pro" || plan === "creator_pro",
+      platformFeePercentage: plan === "pro" || plan === "creator_pro" ? 10 : 20,
     }
 
     return {
@@ -74,6 +78,7 @@ export async function checkSubscription(userId?: string): Promise<SubscriptionDa
         premiumContent: false,
         noWatermark: false,
         prioritySupport: false,
+        platformFeePercentage: 20,
       },
     }
   }
@@ -88,6 +93,7 @@ export function getSubscriptionFeatures(plan: string) {
         premiumContent: true,
         noWatermark: true,
         prioritySupport: true,
+        platformFeePercentage: 10,
       }
     default:
       return {
@@ -95,6 +101,21 @@ export function getSubscriptionFeatures(plan: string) {
         premiumContent: false,
         noWatermark: false,
         prioritySupport: false,
+        platformFeePercentage: 20,
       }
   }
+}
+
+export function getPlatformFeePercentage(plan: string): number {
+  return plan === "pro" || plan === "creator_pro" ? 10 : 20
+}
+
+export function calculatePlatformFee(amount: number, plan: string): number {
+  const feePercentage = getPlatformFeePercentage(plan)
+  return Math.round((amount * feePercentage) / 100)
+}
+
+export function calculateCreatorEarnings(amount: number, plan: string): number {
+  const platformFee = calculatePlatformFee(amount, plan)
+  return amount - platformFee
 }
