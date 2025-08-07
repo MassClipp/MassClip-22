@@ -14,9 +14,11 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/components/ui/use-toast"
-import { Loader2, User, Camera, Instagram, Twitter, Globe, Save, CheckCircle, ExternalLink } from "lucide-react"
+import { Loader2, User, Camera, Instagram, Twitter, Globe, Save, CheckCircle, ExternalLink, XCircle, Crown, RefreshCw } from 'lucide-react'
 import ReactCrop, { type Crop, centerCrop, makeAspectCrop } from "react-image-crop"
 import "react-image-crop/dist/ReactCrop.css"
+import CancelSubscriptionButton from "@/components/cancel-subscription-button"
+import { Badge } from "@/components/ui/badge"
 
 export default function ProfilePage() {
   const { user } = useAuth()
@@ -49,6 +51,9 @@ export default function ProfilePage() {
   const imgRef = useRef<HTMLImageElement>(null)
 
   const [isOnline, setIsOnline] = useState(true)
+
+  const [subscriptionData, setSubscriptionData] = useState<any>(null)
+  const [loadingSubscription, setLoadingSubscription] = useState(false)
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true)
@@ -140,6 +145,12 @@ export default function ProfilePage() {
 
     fetchUserProfile()
   }, [user, toast])
+
+  useEffect(() => {
+    if (user) {
+      fetchSubscriptionData()
+    }
+  }, [user])
 
   const handleProfilePicChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -436,6 +447,30 @@ export default function ProfilePage() {
     }
   }
 
+  const fetchSubscriptionData = async () => {
+    if (!user) return
+    
+    setLoadingSubscription(true)
+    try {
+      const response = await fetch("/api/verify-subscription", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ userId: user.uid }),
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        setSubscriptionData(data)
+      }
+    } catch (error) {
+      console.error("Error fetching subscription data:", error)
+    } finally {
+      setLoadingSubscription(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
@@ -454,6 +489,7 @@ export default function ProfilePage() {
       <Tabs defaultValue="profile" className="space-y-6">
         <TabsList className="bg-zinc-800/50 border border-zinc-700/50">
           <TabsTrigger value="profile">Profile</TabsTrigger>
+          <TabsTrigger value="membership">Membership</TabsTrigger>
         </TabsList>
 
         <TabsContent value="profile">
@@ -700,6 +736,155 @@ export default function ProfilePage() {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        <TabsContent value="membership">
+          <Card className="bg-zinc-900/60 border-zinc-800/50 backdrop-blur-sm">
+            <CardHeader>
+              <CardTitle>Membership & Billing</CardTitle>
+              <CardDescription>Manage your subscription and billing information</CardDescription>
+            </CardHeader>
+            
+            <CardContent className="space-y-6">
+              {loadingSubscription ? (
+                <div className="flex items-center justify-center p-8">
+                  <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                  <span>Loading subscription data...</span>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {/* Current Plan */}
+                  <div className="p-4 rounded-lg border border-zinc-700/50 bg-zinc-800/30">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-medium">Current Plan</h3>
+                      <Badge 
+                        variant={subscriptionData?.isActive ? "default" : "secondary"}
+                        className={subscriptionData?.isActive ? "bg-green-600" : "bg-zinc-600"}
+                      >
+                        {subscriptionData?.isActive ? "Active" : "Free"}
+                      </Badge>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      <div className="flex justify-between">
+                        <span className="text-zinc-400">Plan Type:</span>
+                        <span className="capitalize">
+                          {subscriptionData?.plan === "creator_pro" ? "Creator Pro" : subscriptionData?.plan || "Free"}
+                        </span>
+                      </div>
+                      
+                      {subscriptionData?.isActive && subscriptionData?.currentPeriodEnd && (
+                        <div className="flex justify-between">
+                          <span className="text-zinc-400">Next Billing:</span>
+                          <span>{new Date(subscriptionData.currentPeriodEnd).toLocaleDateString()}</span>
+                        </div>
+                      )}
+                      
+                      {subscriptionData?.stripeCustomerId && (
+                        <div className="flex justify-between">
+                          <span className="text-zinc-400">Customer ID:</span>
+                          <span className="font-mono text-sm">{subscriptionData.stripeCustomerId}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Plan Features */}
+                  <div className="p-4 rounded-lg border border-zinc-700/50 bg-zinc-800/30">
+                    <h3 className="text-lg font-medium mb-4">Plan Features</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="flex items-center gap-2">
+                        {subscriptionData?.features?.unlimitedDownloads ? (
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                        ) : (
+                          <XCircle className="h-4 w-4 text-red-500" />
+                        )}
+                        <span className="text-sm">Unlimited Downloads</span>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        {subscriptionData?.features?.premiumContent ? (
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                        ) : (
+                          <XCircle className="h-4 w-4 text-red-500" />
+                        )}
+                        <span className="text-sm">Premium Content</span>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        {subscriptionData?.features?.noWatermark ? (
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                        ) : (
+                          <XCircle className="h-4 w-4 text-red-500" />
+                        )}
+                        <span className="text-sm">No Watermark</span>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        {subscriptionData?.features?.prioritySupport ? (
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                        ) : (
+                          <XCircle className="h-4 w-4 text-red-500" />
+                        )}
+                        <span className="text-sm">Priority Support</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex gap-4">
+                    {!subscriptionData?.isActive ? (
+                      <Button 
+                        onClick={() => window.open("/pricing", "_blank")}
+                        className="bg-red-600 hover:bg-red-700"
+                      >
+                        <Crown className="h-4 w-4 mr-2" />
+                        Upgrade to Pro
+                      </Button>
+                    ) : (
+                      <div className="flex gap-4">
+                        <Button 
+                          variant="outline"
+                          onClick={fetchSubscriptionData}
+                          disabled={loadingSubscription}
+                          className="border-zinc-700 hover:bg-zinc-800"
+                        >
+                          <RefreshCw className={`h-4 w-4 mr-2 ${loadingSubscription ? "animate-spin" : ""}`} />
+                          Refresh Status
+                        </Button>
+                        
+                        <CancelSubscriptionButton />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Billing History */}
+                  {subscriptionData?.isActive && (
+                    <div className="p-4 rounded-lg border border-zinc-700/50 bg-zinc-800/30">
+                      <h3 className="text-lg font-medium mb-4">Billing Information</h3>
+                      <p className="text-sm text-zinc-400 mb-2">
+                        For detailed billing history and invoices, please visit your Stripe customer portal.
+                      </p>
+                      <Button 
+                        variant="outline"
+                        onClick={() => {
+                          // This would need a customer portal API endpoint
+                          toast({
+                            title: "Coming Soon",
+                            description: "Customer portal access will be available soon.",
+                          })
+                        }}
+                        className="border-zinc-700 hover:bg-zinc-800"
+                      >
+                        <ExternalLink className="h-4 w-4 mr-2" />
+                        View Billing Portal
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 

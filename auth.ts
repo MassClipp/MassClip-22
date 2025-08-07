@@ -1,6 +1,12 @@
 import { initializeApp, getApps } from "firebase/app"
 import { getAuth, connectAuthEmulator } from "firebase/auth"
 import { getFirestore, connectFirestoreEmulator } from "firebase/firestore"
+import type { NextAuthOptions } from "next-auth"
+import GoogleProvider from "next-auth/providers/google"
+import { initializeApp as initializeAdminApp, getApps as getAdminApps } from "firebase-admin/app"
+import { getFirestore as getAdminFirestore } from "firebase-admin/firestore"
+import { cert } from "firebase-admin/app"
+import { FirestoreAdapter } from "@auth/firebase-adapter"
 
 // Firebase configuration
 const firebaseConfig = {
@@ -46,4 +52,52 @@ if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
   }
 }
 
-export default app
+// Initialize Firebase Admin if not already initialized
+if (!getAdminApps().length) {
+  initializeAdminApp({
+    credential: cert({
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+    }),
+  })
+}
+
+const adminDb = getAdminFirestore()
+
+export const authOptions: NextAuthOptions = {
+  adapter: FirestoreAdapter({
+    credential: cert({
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+    }),
+  }),
+  providers: [
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    }),
+  ],
+  session: {
+    strategy: "jwt",
+  },
+  callbacks: {
+    async jwt({ token, user }) {
+      if (user) {
+        token.uid = user.id
+      }
+      return token
+    },
+    async session({ session, token }) {
+      if (token) {
+        session.user.id = token.uid as string
+      }
+      return session
+    },
+  },
+  pages: {
+    signIn: "/login",
+    error: "/auth/error",
+  },
+}

@@ -1,50 +1,75 @@
 import { NextResponse } from "next/server"
+import { setupPurchasesIndexes } from "@/scripts/setup-purchases-indexes"
 
 export async function POST() {
   try {
-    console.log("🔧 [Setup Purchases Indexes] Starting index creation...")
+    console.log("🔧 [Setup Purchases Indexes API] Starting index setup...")
 
-    // Return instructions for manual index creation
-    const indexInstructions = {
-      message: "Firestore indexes need to be created manually",
-      instructions: [
-        "1. Go to Firebase Console: https://console.firebase.google.com",
-        "2. Select your project",
-        "3. Go to Firestore Database > Indexes",
-        "4. Create the following composite indexes:",
-      ],
-      requiredIndexes: [
+    const result = await setupPurchasesIndexes()
+
+    if (result.success) {
+      return NextResponse.json({
+        success: true,
+        message: result.message,
+        indexUrl: `https://console.firebase.google.com/project/${process.env.FIREBASE_PROJECT_ID}/firestore/indexes`,
+        requiredIndexes: [
+          {
+            collection: "bundlePurchases",
+            fields: [
+              { field: "buyerUid", order: "ASCENDING" },
+              { field: "createdAt", order: "DESCENDING" },
+            ],
+          },
+          {
+            collection: "bundlePurchases",
+            fields: [
+              { field: "buyerUid", order: "ASCENDING" },
+              { field: "purchasedAt", order: "DESCENDING" },
+            ],
+          },
+        ],
+      })
+    } else {
+      return NextResponse.json(
         {
-          collection: "purchases",
-          fields: [
-            { field: "buyerUid", order: "ASCENDING" },
-            { field: "createdAt", order: "DESCENDING" },
-          ],
+          success: false,
+          error: result.error,
         },
-        {
-          collection: "purchases",
-          fields: [
-            { field: "buyerUid", order: "ASCENDING" },
-            { field: "type", order: "ASCENDING" },
-            { field: "createdAt", order: "DESCENDING" },
-          ],
-        },
-      ],
-      alternativeMethod: "Use Firebase CLI: firebase deploy --only firestore:indexes",
+        { status: 500 },
+      )
     }
-
-    return NextResponse.json({
-      success: true,
-      ...indexInstructions,
-    })
-  } catch (error) {
-    console.error("❌ [Setup Purchases Indexes] Error:", error)
+  } catch (error: any) {
+    console.error("❌ [Setup Purchases Indexes API] Error:", error)
     return NextResponse.json(
       {
+        success: false,
         error: "Failed to setup indexes",
-        details: error instanceof Error ? error.message : "Unknown error",
+        details: error.message,
       },
       { status: 500 },
     )
   }
+}
+
+export async function GET() {
+  return NextResponse.json({
+    message: "Use POST to setup Firestore indexes for purchases",
+    indexUrl: `https://console.firebase.google.com/project/${process.env.FIREBASE_PROJECT_ID}/firestore/indexes`,
+    requiredIndexes: [
+      {
+        collection: "bundlePurchases",
+        fields: [
+          { field: "buyerUid", order: "ASCENDING" },
+          { field: "createdAt", order: "DESCENDING" },
+        ],
+      },
+      {
+        collection: "bundlePurchases",
+        fields: [
+          { field: "buyerUid", order: "ASCENDING" },
+          { field: "purchasedAt", order: "DESCENDING" },
+        ],
+      },
+    ],
+  })
 }

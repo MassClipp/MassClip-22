@@ -1,3 +1,7 @@
+import { initializeApp, getApps } from "firebase/app"
+import { getAuth, connectAuthEmulator } from "firebase/auth"
+import { getFirestore, connectFirestoreEmulator } from "firebase/firestore"
+
 // Firebase configuration with fallbacks and validation
 export const getFirebaseConfig = () => {
   // Check if all required Firebase config variables are present
@@ -33,3 +37,31 @@ export const getFirebaseConfig = () => {
 
   return config
 }
+
+const firebaseConfig = getFirebaseConfig()
+
+// Initialize Firebase
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0]
+
+// Initialize Auth
+export const auth = getAuth(app)
+
+// Initialize Firestore
+export const db = getFirestore(app)
+
+// Connect to emulators in development
+if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
+  const useEmulators = process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === "true"
+  
+  if (useEmulators) {
+    try {
+      connectAuthEmulator(auth, "http://localhost:9099", { disableWarnings: true })
+      connectFirestoreEmulator(db, "localhost", 8080)
+      console.log("🔥 Connected to Firebase emulators")
+    } catch (error) {
+      console.log("🔥 Firebase emulators already connected or not available")
+    }
+  }
+}
+
+export default app
