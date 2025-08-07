@@ -7,8 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
 import { RefreshCw, DollarSign, TrendingUp, CreditCard, Users, AlertCircle, CheckCircle, XCircle, Bug, Info, Loader2, ExternalLink, Globe, Shield, ArrowRight, Zap, Lock, BarChart3 } from 'lucide-react'
-import { useAuthState } from 'react-firebase-hooks/auth'
-import { auth } from '@/lib/firebase'
+import { useStripeEarnings } from "@/hooks/use-stripe-earnings"
 
 // Safe formatting functions
 function formatCurrency(amount: number): string {
@@ -51,124 +50,11 @@ function calculatePercentageChange(current: number, previous: number): number {
   return ((current - previous) / previous) * 100
 }
 
-interface EarningsData {
-  totalEarnings: number
-  thisMonthEarnings: number
-  lastMonthEarnings: number
-  last30DaysEarnings: number
-  pendingPayout: number
-  availableBalance: number
-  salesMetrics: {
-    totalSales: number
-    thisMonthSales: number
-    last30DaysSales: number
-    averageTransactionValue: number
-    conversionRate: number
-  }
-  accountStatus: {
-    chargesEnabled: boolean
-    payoutsEnabled: boolean
-    detailsSubmitted: boolean
-    requirementsCount: number
-    currentlyDue: string[]
-    pastDue: string[]
-  }
-  recentTransactions: any[]
-  payoutHistory: any[]
-  monthlyBreakdown: any[]
-  error?: string
-  isDemo?: boolean
-  message?: string
-  stripeAccountId?: string
-  lastUpdated?: string
-  debug?: any
-  demoData?: any
-}
-
 export default function EarningsContent() {
-  const [user, loading, error] = useAuthState(auth)
-  const [earningsData, setEarningsData] = useState<EarningsData | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [isRefreshing, setIsRefreshing] = useState(false)
-  const [fetchError, setFetchError] = useState<string | null>(null)
-  const [showDebug, setShowDebug] = useState(false)
+  const { data: earningsData, loading, error, refresh } = useStripeEarnings()
+  const [debugMode, setDebugMode] = useState(false)
 
-  const fetchEarningsData = async (forceRefresh = false) => {
-    if (!user?.uid) return
-
-    try {
-      if (forceRefresh) {
-        setIsRefreshing(true)
-      } else {
-        setIsLoading(true)
-      }
-      setFetchError(null)
-
-      console.log("🔍 Fetching earnings data...")
-      const idToken = await user.getIdToken()
-      
-      const response = await fetch("/api/dashboard/earnings", {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${idToken}`,
-        },
-        cache: forceRefresh ? 'no-cache' : 'default',
-      })
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      }
-
-      const data = await response.json()
-      console.log("📊 Earnings data received:", data)
-      setEarningsData(data)
-    } catch (error) {
-      console.error("❌ Error fetching earnings:", error)
-      setFetchError(error instanceof Error ? error.message : "Failed to fetch earnings data")
-      
-      // Set fallback data
-      setEarningsData({
-        totalEarnings: 0,
-        thisMonthEarnings: 0,
-        lastMonthEarnings: 0,
-        last30DaysEarnings: 0,
-        pendingPayout: 0,
-        availableBalance: 0,
-        salesMetrics: {
-          totalSales: 0,
-          thisMonthSales: 0,
-          last30DaysSales: 0,
-          averageTransactionValue: 0,
-          conversionRate: 0,
-        },
-        accountStatus: {
-          chargesEnabled: false,
-          payoutsEnabled: false,
-          detailsSubmitted: false,
-          requirementsCount: 0,
-          currentlyDue: [],
-          pastDue: [],
-        },
-        recentTransactions: [],
-        payoutHistory: [],
-        monthlyBreakdown: [],
-        error: error instanceof Error ? error.message : "Unknown error",
-        isDemo: true,
-      })
-    } finally {
-      setIsLoading(false)
-      setIsRefreshing(false)
-    }
-  }
-
-  useEffect(() => {
-    if (user) {
-      fetchEarningsData()
-    }
-  }, [user])
-
-  if (loading || isLoading) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
@@ -179,183 +65,155 @@ export default function EarningsContent() {
     )
   }
 
-  if (!user) {
+  if (error) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <Card className="w-full max-w-md bg-gray-800 border-gray-700">
+        <Card className="w-full max-w-md bg-gray-800 border-red-600/50">
           <CardContent className="pt-6">
-            <p className="text-center text-gray-400">Please log in to continue</p>
+            <div className="text-center">
+              <AlertCircle className="h-8 w-8 text-red-400 mx-auto mb-4" />
+              <p className="text-red-400 mb-4">Failed to load earnings data</p>
+              <p className="text-gray-400 text-sm mb-4">{error}</p>
+              <Button onClick={refresh} variant="outline" className="border-red-600/50 text-red-400">
+                Try Again
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
     )
   }
 
-  if (!earningsData) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Card className="w-full max-w-md bg-gray-800 border-gray-700">
-          <CardContent className="pt-6">
-            <p className="text-center text-gray-400">No earnings data available</p>
-          </CardContent>
-        </Card>
-      </div>
-    )
+  const data = earningsData || {
+    totalEarnings: 0,
+    thisMonthEarnings: 0,
+    lastMonthEarnings: 0,
+    last30DaysEarnings: 0,
+    pendingPayout: 0,
+    availableBalance: 0,
+    salesMetrics: {
+      totalSales: 0,
+      thisMonthSales: 0,
+      last30DaysSales: 0,
+      averageTransactionValue: 0,
+      conversionRate: 0
+    },
+    accountStatus: {
+      chargesEnabled: false,
+      payoutsEnabled: false,
+      detailsSubmitted: false,
+      requirementsCount: 0,
+      currentlyDue: [],
+      pastDue: []
+    },
+    recentTransactions: [],
+    payoutHistory: [],
+    monthlyBreakdown: []
   }
 
-  const monthlyChange = calculatePercentageChange(earningsData.thisMonthEarnings, earningsData.lastMonthEarnings)
-  const isConnected = earningsData.accountStatus.chargesEnabled && earningsData.accountStatus.detailsSubmitted
+  const monthlyChange = calculatePercentageChange(data.thisMonthEarnings, data.lastMonthEarnings)
 
   return (
-    <div className="min-h-screen p-6">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between">
         <div>
-          <div className="flex items-center gap-3 mb-2">
-            <h1 className="text-3xl font-bold text-white">Earnings</h1>
-            {!isConnected && (
+          <h1 className="text-3xl font-bold text-white flex items-center gap-3">
+            Earnings
+            {!data.accountStatus.chargesEnabled && (
               <Badge variant="destructive" className="bg-red-600/20 text-red-400 border-red-600/50">
                 Not Connected
               </Badge>
             )}
-            {earningsData.isDemo && (
-              <Badge variant="outline" className="border-yellow-600/50 text-yellow-400">
+            {data.isDemo && (
+              <Badge variant="secondary" className="bg-blue-600/20 text-blue-400 border-blue-600/50">
                 Demo Data
               </Badge>
             )}
-          </div>
+          </h1>
           <p className="text-gray-400">Financial overview and performance metrics</p>
         </div>
-        
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setShowDebug(!showDebug)}
-            className="border-gray-600 text-gray-300 hover:bg-gray-700"
+            onClick={() => setDebugMode(!debugMode)}
+            className="border-gray-600 text-gray-400 hover:bg-gray-700"
           >
             <Bug className="h-4 w-4 mr-2" />
             Debug
           </Button>
           <Button
-            onClick={() => fetchEarningsData(true)}
-            disabled={isRefreshing}
-            className="bg-blue-600 hover:bg-blue-700 text-white"
+            variant="outline"
+            size="sm"
+            onClick={refresh}
+            disabled={loading}
+            className="border-gray-600 text-gray-400 hover:bg-gray-700"
           >
-            {isRefreshing ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4 mr-2" />
-            )}
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
         </div>
       </div>
 
-      {/* Error Display */}
-      {fetchError && (
-        <Card className="mb-6 border-red-600/50 bg-red-900/20">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3 text-red-400">
-              <AlertCircle className="h-5 w-5" />
-              <span>Error: {fetchError}</span>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Debug Panel */}
-      {showDebug && earningsData.debug && (
-        <Card className="mb-6 border-gray-600 bg-gray-800/50">
-          <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
-              <Bug className="h-5 w-5" />
-              Debug Information
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div>
-                <h4 className="text-sm font-medium text-gray-300 mb-2">API Response</h4>
-                <pre className="text-xs text-gray-400 bg-gray-900 p-3 rounded overflow-auto max-h-40">
-                  {JSON.stringify(earningsData.debug, null, 2)}
-                </pre>
-              </div>
-              {earningsData.lastUpdated && (
-                <div>
-                  <h4 className="text-sm font-medium text-gray-300 mb-1">Last Updated</h4>
-                  <p className="text-sm text-gray-400">{formatDateTime(earningsData.lastUpdated)}</p>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Main Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <Card className="bg-gray-800 border-gray-700">
+      {/* Key Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <Card className="bg-gray-800/50 border-gray-700">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-400">Total Earnings</p>
-                <p className="text-2xl font-bold text-white">{formatCurrency(earningsData.totalEarnings)}</p>
+                <p className="text-2xl font-bold text-white">{formatCurrency(data.totalEarnings)}</p>
                 <p className="text-xs text-gray-500">All-time revenue</p>
               </div>
-              <div className="h-12 w-12 bg-green-600/20 rounded-lg flex items-center justify-center">
-                <DollarSign className="h-6 w-6 text-green-400" />
-              </div>
+              <DollarSign className="h-8 w-8 text-green-400" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-gray-800 border-gray-700">
+        <Card className="bg-gray-800/50 border-gray-700">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-400">This Month</p>
-                <p className="text-2xl font-bold text-white">{formatCurrency(earningsData.thisMonthEarnings)}</p>
-                <p className="text-xs text-green-400">{formatPercentage(monthlyChange)} from last month</p>
+                <p className="text-2xl font-bold text-white">{formatCurrency(data.thisMonthEarnings)}</p>
+                <p className={`text-xs ${monthlyChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {formatPercentage(monthlyChange)} from last month
+                </p>
               </div>
-              <div className="h-12 w-12 bg-blue-600/20 rounded-lg flex items-center justify-center">
-                <TrendingUp className="h-6 w-6 text-blue-400" />
-              </div>
+              <TrendingUp className="h-8 w-8 text-blue-400" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-gray-800 border-gray-700">
+        <Card className="bg-gray-800/50 border-gray-700">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-400">Available Balance</p>
-                <p className="text-2xl font-bold text-white">{formatCurrency(earningsData.availableBalance)}</p>
+                <p className="text-2xl font-bold text-white">{formatCurrency(data.availableBalance)}</p>
                 <p className="text-xs text-gray-500">Ready for payout</p>
               </div>
-              <div className="h-12 w-12 bg-purple-600/20 rounded-lg flex items-center justify-center">
-                <CreditCard className="h-6 w-6 text-purple-400" />
-              </div>
+              <CreditCard className="h-8 w-8 text-purple-400" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-gray-800 border-gray-700">
+        <Card className="bg-gray-800/50 border-gray-700">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-400">Total Sales</p>
-                <p className="text-2xl font-bold text-white">{formatNumber(earningsData.salesMetrics.totalSales)}</p>
-                <p className="text-xs text-gray-500">{formatCurrency(earningsData.salesMetrics.averageTransactionValue)} avg order</p>
+                <p className="text-2xl font-bold text-white">{formatNumber(data.salesMetrics.totalSales)}</p>
+                <p className="text-xs text-gray-500">{formatCurrency(data.salesMetrics.averageTransactionValue)} avg order</p>
               </div>
-              <div className="h-12 w-12 bg-orange-600/20 rounded-lg flex items-center justify-center">
-                <BarChart3 className="h-6 w-6 text-orange-400" />
-              </div>
+              <BarChart3 className="h-8 w-8 text-orange-400" />
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Tabs */}
+      {/* Main Content Tabs */}
       <Tabs defaultValue="overview" className="space-y-6">
         <TabsList className="bg-gray-800 border-gray-700">
           <TabsTrigger value="overview" className="data-[state=active]:bg-gray-700">Overview</TabsTrigger>
@@ -366,59 +224,54 @@ export default function EarningsContent() {
         <TabsContent value="overview" className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Recent Performance */}
-            <Card className="bg-gray-800 border-gray-700">
+            <Card className="bg-gray-800/50 border-gray-700">
               <CardHeader>
                 <CardTitle className="text-white">Recent Performance</CardTitle>
-                <CardDescription className="text-gray-400">Your earnings breakdown</CardDescription>
+                <CardDescription>Your earnings breakdown</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-300">Last 30 Days</span>
-                  <span className="text-white font-medium">{formatCurrency(earningsData.last30DaysEarnings)}</span>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400">Last 30 Days</span>
+                  <span className="text-white font-semibold">{formatCurrency(data.last30DaysEarnings)}</span>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-300">This Month Sales</span>
-                  <span className="text-white font-medium">{formatNumber(earningsData.salesMetrics.thisMonthSales)}</span>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400">This Month Sales</span>
+                  <span className="text-white font-semibold">{formatNumber(data.salesMetrics.thisMonthSales)}</span>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-300">Last 30 Days Sales</span>
-                  <span className="text-white font-medium">{formatNumber(earningsData.salesMetrics.last30DaysSales)}</span>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400">Last 30 Days Sales</span>
+                  <span className="text-white font-semibold">{formatNumber(data.salesMetrics.last30DaysSales)}</span>
                 </div>
               </CardContent>
             </Card>
 
             {/* Payout Information */}
-            <Card className="bg-gray-800 border-gray-700">
+            <Card className="bg-gray-800/50 border-gray-700">
               <CardHeader>
                 <CardTitle className="text-white">Payout Information</CardTitle>
-                <CardDescription className="text-gray-400">Balance and payout status</CardDescription>
+                <CardDescription>Balance and payout status</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-300">Pending Payout</span>
-                  <span className="text-white font-medium">{formatCurrency(earningsData.pendingPayout)}</span>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400">Pending Payout</span>
+                  <span className="text-white font-semibold">{formatCurrency(data.pendingPayout)}</span>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-300">Available Balance</span>
-                  <span className="text-green-400 font-medium">{formatCurrency(earningsData.availableBalance)}</span>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400">Available Balance</span>
+                  <span className="text-green-400 font-semibold">{formatCurrency(data.availableBalance)}</span>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-300">Account Status</span>
-                  {isConnected ? (
-                    <Badge className="bg-green-600/20 text-green-400 border-green-600/50">
-                      <CheckCircle className="h-3 w-3 mr-1" />
-                      Connected
-                    </Badge>
-                  ) : (
-                    <Badge variant="destructive" className="bg-red-600/20 text-red-400 border-red-600/50">
-                      <XCircle className="h-3 w-3 mr-1" />
-                      Setup Required
-                    </Badge>
-                  )}
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400">Account Status</span>
+                  <Badge 
+                    variant={data.accountStatus.chargesEnabled ? "default" : "destructive"}
+                    className={data.accountStatus.chargesEnabled ? "bg-green-600/20 text-green-400 border-green-600/50" : "bg-red-600/20 text-red-400 border-red-600/50"}
+                  >
+                    {data.accountStatus.chargesEnabled ? "Active" : "Setup Required"}
+                  </Badge>
                 </div>
                 <Button 
                   variant="outline" 
-                  className="w-full border-gray-600 text-gray-300 hover:bg-gray-700"
+                  className="w-full border-gray-600 text-gray-400 hover:bg-gray-700"
                   onClick={() => window.open('https://dashboard.stripe.com', '_blank')}
                 >
                   <ExternalLink className="h-4 w-4 mr-2" />
@@ -430,23 +283,28 @@ export default function EarningsContent() {
         </TabsContent>
 
         <TabsContent value="transactions" className="space-y-6">
-          <Card className="bg-gray-800 border-gray-700">
+          <Card className="bg-gray-800/50 border-gray-700">
             <CardHeader>
               <CardTitle className="text-white">Recent Transactions</CardTitle>
-              <CardDescription className="text-gray-400">Latest payment activity</CardDescription>
+              <CardDescription>Latest payment activity</CardDescription>
             </CardHeader>
             <CardContent>
-              {earningsData.recentTransactions.length > 0 ? (
+              {data.recentTransactions.length > 0 ? (
                 <div className="space-y-4">
-                  {earningsData.recentTransactions.map((transaction, index) => (
-                    <div key={transaction.id || index} className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg">
+                  {data.recentTransactions.map((transaction: any, index: number) => (
+                    <div key={index} className="flex items-center justify-between p-4 bg-gray-700/30 rounded-lg">
                       <div>
-                        <p className="text-white font-medium">{transaction.description}</p>
-                        <p className="text-sm text-gray-400">{formatDateTime(transaction.created)}</p>
+                        <p className="text-white font-medium">{transaction.description || 'Payment'}</p>
+                        <p className="text-gray-400 text-sm">{formatDateTime(transaction.created)}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-white font-medium">{formatCurrency(transaction.net)}</p>
-                        <p className="text-sm text-gray-400">Fee: {formatCurrency(transaction.fee)}</p>
+                        <p className="text-white font-semibold">{formatCurrency(transaction.amount / 100)}</p>
+                        <Badge 
+                          variant={transaction.status === 'succeeded' ? "default" : "secondary"}
+                          className={transaction.status === 'succeeded' ? "bg-green-600/20 text-green-400" : "bg-gray-600/20 text-gray-400"}
+                        >
+                          {transaction.status}
+                        </Badge>
                       </div>
                     </div>
                   ))}
@@ -455,6 +313,7 @@ export default function EarningsContent() {
                 <div className="text-center py-8">
                   <CreditCard className="h-12 w-12 text-gray-600 mx-auto mb-4" />
                   <p className="text-gray-400">No transactions yet</p>
+                  <p className="text-gray-500 text-sm">Transactions will appear here once you start receiving payments</p>
                 </div>
               )}
             </CardContent>
@@ -462,43 +321,94 @@ export default function EarningsContent() {
         </TabsContent>
 
         <TabsContent value="analytics" className="space-y-6">
-          <Card className="bg-gray-800 border-gray-700">
-            <CardHeader>
-              <CardTitle className="text-white">Monthly Breakdown</CardTitle>
-              <CardDescription className="text-gray-400">Earnings over the last 6 months</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {earningsData.monthlyBreakdown.length > 0 ? (
-                <div className="space-y-4">
-                  {earningsData.monthlyBreakdown.map((month, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg">
-                      <div>
-                        <p className="text-white font-medium">{month.month}</p>
-                        <p className="text-sm text-gray-400">{formatNumber(month.transactionCount)} transactions</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-white font-medium">{formatCurrency(month.earnings)}</p>
-                      </div>
-                    </div>
-                  ))}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card className="bg-gray-800/50 border-gray-700">
+              <CardHeader>
+                <CardTitle className="text-white">Sales Metrics</CardTitle>
+                <CardDescription>Performance indicators</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400">Average Transaction</span>
+                  <span className="text-white font-semibold">{formatCurrency(data.salesMetrics.averageTransactionValue)}</span>
                 </div>
-              ) : (
-                <div className="text-center py-8">
-                  <BarChart3 className="h-12 w-12 text-gray-600 mx-auto mb-4" />
-                  <p className="text-gray-400">No analytics data available</p>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400">Conversion Rate</span>
+                  <span className="text-white font-semibold">{data.salesMetrics.conversionRate.toFixed(1)}%</span>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400">Total Sales Count</span>
+                  <span className="text-white font-semibold">{formatNumber(data.salesMetrics.totalSales)}</span>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gray-800/50 border-gray-700">
+              <CardHeader>
+                <CardTitle className="text-white">Account Health</CardTitle>
+                <CardDescription>Stripe account status</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400">Charges Enabled</span>
+                  {data.accountStatus.chargesEnabled ? (
+                    <CheckCircle className="h-5 w-5 text-green-400" />
+                  ) : (
+                    <XCircle className="h-5 w-5 text-red-400" />
+                  )}
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400">Payouts Enabled</span>
+                  {data.accountStatus.payoutsEnabled ? (
+                    <CheckCircle className="h-5 w-5 text-green-400" />
+                  ) : (
+                    <XCircle className="h-5 w-5 text-red-400" />
+                  )}
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400">Details Submitted</span>
+                  {data.accountStatus.detailsSubmitted ? (
+                    <CheckCircle className="h-5 w-5 text-green-400" />
+                  ) : (
+                    <XCircle className="h-5 w-5 text-red-400" />
+                  )}
+                </div>
+                {data.accountStatus.requirementsCount > 0 && (
+                  <div className="mt-4 p-3 bg-yellow-600/20 border border-yellow-600/50 rounded-lg">
+                    <p className="text-yellow-400 text-sm">
+                      {data.accountStatus.requirementsCount} requirement(s) need attention
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
       </Tabs>
 
+      {/* Debug Information */}
+      {debugMode && (
+        <Card className="bg-gray-900/50 border-gray-600">
+          <CardHeader>
+            <CardTitle className="text-white flex items-center gap-2">
+              <Bug className="h-5 w-5" />
+              Debug Information
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <pre className="text-xs text-gray-400 overflow-auto max-h-96">
+              {JSON.stringify(data, null, 2)}
+            </pre>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Footer */}
-      <div className="mt-8 text-center">
-        <p className="text-sm text-gray-500">
-          Last updated: {earningsData.lastUpdated ? formatDateTime(earningsData.lastUpdated) : 'Never'}
-        </p>
-      </div>
+      {data.lastUpdated && (
+        <div className="text-center text-gray-500 text-sm">
+          Last updated: {formatDateTime(data.lastUpdated)}
+        </div>
+      )}
     </div>
   )
 }
