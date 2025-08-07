@@ -40,19 +40,30 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
     throw new Error(`Creator missing connected Stripe account: ${creatorId}`)
   }
 
-  const creatorStripeAccountId = connectedAccount.stripeAccountId
+  // Use the correct Stripe account ID - prefer stripe_user_id (from OAuth) over stripeAccountId
+  const creatorStripeAccountId = connectedAccount.stripe_user_id || connectedAccount.stripeAccountId
+
+  if (!creatorStripeAccountId) {
+    throw new Error(`Connected account missing Stripe account ID for creator: ${creatorId}`)
+  }
 
   console.log(`✅ Found connected Stripe account: ${creatorStripeAccountId}`)
 
   // Verify session through connected account
   let verifiedSession: Stripe.Checkout.Session
   try {
+    console.log(`🔍 Retrieving session ${session.id} from connected account ${creatorStripeAccountId}`)
     verifiedSession = await stripe.checkout.sessions.retrieve(session.id, {
       expand: ["line_items", "payment_intent"],
       stripeAccount: creatorStripeAccountId,
     })
     console.log(`✅ Session verified through connected account`)
   } catch (error: any) {
+    console.error(`❌ Session verification failed:`, {
+      sessionId: session.id,
+      stripeAccountId: creatorStripeAccountId,
+      error: error.message
+    })
     throw new Error(`Session verification failed: ${error.message}`)
   }
 
