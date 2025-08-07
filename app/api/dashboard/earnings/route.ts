@@ -162,7 +162,25 @@ export async function GET(request: NextRequest) {
     }
 
     const connectedAccountData = connectedAccountDoc.data()
+    addLog('10.1', 'Connected account data found', undefined, { 
+      hasData: !!connectedAccountData,
+      fields: connectedAccountData ? Object.keys(connectedAccountData) : []
+    })
+
+    // Extract all the relevant fields from Firestore
     const stripeAccountId = connectedAccountData?.stripe_user_id || connectedAccountData?.stripeAccountId
+    const chargesEnabled = connectedAccountData?.charges_enabled ?? false
+    const payoutsEnabled = connectedAccountData?.payouts_enabled ?? false
+    const detailsSubmitted = connectedAccountData?.details_submitted ?? false
+    const connected = connectedAccountData?.connected ?? false
+    const requirementsCurrentlyDue = connectedAccountData?.requirements_currently_due || []
+    const requirementsPastDue = connectedAccountData?.requirements_past_due || []
+    const requirementsPendingVerification = connectedAccountData?.requirements_pending_verification || []
+    const businessName = connectedAccountData?.business_name || ''
+    const email = connectedAccountData?.email || ''
+    const country = connectedAccountData?.country || 'US'
+    const defaultCurrency = connectedAccountData?.default_currency || 'usd'
+    const livemode = connectedAccountData?.livemode ?? false
 
     if (!stripeAccountId) {
       addLog('11', 'Connected account found but missing Stripe account ID')
@@ -211,28 +229,34 @@ export async function GET(request: NextRequest) {
 
     addLog('12', `Found connected Stripe account: ${stripeAccountId}`)
 
-    // Check account status with Stripe
-    addLog('13', 'Fetching account details from Stripe')
-    const account = await stripe.accounts.retrieve(stripeAccountId)
-    
+    // Use the account status from Firestore instead of making additional API calls
     const accountStatus = {
-      chargesEnabled: account.charges_enabled || false,
-      payoutsEnabled: account.payouts_enabled || false,
-      detailsSubmitted: account.details_submitted || false,
-      requirementsCount: account.requirements?.currently_due?.length || 0,
-      currentlyDue: account.requirements?.currently_due || [],
-      pastDue: account.requirements?.past_due || [],
+      chargesEnabled,
+      payoutsEnabled,
+      detailsSubmitted,
+      requirementsCount: requirementsCurrentlyDue.length + requirementsPastDue.length + requirementsPendingVerification.length,
+      currentlyDue: requirementsCurrentlyDue,
+      pastDue: requirementsPastDue,
+      pendingVerification: requirementsPendingVerification,
+      connected,
+      businessName,
+      email,
+      country,
+      livemode
     }
 
-    addLog('14', 'Account status retrieved', undefined, accountStatus)
+    addLog('13', 'Account status from Firestore', undefined, accountStatus)
 
-    // If account is not fully set up, return limited data
-    if (!accountStatus.chargesEnabled || !accountStatus.detailsSubmitted) {
-      addLog('15', 'Account not fully set up, returning limited data')
+    // If account is not connected or not fully set up, return limited data
+    if (!connected || !chargesEnabled || !detailsSubmitted) {
+      addLog('14', 'Account not fully set up, returning limited data')
       return NextResponse.json({
         isUnconnected: false,
         accountNotReady: true,
-        message: 'Stripe account setup incomplete',
+        message: !connected ? 'Stripe account not connected' : 
+                 !detailsSubmitted ? 'Stripe account setup incomplete - details not submitted' :
+                 !chargesEnabled ? 'Stripe account setup incomplete - charges not enabled' :
+                 'Stripe account setup incomplete',
         totalEarnings: 0,
         thisMonthEarnings: 0,
         lastMonthEarnings: 0,
@@ -240,7 +264,7 @@ export async function GET(request: NextRequest) {
         pendingPayout: 0,
         availableBalance: 0,
         nextPayoutDate: null,
-        payoutSchedule: account.settings?.payouts?.schedule?.interval || 'manual',
+        payoutSchedule: 'manual',
         accountStatus,
         recentTransactions: [],
         payoutHistory: [],
@@ -267,8 +291,8 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // Fetch earnings data from Stripe
-    addLog('16', 'Fetching earnings data from Stripe')
+    // Account is fully connected and ready - fetch earnings data from Stripe
+    addLog('15', 'Account is fully connected, fetching earnings data from Stripe')
     
     // Get balance
     const balance = await stripe.balance.retrieve({
@@ -381,6 +405,20 @@ export async function GET(request: NextRequest) {
       })
     }
 
+    // Get account details for payout schedule (only if needed)
+    let payoutSchedule = 'manual'
+    let nextPayoutDate = null
+    
+    try {
+      const account = await stripe.accounts.retrieve(stripeAccountId)
+      payoutSchedule = account.settings?.payouts?.schedule?.interval || 'manual'
+      if (account.settings?.payouts?.schedule?.delay_days) {
+        nextPayoutDate = new Date(Date.now() + account.settings.payouts.schedule.delay_days * 24 * 60 * 60 * 1000).toISOString()
+      }
+    } catch (error) {
+      addLog('16', 'Failed to get payout schedule from Stripe', error instanceof Error ? error.message : 'Unknown error')
+    }
+
     addLog('17', 'Successfully calculated earnings data')
 
     const earningsData = {
@@ -390,10 +428,8 @@ export async function GET(request: NextRequest) {
       last30DaysEarnings,
       pendingPayout,
       availableBalance,
-      nextPayoutDate: account.settings?.payouts?.schedule?.delay_days 
-        ? new Date(Date.now() + account.settings.payouts.schedule.delay_days * 24 * 60 * 60 * 1000).toISOString()
-        : null,
-      payoutSchedule: account.settings?.payouts?.schedule?.interval || 'manual',
+      nextPayoutDate,
+      payoutSchedule,
       accountStatus,
       recentTransactions,
       payoutHistory,
@@ -425,7 +461,17 @@ export async function GET(request: NextRequest) {
       lastUpdated: new Date().toISOString(),
       debug: {
         logs: debugLogs,
-        reason: 'Successfully fetched live earnings data'
+        reason: 'Successfully fetched live earnings data',
+        firestoreData: {
+          connected,
+          chargesEnabled,
+          payoutsEnabled,
+          detailsSubmitted,
+          requirementsCount: accountStatus.requirementsCount,
+          businessName,
+          email,
+          livemode
+        }
       }
     }
 
