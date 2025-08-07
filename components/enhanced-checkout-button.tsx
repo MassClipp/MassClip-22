@@ -1,218 +1,133 @@
 "use client"
 
+import type React from "react"
+
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, ShoppingCart, AlertTriangle, ExternalLink, CreditCard } from 'lucide-react'
-import { useAuth } from "@/hooks/use-firebase-auth"
-
-interface BundleItem {
-  id: string
-  title: string
-  price: number
-  creatorId: string
-  stripeProductId?: string
-  stripePriceId?: string
-}
+import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
+import { toast } from "@/hooks/use-toast"
+import { Loader2, ShoppingCart } from "lucide-react"
 
 interface EnhancedCheckoutButtonProps {
-  bundle: BundleItem
+  productBoxId?: string
+  bundleId?: string
+  price: number
+  title: string
+  creatorId: string
   className?: string
-  size?: "sm" | "default" | "lg"
-  variant?: "default" | "destructive" | "outline" | "secondary" | "ghost" | "link"
+  children?: React.ReactNode
 }
 
-export function EnhancedCheckoutButton({ 
-  bundle, 
-  className = "", 
-  size = "default",
-  variant = "destructive"
+export function EnhancedCheckoutButton({
+  productBoxId,
+  bundleId,
+  price,
+  title,
+  creatorId,
+  className = "",
+  children,
 }: EnhancedCheckoutButtonProps) {
-  const { user } = useAuth()
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [creatorAccountStatus, setCreatorAccountStatus] = useState<{
-    connected: boolean
-    fullySetup: boolean
-    accountId?: string
-  } | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const { user, loading: authLoading } = useFirebaseAuth()
 
-  const checkCreatorAccount = async () => {
+  const handleCheckout = async () => {
     try {
-      console.log(`🔍 Checking creator account status for: ${bundle.creatorId}`)
-      
-      const response = await fetch(`/api/stripe/connect/status?userId=${bundle.creatorId}`)
-      
-      if (response.ok) {
-        const data = await response.json()
-        console.log(`✅ Creator account status:`, data)
-        setCreatorAccountStatus(data)
-        return data
-      } else {
-        console.log(`❌ Creator account not found or error`)
-        setCreatorAccountStatus({
-          connected: false,
-          fullySetup: false
+      setIsLoading(true)
+
+      // CRITICAL: Ensure we have buyer identification
+      const buyerUid = user?.uid || "anonymous"
+
+      if (!buyerUid) {
+        toast({
+          title: "Authentication Required",
+          description: "Please sign in to complete your purchase",
+          variant: "destructive",
         })
-        return {
-          connected: false,
-          fullySetup: false
-        }
+        return
       }
-    } catch (error) {
-      console.error("❌ Error checking creator account:", error)
-      setCreatorAccountStatus({
-        connected: false,
-        fullySetup: false
+
+      console.log("🛒 [Enhanced Checkout] Starting checkout with buyer identification:", {
+        buyerUid,
+        productBoxId,
+        bundleId,
+        userEmail: user?.email,
+        userName: user?.displayName,
       })
-      return {
-        connected: false,
-        fullySetup: false
-      }
-    }
-  }
 
-  const handlePurchase = async () => {
-    try {
-      setLoading(true)
-      setError(null)
-
-      console.log(`🛒 [Unlock Button] Starting checkout for bundle:`, bundle)
-
-      // Check if user is authenticated
-      if (!user) {
-        setError("Please log in to make a purchase")
-        return
+      // Determine the item ID (bundle takes precedence)
+      const itemId = bundleId || productBoxId
+      if (!itemId) {
+        throw new Error("No product or bundle ID provided")
       }
 
-      // Get user ID token for authentication
-      const idToken = await user.getIdToken()
-      console.log(`🔐 [Unlock Button] Got auth token for user: ${user.uid}`)
-
-      // Check creator's account status first
-      const creatorStatus = await checkCreatorAccount()
-      
-      if (!creatorStatus.connected || !creatorStatus.fullySetup) {
-        setError("This creator hasn't finished setting up their payment account yet. Please try again later.")
-        return
-      }
-
-      // Validate bundle has required Stripe IDs
-      if (!bundle.stripeProductId || !bundle.stripePriceId) {
-        setError("This item is not properly configured for purchase. Please contact the creator.")
-        return
-      }
-
-      console.log(`🛒 [Unlock Button] Creating checkout session...`)
-
-      // Create checkout session
-      const checkoutResponse = await fetch("/api/stripe/create-checkout-session", {
+      // Create checkout session with comprehensive buyer metadata
+      const response = await fetch("/api/stripe/create-checkout-session", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${idToken}`,
         },
         body: JSON.stringify({
-          bundleId: bundle.id,
-          creatorId: bundle.creatorId,
-          buyerId: user.uid,
-          buyerEmail: user.email,
-          priceId: bundle.stripePriceId,
-          productId: bundle.stripeProductId,
-          amount: Math.round(bundle.price * 100), // Convert to cents
-          currency: "usd",
-          successUrl: `${window.location.origin}/purchase-success?session_id={CHECKOUT_SESSION_ID}`,
+          productBoxId: itemId, // Use itemId for both products and bundles
+          buyerUid, // CRITICAL: Include buyer UID
+          successUrl: `${window.location.origin}/purchase-success?session_id={CHECKOUT_SESSION_ID}&buyer_uid=${buyerUid}`,
           cancelUrl: window.location.href,
         }),
       })
 
-      if (!checkoutResponse.ok) {
-        const errorData = await checkoutResponse.json()
-        console.error(`❌ [Unlock Button] Checkout session creation failed:`, errorData)
-        
-        // Handle specific error types
-        if (errorData.error?.includes("destination account")) {
-          setError("The creator's payment account needs additional setup. Please try again later.")
-        } else if (errorData.error?.includes("capabilities")) {
-          setError("The creator's account is not yet enabled for payments. Please try again later.")
-        } else {
-          setError(errorData.error || "Failed to create checkout session")
-        }
-        return
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to create checkout session")
       }
 
-      const { sessionId, url } = await checkoutResponse.json()
-      console.log(`✅ [Unlock Button] Checkout session created:`, sessionId)
+      const { url, sessionId, metadata } = await response.json()
+
+      console.log("✅ [Enhanced Checkout] Checkout session created with buyer metadata:", {
+        sessionId,
+        buyerUid,
+        metadata,
+      })
 
       // Redirect to Stripe Checkout
       if (url) {
         window.location.href = url
       } else {
-        setError("Failed to redirect to checkout")
+        throw new Error("No checkout URL received")
       }
-
-    } catch (error) {
-      console.error(`❌ [Unlock Button] Purchase failed:`, error)
-      setError(error instanceof Error ? error.message : "An unexpected error occurred")
+    } catch (error: any) {
+      console.error("❌ [Enhanced Checkout] Checkout error:", error)
+      toast({
+        title: "Checkout Failed",
+        description: error.message || "Failed to start checkout process",
+        variant: "destructive",
+      })
     } finally {
-      setLoading(false)
+      setIsLoading(false)
     }
   }
 
-  // Show creator account status if there's an issue
-  if (creatorAccountStatus && (!creatorAccountStatus.connected || !creatorAccountStatus.fullySetup)) {
+  // Show loading state while auth is loading
+  if (authLoading) {
     return (
-      <div className="space-y-2">
-        <Button
-          disabled
-          variant="outline"
-          size={size}
-          className={`${className} opacity-50 cursor-not-allowed`}
-        >
-          <CreditCard className="mr-2 h-4 w-4" />
-          Unavailable
-        </Button>
-        <Alert className="border-amber-500/50 bg-amber-500/10">
-          <AlertTriangle className="h-4 w-4 text-amber-400" />
-          <AlertDescription className="text-amber-200 text-sm">
-            This creator is still setting up their payment account. Check back soon!
-          </AlertDescription>
-        </Alert>
-      </div>
+      <Button disabled className={className}>
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        Loading...
+      </Button>
     )
   }
 
   return (
-    <div className="space-y-2">
-      <Button
-        onClick={handlePurchase}
-        disabled={loading}
-        variant={variant}
-        size={size}
-        className={className}
-      >
-        {loading ? (
-          <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Processing...
-          </>
-        ) : (
-          <>
-            <ShoppingCart className="mr-2 h-4 w-4" />
-            Unlock ${bundle.price.toFixed(2)}
-          </>
-        )}
-      </Button>
-
-      {error && (
-        <Alert className="border-red-500/50 bg-red-500/10">
-          <AlertTriangle className="h-4 w-4 text-red-400" />
-          <AlertDescription className="text-red-200 text-sm">
-            {error}
-          </AlertDescription>
-        </Alert>
+    <Button onClick={handleCheckout} disabled={isLoading} className={className}>
+      {isLoading ? (
+        <>
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          Processing...
+        </>
+      ) : (
+        <>
+          <ShoppingCart className="mr-2 h-4 w-4" />
+          {children || `Purchase for $${price}`}
+        </>
       )}
-    </div>
+    </Button>
   )
 }
