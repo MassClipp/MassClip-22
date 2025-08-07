@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { CheckCircle2, Crown, Shield } from "lucide-react"
+import { CheckCircle2, Crown, Shield } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { SubscribeButton } from "@/components/subscribe-button"
@@ -54,11 +54,9 @@ export default function MembershipPage() {
               </li>
               <li className="flex items-start">
                 <CheckCircle2 className="mr-3 mt-0.5 h-5 w-5 flex-shrink-0 text-green-500" />
-                <span className="text-white">Access to free clips</span>
-              </li>
-              <li className="flex items-start">
-                <CheckCircle2 className="mr-3 mt-0.5 h-5 w-5 flex-shrink-0 text-green-500" />
-                <span className="text-white">Standard video quality</span>
+                <span className="text-white">
+                  <strong>2 bundles max</strong> on storefront
+                </span>
               </li>
               <li className="flex items-start">
                 <CheckCircle2 className="mr-3 mt-0.5 h-5 w-5 flex-shrink-0 text-green-500" />
@@ -104,7 +102,7 @@ export default function MembershipPage() {
             </div>
             <p className="mb-6 text-zinc-400">Everything you need to create amazing content</p>
             <div className="mb-8 flex items-baseline">
-              <p className="text-5xl font-bold text-white">$19</p>
+              <p className="text-5xl font-bold text-white">$15</p>
               <span className="ml-2 text-lg text-zinc-400">/month</span>
             </div>
 
@@ -117,19 +115,17 @@ export default function MembershipPage() {
               </li>
               <li className="flex items-start">
                 <CheckCircle2 className="mr-3 mt-0.5 h-5 w-5 flex-shrink-0 text-green-500" />
+                <span className="text-white">
+                  <strong>Unlimited bundles</strong> on storefront
+                </span>
+              </li>
+              <li className="flex items-start">
+                <CheckCircle2 className="mr-3 mt-0.5 h-5 w-5 flex-shrink-0 text-green-500" />
                 <span className="text-white">Access to all clips</span>
               </li>
               <li className="flex items-start">
                 <CheckCircle2 className="mr-3 mt-0.5 h-5 w-5 flex-shrink-0 text-green-500" />
-                <span className="text-white">High video quality</span>
-              </li>
-              <li className="flex items-start">
-                <CheckCircle2 className="mr-3 mt-0.5 h-5 w-5 flex-shrink-0 text-green-500" />
                 <span className="text-white">Priority support</span>
-              </li>
-              <li className="flex items-start">
-                <CheckCircle2 className="mr-3 mt-0.5 h-5 w-5 flex-shrink-0 text-green-500" />
-                <span className="text-white">Advanced organization features</span>
               </li>
             </ul>
 
