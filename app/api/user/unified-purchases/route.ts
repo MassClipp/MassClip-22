@@ -38,7 +38,8 @@ export async function GET(request: NextRequest) {
         bundlePrice: data.bundlePrice,
         purchaseAmount: data.purchaseAmount,
         amount: data.amount,
-        bundleTitle: data.bundleTitle
+        bundleTitle: data.bundleTitle,
+        bundleThumbnail: data.bundleThumbnail
       })
 
       // Get creator info safely
@@ -58,7 +59,7 @@ export async function GET(request: NextRequest) {
 
       // Get bundle info safely
       let bundleTitle = data.bundleTitle || "Untitled Bundle"
-      let thumbnailUrl = null
+      let thumbnailUrl = data.bundleThumbnail || null // Read from bundlePurchases first
       let contentCount = data.contentCount || 0
 
       if (data.bundleId) {
@@ -67,7 +68,10 @@ export async function GET(request: NextRequest) {
           if (bundleDoc.exists) {
             const bundleData = bundleDoc.data()
             bundleTitle = bundleData?.title || bundleTitle
-            thumbnailUrl = bundleData?.thumbnailUrl || null
+            // Only use bundle thumbnail if we don't have one from purchase
+            if (!thumbnailUrl) {
+              thumbnailUrl = bundleData?.thumbnailUrl || bundleData?.coverImage || null
+            }
             contentCount = bundleData?.contentCount || contentCount
           }
         } catch (error) {
@@ -101,6 +105,8 @@ export async function GET(request: NextRequest) {
         console.warn(`⚠️ [Unified Purchases API] No price found for purchase ${doc.id}`)
       }
 
+      console.log(`🖼️ [Unified Purchases API] Thumbnail for ${doc.id}: ${thumbnailUrl}`)
+
       purchases.push({
         id: doc.id,
         title: bundleTitle,
@@ -123,6 +129,7 @@ export async function GET(request: NextRequest) {
           bundlePrice: data.bundlePrice,
           purchaseAmount: data.purchaseAmount,
           amount: data.amount,
+          bundleThumbnail: data.bundleThumbnail,
         },
       })
     }
@@ -147,7 +154,8 @@ export async function GET(request: NextRequest) {
           id: doc.id,
           productBoxPrice: data.productBoxPrice,
           purchaseAmount: data.purchaseAmount,
-          amount: data.amount
+          amount: data.amount,
+          productBoxThumbnail: data.productBoxThumbnail
         })
 
         // Get creator info safely
@@ -193,6 +201,7 @@ export async function GET(request: NextRequest) {
           creatorId: data.creatorId,
           creatorUsername,
           type: "product_box",
+          thumbnailUrl: data.productBoxThumbnail || null,
           metadata: {
             title: data.productBoxTitle || "Untitled Product",
             description: data.description || "",
@@ -200,6 +209,8 @@ export async function GET(request: NextRequest) {
             productBoxPrice: data.productBoxPrice,
             purchaseAmount: data.purchaseAmount,
             amount: data.amount,
+            thumbnailUrl: data.productBoxThumbnail,
+            productBoxThumbnail: data.productBoxThumbnail,
           },
         })
       }
@@ -229,8 +240,8 @@ export async function GET(request: NextRequest) {
       return getTime(b.createdAt) - getTime(a.createdAt) // Newest first
     })
 
-    console.log(`✅ [Unified Purchases API] Returning ${purchases.length} purchases with prices:`, 
-      purchases.map(p => ({ id: p.id, title: p.title, price: p.price }))
+    console.log(`✅ [Unified Purchases API] Returning ${purchases.length} purchases with prices and thumbnails:`, 
+      purchases.map(p => ({ id: p.id, title: p.title, price: p.price, thumbnailUrl: p.thumbnailUrl }))
     )
 
     return NextResponse.json({
