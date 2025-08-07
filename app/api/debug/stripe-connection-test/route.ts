@@ -1,119 +1,71 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { getFirestore, doc, getDoc, collection, getDocs, query, where } from 'firebase/firestore'
-import { getAuth } from 'firebase-admin/auth'
-import { initializeApp, getApps, cert } from 'firebase-admin/app'
+import { NextResponse } from "next/server"
+import Stripe from "stripe"
 
-// Initialize Firebase Admin if not already initialized
-if (!getApps().length) {
-  initializeApp({
-    credential: cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-    }),
-  })
-}
-
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    console.log('=== Debug Stripe Connection Test ===')
-    
-    // Get the authorization header
-    const authHeader = request.headers.get('authorization')
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ 
-        error: 'No authorization token provided',
-        debug: { step: 'auth_header_check' }
-      }, { status: 401 })
+    console.log("🧪 [Stripe Connection] Testing basic Stripe connection...")
+
+    // Test 1: Environment check
+    if (!process.env.STRIPE_SECRET_KEY) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "STRIPE_SECRET_KEY environment variable not found",
+        },
+        { status: 500 },
+      )
     }
 
-    const token = authHeader.split('Bearer ')[1]
-
-    // Verify the Firebase token
-    const auth = getAuth()
-    let decodedToken
-    try {
-      decodedToken = await auth.verifyIdToken(token)
-    } catch (error) {
-      return NextResponse.json({ 
-        error: 'Invalid token',
-        debug: { step: 'token_verification', error: error instanceof Error ? error.message : 'Unknown' }
-      }, { status: 401 })
-    }
-
-    const userId = decodedToken.uid
-
-    // Initialize Firestore
-    const { initializeApp: initializeClientApp, getApps: getClientApps } = await import('firebase/app')
-    const { getFirestore: getClientFirestore } = await import('firebase/firestore')
-    
-    let clientApp
-    if (getClientApps().length === 0) {
-      clientApp = initializeClientApp({
-        apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-        authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-        storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-        messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-        appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-      })
-    } else {
-      clientApp = getClientApps()[0]
-    }
-
-    const db = getClientFirestore(clientApp)
-
-    // Check specific document
-    const accountRef = doc(db, 'connectedStripeAccounts', userId)
-    const accountDoc = await getDoc(accountRef)
-    
-    // Also check if there are any documents in the collection
-    const collectionRef = collection(db, 'connectedStripeAccounts')
-    const allDocs = await getDocs(collectionRef)
-    
-    // Check for documents with this user ID in different formats
-    const userIdQuery = query(collectionRef, where('userId', '==', userId))
-    const userIdDocs = await getDocs(userIdQuery)
-
-    const debugInfo = {
-      userId,
-      targetDocument: {
-        path: `connectedStripeAccounts/${userId}`,
-        exists: accountDoc.exists(),
-        data: accountDoc.exists() ? accountDoc.data() : null
-      },
-      collection: {
-        totalDocuments: allDocs.size,
-        allDocumentIds: allDocs.docs.map(doc => doc.id),
-        allDocuments: allDocs.docs.map(doc => ({
-          id: doc.id,
-          data: doc.data()
-        }))
-      },
-      userIdQuery: {
-        matchingDocuments: userIdDocs.size,
-        documents: userIdDocs.docs.map(doc => ({
-          id: doc.id,
-          data: doc.data()
-        }))
-      },
-      environment: {
-        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-        hasFirebaseConfig: !!(process.env.NEXT_PUBLIC_FIREBASE_API_KEY && process.env.FIREBASE_PROJECT_ID)
-      }
-    }
-
-    return NextResponse.json({
-      success: true,
-      debug: debugInfo
+    // Test 2: Initialize Stripe
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+      apiVersion: "2024-06-20",
     })
 
+    console.log("✅ [Stripe Connection] Stripe initialized")
+
+    // Test 3: Simple API call - list account details
+    try {
+      const account = await stripe.accounts.retrieve()
+
+      console.log("✅ [Stripe Connection] Account retrieved:", {
+        id: account.id,
+        country: account.country,
+        defaultCurrency: account.default_currency,
+        chargesEnabled: account.charges_enabled,
+      })
+
+      return NextResponse.json({
+        success: true,
+        message: "Stripe connection successful",
+        account: {
+          id: account.id,
+          country: account.country,
+          defaultCurrency: account.default_currency,
+          chargesEnabled: account.charges_enabled,
+          detailsSubmitted: account.details_submitted,
+        },
+      })
+    } catch (stripeError) {
+      console.error("❌ [Stripe Connection] API call failed:", stripeError)
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Stripe API call failed",
+          details: stripeError instanceof Error ? stripeError.message : "Unknown error",
+        },
+        { status: 500 },
+      )
+    }
   } catch (error) {
-    console.error('Debug test error:', error)
-    return NextResponse.json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-      debug: { step: 'general_error' }
-    }, { status: 500 })
+    console.error("❌ [Stripe Connection] Test failed:", error)
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Stripe connection test failed",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }
