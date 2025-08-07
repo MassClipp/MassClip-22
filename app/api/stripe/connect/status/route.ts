@@ -1,26 +1,23 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getConnectedAccount, refreshConnectedAccount } from "@/lib/stripe-connect-service"
+import Stripe from "stripe"
+import { adminDb } from "@/lib/firebase-admin"
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2024-06-20",
+})
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId, refresh = false } = await request.json()
+    const { userId } = await request.json()
 
     if (!userId) {
       return NextResponse.json({ error: "User ID is required" }, { status: 400 })
     }
 
-    console.log(`🔍 Checking Stripe connection status for user: ${userId}`)
+    // Get user data from Firestore
+    const userDoc = await adminDb.collection("users").doc(userId).get()
 
-    let account
-    if (refresh) {
-      console.log("🔄 Refreshing account data from Stripe...")
-      account = await refreshConnectedAccount(userId)
-    } else {
-      account = await getConnectedAccount(userId)
-    }
-
-    if (!account) {
-      console.log("ℹ️ No connected Stripe account found")
+    if (!userDoc.exists) {
       return NextResponse.json({
         connected: false,
         chargesEnabled: false,
@@ -30,28 +27,68 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    console.log(`✅ Found connected account: ${account.stripe_user_id}`)
-    
-    return NextResponse.json({
-      connected: true,
-      accountId: account.stripe_user_id,
-      chargesEnabled: account.charges_enabled,
-      payoutsEnabled: account.payouts_enabled,
-      detailsSubmitted: account.details_submitted,
-      status: account.details_submitted ? "active" : "pending",
-      country: account.country,
-      email: account.email,
-      businessType: account.business_type,
-      defaultCurrency: account.default_currency,
-      requirements: account.requirements,
-      livemode: account.livemode,
-    })
-    
+    const userData = userDoc.data()!
+    const accountId = userData.stripeAccountId
+
+    if (!accountId) {
+      return NextResponse.json({
+        connected: false,
+        chargesEnabled: false,
+        payoutsEnabled: false,
+        detailsSubmitted: false,
+        status: "not_connected",
+      })
+    }
+
+    // Get fresh account data from Stripe
+    try {
+      const account = await stripe.accounts.retrieve(accountId)
+
+      // Update our local data with fresh info from Stripe
+      await adminDb
+        .collection("users")
+        .doc(userId)
+        .update({
+          stripeChargesEnabled: account.charges_enabled,
+          stripePayoutsEnabled: account.payouts_enabled,
+          stripeDetailsSubmitted: account.details_submitted,
+          stripeAccountStatus: account.details_submitted ? "active" : "pending",
+          updatedAt: new Date(),
+        })
+
+      return NextResponse.json({
+        connected: true,
+        accountId,
+        chargesEnabled: account.charges_enabled,
+        payoutsEnabled: account.payouts_enabled,
+        detailsSubmitted: account.details_submitted,
+        status: account.details_submitted ? "active" : "pending",
+      })
+    } catch (stripeError: any) {
+      // If account doesn't exist in Stripe, clean up our records
+      if (stripeError.code === "account_invalid") {
+        await adminDb.collection("users").doc(userId).update({
+          stripeAccountId: null,
+          stripeAccountStatus: null,
+          stripeChargesEnabled: false,
+          stripePayoutsEnabled: false,
+          stripeDetailsSubmitted: false,
+          updatedAt: new Date(),
+        })
+
+        return NextResponse.json({
+          connected: false,
+          chargesEnabled: false,
+          payoutsEnabled: false,
+          detailsSubmitted: false,
+          status: "not_connected",
+        })
+      }
+
+      throw stripeError
+    }
   } catch (error) {
-    console.error("❌ Error checking Stripe status:", error)
-    return NextResponse.json(
-      { error: "Failed to check connection status" },
-      { status: 500 }
-    )
+    console.error("Error checking Stripe status:", error)
+    return NextResponse.json({ error: "Failed to check status" }, { status: 500 })
   }
 }

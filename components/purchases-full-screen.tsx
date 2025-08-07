@@ -185,9 +185,9 @@ export default function PurchasesFullScreen({ className = "" }: PurchasesFullScr
 
   if (authLoading || loading) {
     return (
-      <div className={`min-h-screen bg-black text-white ${className}`}>
-        <div className="w-full h-full">
-          <div className="px-6 py-8">
+      <div className={`w-full h-full bg-gradient-to-br from-black via-gray-900 to-gray-800 text-white ${className}`}>
+        <div className="w-full h-full overflow-y-auto">
+          <div className="w-full px-6 py-8">
             <div className="mb-8">
               <Skeleton className="h-12 w-64 mb-6 bg-gray-800/50" />
               <div className="flex gap-8 mb-8">
@@ -195,15 +195,15 @@ export default function PurchasesFullScreen({ className = "" }: PurchasesFullScr
                 <Skeleton className="h-8 w-24 bg-gray-800/50" />
               </div>
             </div>
-            <div className="space-y-4">
+            <div className="space-y-0">
               {[...Array(5)].map((_, i) => (
-                <div key={i} className="flex items-center gap-4 bg-gray-900/50 p-4 rounded-lg">
-                  <Skeleton className="h-16 w-16 bg-gray-700/50 rounded-lg" />
-                  <div className="flex-1">
+                <div key={i} className="flex items-center gap-0 bg-gray-800/20 border-b border-gray-700/30">
+                  <Skeleton className="h-24 w-24 bg-gray-700/50 rounded-none" />
+                  <div className="flex-1 px-6 py-6">
                     <Skeleton className="h-6 w-48 mb-2 bg-gray-700/50" />
                     <Skeleton className="h-4 w-32 bg-gray-700/50" />
                   </div>
-                  <div>
+                  <div className="px-6">
                     <Skeleton className="h-10 w-24 bg-gray-700/50" />
                   </div>
                 </div>
@@ -217,8 +217,8 @@ export default function PurchasesFullScreen({ className = "" }: PurchasesFullScr
 
   if (error) {
     return (
-      <div className={`min-h-screen bg-black text-white ${className}`}>
-        <div className="px-6 py-8">
+      <div className={`w-full h-full bg-gradient-to-br from-black via-gray-900 to-gray-800 text-white ${className}`}>
+        <div className="w-full h-full overflow-y-auto px-6 py-8">
           <Alert variant="destructive" className="bg-red-900/20 border-red-800">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>{error}</AlertDescription>
@@ -232,14 +232,14 @@ export default function PurchasesFullScreen({ className = "" }: PurchasesFullScr
   }
 
   return (
-    <div className={`min-h-screen bg-black text-white ${className}`}>
-      <div className="w-full">
-        {/* Header Section */}
-        <div className="px-6 py-8 border-b border-gray-800/50">
+    <div className={`w-full h-full bg-gradient-to-br from-black via-gray-900 to-gray-800 text-white ${className}`}>
+      <div className="w-full h-full overflow-y-auto">
+        {/* Header Section - Full Width */}
+        <div className="w-full px-6 py-8 border-b border-gray-700/30 bg-gradient-to-r from-black/80 via-gray-900/80 to-gray-800/80 backdrop-blur-sm sticky top-0 z-10">
           <h1 className="text-4xl font-bold mb-8 text-white">My Purchases</h1>
 
-          {/* Tabs */}
-          <div className="flex gap-8 mb-8 border-b border-gray-800/50">
+          {/* Tabs - Full Width */}
+          <div className="flex gap-8 mb-8 border-b border-gray-700/50">
             <button
               onClick={() => setActiveTab("downloads")}
               className={`text-xl font-medium pb-4 border-b-2 transition-all duration-200 ${
@@ -262,30 +262,30 @@ export default function PurchasesFullScreen({ className = "" }: PurchasesFullScr
             </button>
           </div>
 
-          {/* Search */}
+          {/* Search - Full Width */}
           <div className="relative">
             <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
             <Input
               placeholder="Search your purchases..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-12 bg-gray-900/50 border-gray-700 text-white placeholder:text-gray-400 h-14 text-lg rounded-xl focus:border-gray-500 focus:ring-1 focus:ring-gray-500 w-full"
+              className="pl-12 bg-gray-800/30 border-gray-600 text-white placeholder:text-gray-400 h-14 text-lg rounded-xl focus:border-gray-500 focus:ring-1 focus:ring-gray-500 w-full"
             />
           </div>
         </div>
 
-        {/* Content Section */}
-        <div className="px-6 py-6">
+        {/* Content Section - Full Width, No Padding */}
+        <div className="w-full">
           <AnimatePresence mode="wait">
             {filteredPurchases.length === 0 ? (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                className="flex items-center justify-center h-96"
+                className="flex items-center justify-center h-96 px-6"
               >
                 <div className="max-w-md mx-auto text-center">
-                  <div className="w-24 h-24 mx-auto mb-6 bg-gray-900 rounded-full flex items-center justify-center border border-gray-700">
+                  <div className="w-24 h-24 mx-auto mb-6 bg-gradient-to-br from-gray-800 to-gray-900 rounded-full flex items-center justify-center border border-gray-700 shadow-lg">
                     <Package className="h-12 w-12 text-gray-400" />
                   </div>
                   <h3 className="text-2xl font-semibold mb-4 text-white">
@@ -301,7 +301,7 @@ export default function PurchasesFullScreen({ className = "" }: PurchasesFullScr
                       : "Start exploring premium content to build your collection."}
                   </p>
                   {!searchQuery && (
-                    <Button asChild className="bg-red-600 hover:bg-red-700 h-12 px-8 text-lg">
+                    <Button asChild className="bg-red-600 hover:bg-red-700 h-12 px-8 text-lg shadow-lg">
                       <Link href="/dashboard/explore">
                         <ExternalLink className="h-5 w-5 mr-2" />
                         Explore Content
@@ -311,97 +311,126 @@ export default function PurchasesFullScreen({ className = "" }: PurchasesFullScr
                 </div>
               </motion.div>
             ) : (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="w-full">
                 {filteredPurchases.map((purchase, index) => (
                   <motion.div
                     key={purchase.id}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.02 }}
-                    className="bg-gray-900/50 rounded-lg p-4 hover:bg-gray-900/70 transition-all duration-300"
+                    className="w-full"
                   >
-                    <div className="flex items-center gap-4">
-                      {/* Thumbnail */}
-                      <div className="w-16 h-16 bg-gray-800 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
-                        {getThumbnailUrl(purchase) ? (
-                          <img
-                            src={getThumbnailUrl(purchase) || "/placeholder.svg"}
-                            alt={purchase.title}
-                            className="w-full h-full object-cover rounded-lg"
-                            onError={(e) => {
-                              const target = e.target as HTMLImageElement
-                              target.style.display = "none"
-                              const parent = target.parentElement
-                              if (parent) {
-                                parent.innerHTML = `
-                                  <div class="w-full h-full flex items-center justify-center bg-gray-800 rounded-lg">
-                                    <svg class="h-6 w-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
-                                    </svg>
-                                  </div>
-                                `
-                              }
-                            }}
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-gray-800 rounded-lg">
-                            {getContentIcon(purchase.type || "product_box")}
-                          </div>
-                        )}
-                      </div>
+                    <div className="bg-gray-800/20 border-0 border-b border-gray-700/20 hover:bg-gray-800/30 transition-all duration-300 hover:shadow-lg">
+                      <div className="flex items-center w-full">
+                        {/* Thumbnail - No padding, edge-to-edge */}
+                        <div className="w-24 h-24 bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center flex-shrink-0 overflow-hidden relative">
+                          {getThumbnailUrl(purchase) ? (
+                            <img
+                              src={getThumbnailUrl(purchase) || "/placeholder.svg"}
+                              alt={purchase.title}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                // Fallback to clean gradient placeholder if image fails to load
+                                const target = e.target as HTMLImageElement
+                                target.style.display = "none"
+                                const parent = target.parentElement
+                                if (parent) {
+                                  const placeholderDiv = document.createElement("div")
+                                  placeholderDiv.className =
+                                    "w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-700 to-gray-800 relative"
 
-                      {/* Content */}
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-xl font-semibold text-white mb-1 truncate">{purchase.title}</h3>
-                        <p className="text-gray-400 text-sm mb-1">{purchase.creatorUsername}</p>
-                        {purchase.metadata?.contentCount !== undefined && (
-                          <p className="text-gray-500 text-xs">
-                            {purchase.metadata.contentCount} item{purchase.metadata.contentCount !== 1 ? "s" : ""}
-                          </p>
-                        )}
-                      </div>
+                                  // Add subtle pattern overlay
+                                  const patternDiv = document.createElement("div")
+                                  patternDiv.className =
+                                    "absolute inset-0 bg-gradient-to-br from-blue-500/10 to-purple-500/10"
+                                  placeholderDiv.appendChild(patternDiv)
 
-                      {/* Actions */}
-                      <div className="flex items-center gap-3 flex-shrink-0">
-                        {purchase.status === "completed" && activeTab === "downloads" && (
-                          <>
-                            <Button
-                              onClick={() => handleDownload(purchase)}
-                              variant="outline"
-                              className="border-gray-600 hover:bg-gray-700 bg-transparent text-white h-10 px-4"
-                            >
-                              <Download className="h-4 w-4 mr-2" />
-                              Download
-                            </Button>
-                            <Button asChild className="bg-gray-700 hover:bg-gray-600 text-white h-10 px-4">
-                              <Link
-                                href={
-                                  purchase.type === "bundle"
-                                    ? `/bundles/${purchase.bundleId}/content`
-                                    : `/product-box/${purchase.productBoxId}/content`
+                                  // Add icon container
+                                  const iconContainer = document.createElement("div")
+                                  iconContainer.className =
+                                    "relative z-10 w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg"
+                                  iconContainer.innerHTML = `<svg class="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`
+                                  placeholderDiv.appendChild(iconContainer)
+
+                                  parent.appendChild(placeholderDiv)
                                 }
-                              >
-                                <Eye className="h-4 w-4 mr-2" />
-                                View Content
-                              </Link>
-                            </Button>
-                          </>
-                        )}
-                        {activeTab === "orders" && (
-                          <div className="flex items-center gap-4">
-                            <Badge
-                              variant={purchase.status === "completed" ? "default" : "secondary"}
-                              className={
-                                purchase.status === "completed"
-                                  ? "bg-green-600 text-white px-3 py-1"
-                                  : "bg-gray-700 text-gray-300 px-3 py-1"
-                              }
-                            >
-                              {purchase.status}
-                            </Badge>
-                            <span className="text-xl font-semibold text-white">${purchase.price.toFixed(2)}</span>
+                              }}
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-700 to-gray-800 relative">
+                              {/* Subtle radial gradient overlay */}
+                              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-purple-500/10"></div>
+                              <div className="absolute inset-0 bg-radial-gradient from-transparent via-transparent to-gray-900/20"></div>
+
+                              {/* Icon container with gradient */}
+                              <div className="relative z-10 w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg transform hover:scale-105 transition-transform duration-200">
+                                {getContentIcon(purchase.type || "product_box")}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Content - Proper spacing only for text content */}
+                        <div className="flex-1 min-w-0 px-6 py-6">
+                          <div className="flex items-center justify-between w-full">
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-xl font-semibold text-white mb-1 truncate">{purchase.title}</h3>
+                              <p className="text-gray-400 text-sm mb-1">{purchase.creatorUsername}</p>
+                              {purchase.metadata?.contentCount !== undefined && (
+                                <p className="text-gray-500 text-xs">
+                                  {purchase.metadata.contentCount} item
+                                  {purchase.metadata.contentCount !== 1 ? "s" : ""}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Actions */}
+                            <div className="flex items-center gap-3 flex-shrink-0 ml-6">
+                              {purchase.status === "completed" && activeTab === "downloads" && (
+                                <>
+                                  <Button
+                                    onClick={() => handleDownload(purchase)}
+                                    variant="outline"
+                                    className="border-gray-600 hover:bg-gray-700 bg-transparent text-white h-10 px-4 hover:border-gray-500 transition-all duration-200"
+                                  >
+                                    <Download className="h-4 w-4 mr-2" />
+                                    Download
+                                  </Button>
+                                  <Button
+                                    asChild
+                                    className="bg-gray-700 hover:bg-gray-600 text-white h-10 px-4 shadow-lg hover:shadow-xl transition-all duration-200"
+                                  >
+                                    <Link
+                                      href={
+                                        purchase.type === "bundle"
+                                          ? `/bundles/${purchase.bundleId}`
+                                          : `/product-box/${purchase.productBoxId}/content`
+                                      }
+                                    >
+                                      <Eye className="h-4 w-4 mr-2" />
+                                      View bundle
+                                    </Link>
+                                  </Button>
+                                </>
+                              )}
+                              {activeTab === "orders" && (
+                                <div className="flex items-center gap-4">
+                                  <Badge
+                                    variant={purchase.status === "completed" ? "default" : "secondary"}
+                                    className={
+                                      purchase.status === "completed"
+                                        ? "bg-green-600 text-white px-3 py-1 shadow-sm"
+                                        : "bg-gray-700 text-gray-300 px-3 py-1"
+                                    }
+                                  >
+                                    {purchase.status}
+                                  </Badge>
+                                  <span className="text-xl font-semibold text-white">${purchase.price.toFixed(2)}</span>
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        )}
+                        </div>
                       </div>
                     </div>
                   </motion.div>

@@ -2,120 +2,96 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { useAuth } from "@/contexts/auth-context"
-import { toast } from "@/hooks/use-toast"
-import { Loader2, Unlock } from "lucide-react"
+import { Loader2, Lock } from "lucide-react"
 
 interface UnlockButtonProps {
-  bundleId?: string
-  productBoxId?: string
-  price: number
-  title: string
-  className?: string
-  variant?: "default" | "outline" | "secondary" | "ghost" | "link" | "destructive"
+  stripePriceId?: string
+  bundleId: string
+  user: any
+  creatorId: string
+  price?: number
 }
 
-export function UnlockButton({
-  bundleId,
-  productBoxId,
-  price,
-  title,
-  className = "",
-  variant = "default",
-}: UnlockButtonProps) {
+export function UnlockButton({ stripePriceId, bundleId, user, creatorId, price }: UnlockButtonProps) {
   const [isLoading, setIsLoading] = useState(false)
-  const { user } = useAuth()
+
+  // Safe price formatting function
+  const formatPrice = (price: number | undefined | null): string => {
+    console.log("🔢 UnlockButton formatting price:", price, typeof price)
+    if (typeof price === "number" && !isNaN(price) && isFinite(price)) {
+      return price.toFixed(2)
+    }
+    return "0.00"
+  }
 
   const handleUnlock = async () => {
+    if (!user) {
+      // Redirect to login
+      window.location.href = "/login"
+      return
+    }
+
+    if (!stripePriceId) {
+      console.error("❌ No stripePriceId provided")
+      return
+    }
+
+    setIsLoading(true)
+
     try {
-      setIsLoading(true)
-
-      // Get the Firebase ID token for authentication
-      let idToken = ""
-      if (user) {
-        try {
-          idToken = await user.getIdToken()
-          console.log("🔑 [Unlock Button] Got auth token for user:", user.uid)
-        } catch (error) {
-          console.error("❌ [Unlock Button] Failed to get auth token:", error)
-          toast({
-            title: "Authentication Error",
-            description: "Please try signing in again",
-            variant: "destructive",
-          })
-          return
-        }
-      } else {
-        console.log("⚠️ [Unlock Button] No user authenticated, proceeding as anonymous")
-      }
-
-      const itemId = bundleId || productBoxId
-      if (!itemId) {
-        throw new Error("No product or bundle ID provided")
-      }
-
-      console.log("🔓 [Unlock Button] Starting checkout:", {
-        itemId,
-        userUid: user?.uid || "anonymous",
-        hasToken: !!idToken,
+      console.log("🔓 Creating checkout session for:", {
+        stripePriceId,
+        bundleId,
+        creatorId,
+        userId: user.uid,
       })
 
-      // Create checkout session with authentication token
       const response = await fetch("/api/stripe/create-checkout-session", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          bundleId: itemId,
-          idToken, // CRITICAL: Include the Firebase auth token
-          successUrl: `${window.location.origin}/purchase-success?session_id={CHECKOUT_SESSION_ID}`,
-          cancelUrl: window.location.href,
+          priceId: stripePriceId,
+          bundleId,
+          creatorId,
+          userId: user.uid,
         }),
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Failed to create checkout session")
+        throw new Error(`HTTP error! status: ${response.status}`)
       }
 
-      const { url, sessionId, buyerUid } = await response.json()
+      const { url } = await response.json()
 
-      console.log("✅ [Unlock Button] Checkout session created:", {
-        sessionId,
-        buyerUid,
-        hasUrl: !!url,
-      })
-
-      // Redirect to Stripe Checkout
       if (url) {
         window.location.href = url
       } else {
         throw new Error("No checkout URL received")
       }
-    } catch (error: any) {
-      console.error("❌ [Unlock Button] Purchase failed:", error)
-      toast({
-        title: "Purchase Failed",
-        description: error.message || "Failed to start checkout process",
-        variant: "destructive",
-      })
-    } finally {
+    } catch (error) {
+      console.error("❌ Error creating checkout session:", error)
       setIsLoading(false)
     }
   }
 
   return (
-    <Button onClick={handleUnlock} disabled={isLoading} className={className} variant={variant}>
+    <Button
+      onClick={handleUnlock}
+      disabled={isLoading}
+      size="sm"
+      className="bg-white text-black hover:bg-gray-100 font-medium px-4 py-2 rounded-lg transition-colors duration-200"
+    >
       {isLoading ? (
         <>
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          Processing...
+          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+          Loading...
         </>
       ) : (
         <>
-          <Unlock className="mr-2 h-4 w-4" />
-          Unlock ${price}
+          <Lock className="w-4 h-4 mr-2" />
+          Unlock
         </>
       )}
     </Button>

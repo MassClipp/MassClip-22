@@ -1,7 +1,6 @@
 import { initializeApp as initializeAdminApp, getApps, cert, type App } from "firebase-admin/app"
 import { getFirestore, FieldValue, type Firestore } from "firebase-admin/firestore"
 import { getAuth, type Auth, type DecodedIdToken } from "firebase-admin/auth"
-import { getStorage } from "firebase-admin/storage"
 
 /**
  * Initialise the Firebase Admin SDK exactly once (avoids double-init in
@@ -49,47 +48,20 @@ export function initializeFirebaseAdmin(): App {
   }
 }
 
-let adminApp: App
-
-if (getApps().length === 0) {
-  try {
-    // Initialize Firebase Admin with service account
-    adminApp = initializeFirebaseAdmin()
-  } catch (error) {
-    console.error("❌ Firebase Admin initialization error:", error)
-    throw error
-  }
-} else {
-  adminApp = getApps()[0]
-  console.log("✅ Firebase Admin already initialized")
-}
-
-// Initialize services
-export const adminDb: Firestore = getFirestore(adminApp)
+// Initialize on import
+const adminApp = initializeFirebaseAdmin()
+export const db: Firestore = getFirestore(adminApp)
 export const auth: Auth = getAuth(adminApp)
-export const storage = getStorage(adminApp)
 
-// Export with the exact names the system expects
+// Export the required adminDb and adminAuth aliases
+export const adminDb = db
 export const adminAuth = auth
-export const firestore = adminDb
 
-// REQUIRED: Export db as a named export (this was missing)
-export const db: Firestore = adminDb
+// Add all the other required exports
+export const firestore = db
 
-// REQUIRED: Export admin object with methods that match Firebase Admin SDK usage patterns
-export const admin = {
-  auth: () => auth,
-  firestore: () => adminDb,
-  storage: () => storage,
-  app: () => adminApp,
-  // Direct access to services for convenience
-  authService: auth,
-  firestoreService: adminDb,
-  storageService: storage,
-}
-
-// Default export
-export default adminApp
+// Recommended for better Firestore reliability
+db.settings({ ignoreUndefinedProperties: true })
 
 /**
  * Generic retry helper with exponential back-off – useful for flaky Firestore
@@ -162,7 +134,7 @@ export async function getAuthenticatedUser(
  */
 export async function createOrUpdateUserProfile(userId: string, profileData: Record<string, unknown>) {
   return withRetry(async () => {
-    const ref = adminDb.collection("users").doc(userId)
+    const ref = db.collection("users").doc(userId)
     const now = new Date()
 
     try {
@@ -195,5 +167,4 @@ export { FieldValue }
 export const firebaseDb = {
   auth: () => auth,
   firestore: () => firestore,
-  storage: () => storage,
 }
