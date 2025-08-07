@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation"
 import { CheckCircle2, Crown, Shield } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { SubscribeButton } from "@/components/subscribe-button"
 import { useAuth } from "@/contexts/auth-context"
 import { useUserPlan } from "@/hooks/use-user-plan"
 
@@ -14,6 +13,10 @@ export default function MembershipPage() {
   const { user } = useAuth()
   const { isProUser, loading } = useUserPlan()
   const [selectedPlan, setSelectedPlan] = useState<"free" | "pro">(isProUser ? "pro" : "free")
+
+  const handleUpgradeClick = () => {
+    window.open("https://buy.stripe.com/14A6oHeWEeJngFv4SzeIw04", "_blank")
+  }
 
   return (
     <div className="space-y-8">
@@ -138,12 +141,12 @@ export default function MembershipPage() {
                 Manage Subscription
               </Button>
             ) : (
-              <SubscribeButton 
-                className="w-full bg-red-600 hover:bg-red-700"
-                priceId="price_1RtJZ8Dheyb0pkWFLmmmBFPw"
+              <Button 
+                onClick={handleUpgradeClick}
+                className="w-full bg-red-600 hover:bg-red-700 text-white"
               >
                 Upgrade to Creator Pro
-              </SubscribeButton>
+              </Button>
             )}
           </div>
         </Card>
