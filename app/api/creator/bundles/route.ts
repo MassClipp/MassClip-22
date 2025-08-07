@@ -363,13 +363,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const token = authHeader.split("Bearer ")[1]
-    const decodedToken = await auth.verifyIdToken(token)
+    const idToken = authHeader.split("Bearer ")[1]
+    const decodedToken = await auth.verifyIdToken(idToken)
     const userId = decodedToken.uid
 
     console.log(`🔍 [Bundles API] Fetching bundles for user: ${userId}`)
 
-    // Query bundles collection - Remove orderBy to avoid index issues
+    // Query bundles collection
     const bundlesRef = db.collection("bundles")
     const bundlesQuery = bundlesRef.where("creatorId", "==", userId)
     const bundlesSnapshot = await bundlesQuery.get()
@@ -491,35 +491,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const token = authHeader.split("Bearer ")[1]
-    const decodedToken = await auth.verifyIdToken(token)
+    const idToken = authHeader.split("Bearer ")[1]
+    const decodedToken = await auth.verifyIdToken(idToken)
     const userId = decodedToken.uid
-
-    // Get user's plan to check bundle limits
-    const userDoc = await db.collection("users").doc(userId).get()
-    const userData = userDoc.data()
-    const userPlan = userData?.plan || "free"
-
-    console.log(`🔍 [Bundles API] Creating bundle for user: ${userId}, plan: ${userPlan}`)
-
-    // Check bundle limit for free users
-    if (userPlan === "free") {
-      const existingBundlesSnapshot = await db.collection("bundles").where("creatorId", "==", userId).get()
-      const bundleCount = existingBundlesSnapshot.size
-
-      if (bundleCount >= 2) {
-        console.log(`❌ [Bundles API] Bundle limit reached for free user: ${bundleCount}/2`)
-        return NextResponse.json(
-          {
-            error: "Bundle limit reached",
-            message: "Free users can only create 2 bundles. Upgrade to Creator Pro for unlimited bundles.",
-            currentCount: bundleCount,
-            limit: 2,
-          },
-          { status: 403 }
-        )
-      }
-    }
 
     const body = await request.json()
     const { title, description, price, currency = "usd", type = "one_time", contentIds = [] } = body
@@ -532,9 +506,9 @@ export async function POST(request: NextRequest) {
     console.log(`🔍 [Bundles API] Content IDs to process:`, contentIds)
 
     // Get user's Stripe account info
-    const userDocStripe = await db.collection("users").doc(userId).get()
-    const userDataStripe = userDocStripe.data()
-    const stripeAccountId = userDataStripe?.stripeAccountId
+    const userDoc = await db.collection("users").doc(userId).get()
+    const userData = userDoc.data()
+    const stripeAccountId = userData?.stripeAccountId
 
     if (!stripeAccountId) {
       return NextResponse.json(

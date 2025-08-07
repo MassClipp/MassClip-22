@@ -4,7 +4,7 @@ import { useRef } from "react"
 
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Plus, Edit, Eye, EyeOff, Loader2, AlertCircle, Upload, X, Check, Trash2, ImageIcon, Crown, Lock } from 'lucide-react'
+import { Plus, Edit, Eye, EyeOff, Loader2, AlertCircle, Upload, X, Check, Trash2, ImageIcon } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -18,7 +18,7 @@ import { useToast } from "@/hooks/use-toast"
 import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, onSnapshot, addDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { useAuth } from "@/contexts/auth-context"
-import { useUserPlan } from "@/hooks/use-user-plan"
+import { checkBundleLimit, formatBundleLimitStatus, type BundleLimitCheck } from "@/lib/bundle-limits-service"
 
 interface ContentItem {
   id: string
@@ -66,7 +66,6 @@ interface EditBundleForm {
 
 export default function BundlesPage() {
   const { user } = useAuth()
-  const { planData, isProUser } = useUserPlan()
   const [productBoxes, setProductBoxes] = useState<ProductBox[]>([])
   const [contentItems, setContentItems] = useState<{ [key: string]: ContentItem[] }>({})
   const [loading, setLoading] = useState(true)
@@ -101,16 +100,11 @@ export default function BundlesPage() {
     coverImage: "",
   })
 
-  // Bundle limit states
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
+  const [bundleLimitCheck, setBundleLimitCheck] = useState<BundleLimitCheck | null>(null)
+  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false)
 
   // Real-time listeners for content updates
   const contentListeners = useRef<{ [key: string]: () => void }>({})
-
-  // Bundle limit constants
-  const FREE_BUNDLE_LIMIT = 2
-  const canCreateBundle = isProUser || productBoxes.length < FREE_BUNDLE_LIMIT
-  const bundlesRemaining = isProUser ? "Unlimited" : Math.max(0, FREE_BUNDLE_LIMIT - productBoxes.length)
 
   // Add helper functions at the top of the component
   const formatFileSize = (bytes: number): string => {
@@ -135,13 +129,17 @@ export default function BundlesPage() {
     }
   }
 
-  // Handle create bundle button click with limit check
-  const handleCreateBundleClick = () => {
-    if (!canCreateBundle) {
-      setShowUpgradeModal(true)
-      return
+  // Check bundle limits
+  const checkUserBundleLimit = async () => {
+    if (!user) return
+
+    try {
+      const limitCheck = await checkBundleLimit(user.uid)
+      setBundleLimitCheck(limitCheck)
+      console.log("📊 [Bundles] Bundle limit check:", limitCheck)
+    } catch (error) {
+      console.error("❌ [Bundles] Error checking bundle limits:", error)
     }
-    setShowCreateModal(true)
   }
 
   // Fetch product boxes - Updated to use the bundles API
@@ -418,7 +416,7 @@ export default function BundlesPage() {
     setShowContent((prev) => ({ ...prev, [productBoxId]: !prev[productBoxId] }))
   }
 
-  // Handle create bundle
+  // Handle create bundle with limit check
   const handleCreateBundle = async () => {
     if (!createForm.title.trim() || !createForm.price) {
       toast({
@@ -429,14 +427,17 @@ export default function BundlesPage() {
       return
     }
 
-    // Double-check bundle limit before creating
-    if (!canCreateBundle) {
+    // Check bundle limits before creating
+    if (!user) return
+    
+    const limitCheck = await checkBundleLimit(user.uid)
+    if (!limitCheck.canCreate) {
       toast({
         title: "Bundle Limit Reached",
-        description: `Free users can only create ${FREE_BUNDLE_LIMIT} bundles. Upgrade to Creator Pro for unlimited bundles.`,
+        description: limitCheck.message || "You have reached your bundle creation limit",
         variant: "destructive",
       })
-      setShowUpgradeModal(true)
+      setShowUpgradePrompt(true)
       return
     }
 
@@ -495,24 +496,6 @@ export default function BundlesPage() {
           // Don't fail the entire creation for thumbnail upload issues
         }
       }
-
-      toast({
-        title: "Success",
-        description: data.message || "Bundle created successfully",
-      })
-
-      // Reset form and close modal
-      setCreateForm({
-        title: "",
-        description: "",
-        price: "",
-        billingType: "one_time",
-        thumbnail: null,
-      })
-      setShowCreateModal(false)
-
-      // Refresh bundles to show the new one
-      await fetchProductBoxes()
     } catch (error) {
       console.error("Error creating bundle:", error)
       toast({
@@ -682,6 +665,15 @@ export default function BundlesPage() {
     })
     setShowEditModal(productBox.id)
   }
+
+  // Format file size
+  // const formatFileSize = (bytes: number): string => {
+  //   if (bytes === 0) return "0 Bytes"
+  //   const k = 1024
+  //   const sizes = ["Bytes", "KB", "MB", "GB"]
+  //   const i = Math.floor(Math.log(bytes) / Math.log(k))
+  //   return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
+  // }
 
   // Fetch user's uploads
   const fetchUserUploads = async () => {
@@ -1042,6 +1034,7 @@ export default function BundlesPage() {
   useEffect(() => {
     if (user) {
       fetchProductBoxes()
+      checkUserBundleLimit()
     }
   }, [user])
 
@@ -1073,44 +1066,213 @@ export default function BundlesPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header with Bundle Limit Info */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Bundles</h1>
-          <div className="flex items-center gap-3 mt-1">
+          <div className="flex items-center gap-4">
             <p className="text-zinc-400">Create and manage premium content packages for your audience</p>
-            {!isProUser && (
-              <div className="flex items-center gap-2">
-                <Badge variant="outline" className="border-amber-500/50 text-amber-400 bg-amber-500/10">
-                  <Lock className="h-3 w-3 mr-1" />
-                  {bundlesRemaining} of {FREE_BUNDLE_LIMIT} remaining
-                </Badge>
-              </div>
+            {bundleLimitCheck && (
+              <Badge variant={bundleLimitCheck.canCreate ? "default" : "secondary"} className="text-xs">
+                {formatBundleLimitStatus(bundleLimitCheck)}
+              </Badge>
             )}
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          {!isProUser && productBoxes.length >= FREE_BUNDLE_LIMIT && (
-            <Button
-              variant="outline"
-              className="border-amber-500/50 text-amber-400 hover:bg-amber-500/10"
-              onClick={() => setShowUpgradeModal(true)}
+        <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
+          <DialogTrigger asChild>
+            <Button 
+              className="bg-red-600 hover:bg-red-700"
+              disabled={bundleLimitCheck && !bundleLimitCheck.canCreate}
             >
-              <Crown className="h-4 w-4 mr-2" />
-              Upgrade for Unlimited
+              <Plus className="h-4 w-4 mr-2" />
+              Create Bundle
             </Button>
-          )}
-          
-          <Button 
-            className={`${canCreateBundle ? 'bg-red-600 hover:bg-red-700' : 'bg-zinc-700 hover:bg-zinc-600'}`}
-            onClick={handleCreateBundleClick}
-            disabled={!canCreateBundle}
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            {canCreateBundle ? 'Create Bundle' : 'Limit Reached'}
-          </Button>
-        </div>
+          </DialogTrigger>
+          <DialogContent className="bg-zinc-900 border-zinc-800 text-white">
+            <DialogHeader>
+              <DialogTitle>Create New Bundle</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="title">Title *</Label>
+                <Input
+                  id="title"
+                  value={createForm.title}
+                  onChange={(e) => setCreateForm((prev) => ({ ...prev, title: e.target.value }))}
+                  placeholder="Enter bundle title"
+                  className="bg-zinc-800 border-zinc-700"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                  id="description"
+                  value={createForm.description}
+                  onChange={(e) => setCreateForm((prev) => ({ ...prev, description: e.target.value }))}
+                  placeholder="Describe your bundle"
+                  className="bg-zinc-800 border-zinc-700"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="price">Price (USD) *</Label>
+                  <Input
+                    id="price"
+                    type="number"
+                    step="0.01"
+                    min="0.50"
+                    value={createForm.price}
+                    onChange={(e) => setCreateForm((prev) => ({ ...prev, price: e.target.value }))}
+                    placeholder="9.99"
+                    className="bg-zinc-800 border-zinc-700"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="billing">Billing Type</Label>
+                  <Select
+                    value={createForm.billingType}
+                    onValueChange={(value: "one_time" | "subscription") =>
+                      setCreateForm((prev) => ({ ...prev, billingType: value }))
+                    }
+                  >
+                    <SelectTrigger className="bg-zinc-800 border-zinc-700">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-zinc-800 border-zinc-700">
+                      <SelectItem value="one_time">One-time Payment</SelectItem>
+                      <SelectItem value="subscription">Monthly Subscription</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Enhanced Thumbnail Section */}
+              <div className="space-y-4">
+                <Label>Bundle Thumbnail (Optional)</Label>
+
+                {/* Thumbnail Preview */}
+                {createForm.thumbnail && (
+                  <div className="relative">
+                    <div className="aspect-square w-32 h-32 rounded-lg overflow-hidden border border-zinc-700">
+                      <img
+                        src={URL.createObjectURL(createForm.thumbnail) || "/placeholder.svg"}
+                        alt="Thumbnail preview"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setCreateForm((prev) => ({ ...prev, thumbnail: null }))}
+                      className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-red-600 hover:bg-red-700 text-white p-0"
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                    <p className="text-xs text-zinc-400 mt-2">{createForm.thumbnail.name}</p>
+                  </div>
+                )}
+
+                {/* Upload Area */}
+                {!createForm.thumbnail && (
+                  <div
+                    className="border-2 border-dashed border-zinc-700 rounded-lg p-8 text-center hover:border-zinc-600 transition-colors cursor-pointer"
+                    onClick={() => document.getElementById("thumbnail-upload")?.click()}
+                    onDragOver={(e) => {
+                      e.preventDefault()
+                      e.currentTarget.classList.add("border-zinc-500")
+                    }}
+                    onDragLeave={(e) => {
+                      e.preventDefault()
+                      e.currentTarget.classList.remove("border-zinc-500")
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault()
+                      e.currentTarget.classList.remove("border-zinc-500")
+                      const files = e.dataTransfer.files
+                      if (files.length > 0) {
+                        const file = files[0]
+                        if (file.type.startsWith("image/")) {
+                          setCreateForm((prev) => ({ ...prev, thumbnail: file }))
+                        }
+                      }
+                    }}
+                  >
+                    <div className="space-y-3">
+                      <div className="w-16 h-16 mx-auto bg-zinc-800 rounded-lg flex items-center justify-center">
+                        <Upload className="h-8 w-8 text-zinc-500" />
+                      </div>
+                      <div>
+                        <p className="text-sm text-zinc-300 font-medium">Upload bundle thumbnail</p>
+                        <p className="text-xs text-zinc-500 mt-1">Drag and drop an image here, or click to browse</p>
+                      </div>
+                      <div className="text-xs text-zinc-600">
+                        Supports: JPEG, PNG, WebP • Max size: 5MB • Recommended: 400x400px
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Hidden File Input */}
+                <input
+                  id="thumbnail-upload"
+                  type="file"
+                  accept="image/jpeg,image/jpg,image/png,image/webp"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) {
+                      // Validate file type
+                      const allowedTypes = ["image/jpeg", "image/jpg,image/png", "image/webp"]
+                      if (!allowedTypes.includes(file.type)) {
+                        toast({
+                          title: "Invalid File Type",
+                          description: "Please select a JPEG, PNG, or WebP image",
+                          variant: "destructive",
+                        })
+                        return
+                      }
+
+                      // Validate file size (5MB max)
+                      const maxSize = 5 * 1024 * 1024
+                      if (file.size > maxSize) {
+                        toast({
+                          title: "File Too Large",
+                          description: "Please select an image smaller than 5MB",
+                          variant: "destructive",
+                        })
+                        return
+                      }
+
+                      setCreateForm((prev) => ({ ...prev, thumbnail: file }))
+                    }
+                  }}
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4">
+                <Button variant="outline" onClick={() => setShowCreateModal(false)} className="border-zinc-700">
+                  Cancel
+                </Button>
+                <Button onClick={handleCreateBundle} disabled={createLoading} className="bg-red-600 hover:bg-red-700">
+                  {createLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    "Create Bundle"
+                  )}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Product Boxes */}
@@ -1118,17 +1280,8 @@ export default function BundlesPage() {
         <div className="text-center py-12">
           <div className="text-6xl mb-4">📦</div>
           <h3 className="text-xl font-medium text-white mb-2">No Bundles Yet</h3>
-          <p className="text-zinc-400 mb-4">
-            {isProUser 
-              ? "Create your first premium content bundle to get started"
-              : `Create up to ${FREE_BUNDLE_LIMIT} premium content bundles to get started`
-            }
-          </p>
-          <Button 
-            className={`${canCreateBundle ? 'bg-red-600 hover:bg-red-700' : 'bg-zinc-700 hover:bg-zinc-600'}`}
-            onClick={handleCreateBundleClick}
-            disabled={!canCreateBundle}
-          >
+          <p className="text-zinc-400 mb-4">Create your first premium content bundle to get started</p>
+          <Button className="bg-red-600 hover:bg-red-700" onClick={() => setShowCreateModal(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Create Your First Bundle
           </Button>
@@ -1342,239 +1495,6 @@ export default function BundlesPage() {
           })}
         </div>
       )}
-
-      {/* Upgrade Modal */}
-      <Dialog open={showUpgradeModal} onOpenChange={setShowUpgradeModal}>
-        <DialogContent className="bg-zinc-900 border-zinc-800 text-white">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Crown className="h-5 w-5 text-amber-400" />
-              Bundle Limit Reached
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="text-center py-6">
-              <div className="text-4xl mb-4">🚀</div>
-              <h3 className="text-lg font-medium text-white mb-2">Upgrade to Creator Pro</h3>
-              <p className="text-zinc-400 mb-4">
-                Free users can create up to {FREE_BUNDLE_LIMIT} bundles. Upgrade to Creator Pro for unlimited bundles and more features.
-              </p>
-              
-              <div className="bg-zinc-800/50 rounded-lg p-4 mb-4">
-                <h4 className="font-medium text-white mb-2">Creator Pro Benefits:</h4>
-                <ul className="text-sm text-zinc-300 space-y-1">
-                  <li>✅ Unlimited bundles</li>
-                  <li>✅ Unlimited downloads</li>
-                  <li>✅ Priority support</li>
-                  <li>✅ Advanced analytics</li>
-                </ul>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3">
-              <Button variant="outline" onClick={() => setShowUpgradeModal(false)} className="border-zinc-700">
-                Maybe Later
-              </Button>
-              <Button 
-                className="bg-amber-600 hover:bg-amber-700"
-                onClick={() => {
-                  setShowUpgradeModal(false)
-                  window.open('/membership-plans', '_blank')
-                }}
-              >
-                <Crown className="h-4 w-4 mr-2" />
-                Upgrade Now
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Create Bundle Modal */}
-      <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
-        <DialogContent className="bg-zinc-900 border-zinc-800 text-white">
-          <DialogHeader>
-            <DialogTitle>Create New Bundle</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="title">Title *</Label>
-              <Input
-                id="title"
-                value={createForm.title}
-                onChange={(e) => setCreateForm((prev) => ({ ...prev, title: e.target.value }))}
-                placeholder="Enter bundle title"
-                className="bg-zinc-800 border-zinc-700"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                value={createForm.description}
-                onChange={(e) => setCreateForm((prev) => ({ ...prev, description: e.target.value }))}
-                placeholder="Describe your bundle"
-                className="bg-zinc-800 border-zinc-700"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="price">Price (USD) *</Label>
-                <Input
-                  id="price"
-                  type="number"
-                  step="0.01"
-                  min="0.50"
-                  value={createForm.price}
-                  onChange={(e) => setCreateForm((prev) => ({ ...prev, price: e.target.value }))}
-                  placeholder="9.99"
-                  className="bg-zinc-800 border-zinc-700"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="billing">Billing Type</Label>
-                <Select
-                  value={createForm.billingType}
-                  onValueChange={(value: "one_time" | "subscription") =>
-                    setCreateForm((prev) => ({ ...prev, billingType: value }))
-                  }
-                >
-                  <SelectTrigger className="bg-zinc-800 border-zinc-700">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-zinc-800 border-zinc-700">
-                    <SelectItem value="one_time">One-time Payment</SelectItem>
-                    <SelectItem value="subscription">Monthly Subscription</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Enhanced Thumbnail Section */}
-            <div className="space-y-4">
-              <Label>Bundle Thumbnail (Optional)</Label>
-
-              {/* Thumbnail Preview */}
-              {createForm.thumbnail && (
-                <div className="relative">
-                  <div className="aspect-square w-32 h-32 rounded-lg overflow-hidden border border-zinc-700">
-                    <img
-                      src={URL.createObjectURL(createForm.thumbnail) || "/placeholder.svg"}
-                      alt="Thumbnail preview"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setCreateForm((prev) => ({ ...prev, thumbnail: null }))}
-                    className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-red-600 hover:bg-red-700 text-white p-0"
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
-                  <p className="text-xs text-zinc-400 mt-2">{createForm.thumbnail.name}</p>
-                </div>
-              )}
-
-              {/* Upload Area */}
-              {!createForm.thumbnail && (
-                <div
-                  className="border-2 border-dashed border-zinc-700 rounded-lg p-8 text-center hover:border-zinc-600 transition-colors cursor-pointer"
-                  onClick={() => document.getElementById("thumbnail-upload")?.click()}
-                  onDragOver={(e) => {
-                    e.preventDefault()
-                    e.currentTarget.classList.add("border-zinc-500")
-                  }}
-                  onDragLeave={(e) => {
-                    e.preventDefault()
-                    e.currentTarget.classList.remove("border-zinc-500")
-                  }}
-                  onDrop={(e) => {
-                    e.preventDefault()
-                    e.currentTarget.classList.remove("border-zinc-500")
-                    const files = e.dataTransfer.files
-                    if (files.length > 0) {
-                      const file = files[0]
-                      if (file.type.startsWith("image/")) {
-                        setCreateForm((prev) => ({ ...prev, thumbnail: file }))
-                      }
-                    }
-                  }}
-                >
-                  <div className="space-y-3">
-                    <div className="w-16 h-16 mx-auto bg-zinc-800 rounded-lg flex items-center justify-center">
-                      <Upload className="h-8 w-8 text-zinc-500" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-zinc-300 font-medium">Upload bundle thumbnail</p>
-                      <p className="text-xs text-zinc-500 mt-1">Drag and drop an image here, or click to browse</p>
-                    </div>
-                    <div className="text-xs text-zinc-600">
-                      Supports: JPEG, PNG, WebP • Max size: 5MB • Recommended: 400x400px
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Hidden File Input */}
-              <input
-                id="thumbnail-upload"
-                type="file"
-                accept="image/jpeg,image/jpg,image/png,image/webp"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0]
-                  if (file) {
-                    // Validate file type
-                    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"]
-                    if (!allowedTypes.includes(file.type)) {
-                      toast({
-                        title: "Invalid File Type",
-                        description: "Please select a JPEG, PNG, or WebP image",
-                        variant: "destructive",
-                      })
-                      return
-                    }
-
-                    // Validate file size (5MB max)
-                    const maxSize = 5 * 1024 * 1024
-                    if (file.size > maxSize) {
-                      toast({
-                        title: "File Too Large",
-                        description: "Please select an image smaller than 5MB",
-                        variant: "destructive",
-                      })
-                      return
-                    }
-
-                    setCreateForm((prev) => ({ ...prev, thumbnail: file }))
-                  }
-                }}
-              />
-            </div>
-
-            <div className="flex justify-end gap-3 pt-4">
-              <Button variant="outline" onClick={() => setShowCreateModal(false)} className="border-zinc-700">
-                Cancel
-              </Button>
-              <Button onClick={handleCreateBundle} disabled={createLoading} className="bg-red-600 hover:bg-red-700">
-                {createLoading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Creating...
-                  </>
-                ) : (
-                  "Create Bundle"
-                )}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Edit Bundle Modal */}
       <Dialog open={!!showEditModal} onOpenChange={() => setShowEditModal(null)}>
@@ -1845,6 +1765,44 @@ export default function BundlesPage() {
                   )}
                 </Button>
               </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Upgrade Prompt Dialog */}
+      <Dialog open={showUpgradePrompt} onOpenChange={setShowUpgradePrompt}>
+        <DialogContent className="bg-zinc-900 border-zinc-800 text-white">
+          <DialogHeader>
+            <DialogTitle>Bundle Limit Reached</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-zinc-300">
+              {bundleLimitCheck?.message || "You have reached your bundle creation limit."}
+            </p>
+            <div className="bg-zinc-800/50 p-4 rounded-lg">
+              <h4 className="font-medium text-white mb-2">Upgrade Benefits:</h4>
+              <ul className="text-sm text-zinc-300 space-y-1">
+                <li>• Create unlimited bundles</li>
+                <li>• Advanced analytics</li>
+                <li>• Priority support</li>
+                <li>• Custom branding options</li>
+              </ul>
+            </div>
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" onClick={() => setShowUpgradePrompt(false)} className="border-zinc-700">
+                Maybe Later
+              </Button>
+              <Button 
+                className="bg-red-600 hover:bg-red-700"
+                onClick={() => {
+                  setShowUpgradePrompt(false)
+                  // Navigate to pricing page
+                  window.location.href = "/pricing"
+                }}
+              >
+                Upgrade Now
+              </Button>
             </div>
           </div>
         </DialogContent>
