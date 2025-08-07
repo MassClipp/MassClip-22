@@ -3,6 +3,7 @@ import { getAuth } from "firebase-admin/auth"
 import { getFirestore } from "firebase-admin/firestore"
 import { initializeApp, getApps, cert } from "firebase-admin/app"
 import Stripe from "stripe"
+import { db } from "@/lib/firebase-admin"
 
 // Initialize Firebase Admin
 if (!getApps().length) {
@@ -24,7 +25,6 @@ if (!getApps().length) {
   })
 }
 
-const db = getFirestore()
 const auth = getAuth()
 
 // Initialize Stripe
@@ -363,109 +363,21 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const idToken = authHeader.split("Bearer ")[1]
-    const decodedToken = await auth.verifyIdToken(idToken)
+    const token = authHeader.split("Bearer ")[1]
+    const decodedToken = await auth.verifyIdToken(token)
     const userId = decodedToken.uid
 
     console.log(`🔍 [Bundles API] Fetching bundles for user: ${userId}`)
 
-    // Query bundles collection
-    const bundlesRef = db.collection("bundles")
-    const bundlesQuery = bundlesRef.where("creatorId", "==", userId)
-    const bundlesSnapshot = await bundlesQuery.get()
+    // Get bundles from Firestore
+    const bundlesSnapshot = await db.collection("bundles").where("creatorId", "==", userId).orderBy("createdAt", "desc").get()
 
-    const bundles: any[] = []
+    const bundles = bundlesSnapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }))
 
-    for (const doc of bundlesSnapshot.docs) {
-      const data = doc.data()
-
-      // Get detailed content metadata for each content item
-      const detailedContentItems: DetailedContentItem[] = []
-      const contentItemIds = data.contentItems || []
-
-      console.log(`📦 [Bundles API] Processing ${contentItemIds.length} content items for bundle: ${doc.id}`)
-
-      for (const contentId of contentItemIds) {
-        const detailedItem = await getDetailedContentMetadata(contentId)
-        if (detailedItem) {
-          detailedContentItems.push(detailedItem)
-          console.log(`✅ [Bundles API] Successfully added: ${detailedItem.displayTitle}`)
-        } else {
-          console.warn(`⚠️ [Bundles API] Failed to get metadata for: ${contentId}`)
-        }
-      }
-
-      // Calculate bundle statistics
-      const totalDuration = detailedContentItems.reduce((sum, item) => sum + (item.duration || 0), 0)
-      const totalSize = detailedContentItems.reduce((sum, item) => sum + (item.fileSize || 0), 0)
-      const videoCount = detailedContentItems.filter((item) => item.contentType === "video").length
-      const audioCount = detailedContentItems.filter((item) => item.contentType === "audio").length
-      const imageCount = detailedContentItems.filter((item) => item.contentType === "image").length
-      const documentCount = detailedContentItems.filter((item) => item.contentType === "document").length
-
-      bundles.push({
-        id: doc.id,
-        title: data.title || "Untitled Bundle",
-        description: data.description || "",
-        price: data.price || 0,
-        currency: data.currency || "usd",
-        coverImage: data.coverImage || data.customPreviewThumbnail || null,
-        active: data.active !== false,
-
-        // Enhanced content metadata - Store full details in Firestore
-        contentItems: contentItemIds, // Keep original IDs for compatibility
-        detailedContentItems: detailedContentItems, // Full detailed metadata
-        contents: detailedContentItems, // Alternative field name
-
-        // Content metadata summary
-        contentMetadata: {
-          totalItems: detailedContentItems.length,
-          totalDuration: totalDuration,
-          totalDurationFormatted: formatDuration(totalDuration),
-          totalSize: totalSize,
-          totalSizeFormatted: formatFileSize(totalSize),
-          contentBreakdown: {
-            videos: videoCount,
-            audio: audioCount,
-            images: imageCount,
-            documents: documentCount,
-          },
-          averageDuration: detailedContentItems.length > 0 ? totalDuration / detailedContentItems.length : 0,
-          averageSize: detailedContentItems.length > 0 ? totalSize / detailedContentItems.length : 0,
-          resolutions: [...new Set(detailedContentItems.map((item) => item.resolution).filter(Boolean))],
-          formats: [...new Set(detailedContentItems.map((item) => item.format).filter(Boolean))],
-          qualities: [...new Set(detailedContentItems.map((item) => item.quality).filter(Boolean))],
-        },
-
-        // Quick access arrays for easy querying and display
-        contentTitles: detailedContentItems.map((item) => item.displayTitle),
-        contentDescriptions: detailedContentItems.map((item) => item.description || "").filter(Boolean),
-        contentTags: [...new Set(detailedContentItems.flatMap((item) => item.tags || []))],
-        contentUrls: detailedContentItems.map((item) => item.fileUrl),
-        contentThumbnails: detailedContentItems.map((item) => item.thumbnailUrl).filter(Boolean),
-
-        // Timestamps
-        createdAt: data.createdAt,
-        updatedAt: data.updatedAt,
-
-        // Stripe integration - use consistent field names
-        productId: data.productId || data.stripeProductId,
-        priceId: data.priceId || data.stripePriceId,
-        stripeAccountId: data.stripeAccountId,
-
-        type: data.type || "one_time",
-      })
-    }
-
-    // Sort by creation date (newest first)
-    bundles.sort((a, b) => {
-      if (!a.createdAt || !b.createdAt) return 0
-      const aTime = a.createdAt.seconds || a.createdAt.getTime?.() / 1000 || 0
-      const bTime = b.createdAt.seconds || b.createdAt.getTime?.() / 1000 || 0
-      return bTime - aTime
-    })
-
-    console.log(`✅ [Bundles API] Found ${bundles.length} bundles with detailed metadata`)
+    console.log(`✅ [Bundles API] Found ${bundles.length} bundles`)
 
     return NextResponse.json({
       success: true,
@@ -474,13 +386,7 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error("❌ [Bundles API] Error:", error)
-    return NextResponse.json(
-      {
-        error: "Failed to fetch bundles",
-        details: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 },
-    )
+    return NextResponse.json({ error: "Failed to fetch bundles" }, { status: 500 })
   }
 }
 
@@ -491,9 +397,35 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const idToken = authHeader.split("Bearer ")[1]
-    const decodedToken = await auth.verifyIdToken(idToken)
+    const token = authHeader.split("Bearer ")[1]
+    const decodedToken = await auth.verifyIdToken(token)
     const userId = decodedToken.uid
+
+    // Get user's plan to check bundle limits
+    const userDoc = await db.collection("users").doc(userId).get()
+    const userData = userDoc.data()
+    const userPlan = userData?.plan || "free"
+
+    console.log(`🔍 [Bundles API] Creating bundle for user: ${userId}, plan: ${userPlan}`)
+
+    // Check bundle limit for free users
+    if (userPlan === "free") {
+      const existingBundlesSnapshot = await db.collection("bundles").where("creatorId", "==", userId).get()
+      const bundleCount = existingBundlesSnapshot.size
+
+      if (bundleCount >= 2) {
+        console.log(`❌ [Bundles API] Bundle limit reached for free user: ${bundleCount}/2`)
+        return NextResponse.json(
+          {
+            error: "Bundle limit reached",
+            message: "Free users can only create 2 bundles. Upgrade to Creator Pro for unlimited bundles.",
+            currentCount: bundleCount,
+            limit: 2,
+          },
+          { status: 403 }
+        )
+      }
+    }
 
     const body = await request.json()
     const { title, description, price, currency = "usd", type = "one_time", contentIds = [] } = body
@@ -506,9 +438,9 @@ export async function POST(request: NextRequest) {
     console.log(`🔍 [Bundles API] Content IDs to process:`, contentIds)
 
     // Get user's Stripe account info
-    const userDoc = await db.collection("users").doc(userId).get()
-    const userData = userDoc.data()
-    const stripeAccountId = userData?.stripeAccountId
+    const userDocStripe = await db.collection("users").doc(userId).get()
+    const userDataStripe = userDocStripe.data()
+    const stripeAccountId = userDataStripe?.stripeAccountId
 
     if (!stripeAccountId) {
       return NextResponse.json(
