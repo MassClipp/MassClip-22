@@ -1,6 +1,7 @@
 import { db } from "@/lib/firebase-admin"
 import { FieldValue } from "firebase-admin/firestore"
 import Stripe from "stripe"
+import { getConnectedStripeAccount } from "@/lib/connected-stripe-accounts-service"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
@@ -25,18 +26,23 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
     return { alreadyProcessed: true, sessionId: session.id }
   }
 
-  // Get creator info
+  // Get creator info from users collection
   const creatorDoc = await db.collection("users").doc(creatorId).get()
   if (!creatorDoc.exists) {
     throw new Error(`Creator not found: ${creatorId}`)
   }
 
   const creatorData = creatorDoc.data()!
-  const creatorStripeAccountId = creatorData.stripeAccountId
 
-  if (!creatorStripeAccountId) {
-    throw new Error(`Creator missing Stripe account: ${creatorId}`)
+  // Get connected Stripe account from new collection
+  const connectedAccount = await getConnectedStripeAccount(creatorId)
+  if (!connectedAccount) {
+    throw new Error(`Creator missing connected Stripe account: ${creatorId}`)
   }
+
+  const creatorStripeAccountId = connectedAccount.stripeAccountId
+
+  console.log(`✅ Found connected Stripe account: ${creatorStripeAccountId}`)
 
   // Verify session through connected account
   let verifiedSession: Stripe.Checkout.Session
@@ -197,6 +203,12 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
     stripeProductId: bundleData.stripeProductId || bundleData.productId || "",
     stripePriceId: bundleData.stripePriceId || bundleData.priceId || "",
 
+    // Connected account info
+    connectedAccountEmail: connectedAccount.email,
+    connectedAccountChargesEnabled: connectedAccount.charges_enabled,
+    connectedAccountPayoutsEnabled: connectedAccount.payouts_enabled,
+    connectedAccountDetailsSubmitted: connectedAccount.details_submitted,
+
     // Timestamps
     bundleCreatedAt: bundleData.createdAt || null,
     bundleUpdatedAt: bundleData.updatedAt || null,
@@ -212,6 +224,7 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
     bundleTitle: bundleData.title,
     bundlePrice: bundleData.price,
     creatorId: creatorId,
+    creatorStripeAccountId: creatorStripeAccountId,
     contentItems: formattedBundleContent.length,
     totalFileSize: bundleData.contentMetadata?.totalSizeFormatted || "Unknown",
     firstItemFileUrl: formattedBundleContent[0]?.fileUrl || "No URL",
@@ -226,6 +239,7 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
     contentItems: formattedBundleContent.length,
     purchaseAmount: session.amount_total || 0,
     totalBundleSize: bundleData.contentMetadata?.totalSizeFormatted || "Unknown",
+    creatorStripeAccountId: creatorStripeAccountId,
   }
 }
 

@@ -1,8 +1,10 @@
 import { doc, getDoc, setDoc, deleteDoc, updateDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import { db as adminDb } from '@/lib/firebase-admin'
 
 export interface ConnectedStripeAccount {
   userId: string
+  stripeAccountId: string
   stripe_user_id: string
   access_token: string
   refresh_token?: string
@@ -36,6 +38,33 @@ export interface ConnectedStripeAccount {
   stripeAccountData?: any
 }
 
+// Server-side function for webhook processor (uses admin SDK)
+export async function getConnectedStripeAccount(userId: string): Promise<ConnectedStripeAccount | null> {
+  try {
+    if (!adminDb) {
+      console.error('Firebase Admin not initialized')
+      return null
+    }
+    
+    const docRef = adminDb.collection('connectedStripeAccounts').doc(userId)
+    const docSnap = await docRef.get()
+    
+    if (docSnap.exists) {
+      const data = docSnap.data() as ConnectedStripeAccount
+      // Ensure stripeAccountId is set from stripe_user_id if missing
+      if (!data.stripeAccountId && data.stripe_user_id) {
+        data.stripeAccountId = data.stripe_user_id
+      }
+      return data
+    }
+    
+    return null
+  } catch (error) {
+    console.error('Error getting connected account (server):', error)
+    return null
+  }
+}
+
 export class ConnectedStripeAccountsService {
   
   static async getAccount(userId: string): Promise<ConnectedStripeAccount | null> {
@@ -46,7 +75,12 @@ export class ConnectedStripeAccountsService {
       const docSnap = await getDoc(docRef)
       
       if (docSnap.exists()) {
-        return docSnap.data() as ConnectedStripeAccount
+        const data = docSnap.data() as ConnectedStripeAccount
+        // Ensure stripeAccountId is set from stripe_user_id if missing
+        if (!data.stripeAccountId && data.stripe_user_id) {
+          data.stripeAccountId = data.stripe_user_id
+        }
+        return data
       }
       
       return null
