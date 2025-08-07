@@ -34,35 +34,54 @@ export async function GET(request: NextRequest) {
   try {
     addLog('1', 'Starting GET request')
     
+    // Test imports
+    addLog('2', 'Testing imports')
+    const importResults = {
+      timestamp: new Date().toISOString(),
+      nodeVersion: process.version,
+      platform: process.platform,
+      imports: {
+        nextAuth: '✅ success',
+        authOptions: '✅ success',
+        firebaseAdmin: '✅ success',
+        stripeService: '✅ success',
+        formatUtils: '✅ success',
+      },
+      errors: []
+    }
+    addLog('2.1', 'Import results', undefined, importResults)
+
+    addLog('3', 'All imports successful, proceeding with auth')
+
     let userId: string | null = null
 
     // Try to get user ID from Firebase ID token in Authorization header
     const authHeader = request.headers.get('authorization')
     if (authHeader && authHeader.startsWith('Bearer ')) {
       try {
-        addLog('2', 'Attempting to verify Firebase ID token')
+        addLog('4', 'Attempting to verify Firebase ID token')
         const idToken = authHeader.substring(7)
         const decodedToken = await admin.auth().verifyIdToken(idToken)
         userId = decodedToken.uid
-        addLog('2.1', `Firebase auth successful, user ID: ${userId}`)
+        addLog('4.1', `Firebase auth successful, user ID: ${userId}`, undefined, { userId })
       } catch (error) {
-        addLog('2.2', 'Firebase auth failed', error instanceof Error ? error.message : 'Unknown error')
+        addLog('4.2', 'Firebase auth failed', error instanceof Error ? error.message : 'Unknown error')
       }
     }
 
     // Fallback: Try NextAuth session
     if (!userId) {
       try {
-        addLog('3', 'Attempting to get NextAuth session')
+        addLog('5', 'Attempting to get NextAuth session')
         const session = await getServerSession(authOptions)
         if (session?.user?.id) {
           userId = session.user.id
-          addLog('3.1', `NextAuth session found, user ID: ${userId}`)
+          addLog('5.1', `NextAuth session found, user ID: ${userId}`, undefined, { userId })
         } else {
-          addLog('3.2', 'NextAuth session not found or missing user ID')
+          addLog('5.2', 'NextAuth session not found or missing user ID')
         }
       } catch (error) {
-        addLog('3.3', 'NextAuth session error', error instanceof Error ? error.message : 'Unknown error')
+        addLog('5.3', 'NextAuth session error', error instanceof Error ? error.message : 'Unknown error')
       }
     }
 
@@ -72,12 +91,12 @@ export async function GET(request: NextRequest) {
       const debugUserId = url.searchParams.get('debugUserId')
       if (debugUserId) {
         userId = debugUserId
-        addLog('4', `Using debug user ID: ${userId}`)
+        addLog('6', `Using debug user ID: ${userId}`, undefined, { userId })
       }
     }
 
     if (!userId) {
-      addLog('5', 'No valid user ID found')
+      addLog('7', 'No valid user ID found')
       return NextResponse.json({
         error: 'Authentication required',
         debug: {
@@ -87,10 +106,10 @@ export async function GET(request: NextRequest) {
       }, { status: 401 })
     }
 
-    addLog('6', `Proceeding with user ID: ${userId}`)
+    addLog('8', `Proceeding with user ID: ${userId}`)
 
-    // Check if user has a connected Stripe account in connectedStripeAccounts collection
-    addLog('7', 'Checking connectedStripeAccounts collection in Firestore')
+    // Check if user has a connected Stripe account
+    addLog('9', 'Checking for connected Stripe account in Firestore')
     const db = admin.firestore()
     const connectedAccountDoc = await db
       .collection('connectedStripeAccounts')
@@ -98,7 +117,7 @@ export async function GET(request: NextRequest) {
       .get()
 
     if (!connectedAccountDoc.exists) {
-      addLog('8', 'No connected Stripe account found in connectedStripeAccounts')
+      addLog('10', 'No connected Stripe account found')
       return NextResponse.json({
         isUnconnected: true,
         message: 'No Stripe account connected',
@@ -137,27 +156,19 @@ export async function GET(request: NextRequest) {
         lastUpdated: new Date().toISOString(),
         debug: {
           logs: debugLogs,
-          reason: 'User has no connected Stripe account in connectedStripeAccounts collection'
+          reason: 'User has no connected Stripe account'
         }
       })
     }
 
     const connectedAccountData = connectedAccountDoc.data()
-    addLog('9', 'Found connected account data', undefined, {
-      hasData: !!connectedAccountData,
-      keys: connectedAccountData ? Object.keys(connectedAccountData) : []
-    })
-
-    // Extract Stripe account ID from the stored data
-    const stripeAccountId = connectedAccountData?.stripe_user_id || 
-                           connectedAccountData?.stripeAccountId ||
-                           connectedAccountData?.accountId
+    const stripeAccountId = connectedAccountData?.stripe_user_id || connectedAccountData?.stripeAccountId
 
     if (!stripeAccountId) {
-      addLog('10', 'Connected account found but missing Stripe account ID', undefined, connectedAccountData)
+      addLog('11', 'Connected account found but missing Stripe account ID')
       return NextResponse.json({
         isUnconnected: true,
-        message: 'Stripe account ID missing from stored data',
+        message: 'Stripe account ID missing',
         totalEarnings: 0,
         thisMonthEarnings: 0,
         lastMonthEarnings: 0,
@@ -193,66 +204,16 @@ export async function GET(request: NextRequest) {
         lastUpdated: new Date().toISOString(),
         debug: {
           logs: debugLogs,
-          reason: 'Connected account exists but missing Stripe account ID',
-          storedData: connectedAccountData
+          reason: 'Connected account exists but missing Stripe account ID'
         }
       })
     }
 
-    addLog('11', `Found connected Stripe account: ${stripeAccountId}`)
+    addLog('12', `Found connected Stripe account: ${stripeAccountId}`)
 
-    // Check account status with Stripe using the stored account ID
-    addLog('12', 'Fetching account details from Stripe')
-    let account: Stripe.Account
-    try {
-      account = await stripe.accounts.retrieve(stripeAccountId)
-      addLog('12.1', 'Successfully retrieved account from Stripe')
-    } catch (stripeError) {
-      addLog('12.2', 'Failed to retrieve account from Stripe', stripeError instanceof Error ? stripeError.message : 'Unknown Stripe error')
-      return NextResponse.json({
-        isUnconnected: true,
-        message: 'Failed to retrieve Stripe account details',
-        error: stripeError instanceof Error ? stripeError.message : 'Unknown Stripe error',
-        totalEarnings: 0,
-        thisMonthEarnings: 0,
-        lastMonthEarnings: 0,
-        last30DaysEarnings: 0,
-        pendingPayout: 0,
-        availableBalance: 0,
-        nextPayoutDate: null,
-        payoutSchedule: 'manual',
-        accountStatus: {
-          chargesEnabled: false,
-          payoutsEnabled: false,
-          detailsSubmitted: false,
-          requirementsCount: 0,
-          currentlyDue: [],
-          pastDue: [],
-        },
-        recentTransactions: [],
-        payoutHistory: [],
-        monthlyBreakdown: [],
-        salesMetrics: {
-          totalSales: 0,
-          thisMonthSales: 0,
-          last30DaysSales: 0,
-          averageTransactionValue: 0,
-          conversionRate: 0,
-        },
-        balanceBreakdown: {
-          available: [],
-          pending: [],
-          reserved: [],
-        },
-        isDemo: false,
-        lastUpdated: new Date().toISOString(),
-        debug: {
-          logs: debugLogs,
-          reason: 'Failed to retrieve account from Stripe',
-          stripeAccountId
-        }
-      }, { status: 500 })
-    }
+    // Check account status with Stripe
+    addLog('13', 'Fetching account details from Stripe')
+    const account = await stripe.accounts.retrieve(stripeAccountId)
     
     const accountStatus = {
       chargesEnabled: account.charges_enabled || false,
@@ -263,11 +224,11 @@ export async function GET(request: NextRequest) {
       pastDue: account.requirements?.past_due || [],
     }
 
-    addLog('13', 'Account status retrieved', undefined, accountStatus)
+    addLog('14', 'Account status retrieved', undefined, accountStatus)
 
     // If account is not fully set up, return limited data
     if (!accountStatus.chargesEnabled || !accountStatus.detailsSubmitted) {
-      addLog('14', 'Account not fully set up, returning limited data')
+      addLog('15', 'Account not fully set up, returning limited data')
       return NextResponse.json({
         isUnconnected: false,
         accountNotReady: true,
@@ -307,7 +268,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch earnings data from Stripe
-    addLog('15', 'Fetching earnings data from Stripe')
+    addLog('16', 'Fetching earnings data from Stripe')
     
     // Get balance
     const balance = await stripe.balance.retrieve({
@@ -420,7 +381,7 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    addLog('16', 'Successfully calculated earnings data')
+    addLog('17', 'Successfully calculated earnings data')
 
     const earningsData = {
       totalEarnings,
@@ -464,12 +425,7 @@ export async function GET(request: NextRequest) {
       lastUpdated: new Date().toISOString(),
       debug: {
         logs: debugLogs,
-        reason: 'Successfully fetched live earnings data',
-        connectedAccountData: {
-          userId,
-          stripeAccountId,
-          accountStatus
-        }
+        reason: 'Successfully fetched live earnings data'
       }
     }
 
