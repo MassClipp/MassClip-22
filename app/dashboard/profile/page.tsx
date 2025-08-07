@@ -1,993 +1,607 @@
 "use client"
 
-import type React from "react"
-
-import { useState, useEffect, useRef } from "react"
-import { useRouter } from "next/navigation"
-import { useAuth } from "@/contexts/auth-context"
-import { doc, getDoc, setDoc, serverTimestamp, updateDoc } from "firebase/firestore"
-import { db } from "@/lib/firebase"
+import { useState, useEffect } from "react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { useToast } from "@/components/ui/use-toast"
-import { Loader2, User, Camera, Instagram, Twitter, Globe, Save, CheckCircle, ExternalLink, Crown, CreditCard, AlertTriangle } from 'lucide-react'
-import ReactCrop, { type Crop, centerCrop, makeAspectCrop } from "react-image-crop"
-import "react-image-crop/dist/ReactCrop.css"
+import { Separator } from "@/components/ui/separator"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
+import { User, Camera, ExternalLink, CreditCard, Crown, Calendar, DollarSign, CheckCircle, XCircle, AlertCircle, Loader2, Trash2 } from 'lucide-react'
+import { useAuthState } from 'react-firebase-hooks/auth'
+import { auth, db } from '@/lib/firebase'
+import { doc, getDoc, updateDoc } from 'firebase/firestore'
+import { toast } from 'sonner'
+
+interface UserProfile {
+  displayName: string
+  username: string
+  bio: string
+  profilePicture?: string
+  stripeCustomerId?: string
+  plan?: string
+  subscriptionStatus?: string
+  subscriptionEndDate?: string
+  nextBillingDate?: string
+}
+
+interface SubscriptionData {
+  id: string
+  status: string
+  current_period_end: number
+  cancel_at_period_end: boolean
+  plan: {
+    id: string
+    nickname: string
+    amount: number
+    currency: string
+    interval: string
+  }
+}
 
 export default function ProfilePage() {
-  const { user } = useAuth()
-  const router = useRouter()
-  const { toast } = useToast()
-  const fileInputRef = useRef<HTMLInputElement>(null)
-
-  const [loading, setLoading] = useState(true)
+  const [user, loading, error] = useAuthState(auth)
+  const [profile, setProfile] = useState<UserProfile>({
+    displayName: '',
+    username: '',
+    bio: '',
+  })
+  const [originalProfile, setOriginalProfile] = useState<UserProfile>({
+    displayName: '',
+    username: '',
+    bio: '',
+  })
   const [saving, setSaving] = useState(false)
-  const [saveSuccess, setSaveSuccess] = useState(false)
-
-  // Profile state
-  const [displayName, setDisplayName] = useState("")
-  const [username, setUsername] = useState("")
-  const [bio, setBio] = useState("")
-  const [profilePic, setProfilePic] = useState<string | null>(null)
-  const [newProfilePic, setNewProfilePic] = useState<File | null>(null)
-  const [profilePicPreview, setProfilePicPreview] = useState<string | null>(null)
-
-  // Social links
-  const [instagramHandle, setInstagramHandle] = useState("")
-  const [twitterHandle, setTwitterHandle] = useState("")
-  const [websiteUrl, setWebsiteUrl] = useState("")
-
-  const [crop, setCrop] = useState<Crop>()
-  const [completedCrop, setCompletedCrop] = useState<Crop>()
-  const [showCropModal, setShowCropModal] = useState(false)
-  const [imageToCrop, setImageToCrop] = useState<string | null>(null)
-  const [croppedImageBlob, setCroppedImageBlob] = useState<Blob | null>(null)
-  const imgRef = useRef<HTMLImageElement>(null)
-
-  const [isOnline, setIsOnline] = useState(true)
-
-  // Subscription state
-  const [subscriptionData, setSubscriptionData] = useState<any>(null)
+  const [loadingProfile, setLoadingProfile] = useState(true)
+  const [subscription, setSubscription] = useState<SubscriptionData | null>(null)
   const [loadingSubscription, setLoadingSubscription] = useState(true)
-  const [cancelingSubscription, setCancelingSubscription] = useState(false)
+  const [canceling, setCanceling] = useState(false)
 
+  // Load user profile
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true)
-    const handleOffline = () => setIsOnline(false)
-
-    window.addEventListener("online", handleOnline)
-    window.addEventListener("offline", handleOffline)
-
-    return () => {
-      window.removeEventListener("online", handleOnline)
-      window.removeEventListener("offline", handleOffline)
-    }
-  }, [])
-
-  // Fetch user profile
-  useEffect(() => {
-    const fetchUserProfile = async () => {
-      if (!user) return
+    const loadProfile = async () => {
+      if (!user?.uid) return
 
       try {
-        setLoading(true)
-        console.log("🔍 Fetching user profile for:", user.uid)
-
-        const userDoc = await getDoc(doc(db, "users", user.uid))
-
-        if (userDoc.exists()) {
-          const userData = userDoc.data()
-          console.log("✅ User data loaded:", userData)
-
-          setDisplayName(userData.displayName || "")
-          setUsername(userData.username || "")
-          setBio(userData.bio || "")
-
-          // Handle profile picture
-          const profilePicUrl = userData.profilePic
-          if (profilePicUrl) {
-            const cacheBustedUrl = profilePicUrl.includes("?")
-              ? `${profilePicUrl}&cb=${Date.now()}`
-              : `${profilePicUrl}?cb=${Date.now()}`
-            setProfilePic(cacheBustedUrl)
-          } else {
-            setProfilePic(null)
-          }
-
-          // Social links - handle both old and new structure
-          const socialLinks = userData.socialLinks || {}
-          setInstagramHandle(socialLinks.instagram || userData.instagramHandle || "")
-          setTwitterHandle(socialLinks.twitter || userData.twitterHandle || "")
-          setWebsiteUrl(socialLinks.website || userData.websiteUrl || "")
+        setLoadingProfile(true)
+        const profileDoc = await getDoc(doc(db, 'userProfiles', user.uid))
+        
+        if (profileDoc.exists()) {
+          const data = profileDoc.data() as UserProfile
+          setProfile(data)
+          setOriginalProfile(data)
         } else {
-          console.log("❌ No user document found, creating one...")
-          // Create initial user document
-          const initialData = {
-            uid: user.uid,
-            email: user.email,
-            displayName: user.displayName || "",
-            username: "",
-            bio: "",
-            profilePic: user.photoURL || null,
-            socialLinks: {
-              instagram: "",
-              twitter: "",
-              website: "",
-            },
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
+          // Set defaults from Firebase Auth
+          const defaultProfile = {
+            displayName: user.displayName || '',
+            username: user.email?.split('@')[0] || '',
+            bio: '',
           }
-
-          await setDoc(doc(db, "users", user.uid), initialData)
-          console.log("✅ Initial user document created")
-
-          // Set the state with initial data
-          setDisplayName(initialData.displayName)
-          setUsername(initialData.username)
-          setBio(initialData.bio)
-          setProfilePic(initialData.profilePic)
+          setProfile(defaultProfile)
+          setOriginalProfile(defaultProfile)
         }
       } catch (error) {
-        console.error("❌ Error fetching user profile:", error)
-        toast({
-          title: "Error",
-          description: "Failed to load profile data. Please try again.",
-          variant: "destructive",
-        })
+        console.error('Error loading profile:', error)
+        toast.error('Failed to load profile')
       } finally {
-        setLoading(false)
+        setLoadingProfile(false)
       }
     }
 
-    fetchUserProfile()
-  }, [user, toast])
+    if (user) {
+      loadProfile()
+    }
+  }, [user])
 
-  // Fetch subscription data
+  // Load subscription data
   useEffect(() => {
-    const fetchSubscriptionData = async () => {
-      if (!user) return
+    const loadSubscription = async () => {
+      if (!user?.uid) return
 
       try {
         setLoadingSubscription(true)
-        const response = await fetch("/api/verify-subscription", {
-          method: "POST",
+        const idToken = await user.getIdToken()
+        const response = await fetch('/api/verify-subscription', {
+          method: 'POST',
           headers: {
-            "Content-Type": "application/json",
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`,
           },
           body: JSON.stringify({ userId: user.uid }),
         })
 
         if (response.ok) {
           const data = await response.json()
-          setSubscriptionData(data)
+          if (data.subscription) {
+            setSubscription(data.subscription)
+          }
         }
       } catch (error) {
-        console.error("Error fetching subscription data:", error)
+        console.error('Error loading subscription:', error)
       } finally {
         setLoadingSubscription(false)
       }
     }
 
-    fetchSubscriptionData()
+    if (user) {
+      loadSubscription()
+    }
   }, [user])
 
-  const handleProfilePicChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    // Check file size (5MB limit)
-    if (file.size > 5 * 1024 * 1024) {
-      toast({
-        title: "File too large",
-        description: "Profile picture must be less than 5MB",
-        variant: "destructive",
-      })
-      return
-    }
-
-    // Check file type
-    if (!file.type.startsWith("image/")) {
-      toast({
-        title: "Invalid file type",
-        description: "Please select an image file",
-        variant: "destructive",
-      })
-      return
-    }
-
-    // Create preview for cropping
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      const imageUrl = e.target?.result as string
-      setImageToCrop(imageUrl)
-      setShowCropModal(true)
-    }
-    reader.readAsDataURL(file)
-  }
-
-  const onImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
-    const { width, height } = e.currentTarget
-    const crop = centerCrop(
-      makeAspectCrop(
-        {
-          unit: "%",
-          width: 90,
-        },
-        1, // aspect ratio 1:1 for square
-        width,
-        height,
-      ),
-      width,
-      height,
-    )
-    setCrop(crop)
-  }
-
-  const getCroppedImg = (image: HTMLImageElement, crop: Crop): Promise<Blob> => {
-    const canvas = document.createElement("canvas")
-    const ctx = canvas.getContext("2d")
-
-    if (!ctx) {
-      throw new Error("No 2d context")
-    }
-
-    const scaleX = image.naturalWidth / image.width
-    const scaleY = image.naturalHeight / image.height
-    const pixelRatio = window.devicePixelRatio
-
-    canvas.width = crop.width * pixelRatio * scaleX
-    canvas.height = crop.height * pixelRatio * scaleY
-
-    ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0)
-    ctx.imageSmoothingQuality = "high"
-
-    ctx.drawImage(
-      image,
-      crop.x * scaleX,
-      crop.y * scaleY,
-      crop.width * scaleX,
-      crop.height * scaleY,
-      0,
-      0,
-      crop.width * scaleX,
-      crop.height * scaleY,
-    )
-
-    return new Promise((resolve) => {
-      canvas.toBlob(
-        (blob) => {
-          if (blob) {
-            resolve(blob)
-          }
-        },
-        "image/jpeg",
-        0.9,
-      )
-    })
-  }
-
-  const handleCropComplete = async () => {
-    if (!imgRef.current || !completedCrop) return
-
-    try {
-      const croppedBlob = await getCroppedImg(imgRef.current, completedCrop)
-      setCroppedImageBlob(croppedBlob)
-
-      // Create preview URL
-      const previewUrl = URL.createObjectURL(croppedBlob)
-      setProfilePicPreview(previewUrl)
-
-      setShowCropModal(false)
-      setImageToCrop(null)
-    } catch (error) {
-      console.error("Error cropping image:", error)
-      toast({
-        title: "Cropping failed",
-        description: "Failed to crop image. Please try again.",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-
-    if (!user) {
-      toast({
-        title: "Authentication required",
-        description: "Please log in to update your profile.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    if (!isOnline) {
-      toast({
-        title: "No internet connection",
-        description: "Please check your connection and try again.",
-        variant: "destructive",
-      })
-      return
-    }
+  const handleSave = async () => {
+    if (!user?.uid) return
 
     try {
       setSaving(true)
-      console.log("🔄 Starting profile update for user:", user.uid)
-
-      let profilePicUrl = profilePic
-
-      // Upload new profile pic if cropped
-      if (croppedImageBlob) {
-        console.log("📸 Uploading new profile picture...")
-
-        try {
-          // Get fresh auth token
-          const idToken = await user.getIdToken(true)
-
-          const formData = new FormData()
-          formData.append("file", croppedImageBlob, "profile.jpg")
-          formData.append("userId", user.uid)
-
-          const uploadResponse = await fetch("/api/upload-profile-pic", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${idToken}`,
-            },
-            body: formData,
-          })
-
-          if (!uploadResponse.ok) {
-            const errorText = await uploadResponse.text()
-            throw new Error(`Upload failed: ${errorText}`)
-          }
-
-          const uploadResult = await uploadResponse.json()
-          profilePicUrl = uploadResult.url
-          console.log("✅ Profile picture uploaded:", profilePicUrl)
-        } catch (uploadError) {
-          console.error("❌ Profile picture upload failed:", uploadError)
-          toast({
-            title: "Upload failed",
-            description: "Failed to upload profile picture. Continuing with other updates.",
-            variant: "destructive",
-          })
-          // Continue with other updates even if image upload fails
-        }
-      }
-
-      // Prepare profile data
-      const profileData = {
-        displayName: displayName.trim(),
-        username: username.toLowerCase().trim(),
-        bio: bio.trim(),
-        profilePic: profilePicUrl,
-        socialLinks: {
-          instagram: instagramHandle.trim(),
-          twitter: twitterHandle.trim(),
-          website: websiteUrl.trim(),
-        },
-        email: user.email,
-        updatedAt: serverTimestamp(),
-      }
-
-      console.log("💾 Updating user profile with data:", profileData)
-
-      // Update user profile in Firestore
-      const userDocRef = doc(db, "users", user.uid)
-
-      // Check if document exists first
-      const userDoc = await getDoc(userDocRef)
-
-      if (userDoc.exists()) {
-        // Update existing document
-        await updateDoc(userDocRef, profileData)
-        console.log("✅ User profile updated successfully")
-      } else {
-        // Create new document with createdAt timestamp
-        await setDoc(userDocRef, {
-          ...profileData,
-          uid: user.uid,
-          createdAt: serverTimestamp(),
-        })
-        console.log("✅ User profile created successfully")
-      }
-
-      // Also update the creators collection if username exists
-      if (username.trim()) {
-        try {
-          const creatorDocRef = doc(db, "creators", username.toLowerCase().trim())
-          const creatorData = {
-            uid: user.uid,
-            username: username.toLowerCase().trim(),
-            displayName: displayName.trim(),
-            bio: bio.trim(),
-            profilePic: profilePicUrl,
-            email: user.email,
-            updatedAt: serverTimestamp(),
-          }
-
-          const creatorDoc = await getDoc(creatorDocRef)
-
-          if (creatorDoc.exists()) {
-            await updateDoc(creatorDocRef, creatorData)
-          } else {
-            await setDoc(creatorDocRef, {
-              ...creatorData,
-              totalVideos: 0,
-              totalDownloads: 0,
-              totalEarnings: 0,
-              isVerified: false,
-              createdAt: serverTimestamp(),
-            })
-          }
-
-          console.log("✅ Creator profile updated successfully")
-        } catch (creatorError) {
-          console.error("⚠️ Creator profile update failed:", creatorError)
-          // Don't fail the whole operation if creator update fails
-        }
-      }
-
-      // Clear the cropped image blob after successful upload
-      setCroppedImageBlob(null)
-      setProfilePicPreview(null)
-
-      // Update the profile pic state with the new URL
-      setProfilePic(profilePicUrl)
-
-      // Show success message
-      setSaveSuccess(true)
-      setTimeout(() => setSaveSuccess(false), 3000)
-
-      toast({
-        title: "Profile updated",
-        description: "Your profile has been updated successfully",
-      })
-
-      // Refresh the page data
-      setTimeout(() => {
-        window.location.reload()
-      }, 1500)
+      await updateDoc(doc(db, 'userProfiles', user.uid), profile)
+      setOriginalProfile(profile)
+      toast.success('Profile updated successfully')
     } catch (error) {
-      console.error("❌ Error updating profile:", error)
-      toast({
-        title: "Update failed",
-        description: error instanceof Error ? error.message : "Failed to update profile. Please try again.",
-        variant: "destructive",
-      })
+      console.error('Error saving profile:', error)
+      toast.error('Failed to save profile')
     } finally {
       setSaving(false)
     }
   }
 
-  const handleCancelSubscription = async () => {
-    if (!user) return
+  const handleCancel = () => {
+    setProfile(originalProfile)
+  }
 
-    setCancelingSubscription(true)
+  const hasChanges = JSON.stringify(profile) !== JSON.stringify(originalProfile)
+
+  const handleCancelSubscription = async () => {
+    if (!user?.uid || !subscription) return
+
     try {
-      const response = await fetch("/api/cancel-subscription", {
-        method: "POST",
+      setCanceling(true)
+      const idToken = await user.getIdToken()
+      const response = await fetch('/api/cancel-subscription', {
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`,
         },
-        body: JSON.stringify({ userId: user.uid }),
+        body: JSON.stringify({ 
+          userId: user.uid,
+          subscriptionId: subscription.id 
+        }),
       })
 
       const data = await response.json()
 
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to cancel subscription")
-      }
-
-      toast({
-        title: "Subscription Canceled",
-        description: "Your subscription has been canceled successfully. You'll have access until the end of your billing period.",
-      })
-
-      // Refresh subscription data
-      const refreshResponse = await fetch("/api/verify-subscription", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ userId: user.uid }),
-      })
-
-      if (refreshResponse.ok) {
-        const refreshData = await refreshResponse.json()
-        setSubscriptionData(refreshData)
+      if (response.ok) {
+        toast.success('Subscription canceled successfully')
+        // Update subscription state
+        setSubscription({
+          ...subscription,
+          cancel_at_period_end: true
+        })
+      } else {
+        toast.error(data.error || 'Failed to cancel subscription')
       }
     } catch (error) {
-      console.error("Error canceling subscription:", error)
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to cancel subscription. Please try again.",
-        variant: "destructive",
-      })
+      console.error('Error canceling subscription:', error)
+      toast.error('Failed to cancel subscription')
     } finally {
-      setCancelingSubscription(false)
+      setCanceling(false)
     }
   }
 
-  const handleViewProfile = () => {
-    if (username) {
-      window.open(`/creator/${username}?updated=true`, "_blank")
-    }
+  const formatCurrency = (amount: number, currency: string = 'usd') => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currency.toUpperCase(),
+    }).format(amount / 100)
   }
 
-  if (loading) {
+  const formatDate = (timestamp: number) => {
+    return new Date(timestamp * 1000).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    })
+  }
+
+  if (loading || loadingProfile) {
     return (
-      <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
-        <Loader2 className="h-8 w-8 text-zinc-500 animate-spin" />
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-white" />
+          <p className="text-gray-400">Loading profile...</p>
+        </div>
       </div>
     )
   }
 
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Card className="w-full max-w-md bg-gray-800 border-gray-700">
+          <CardContent className="pt-6">
+            <p className="text-center text-gray-400">Please log in to continue</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  const currentPlan = subscription?.status === 'active' ? 'Creator Pro' : 'Free'
+  const isProUser = subscription?.status === 'active'
+
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Profile Settings</h1>
-        <p className="text-zinc-400 mt-1">Manage your creator profile and settings</p>
+    <div className="container mx-auto py-8 px-4 max-w-6xl">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-white mb-2">Profile Settings</h1>
+        <p className="text-gray-400">Manage your creator profile and settings</p>
       </div>
 
       <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList className="bg-zinc-800/50 border border-zinc-700/50">
-          <TabsTrigger value="profile">Profile</TabsTrigger>
-          <TabsTrigger value="membership">Membership</TabsTrigger>
+        <TabsList className="bg-gray-800 border-gray-700">
+          <TabsTrigger value="profile" className="data-[state=active]:bg-gray-700">
+            <User className="h-4 w-4 mr-2" />
+            Profile
+          </TabsTrigger>
+          <TabsTrigger value="membership" className="data-[state=active]:bg-gray-700">
+            <CreditCard className="h-4 w-4 mr-2" />
+            Membership
+          </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="profile">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <Card className="bg-zinc-900/60 border-zinc-800/50 backdrop-blur-sm md:col-span-2">
-              {!isOnline && (
-                <div className="bg-red-900/20 border border-red-500/50 rounded-lg p-4 mb-6">
-                  <p className="text-red-400 text-sm">
-                    ⚠️ You appear to be offline. Changes may not save until your connection is restored.
-                  </p>
+        <TabsContent value="profile" className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Profile Information */}
+            <Card className="bg-gray-800/50 border-gray-700">
+              <CardHeader>
+                <CardTitle className="text-white">Profile Information</CardTitle>
+                <CardDescription>Update your profile details and social links</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Profile Picture */}
+                <div className="flex flex-col items-center space-y-4">
+                  <Avatar className="h-24 w-24">
+                    <AvatarImage src={profile.profilePicture || "/placeholder.svg"} />
+                    <AvatarFallback className="bg-gray-700 text-white text-2xl">
+                      {profile.displayName?.charAt(0)?.toUpperCase() || user.email?.charAt(0)?.toUpperCase() || 'U'}
+                    </AvatarFallback>
+                  </Avatar>
+                  <Button variant="outline" size="sm" className="border-gray-600 text-gray-400 hover:bg-gray-700">
+                    <Camera className="h-4 w-4 mr-2" />
+                    Click to change profile picture
+                  </Button>
                 </div>
-              )}
-              <form onSubmit={handleSubmit}>
-                <CardHeader>
-                  <CardTitle>Profile Information</CardTitle>
-                  <CardDescription>Update your profile details and social links</CardDescription>
-                </CardHeader>
 
-                <CardContent className="space-y-6">
-                  {/* Profile Picture */}
-                  <div className="flex flex-col items-center space-y-4">
-                    <div
-                      className="relative w-24 h-24 rounded-full overflow-hidden bg-zinc-800 cursor-pointer group"
-                      onClick={() => fileInputRef.current?.click()}
-                    >
-                      {profilePicPreview || profilePic ? (
-                        <img
-                          src={profilePicPreview || profilePic || ""}
-                          alt={displayName || "Profile"}
-                          className="w-full h-full object-cover"
-                          key={profilePicPreview || profilePic}
-                          onError={(e) => {
-                            console.error("Failed to load profile image:", e)
-                            setProfilePic(null)
-                          }}
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-zinc-800 text-zinc-400 text-4xl font-light">
-                          {displayName ? displayName.charAt(0).toUpperCase() : <User className="h-8 w-8" />}
-                        </div>
-                      )}
-
-                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Camera className="h-6 w-6 text-white" />
-                      </div>
-
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={handleProfilePicChange}
-                      />
-                    </div>
-                    <p className="text-sm text-zinc-400">Click to change profile picture</p>
-                  </div>
-
-                  {/* Display Name */}
+                {/* Form Fields */}
+                <div className="space-y-4">
                   <div>
-                    <Label htmlFor="displayName">Display Name</Label>
+                    <Label htmlFor="displayName" className="text-gray-300">Display Name</Label>
                     <Input
                       id="displayName"
-                      value={displayName}
-                      onChange={(e) => setDisplayName(e.target.value)}
-                      className="bg-zinc-800/50 border-zinc-700 focus:border-red-500 text-white mt-1.5"
+                      value={profile.displayName}
+                      onChange={(e) => setProfile({ ...profile, displayName: e.target.value })}
+                      className="bg-gray-700 border-gray-600 text-white"
                       placeholder="Your display name"
-                      required
                     />
                   </div>
 
-                  {/* Username */}
                   <div>
-                    <Label htmlFor="username">Username</Label>
+                    <Label htmlFor="username" className="text-gray-300">Username</Label>
                     <Input
                       id="username"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
-                      className="bg-zinc-800/50 border-zinc-700 focus:border-red-500 text-white mt-1.5"
-                      placeholder="username"
-                      required
+                      value={profile.username}
+                      onChange={(e) => setProfile({ ...profile, username: e.target.value })}
+                      className="bg-gray-700 border-gray-600 text-white"
+                      placeholder="Your username"
                     />
-                    <p className="text-xs text-zinc-500 mt-1.5">
-                      This will be your profile URL: massclip.pro/creator/{username || "username"}
+                    <p className="text-sm text-gray-500 mt-1">
+                      This will be your profile URL: massclip.pro/creator/{profile.username}
                     </p>
                   </div>
 
-                  {/* Bio */}
                   <div>
-                    <Label htmlFor="bio">Bio</Label>
+                    <Label htmlFor="bio" className="text-gray-300">Bio</Label>
                     <Textarea
                       id="bio"
-                      value={bio}
-                      onChange={(e) => setBio(e.target.value)}
-                      className="bg-zinc-800/50 border-zinc-700 focus:border-red-500 text-white mt-1.5 resize-none"
+                      value={profile.bio}
+                      onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
+                      className="bg-gray-700 border-gray-600 text-white min-h-[100px]"
                       placeholder="Tell viewers about yourself"
-                      rows={4}
                     />
-                  </div>
-
-                  {/* Social Links */}
-                  <div className="space-y-4">
-                    <h3 className="text-sm font-medium text-white">Social Links</h3>
-
-                    <div>
-                      <Label htmlFor="instagram" className="flex items-center gap-2">
-                        <Instagram className="h-4 w-4 text-zinc-400" />
-                        Instagram
-                      </Label>
-                      <div className="relative mt-1.5">
-                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-500">@</span>
-                        <Input
-                          id="instagram"
-                          value={instagramHandle}
-                          onChange={(e) => setInstagramHandle(e.target.value.replace(/[^a-zA-Z0-9_.]/g, ""))}
-                          className="bg-zinc-800/50 border-zinc-700 focus:border-red-500 text-white pl-8"
-                          placeholder="username"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <Label htmlFor="twitter" className="flex items-center gap-2">
-                        <Twitter className="h-4 w-4 text-zinc-400" />
-                        Twitter
-                      </Label>
-                      <div className="relative mt-1.5">
-                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-500">@</span>
-                        <Input
-                          id="twitter"
-                          value={twitterHandle}
-                          onChange={(e) => setTwitterHandle(e.target.value.replace(/[^a-zA-Z0-9_]/g, ""))}
-                          className="bg-zinc-800/50 border-zinc-700 focus:border-red-500 text-white pl-8"
-                          placeholder="username"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <Label htmlFor="website" className="flex items-center gap-2">
-                        <Globe className="h-4 w-4 text-zinc-400" />
-                        Website
-                      </Label>
-                      <Input
-                        id="website"
-                        value={websiteUrl}
-                        onChange={(e) => setWebsiteUrl(e.target.value)}
-                        className="bg-zinc-800/50 border-zinc-700 focus:border-red-500 text-white mt-1.5"
-                        placeholder="https://example.com"
-                      />
-                    </div>
-                  </div>
-                </CardContent>
-
-                <CardFooter className="border-t border-zinc-800/50 pt-6">
-                  <Button
-                    type="submit"
-                    disabled={saving || !displayName.trim() || !username.trim()}
-                    className="ml-auto bg-red-600 hover:bg-red-700"
-                  >
-                    {saving ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Saving...
-                      </>
-                    ) : saveSuccess ? (
-                      <>
-                        <CheckCircle className="mr-2 h-4 w-4" />
-                        Saved!
-                      </>
-                    ) : (
-                      <>
-                        <Save className="mr-2 h-4 w-4" />
-                        Save Changes
-                      </>
-                    )}
-                  </Button>
-                </CardFooter>
-              </form>
-            </Card>
-
-            <Card className="bg-zinc-900/60 border-zinc-800/50 backdrop-blur-sm">
-              <CardHeader>
-                <CardTitle>Profile Preview</CardTitle>
-                <CardDescription>How others will see your profile</CardDescription>
-              </CardHeader>
-
-              <CardContent>
-                <div className="flex flex-col items-center text-center">
-                  <div className="w-20 h-20 rounded-full overflow-hidden bg-zinc-800 mb-4">
-                    {profilePicPreview || profilePic ? (
-                      <img
-                        src={profilePicPreview || profilePic || ""}
-                        alt={displayName || "Profile"}
-                        className="w-full h-full object-cover"
-                        key={profilePicPreview || profilePic}
-                        onError={(e) => {
-                          console.error("Failed to load preview image:", e)
-                        }}
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-zinc-800 text-zinc-400 text-3xl font-light">
-                        {displayName ? displayName.charAt(0).toUpperCase() : <User className="h-6 w-6" />}
-                      </div>
-                    )}
-                  </div>
-
-                  <h3 className="text-lg font-medium text-white">{displayName || "Your Name"}</h3>
-
-                  <p className="text-sm text-zinc-400 mb-4">@{username || "username"}</p>
-
-                  {bio && <p className="text-sm text-zinc-300 mb-4 line-clamp-4">{bio}</p>}
-
-                  <div className="flex gap-2 mt-2">
-                    {instagramHandle && (
-                      <div className="p-2 rounded-full bg-zinc-800">
-                        <Instagram className="h-4 w-4 text-zinc-400" />
-                      </div>
-                    )}
-
-                    {twitterHandle && (
-                      <div className="p-2 rounded-full bg-zinc-800">
-                        <Twitter className="h-4 w-4 text-zinc-400" />
-                      </div>
-                    )}
-
-                    {websiteUrl && (
-                      <div className="p-2 rounded-full bg-zinc-800">
-                        <Globe className="h-4 w-4 text-zinc-400" />
-                      </div>
-                    )}
                   </div>
                 </div>
 
-                {username && (
-                  <Button
-                    variant="outline"
-                    className="w-full mt-6 border-zinc-700 hover:bg-zinc-800 bg-transparent"
-                    onClick={handleViewProfile}
-                  >
-                    <ExternalLink className="h-4 w-4 mr-2" />
-                    View Public Profile
-                  </Button>
+                {/* Action Buttons */}
+                {hasChanges && (
+                  <div className="flex gap-3 pt-4">
+                    <Button onClick={handleSave} disabled={saving} className="bg-blue-600 hover:bg-blue-700">
+                      {saving ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        'Save Changes'
+                      )}
+                    </Button>
+                    <Button variant="outline" onClick={handleCancel} className="border-gray-600 text-gray-400 hover:bg-gray-700">
+                      Cancel
+                    </Button>
+                  </div>
                 )}
+              </CardContent>
+            </Card>
+
+            {/* Profile Preview */}
+            <Card className="bg-gray-800/50 border-gray-700">
+              <CardHeader>
+                <CardTitle className="text-white">Profile Preview</CardTitle>
+                <CardDescription>How others will see your profile</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="text-center">
+                  <Avatar className="h-20 w-20 mx-auto mb-4">
+                    <AvatarImage src={profile.profilePicture || "/placeholder.svg"} />
+                    <AvatarFallback className="bg-gray-700 text-white text-xl">
+                      {profile.displayName?.charAt(0)?.toUpperCase() || 'U'}
+                    </AvatarFallback>
+                  </Avatar>
+                  <h3 className="text-xl font-semibold text-white mb-1">
+                    {profile.displayName || 'Your Name'}
+                  </h3>
+                  <p className="text-gray-400 mb-4">@{profile.username || 'username'}</p>
+                  {profile.bio && (
+                    <p className="text-gray-300 text-sm">{profile.bio}</p>
+                  )}
+                </div>
+
+                <Separator className="bg-gray-700" />
+
+                <Button variant="outline" className="w-full border-gray-600 text-gray-400 hover:bg-gray-700">
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  View Public Profile
+                </Button>
               </CardContent>
             </Card>
           </div>
         </TabsContent>
 
-        <TabsContent value="membership">
-          <Card className="bg-zinc-900/60 border-zinc-800/50 backdrop-blur-sm">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Crown className="h-5 w-5 text-yellow-500" />
-                Membership Status
-              </CardTitle>
-              <CardDescription>Manage your subscription and billing</CardDescription>
-            </CardHeader>
-
-            <CardContent className="space-y-6">
-              {loadingSubscription ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
-                </div>
-              ) : (
-                <>
-                  {/* Current Plan */}
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between p-4 bg-zinc-800/50 rounded-lg border border-zinc-700/50">
-                      <div>
-                        <h3 className="font-medium text-white">Current Plan</h3>
-                        <p className="text-sm text-zinc-400">
-                          {subscriptionData?.plan === "creator_pro" ? "Creator Pro" : "Free"}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-medium text-white">
-                          {subscriptionData?.plan === "creator_pro" ? "$15/month" : "$0"}
-                        </p>
-                        <p className="text-sm text-zinc-400">
-                          {subscriptionData?.isActive ? "Active" : "Inactive"}
-                        </p>
-                      </div>
+        <TabsContent value="membership" className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Current Subscription */}
+            <Card className="bg-gray-800/50 border-gray-700">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center gap-2">
+                  <Crown className="h-5 w-5 text-yellow-500" />
+                  Current Plan
+                </CardTitle>
+                <CardDescription>Your subscription status and details</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {loadingSubscription ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-white" />
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-400">Plan</span>
+                      <Badge 
+                        variant={isProUser ? "default" : "secondary"}
+                        className={isProUser ? "bg-yellow-600/20 text-yellow-400 border-yellow-600/50" : "bg-gray-600/20 text-gray-400 border-gray-600/50"}
+                      >
+                        {currentPlan}
+                      </Badge>
                     </div>
 
-                    {/* Plan Features */}
-                    <div className="space-y-2">
-                      <h4 className="font-medium text-white">Plan Features</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                        {subscriptionData?.plan === "creator_pro" ? (
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-400">Status</span>
+                      <div className="flex items-center gap-2">
+                        {subscription?.status === 'active' ? (
                           <>
-                            <div className="flex items-center gap-2 text-sm text-green-400">
-                              <CheckCircle className="h-4 w-4" />
-                              Unlimited downloads
-                            </div>
-                            <div className="flex items-center gap-2 text-sm text-green-400">
-                              <CheckCircle className="h-4 w-4" />
-                              Unlimited bundles on storefront
-                            </div>
-                            <div className="flex items-center gap-2 text-sm text-green-400">
-                              <CheckCircle className="h-4 w-4" />
-                              Access to all clips
-                            </div>
-                            <div className="flex items-center gap-2 text-sm text-green-400">
-                              <CheckCircle className="h-4 w-4" />
-                              Priority support
-                            </div>
+                            <CheckCircle className="h-4 w-4 text-green-400" />
+                            <span className="text-green-400">Active</span>
+                          </>
+                        ) : subscription?.cancel_at_period_end ? (
+                          <>
+                            <AlertCircle className="h-4 w-4 text-yellow-400" />
+                            <span className="text-yellow-400">Canceled</span>
                           </>
                         ) : (
                           <>
-                            <div className="flex items-center gap-2 text-sm text-zinc-400">
-                              <CheckCircle className="h-4 w-4" />
-                              15 downloads per month
-                            </div>
-                            <div className="flex items-center gap-2 text-sm text-zinc-400">
-                              <CheckCircle className="h-4 w-4" />
-                              Maximum 2 bundles on storefront
-                            </div>
-                            <div className="flex items-center gap-2 text-sm text-zinc-400">
-                              <CheckCircle className="h-4 w-4" />
-                              Limited organization features
-                            </div>
+                            <XCircle className="h-4 w-4 text-gray-400" />
+                            <span className="text-gray-400">Inactive</span>
                           </>
                         )}
                       </div>
                     </div>
 
-                    {/* Billing Information */}
-                    {subscriptionData?.isActive && subscriptionData?.plan === "creator_pro" && (
-                      <div className="space-y-2">
-                        <h4 className="font-medium text-white">Billing Information</h4>
-                        <div className="p-4 bg-zinc-800/50 rounded-lg border border-zinc-700/50 space-y-2">
-                          {subscriptionData?.currentPeriodEnd && (
-                            <div className="flex justify-between text-sm">
-                              <span className="text-zinc-400">Next billing date:</span>
-                              <span className="text-white">
-                                {new Date(subscriptionData.currentPeriodEnd).toLocaleDateString()}
-                              </span>
-                            </div>
-                          )}
-                          {subscriptionData?.stripeCustomerId && (
-                            <div className="flex justify-between text-sm">
-                              <span className="text-zinc-400">Customer ID:</span>
-                              <span className="text-white font-mono text-xs">
-                                {subscriptionData.stripeCustomerId}
-                              </span>
-                            </div>
-                          )}
+                    {subscription && (
+                      <>
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-400">Price</span>
+                          <span className="text-white font-semibold">
+                            {formatCurrency(subscription.plan.amount, subscription.plan.currency)} / {subscription.plan.interval}
+                          </span>
                         </div>
-                      </div>
+
+                        {subscription.cancel_at_period_end ? (
+                          <div className="flex items-center justify-between">
+                            <span className="text-gray-400">Access ends</span>
+                            <span className="text-yellow-400">
+                              {formatDate(subscription.current_period_end)}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between">
+                            <span className="text-gray-400">Next billing</span>
+                            <span className="text-white">
+                              {formatDate(subscription.current_period_end)}
+                            </span>
+                          </div>
+                        )}
+
+                        {profile.stripeCustomerId && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-gray-400">Customer ID</span>
+                            <span className="text-gray-500 text-sm font-mono">
+                              {profile.stripeCustomerId}
+                            </span>
+                          </div>
+                        )}
+                      </>
                     )}
 
-                    {/* Subscription Actions */}
-                    <div className="space-y-4">
-                      {subscriptionData?.plan === "creator_pro" && subscriptionData?.isActive ? (
-                        <div className="space-y-4">
-                          {subscriptionData?.subscriptionCanceledAt ? (
-                            <div className="p-4 bg-yellow-900/20 border border-yellow-500/50 rounded-lg">
-                              <div className="flex items-center gap-2 text-yellow-400 mb-2">
-                                <AlertTriangle className="h-4 w-4" />
-                                <span className="font-medium">Subscription Canceled</span>
-                              </div>
-                              <p className="text-sm text-yellow-300">
-                                Your subscription is canceled and will end on{" "}
-                                {subscriptionData?.subscriptionEndDate
-                                  ? new Date(subscriptionData.subscriptionEndDate).toLocaleDateString()
-                                  : "the next billing date"}
-                                . You'll continue to have access until then.
-                              </p>
-                            </div>
-                          ) : (
-                            <Button
-                              onClick={handleCancelSubscription}
-                              disabled={cancelingSubscription}
-                              variant="destructive"
-                              className="w-full"
-                            >
-                              {cancelingSubscription ? (
-                                <>
-                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                  Canceling...
-                                </>
-                              ) : (
-                                <>
-                                  <CreditCard className="mr-2 h-4 w-4" />
-                                  Cancel Subscription
-                                </>
-                              )}
+                    <Separator className="bg-gray-700" />
+
+                    {/* Action Buttons */}
+                    <div className="space-y-3">
+                      {subscription?.status === 'active' && !subscription.cancel_at_period_end ? (
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="destructive" className="w-full">
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Cancel Subscription
                             </Button>
-                          )}
-                        </div>
-                      ) : (
-                        <Button
-                          onClick={() => window.open("https://buy.stripe.com/14A6oHeWEeJngFv4SzeIw04", "_blank")}
-                          className="w-full bg-red-600 hover:bg-red-700"
+                          </AlertDialogTrigger>
+                          <AlertDialogContent className="bg-gray-800 border-gray-700">
+                            <AlertDialogHeader>
+                              <AlertDialogTitle className="text-white">Cancel Subscription</AlertDialogTitle>
+                              <AlertDialogDescription className="text-gray-400">
+                                Are you sure you want to cancel your Creator Pro subscription? You'll continue to have access until {formatDate(subscription.current_period_end)}.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel className="bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600">
+                                Keep Subscription
+                              </AlertDialogCancel>
+                              <AlertDialogAction 
+                                onClick={handleCancelSubscription}
+                                disabled={canceling}
+                                className="bg-red-600 hover:bg-red-700"
+                              >
+                                {canceling ? (
+                                  <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    Canceling...
+                                  </>
+                                ) : (
+                                  'Cancel Subscription'
+                                )}
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      ) : !isProUser ? (
+                        <Button 
+                          className="w-full bg-yellow-600 hover:bg-yellow-700 text-black font-semibold"
+                          onClick={() => window.open('https://buy.stripe.com/14A6oHeWEeJngFv4SzeIw04', '_blank')}
                         >
-                          <Crown className="mr-2 h-4 w-4" />
+                          <Crown className="h-4 w-4 mr-2" />
                           Upgrade to Creator Pro
                         </Button>
-                      )}
+                      ) : subscription?.cancel_at_period_end ? (
+                        <div className="text-center p-4 bg-yellow-600/10 border border-yellow-600/20 rounded-lg">
+                          <AlertCircle className="h-6 w-6 text-yellow-400 mx-auto mb-2" />
+                          <p className="text-yellow-400 text-sm">
+                            Your subscription is canceled and will end on {formatDate(subscription.current_period_end)}
+                          </p>
+                        </div>
+                      ) : null}
                     </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Plan Features */}
+            <Card className="bg-gray-800/50 border-gray-700">
+              <CardHeader>
+                <CardTitle className="text-white">Plan Features</CardTitle>
+                <CardDescription>What's included in your current plan</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <CheckCircle className="h-5 w-5 text-green-400" />
+                    <span className="text-gray-300">Upload and share content</span>
                   </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
+                  <div className="flex items-center gap-3">
+                    <CheckCircle className="h-5 w-5 text-green-400" />
+                    <span className="text-gray-300">Basic analytics</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <CheckCircle className="h-5 w-5 text-green-400" />
+                    <span className="text-gray-300">Community access</span>
+                  </div>
+                  
+                  {isProUser ? (
+                    <>
+                      <div className="flex items-center gap-3">
+                        <CheckCircle className="h-5 w-5 text-yellow-400" />
+                        <span className="text-white font-medium">Accept payments</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <CheckCircle className="h-5 w-5 text-yellow-400" />
+                        <span className="text-white font-medium">Advanced analytics</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <CheckCircle className="h-5 w-5 text-yellow-400" />
+                        <span className="text-white font-medium">Priority support</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <CheckCircle className="h-5 w-5 text-yellow-400" />
+                        <span className="text-white font-medium">Custom branding</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-3">
+                        <XCircle className="h-5 w-5 text-gray-500" />
+                        <span className="text-gray-500">Accept payments</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <XCircle className="h-5 w-5 text-gray-500" />
+                        <span className="text-gray-500">Advanced analytics</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <XCircle className="h-5 w-5 text-gray-500" />
+                        <span className="text-gray-500">Priority support</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <XCircle className="h-5 w-5 text-gray-500" />
+                        <span className="text-gray-500">Custom branding</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {!isProUser && (
+                  <>
+                    <Separator className="bg-gray-700" />
+                    <div className="text-center">
+                      <p className="text-gray-400 text-sm mb-3">
+                        Upgrade to Creator Pro for $15/month
+                      </p>
+                      <Button 
+                        size="sm"
+                        className="bg-yellow-600 hover:bg-yellow-700 text-black font-semibold"
+                        onClick={() => window.open('https://buy.stripe.com/14A6oHeWEeJngFv4SzeIw04', '_blank')}
+                      >
+                        <Crown className="h-4 w-4 mr-2" />
+                        Upgrade Now
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
       </Tabs>
-
-      {/* Image Crop Modal */}
-      {showCropModal && imageToCrop && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-zinc-900 rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-auto">
-            <h3 className="text-lg font-medium text-white mb-4">Crop Profile Picture</h3>
-
-            <div className="mb-4">
-              <ReactCrop
-                crop={crop}
-                onChange={(_, percentCrop) => setCrop(percentCrop)}
-                onComplete={(c) => setCompletedCrop(c)}
-                aspect={1}
-                className="max-w-full"
-              >
-                <img
-                  ref={imgRef}
-                  alt="Crop me"
-                  src={imageToCrop || "/placeholder.svg"}
-                  onLoad={onImageLoad}
-                  className="max-w-full h-auto"
-                />
-              </ReactCrop>
-            </div>
-
-            <div className="flex gap-3 justify-end">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowCropModal(false)
-                  setImageToCrop(null)
-                }}
-                className="border-zinc-700 hover:bg-zinc-800"
-              >
-                Cancel
-              </Button>
-              <Button onClick={handleCropComplete} className="bg-red-600 hover:bg-red-700" disabled={!completedCrop}>
-                Apply Crop
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
