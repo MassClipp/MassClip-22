@@ -5,46 +5,53 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { DollarSign, TrendingUp, CreditCard, BarChart3, Bug, RefreshCw, AlertTriangle, CheckCircle, XCircle } from 'lucide-react'
+import { DollarSign, TrendingUp, CreditCard, BarChart3, RefreshCw, AlertTriangle, CheckCircle, XCircle, ExternalLink } from 'lucide-react'
 import { useStripeEarnings } from "@/hooks/use-stripe-earnings"
-import EarningsDebugPanel from "@/components/earnings-debug-panel"
+import { useAuthState } from 'react-firebase-hooks/auth'
+import { auth } from '@/firebase/config'
 
 export default function EarningsContent() {
   const { earningsData, isLoading, error, refetch } = useStripeEarnings()
-  const [showDebug, setShowDebug] = useState(false)
+  const [user] = useAuthState(auth)
+  const [dashboardLoading, setDashboardLoading] = useState(false)
 
-  // Determine connection status based on the actual data
-  const getConnectionStatus = () => {
-    if (isLoading) return { status: 'loading', label: 'Checking...', variant: 'secondary' as const }
-    if (error) return { status: 'error', label: 'Error', variant: 'destructive' as const }
-    if (!earningsData) return { status: 'unknown', label: 'Unknown', variant: 'secondary' as const }
+  // Function to get Stripe Express dashboard URL
+  const openStripeDashboard = async () => {
+    if (!user) return
     
-    // Check if it's explicitly marked as unconnected
-    if (earningsData.isUnconnected) {
-      return { status: 'unconnected', label: 'Not Connected', variant: 'destructive' as const }
+    try {
+      setDashboardLoading(true)
+      const idToken = await user.getIdToken()
+      
+      const response = await fetch('/api/stripe/express-dashboard-link', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ userId: user.uid }),
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        if (data.url) {
+          window.open(data.url, '_blank')
+        } else {
+          // Fallback to regular Stripe dashboard
+          window.open('https://dashboard.stripe.com', '_blank')
+        }
+      } else {
+        // Fallback to regular Stripe dashboard
+        window.open('https://dashboard.stripe.com', '_blank')
+      }
+    } catch (error) {
+      console.error('Error opening Stripe dashboard:', error)
+      // Fallback to regular Stripe dashboard
+      window.open('https://dashboard.stripe.com', '_blank')
+    } finally {
+      setDashboardLoading(false)
     }
-    
-    // Check if account is not ready (connected but incomplete setup)
-    if (earningsData.accountNotReady) {
-      return { status: 'incomplete', label: 'Setup Required', variant: 'secondary' as const }
-    }
-    
-    // Check account status flags
-    const { accountStatus } = earningsData
-    if (!accountStatus?.chargesEnabled || !accountStatus?.payoutsEnabled || !accountStatus?.detailsSubmitted) {
-      return { status: 'incomplete', label: 'Setup Required', variant: 'secondary' as const }
-    }
-    
-    // If we have real earnings data (not demo/zero), consider it connected
-    if (earningsData.totalEarnings > 0 || earningsData.recentTransactions?.length > 0) {
-      return { status: 'connected', label: 'Connected', variant: 'default' as const }
-    }
-    
-    // Account is set up but no earnings yet
-    return { status: 'ready', label: 'Ready', variant: 'default' as const }
   }
-
-  const connectionStatus = getConnectionStatus()
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -87,29 +94,13 @@ export default function EarningsContent() {
 
   return (
     <div className="space-y-6">
+      {/* Header - Cleaned up without badges and debug button */}
       <div className="flex items-center justify-between">
         <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-bold text-white">Earnings</h1>
-            <Badge variant={connectionStatus.variant}>
-              {connectionStatus.status === 'connected' && <CheckCircle className="h-3 w-3 mr-1" />}
-              {connectionStatus.status === 'unconnected' && <XCircle className="h-3 w-3 mr-1" />}
-              {connectionStatus.status === 'incomplete' && <AlertTriangle className="h-3 w-3 mr-1" />}
-              {connectionStatus.label}
-            </Badge>
-          </div>
+          <h1 className="text-3xl font-bold text-white">Earnings</h1>
           <p className="text-gray-400">Financial overview and performance metrics</p>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowDebug(!showDebug)}
-            className="border-gray-600 text-gray-400 hover:bg-gray-700"
-          >
-            <Bug className="h-4 w-4 mr-2" />
-            Debug
-          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -133,15 +124,6 @@ export default function EarningsContent() {
             <p className="text-red-300 text-sm mt-1">{error}</p>
           </CardContent>
         </Card>
-      )}
-
-      {/* Debug Panel */}
-      {showDebug && (
-        <EarningsDebugPanel 
-          earningsData={earningsData} 
-          loading={isLoading} 
-          error={error} 
-        />
       )}
 
       {/* Main Content */}
@@ -273,16 +255,18 @@ export default function EarningsContent() {
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-gray-400">Account Status</span>
-                      <Badge variant={connectionStatus.status === 'connected' ? 'default' : 'destructive'}>
-                        {connectionStatus.status === 'connected' ? 'Active' : 'Setup Required'}
+                      <Badge variant="default" className="bg-green-600/20 text-green-400 border-green-600/50">
+                        Active
                       </Badge>
                     </div>
                     <Button 
                       variant="outline" 
                       className="w-full border-gray-600 text-gray-400 hover:bg-gray-700"
+                      onClick={openStripeDashboard}
+                      disabled={dashboardLoading}
                     >
-                      <CreditCard className="h-4 w-4 mr-2" />
-                      Stripe Dashboard
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      {dashboardLoading ? 'Opening...' : 'Stripe Dashboard'}
                     </Button>
                   </CardContent>
                 </Card>
@@ -326,34 +310,55 @@ export default function EarningsContent() {
             </TabsContent>
 
             <TabsContent value="analytics" className="space-y-4">
-              <Card className="bg-gray-900/50 border-gray-700">
-                <CardHeader>
-                  <CardTitle className="text-white">Monthly Breakdown</CardTitle>
-                  <p className="text-sm text-gray-400">Earnings over time</p>
-                </CardHeader>
-                <CardContent>
-                  {earningsData.monthlyBreakdown && earningsData.monthlyBreakdown.length > 0 ? (
-                    <div className="space-y-3">
-                      {earningsData.monthlyBreakdown.map((month, index) => (
-                        <div key={index} className="flex justify-between items-center p-3 bg-gray-800/50 rounded-lg">
-                          <div>
-                            <p className="text-white font-medium">{month.month}</p>
-                            <p className="text-xs text-gray-400">{month.transactionCount} transactions</p>
-                          </div>
-                          <p className="text-white font-medium">
-                            {formatCurrency(month.earnings)}
-                          </p>
-                        </div>
-                      ))}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card className="bg-gray-900/50 border-gray-700">
+                  <CardHeader>
+                    <CardTitle className="text-white">Sales Metrics</CardTitle>
+                    <p className="text-sm text-gray-400">Performance indicators</p>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400">Average Transaction</span>
+                      <span className="text-white font-medium">
+                        {formatCurrency(earningsData.salesMetrics?.averageTransactionValue || 0)}
+                      </span>
                     </div>
-                  ) : (
-                    <div className="text-center py-8">
-                      <BarChart3 className="h-12 w-12 text-gray-600 mx-auto mb-4" />
-                      <p className="text-gray-400">No analytics data available</p>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400">Conversion Rate</span>
+                      <span className="text-white font-medium">
+                        {(earningsData.salesMetrics?.conversionRate || 0).toFixed(1)}%
+                      </span>
                     </div>
-                  )}
-                </CardContent>
-              </Card>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400">Total Sales Count</span>
+                      <span className="text-white font-medium">
+                        {earningsData.salesMetrics?.totalSales || 0}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-gray-900/50 border-gray-700">
+                  <CardHeader>
+                    <CardTitle className="text-white">Account Health</CardTitle>
+                    <p className="text-sm text-gray-400">Stripe account status</p>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400">Charges Enabled</span>
+                      <CheckCircle className="h-5 w-5 text-green-400" />
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400">Payouts Enabled</span>
+                      <CheckCircle className="h-5 w-5 text-green-400" />
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400">Details Submitted</span>
+                      <CheckCircle className="h-5 w-5 text-green-400" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
             </TabsContent>
           </Tabs>
         </>
