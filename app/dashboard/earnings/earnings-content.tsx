@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
 import { RefreshCw, DollarSign, TrendingUp, CreditCard, Users, AlertCircle, CheckCircle, XCircle, Bug, Info, Loader2, ExternalLink, Globe, Shield, ArrowRight, Zap, Lock, BarChart3 } from 'lucide-react'
 import { useStripeEarnings } from "@/hooks/use-stripe-earnings"
+import EarningsDebugPanel from "@/components/earnings-debug-panel"
 
 // Safe formatting functions
 function formatCurrency(amount: number): string {
@@ -386,21 +387,13 @@ export default function EarningsContent() {
         </TabsContent>
       </Tabs>
 
-      {/* Debug Information */}
+      {/* Enhanced Debug Information */}
       {debugMode && (
-        <Card className="bg-gray-900/50 border-gray-600">
-          <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
-              <Bug className="h-5 w-5" />
-              Debug Information
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <pre className="text-xs text-gray-400 overflow-auto max-h-96">
-              {JSON.stringify(data, null, 2)}
-            </pre>
-          </CardContent>
-        </Card>
+        <EarningsDebugPanel 
+          earningsData={data}
+          loading={loading}
+          error={error}
+        />
       )}
 
       {/* Footer */}
