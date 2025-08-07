@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/components/ui/use-toast"
-import { Loader2, User, Camera, Instagram, Twitter, Globe, Save, CheckCircle, ExternalLink } from "lucide-react"
+import { Loader2, User, Camera, Instagram, Twitter, Globe, Save, CheckCircle, ExternalLink, Crown, CreditCard, AlertTriangle } from 'lucide-react'
 import ReactCrop, { type Crop, centerCrop, makeAspectCrop } from "react-image-crop"
 import "react-image-crop/dist/ReactCrop.css"
 
@@ -49,6 +49,11 @@ export default function ProfilePage() {
   const imgRef = useRef<HTMLImageElement>(null)
 
   const [isOnline, setIsOnline] = useState(true)
+
+  // Subscription state
+  const [subscriptionData, setSubscriptionData] = useState<any>(null)
+  const [loadingSubscription, setLoadingSubscription] = useState(true)
+  const [cancelingSubscription, setCancelingSubscription] = useState(false)
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true)
@@ -140,6 +145,35 @@ export default function ProfilePage() {
 
     fetchUserProfile()
   }, [user, toast])
+
+  // Fetch subscription data
+  useEffect(() => {
+    const fetchSubscriptionData = async () => {
+      if (!user) return
+
+      try {
+        setLoadingSubscription(true)
+        const response = await fetch("/api/verify-subscription", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ userId: user.uid }),
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          setSubscriptionData(data)
+        }
+      } catch (error) {
+        console.error("Error fetching subscription data:", error)
+      } finally {
+        setLoadingSubscription(false)
+      }
+    }
+
+    fetchSubscriptionData()
+  }, [user])
 
   const handleProfilePicChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -430,6 +464,55 @@ export default function ProfilePage() {
     }
   }
 
+  const handleCancelSubscription = async () => {
+    if (!user) return
+
+    setCancelingSubscription(true)
+    try {
+      const response = await fetch("/api/cancel-subscription", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ userId: user.uid }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to cancel subscription")
+      }
+
+      toast({
+        title: "Subscription Canceled",
+        description: "Your subscription has been canceled successfully. You'll have access until the end of your billing period.",
+      })
+
+      // Refresh subscription data
+      const refreshResponse = await fetch("/api/verify-subscription", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ userId: user.uid }),
+      })
+
+      if (refreshResponse.ok) {
+        const refreshData = await refreshResponse.json()
+        setSubscriptionData(refreshData)
+      }
+    } catch (error) {
+      console.error("Error canceling subscription:", error)
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to cancel subscription. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setCancelingSubscription(false)
+    }
+  }
+
   const handleViewProfile = () => {
     if (username) {
       window.open(`/creator/${username}?updated=true`, "_blank")
@@ -454,6 +537,7 @@ export default function ProfilePage() {
       <Tabs defaultValue="profile" className="space-y-6">
         <TabsList className="bg-zinc-800/50 border border-zinc-700/50">
           <TabsTrigger value="profile">Profile</TabsTrigger>
+          <TabsTrigger value="membership">Membership</TabsTrigger>
         </TabsList>
 
         <TabsContent value="profile">
@@ -700,6 +784,165 @@ export default function ProfilePage() {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        <TabsContent value="membership">
+          <Card className="bg-zinc-900/60 border-zinc-800/50 backdrop-blur-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Crown className="h-5 w-5 text-yellow-500" />
+                Membership Status
+              </CardTitle>
+              <CardDescription>Manage your subscription and billing</CardDescription>
+            </CardHeader>
+
+            <CardContent className="space-y-6">
+              {loadingSubscription ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
+                </div>
+              ) : (
+                <>
+                  {/* Current Plan */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between p-4 bg-zinc-800/50 rounded-lg border border-zinc-700/50">
+                      <div>
+                        <h3 className="font-medium text-white">Current Plan</h3>
+                        <p className="text-sm text-zinc-400">
+                          {subscriptionData?.plan === "creator_pro" ? "Creator Pro" : "Free"}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-medium text-white">
+                          {subscriptionData?.plan === "creator_pro" ? "$15/month" : "$0"}
+                        </p>
+                        <p className="text-sm text-zinc-400">
+                          {subscriptionData?.isActive ? "Active" : "Inactive"}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Plan Features */}
+                    <div className="space-y-2">
+                      <h4 className="font-medium text-white">Plan Features</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        {subscriptionData?.plan === "creator_pro" ? (
+                          <>
+                            <div className="flex items-center gap-2 text-sm text-green-400">
+                              <CheckCircle className="h-4 w-4" />
+                              Unlimited downloads
+                            </div>
+                            <div className="flex items-center gap-2 text-sm text-green-400">
+                              <CheckCircle className="h-4 w-4" />
+                              Unlimited bundles on storefront
+                            </div>
+                            <div className="flex items-center gap-2 text-sm text-green-400">
+                              <CheckCircle className="h-4 w-4" />
+                              Access to all clips
+                            </div>
+                            <div className="flex items-center gap-2 text-sm text-green-400">
+                              <CheckCircle className="h-4 w-4" />
+                              Priority support
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="flex items-center gap-2 text-sm text-zinc-400">
+                              <CheckCircle className="h-4 w-4" />
+                              15 downloads per month
+                            </div>
+                            <div className="flex items-center gap-2 text-sm text-zinc-400">
+                              <CheckCircle className="h-4 w-4" />
+                              Maximum 2 bundles on storefront
+                            </div>
+                            <div className="flex items-center gap-2 text-sm text-zinc-400">
+                              <CheckCircle className="h-4 w-4" />
+                              Limited organization features
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Billing Information */}
+                    {subscriptionData?.isActive && subscriptionData?.plan === "creator_pro" && (
+                      <div className="space-y-2">
+                        <h4 className="font-medium text-white">Billing Information</h4>
+                        <div className="p-4 bg-zinc-800/50 rounded-lg border border-zinc-700/50 space-y-2">
+                          {subscriptionData?.currentPeriodEnd && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-zinc-400">Next billing date:</span>
+                              <span className="text-white">
+                                {new Date(subscriptionData.currentPeriodEnd).toLocaleDateString()}
+                              </span>
+                            </div>
+                          )}
+                          {subscriptionData?.stripeCustomerId && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-zinc-400">Customer ID:</span>
+                              <span className="text-white font-mono text-xs">
+                                {subscriptionData.stripeCustomerId}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Subscription Actions */}
+                    <div className="space-y-4">
+                      {subscriptionData?.plan === "creator_pro" && subscriptionData?.isActive ? (
+                        <div className="space-y-4">
+                          {subscriptionData?.subscriptionCanceledAt ? (
+                            <div className="p-4 bg-yellow-900/20 border border-yellow-500/50 rounded-lg">
+                              <div className="flex items-center gap-2 text-yellow-400 mb-2">
+                                <AlertTriangle className="h-4 w-4" />
+                                <span className="font-medium">Subscription Canceled</span>
+                              </div>
+                              <p className="text-sm text-yellow-300">
+                                Your subscription is canceled and will end on{" "}
+                                {subscriptionData?.subscriptionEndDate
+                                  ? new Date(subscriptionData.subscriptionEndDate).toLocaleDateString()
+                                  : "the next billing date"}
+                                . You'll continue to have access until then.
+                              </p>
+                            </div>
+                          ) : (
+                            <Button
+                              onClick={handleCancelSubscription}
+                              disabled={cancelingSubscription}
+                              variant="destructive"
+                              className="w-full"
+                            >
+                              {cancelingSubscription ? (
+                                <>
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                  Canceling...
+                                </>
+                              ) : (
+                                <>
+                                  <CreditCard className="mr-2 h-4 w-4" />
+                                  Cancel Subscription
+                                </>
+                              )}
+                            </Button>
+                          )}
+                        </div>
+                      ) : (
+                        <Button
+                          onClick={() => window.open("https://buy.stripe.com/14A6oHeWEeJngFv4SzeIw04", "_blank")}
+                          className="w-full bg-red-600 hover:bg-red-700"
+                        >
+                          <Crown className="mr-2 h-4 w-4" />
+                          Upgrade to Creator Pro
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 
