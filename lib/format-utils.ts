@@ -1,105 +1,117 @@
 /**
- * Utility functions for formatting data
+ * Utility functions for formatting numbers, dates, and other data
  */
 
-/**
- * Format a number as currency
- */
-export function formatCurrency(amount: number, currency = "USD"): string {
-  if (typeof amount !== "number" || isNaN(amount)) {
-    return "$0.00"
+export interface StripeEarningsData {
+  totalEarnings: number
+  thisMonthEarnings: number
+  lastMonthEarnings: number
+  last30DaysEarnings: number
+  pendingPayout: number
+  availableBalance: number
+  nextPayoutDate: Date | null
+  payoutSchedule: string
+  salesMetrics: {
+    totalSales: number
+    thisMonthSales: number
+    last30DaysSales: number
+    averageTransactionValue: number
+    conversionRate: number
   }
-
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount)
+  accountStatus: {
+    chargesEnabled: boolean
+    payoutsEnabled: boolean
+    detailsSubmitted: boolean
+    requirementsCount: number
+    currentlyDue: string[]
+    pastDue: string[]
+  }
+  recentTransactions: any[]
+  payoutHistory: any[]
+  monthlyBreakdown: any[]
+  balanceBreakdown: {
+    available: { amount: number; currency: string }[]
+    pending: { amount: number; currency: string }[]
+    reserved: { amount: number; currency: string }[]
+  }
+  error?: string | null
+  isDemo?: boolean
+  isUnconnected?: boolean
+  message?: string
 }
 
 /**
- * Format a number with proper locale formatting
- */
-export function formatNumber(num: number): string {
-  if (typeof num !== "number" || isNaN(num)) {
-    return "0"
-  }
-
-  return new Intl.NumberFormat("en-US").format(num)
-}
-
-/**
- * Format an integer (whole number)
- */
-export function formatInteger(value: number): string {
-  if (typeof value !== "number" || isNaN(value)) {
-    return "0"
-  }
-
-  return new Intl.NumberFormat("en-US").format(Math.floor(value))
-}
-
-/**
- * Format a percentage
- */
-export function formatPercentage(value: number): string {
-  if (typeof value !== "number" || isNaN(value)) {
-    return "0%"
-  }
-
-  return `${value >= 0 ? "+" : ""}${value.toFixed(1)}%`
-}
-
-/**
- * Format duration in seconds to HH:MM:SS or MM:SS
- */
-export function formatDuration(seconds: number): string {
-  if (typeof seconds !== "number" || isNaN(seconds) || seconds < 0) {
-    return "0:00"
-  }
-
-  const hours = Math.floor(seconds / 3600)
-  const minutes = Math.floor((seconds % 3600) / 60)
-  const remainingSeconds = Math.floor(seconds % 60)
-
-  if (hours > 0) {
-    return `${hours}:${minutes.toString().padStart(2, "0")}:${remainingSeconds.toString().padStart(2, "0")}`
-  }
-
-  return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
-}
-
-/**
- * Safely convert any value to a number
+ * Safely convert a value to a number, returning 0 for invalid inputs
  */
 export function safeNumber(value: any): number {
-  if (typeof value === "number" && !isNaN(value)) {
+  if (typeof value === "number" && !isNaN(value) && isFinite(value)) {
     return value
   }
 
   if (typeof value === "string") {
     const parsed = Number.parseFloat(value)
-    return isNaN(parsed) ? 0 : parsed
+    if (!isNaN(parsed) && isFinite(parsed)) {
+      return parsed
+    }
   }
 
   return 0
 }
 
 /**
- * Format a date to a readable string
+ * Format a number as currency (USD)
  */
-export function formatDate(date: Date | string | number): string {
+export function formatCurrency(amount: number): string {
+  const safeAmount = safeNumber(amount)
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(safeAmount)
+}
+
+/**
+ * Format a number with proper locale formatting
+ */
+export function formatNumber(value: number): string {
+  const safeValue = safeNumber(value)
+  return new Intl.NumberFormat("en-US").format(safeValue)
+}
+
+/**
+ * Format a number as an integer (whole number)
+ */
+export function formatInteger(value: number): string {
+  const safeValue = safeNumber(value)
+  return new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(Math.floor(safeValue))
+}
+
+/**
+ * Format a percentage with + or - sign
+ */
+export function formatPercentage(value: number): string {
+  const safeValue = safeNumber(value)
+  const sign = safeValue >= 0 ? "+" : ""
+  return `${sign}${safeValue.toFixed(1)}%`
+}
+
+/**
+ * Format a date in short format
+ */
+export function formatDate(date: Date | string): string {
   try {
-    const d = new Date(date)
-    if (isNaN(d.getTime())) {
+    const dateObj = typeof date === "string" ? new Date(date) : date
+    if (isNaN(dateObj.getTime())) {
       return "Invalid Date"
     }
-
-    return d.toLocaleDateString("en-US", {
-      year: "numeric",
+    return dateObj.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
+      year: "numeric",
     })
   } catch {
     return "Invalid Date"
@@ -109,18 +121,17 @@ export function formatDate(date: Date | string | number): string {
 /**
  * Format a date with time
  */
-export function formatDateTime(date: Date | string | number): string {
+export function formatDateTime(date: Date | string): string {
   try {
-    const d = new Date(date)
-    if (isNaN(d.getTime())) {
+    const dateObj = typeof date === "string" ? new Date(date) : date
+    if (isNaN(dateObj.getTime())) {
       return "Invalid Date"
     }
-
-    return d.toLocaleDateString("en-US", {
-      year: "numeric",
+    return dateObj.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
-      hour: "2-digit",
+      year: "numeric",
+      hour: "numeric",
       minute: "2-digit",
     })
   } catch {
@@ -129,33 +140,52 @@ export function formatDateTime(date: Date | string | number): string {
 }
 
 /**
- * Calculate percentage change between two values
+ * Format duration from seconds to HH:MM:SS
  */
-export function calculatePercentageChange(current: number, previous: number): number {
-  if (previous === 0) {
-    return current > 0 ? 100 : 0
-  }
+export function formatDuration(seconds: number): string {
+  const safeSeconds = safeNumber(seconds)
+  const hours = Math.floor(safeSeconds / 3600)
+  const minutes = Math.floor((safeSeconds % 3600) / 60)
+  const remainingSeconds = Math.floor(safeSeconds % 60)
 
-  return ((current - previous) / previous) * 100
+  if (hours > 0) {
+    return `${hours}:${minutes.toString().padStart(2, "0")}:${remainingSeconds.toString().padStart(2, "0")}`
+  }
+  return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
 }
 
 /**
  * Format file size in bytes to human readable format
  */
 export function formatFileSize(bytes: number): string {
-  if (bytes === 0) return "0 Bytes"
+  const safeBytes = safeNumber(bytes)
+  if (safeBytes === 0) return "0 Bytes"
 
   const k = 1024
   const sizes = ["Bytes", "KB", "MB", "GB", "TB"]
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  const i = Math.floor(Math.log(safeBytes) / Math.log(k))
 
-  return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
+  return Number.parseFloat((safeBytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
 }
 
 /**
- * Create safe default earnings data structure
+ * Calculate percentage change between two values
  */
-export function createDefaultEarningsData(): any {
+export function calculatePercentageChange(current: number, previous: number): number {
+  const safeCurrent = safeNumber(current)
+  const safePrevious = safeNumber(previous)
+
+  if (safePrevious === 0) {
+    return safeCurrent > 0 ? 100 : 0
+  }
+
+  return ((safeCurrent - safePrevious) / safePrevious) * 100
+}
+
+/**
+ * Creates default earnings data with all zeros - for unconnected accounts
+ */
+export function createDefaultEarningsData(): StripeEarningsData {
   return {
     totalEarnings: 0,
     thisMonthEarnings: 0,
@@ -163,6 +193,8 @@ export function createDefaultEarningsData(): any {
     last30DaysEarnings: 0,
     pendingPayout: 0,
     availableBalance: 0,
+    nextPayoutDate: null,
+    payoutSchedule: "monthly",
     salesMetrics: {
       totalSales: 0,
       thisMonthSales: 0,
@@ -186,37 +218,40 @@ export function createDefaultEarningsData(): any {
       pending: [],
       reserved: [],
     },
-    nextPayoutDate: null,
-    payoutSchedule: "monthly",
-    error: null,
+    isDemo: false,
+    isUnconnected: true,
+    message: "Connect your Stripe account to view earnings data",
   }
 }
 
 /**
- * Validate and clean earnings data structure
+ * Validates and sanitizes earnings data to ensure all numbers are valid
  */
-export function validateEarningsData(data: any): any {
-  if (!data || typeof data !== "object") {
+export function validateEarningsData(data: any): StripeEarningsData {
+  if (!data || typeof data !== 'object') {
+    console.warn("Invalid earnings data received, using defaults")
     return createDefaultEarningsData()
   }
 
-  const safeArray = (val: any): any[] => {
-    if (Array.isArray(val)) return val
-    return []
+  // Helper function to safely get array
+  const safeArray = (value: any): any[] => {
+    return Array.isArray(value) ? value : []
   }
 
-  const safeObject = (val: any, defaults: any): any => {
-    if (val && typeof val === "object") return { ...defaults, ...val }
-    return defaults
+  // Helper function to safely get object
+  const safeObject = (value: any, defaults: any): any => {
+    return value && typeof value === 'object' ? { ...defaults, ...value } : defaults
   }
 
-  return {
+  const validated: StripeEarningsData = {
     totalEarnings: safeNumber(data.totalEarnings),
     thisMonthEarnings: safeNumber(data.thisMonthEarnings),
     lastMonthEarnings: safeNumber(data.lastMonthEarnings),
     last30DaysEarnings: safeNumber(data.last30DaysEarnings),
     pendingPayout: safeNumber(data.pendingPayout),
     availableBalance: safeNumber(data.availableBalance),
+    nextPayoutDate: data.nextPayoutDate ? new Date(data.nextPayoutDate) : null,
+    payoutSchedule: typeof data.payoutSchedule === 'string' ? data.payoutSchedule : "monthly",
     salesMetrics: safeObject(data.salesMetrics, {
       totalSales: 0,
       thisMonthSales: 0,
@@ -240,8 +275,23 @@ export function validateEarningsData(data: any): any {
       pending: [],
       reserved: [],
     }),
-    nextPayoutDate: data.nextPayoutDate || null,
-    payoutSchedule: data.payoutSchedule || "monthly",
     error: data.error || null,
+    isDemo: Boolean(data.isDemo),
+    isUnconnected: Boolean(data.isUnconnected),
+    message: data.message || null,
   }
+
+  // Ensure salesMetrics numbers are valid
+  validated.salesMetrics.totalSales = safeNumber(validated.salesMetrics.totalSales)
+  validated.salesMetrics.thisMonthSales = safeNumber(validated.salesMetrics.thisMonthSales)
+  validated.salesMetrics.last30DaysSales = safeNumber(validated.salesMetrics.last30DaysSales)
+  validated.salesMetrics.averageTransactionValue = safeNumber(validated.salesMetrics.averageTransactionValue)
+  validated.salesMetrics.conversionRate = safeNumber(validated.salesMetrics.conversionRate)
+
+  // Ensure accountStatus numbers are valid
+  validated.accountStatus.requirementsCount = safeNumber(validated.accountStatus.requirementsCount)
+  validated.accountStatus.currentlyDue = safeArray(validated.accountStatus.currentlyDue)
+  validated.accountStatus.pastDue = safeArray(validated.accountStatus.pastDue)
+
+  return validated
 }

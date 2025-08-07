@@ -1,135 +1,116 @@
-"use client"
+import { useState, useEffect } from 'react'
+import { useAuthState } from 'react-firebase-hooks/auth'
+import { auth } from '@/lib/firebase'
 
-import { useState, useEffect, useCallback } from "react"
-import { useAuth } from "@/contexts/auth-context"
-import { validateEarningsData, createDefaultEarningsData } from "@/lib/format-utils"
-
-interface StripeEarningsData {
+interface EarningsData {
   totalEarnings: number
   thisMonthEarnings: number
   lastMonthEarnings: number
   last30DaysEarnings: number
   pendingPayout: number
   availableBalance: number
-  salesMetrics: {
-    totalSales: number
-    thisMonthSales: number
-    last30DaysSales: number
-    averageTransactionValue: number
-  }
+  nextPayoutDate: Date | null
+  payoutSchedule: string
   accountStatus: {
     chargesEnabled: boolean
     payoutsEnabled: boolean
     detailsSubmitted: boolean
     requirementsCount: number
+    currentlyDue: string[]
+    pastDue: string[]
   }
   recentTransactions: any[]
   payoutHistory: any[]
-  monthlyBreakdown: any[]
+  monthlyBreakdown: {
+    month: string
+    earnings: number
+    transactionCount: number
+  }[]
+  salesMetrics: {
+    totalSales: number
+    thisMonthSales: number
+    last30DaysSales: number
+    averageTransactionValue: number
+    conversionRate: number
+  }
+  balanceBreakdown: {
+    available: { amount: number; currency: string }[]
+    pending: { amount: number; currency: string }[]
+    reserved: { amount: number; currency: string }[]
+  }
+  isDemo: boolean
+  isUnconnected: boolean
+  accountNotReady?: boolean
+  message?: string
+  error?: string
+  stripeAccountId?: string | null
+  lastUpdated: string
+  debug?: any
 }
 
 export function useStripeEarnings() {
-  const { user } = useAuth()
-  const [data, setData] = useState<StripeEarningsData>(createDefaultEarningsData())
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [user, loading, error] = useAuthState(auth)
+  const [earningsData, setEarningsData] = useState<EarningsData | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [fetchError, setFetchError] = useState<string | null>(null)
 
-  const fetchEarnings = useCallback(async () => {
+  const fetchEarnings = async () => {
+    if (!user) {
+      console.log('❌ No authenticated user found')
+      setIsLoading(false)
+      return
+    }
+
     try {
-      setLoading(true)
-      setError(null)
-
-      console.log("🔄 Fetching earnings data")
-
-      const response = await fetch("/api/dashboard/earnings", {
+      setIsLoading(true)
+      setFetchError(null)
+      
+      console.log('🔍 Fetching earnings data for user:', user.uid)
+      
+      // Get the Firebase ID token
+      const idToken = await user.getIdToken()
+      
+      const response = await fetch('/api/dashboard/earnings', {
+        method: 'GET',
         headers: {
-          "Content-Type": "application/json",
+          'Authorization': `Bearer ${idToken}`,
+          'Content-Type': 'application/json',
         },
       })
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        const errorData = await response.json()
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`)
       }
 
-      const result = await response.json()
-      console.log("📊 Raw API response received:", {
-        hasData: !!result,
-        keys: result ? Object.keys(result) : [],
-        totalEarnings: result?.totalEarnings,
-        salesMetrics: result?.salesMetrics,
-      })
-
-      // Use our bulletproof validation function
-      const validatedData = validateEarningsData(result)
-
-      console.log("✅ Validated earnings data:", {
-        totalEarnings: validatedData.totalEarnings,
-        totalSales: validatedData.salesMetrics.totalSales,
-        allFieldsValid: {
-          totalEarnings: typeof validatedData.totalEarnings === "number" && isFinite(validatedData.totalEarnings),
-          thisMonthEarnings:
-            typeof validatedData.thisMonthEarnings === "number" && isFinite(validatedData.thisMonthEarnings),
-          averageTransactionValue:
-            typeof validatedData.salesMetrics.averageTransactionValue === "number" &&
-            isFinite(validatedData.salesMetrics.averageTransactionValue),
-        },
-      })
-
-      setData(validatedData)
-      setLastUpdated(new Date())
+      const data = await response.json()
+      console.log('✅ Earnings data received:', data)
+      setEarningsData(data)
     } catch (err) {
-      console.error("❌ Error fetching earnings:", err)
-      setError(err instanceof Error ? err.message : "Failed to fetch earnings data")
-
-      // Always ensure we have valid data, even on error
-      setData(createDefaultEarningsData())
+      console.error('❌ Error fetching earnings:', err)
+      setFetchError(err instanceof Error ? err.message : 'Unknown error')
     } finally {
-      setLoading(false)
+      setIsLoading(false)
     }
-  }, [])
-
-  const refresh = useCallback(async () => {
-    console.log("🔄 Manual refresh triggered")
-    await fetchEarnings()
-  }, [fetchEarnings])
-
-  const syncData = useCallback(async () => {
-    try {
-      console.log("🔄 Syncing data...")
-      const response = await fetch("/api/dashboard/sync-stats", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error(`Failed to sync data: ${response.status}`)
-      }
-
-      // Refresh data after sync
-      await fetchEarnings()
-    } catch (err) {
-      console.error("Error syncing data:", err)
-      throw err
-    }
-  }, [fetchEarnings])
+  }
 
   useEffect(() => {
-    console.log("🔄 Fetching earnings on mount")
-    fetchEarnings()
-  }, [fetchEarnings])
+    if (!loading && user) {
+      fetchEarnings()
+    } else if (!loading && !user) {
+      setIsLoading(false)
+    }
+  }, [user, loading])
 
-  // Final safety check - ensure data is never null/undefined
-  const safeData = data || createDefaultEarningsData()
+  const refetch = () => {
+    fetchEarnings()
+  }
 
   return {
-    data: safeData, // Guaranteed to be a valid StripeEarningsData object with all numbers validated
-    loading,
-    error,
-    lastUpdated,
-    refresh,
-    syncData,
+    earningsData,
+    isLoading: isLoading || loading,
+    error: fetchError || (error ? error.message : null),
+    refetch,
+    user,
   }
 }

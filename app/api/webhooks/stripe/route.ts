@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
 import { processCheckoutSessionCompleted } from "@/lib/stripe/webhook-processor"
+import { saveConnectedStripeAccount } from "@/lib/stripe-accounts-service"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
@@ -81,6 +82,39 @@ export async function POST(req: NextRequest) {
           console.error("❌ Error processing checkout session:", error.message)
           return NextResponse.json({ error: error.message }, { status: 400 })
         }
+
+      case "account.updated":
+        try {
+          const account = event.data.object as Stripe.Account
+          console.log(`🔄 Processing account.updated for account: ${account.id}`)
+
+          // Find the user associated with this Stripe account
+          const accountsSnapshot = await adminDb
+            .collection("connectedStripeAccounts")
+            .where("stripeAccountId", "==", account.id)
+            .get()
+
+          if (accountsSnapshot.empty) {
+            console.log(`ℹ️ No user found for Stripe account: ${account.id}`)
+            return NextResponse.json({ received: true, message: "Account not found in our records" })
+          }
+
+          // Update all matching accounts (should be just one)
+          for (const doc of accountsSnapshot.docs) {
+            const userId = doc.id
+            console.log(`🔄 Updating connected account for user: ${userId}`)
+            await saveConnectedStripeAccount(userId, account)
+          }
+
+          return NextResponse.json({
+            received: true,
+            message: "Account updated successfully",
+          })
+        } catch (error: any) {
+          console.error("❌ Error processing account.updated:", error.message)
+          return NextResponse.json({ error: error.message }, { status: 400 })
+        }
+
       default:
         console.log(`ℹ️ Unhandled event type: ${event.type}`)
         return NextResponse.json({ received: true })

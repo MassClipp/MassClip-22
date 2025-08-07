@@ -6,414 +6,300 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
-import { RefreshCw, DollarSign, TrendingUp, CreditCard, Users, AlertCircle, CheckCircle, XCircle } from "lucide-react"
-import {
-  formatCurrency,
-  formatNumber,
-  formatPercentage,
-  formatDateTime,
-  calculatePercentageChange,
-  createDefaultEarningsData,
-} from "@/lib/format-utils"
+import { RefreshCw, DollarSign, TrendingUp, CreditCard, Users, AlertCircle, CheckCircle, XCircle, Bug, Info, Loader2, ExternalLink, Globe, Shield, ArrowRight, Zap, Lock, BarChart3 } from 'lucide-react'
+import { useAuthState } from 'react-firebase-hooks/auth'
+import { auth } from '@/lib/firebase'
+import EarningsContent from './earnings-content'
 
-interface EarningsData {
-  totalEarnings: number
-  thisMonthEarnings: number
-  lastMonthEarnings: number
-  last30DaysEarnings: number
-  pendingPayout: number
-  availableBalance: number
-  salesMetrics: {
-    totalSales: number
-    thisMonthSales: number
-    last30DaysSales: number
-    averageTransactionValue: number
-    conversionRate: number
-  }
-  accountStatus: {
-    chargesEnabled: boolean
-    payoutsEnabled: boolean
-    detailsSubmitted: boolean
-    requirementsCount: number
-    currentlyDue: string[]
-    pastDue: string[]
-  }
-  recentTransactions: any[]
-  payoutHistory: any[]
-  monthlyBreakdown: any[]
-  error?: string
-  isDemo?: boolean
-  stripeAccountId?: string
-  lastUpdated?: string
+// Safe formatting functions
+function formatCurrency(amount: number): string {
+  if (typeof amount !== "number" || isNaN(amount)) return "$0.00"
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(amount)
+}
+
+interface StripeConnectionStatus {
+  connected: boolean
+  accountId?: string
+  chargesEnabled: boolean
+  payoutsEnabled: boolean
+  detailsSubmitted: boolean
+  status: string
 }
 
 export default function EarningsPage() {
-  const [earningsData, setEarningsData] = useState<EarningsData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [user, loading, error] = useAuthState(auth)
+  const [stripeStatus, setStripeStatus] = useState<StripeConnectionStatus | null>(null)
+  const [checkingStripe, setCheckingStripe] = useState(true)
+  const [connectionError, setConnectionError] = useState<string | null>(null)
 
-  const fetchEarningsData = async (forceRefresh = false) => {
+  // Check Stripe connection status
+  const checkStripeStatus = async () => {
+    if (!user?.uid) return
+
     try {
-      setError(null)
-      if (forceRefresh) {
-        setRefreshing(true)
-      } else {
-        setLoading(true)
-      }
+      setCheckingStripe(true)
+      setConnectionError(null)
+      console.log("🔍 Checking Stripe connection status...")
 
-      const endpoint = "/api/dashboard/earnings"
-      const method = forceRefresh ? "POST" : "GET"
-
-      const response = await fetch(endpoint, {
-        method,
+      const idToken = await user.getIdToken()
+      const response = await fetch("/api/stripe/connect/status", {
+        method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Authorization": `Bearer ${idToken}`,
         },
+        body: JSON.stringify({ userId: user.uid }),
       })
 
-      const data = await response.json()
-
-      // Always set data, even if there's an error
-      setEarningsData(data)
-
-      if (data.error && !data.isDemo) {
-        setError(data.error)
+      if (response.ok) {
+        const data = await response.json()
+        console.log("🔍 Stripe status:", data)
+        setStripeStatus(data)
+      } else {
+        console.log("🔍 No Stripe connection found")
+        setStripeStatus({
+          connected: false,
+          chargesEnabled: false,
+          payoutsEnabled: false,
+          detailsSubmitted: false,
+          status: "not_connected"
+        })
       }
-
-      console.log("Earnings data loaded:", data)
-    } catch (err) {
-      console.error("Error fetching earnings:", err)
-      setError(err instanceof Error ? err.message : "Failed to load earnings data")
-
-      // Set fallback data
-      setEarningsData({
-        ...createDefaultEarningsData(),
-        isDemo: true,
-        error: "Failed to connect to server",
+    } catch (error) {
+      console.error("🔍 Error checking Stripe status:", error)
+      setConnectionError(error instanceof Error ? error.message : "Failed to check connection")
+      setStripeStatus({
+        connected: false,
+        chargesEnabled: false,
+        payoutsEnabled: false,
+        detailsSubmitted: false,
+        status: "error"
       })
     } finally {
-      setLoading(false)
-      setRefreshing(false)
+      setCheckingStripe(false)
     }
   }
 
   useEffect(() => {
-    fetchEarningsData()
-  }, [])
+    if (user) {
+      checkStripeStatus()
+    }
+  }, [user])
 
-  const handleRefresh = () => {
-    fetchEarningsData(true)
-  }
-
-  if (loading) {
+  // Show loading while checking auth or Stripe status
+  if (loading || checkingStripe) {
     return (
-      <div className="container mx-auto p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-3xl font-bold">Earnings Dashboard</h1>
-            <p className="text-muted-foreground">Track your revenue and performance</p>
-          </div>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {[...Array(4)].map((_, i) => (
-            <Card key={i}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Loading...</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="h-8 bg-muted animate-pulse rounded"></div>
-              </CardContent>
-            </Card>
-          ))}
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-white" />
+          <p className="text-gray-400">
+            {loading ? "Loading..." : "Checking Stripe connection..."}
+          </p>
         </div>
       </div>
     )
   }
 
-  if (error && !earningsData) {
+  // Show login prompt if not authenticated
+  if (!user) {
     return (
-      <div className="container mx-auto p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-3xl font-bold">Earnings Dashboard</h1>
-            <p className="text-muted-foreground">Track your revenue and performance</p>
-          </div>
-        </div>
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center gap-2 text-destructive">
-              <XCircle className="h-5 w-5" />
-              <span>Error: {error}</span>
-            </div>
-            <Button onClick={() => fetchEarningsData()} className="mt-4">
-              Try Again
-            </Button>
+      <div className="flex items-center justify-center min-h-screen">
+        <Card className="w-full max-w-md bg-gray-800 border-gray-700">
+          <CardContent className="pt-6">
+            <p className="text-center text-gray-400">Please log in to continue</p>
           </CardContent>
         </Card>
       </div>
     )
   }
 
-  const data = earningsData!
-  const monthlyGrowth = calculatePercentageChange(data.thisMonthEarnings, data.lastMonthEarnings)
+  // Show Stripe connection setup if not connected or not fully set up
+  if (!stripeStatus?.connected || !stripeStatus?.chargesEnabled || !stripeStatus?.detailsSubmitted) {
+    return (
+      <div className="min-h-screen">
+        {/* Hero Section - Compact */}
+        <div className="text-center py-12">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 via-purple-600 to-purple-700 rounded-full mb-4 shadow-lg">
+            <CreditCard className="w-8 h-8 text-white" />
+          </div>
+          <h1 className="text-3xl font-bold text-white mb-3">
+            Connect Your Stripe Account
+          </h1>
+          <p className="text-gray-400 mb-8">
+            Start accepting payments and track your earnings
+          </p>
+        </div>
 
-  // Determine data source badge
-  const getDataSourceBadge = () => {
-    if (data.error) {
-      return <Badge variant="destructive">Error</Badge>
-    }
-    if (data.isDemo) {
-      return <Badge variant="secondary">Demo Data</Badge>
-    }
-    return <Badge variant="default">Live Data</Badge>
-  }
-
-  // Account status badge
-  const getAccountStatusBadge = () => {
-    const { accountStatus } = data
-    if (!accountStatus.chargesEnabled || !accountStatus.payoutsEnabled) {
-      return <Badge variant="destructive">Setup Required</Badge>
-    }
-    if (accountStatus.requirementsCount > 0) {
-      return <Badge variant="secondary">Action Required</Badge>
-    }
-    return <Badge variant="default">Active</Badge>
-  }
-
-  return (
-    <div className="container mx-auto p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold">Earnings Dashboard</h1>
-          <p className="text-muted-foreground">Track your revenue and performance</p>
-          <div className="flex items-center gap-2 mt-2">
-            {getDataSourceBadge()}
-            {data.stripeAccountId && <Badge variant="outline">Account: {data.stripeAccountId.slice(-6)}</Badge>}
+        {/* Benefits Section - Individual Cards */}
+        <div className="grid grid-cols-3 gap-6 px-16 mb-12">
+          <div className="border border-gray-700/50 rounded-lg text-center p-4 bg-transparent">
+            <DollarSign className="w-8 h-8 text-blue-400 mx-auto mb-3" />
+            <h3 className="text-lg font-semibold text-white mb-2">Accept Payments</h3>
+            <p className="text-gray-400 text-sm">Process payments from customers worldwide</p>
+          </div>
+          
+          <div className="border border-gray-700/50 rounded-lg text-center p-4 bg-transparent">
+            <Globe className="w-8 h-8 text-purple-400 mx-auto mb-3" />
+            <h3 className="text-lg font-semibold text-white mb-2">Global Reach</h3>
+            <p className="text-gray-400 text-sm">Supported in 40+ countries</p>
+          </div>
+          
+          <div className="border border-gray-700/50 rounded-lg text-center p-4 bg-transparent">
+            <Shield className="w-8 h-8 text-blue-400 mx-auto mb-3" />
+            <h3 className="text-lg font-semibold text-white mb-2">Secure & Reliable</h3>
+            <p className="text-gray-400 text-sm">Bank-level security and encryption</p>
           </div>
         </div>
-        <Button onClick={handleRefresh} disabled={refreshing} variant="outline">
-          <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-          Refresh
-        </Button>
-      </div>
 
-      {/* Key Metrics */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Earnings</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(data.totalEarnings)}</div>
-            <p className="text-xs text-muted-foreground">All-time revenue</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">This Month</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(data.thisMonthEarnings)}</div>
-            <p className="text-xs text-muted-foreground">{formatPercentage(monthlyGrowth)} from last month</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Available Balance</CardTitle>
-            <CreditCard className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(data.availableBalance)}</div>
-            <p className="text-xs text-muted-foreground">Ready for payout</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Sales</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatNumber(data.salesMetrics.totalSales)}</div>
-            <p className="text-xs text-muted-foreground">
-              {formatCurrency(data.salesMetrics.averageTransactionValue)} avg order
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Account Status Alert */}
-      {data.accountStatus.requirementsCount > 0 && (
-        <Card className="mb-6 border-yellow-200 bg-yellow-50">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-yellow-600" />
+        {/* Single Connection Card - Full Width */}
+        <div className="px-16 mb-12">
+          <Card className="bg-gray-800/30 border-purple-500/30 p-8 max-w-4xl mx-auto">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 via-purple-600 to-purple-700 rounded-lg flex items-center justify-center shadow-lg">
+                <ExternalLink className="w-6 h-6 text-white" />
+              </div>
               <div>
-                <h3 className="font-semibold text-yellow-800">Account Setup Required</h3>
-                <p className="text-sm text-yellow-700">
-                  {data.accountStatus.requirementsCount} requirement(s) need attention to enable full functionality.
-                </p>
-                {data.accountStatus.currentlyDue.length > 0 && (
-                  <p className="text-xs text-yellow-600 mt-1">
-                    Currently due: {data.accountStatus.currentlyDue.join(", ")}
-                  </p>
-                )}
+                <h3 className="text-2xl font-semibold text-white">Connect Your Stripe Account</h3>
+                <p className="text-gray-400">Securely connect your Stripe account through Stripe Connect. If you don't have an account, Stripe will help you create one during the process.</p>
               </div>
             </div>
-          </CardContent>
-        </Card>
-      )}
+            
+            <div className="grid grid-cols-2 gap-8 mb-8">
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <CheckCircle className="w-5 h-5 text-blue-400" />
+                  <span className="text-gray-300">Secure OAuth connection</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <CheckCircle className="w-5 h-5 text-purple-400" />
+                  <span className="text-gray-300">No manual account IDs needed</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <CheckCircle className="w-5 h-5 text-blue-400" />
+                  <span className="text-gray-300">Stripe handles account verification</span>
+                </div>
+              </div>
+              
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <CheckCircle className="w-5 h-5 text-purple-400" />
+                  <span className="text-gray-300">Quick 5-minute setup</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <CheckCircle className="w-5 h-5 text-blue-400" />
+                  <span className="text-gray-300">2.9% + 30¢ per transaction</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <CheckCircle className="w-5 h-5 text-purple-400" />
+                  <span className="text-gray-300">Automatic payouts to your bank</span>
+                </div>
+              </div>
+            </div>
+            
+            <Button 
+              onClick={async () => {
+                try {
+                  setConnectionError(null)
+                  const idToken = await user.getIdToken()
+                  const response = await fetch("/api/stripe/connect/oauth", {
+                    method: "POST",
+                    headers: { 
+                      "Content-Type": "application/json",
+                      "Authorization": `Bearer ${idToken}`,
+                    },
+                    body: JSON.stringify({ userId: user.uid }),
+                  })
+                  const data = await response.json()
+                  if (!response.ok) throw new Error(data.error || "Failed to connect Stripe account")
+                  if (data.authUrl) window.location.href = data.authUrl
+                } catch (err) {
+                  setConnectionError(err instanceof Error ? err.message : "Failed to connect account")
+                }
+              }}
+              disabled={loading}
+              className="w-full bg-gradient-to-r from-blue-600 via-purple-600 to-purple-700 hover:from-blue-700 hover:via-purple-700 hover:to-purple-800 text-white py-4 text-lg font-semibold shadow-lg"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="mr-3 h-5 w-5 animate-spin" />
+                  Connecting...
+                </>
+              ) : (
+                <>
+                  <ExternalLink className="mr-3 h-5 w-5" />
+                  Connect with Stripe
+                </>
+              )}
+            </Button>
+            
+            <p className="text-sm text-gray-500 text-center mt-4">
+              You'll be redirected to Stripe to complete setup. If you don't have a Stripe account, one will be created for you automatically.
+            </p>
+          </Card>
+        </div>
 
-      {/* Detailed Tabs */}
-      <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="transactions">Transactions</TabsTrigger>
-          <TabsTrigger value="analytics">Analytics</TabsTrigger>
-        </TabsList>
+        {/* How It Works Section - Compact */}
+        <div className="text-center py-8">
+          <div className="flex items-center justify-center gap-3 mb-8">
+            <Info className="w-6 h-6 text-purple-400" />
+            <h2 className="text-2xl font-bold text-white">How It Works</h2>
+          </div>
+          
+          <div className="grid grid-cols-3 gap-8 px-20">
+            <div className="text-center">
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 via-purple-600 to-purple-700 rounded-full flex items-center justify-center mx-auto mb-3 text-lg font-bold text-white shadow-lg">
+                1
+              </div>
+              <h3 className="text-lg font-semibold mb-2 text-white">Click Connect</h3>
+              <p className="text-gray-400 text-sm">Start the secure connection process with Stripe</p>
+            </div>
+            
+            <div className="text-center">
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 via-purple-600 to-purple-700 rounded-full flex items-center justify-center mx-auto mb-3 text-lg font-bold text-white shadow-lg">
+                2
+              </div>
+              <h3 className="text-lg font-semibold mb-2 text-white">Complete Setup</h3>
+              <p className="text-gray-400 text-sm">Follow Stripe's secure onboarding process</p>
+            </div>
+            
+            <div className="text-center">
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 via-purple-600 to-purple-700 rounded-full flex items-center justify-center mx-auto mb-3 text-lg font-bold text-white shadow-lg">
+                3
+              </div>
+              <h3 className="text-lg font-semibold mb-2 text-white">Start Earning</h3>
+              <p className="text-gray-400 text-sm">Begin accepting payments immediately</p>
+            </div>
+          </div>
+        </div>
 
-        <TabsContent value="overview" className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>Recent Performance</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex justify-between">
-                  <span>Last 30 Days</span>
-                  <span className="font-semibold">{formatCurrency(data.last30DaysEarnings)}</span>
+        {/* Error Display */}
+        {connectionError && (
+          <div className="px-16 pb-8">
+            <Card className="border-red-600/50 bg-red-900/20">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3 text-red-400">
+                  <AlertCircle className="h-5 w-5" />
+                  <span>Error: {connectionError}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span>This Month Sales</span>
-                  <span className="font-semibold">{formatNumber(data.salesMetrics.thisMonthSales)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Last 30 Days Sales</span>
-                  <span className="font-semibold">{formatNumber(data.salesMetrics.last30DaysSales)}</span>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Payout Information</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex justify-between">
-                  <span>Pending Payout</span>
-                  <span className="font-semibold">{formatCurrency(data.pendingPayout)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Available Balance</span>
-                  <span className="font-semibold text-green-600">{formatCurrency(data.availableBalance)}</span>
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <span>Account Status</span>
-                  {getAccountStatusBadge()}
-                </div>
-                <Button className="w-full bg-transparent" variant="outline">
-                  <CreditCard className="mr-2 h-4 w-4" />
-                  Manage Payouts
+                <Button 
+                  onClick={() => setConnectionError(null)} 
+                  variant="outline" 
+                  size="sm" 
+                  className="mt-3 border-red-600/50 text-red-400 hover:bg-red-900/40"
+                >
+                  Dismiss
                 </Button>
               </CardContent>
             </Card>
           </div>
-        </TabsContent>
+        )}
+      </div>
+    )
+  }
 
-        <TabsContent value="transactions" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Recent Transactions</CardTitle>
-              <CardDescription>Your latest payment transactions</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {data.recentTransactions.length > 0 ? (
-                <div className="space-y-4">
-                  {data.recentTransactions.slice(0, 10).map((transaction) => (
-                    <div key={transaction.id} className="flex items-center justify-between p-3 border rounded-lg">
-                      <div>
-                        <p className="font-medium">{transaction.description}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {formatDateTime(transaction.created)} • {transaction.type}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-semibold">{formatCurrency(transaction.net)}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {transaction.status === "available" ? (
-                            <CheckCircle className="inline h-3 w-3 text-green-500 mr-1" />
-                          ) : (
-                            <AlertCircle className="inline h-3 w-3 text-yellow-500 mr-1" />
-                          )}
-                          {transaction.status}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-center text-muted-foreground py-8">No transactions found</p>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="analytics" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Account Health</CardTitle>
-              <CardDescription>Your Stripe account status and capabilities</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="flex items-center justify-between">
-                  <span>Charges Enabled</span>
-                  {data.accountStatus.chargesEnabled ? (
-                    <CheckCircle className="h-5 w-5 text-green-500" />
-                  ) : (
-                    <XCircle className="h-5 w-5 text-red-500" />
-                  )}
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Payouts Enabled</span>
-                  {data.accountStatus.payoutsEnabled ? (
-                    <CheckCircle className="h-5 w-5 text-green-500" />
-                  ) : (
-                    <XCircle className="h-5 w-5 text-red-500" />
-                  )}
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Details Submitted</span>
-                  {data.accountStatus.detailsSubmitted ? (
-                    <CheckCircle className="h-5 w-5 text-green-500" />
-                  ) : (
-                    <XCircle className="h-5 w-5 text-red-500" />
-                  )}
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Requirements</span>
-                  <Badge variant={data.accountStatus.requirementsCount > 0 ? "destructive" : "default"}>
-                    {data.accountStatus.requirementsCount} pending
-                  </Badge>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-
-      {/* Footer Info */}
-      {data.lastUpdated && (
-        <div className="mt-6 text-center text-sm text-muted-foreground">
-          Last updated: {formatDateTime(data.lastUpdated)}
-        </div>
-      )}
-    </div>
-  )
+  // Show the earnings dashboard if connected and set up
+  return <EarningsContent />
 }
