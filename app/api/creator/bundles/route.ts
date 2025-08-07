@@ -32,12 +32,92 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
 })
 
+// GET method to fetch user's bundles
+export async function GET(request: NextRequest) {
+  try {
+    console.log("🔍 [Bundles] Fetching user bundles...")
+
+    // Get authorization header
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
+    }
+
+    const idToken = authHeader.replace("Bearer ", "")
+
+    // Verify authentication
+    let decodedToken
+    try {
+      decodedToken = await auth.verifyIdToken(idToken)
+    } catch (error) {
+      console.error("❌ [Bundles] Token verification failed:", error)
+      return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
+    }
+
+    const userId = decodedToken.uid
+    console.log("✅ [Bundles] User authenticated:", userId)
+
+    // Query bundles collection for user's bundles
+    const bundlesQuery = db.collection("bundles").where("creatorId", "==", userId)
+    const bundlesSnapshot = await bundlesQuery.get()
+
+    const bundles: any[] = []
+
+    bundlesSnapshot.forEach((doc) => {
+      const data = doc.data()
+      bundles.push({
+        id: doc.id,
+        title: data.title,
+        description: data.description || "",
+        price: data.price || 0,
+        currency: data.currency || "usd",
+        coverImage: data.coverImage || data.thumbnailUrl || data.coverImageUrl || "",
+        active: data.active !== false, // Default to true if not specified
+        contentItems: data.contentItems || [],
+        createdAt: data.createdAt,
+        updatedAt: data.updatedAt,
+        productId: data.productId || data.stripeProductId,
+        priceId: data.priceId || data.stripePriceId,
+        stripeProductId: data.stripeProductId,
+        stripePriceId: data.stripePriceId,
+        contentMetadata: data.contentMetadata,
+        detailedContentItems: data.detailedContentItems,
+      })
+    })
+
+    // Sort by creation date (newest first)
+    bundles.sort((a, b) => {
+      const aTime = a.createdAt?.seconds || new Date(a.createdAt).getTime() / 1000 || 0
+      const bTime = b.createdAt?.seconds || new Date(b.createdAt).getTime() / 1000 || 0
+      return bTime - aTime
+    })
+
+    console.log(`✅ [Bundles] Found ${bundles.length} bundles for user ${userId}`)
+
+    return NextResponse.json({
+      success: true,
+      bundles,
+      count: bundles.length,
+    })
+  } catch (error: any) {
+    console.error("❌ [Bundles] Error fetching bundles:", error)
+    return NextResponse.json(
+      {
+        error: "Failed to fetch bundles",
+        details: error.message,
+      },
+      { status: 500 }
+    )
+  }
+}
+
+// POST method to create new bundles
 export async function POST(request: NextRequest) {
   try {
     console.log("🚀 [Bundle Creation] Starting bundle creation...")
 
     const body = await request.json()
-    const { idToken, title, description, price, billingType, thumbnailUrl, contentItems } = body
+    const { title, description, price, billingType, thumbnailUrl, contentItems } = body
 
     console.log("📝 [Bundle Creation] Request data:", {
       title,
@@ -48,11 +128,15 @@ export async function POST(request: NextRequest) {
       contentItemsCount: contentItems?.length || 0,
     })
 
-    // Verify authentication
-    if (!idToken) {
+    // Get authorization header
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 })
     }
 
+    const idToken = authHeader.replace("Bearer ", "")
+
+    // Verify authentication
     let decodedToken
     try {
       decodedToken = await auth.verifyIdToken(idToken)
@@ -101,10 +185,10 @@ export async function POST(request: NextRequest) {
     })
 
     // Validate required fields
-    if (!title || !description || !price || !contentItems || contentItems.length === 0) {
+    if (!title || !price) {
       return NextResponse.json(
         {
-          error: "Missing required fields: title, description, price, and contentItems are required",
+          error: "Missing required fields: title and price are required",
         },
         { status: 400 }
       )
@@ -115,11 +199,11 @@ export async function POST(request: NextRequest) {
     const product = await stripe.products.create(
       {
         name: title,
-        description: description,
+        description: description || "",
         metadata: {
           bundleType: "content_bundle",
           creatorId: userId,
-          contentCount: contentItems.length.toString(),
+          contentCount: (contentItems?.length || 0).toString(),
         },
       },
       {
@@ -149,7 +233,7 @@ export async function POST(request: NextRequest) {
     console.log("✅ [Bundle Creation] Stripe price created:", stripePrice.id)
 
     // Process content items and calculate metadata
-    const processedContentItems = contentItems.map((item: any, index: number) => ({
+    const processedContentItems = (contentItems || []).map((item: any, index: number) => ({
       id: item.id || `content_${index}`,
       title: item.title || `Content ${index + 1}`,
       description: item.description || "",
@@ -195,7 +279,7 @@ export async function POST(request: NextRequest) {
     const bundleData = {
       id: bundleId,
       title,
-      description,
+      description: description || "",
       price,
       currency: "usd",
       billingType: billingType || "one_time",
@@ -213,7 +297,7 @@ export async function POST(request: NextRequest) {
 
       // Content
       detailedContentItems: processedContentItems,
-      contentItems: processedContentItems, // For compatibility
+      contentItems: processedContentItems.map(item => item.id), // Array of IDs for compatibility
       contentMetadata,
 
       // Quick access arrays
@@ -225,17 +309,19 @@ export async function POST(request: NextRequest) {
 
       // Visual
       thumbnailUrl: thumbnailUrl || processedContentItems[0]?.thumbnailUrl || "",
+      coverImage: thumbnailUrl || processedContentItems[0]?.thumbnailUrl || "",
       coverImageUrl: thumbnailUrl || "",
       customPreviewThumbnail: thumbnailUrl || "",
 
       // Status
       status: "active",
+      active: true,
       isPublic: true,
 
       // Timestamps
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      contentLastUpdated: new Date().toISOString(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      contentLastUpdated: new Date(),
     }
 
     console.log("💾 [Bundle Creation] Saving bundle to Firestore...")
@@ -253,6 +339,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      message: "Bundle created successfully",
+      bundleId,
       bundle: {
         id: bundleId,
         title,
