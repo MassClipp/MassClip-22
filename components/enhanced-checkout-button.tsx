@@ -4,7 +4,8 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/hooks/use-firebase-auth"
 import { toast } from "@/hooks/use-toast"
-import { Loader2, Lock, CreditCard } from 'lucide-react'
+import { Loader2, Lock, CreditCard, AlertTriangle, ExternalLink } from 'lucide-react'
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 interface EnhancedCheckoutButtonProps {
   bundleId: string
@@ -26,11 +27,13 @@ export function EnhancedCheckoutButton({
   size = "default"
 }: EnhancedCheckoutButtonProps) {
   const [isLoading, setIsLoading] = useState(false)
+  const [stripeError, setStripeError] = useState<string | null>(null)
   const { user, loading: authLoading, signInWithGoogle } = useAuth()
 
   const handlePurchase = async () => {
     try {
       setIsLoading(true)
+      setStripeError(null)
       console.log("🛒 [Checkout] Starting purchase flow for bundle:", bundleId)
 
       // Check if user is authenticated
@@ -124,18 +127,31 @@ export function EnhancedCheckoutButton({
         })
 
         let errorMessage = "Failed to create checkout session"
+        let isStripeAccountError = false
+        
         try {
           const errorData = JSON.parse(errorText)
           errorMessage = errorData.error || errorMessage
+          
+          // Check for specific Stripe account setup errors
+          if (errorMessage.includes("capabilities enabled") || 
+              errorMessage.includes("destination account") ||
+              errorMessage.includes("transfers") ||
+              errorMessage.includes("legacy_payments")) {
+            isStripeAccountError = true
+            setStripeError("The creator's payment account is not fully set up. They need to complete their Stripe account verification to accept payments.")
+          }
         } catch {
           // Use default error message if parsing fails
         }
 
-        toast({
-          title: "Checkout Error",
-          description: errorMessage,
-          variant: "destructive",
-        })
+        if (!isStripeAccountError) {
+          toast({
+            title: "Checkout Error",
+            description: errorMessage,
+            variant: "destructive",
+          })
+        }
         return
       }
 
@@ -158,6 +174,28 @@ export function EnhancedCheckoutButton({
   }
 
   const isDisabled = isLoading || authLoading
+
+  // Show Stripe account error if present
+  if (stripeError) {
+    return (
+      <div className="space-y-3">
+        <Alert className="border-amber-500/50 bg-amber-500/10">
+          <AlertTriangle className="h-4 w-4 text-amber-500" />
+          <AlertDescription className="text-amber-200">
+            {stripeError}
+          </AlertDescription>
+        </Alert>
+        <Button
+          onClick={() => setStripeError(null)}
+          variant="outline"
+          size={size}
+          className={className}
+        >
+          Try Again
+        </Button>
+      </div>
+    )
+  }
 
   return (
     <Button

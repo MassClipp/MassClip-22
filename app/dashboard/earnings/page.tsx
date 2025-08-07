@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator"
 import { RefreshCw, DollarSign, TrendingUp, CreditCard, Users, AlertCircle, CheckCircle, XCircle, Bug, Info, Loader2, ExternalLink, Globe, Shield, ArrowRight, Zap, Lock, BarChart3 } from 'lucide-react'
 import { useAuthState } from 'react-firebase-hooks/auth'
 import { auth } from '@/lib/firebase'
+import { StripeAccountSetupPrompt } from '@/components/stripe-account-setup-prompt'
 import EarningsContent from './earnings-content'
 
 // Safe formatting functions
@@ -119,165 +120,117 @@ export default function EarningsPage() {
   // Show Stripe connection setup if not connected or not fully set up
   if (!stripeStatus?.connected || !stripeStatus?.chargesEnabled || !stripeStatus?.detailsSubmitted) {
     return (
-      <div className="min-h-screen">
-        {/* Hero Section - Compact */}
-        <div className="text-center py-12">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 via-purple-600 to-purple-700 rounded-full mb-4 shadow-lg">
-            <CreditCard className="w-8 h-8 text-white" />
-          </div>
-          <h1 className="text-3xl font-bold text-white mb-3">
-            Connect Your Stripe Account
-          </h1>
-          <p className="text-gray-400 mb-8">
-            Start accepting payments and track your earnings
-          </p>
-        </div>
-
-        {/* Benefits Section - Individual Cards */}
-        <div className="grid grid-cols-3 gap-6 px-16 mb-12">
-          <div className="border border-gray-700/50 rounded-lg text-center p-4 bg-transparent">
-            <DollarSign className="w-8 h-8 text-blue-400 mx-auto mb-3" />
-            <h3 className="text-lg font-semibold text-white mb-2">Accept Payments</h3>
-            <p className="text-gray-400 text-sm">Process payments from customers worldwide</p>
-          </div>
-          
-          <div className="border border-gray-700/50 rounded-lg text-center p-4 bg-transparent">
-            <Globe className="w-8 h-8 text-purple-400 mx-auto mb-3" />
-            <h3 className="text-lg font-semibold text-white mb-2">Global Reach</h3>
-            <p className="text-gray-400 text-sm">Supported in 40+ countries</p>
-          </div>
-          
-          <div className="border border-gray-700/50 rounded-lg text-center p-4 bg-transparent">
-            <Shield className="w-8 h-8 text-blue-400 mx-auto mb-3" />
-            <h3 className="text-lg font-semibold text-white mb-2">Secure & Reliable</h3>
-            <p className="text-gray-400 text-sm">Bank-level security and encryption</p>
-          </div>
-        </div>
-
-        {/* Single Connection Card - Full Width */}
-        <div className="px-16 mb-12">
-          <Card className="bg-gray-800/30 border-purple-500/30 p-8 max-w-4xl mx-auto">
-            <div className="flex items-center gap-4 mb-6">
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 via-purple-600 to-purple-700 rounded-lg flex items-center justify-center shadow-lg">
-                <ExternalLink className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h3 className="text-2xl font-semibold text-white">Connect Your Stripe Account</h3>
-                <p className="text-gray-400">Securely connect your Stripe account through Stripe Connect. If you don't have an account, Stripe will help you create one during the process.</p>
-              </div>
+      <div className="min-h-screen p-6">
+        <div className="max-w-4xl mx-auto space-y-6">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-white flex items-center gap-3">
+                Earnings
+                <Badge variant="destructive">Not Connected</Badge>
+              </h1>
+              <p className="text-gray-400 mt-1">Financial overview and performance metrics</p>
             </div>
-            
-            <div className="grid grid-cols-2 gap-8 mb-8">
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <CheckCircle className="w-5 h-5 text-blue-400" />
-                  <span className="text-gray-300">Secure OAuth connection</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <CheckCircle className="w-5 h-5 text-purple-400" />
-                  <span className="text-gray-300">No manual account IDs needed</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <CheckCircle className="w-5 h-5 text-blue-400" />
-                  <span className="text-gray-300">Stripe handles account verification</span>
-                </div>
-              </div>
-              
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <CheckCircle className="w-5 h-5 text-purple-400" />
-                  <span className="text-gray-300">Quick 5-minute setup</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <CheckCircle className="w-5 h-5 text-blue-400" />
-                  <span className="text-gray-300">2.9% + 30¢ per transaction</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <CheckCircle className="w-5 h-5 text-purple-400" />
-                  <span className="text-gray-300">Automatic payouts to your bank</span>
-                </div>
-              </div>
-            </div>
-            
-            <Button 
-              onClick={async () => {
-                try {
-                  setConnectionError(null)
-                  const idToken = await user.getIdToken()
-                  const response = await fetch("/api/stripe/connect/oauth", {
-                    method: "POST",
-                    headers: { 
-                      "Content-Type": "application/json",
-                      "Authorization": `Bearer ${idToken}`,
-                    },
-                    body: JSON.stringify({ userId: user.uid }),
-                  })
-                  const data = await response.json()
-                  if (!response.ok) throw new Error(data.error || "Failed to connect Stripe account")
-                  if (data.authUrl) window.location.href = data.authUrl
-                } catch (err) {
-                  setConnectionError(err instanceof Error ? err.message : "Failed to connect account")
-                }
-              }}
-              disabled={loading}
-              className="w-full bg-gradient-to-r from-blue-600 via-purple-600 to-purple-700 hover:from-blue-700 hover:via-purple-700 hover:to-purple-800 text-white py-4 text-lg font-semibold shadow-lg"
+            <Button
+              onClick={checkStripeStatus}
+              disabled={checkingStripe}
+              variant="outline"
+              size="sm"
             >
-              {loading ? (
-                <>
-                  <Loader2 className="mr-3 h-5 w-5 animate-spin" />
-                  Connecting...
-                </>
-              ) : (
-                <>
-                  <ExternalLink className="mr-3 h-5 w-5" />
-                  Connect with Stripe
-                </>
-              )}
+              <RefreshCw className={`mr-2 h-4 w-4 ${checkingStripe ? 'animate-spin' : ''}`} />
+              Refresh
             </Button>
-            
-            <p className="text-sm text-gray-500 text-center mt-4">
-              You'll be redirected to Stripe to complete setup. If you don't have a Stripe account, one will be created for you automatically.
-            </p>
+          </div>
+
+          {/* Stripe Account Setup Prompt */}
+          <StripeAccountSetupPrompt />
+
+          {/* Preview Cards - Disabled State */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <Card className="bg-gray-800/30 border-gray-700">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-gray-400">Total Earnings</CardTitle>
+                <DollarSign className="h-4 w-4 text-gray-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-gray-500">$0.00</div>
+                <p className="text-xs text-gray-500">All-time revenue</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gray-800/30 border-gray-700">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-gray-400">This Month</CardTitle>
+                <TrendingUp className="h-4 w-4 text-gray-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-gray-500">$0.00</div>
+                <p className="text-xs text-gray-500">+0.0% from last month</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gray-800/30 border-gray-700">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-gray-400">Available Balance</CardTitle>
+                <CreditCard className="h-4 w-4 text-gray-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-gray-500">$0.00</div>
+                <p className="text-xs text-gray-500">Ready for payout</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gray-800/30 border-gray-700">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-gray-400">Total Sales</CardTitle>
+                <BarChart3 className="h-4 w-4 text-gray-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-gray-500">0</div>
+                <p className="text-xs text-gray-500">$0.00 avg order</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Benefits Section */}
+          <Card className="bg-gray-800/30 border-gray-700">
+            <CardHeader>
+              <CardTitle className="text-white flex items-center gap-2">
+                <Info className="h-5 w-5 text-blue-400" />
+                Why Connect Your Stripe Account?
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="text-center">
+                  <div className="w-12 h-12 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <DollarSign className="w-6 h-6 text-blue-400" />
+                  </div>
+                  <h3 className="font-semibold text-white mb-2">Accept Payments</h3>
+                  <p className="text-gray-400 text-sm">Start earning money from your premium content and bundles</p>
+                </div>
+                
+                <div className="text-center">
+                  <div className="w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <Globe className="w-6 h-6 text-green-400" />
+                  </div>
+                  <h3 className="font-semibold text-white mb-2">Global Reach</h3>
+                  <p className="text-gray-400 text-sm">Accept payments from customers worldwide in multiple currencies</p>
+                </div>
+                
+                <div className="text-center">
+                  <div className="w-12 h-12 bg-purple-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <Shield className="w-6 h-6 text-purple-400" />
+                  </div>
+                  <h3 className="font-semibold text-white mb-2">Secure & Reliable</h3>
+                  <p className="text-gray-400 text-sm">Bank-level security with automatic fraud protection</p>
+                </div>
+              </div>
+            </CardContent>
           </Card>
-        </div>
 
-        {/* How It Works Section - Compact */}
-        <div className="text-center py-8">
-          <div className="flex items-center justify-center gap-3 mb-8">
-            <Info className="w-6 h-6 text-purple-400" />
-            <h2 className="text-2xl font-bold text-white">How It Works</h2>
-          </div>
-          
-          <div className="grid grid-cols-3 gap-8 px-20">
-            <div className="text-center">
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 via-purple-600 to-purple-700 rounded-full flex items-center justify-center mx-auto mb-3 text-lg font-bold text-white shadow-lg">
-                1
-              </div>
-              <h3 className="text-lg font-semibold mb-2 text-white">Click Connect</h3>
-              <p className="text-gray-400 text-sm">Start the secure connection process with Stripe</p>
-            </div>
-            
-            <div className="text-center">
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 via-purple-600 to-purple-700 rounded-full flex items-center justify-center mx-auto mb-3 text-lg font-bold text-white shadow-lg">
-                2
-              </div>
-              <h3 className="text-lg font-semibold mb-2 text-white">Complete Setup</h3>
-              <p className="text-gray-400 text-sm">Follow Stripe's secure onboarding process</p>
-            </div>
-            
-            <div className="text-center">
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 via-purple-600 to-purple-700 rounded-full flex items-center justify-center mx-auto mb-3 text-lg font-bold text-white shadow-lg">
-                3
-              </div>
-              <h3 className="text-lg font-semibold mb-2 text-white">Start Earning</h3>
-              <p className="text-gray-400 text-sm">Begin accepting payments immediately</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Error Display */}
-        {connectionError && (
-          <div className="px-16 pb-8">
+          {/* Error Display */}
+          {connectionError && (
             <Card className="border-red-600/50 bg-red-900/20">
               <CardContent className="p-4">
                 <div className="flex items-center gap-3 text-red-400">
@@ -294,8 +247,8 @@ export default function EarningsPage() {
                 </Button>
               </CardContent>
             </Card>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     )
   }

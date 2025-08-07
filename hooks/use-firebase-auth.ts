@@ -1,15 +1,13 @@
-"use client"
-
-import { useEffect, useState } from "react"
+import { useState, useEffect } from 'react'
 import { 
   User, 
-  onAuthStateChanged, 
   signInWithPopup, 
   GoogleAuthProvider, 
   signOut as firebaseSignOut,
+  onAuthStateChanged,
   getAuth
-} from "firebase/auth"
-import { auth } from "@/lib/firebase-config"
+} from 'firebase/auth'
+import { auth } from '@/lib/firebase'
 
 interface AuthState {
   user: User | null
@@ -21,84 +19,49 @@ export function useFirebaseAuth() {
   const [authState, setAuthState] = useState<AuthState>({
     user: null,
     loading: true,
-    error: null,
+    error: null
   })
 
   useEffect(() => {
-    console.log("🔥 [Firebase Auth] Setting up auth state listener")
-    
-    const unsubscribe = onAuthStateChanged(
-      auth,
+    const unsubscribe = onAuthStateChanged(auth, 
       (user) => {
-        console.log("🔥 [Firebase Auth] Auth state changed:", {
-          uid: user?.uid,
-          email: user?.email,
-          displayName: user?.displayName,
-        })
-        
         setAuthState({
           user,
           loading: false,
-          error: null,
+          error: null
         })
       },
       (error) => {
-        console.error("❌ [Firebase Auth] Auth state error:", error)
         setAuthState({
           user: null,
           loading: false,
-          error: error.message,
+          error: error.message
         })
       }
     )
 
-    return () => {
-      console.log("🔥 [Firebase Auth] Cleaning up auth listener")
-      unsubscribe()
-    }
+    return () => unsubscribe()
   }, [])
 
-  const signInWithGoogle = async () => {
+  const signInWithGoogle = async (): Promise<User> => {
     try {
-      console.log("🔥 [Firebase Auth] Starting Google sign in")
       setAuthState(prev => ({ ...prev, loading: true, error: null }))
-      
       const provider = new GoogleAuthProvider()
-      provider.addScope('email')
-      provider.addScope('profile')
-      
       const result = await signInWithPopup(auth, provider)
-      console.log("✅ [Firebase Auth] Google sign in successful:", {
-        uid: result.user.uid,
-        email: result.user.email,
-      })
-      
       return result.user
-    } catch (error: any) {
-      console.error("❌ [Firebase Auth] Google sign in failed:", error)
-      setAuthState(prev => ({ 
-        ...prev, 
-        loading: false, 
-        error: error.message 
-      }))
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Authentication failed'
+      setAuthState(prev => ({ ...prev, loading: false, error: errorMessage }))
       throw error
     }
   }
 
-  const signOut = async () => {
+  const signOut = async (): Promise<void> => {
     try {
-      console.log("🔥 [Firebase Auth] Signing out")
-      setAuthState(prev => ({ ...prev, loading: true }))
-      
       await firebaseSignOut(auth)
-      console.log("✅ [Firebase Auth] Sign out successful")
-    } catch (error: any) {
-      console.error("❌ [Firebase Auth] Sign out failed:", error)
-      setAuthState(prev => ({ 
-        ...prev, 
-        loading: false, 
-        error: error.message 
-      }))
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Sign out failed'
+      setAuthState(prev => ({ ...prev, error: errorMessage }))
       throw error
     }
   }
@@ -108,9 +71,9 @@ export function useFirebaseAuth() {
     loading: authState.loading,
     error: authState.error,
     signInWithGoogle,
-    signOut,
+    signOut
   }
 }
 
-// Export useAuth as an alias for useFirebaseAuth
+// Export as useAuth for compatibility
 export const useAuth = useFirebaseAuth

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/firebase-admin"
+import { adminDb } from "@/lib/firebase-admin"
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,10 +12,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log("🔍 [Debug] Testing bundle configuration for:", bundleId)
+    console.log("🔍 [Debug] Testing bundle prerequisites for:", bundleId)
 
     // Get bundle data
-    const bundleDoc = await db.collection("bundles").doc(bundleId).get()
+    const bundleDoc = await adminDb.collection("bundles").doc(bundleId).get()
     
     if (!bundleDoc.exists) {
       return NextResponse.json(
@@ -25,78 +25,97 @@ export async function POST(request: NextRequest) {
     }
 
     const bundleData = bundleDoc.data()
-    console.log("📦 [Debug] Bundle data:", {
-      id: bundleId,
-      title: bundleData?.title,
-      price: bundleData?.price,
-      creatorId: bundleData?.creatorId,
-      stripePriceId: bundleData?.stripePriceId,
-    })
+    const issues: string[] = []
 
-    // Check if bundle has required fields
-    const missingFields = []
-    if (!bundleData?.price) missingFields.push("price")
-    if (!bundleData?.creatorId) missingFields.push("creatorId")
-    if (!bundleData?.stripePriceId) missingFields.push("stripePriceId")
+    // Check bundle configuration
+    if (!bundleData?.creatorId) {
+      issues.push("Missing creator ID")
+    }
 
-    if (missingFields.length > 0) {
-      return NextResponse.json(
-        { 
-          error: "Bundle missing required fields",
-          missingFields,
-          bundleData: {
-            title: bundleData?.title,
-            price: bundleData?.price,
-            creatorId: bundleData?.creatorId,
-            stripePriceId: bundleData?.stripePriceId,
-          }
-        },
-        { status: 400 }
-      )
+    if (!bundleData?.price || bundleData.price <= 0) {
+      issues.push("Invalid price")
+    }
+
+    if (!bundleData?.title) {
+      issues.push("Missing title")
     }
 
     // Check creator's Stripe account
-    const creatorDoc = await db.collection("users").doc(bundleData.creatorId).get()
-    const creatorData = creatorDoc.data()
+    if (bundleData?.creatorId) {
+      console.log("🔍 [Debug] Checking creator Stripe account:", bundleData.creatorId)
+      
+      try {
+        const userDoc = await adminDb.collection("users").doc(bundleData.creatorId).get()
+        const userData = userDoc.data()
 
-    console.log("👤 [Debug] Creator data:", {
-      id: bundleData.creatorId,
-      stripeAccountId: creatorData?.stripeAccountId,
-      stripeAccountStatus: creatorData?.stripeAccountStatus,
-    })
+        if (!userData?.stripeAccountId) {
+          issues.push("Creator has no Stripe account connected")
+        } else {
+          // Check connected Stripe account
+          const connectedAccountDoc = await adminDb
+            .collection("connectedStripeAccounts")
+            .doc(bundleData.creatorId)
+            .get()
 
-    if (!creatorData?.stripeAccountId) {
-      return NextResponse.json(
-        { 
-          error: "Creator has not connected their Stripe account",
-          creatorId: bundleData.creatorId,
-        },
-        { status: 400 }
-      )
+          if (connectedAccountDoc.exists) {
+            const accountData = connectedAccountDoc.data()
+            
+            if (!accountData?.charges_enabled) {
+              issues.push("Creator's Stripe account cannot accept charges")
+            }
+            
+            if (!accountData?.details_submitted) {
+              issues.push("Creator's Stripe account setup is incomplete")
+            }
+            
+            if (!accountData?.payouts_enabled) {
+              issues.push("Creator's Stripe account cannot receive payouts")
+            }
+          } else {
+            issues.push("Creator's Stripe account data not found")
+          }
+        }
+      } catch (error) {
+        console.error("❌ [Debug] Error checking creator account:", error)
+        issues.push("Error checking creator's payment setup")
+      }
     }
 
+    // Check bundle content
+    if (bundleData?.contentIds && bundleData.contentIds.length === 0) {
+      issues.push("Bundle has no content")
+    }
+
+    const success = issues.length === 0
+
+    console.log(`${success ? '✅' : '❌'} [Debug] Bundle prerequisites check:`, {
+      bundleId,
+      success,
+      issues,
+      bundleData: {
+        title: bundleData?.title,
+        price: bundleData?.price,
+        creatorId: bundleData?.creatorId,
+        contentCount: bundleData?.contentIds?.length || 0,
+      }
+    })
+
     return NextResponse.json({
-      success: true,
+      success,
+      issues,
       bundle: {
         id: bundleId,
-        title: bundleData.title,
-        price: bundleData.price,
-        stripePriceId: bundleData.stripePriceId,
-      },
-      creator: {
-        id: bundleData.creatorId,
-        stripeAccountId: creatorData.stripeAccountId,
-        stripeAccountStatus: creatorData.stripeAccountStatus,
-      },
+        title: bundleData?.title,
+        price: bundleData?.price,
+        creatorId: bundleData?.creatorId,
+        contentCount: bundleData?.contentIds?.length || 0,
+      }
     })
 
   } catch (error) {
     console.error("❌ [Debug] Checkout test error:", error)
     return NextResponse.json(
-      { 
-        error: "Internal server error",
-        details: error instanceof Error ? error.message : "Unknown error"
-      },
+      { error: "Internal server error" },
       { status: 500 }
     )
   }
