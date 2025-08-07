@@ -138,7 +138,12 @@ export default function MembershipPage() {
                 Manage Subscription
               </Button>
             ) : (
-              <SubscribeButton className="w-full bg-red-600 hover:bg-red-700">Upgrade to Creator Pro</SubscribeButton>
+              <SubscribeButton 
+                className="w-full bg-red-600 hover:bg-red-700"
+                priceId="price_1RtJZ8Dheyb0pkWFLmmmBFPw"
+              >
+                Upgrade to Creator Pro
+              </SubscribeButton>
             )}
           </div>
         </Card>
