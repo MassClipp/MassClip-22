@@ -10,15 +10,24 @@ import { useAuth } from "@/hooks/use-firebase-auth"
 
 interface StripeAccountStatus {
   connected: boolean
+  fullySetup: boolean
   accountId?: string
   chargesEnabled: boolean
   payoutsEnabled: boolean
   detailsSubmitted: boolean
+  transfersCapability?: string
   status: string
-  requirements?: {
-    currently_due: string[]
-    past_due: string[]
-    eventually_due: string[]
+  account?: {
+    stripe_user_id: string
+    email: string
+    country: string
+    business_type: string
+    livemode: boolean
+    requirements: {
+      currently_due: string[]
+      past_due: string[]
+      pending_verification: string[]
+    }
   }
 }
 
@@ -29,11 +38,15 @@ export function StripeAccountSetupPrompt() {
   const [connecting, setConnecting] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
 
-  const checkAccountStatus = async () => {
+  const checkAccountStatus = async (refresh = false) => {
     if (!user) return
 
     try {
-      setRefreshing(true)
+      setRefreshing(refresh)
+      if (!refresh) setLoading(true)
+      
+      console.log(`🔍 Checking account status for user: ${user.uid}`)
+      
       const idToken = await user.getIdToken()
       const response = await fetch("/api/stripe/connect/status", {
         method: "POST",
@@ -41,15 +54,21 @@ export function StripeAccountSetupPrompt() {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${idToken}`,
         },
-        body: JSON.stringify({ userId: user.uid }),
+        body: JSON.stringify({ 
+          userId: user.uid,
+          refresh: refresh 
+        }),
       })
 
       if (response.ok) {
         const data = await response.json()
+        console.log(`✅ Account status:`, data)
         setAccountStatus(data)
       } else {
+        console.log(`❌ Account status check failed`)
         setAccountStatus({
           connected: false,
+          fullySetup: false,
           chargesEnabled: false,
           payoutsEnabled: false,
           detailsSubmitted: false,
@@ -57,9 +76,10 @@ export function StripeAccountSetupPrompt() {
         })
       }
     } catch (error) {
-      console.error("Error checking Stripe status:", error)
+      console.error("❌ Error checking account status:", error)
       setAccountStatus({
         connected: false,
+        fullySetup: false,
         chargesEnabled: false,
         payoutsEnabled: false,
         detailsSubmitted: false,
@@ -122,16 +142,20 @@ export function StripeAccountSetupPrompt() {
       return <Badge variant="outline" className="border-amber-500 text-amber-500">Restricted</Badge>
     }
 
-    return <Badge variant="default" className="bg-green-600">Active</Badge>
+    if (accountStatus.fullySetup) {
+      return <Badge variant="default" className="bg-green-600">Active</Badge>
+    }
+
+    return <Badge variant="outline" className="border-amber-500 text-amber-500">Setup Required</Badge>
   }
 
   const getRequirementsList = () => {
-    if (!accountStatus?.requirements) return []
+    if (!accountStatus?.account?.requirements) return []
 
     return [
-      ...accountStatus.requirements.past_due.map(req => ({ req, urgent: true })),
-      ...accountStatus.requirements.currently_due.map(req => ({ req, urgent: false })),
-      ...accountStatus.requirements.eventually_due.map(req => ({ req, urgent: false })),
+      ...accountStatus.account.requirements.past_due.map(req => ({ req, urgent: true })),
+      ...accountStatus.account.requirements.currently_due.map(req => ({ req, urgent: false })),
+      ...accountStatus.account.requirements.pending_verification.map(req => ({ req, urgent: false })),
     ]
   }
 
@@ -164,7 +188,7 @@ export function StripeAccountSetupPrompt() {
   }
 
   // If account is fully set up, don't show the prompt
-  if (accountStatus?.connected && accountStatus?.chargesEnabled && accountStatus?.payoutsEnabled && accountStatus?.detailsSubmitted) {
+  if (accountStatus?.connected && accountStatus?.fullySetup) {
     return null
   }
 
@@ -185,7 +209,7 @@ export function StripeAccountSetupPrompt() {
           <div className="flex items-center gap-2">
             {getStatusBadge()}
             <Button
-              onClick={checkAccountStatus}
+              onClick={() => checkAccountStatus(true)}
               disabled={refreshing}
               variant="ghost"
               size="sm"
@@ -274,6 +298,23 @@ export function StripeAccountSetupPrompt() {
             </div>
           </div>
         </div>
+
+        {/* Show transfers capability if available */}
+        {accountStatus?.transfersCapability && (
+          <div className="p-3 bg-gray-700/30 rounded-lg">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-300">Transfers Capability</span>
+              <div className="flex items-center gap-1">
+                {accountStatus.transfersCapability === 'active' ? (
+                  <CheckCircle className="h-4 w-4 text-green-400" />
+                ) : (
+                  <Clock className="h-4 w-4 text-amber-400" />
+                )}
+                <span className="text-white capitalize">{accountStatus.transfersCapability}</span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Requirements List */}
         {requirements.length > 0 && (

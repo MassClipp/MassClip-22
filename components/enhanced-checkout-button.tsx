@@ -2,224 +2,217 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { useAuth } from "@/hooks/use-firebase-auth"
-import { toast } from "@/hooks/use-toast"
-import { Loader2, Lock, CreditCard, AlertTriangle, ExternalLink } from 'lucide-react'
+import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Loader2, ShoppingCart, AlertTriangle, ExternalLink, CreditCard } from 'lucide-react'
+import { useAuth } from "@/hooks/use-firebase-auth"
 
-interface EnhancedCheckoutButtonProps {
-  bundleId: string
-  price: number
+interface BundleItem {
+  id: string
   title: string
+  price: number
   creatorId: string
-  className?: string
-  variant?: "default" | "destructive" | "outline" | "secondary" | "ghost" | "link"
-  size?: "default" | "sm" | "lg" | "icon"
+  stripeProductId?: string
+  stripePriceId?: string
 }
 
-export function EnhancedCheckoutButton({
-  bundleId,
-  price,
-  title,
-  creatorId,
-  className,
-  variant = "default",
-  size = "default"
+interface EnhancedCheckoutButtonProps {
+  bundle: BundleItem
+  className?: string
+  size?: "sm" | "default" | "lg"
+  variant?: "default" | "destructive" | "outline" | "secondary" | "ghost" | "link"
+}
+
+export function EnhancedCheckoutButton({ 
+  bundle, 
+  className = "", 
+  size = "default",
+  variant = "destructive"
 }: EnhancedCheckoutButtonProps) {
-  const [isLoading, setIsLoading] = useState(false)
-  const [stripeError, setStripeError] = useState<string | null>(null)
-  const { user, loading: authLoading, signInWithGoogle } = useAuth()
+  const { user } = useAuth()
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [creatorAccountStatus, setCreatorAccountStatus] = useState<{
+    connected: boolean
+    fullySetup: boolean
+    accountId?: string
+  } | null>(null)
+
+  const checkCreatorAccount = async () => {
+    try {
+      console.log(`🔍 Checking creator account status for: ${bundle.creatorId}`)
+      
+      const response = await fetch(`/api/stripe/connect/status?userId=${bundle.creatorId}`)
+      
+      if (response.ok) {
+        const data = await response.json()
+        console.log(`✅ Creator account status:`, data)
+        setCreatorAccountStatus(data)
+        return data
+      } else {
+        console.log(`❌ Creator account not found or error`)
+        setCreatorAccountStatus({
+          connected: false,
+          fullySetup: false
+        })
+        return {
+          connected: false,
+          fullySetup: false
+        }
+      }
+    } catch (error) {
+      console.error("❌ Error checking creator account:", error)
+      setCreatorAccountStatus({
+        connected: false,
+        fullySetup: false
+      })
+      return {
+        connected: false,
+        fullySetup: false
+      }
+    }
+  }
 
   const handlePurchase = async () => {
     try {
-      setIsLoading(true)
-      setStripeError(null)
-      console.log("🛒 [Checkout] Starting purchase flow for bundle:", bundleId)
+      setLoading(true)
+      setError(null)
+
+      console.log(`🛒 [Unlock Button] Starting checkout for bundle:`, bundle)
 
       // Check if user is authenticated
-      let currentUser = user
-      if (!currentUser && !authLoading) {
-        console.log("🔐 [Checkout] User not authenticated, prompting sign in")
-        toast({
-          title: "Authentication Required",
-          description: "Please sign in to continue with your purchase.",
-        })
-        
-        try {
-          currentUser = await signInWithGoogle()
-          console.log("✅ [Checkout] User signed in successfully")
-        } catch (authError) {
-          console.error("❌ [Checkout] Authentication failed:", authError)
-          toast({
-            title: "Authentication Failed",
-            description: "Unable to sign in. Please try again.",
-            variant: "destructive",
-          })
-          return
-        }
-      }
-
-      // Get ID token for authenticated requests
-      let idToken = null
-      if (currentUser) {
-        try {
-          idToken = await currentUser.getIdToken()
-          console.log("🔑 [Checkout] Got ID token for user:", currentUser.uid)
-        } catch (tokenError) {
-          console.error("❌ [Checkout] Failed to get ID token:", tokenError)
-          toast({
-            title: "Authentication Error",
-            description: "Unable to verify authentication. Please try signing in again.",
-            variant: "destructive",
-          })
-          return
-        }
-      }
-
-      // Debug bundle before checkout
-      console.log("🔍 [Checkout] Debugging bundle configuration...")
-      const debugResponse = await fetch(`/api/debug/checkout-test`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(idToken && { Authorization: `Bearer ${idToken}` }),
-        },
-        body: JSON.stringify({ bundleId }),
-      })
-
-      if (!debugResponse.ok) {
-        const debugError = await debugResponse.text()
-        console.error("❌ [Checkout] Bundle debug failed:", debugError)
-        toast({
-          title: "Configuration Error",
-          description: "Bundle is not properly configured for checkout.",
-          variant: "destructive",
-        })
+      if (!user) {
+        setError("Please log in to make a purchase")
         return
       }
 
-      const debugData = await debugResponse.json()
-      console.log("✅ [Checkout] Bundle debug successful:", debugData)
+      // Get user ID token for authentication
+      const idToken = await user.getIdToken()
+      console.log(`🔐 [Unlock Button] Got auth token for user: ${user.uid}`)
+
+      // Check creator's account status first
+      const creatorStatus = await checkCreatorAccount()
+      
+      if (!creatorStatus.connected || !creatorStatus.fullySetup) {
+        setError("This creator hasn't finished setting up their payment account yet. Please try again later.")
+        return
+      }
+
+      // Validate bundle has required Stripe IDs
+      if (!bundle.stripeProductId || !bundle.stripePriceId) {
+        setError("This item is not properly configured for purchase. Please contact the creator.")
+        return
+      }
+
+      console.log(`🛒 [Unlock Button] Creating checkout session...`)
 
       // Create checkout session
-      console.log("💳 [Checkout] Creating Stripe checkout session...")
       const checkoutResponse = await fetch("/api/stripe/create-checkout-session", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(idToken && { Authorization: `Bearer ${idToken}` }),
+          "Authorization": `Bearer ${idToken}`,
         },
         body: JSON.stringify({
-          bundleId,
+          bundleId: bundle.id,
+          creatorId: bundle.creatorId,
+          buyerId: user.uid,
+          buyerEmail: user.email,
+          priceId: bundle.stripePriceId,
+          productId: bundle.stripeProductId,
+          amount: Math.round(bundle.price * 100), // Convert to cents
+          currency: "usd",
           successUrl: `${window.location.origin}/purchase-success?session_id={CHECKOUT_SESSION_ID}`,
           cancelUrl: window.location.href,
-          buyerEmail: currentUser?.email || undefined,
-          buyerName: currentUser?.displayName || undefined,
         }),
       })
 
       if (!checkoutResponse.ok) {
-        const errorText = await checkoutResponse.text()
-        console.error("❌ [Checkout] Checkout session creation failed:", {
-          status: checkoutResponse.status,
-          statusText: checkoutResponse.statusText,
-          error: errorText,
-        })
-
-        let errorMessage = "Failed to create checkout session"
-        let isStripeAccountError = false
+        const errorData = await checkoutResponse.json()
+        console.error(`❌ [Unlock Button] Checkout session creation failed:`, errorData)
         
-        try {
-          const errorData = JSON.parse(errorText)
-          errorMessage = errorData.error || errorMessage
-          
-          // Check for specific Stripe account setup errors
-          if (errorMessage.includes("capabilities enabled") || 
-              errorMessage.includes("destination account") ||
-              errorMessage.includes("transfers") ||
-              errorMessage.includes("legacy_payments")) {
-            isStripeAccountError = true
-            setStripeError("The creator's payment account is not fully set up. They need to complete their Stripe account verification to accept payments.")
-          }
-        } catch {
-          // Use default error message if parsing fails
-        }
-
-        if (!isStripeAccountError) {
-          toast({
-            title: "Checkout Error",
-            description: errorMessage,
-            variant: "destructive",
-          })
+        // Handle specific error types
+        if (errorData.error?.includes("destination account")) {
+          setError("The creator's payment account needs additional setup. Please try again later.")
+        } else if (errorData.error?.includes("capabilities")) {
+          setError("The creator's account is not yet enabled for payments. Please try again later.")
+        } else {
+          setError(errorData.error || "Failed to create checkout session")
         }
         return
       }
 
-      const { url } = await checkoutResponse.json()
-      console.log("✅ [Checkout] Checkout session created, redirecting to:", url)
+      const { sessionId, url } = await checkoutResponse.json()
+      console.log(`✅ [Unlock Button] Checkout session created:`, sessionId)
 
-      // Redirect to Stripe checkout
-      window.location.href = url
+      // Redirect to Stripe Checkout
+      if (url) {
+        window.location.href = url
+      } else {
+        setError("Failed to redirect to checkout")
+      }
 
     } catch (error) {
-      console.error("❌ [Checkout] Unexpected error:", error)
-      toast({
-        title: "Purchase Failed",
-        description: error instanceof Error ? error.message : "An unexpected error occurred",
-        variant: "destructive",
-      })
+      console.error(`❌ [Unlock Button] Purchase failed:`, error)
+      setError(error instanceof Error ? error.message : "An unexpected error occurred")
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
   }
 
-  const isDisabled = isLoading || authLoading
-
-  // Show Stripe account error if present
-  if (stripeError) {
+  // Show creator account status if there's an issue
+  if (creatorAccountStatus && (!creatorAccountStatus.connected || !creatorAccountStatus.fullySetup)) {
     return (
-      <div className="space-y-3">
-        <Alert className="border-amber-500/50 bg-amber-500/10">
-          <AlertTriangle className="h-4 w-4 text-amber-500" />
-          <AlertDescription className="text-amber-200">
-            {stripeError}
-          </AlertDescription>
-        </Alert>
+      <div className="space-y-2">
         <Button
-          onClick={() => setStripeError(null)}
+          disabled
           variant="outline"
           size={size}
-          className={className}
+          className={`${className} opacity-50 cursor-not-allowed`}
         >
-          Try Again
+          <CreditCard className="mr-2 h-4 w-4" />
+          Unavailable
         </Button>
+        <Alert className="border-amber-500/50 bg-amber-500/10">
+          <AlertTriangle className="h-4 w-4 text-amber-400" />
+          <AlertDescription className="text-amber-200 text-sm">
+            This creator is still setting up their payment account. Check back soon!
+          </AlertDescription>
+        </Alert>
       </div>
     )
   }
 
   return (
-    <Button
-      onClick={handlePurchase}
-      disabled={isDisabled}
-      className={className}
-      variant={variant}
-      size={size}
-    >
-      {isLoading ? (
-        <>
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          Processing...
-        </>
-      ) : (
-        <>
-          {user ? (
-            <CreditCard className="mr-2 h-4 w-4" />
-          ) : (
-            <Lock className="mr-2 h-4 w-4" />
-          )}
-          {user ? `Buy for $${price.toFixed(2)}` : "Sign in & Buy"}
-        </>
+    <div className="space-y-2">
+      <Button
+        onClick={handlePurchase}
+        disabled={loading}
+        variant={variant}
+        size={size}
+        className={className}
+      >
+        {loading ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Processing...
+          </>
+        ) : (
+          <>
+            <ShoppingCart className="mr-2 h-4 w-4" />
+            Unlock ${bundle.price.toFixed(2)}
+          </>
+        )}
+      </Button>
+
+      {error && (
+        <Alert className="border-red-500/50 bg-red-500/10">
+          <AlertTriangle className="h-4 w-4 text-red-400" />
+          <AlertDescription className="text-red-200 text-sm">
+            {error}
+          </AlertDescription>
+        </Alert>
       )}
-    </Button>
+    </div>
   )
 }
