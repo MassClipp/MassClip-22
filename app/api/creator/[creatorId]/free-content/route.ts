@@ -26,32 +26,20 @@ export async function GET(request: NextRequest, { params }: { params: { creatorI
       if (!snapshot.empty) {
         freeContent = snapshot.docs.map((doc) => {
           const data = doc.data()
-          
-          // Validate and log the video URL
-          const fileUrl = data.fileUrl || data.url || ""
-          const isValidUrl = fileUrl && (fileUrl.startsWith('http://') || fileUrl.startsWith('https://'))
-          
           console.log(`🎬 Free Content Item:`, {
             id: doc.id,
             title: data.title,
-            fileUrl: fileUrl,
-            isValidUrl: isValidUrl,
+            fileUrl: data.fileUrl,
             thumbnailUrl: data.thumbnailUrl ? "✅" : "❌",
             type: data.type,
             duration: data.duration,
           })
 
-          // Only include items with valid URLs
-          if (!isValidUrl) {
-            console.warn(`⚠️ Skipping item ${doc.id} - invalid or missing fileUrl:`, fileUrl)
-            return null
-          }
-
           return {
             id: doc.id,
             title: data.title || "Untitled Content",
             thumbnailUrl: data.thumbnailUrl || "/placeholder.svg?height=200&width=300",
-            fileUrl: fileUrl,
+            fileUrl: data.fileUrl || data.url || "", // Try both fileUrl and url fields
             type: data.type || "video",
             duration: data.duration || "0:00",
             views: data.views || 0,
@@ -59,17 +47,17 @@ export async function GET(request: NextRequest, { params }: { params: { creatorI
             createdAt: data.createdAt || new Date(),
             isPremium: false,
           }
-        }).filter(Boolean) // Remove null items
+        })
 
-        console.log(`✅ Successfully loaded ${freeContent.length} valid free content items`)
+        console.log(`✅ Successfully loaded ${freeContent.length} free content items`)
 
         // Log the final processed items
         freeContent.forEach((item, index) => {
-          console.log(`📹 Valid processed item ${index}:`, {
+          console.log(`📹 Processed item ${index}:`, {
             id: item.id,
             title: item.title,
             fileUrl: item.fileUrl,
-            hasValidUrl: !!(item.fileUrl && (item.fileUrl.startsWith('http://') || item.fileUrl.startsWith('https://'))),
+            hasFileUrl: !!item.fileUrl,
           })
         })
       } else {
@@ -86,7 +74,7 @@ export async function GET(request: NextRequest, { params }: { params: { creatorI
       )
     }
 
-    console.log(`📊 FINAL RESULT: ${freeContent.length} valid free content items`)
+    console.log(`📊 FINAL RESULT: ${freeContent.length} free content items`)
 
     return NextResponse.json({
       content: freeContent,
