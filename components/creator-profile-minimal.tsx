@@ -5,7 +5,7 @@ import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Share2, Play, Calendar, Users, Heart, Check, Package, Download, Pause, Lock } from 'lucide-react'
+import { Share2, Play, Calendar, Users, Heart, Check, Package, Download, Pause, Lock, AlertCircle } from 'lucide-react'
 import { useAuthState } from "react-firebase-hooks/auth"
 import { auth, db } from "@/lib/firebase"
 import { UnlockButton } from "@/components/unlock-button"
@@ -366,10 +366,10 @@ function ContentCard({ item }: { item: ContentItem }) {
   const [user] = useAuthState(auth)
   const [isHovered, setIsHovered] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
-  const [thumbnailError, setThumbnailError] = useState(false)
   const [videoError, setVideoError] = useState(false)
   const [videoLoaded, setVideoLoaded] = useState(false)
   const [isDownloading, setIsDownloading] = useState(false)
+  const [loadAttempts, setLoadAttempts] = useState(0)
   const videoRef = useRef<HTMLVideoElement>(null)
   const { toast } = useToast()
   const { hasReachedLimit, isProUser, forceRefresh } = useDownloadLimit()
@@ -388,6 +388,9 @@ function ContentCard({ item }: { item: ContentItem }) {
     originalFileUrl: item.fileUrl,
     proxiedVideoUrl: proxiedVideoUrl,
     thumbnailUrl: item.thumbnailUrl,
+    loadAttempts,
+    videoError,
+    videoLoaded,
   })
 
   // Record a download in Firestore (same logic as VimeoCard)
@@ -454,10 +457,12 @@ function ContentCard({ item }: { item: ContentItem }) {
     }
   }
 
-  // Load video metadata and show first frame
+  // Enhanced video loading with retry logic
   useEffect(() => {
     const videoElement = videoRef.current
-    if (!videoElement || !proxiedVideoUrl) return
+    if (!videoElement || !proxiedVideoUrl || videoError) return
+
+    let timeoutId: NodeJS.Timeout
 
     const handleLoadedMetadata = () => {
       console.log("✅ Video metadata loaded for:", item.title)
@@ -470,45 +475,68 @@ function ContentCard({ item }: { item: ContentItem }) {
     const handleLoadedData = () => {
       console.log("✅ Video data loaded for:", item.title)
       setVideoLoaded(true)
+      setVideoError(false)
     }
 
     const handleError = (e: Event) => {
-      console.error("❌ Video loading error:", e)
-      setVideoError(true)
-      setVideoLoaded(false)
+      console.error("❌ Video loading error for", item.title, ":", e)
+      
+      // Retry logic - try up to 3 times
+      if (loadAttempts < 3) {
+        console.log(`🔄 Retrying video load for ${item.title}, attempt ${loadAttempts + 1}`)
+        setLoadAttempts(prev => prev + 1)
+        
+        // Wait a bit before retrying
+        timeoutId = setTimeout(() => {
+          videoElement.load()
+        }, 1000 * (loadAttempts + 1)) // Exponential backoff
+      } else {
+        console.error("❌ Max retry attempts reached for:", item.title)
+        setVideoError(true)
+        setVideoLoaded(false)
+      }
     }
 
     const handleCanPlay = () => {
       console.log("✅ Video can play:", item.title)
       setVideoLoaded(true)
+      setVideoError(false)
     }
 
+    const handleLoadStart = () => {
+      console.log("🔄 Video load started for:", item.title)
+    }
+
+    // Add all event listeners
     videoElement.addEventListener("loadedmetadata", handleLoadedMetadata)
     videoElement.addEventListener("loadeddata", handleLoadedData)
     videoElement.addEventListener("error", handleError)
     videoElement.addEventListener("canplay", handleCanPlay)
+    videoElement.addEventListener("loadstart", handleLoadStart)
 
     // Start loading the video
     videoElement.load()
 
     return () => {
+      if (timeoutId) clearTimeout(timeoutId)
       videoElement.removeEventListener("loadedmetadata", handleLoadedMetadata)
       videoElement.removeEventListener("loadeddata", handleLoadedData)
       videoElement.removeEventListener("error", handleError)
       videoElement.removeEventListener("canplay", handleCanPlay)
+      videoElement.removeEventListener("loadstart", handleLoadStart)
     }
-  }, [proxiedVideoUrl, item.title])
+  }, [proxiedVideoUrl, item.title, loadAttempts])
 
   const handlePlayPause = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
 
-    if (!videoRef.current || !proxiedVideoUrl) {
-      console.error("❌ No video element or proxied URL available")
+    if (!videoRef.current || !proxiedVideoUrl || videoError) {
+      console.error("❌ No video element, proxied URL, or video error for:", item.title)
       return
     }
 
-    console.log("🎬 Attempting to play video:", proxiedVideoUrl)
+    console.log("🎬 Attempting to play video:", item.title)
 
     if (isPlaying) {
       videoRef.current.pause()
@@ -527,12 +555,12 @@ function ContentCard({ item }: { item: ContentItem }) {
       videoRef.current
         .play()
         .then(() => {
-          console.log("✅ Video started playing")
+          console.log("✅ Video started playing:", item.title)
           setIsPlaying(true)
         })
         .catch((error) => {
-          console.error("❌ Error playing video:", error)
-          setVideoError(true)
+          console.error("❌ Error playing video:", item.title, error)
+          // Don't set video error here, just log it
         })
     }
   }
@@ -545,9 +573,8 @@ function ContentCard({ item }: { item: ContentItem }) {
   }
 
   const handleVideoError = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
-    console.error("❌ Video error:", e.currentTarget.error)
-    setVideoError(true)
-    setVideoLoaded(false)
+    console.error("❌ Video element error for", item.title, ":", e.currentTarget.error)
+    // This will trigger the retry logic in the useEffect
   }
 
   const handleDownload = async (e: React.MouseEvent) => {
@@ -639,10 +666,6 @@ function ContentCard({ item }: { item: ContentItem }) {
     }
   }
 
-  const handleThumbnailError = () => {
-    setThumbnailError(true)
-  }
-
   // Update state when video plays/pauses
   useEffect(() => {
     const videoElement = videoRef.current
@@ -674,62 +697,68 @@ function ContentCard({ item }: { item: ContentItem }) {
           isHovered ? "border border-white/50" : "border border-transparent"
         }`}
       >
-        {/* Video element */}
-        {proxiedVideoUrl && !videoError ? (
+        {/* Video element - always render if we have a URL */}
+        {proxiedVideoUrl && (
           <video
             ref={videoRef}
-            className="w-full h-full object-cover"
+            className={`w-full h-full object-cover transition-opacity duration-300 ${
+              videoLoaded && !videoError ? "opacity-100" : "opacity-0"
+            }`}
             preload="metadata"
             muted
             playsInline
             controls={false}
             onError={handleVideoError}
-            style={{ display: videoLoaded ? "block" : "none" }}
           >
             <source src={proxiedVideoUrl} type="video/mp4" />
             Your browser does not support the video tag.
           </video>
-        ) : null}
+        )}
 
-        {/* Loading state or fallback */}
-        {(!videoLoaded || videoError) && (
-          <div className="absolute inset-0 bg-zinc-800 flex items-center justify-center">
-            {!videoError ? (
-              <div className="text-center">
-                <div className="w-4 h-4 border border-zinc-600 border-t-white rounded-full animate-spin mx-auto mb-2" />
-                <p className="text-xs text-zinc-500">Loading...</p>
-              </div>
-            ) : (
-              <div className="text-center">
-                <Play className="w-8 h-8 text-zinc-600 mx-auto mb-2" />
-                <p className="text-xs text-zinc-500">Video unavailable</p>
-              </div>
-            )}
+        {/* Loading/Error state overlay */}
+        <div
+          className={`absolute inset-0 bg-zinc-800 flex items-center justify-center transition-opacity duration-300 ${
+            !videoLoaded || videoError ? "opacity-100" : "opacity-0"
+          }`}
+        >
+          {!videoError && loadAttempts < 3 ? (
+            <div className="text-center">
+              <div className="w-4 h-4 border border-zinc-600 border-t-white rounded-full animate-spin mx-auto mb-2" />
+              <p className="text-xs text-zinc-500">
+                {loadAttempts > 0 ? `Retrying... (${loadAttempts}/3)` : "Loading..."}
+              </p>
+            </div>
+          ) : (
+            <div className="text-center">
+              <AlertCircle className="w-8 h-8 text-zinc-600 mx-auto mb-2" />
+              <p className="text-xs text-zinc-500">Video unavailable</p>
+            </div>
+          )}
+        </div>
+
+        {/* Play/Pause overlay - only show if video is loaded and no error */}
+        {videoLoaded && !videoError && (
+          <div
+            className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-200 ${
+              isHovered || !isPlaying ? "opacity-100" : "opacity-0"
+            }`}
+          >
+            <button
+              onClick={handlePlayPause}
+              className="bg-white/20 backdrop-blur-sm rounded-full p-2 transition-transform duration-300 hover:scale-110"
+              aria-label={isPlaying ? "Pause video" : "Play video"}
+            >
+              {isPlaying ? (
+                <Pause className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+              ) : (
+                <Play className="h-4 w-4 sm:h-5 sm:w-5 text-white ml-0.5" />
+              )}
+            </button>
           </div>
         )}
 
-        {/* Play/Pause overlay */}
-        <div
-          className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-200 ${
-            isHovered || !isPlaying ? "opacity-100" : "opacity-0"
-          }`}
-        >
-          <button
-            onClick={handlePlayPause}
-            disabled={!proxiedVideoUrl || videoError || !videoLoaded}
-            className="bg-white/20 backdrop-blur-sm rounded-full p-2 transition-transform duration-300 hover:scale-110 disabled:opacity-50"
-            aria-label={isPlaying ? "Pause video" : "Play video"}
-          >
-            {isPlaying ? (
-              <Pause className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
-            ) : (
-              <Play className="h-4 w-4 sm:h-5 sm:w-5 text-white ml-0.5" />
-            )}
-          </button>
-        </div>
-
-        {/* Download button - bottom right corner, shows lock if limit reached */}
-        {proxiedVideoUrl && !videoError && videoLoaded && (
+        {/* Download button - only show if video is loaded and no error */}
+        {videoLoaded && !videoError && proxiedVideoUrl && (
           <button
             onClick={handleDownload}
             disabled={isDownloading || (hasReachedLimit && !isProUser)}
