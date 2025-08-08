@@ -1,24 +1,36 @@
-"use client"
+'use client'
 
+import { useState, useEffect } from 'react'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Plus, Package, DollarSign, Edit, Eye, EyeOff, Loader2, AlertCircle, Upload, X, Check, Trash2, ImageIcon } from 'lucide-react'
+import { useToast } from '@/hooks/use-toast'
+import { useUserPlan } from '@/hooks/use-user-plan'
+import { StripeConnectionPrompt } from '@/components/stripe-connection-prompt'
 import { useRef } from "react"
-
-import { useState, useEffect } from "react"
-import { motion, AnimatePresence } from "framer-motion"
-import { Plus, Edit, Eye, EyeOff, Loader2, AlertCircle, Upload, X, Check, Trash2, ImageIcon } from 'lucide-react'
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Switch } from "@/components/ui/switch"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useToast } from "@/hooks/use-toast"
 import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, onSnapshot, addDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { useAuth } from "@/contexts/auth-context"
-import { useUserPlan } from "@/hooks/use-user-plan"
+import { useRouter } from "next/navigation"
+import { useToast as useToastUi } from "@/components/ui/use-toast"
+import { motion, AnimatePresence } from "framer-motion"
+
+interface Bundle {
+  id: string
+  title: string
+  description: string
+  price: number
+  coverImage?: string
+  isActive: boolean
+  contentItems?: any[]
+  createdAt: any
+}
 
 interface ContentItem {
   id: string
@@ -65,10 +77,17 @@ interface EditBundleForm {
 }
 
 export default function BundlesPage() {
+  const [bundles, setBundles] = useState<Bundle[]>([])
+  const [loading, setLoading] = useState(true)
+  const [stripeConnected, setStripeConnected] = useState<boolean | null>(null)
+  const { toast } = useToast()
+  const { planData, isProUser, plan, loading: planLoading } = useUserPlan()
   const { user } = useAuth()
+  const router = useRouter()
+  const { toast: toastHook } = useToast()
+
   const [productBoxes, setProductBoxes] = useState<ProductBox[]>([])
   const [contentItems, setContentItems] = useState<{ [key: string]: ContentItem[] }>({})
-  const [loading, setLoading] = useState(true)
   const [contentLoading, setContentLoading] = useState<{ [key: string]: boolean }>({})
   const [showContent, setShowContent] = useState<{ [key: string]: boolean }>({})
   const [error, setError] = useState<string | null>(null)
@@ -81,10 +100,8 @@ export default function BundlesPage() {
     billingType: "one_time",
     thumbnail: null,
   })
-  const { toast } = useToast()
 
   // Bundle limit logic for free users
-  const { planData, isProUser } = useUserPlan()
   const bundleLimit = isProUser ? Infinity : 2
   const isAtBundleLimit = !isProUser && productBoxes.length >= bundleLimit
 
@@ -130,6 +147,26 @@ export default function BundlesPage() {
       return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
     }
   }
+
+  // Check Stripe connection status
+  useEffect(() => {
+    const checkStripeStatus = async () => {
+      try {
+        const response = await fetch('/api/stripe/connect/status')
+        if (response.ok) {
+          const data = await response.json()
+          setStripeConnected(data.connected)
+        } else {
+          setStripeConnected(false)
+        }
+      } catch (error) {
+        console.error('Error checking Stripe status:', error)
+        setStripeConnected(false)
+      }
+    }
+
+    checkStripeStatus()
+  }, [])
 
   // Fetch product boxes - Updated to use the bundles API
   const fetchProductBoxes = async () => {
@@ -194,6 +231,46 @@ export default function BundlesPage() {
       setLoading(false)
     }
   }
+
+  // Fetch bundles
+  useEffect(() => {
+    const fetchBundles = async () => {
+      try {
+        const token = localStorage.getItem('authToken')
+        if (!token) {
+          throw new Error('No auth token found')
+        }
+
+        const response = await fetch('/api/creator/bundles', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        })
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch bundles: ${response.status}`)
+        }
+
+        const data = await response.json()
+        setBundles(data.bundles || [])
+      } catch (error) {
+        console.error('Error fetching bundles:', error)
+        toast({
+          title: 'Error',
+          description: 'Failed to load bundles',
+          variant: 'destructive',
+        })
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    if (stripeConnected === true) {
+      fetchBundles()
+    } else if (stripeConnected === false) {
+      setLoading(false)
+    }
+  }, [stripeConnected, toast])
 
   // Set up real-time listener for product box content
   const setupContentListener = (productBox: ProductBox) => {
@@ -499,6 +576,21 @@ export default function BundlesPage() {
     } finally {
       setCreateLoading(false)
     }
+  }
+
+  const handleCreateBundleNew = () => {
+    // Check if free user has reached limit
+    if (plan !== 'pro' && bundles.length >= 2) {
+      toast({
+        title: 'Bundle Limit Reached',
+        description: 'Free users can create up to 2 bundles. Upgrade to Pro for unlimited bundles.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    // Navigate to bundle creation
+    window.location.href = '/dashboard/bundles/create'
   }
 
   // Handle thumbnail upload for edit modal
@@ -1030,6 +1122,29 @@ export default function BundlesPage() {
     }
   }, [user])
 
+  // Show Stripe connection prompt if not connected
+  if (stripeConnected === false) {
+    return <StripeConnectionPrompt />
+  }
+
+  // Show loading state
+  if (loading || stripeConnected === null || planLoading) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading bundles...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const isFreePlan = plan !== 'pro'
+  const bundleCount = bundles.length
+  const canCreateMore = !isFreePlan || bundleCount < 2
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -1057,255 +1172,50 @@ export default function BundlesPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <h1 className="text-2xl font-bold text-white">Bundles</h1>
-            {!isProUser && (
-              <div className="text-sm text-zinc-400 bg-zinc-800 px-2 py-1 rounded">
-                {productBoxes.length}/{bundleLimit}
-              </div>
-            )}
-          </div>
-          <p className="text-zinc-400">Create and manage premium content packages for your audience</p>
+    <div className="container mx-auto px-4 py-8">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+        <div className="flex items-center gap-3">
+          <h1 className="text-3xl font-bold">Bundles</h1>
+          {isFreePlan && (
+            <Badge variant="outline" className="text-xs">
+              {bundleCount}/2
+            </Badge>
+          )}
         </div>
-
-        <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
-          <DialogTrigger asChild>
-            <Button
-              className="bg-red-600 hover:bg-red-700"
-              disabled={isAtBundleLimit}
-              onClick={() => {
-                if (isAtBundleLimit) {
-                  toast({
-                    title: "Bundle Limit Reached",
-                    description: "Free users can create up to 2 bundles. Upgrade to Creator Pro for unlimited bundles.",
-                    variant: "destructive",
-                  })
-                  return
-                }
-                setShowCreateModal(true)
-              }}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Create Bundle
-              {isAtBundleLimit && " (Limit Reached)"}
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="bg-zinc-900 border-zinc-800 text-white">
-            <DialogHeader>
-              <DialogTitle>Create New Bundle</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="title">Title *</Label>
-                <Input
-                  id="title"
-                  value={createForm.title}
-                  onChange={(e) => setCreateForm((prev) => ({ ...prev, title: e.target.value }))}
-                  placeholder="Enter bundle title"
-                  className="bg-zinc-800 border-zinc-700"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  value={createForm.description}
-                  onChange={(e) => setCreateForm((prev) => ({ ...prev, description: e.target.value }))}
-                  placeholder="Describe your bundle"
-                  className="bg-zinc-800 border-zinc-700"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="price">Price (USD) *</Label>
-                  <Input
-                    id="price"
-                    type="number"
-                    step="0.01"
-                    min="0.50"
-                    value={createForm.price}
-                    onChange={(e) => setCreateForm((prev) => ({ ...prev, price: e.target.value }))}
-                    placeholder="9.99"
-                    className="bg-zinc-800 border-zinc-700"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="billing">Billing Type</Label>
-                  <Select
-                    value={createForm.billingType}
-                    onValueChange={(value: "one_time" | "subscription") =>
-                      setCreateForm((prev) => ({ ...prev, billingType: value }))
-                    }
-                  >
-                    <SelectTrigger className="bg-zinc-800 border-zinc-700">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-zinc-800 border-zinc-700">
-                      <SelectItem value="one_time">One-time Payment</SelectItem>
-                      <SelectItem value="subscription">Monthly Subscription</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Enhanced Thumbnail Section */}
-              <div className="space-y-4">
-                <Label>Bundle Thumbnail (Optional)</Label>
-
-                {/* Thumbnail Preview */}
-                {createForm.thumbnail && (
-                  <div className="relative">
-                    <div className="aspect-square w-32 h-32 rounded-lg overflow-hidden border border-zinc-700">
-                      <img
-                        src={URL.createObjectURL(createForm.thumbnail) || "/placeholder.svg"}
-                        alt="Thumbnail preview"
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setCreateForm((prev) => ({ ...prev, thumbnail: null }))}
-                      className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-red-600 hover:bg-red-700 text-white p-0"
-                    >
-                      <X className="h-3 w-3" />
-                    </Button>
-                    <p className="text-xs text-zinc-400 mt-2">{createForm.thumbnail.name}</p>
-                  </div>
-                )}
-
-                {/* Upload Area */}
-                {!createForm.thumbnail && (
-                  <div
-                    className="border-2 border-dashed border-zinc-700 rounded-lg p-8 text-center hover:border-zinc-600 transition-colors cursor-pointer"
-                    onClick={() => document.getElementById("thumbnail-upload")?.click()}
-                    onDragOver={(e) => {
-                      e.preventDefault()
-                      e.currentTarget.classList.add("border-zinc-500")
-                    }}
-                    onDragLeave={(e) => {
-                      e.preventDefault()
-                      e.currentTarget.classList.remove("border-zinc-500")
-                    }}
-                    onDrop={(e) => {
-                      e.preventDefault()
-                      e.currentTarget.classList.remove("border-zinc-500")
-                      const files = e.dataTransfer.files
-                      if (files.length > 0) {
-                        const file = files[0]
-                        if (file.type.startsWith("image/")) {
-                          setCreateForm((prev) => ({ ...prev, thumbnail: file }))
-                        }
-                      }
-                    }}
-                  >
-                    <div className="space-y-3">
-                      <div className="w-16 h-16 mx-auto bg-zinc-800 rounded-lg flex items-center justify-center">
-                        <Upload className="h-8 w-8 text-zinc-500" />
-                      </div>
-                      <div>
-                        <p className="text-sm text-zinc-300 font-medium">Upload bundle thumbnail</p>
-                        <p className="text-xs text-zinc-500 mt-1">Drag and drop an image here, or click to browse</p>
-                      </div>
-                      <div className="text-xs text-zinc-600">
-                        Supports: JPEG, PNG, WebP • Max size: 5MB • Recommended: 400x400px
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Hidden File Input */}
-                <input
-                  id="thumbnail-upload"
-                  type="file"
-                  accept="image/jpeg,image/jpg,image/png,image/webp"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0]
-                    if (file) {
-                      // Validate file type
-                      const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"]
-                      if (!allowedTypes.includes(file.type)) {
-                        toast({
-                          title: "Invalid File Type",
-                          description: "Please select a JPEG, PNG, or WebP image",
-                          variant: "destructive",
-                        })
-                        return
-                      }
-
-                      // Validate file size (5MB max)
-                      const maxSize = 5 * 1024 * 1024
-                      if (file.size > maxSize) {
-                        toast({
-                          title: "File Too Large",
-                          description: "Please select an image smaller than 5MB",
-                          variant: "destructive",
-                        })
-                        return
-                      }
-
-                      setCreateForm((prev) => ({ ...prev, thumbnail: file }))
-                    }
-                  }}
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4">
-                <Button variant="outline" onClick={() => setShowCreateModal(false)} className="border-zinc-700">
-                  Cancel
-                </Button>
-                <Button onClick={handleCreateBundle} disabled={createLoading} className="bg-red-600 hover:bg-red-700">
-                  {createLoading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Creating...
-                    </>
-                  ) : (
-                    "Create Bundle"
-                  )}
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <Button
+          onClick={handleCreateBundleNew}
+          disabled={!canCreateMore}
+          className="flex items-center gap-2"
+        >
+          <Plus className="w-4 h-4" />
+          Create Bundle {!canCreateMore && '(Limit Reached)'}
+        </Button>
       </div>
 
-      {/* Product Boxes */}
-      {productBoxes.length === 0 ? (
-        <div className="text-center py-12">
-          <div className="text-6xl mb-4">📦</div>
-          <h3 className="text-xl font-medium text-white mb-2">No Bundles Yet</h3>
-          <p className="text-zinc-400 mb-4">Create your first premium content bundle to get started</p>
-          <Button
-            className="bg-red-600 hover:bg-red-700"
-            disabled={isAtBundleLimit}
-            onClick={() => {
-              if (isAtBundleLimit) {
-                toast({
-                  title: "Bundle Limit Reached",
-                  description: "Free users can create up to 2 bundles. Upgrade to Creator Pro for unlimited bundles.",
-                  variant: "destructive",
-                })
-                return
-              }
-              setShowCreateModal(true)
-            }}
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Create Your First Bundle
-          </Button>
-        </div>
+      <p className="text-muted-foreground mb-8">
+        Create and manage premium content packages for your audience
+      </p>
+
+      {bundles.length === 0 ? (
+        <Card className="text-center py-12">
+          <CardContent>
+            <Package className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-lg font-semibold mb-2">No bundles yet</h3>
+            <p className="text-muted-foreground mb-6">
+              Create your first bundle to start selling premium content
+            </p>
+            <Button
+              onClick={handleCreateBundleNew}
+              disabled={!canCreateMore}
+              className="flex items-center gap-2 mx-auto"
+            >
+              <Plus className="w-4 h-4" />
+              Create Your First Bundle
+            </Button>
+          </CardContent>
+        </Card>
       ) : (
-        <div className="space-y-6">
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {productBoxes.map((productBox, index) => {
             const boxContent = contentItems[productBox.id] || []
             const isContentLoading = contentLoading[productBox.id] || false
@@ -1319,192 +1229,66 @@ export default function BundlesPage() {
                 transition={{ duration: 0.3, delay: index * 0.1 }}
               >
                 <Card className="bg-zinc-900/50 border-zinc-800 overflow-hidden">
+                  <div className="aspect-video bg-muted relative">
+                    {productBox.coverImage ? (
+                      <img
+                        src={productBox.coverImage || "/placeholder.svg"}
+                        alt={productBox.title}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Package className="w-12 h-12 text-muted-foreground" />
+                      </div>
+                    )}
+                    <div className="absolute top-2 right-2">
+                      <Badge variant={productBox.active ? 'default' : 'secondary'}>
+                        {productBox.active ? 'Active' : 'Inactive'}
+                      </Badge>
+                    </div>
+                  </div>
+
                   <CardHeader>
                     <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <CardTitle className="text-xl text-white">{productBox.title}</CardTitle>
-                          <Badge variant={productBox.active ? "default" : "secondary"}>
-                            {productBox.active ? "Active" : "Inactive"}
-                          </Badge>
-                        </div>
-                        <p className="text-zinc-400 mb-3">{productBox.description}</p>
-                        <div className="flex items-center gap-4">
-                          <span className="text-2xl font-bold text-green-400">${productBox.price.toFixed(2)}</span>
-                        </div>
+                      <div className="flex-1 min-w-0">
+                        <CardTitle className="text-lg truncate">{productBox.title}</CardTitle>
+                        <CardDescription className="line-clamp-2">
+                          {productBox.description}
+                        </CardDescription>
                       </div>
                     </div>
                   </CardHeader>
 
                   <CardContent>
-                    {/* Content Section Header */}
-                    <div className="flex items-center justify-between mb-4">
-                      <span className="text-sm text-zinc-400">Content ({boxContent.length})</span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => toggleContentVisibility(productBox.id)}
-                        className="text-xs text-zinc-400 hover:text-white hover:bg-zinc-800"
-                      >
-                        {isContentVisible ? (
-                          <>
-                            <EyeOff className="h-3 w-3 mr-1" />
-                            Hide
-                          </>
-                        ) : (
-                          <>
-                            <Eye className="h-3 w-3 mr-1" />
-                            Show Content
-                          </>
-                        )}
-                      </Button>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <DollarSign className="w-4 h-4 text-green-600" />
+                        <span className="font-semibold text-green-600">
+                          ${productBox.price.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        Content ({boxContent.length})
+                      </div>
                     </div>
 
-                    {/* Content Grid */}
-                    <AnimatePresence>
-                      {isContentVisible && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: "auto" }}
-                          exit={{ opacity: 0, height: 0 }}
-                          transition={{ duration: 0.3 }}
-                          className="space-y-4"
-                        >
-                          {isContentLoading ? (
-                            <div className="flex items-center justify-center py-8">
-                              <Loader2 className="h-5 w-5 text-zinc-500 animate-spin" />
-                              <span className="ml-2 text-sm text-zinc-400">Loading content...</span>
-                            </div>
-                          ) : boxContent.length > 0 ? (
-                            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-                              {boxContent.map((item) => (
-                                <div key={item.id} className="group relative">
-                                  <div className="relative aspect-[9/16] bg-zinc-900 rounded-lg overflow-hidden shadow-md border border-transparent hover:border-white/20 transition-all duration-300">
-                                    {/* Delete button */}
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        handleRemoveContentFromBundle(productBox.id, item.id)
-                                      }}
-                                      className="absolute top-2 right-2 z-30 w-6 h-6 bg-red-600/90 hover:bg-red-600 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 shadow-lg"
-                                      title="Remove from bundle"
-                                    >
-                                      <X className="w-3 h-3 text-white" />
-                                    </button>
-
-                                    {item.contentType === "video" ? (
-                                      <video
-                                        src={item.fileUrl}
-                                        className="w-full h-full object-cover cursor-pointer"
-                                        muted
-                                        preload="metadata"
-                                        poster={item.thumbnailUrl}
-                                        onMouseEnter={(e) => {
-                                          const video = e.target as HTMLVideoElement
-                                          video.play().catch(() => {})
-                                        }}
-                                        onMouseLeave={(e) => {
-                                          const video = e.target as HTMLVideoElement
-                                          video.pause()
-                                          video.currentTime = 0
-                                        }}
-                                        onClick={() => window.open(item.fileUrl, "_blank")}
-                                      />
-                                    ) : (
-                                      <div className="w-full h-full flex items-center justify-center cursor-pointer bg-zinc-800">
-                                        <div className="text-center">
-                                          <div className="text-2xl mb-1">
-                                            {item.contentType === "audio"
-                                              ? "🎵"
-                                              : item.contentType === "image"
-                                                ? "🖼️"
-                                                : "📄"}
-                                          </div>
-                                        </div>
-                                      </div>
-                                    )}
-
-                                    {/* Play overlay for videos */}
-                                    {item.contentType === "video" && (
-                                      <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
-                                    )}
-                                  </div>
-
-                                  {/* File info */}
-                                  <div className="mt-2">
-                                    <p className="text-xs text-zinc-300 truncate font-light">{item.title}</p>
-                                  </div>
-                                </div>
-                              ))}
-
-                              {/* Add Content Placeholder - Only show when there's existing content */}
-                              <div
-                                className="aspect-[9/16] bg-zinc-800/50 rounded-lg border-2 border-dashed border-zinc-700 flex flex-col items-center justify-center cursor-pointer hover:border-zinc-600 hover:bg-zinc-800/70 transition-all duration-200"
-                                onClick={() => {
-                                  fetchUserUploads()
-                                  setShowAddContentModal(productBox.id)
-                                }}
-                              >
-                                <Plus className="w-6 h-6 text-zinc-500 mb-1" />
-                                <p className="text-xs text-zinc-500 text-center px-1">Add Content</p>
-                              </div>
-                            </div>
-                          ) : (
-                            // Empty state - Show centered Add Content button
-                            <div className="text-center py-8">
-                              <div className="text-4xl mb-2">📹</div>
-                              <p className="text-sm text-zinc-500 mb-4">No content added yet</p>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="border-zinc-700 text-zinc-300 bg-transparent hover:bg-zinc-800"
-                                onClick={() => {
-                                  fetchUserUploads()
-                                  setShowAddContentModal(productBox.id)
-                                }}
-                              >
-                                <Plus className="h-4 w-4 mr-2" />
-                                Add Content
-                              </Button>
-                            </div>
-                          )}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-
-                    {/* Mobile Controls Section - Separated by border */}
-                    <div className="mt-6 pt-4 border-t border-zinc-800">
-                      <div className="flex items-center justify-between gap-4">
-                        {/* Toggle Switch */}
-                        <div className="flex items-center gap-3">
-                          <Switch
-                            checked={productBox.active}
-                            onCheckedChange={() => handleToggleActive(productBox.id)}
-                            className="data-[state=checked]:bg-red-600"
-                          />
-                          <span className="text-sm text-zinc-400">{productBox.active ? "Active" : "Inactive"}</span>
-                        </div>
-
-                        {/* Action Buttons */}
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="hover:bg-zinc-800 text-zinc-400 hover:text-white"
-                            onClick={() => openEditModal(productBox)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="hover:bg-red-900/50 text-red-400 hover:text-red-300"
-                            onClick={() => handleDelete(productBox.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
+                    <div className="flex gap-2 mt-4">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => window.location.href = `/dashboard/bundles/${productBox.id}/edit`}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => window.location.href = `/bundles/${productBox.id}`}
+                      >
+                        View
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>
