@@ -88,6 +88,9 @@ export const admin = {
   storageService: storage,
 }
 
+// REQUIRED: Export firebaseAdmin as named export
+export const firebaseAdmin = adminApp
+
 // Default export
 export default adminApp
 
