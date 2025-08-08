@@ -4,7 +4,7 @@ import { useRef } from "react"
 
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Plus, Edit, Eye, EyeOff, Loader2, AlertCircle, Upload, X, Check, Trash2, ImageIcon } from "lucide-react"
+import { Plus, Edit, Eye, EyeOff, Loader2, AlertCircle, Upload, X, Check, Trash2, ImageIcon } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -18,6 +18,7 @@ import { useToast } from "@/hooks/use-toast"
 import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, onSnapshot, addDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { useAuth } from "@/contexts/auth-context"
+import { useUserPlan } from "@/hooks/use-user-plan"
 
 interface ContentItem {
   id: string
@@ -81,6 +82,11 @@ export default function BundlesPage() {
     thumbnail: null,
   })
   const { toast } = useToast()
+
+  // Bundle limit logic for free users
+  const { planData, isProUser } = useUserPlan()
+  const bundleLimit = isProUser ? Infinity : 2
+  const isAtBundleLimit = !isProUser && productBoxes.length >= bundleLimit
 
   const [availableUploads, setAvailableUploads] = useState<ContentItem[]>([])
   const [showAddContentModal, setShowAddContentModal] = useState<string | null>(null)
@@ -1055,15 +1061,37 @@ export default function BundlesPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Bundles</h1>
+          <div className="flex items-center gap-3 mb-2">
+            <h1 className="text-2xl font-bold text-white">Bundles</h1>
+            {!isProUser && (
+              <div className="text-sm text-zinc-400 bg-zinc-800 px-2 py-1 rounded">
+                {productBoxes.length}/{bundleLimit}
+              </div>
+            )}
+          </div>
           <p className="text-zinc-400">Create and manage premium content packages for your audience</p>
         </div>
 
         <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
           <DialogTrigger asChild>
-            <Button className="bg-red-600 hover:bg-red-700">
+            <Button
+              className="bg-red-600 hover:bg-red-700"
+              disabled={isAtBundleLimit}
+              onClick={() => {
+                if (isAtBundleLimit) {
+                  toast({
+                    title: "Bundle Limit Reached",
+                    description: "Free users can create up to 2 bundles. Upgrade to Creator Pro for unlimited bundles.",
+                    variant: "destructive",
+                  })
+                  return
+                }
+                setShowCreateModal(true)
+              }}
+            >
               <Plus className="h-4 w-4 mr-2" />
               Create Bundle
+              {isAtBundleLimit && " (Limit Reached)"}
             </Button>
           </DialogTrigger>
           <DialogContent className="bg-zinc-900 border-zinc-800 text-white">
@@ -1257,7 +1285,21 @@ export default function BundlesPage() {
           <div className="text-6xl mb-4">📦</div>
           <h3 className="text-xl font-medium text-white mb-2">No Bundles Yet</h3>
           <p className="text-zinc-400 mb-4">Create your first premium content bundle to get started</p>
-          <Button className="bg-red-600 hover:bg-red-700" onClick={() => setShowCreateModal(true)}>
+          <Button
+            className="bg-red-600 hover:bg-red-700"
+            disabled={isAtBundleLimit}
+            onClick={() => {
+              if (isAtBundleLimit) {
+                toast({
+                  title: "Bundle Limit Reached",
+                  description: "Free users can create up to 2 bundles. Upgrade to Creator Pro for unlimited bundles.",
+                  variant: "destructive",
+                })
+                return
+              }
+              setShowCreateModal(true)
+            }}
+          >
             <Plus className="h-4 w-4 mr-2" />
             Create Your First Bundle
           </Button>
