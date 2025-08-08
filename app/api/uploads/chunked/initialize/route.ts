@@ -37,35 +37,35 @@ export async function POST(request: NextRequest) {
 
     const { uploadId, fileName, fileSize, fileType, totalChunks, chunkSize } = await request.json()
 
-    if (!uploadId || !fileName || !fileSize || !fileType || !totalChunks || !chunkSize) {
+    if (!uploadId || !fileName || !fileSize || !fileType || !totalChunks) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
-    // Get user profile to determine upload path
+    // Check if user exists in the users collection
     const userDoc = await db.collection("users").doc(user.uid).get()
     if (!userDoc.exists) {
       return NextResponse.json({ error: "User profile not found" }, { status: 404 })
     }
 
     const userData = userDoc.data()!
-    const username = userData.username
+    const username = userData.username || userData.displayName || "unknown"
 
-    if (!username) {
-      return NextResponse.json({ error: "Username not found in profile" }, { status: 400 })
-    }
-
-    // Generate unique filename with timestamp
+    // Generate R2 key for the final file
     const timestamp = Date.now()
-    const uniqueFileName = `${timestamp}-${fileName}`
-    const r2Key = `creators/${username}/${uniqueFileName}`
+    const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, "_")
+    const r2Key = `creators/${username}/${timestamp}-${sanitizedFileName}`
     
-    const publicUrl = `${process.env.CLOUDFLARE_R2_PUBLIC_URL || process.env.R2_PUBLIC_URL}/${r2Key}`
+    // Generate public URL
+    const publicDomain = process.env.CLOUDFLARE_R2_PUBLIC_URL || process.env.R2_PUBLIC_URL
+    const bucketName = process.env.CLOUDFLARE_R2_BUCKET_NAME || process.env.R2_BUCKET_NAME
+    const publicUrl = publicDomain 
+      ? `${publicDomain}/${r2Key}`
+      : `https://pub-${bucketName}.r2.dev/${r2Key}`
 
     // Create upload session in Firestore
     const sessionData = {
       uploadId,
       uid: user.uid,
-      fileName,
       originalFileName: fileName,
       fileSize,
       fileType,
@@ -73,26 +73,22 @@ export async function POST(request: NextRequest) {
       chunkSize,
       r2Key,
       publicUrl,
-      username,
-      status: 'initializing',
-      completedChunks: [],
+      status: 'initialized',
       createdAt: new Date(),
       updatedAt: new Date()
     }
 
     await db.collection("uploadSessions").doc(uploadId).set(sessionData)
 
-    console.log(`✅ [Chunked Upload] Initialized session: ${uploadId}`)
+    console.log(`✅ [Chunked Upload] Session initialized: ${uploadId}`)
     console.log(`📁 [Chunked Upload] R2 Key: ${r2Key}`)
-    console.log(`🌐 [Chunked Upload] Public URL: ${publicUrl}`)
+    console.log(`🔗 [Chunked Upload] Public URL: ${publicUrl}`)
 
     return NextResponse.json({
       success: true,
       uploadId,
       publicUrl,
-      r2Key,
-      totalChunks,
-      chunkSize
+      r2Key
     })
 
   } catch (error) {

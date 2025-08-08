@@ -69,22 +69,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "R2 bucket not configured" }, { status: 500 })
     }
 
-    // Create chunk key
+    // Generate chunk key
     const chunkKey = `${sessionData.r2Key}.chunk.${chunkIndex}`
 
-    // Create the command to put the chunk
-    const command = new PutObjectCommand({
+    // Create presigned URL for chunk upload
+    const putCommand = new PutObjectCommand({
       Bucket: bucketName,
       Key: chunkKey,
-      ContentLength: chunkSize,
+      ContentType: "application/octet-stream"
     })
 
-    // Generate a pre-signed URL for uploading the chunk (shorter expiry for chunks)
-    const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 1800 }) // 30 minutes
+    const uploadUrl = await getSignedUrl(s3Client, putCommand, { expiresIn: 3600 }) // 1 hour
+
+    console.log(`🔗 [Chunk URL] Generated for chunk ${chunkIndex}: ${chunkKey}`)
 
     return NextResponse.json({
       success: true,
-      uploadUrl: signedUrl,
+      uploadUrl,
       chunkKey
     })
 

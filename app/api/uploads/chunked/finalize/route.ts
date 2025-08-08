@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { S3Client, ListObjectsV2Command, CopyObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3"
+import { S3Client, ListObjectsV2Command, GetObjectCommand, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3"
 import { initializeFirebaseAdmin, db } from "@/lib/firebase/firebaseAdmin"
 import { headers } from "next/headers"
 
@@ -36,6 +36,79 @@ async function verifyAuthToken(request: NextRequest) {
   } catch (error) {
     console.error("Token verification failed:", error)
     return null
+  }
+}
+
+async function combineChunksInR2(bucketName: string, r2Key: string, totalChunks: number) {
+  console.log(`🔄 [Combine Chunks] Starting combination for ${totalChunks} chunks`)
+  
+  try {
+    // Get all chunk objects
+    const chunkBuffers: Buffer[] = []
+    
+    for (let i = 0; i < totalChunks; i++) {
+      const chunkKey = `${r2Key}.chunk.${i}`
+      console.log(`📥 [Combine Chunks] Downloading chunk ${i}: ${chunkKey}`)
+      
+      const getCommand = new GetObjectCommand({
+        Bucket: bucketName,
+        Key: chunkKey
+      })
+      
+      const response = await s3Client.send(getCommand)
+      if (!response.Body) {
+        throw new Error(`Chunk ${i} has no body`)
+      }
+      
+      // Convert stream to buffer
+      const chunks: Uint8Array[] = []
+      const reader = response.Body.transformToWebStream().getReader()
+      
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        chunks.push(value)
+      }
+      
+      const chunkBuffer = Buffer.concat(chunks.map(chunk => Buffer.from(chunk)))
+      chunkBuffers.push(chunkBuffer)
+      console.log(`✅ [Combine Chunks] Downloaded chunk ${i} (${chunkBuffer.length} bytes)`)
+    }
+    
+    // Combine all chunks into one buffer
+    const combinedBuffer = Buffer.concat(chunkBuffers)
+    console.log(`🔗 [Combine Chunks] Combined ${chunkBuffers.length} chunks into ${combinedBuffer.length} bytes`)
+    
+    // Upload combined file
+    const putCommand = new PutObjectCommand({
+      Bucket: bucketName,
+      Key: r2Key,
+      Body: combinedBuffer,
+      ContentType: "video/mp4" // Default to mp4, should be determined from original file type
+    })
+    
+    await s3Client.send(putCommand)
+    console.log(`✅ [Combine Chunks] Uploaded combined file: ${r2Key}`)
+    
+    // Clean up chunk files
+    for (let i = 0; i < totalChunks; i++) {
+      const chunkKey = `${r2Key}.chunk.${i}`
+      try {
+        const deleteCommand = new DeleteObjectCommand({
+          Bucket: bucketName,
+          Key: chunkKey
+        })
+        await s3Client.send(deleteCommand)
+        console.log(`🗑️ [Combine Chunks] Deleted chunk: ${chunkKey}`)
+      } catch (error) {
+        console.warn(`⚠️ [Combine Chunks] Failed to delete chunk ${chunkKey}:`, error)
+      }
+    }
+    
+    return true
+  } catch (error) {
+    console.error("❌ [Combine Chunks] Error combining chunks:", error)
+    throw error
   }
 }
 
@@ -83,104 +156,69 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "R2 bucket not configured" }, { status: 500 })
     }
 
-    console.log(`🔄 [Chunked Upload] Finalizing upload: ${uploadId}`)
-    console.log(`📦 [Chunked Upload] Combining ${completedChunks.length} chunks`)
+    console.log(`🏁 [Finalize Upload] Starting finalization for ${uploadId}`)
+    console.log(`📦 [Finalize Upload] Combining ${completedChunks.length} chunks`)
 
-    // For R2, we need to combine chunks manually
-    // First, list all chunk objects to verify they exist
-    const listCommand = new ListObjectsV2Command({
-      Bucket: bucketName,
-      Prefix: `${sessionData.r2Key}.chunk.`
-    })
+    try {
+      // Combine chunks into final file
+      await combineChunksInR2(bucketName, sessionData.r2Key, sessionData.totalChunks)
 
-    const listResult = await s3Client.send(listCommand)
-    const chunkObjects = listResult.Contents || []
+      // Create upload record in database
+      const uploadData = {
+        uid: user.uid,
+        fileUrl: sessionData.publicUrl,
+        filename: sessionData.originalFileName,
+        title: sessionData.originalFileName.split('.')[0], // Remove extension for title
+        type: getFileType(sessionData.fileType),
+        size: sessionData.fileSize,
+        mimeType: sessionData.fileType,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        uploadMethod: 'chunked',
+        originalUploadId: uploadId,
+        views: 0,
+        downloads: 0
+      }
 
-    if (chunkObjects.length !== sessionData.totalChunks) {
-      return NextResponse.json({ 
-        error: `Chunk count mismatch. Expected ${sessionData.totalChunks}, found ${chunkObjects.length}` 
-      }, { status: 400 })
-    }
+      const uploadRef = await db.collection("uploads").add(uploadData)
 
-    // Sort chunks by index
-    chunkObjects.sort((a, b) => {
-      const aIndex = parseInt(a.Key!.split('.chunk.')[1])
-      const bIndex = parseInt(b.Key!.split('.chunk.')[1])
-      return aIndex - bIndex
-    })
-
-    // For now, we'll use the first chunk as the final file
-    // In a production environment, you'd want to properly combine chunks
-    const firstChunkKey = chunkObjects[0].Key!
-    
-    // Copy first chunk to final location
-    const copyCommand = new CopyObjectCommand({
-      Bucket: bucketName,
-      CopySource: `${bucketName}/${firstChunkKey}`,
-      Key: sessionData.r2Key,
-      ContentType: sessionData.fileType
-    })
-
-    await s3Client.send(copyCommand)
-
-    // Clean up chunk files
-    for (const chunkObj of chunkObjects) {
-      const deleteCommand = new DeleteObjectCommand({
-        Bucket: bucketName,
-        Key: chunkObj.Key!
+      // Update session status
+      await db.collection("uploadSessions").doc(uploadId).update({
+        status: 'completed',
+        finalUploadId: uploadRef.id,
+        completedAt: new Date(),
+        updatedAt: new Date()
       })
-      await s3Client.send(deleteCommand)
+
+      console.log(`✅ [Finalize Upload] Upload completed: ${uploadId}`)
+      console.log(`📄 [Finalize Upload] Created upload record: ${uploadRef.id}`)
+
+      return NextResponse.json({
+        success: true,
+        uploadId: uploadRef.id,
+        fileUrl: sessionData.publicUrl,
+        message: "Upload completed successfully"
+      })
+
+    } catch (combineError) {
+      console.error("❌ [Finalize Upload] Failed to combine chunks:", combineError)
+      
+      // Update session with error status
+      await db.collection("uploadSessions").doc(uploadId).update({
+        status: 'error',
+        error: combineError instanceof Error ? combineError.message : 'Failed to combine chunks',
+        updatedAt: new Date()
+      })
+
+      return NextResponse.json(
+        { error: "Failed to combine uploaded chunks into final file" },
+        { status: 500 }
+      )
     }
-
-    // Create upload record in database
-    const uploadData = {
-      uid: user.uid,
-      fileUrl: sessionData.publicUrl,
-      filename: sessionData.originalFileName,
-      title: sessionData.originalFileName.split('.')[0], // Remove extension for title
-      type: getFileType(sessionData.fileType),
-      size: sessionData.fileSize,
-      mimeType: sessionData.fileType,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      uploadMethod: 'chunked',
-      originalUploadId: uploadId
-    }
-
-    const uploadRef = await db.collection("uploads").add(uploadData)
-
-    // Update session status
-    await db.collection("uploadSessions").doc(uploadId).update({
-      status: 'completed',
-      finalUploadId: uploadRef.id,
-      completedAt: new Date(),
-      updatedAt: new Date()
-    })
-
-    console.log(`✅ [Chunked Upload] Finalized: ${uploadId}`)
-    console.log(`📄 [Chunked Upload] Created upload record: ${uploadRef.id}`)
-
-    return NextResponse.json({
-      success: true,
-      uploadId: uploadRef.id,
-      fileUrl: sessionData.publicUrl,
-      message: "Upload completed successfully"
-    })
 
   } catch (error) {
     console.error("Error finalizing chunked upload:", error)
     
-    // Update session with error status
-    try {
-      await db.collection("uploadSessions").doc(request.json().then(data => data.uploadId)).update({
-        status: 'error',
-        error: error instanceof Error ? error.message : 'Unknown error',
-        updatedAt: new Date()
-      })
-    } catch (updateError) {
-      console.error("Failed to update session with error:", updateError)
-    }
-
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unknown error occurred" },
       { status: 500 }
