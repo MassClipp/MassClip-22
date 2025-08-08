@@ -20,17 +20,32 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Invalid video URL format" }, { status: 400 })
     }
 
+    // Get range header from client request
+    const range = request.headers.get('range')
+    console.log("📊 Range request:", range)
+
+    // Prepare headers for the upstream request
+    const upstreamHeaders: Record<string, string> = {
+      "User-Agent": "Mozilla/5.0 (compatible; MassClip/1.0)",
+      "Accept": "video/*,*/*;q=0.9",
+      "Accept-Encoding": "identity",
+      "Cache-Control": "no-cache",
+    }
+
+    // Forward range header if present
+    if (range) {
+      upstreamHeaders["Range"] = range
+    }
+
     // Fetch the video from the original URL with timeout
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 second timeout
 
     try {
+      console.log("🔄 Fetching video with headers:", upstreamHeaders)
+      
       const response = await fetch(videoUrl, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (compatible; MassClip/1.0)",
-          "Accept": "video/*,*/*;q=0.9",
-          "Accept-Encoding": "identity", // Prevent compression issues
-        },
+        headers: upstreamHeaders,
         signal: controller.signal,
       })
 
@@ -49,31 +64,51 @@ export async function GET(request: NextRequest) {
         }, { status: response.status })
       }
 
-      // Get the video data
-      const videoBuffer = await response.arrayBuffer()
+      // Get response headers
       const contentType = response.headers.get("content-type") || "video/mp4"
       const contentLength = response.headers.get("content-length")
+      const acceptRanges = response.headers.get("accept-ranges")
+      const contentRange = response.headers.get("content-range")
 
-      console.log("✅ Video fetched successfully:", {
+      console.log("✅ Video response received:", {
         url: videoUrl,
+        status: response.status,
         contentType,
         contentLength,
-        size: videoBuffer.byteLength,
+        acceptRanges,
+        contentRange,
+        hasRange: !!range
       })
 
-      // Return the video with proper headers
-      return new NextResponse(videoBuffer, {
-        status: 200,
-        headers: {
-          "Content-Type": contentType,
-          "Content-Length": contentLength || videoBuffer.byteLength.toString(),
-          "Cache-Control": "public, max-age=31536000", // Cache for 1 year
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-          "Access-Control-Allow-Headers": "Range, Content-Range",
-          "Accept-Ranges": "bytes",
-        },
+      // Stream the response
+      const responseHeaders: Record<string, string> = {
+        "Content-Type": contentType,
+        "Cache-Control": "public, max-age=31536000",
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+        "Access-Control-Allow-Headers": "Range, Content-Range",
+        "Accept-Ranges": "bytes",
+      }
+
+      // Forward content-length if available
+      if (contentLength) {
+        responseHeaders["Content-Length"] = contentLength
+      }
+
+      // Forward content-range for partial content
+      if (contentRange) {
+        responseHeaders["Content-Range"] = contentRange
+      }
+
+      // Return appropriate status code
+      const statusCode = response.status === 206 ? 206 : 200
+
+      // Stream the response body
+      return new NextResponse(response.body, {
+        status: statusCode,
+        headers: responseHeaders,
       })
+
     } catch (fetchError) {
       clearTimeout(timeoutId)
       

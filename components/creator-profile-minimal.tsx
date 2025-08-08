@@ -370,6 +370,7 @@ function ContentCard({ item }: { item: ContentItem }) {
   const [videoLoaded, setVideoLoaded] = useState(false)
   const [isDownloading, setIsDownloading] = useState(false)
   const [loadAttempts, setLoadAttempts] = useState(0)
+  const [videoStatus, setVideoStatus] = useState<'loading' | 'loaded' | 'error' | 'timeout'>('loading')
   const videoRef = useRef<HTMLVideoElement>(null)
   const { toast } = useToast()
   const { hasReachedLimit, isProUser, forceRefresh } = useDownloadLimit()
@@ -377,7 +378,14 @@ function ContentCard({ item }: { item: ContentItem }) {
   // Create proxied video URL to bypass CORS
   const getProxiedVideoUrl = (originalUrl: string) => {
     if (!originalUrl) return ""
-    return `/api/proxy-video?url=${encodeURIComponent(originalUrl)}`
+    // Validate URL before proxying
+    try {
+      new URL(originalUrl)
+      return `/api/proxy-video?url=${encodeURIComponent(originalUrl)}`
+    } catch {
+      console.error("❌ Invalid URL for proxying:", originalUrl)
+      return ""
+    }
   }
 
   const proxiedVideoUrl = getProxiedVideoUrl(item.fileUrl)
@@ -391,6 +399,7 @@ function ContentCard({ item }: { item: ContentItem }) {
     loadAttempts,
     videoError,
     videoLoaded,
+    videoStatus,
   })
 
   // Record a download in Firestore (same logic as VimeoCard)
@@ -460,16 +469,28 @@ function ContentCard({ item }: { item: ContentItem }) {
   // Enhanced video loading with better error handling and fallbacks
   useEffect(() => {
     const videoElement = videoRef.current
-    if (!videoElement || !proxiedVideoUrl) return
+    if (!videoElement || !proxiedVideoUrl) {
+      console.log("❌ No video element or proxied URL:", { videoElement: !!videoElement, proxiedVideoUrl })
+      setVideoStatus('error')
+      setVideoError(true)
+      return
+    }
 
     let timeoutId: NodeJS.Timeout
     let loadTimeoutId: NodeJS.Timeout
+
+    const resetVideoState = () => {
+      setVideoLoaded(false)
+      setVideoError(false)
+      setVideoStatus('loading')
+    }
 
     const handleLoadedMetadata = () => {
       console.log("✅ Video metadata loaded for:", item.title)
       clearTimeout(loadTimeoutId)
       setVideoLoaded(true)
       setVideoError(false)
+      setVideoStatus('loaded')
       // Seek to first frame to show video immediately
       videoElement.currentTime = 0.1
     }
@@ -479,6 +500,7 @@ function ContentCard({ item }: { item: ContentItem }) {
       clearTimeout(loadTimeoutId)
       setVideoLoaded(true)
       setVideoError(false)
+      setVideoStatus('loaded')
     }
 
     const handleError = (e: Event) => {
@@ -487,12 +509,13 @@ function ContentCard({ item }: { item: ContentItem }) {
         videoError: videoElement.error,
         networkState: videoElement.networkState,
         readyState: videoElement.readyState,
-        currentSrc: videoElement.currentSrc
+        currentSrc: videoElement.currentSrc,
+        loadAttempts
       })
       
       clearTimeout(loadTimeoutId)
       
-      // Retry logic - try up to 2 times (reduced from 3 for faster fallback)
+      // Retry logic - try up to 2 times with exponential backoff
       if (loadAttempts < 2) {
         console.log(`🔄 Retrying video load for ${item.title}, attempt ${loadAttempts + 1}`)
         setLoadAttempts(prev => prev + 1)
@@ -500,13 +523,15 @@ function ContentCard({ item }: { item: ContentItem }) {
         // Wait before retrying with exponential backoff
         timeoutId = setTimeout(() => {
           if (videoElement) {
+            resetVideoState()
             videoElement.load()
           }
-        }, 2000 * (loadAttempts + 1))
+        }, 2000 * Math.pow(2, loadAttempts)) // 2s, 4s, 8s...
       } else {
         console.error("❌ Max retry attempts reached for:", item.title)
         setVideoError(true)
         setVideoLoaded(false)
+        setVideoStatus('error')
       }
     }
 
@@ -515,17 +540,20 @@ function ContentCard({ item }: { item: ContentItem }) {
       clearTimeout(loadTimeoutId)
       setVideoLoaded(true)
       setVideoError(false)
+      setVideoStatus('loaded')
     }
 
     const handleLoadStart = () => {
       console.log("🔄 Video load started for:", item.title)
+      setVideoStatus('loading')
       // Set a timeout for loading - if it takes too long, consider it failed
       loadTimeoutId = setTimeout(() => {
         console.warn("⚠️ Video loading timeout for:", item.title)
+        setVideoStatus('timeout')
         if (!videoLoaded) {
           handleError(new Event('timeout'))
         }
-      }, 15000) // 15 second timeout
+      }, 10000) // Reduced to 10 second timeout
     }
 
     const handleStalled = () => {
@@ -536,6 +564,13 @@ function ContentCard({ item }: { item: ContentItem }) {
       console.warn("⚠️ Video suspended for:", item.title)
     }
 
+    const handleProgress = () => {
+      console.log("📊 Video loading progress for:", item.title, {
+        buffered: videoElement.buffered.length > 0 ? videoElement.buffered.end(0) : 0,
+        duration: videoElement.duration
+      })
+    }
+
     // Add all event listeners
     videoElement.addEventListener("loadedmetadata", handleLoadedMetadata)
     videoElement.addEventListener("loadeddata", handleLoadedData)
@@ -544,8 +579,10 @@ function ContentCard({ item }: { item: ContentItem }) {
     videoElement.addEventListener("loadstart", handleLoadStart)
     videoElement.addEventListener("stalled", handleStalled)
     videoElement.addEventListener("suspend", handleSuspend)
+    videoElement.addEventListener("progress", handleProgress)
 
     // Start loading the video
+    console.log("🚀 Starting video load for:", item.title, "URL:", proxiedVideoUrl)
     videoElement.load()
 
     return () => {
@@ -558,6 +595,7 @@ function ContentCard({ item }: { item: ContentItem }) {
       videoElement.removeEventListener("loadstart", handleLoadStart)
       videoElement.removeEventListener("stalled", handleStalled)
       videoElement.removeEventListener("suspend", handleSuspend)
+      videoElement.removeEventListener("progress", handleProgress)
     }
   }, [proxiedVideoUrl, item.title, loadAttempts])
 
@@ -565,8 +603,13 @@ function ContentCard({ item }: { item: ContentItem }) {
     e.preventDefault()
     e.stopPropagation()
 
-    if (!videoRef.current || !proxiedVideoUrl || videoError) {
-      console.error("❌ No video element, proxied URL, or video error for:", item.title)
+    if (!videoRef.current || !proxiedVideoUrl || videoError || videoStatus !== 'loaded') {
+      console.error("❌ Cannot play video:", { 
+        hasVideoRef: !!videoRef.current, 
+        hasProxiedUrl: !!proxiedVideoUrl, 
+        videoError, 
+        videoStatus 
+      })
       return
     }
 
@@ -719,6 +762,12 @@ function ContentCard({ item }: { item: ContentItem }) {
     }
   }, [])
 
+  // Don't render if no valid video URL
+  if (!proxiedVideoUrl) {
+    console.log("❌ No valid proxied URL for:", item.title)
+    return null
+  }
+
   return (
     <div
       className="group cursor-pointer w-full max-w-[180px] sm:max-w-[200px]"
@@ -732,40 +781,40 @@ function ContentCard({ item }: { item: ContentItem }) {
         }`}
       >
         {/* Video element - always render if we have a URL */}
-        {proxiedVideoUrl && (
-          <video
-            ref={videoRef}
-            className={`w-full h-full object-cover transition-opacity duration-300 ${
-              videoLoaded && !videoError ? "opacity-100" : "opacity-0"
-            }`}
-            preload="metadata"
-            muted
-            playsInline
-            controls={false}
-            onError={handleVideoError}
-          >
-            <source src={proxiedVideoUrl} type="video/mp4" />
-            Your browser does not support the video tag.
-          </video>
-        )}
+        <video
+          ref={videoRef}
+          className={`w-full h-full object-cover transition-opacity duration-300 ${
+            videoLoaded && !videoError && videoStatus === 'loaded' ? "opacity-100" : "opacity-0"
+          }`}
+          preload="metadata"
+          muted
+          playsInline
+          controls={false}
+          onError={handleVideoError}
+        >
+          <source src={proxiedVideoUrl} type="video/mp4" />
+          Your browser does not support the video tag.
+        </video>
 
         {/* Loading/Error state overlay */}
         <div
           className={`absolute inset-0 bg-zinc-800 flex items-center justify-center transition-opacity duration-300 ${
-            !videoLoaded || videoError ? "opacity-100" : "opacity-0"
+            !videoLoaded || videoError || videoStatus !== 'loaded' ? "opacity-100" : "opacity-0"
           }`}
         >
-          {!videoError && loadAttempts < 2 ? (
+          {videoStatus === 'loading' && loadAttempts < 2 ? (
             <div className="text-center">
               <div className="w-4 h-4 border border-zinc-600 border-t-white rounded-full animate-spin mx-auto mb-2" />
               <p className="text-xs text-zinc-500">
                 {loadAttempts > 0 ? `Retrying... (${loadAttempts}/2)` : "Loading..."}
               </p>
             </div>
-          ) : videoError ? (
+          ) : videoError || videoStatus === 'error' || videoStatus === 'timeout' ? (
             <div className="text-center">
               <AlertCircle className="w-8 h-8 text-zinc-600 mx-auto mb-2" />
-              <p className="text-xs text-zinc-500">Video unavailable</p>
+              <p className="text-xs text-zinc-500">
+                {videoStatus === 'timeout' ? 'Loading timeout' : 'Video unavailable'}
+              </p>
               {/* Show thumbnail as fallback if available */}
               {item.thumbnailUrl && (
                 <img 
@@ -785,7 +834,7 @@ function ContentCard({ item }: { item: ContentItem }) {
         </div>
 
         {/* Play/Pause overlay - only show if video is loaded and no error */}
-        {videoLoaded && !videoError && (
+        {videoLoaded && !videoError && videoStatus === 'loaded' && (
           <div
             className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-200 ${
               isHovered || !isPlaying ? "opacity-100" : "opacity-0"
@@ -806,7 +855,7 @@ function ContentCard({ item }: { item: ContentItem }) {
         )}
 
         {/* Download button - only show if video is loaded and no error */}
-        {videoLoaded && !videoError && proxiedVideoUrl && (
+        {videoLoaded && !videoError && videoStatus === 'loaded' && proxiedVideoUrl && (
           <button
             onClick={handleDownload}
             disabled={isDownloading || (hasReachedLimit && !isProUser)}
