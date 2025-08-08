@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 import { Button } from "@/components/ui/button"
@@ -9,35 +8,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/components/ui/use-toast"
-import {
-  Upload,
-  Search,
-  Grid3X3,
-  List,
-  Trash2,
-  Edit2,
-  Film,
-  Music,
-  ImageIcon,
-  File,
-  Filter,
-  RefreshCw,
-  MoreVertical,
-  Eye,
-  Copy,
-  Loader2,
-  PlusCircle,
-} from "lucide-react"
+import { Upload, Search, Grid3X3, List, Trash2, Edit2, Film, Music, ImageIcon, File, Filter, RefreshCw, MoreVertical, Eye, Copy, Loader2, PlusCircle, Pause, Play, X, CheckCircle, AlertCircle, Clock } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { motion, AnimatePresence } from "framer-motion"
 import { formatDistanceToNow } from "date-fns"
-import { v4 as uuidv4 } from "uuid"
 import FirestoreIndexHelper from "@/components/firestore-index-helper"
 import ProfileSetup from "@/components/profile-setup"
 import { VideoPreviewPlayer } from "@/components/video-preview-player"
+import { chunkedUploadService } from "@/lib/chunked-upload-service"
+import { uploadQueueManager, type QueuedUpload } from "@/lib/upload-queue-manager"
 
 interface UploadType {
   id: string
@@ -50,14 +32,6 @@ interface UploadType {
   mimeType?: string
   createdAt: Date
   updatedAt: Date
-}
-
-interface UploadProgress {
-  id: string
-  file: File
-  progress: number
-  status: "uploading" | "processing" | "completed" | "error"
-  error?: string
 }
 
 const FILE_TYPE_ICONS = {
@@ -76,6 +50,22 @@ const FILE_TYPE_COLORS = {
   other: "text-gray-500",
 }
 
+const STATUS_ICONS = {
+  queued: Clock,
+  uploading: Loader2,
+  completed: CheckCircle,
+  error: AlertCircle,
+  paused: Pause,
+}
+
+const STATUS_COLORS = {
+  queued: "text-yellow-500",
+  uploading: "text-blue-500",
+  completed: "text-green-500",
+  error: "text-red-500",
+  paused: "text-orange-500",
+}
+
 export default function UploadPage() {
   const { user, loading: authLoading } = useFirebaseAuth()
   const { toast } = useToast()
@@ -90,12 +80,36 @@ export default function UploadPage() {
   const [selectedUpload, setSelectedUpload] = useState<UploadType | null>(null)
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false)
   const [newTitle, setNewTitle] = useState("")
-  const [uploadProgress, setUploadProgress] = useState<UploadProgress[]>([])
   const [hasIndexError, setHasIndexError] = useState(false)
   const [hasUserProfile, setHasUserProfile] = useState<boolean | null>(null)
   const [username, setUsername] = useState<string | null>(null)
   const [selectedUploads, setSelectedUploads] = useState<string[]>([])
   const [showAddToFreeContentDialog, setShowAddToFreeContentDialog] = useState(false)
+  const [uploadQueue, setUploadQueue] = useState<QueuedUpload[]>([])
+  const [queueStats, setQueueStats] = useState({
+    total: 0,
+    queued: 0,
+    uploading: 0,
+    completed: 0,
+    error: 0,
+    paused: 0
+  })
+
+  // Initialize upload services
+  useEffect(() => {
+    if (user) {
+      // Set auth token for chunked upload service
+      user.getIdToken().then(token => {
+        chunkedUploadService.setAuthToken(token)
+      })
+
+      // Set up global progress callback
+      uploadQueueManager.setGlobalProgressCallback((queue) => {
+        setUploadQueue(queue)
+        setQueueStats(uploadQueueManager.getQueueStatus())
+      })
+    }
+  }, [user])
 
   // Check if user has a profile
   const checkUserProfile = useCallback(async () => {
@@ -151,8 +165,6 @@ export default function UploadPage() {
       if (filterType !== "all") params.append("type", filterType)
       if (searchTerm) params.append("search", searchTerm)
 
-      console.log("🔍 Fetching uploads with token:", token.substring(0, 20) + "...")
-
       const response = await fetch(`/api/uploads?${params}`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -163,7 +175,6 @@ export default function UploadPage() {
         const errorData = await response.json().catch(() => ({}))
         console.error("API Error:", response.status, errorData)
 
-        // Handle index errors specifically
         if (errorData.indexError) {
           setHasIndexError(true)
           toast({
@@ -203,161 +214,40 @@ export default function UploadPage() {
     }
   }, [user, hasUserProfile, fetchUploads])
 
-  // Handle file upload
+  // Handle file upload with chunked upload service
   const handleFileUpload = async (files: FileList) => {
     if (!user || files.length === 0 || !hasUserProfile) return
 
-    console.log(`🔍 [File Upload] Starting upload for ${files.length} files`)
+    console.log(`🔍 [Chunked Upload] Starting upload for ${files.length} files`)
 
-    const newUploads: UploadProgress[] = Array.from(files).map((file) => ({
-      id: uuidv4(),
-      file,
-      progress: 0,
-      status: "uploading",
-    }))
-
-    setUploadProgress((prev) => [...prev, ...newUploads])
-
-    for (const uploadItem of newUploads) {
-      try {
-        console.log(`🔍 [File Upload] Processing: ${uploadItem.file.name}`)
-        console.log(`🔍 [File Upload] File details:`, {
-          name: uploadItem.file.name,
-          size: uploadItem.file.size,
-          type: uploadItem.file.type,
-        })
-
-        // Update progress to show upload starting
-        setUploadProgress((prev) => prev.map((item) => (item.id === uploadItem.id ? { ...item, progress: 10 } : item)))
-
-        // Generate unique filename with timestamp
-        const timestamp = Date.now()
-        const uniqueFileName = `${timestamp}-${uploadItem.file.name}`
-        console.log(`🔍 [File Upload] Generated filename: ${uniqueFileName}`)
-
-        // Get upload URL from Cloudflare R2
-        console.log(`🔍 [File Upload] Requesting upload URL...`)
-        const token = await user.getIdToken()
-        const uploadResponse = await fetch("/api/get-upload-url", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            fileName: uniqueFileName,
-            fileType: uploadItem.file.type,
-          }),
-        })
-
-        console.log(`🔍 [File Upload] Upload URL response status: ${uploadResponse.status}`)
-
-        if (!uploadResponse.ok) {
-          const errorData = await uploadResponse.json()
-          console.error("❌ [File Upload] Failed to get upload URL:", errorData)
-          throw new Error(errorData.error || "Failed to get upload URL")
+    // Add files to upload queue
+    Array.from(files).forEach((file, index) => {
+      const priority = file.size < 50 * 1024 * 1024 ? 1 : 0 // Prioritize smaller files
+      const queueId = uploadQueueManager.addToQueue(file, priority)
+      
+      // Set up individual progress callback
+      uploadQueueManager.setProgressCallback(queueId, (queuedUpload) => {
+        if (queuedUpload.status === 'completed') {
+          toast({
+            title: "Upload Complete!",
+            description: `${queuedUpload.file.name} has been uploaded successfully.`,
+          })
+          // Refresh uploads list
+          setTimeout(() => fetchUploads(), 1000)
+        } else if (queuedUpload.status === 'error') {
+          toast({
+            title: "Upload Failed",
+            description: queuedUpload.error || `Failed to upload ${queuedUpload.file.name}`,
+            variant: "destructive",
+          })
         }
+      })
+    })
 
-        const { uploadUrl, publicUrl } = await uploadResponse.json()
-        console.log(`✅ [File Upload] Got upload URL and public URL: ${publicUrl}`)
-
-        // Update progress
-        setUploadProgress((prev) => prev.map((item) => (item.id === uploadItem.id ? { ...item, progress: 30 } : item)))
-
-        // Upload file to Cloudflare R2
-        console.log(`🔍 [File Upload] Uploading to R2...`)
-        const putResponse = await fetch(uploadUrl, {
-          method: "PUT",
-          body: uploadItem.file,
-          headers: {
-            "Content-Type": uploadItem.file.type,
-          },
-        })
-
-        console.log(`🔍 [File Upload] R2 upload response status: ${putResponse.status}`)
-
-        if (!putResponse.ok) {
-          console.error("❌ [File Upload] R2 upload failed:", putResponse.statusText)
-          throw new Error(`Failed to upload file to storage: ${putResponse.statusText}`)
-        }
-
-        console.log(`✅ [File Upload] File uploaded to R2 successfully`)
-
-        // Update progress
-        setUploadProgress((prev) =>
-          prev.map((item) => (item.id === uploadItem.id ? { ...item, progress: 70, status: "processing" } : item)),
-        )
-
-        // Create upload record in database
-        console.log(`🔍 [File Upload] Creating database record...`)
-        const tokenForRecord = await user.getIdToken()
-        const recordResponse = await fetch("/api/uploads", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${tokenForRecord}`,
-          },
-          body: JSON.stringify({
-            fileUrl: publicUrl,
-            filename: uploadItem.file.name,
-            title: uploadItem.file.name.split(".")[0], // Remove extension for title
-            size: uploadItem.file.size,
-            mimeType: uploadItem.file.type,
-          }),
-        })
-
-        console.log(`🔍 [File Upload] Database record response status: ${recordResponse.status}`)
-
-        if (!recordResponse.ok) {
-          const errorData = await recordResponse.json()
-          console.error("❌ [File Upload] Failed to create database record:", errorData)
-          throw new Error(errorData.error || "Failed to create upload record")
-        }
-
-        const recordData = await recordResponse.json()
-        console.log(`✅ [File Upload] Database record created:`, recordData)
-
-        // Complete upload
-        setUploadProgress((prev) =>
-          prev.map((item) => (item.id === uploadItem.id ? { ...item, progress: 100, status: "completed" } : item)),
-        )
-
-        console.log(`✅ [File Upload] Upload completed: ${uploadItem.file.name}`)
-
-        toast({
-          title: "Upload Complete!",
-          description: `${uploadItem.file.name} has been uploaded successfully.`,
-        })
-      } catch (error) {
-        console.error(`❌ [File Upload] Upload failed for ${uploadItem.file.name}:`, error)
-
-        setUploadProgress((prev) =>
-          prev.map((item) =>
-            item.id === uploadItem.id
-              ? {
-                  ...item,
-                  status: "error",
-                  error: error instanceof Error ? error.message : "Upload failed",
-                }
-              : item,
-          ),
-        )
-
-        toast({
-          title: "Upload Failed",
-          description: error instanceof Error ? error.message : `Failed to upload ${uploadItem.file.name}`,
-          variant: "destructive",
-        })
-      }
-    }
-
-    // Refresh uploads after all uploads complete
-    console.log(`🔍 [File Upload] Refreshing uploads list...`)
-    setTimeout(() => {
-      fetchUploads()
-      // Clear completed uploads after a delay
-      setUploadProgress((prev) => prev.filter((item) => item.status !== "completed"))
-    }, 2000)
+    toast({
+      title: "Files Added to Queue",
+      description: `${files.length} file(s) added to upload queue`,
+    })
   }
 
   // Handle drag and drop
@@ -371,6 +261,51 @@ export default function UploadPage() {
     if (files.length > 0) {
       handleFileUpload(files)
     }
+  }
+
+  // Queue management functions
+  const pauseUpload = (queueId: string) => {
+    uploadQueueManager.pauseUpload(queueId)
+  }
+
+  const resumeUpload = (queueId: string) => {
+    uploadQueueManager.resumeUpload(queueId)
+  }
+
+  const retryUpload = (queueId: string) => {
+    uploadQueueManager.retryUpload(queueId)
+  }
+
+  const removeFromQueue = (queueId: string) => {
+    uploadQueueManager.removeFromQueue(queueId)
+  }
+
+  const clearCompletedUploads = () => {
+    uploadQueueManager.clearCompleted()
+  }
+
+  // Format file size
+  const formatFileSize = (bytes?: number) => {
+    if (!bytes) return "Unknown size"
+    const sizes = ["Bytes", "KB", "MB", "GB"]
+    const i = Math.floor(Math.log(bytes) / Math.log(1024))
+    return Math.round((bytes / Math.pow(1024, i)) * 100) / 100 + " " + sizes[i]
+  }
+
+  // Format speed
+  const formatSpeed = (bytesPerSecond: number) => {
+    if (bytesPerSecond === 0) return "0 B/s"
+    const sizes = ["B/s", "KB/s", "MB/s", "GB/s"]
+    const i = Math.floor(Math.log(bytesPerSecond) / Math.log(1024))
+    return Math.round((bytesPerSecond / Math.pow(1024, i)) * 100) / 100 + " " + sizes[i]
+  }
+
+  // Format time
+  const formatTime = (seconds: number) => {
+    if (seconds === 0 || !isFinite(seconds)) return "Unknown"
+    if (seconds < 60) return `${Math.round(seconds)}s`
+    if (seconds < 3600) return `${Math.round(seconds / 60)}m`
+    return `${Math.round(seconds / 3600)}h`
   }
 
   // Handle rename
@@ -459,17 +394,8 @@ export default function UploadPage() {
       toast({
         title: "Error",
         description: "Failed to copy URL",
-        variant: "destructive",
       })
     }
-  }
-
-  // Format file size
-  const formatFileSize = (bytes?: number) => {
-    if (!bytes) return "Unknown size"
-    const sizes = ["Bytes", "KB", "MB", "GB"]
-    const i = Math.floor(Math.log(bytes) / Math.log(1024))
-    return Math.round((bytes / Math.pow(1024, i)) * 100) / 100 + " " + sizes[i]
   }
 
   // Get stats
@@ -480,43 +406,6 @@ export default function UploadPage() {
     image: uploads.filter((u) => u.type === "image").length,
     document: uploads.filter((u) => u.type === "document").length,
     other: uploads.filter((u) => u.type === "other").length,
-  }
-
-  // Add this function after the other handler functions
-  const checkR2Config = async () => {
-    try {
-      const response = await fetch("/api/debug/r2-config")
-      const data = await response.json()
-
-      console.log("🔍 [R2 Debug] Configuration:", data)
-
-      if (data.allConfigured) {
-        toast({
-          title: "R2 Configuration OK",
-          description: "All Cloudflare R2 environment variables are configured.",
-        })
-      } else {
-        toast({
-          title: "R2 Configuration Issues",
-          description: "Some Cloudflare R2 environment variables are missing. Check console for details.",
-          variant: "destructive",
-        })
-      }
-    } catch (error) {
-      console.error("❌ [R2 Debug] Error:", error)
-      toast({
-        title: "Debug Error",
-        description: "Failed to check R2 configuration",
-        variant: "destructive",
-      })
-    }
-  }
-
-  // Handle profile setup completion
-  const handleProfileSetupComplete = (username: string) => {
-    setHasUserProfile(true)
-    setUsername(username)
-    fetchUploads()
   }
 
   // Toggle selection of an upload
@@ -565,6 +454,13 @@ export default function UploadPage() {
     }
   }
 
+  // Handle profile setup completion
+  const handleProfileSetupComplete = (username: string) => {
+    setHasUserProfile(true)
+    setUsername(username)
+    fetchUploads()
+  }
+
   if (loading || authLoading) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
@@ -603,7 +499,7 @@ export default function UploadPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">My Uploads</h1>
-          <p className="text-zinc-400 mt-1">Manage your content library and organize files for product boxes</p>
+          <p className="text-zinc-400 mt-1">Manage your content library with advanced chunked uploads</p>
           {username && (
             <p className="text-sm text-zinc-500 mt-1">
               Files will be uploaded to your creator folder: <span className="text-zinc-300">creators/{username}/</span>
@@ -611,11 +507,7 @@ export default function UploadPage() {
           )}
         </div>
 
-        {/* Update the header section to include the debug button */}
         <div className="flex items-center gap-3">
-          <Button variant="outline" onClick={() => checkR2Config()} className="border-zinc-700 hover:bg-zinc-800">
-            Debug R2
-          </Button>
           <Button variant="outline" onClick={() => fetchUploads()} className="border-zinc-700 hover:bg-zinc-800">
             <RefreshCw className="h-4 w-4" />
           </Button>
@@ -638,26 +530,110 @@ export default function UploadPage() {
         </div>
       </div>
 
-      {/* Upload Progress */}
-      {uploadProgress.length > 0 && (
+      {/* Upload Queue */}
+      {uploadQueue.length > 0 && (
         <Card className="bg-zinc-900/60 border-zinc-800/50">
-          <CardHeader>
-            <CardTitle className="text-lg">Upload Progress</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-lg">Upload Queue ({queueStats.total})</CardTitle>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-xs">
+                {queueStats.uploading} uploading
+              </Badge>
+              <Badge variant="outline" className="text-xs">
+                {queueStats.queued} queued
+              </Badge>
+              {queueStats.completed > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={clearCompletedUploads}
+                  className="border-zinc-700"
+                >
+                  Clear Completed
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {uploadProgress.map((upload) => (
-                <div key={upload.id} className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-white">{upload.file.name}</span>
-                    <span className="text-sm text-zinc-400">
-                      {upload.status === "completed" ? "✓" : upload.status === "error" ? "✗" : `${upload.progress}%`}
-                    </span>
+            <div className="space-y-4 max-h-96 overflow-y-auto">
+              {uploadQueue.map((queuedUpload) => {
+                const StatusIcon = STATUS_ICONS[queuedUpload.status]
+                const statusColor = STATUS_COLORS[queuedUpload.status]
+                const progress = queuedUpload.progress
+
+                return (
+                  <div key={queuedUpload.id} className="space-y-2 p-3 bg-zinc-800/30 rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <StatusIcon className={`h-4 w-4 ${statusColor} ${queuedUpload.status === 'uploading' ? 'animate-spin' : ''}`} />
+                        <div>
+                          <span className="text-sm font-medium text-white">{queuedUpload.file.name}</span>
+                          <div className="text-xs text-zinc-400">
+                            {formatFileSize(queuedUpload.file.size)}
+                            {progress && progress.speed > 0 && (
+                              <span> • {formatSpeed(progress.speed)} • ETA: {formatTime(progress.eta)}</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        {queuedUpload.status === 'uploading' && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => pauseUpload(queuedUpload.id)}
+                          >
+                            <Pause className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {queuedUpload.status === 'paused' && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => resumeUpload(queuedUpload.id)}
+                          >
+                            <Play className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {queuedUpload.status === 'error' && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => retryUpload(queuedUpload.id)}
+                          >
+                            <RefreshCw className="h-4 w-4" />
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => removeFromQueue(queuedUpload.id)}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    {progress && (
+                      <div className="space-y-1">
+                        <Progress 
+                          value={(progress.uploadedBytes / progress.fileSize) * 100} 
+                          className="h-2" 
+                        />
+                        <div className="flex justify-between text-xs text-zinc-400">
+                          <span>{Math.round((progress.uploadedBytes / progress.fileSize) * 100)}%</span>
+                          <span>{progress.completedChunks}/{progress.totalChunks} chunks</span>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {queuedUpload.error && (
+                      <p className="text-sm text-red-400">{queuedUpload.error}</p>
+                    )}
                   </div>
-                  <Progress value={upload.progress} className="h-2" />
-                  {upload.error && <p className="text-sm text-red-400">{upload.error}</p>}
-                </div>
-              ))}
+                )
+              })}
             </div>
           </CardContent>
         </Card>
@@ -674,9 +650,9 @@ export default function UploadPage() {
           <Upload className="h-12 w-12 text-zinc-500 mb-4" />
           <h3 className="text-lg font-medium text-white mb-2">Drop files here or click to upload</h3>
           <p className="text-zinc-400 text-center">
-            Supports videos, audio, images, and documents
+            Advanced chunked uploads with parallel processing
             <br />
-            <span className="text-sm text-zinc-500">MP4, MOV, MP3, WAV, JPG, PNG, PDF, DOC, and more</span>
+            <span className="text-sm text-zinc-500">Supports large files, resume capability, and real-time progress</span>
           </p>
         </CardContent>
       </Card>
@@ -800,8 +776,7 @@ export default function UploadPage() {
             <Upload className="h-12 w-12 text-zinc-600 mb-4" />
             <h3 className="text-xl font-medium text-white mb-2">No uploads yet</h3>
             <p className="text-zinc-400 text-center mb-6 max-w-md">
-              Upload your first file to start building your content library. You can then add these files to your
-              product boxes.
+              Upload your first file to start building your content library. Advanced chunked uploads ensure fast and reliable transfers.
             </p>
             <Button
               onClick={() => fileInputRef.current?.click()}
@@ -1007,7 +982,7 @@ export default function UploadPage() {
               })}
             </div>
           ) : (
-            // List view remains the same
+            // List view
             <Card className="bg-zinc-900/60 border-zinc-800/50">
               <CardContent className="p-0">
                 <div className="divide-y divide-zinc-800">
