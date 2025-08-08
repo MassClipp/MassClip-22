@@ -1,6 +1,3 @@
-import { S3Client, CreateMultipartUploadCommand, UploadPartCommand, CompleteMultipartUploadCommand, AbortMultipartUploadCommand } from '@aws-sdk/client-s3'
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
-
 export interface UploadChunk {
   chunkIndex: number
   chunkData: Blob
@@ -37,13 +34,7 @@ export interface ChunkedUploadSession {
   uploadedBytes: number
 }
 
-interface ChunkUploadResult {
-  ETag: string
-  PartNumber: number
-}
-
-class ChunkedUploadService {
-  private s3Client: S3Client
+export class ChunkedUploadService {
   private static readonly CHUNK_SIZE = 5 * 1024 * 1024 // 5MB chunks
   private static readonly MAX_CONCURRENT_CHUNKS = 3
   private static readonly MAX_RETRIES = 3
@@ -54,18 +45,6 @@ class ChunkedUploadService {
   private authToken: string | null = null
   private tokenExpiry: number = 0
 
-  constructor() {
-    this.s3Client = new S3Client({
-      region: "auto",
-      endpoint: process.env.CLOUDFLARE_R2_ENDPOINT || process.env.R2_ENDPOINT,
-      credentials: {
-        accessKeyId: process.env.CLOUDFLARE_R2_ACCESS_KEY_ID || process.env.R2_ACCESS_KEY_ID!,
-        secretAccessKey: process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY || process.env.R2_SECRET_ACCESS_KEY!,
-      },
-      forcePathStyle: true,
-    })
-  }
-
   async setAuthToken(token: string) {
     this.authToken = token
     this.tokenExpiry = Date.now() + (50 * 60 * 1000) // 50 minutes
@@ -73,93 +52,9 @@ class ChunkedUploadService {
 
   private async getValidAuthToken(): Promise<string> {
     if (!this.authToken || Date.now() > this.tokenExpiry) {
-      // Try to get fresh token from Firebase Auth
-      if (typeof window !== 'undefined') {
-        const { getAuth } = await import('firebase/auth')
-        const auth = getAuth()
-        if (auth.currentUser) {
-          const token = await auth.currentUser.getIdToken(true)
-          this.authToken = token
-          this.tokenExpiry = Date.now() + (50 * 60 * 1000)
-          return token
-        }
-      }
       throw new Error('Auth token expired or not set')
     }
     return this.authToken
-  }
-
-  async initializeMultipartUpload(key: string): Promise<string> {
-    const bucket = process.env.CLOUDFLARE_R2_BUCKET_NAME || process.env.R2_BUCKET_NAME!
-    
-    const command = new CreateMultipartUploadCommand({
-      Bucket: bucket,
-      Key: key,
-      ContentType: this.getContentType(key),
-    })
-
-    const response = await this.s3Client.send(command)
-    
-    if (!response.UploadId) {
-      throw new Error('Failed to initialize multipart upload')
-    }
-
-    console.log(`✅ [Chunked Upload] Initialized multipart upload: ${response.UploadId}`)
-    return response.UploadId
-  }
-
-  async getChunkUploadUrl(key: string, uploadId: string, partNumber: number): Promise<string> {
-    const bucket = process.env.CLOUDFLARE_R2_BUCKET_NAME || process.env.R2_BUCKET_NAME!
-    
-    const command = new UploadPartCommand({
-      Bucket: bucket,
-      Key: key,
-      UploadId: uploadId,
-      PartNumber: partNumber,
-    })
-
-    const presignedUrl = await getSignedUrl(this.s3Client, command, { expiresIn: 3600 })
-    console.log(`🔗 [Chunked Upload] Generated presigned URL for part ${partNumber}`)
-    return presignedUrl
-  }
-
-  async completeMultipartUpload(
-    key: string, 
-    uploadId: string, 
-    parts: Array<{ ETag: string; PartNumber: number }>
-  ): Promise<string> {
-    const bucket = process.env.CLOUDFLARE_R2_BUCKET_NAME || process.env.R2_BUCKET_NAME!
-    
-    const command = new CompleteMultipartUploadCommand({
-      Bucket: bucket,
-      Key: key,
-      UploadId: uploadId,
-      MultipartUpload: {
-        Parts: parts.sort((a, b) => a.PartNumber - b.PartNumber),
-      },
-    })
-
-    const response = await this.s3Client.send(command)
-    
-    if (!response.Location) {
-      throw new Error('Failed to complete multipart upload')
-    }
-
-    console.log(`✅ [Chunked Upload] Completed multipart upload: ${response.Location}`)
-    return response.Location
-  }
-
-  async abortMultipartUpload(key: string, uploadId: string): Promise<void> {
-    const bucket = process.env.CLOUDFLARE_R2_BUCKET_NAME || process.env.R2_BUCKET_NAME!
-    
-    const command = new AbortMultipartUploadCommand({
-      Bucket: bucket,
-      Key: key,
-      UploadId: uploadId,
-    })
-
-    await this.s3Client.send(command)
-    console.log(`❌ [Chunked Upload] Aborted multipart upload: ${uploadId}`)
   }
 
   private generateUploadId(): string {
@@ -317,7 +212,8 @@ class ChunkedUploadService {
         },
         body: JSON.stringify({
           uploadId,
-          chunkNumber: chunk.chunkIndex
+          chunkIndex: chunk.chunkIndex,
+          chunkSize: chunk.chunkSize
         })
       })
 
@@ -327,11 +223,11 @@ class ChunkedUploadService {
         throw new Error(error.error || 'Failed to get chunk upload URL')
       }
 
-      const { presignedUrl } = await urlResponse.json()
+      const { uploadUrl } = await urlResponse.json()
       console.log(`🔗 [Chunked Upload] Got upload URL for chunk ${chunk.chunkIndex}`)
 
       // Upload chunk to R2
-      const uploadResponse = await fetch(presignedUrl, {
+      const uploadResponse = await fetch(uploadUrl, {
         method: 'PUT',
         body: chunk.chunkData,
         headers: {
@@ -385,7 +281,8 @@ class ChunkedUploadService {
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          uploadId
+          uploadId,
+          completedChunks: Array.from(session.uploadedChunks)
         })
       })
 
@@ -411,6 +308,10 @@ class ChunkedUploadService {
     if (!session || !callback) return
 
     const now = Date.now()
+    const timeDiff = (now - session.lastProgressTime) / 1000 // seconds
+    const bytesDiff = session.uploadedBytes
+    
+    // Calculate speed (bytes per second)
     const totalTime = (now - session.startTime) / 1000
     const speed = totalTime > 0 ? session.uploadedBytes / totalTime : 0
     
@@ -471,32 +372,7 @@ class ChunkedUploadService {
       status: 'uploading'
     }
   }
-
-  getPublicUrl(key: string): string {
-    const publicUrl = process.env.CLOUDFLARE_R2_PUBLIC_URL || process.env.R2_PUBLIC_URL
-    return `${publicUrl}/${key}`
-  }
-
-  private getContentType(filename: string): string {
-    const ext = filename.toLowerCase().split('.').pop()
-    const mimeTypes: Record<string, string> = {
-      'mp4': 'video/mp4',
-      'mov': 'video/quicktime',
-      'avi': 'video/x-msvideo',
-      'mkv': 'video/x-matroska',
-      'webm': 'video/webm',
-      'mp3': 'audio/mpeg',
-      'wav': 'audio/wav',
-      'jpg': 'image/jpeg',
-      'jpeg': 'image/jpeg',
-      'png': 'image/png',
-      'gif': 'image/gif',
-      'pdf': 'application/pdf',
-      'zip': 'application/zip',
-    }
-    return mimeTypes[ext || ''] || 'application/octet-stream'
-  }
 }
 
-// Singleton instance - this is the required export!
+// Singleton instance
 export const chunkedUploadService = new ChunkedUploadService()

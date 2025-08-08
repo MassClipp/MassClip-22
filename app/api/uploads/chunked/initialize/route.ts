@@ -1,138 +1,104 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { chunkedUploadService } from '@/lib/chunked-upload-service'
-import { firebaseAdmin } from '@/lib/firebase-admin'
-import { getAuth } from 'firebase-admin/auth'
-import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore'
-import { initializeApp, getApps } from 'firebase/app'
-import { firebaseConfig } from '@/firebase/config'
+import { type NextRequest, NextResponse } from "next/server"
+import { initializeFirebaseAdmin, db } from "@/lib/firebase/firebaseAdmin"
+import { headers } from "next/headers"
 
-// Initialize Firebase client if not already initialized
-if (!getApps().length) {
-  initializeApp(firebaseConfig)
+// Initialize Firebase Admin
+initializeFirebaseAdmin()
+
+async function verifyAuthToken(request: NextRequest) {
+  try {
+    const headersList = headers()
+    const authorization = headersList.get("authorization")
+
+    if (!authorization?.startsWith("Bearer ")) {
+      return null
+    }
+
+    const token = authorization.split("Bearer ")[1]
+    if (!token) {
+      return null
+    }
+
+    const { getAuth } = await import("firebase-admin/auth")
+    const decodedToken = await getAuth().verifyIdToken(token)
+    return decodedToken
+  } catch (error) {
+    console.error("Token verification failed:", error)
+    return null
+  }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('🚀 [Initialize] Starting chunked upload initialization')
-
-    // Get auth token
-    const authHeader = request.headers.get('authorization')
-    if (!authHeader?.startsWith('Bearer ')) {
-      console.error('❌ [Initialize] Missing or invalid authorization header')
-      return NextResponse.json({ error: 'Missing or invalid authorization header' }, { status: 401 })
+    const user = await verifyAuthToken(request)
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const token = authHeader.substring(7)
-    let decodedToken
-    
-    try {
-      decodedToken = await getAuth(firebaseAdmin).verifyIdToken(token)
-      console.log('✅ [Initialize] Token verified for user:', decodedToken.uid)
-    } catch (error) {
-      console.error('❌ [Initialize] Token verification failed:', error)
-      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 })
-    }
-
-    const userId = decodedToken.uid
-
-    // Get request body
     const { uploadId, fileName, fileSize, fileType, totalChunks, chunkSize } = await request.json()
 
-    console.log('📋 [Initialize] Upload details:', {
-      uploadId,
-      fileName,
-      fileSize,
-      totalChunks,
-      chunkSize
-    })
-
     if (!uploadId || !fileName || !fileSize || !fileType || !totalChunks || !chunkSize) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
-    // Get user profile for username
-    const db = getFirestore()
-    let username = 'unknown'
-    
-    try {
-      // Try userProfiles collection first
-      const userProfileRef = doc(db, 'userProfiles', userId)
-      const userProfileSnap = await getDoc(userProfileRef)
-      
-      if (userProfileSnap.exists()) {
-        username = userProfileSnap.data().username || userProfileSnap.data().displayName || 'unknown'
-        console.log('✅ [Initialize] Found user profile:', username)
-      } else {
-        // Try users collection as fallback
-        const userRef = doc(db, 'users', userId)
-        const userSnap = await getDoc(userRef)
-        
-        if (userSnap.exists()) {
-          const userData = userSnap.data()
-          username = userData.username || userData.displayName || userData.email?.split('@')[0] || userId.substring(0, 8)
-          console.log('✅ [Initialize] Found user data:', username)
-        } else {
-          // Use email prefix or user ID as fallback
-          username = decodedToken.email?.split('@')[0] || userId.substring(0, 8)
-          console.log('⚠️ [Initialize] Using fallback username:', username)
-        }
-      }
-    } catch (error) {
-      console.error('⚠️ [Initialize] Error fetching user profile:', error)
-      username = decodedToken.email?.split('@')[0] || userId.substring(0, 8)
+    // Get user profile to determine upload path
+    const userDoc = await db.collection("users").doc(user.uid).get()
+    if (!userDoc.exists) {
+      return NextResponse.json({ error: "User profile not found" }, { status: 404 })
     }
 
-    // Generate unique key for R2
+    const userData = userDoc.data()!
+    const username = userData.username
+
+    if (!username) {
+      return NextResponse.json({ error: "Username not found in profile" }, { status: 400 })
+    }
+
+    // Generate unique filename with timestamp
     const timestamp = Date.now()
-    const randomId = Math.random().toString(36).substring(2, 15)
-    const sanitizedFilename = fileName.replace(/[^a-zA-Z0-9.-]/g, '_')
-    const r2Key = `creators/${username}/${timestamp}-${randomId}-${sanitizedFilename}`
-
-    console.log('🔑 [Initialize] Generated R2 key:', r2Key)
-
-    // Initialize multipart upload
-    const r2UploadId = await chunkedUploadService.initializeMultipartUpload(r2Key)
-
-    // Generate public URL
-    const publicUrl = chunkedUploadService.getPublicUrl(r2Key)
+    const uniqueFileName = `${timestamp}-${fileName}`
+    const r2Key = `creators/${username}/${uniqueFileName}`
+    
+    const publicUrl = `${process.env.CLOUDFLARE_R2_PUBLIC_URL || process.env.R2_PUBLIC_URL}/${r2Key}`
 
     // Create upload session in Firestore
-    const uploadSession = {
+    const sessionData = {
       uploadId,
-      userId,
-      username,
+      uid: user.uid,
       fileName,
+      originalFileName: fileName,
       fileSize,
       fileType,
       totalChunks,
       chunkSize,
       r2Key,
-      r2UploadId,
       publicUrl,
-      status: 'initialized',
+      username,
+      status: 'initializing',
+      completedChunks: [],
       createdAt: new Date(),
-      parts: [],
+      updatedAt: new Date()
     }
 
-    const sessionRef = doc(db, 'uploadSessions', uploadId)
-    await setDoc(sessionRef, uploadSession)
+    await db.collection("uploadSessions").doc(uploadId).set(sessionData)
 
-    console.log('✅ [Initialize] Upload session stored in Firestore')
+    console.log(`✅ [Chunked Upload] Initialized session: ${uploadId}`)
+    console.log(`📁 [Chunked Upload] R2 Key: ${r2Key}`)
+    console.log(`🌐 [Chunked Upload] Public URL: ${publicUrl}`)
 
     return NextResponse.json({
+      success: true,
       uploadId,
       publicUrl,
       r2Key,
       totalChunks,
-      chunkSize,
-      r2UploadId,
-      message: 'Upload session initialized successfully'
+      chunkSize
     })
 
   } catch (error) {
-    console.error('❌ [Initialize] Error:', error)
+    console.error("Error initializing chunked upload:", error)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to initialize upload' },
+      { error: error instanceof Error ? error.message : "Unknown error occurred" },
       { status: 500 }
     )
   }
