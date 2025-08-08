@@ -1,35 +1,20 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter } from 'next/navigation'
-import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
 import { Loader2, CheckCircle, AlertCircle, ExternalLink, CreditCard, Globe, Shield, Info, Bug } from 'lucide-react'
-import { useAuthContext } from '@/contexts/auth-context'
-import { StripeConnectionDark } from '@/components/stripe-connection-dark'
+import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 import Link from "next/link"
 
 export default function ConnectStripePage() {
-  const { user, loading: authLoading } = useAuthContext()
-  const router = useRouter()
-  const [mounted, setMounted] = useState(false)
+  const { user, loading: authLoading } = useFirebaseAuth()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [debugInfo, setDebugInfo] = useState<any>(null)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  useEffect(() => {
-    if (!authLoading && !user) {
-      router.push('/login')
-    }
-  }, [user, authLoading, router])
 
   useEffect(() => {
     // Check for error parameters in URL
@@ -110,16 +95,27 @@ export default function ConnectStripePage() {
     }
   }
 
-  if (!mounted || authLoading) {
+  if (authLoading) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-white" />
+      <div className="flex items-center justify-center min-h-screen bg-gray-900">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-white" />
+          <p className="text-gray-400">Loading...</p>
+        </div>
       </div>
     )
   }
 
   if (!user) {
-    return null
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-900">
+        <Card className="w-full max-w-md bg-gray-800 border-gray-700">
+          <CardContent className="pt-6">
+            <p className="text-center text-gray-400">Please log in to continue</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (
@@ -387,14 +383,6 @@ export default function ConnectStripePage() {
             </div>
           </div>
         </div>
-
-        {/* Stripe Connection Component */}
-        <StripeConnectionDark 
-          userId={user.uid}
-          onSuccess={() => {
-            router.push('/dashboard/earnings')
-          }}
-        />
       </div>
     </div>
   )
