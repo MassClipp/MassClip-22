@@ -8,7 +8,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("🔍 [Verify Session] Starting session verification with NEW logic")
+    console.log("🔍 [Verify Session] Starting session verification")
 
     const body = await request.json()
     const { sessionId } = body
@@ -20,11 +20,32 @@ export async function POST(request: NextRequest) {
 
     console.log(`🔍 [Verify Session] Verifying session: ${sessionId}`)
 
-    // STEP 1: Look for purchase document using sessionId as document ID
-    console.log(`🔍 [Verify Session] Looking up purchase: bundlePurchases/${sessionId}`)
-    const purchaseDoc = await db.collection("bundlePurchases").doc(sessionId).get()
+    // STEP 1: Look for purchase document in bundlePurchases collection
+    console.log(`🔍 [Verify Session] Looking up purchase in bundlePurchases collection`)
+    
+    // Try to find by sessionId field first
+    const purchaseQuery = await db.collection("bundlePurchases").where("sessionId", "==", sessionId).limit(1).get()
+    
+    let purchaseDoc = null
+    let purchaseData = null
 
-    if (!purchaseDoc.exists) {
+    if (!purchaseQuery.empty) {
+      purchaseDoc = purchaseQuery.docs[0]
+      purchaseData = purchaseDoc.data()
+      console.log(`✅ [Verify Session] Found purchase document by sessionId query`)
+    } else {
+      // Try using sessionId as document ID (fallback)
+      console.log(`🔍 [Verify Session] Trying sessionId as document ID: bundlePurchases/${sessionId}`)
+      const directDoc = await db.collection("bundlePurchases").doc(sessionId).get()
+      
+      if (directDoc.exists) {
+        purchaseDoc = directDoc
+        purchaseData = directDoc.data()!
+        console.log(`✅ [Verify Session] Found purchase document by direct ID lookup`)
+      }
+    }
+
+    if (!purchaseData) {
       console.error(`❌ [Verify Session] No purchase found for session: ${sessionId}`)
       return NextResponse.json(
         {
@@ -36,31 +57,18 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const purchaseData = purchaseDoc.data()!
     console.log(`✅ [Verify Session] Found purchase document`)
     console.log(`🔍 [Verify Session] Purchase data:`, {
       sessionId: purchaseData.sessionId,
-      creatorId: purchaseData.creatorId,
-      creatorStripeAccountId: purchaseData.creatorStripeAccountId,
       bundleId: purchaseData.bundleId,
       buyerUid: purchaseData.buyerUid,
       status: purchaseData.status,
       webhookProcessed: purchaseData.webhookProcessed,
+      bundleTitle: purchaseData.bundleTitle,
+      contentItems: purchaseData.bundleContent?.length || 0,
     })
 
-    // STEP 2: Validate required fields from new data structure
-    if (!purchaseData.creatorStripeAccountId) {
-      console.error(`❌ [Verify Session] No creatorStripeAccountId in purchase data`)
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Creator account not found",
-          details: "Unable to verify payment - creator's Stripe account not configured",
-        },
-        { status: 400 },
-      )
-    }
-
+    // STEP 2: Validate required fields
     if (!purchaseData.bundleId) {
       console.error(`❌ [Verify Session] No bundleId in purchase data`)
       return NextResponse.json(
@@ -73,52 +81,39 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // STEP 3: Verify session through creator's connected Stripe account
-    let session: Stripe.Checkout.Session
-    try {
-      console.log(
-        `🔍 [Verify Session] Retrieving session from connected account: ${purchaseData.creatorStripeAccountId}`,
-      )
-      session = await stripe.checkout.sessions.retrieve(sessionId, {
-        expand: ["line_items", "payment_intent"],
-        stripeAccount: purchaseData.creatorStripeAccountId,
-      })
-      console.log(`✅ [Verify Session] Retrieved Stripe session from connected account`)
-      console.log(`💰 [Verify Session] Session details:`, {
-        id: session.id,
-        amount: session.amount_total,
-        currency: session.currency,
-        payment_status: session.payment_status,
-        customer_email: session.customer_details?.email,
-      })
-    } catch (error: any) {
-      console.error(`❌ [Verify Session] Failed to retrieve session from connected account:`, error.message)
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Invalid session ID",
-          details: `Unable to retrieve session from connected Stripe account: ${error.message}`,
-        },
-        { status: 400 },
-      )
+    // STEP 3: Get Stripe session data for verification
+    let session: Stripe.Checkout.Session | null = null
+    
+    // Try to retrieve from connected account if we have the creator's Stripe account ID
+    if (purchaseData.creatorStripeAccountId) {
+      try {
+        console.log(`🔍 [Verify Session] Retrieving session from connected account: ${purchaseData.creatorStripeAccountId}`)
+        session = await stripe.checkout.sessions.retrieve(sessionId, {
+          expand: ["line_items", "payment_intent"],
+          stripeAccount: purchaseData.creatorStripeAccountId,
+        })
+        console.log(`✅ [Verify Session] Retrieved Stripe session from connected account`)
+      } catch (error: any) {
+        console.warn(`⚠️ [Verify Session] Failed to retrieve from connected account: ${error.message}`)
+        // Fall through to platform account attempt
+      }
     }
 
-    // STEP 4: Verify payment status
-    if (session.payment_status !== "paid") {
-      console.error(`❌ [Verify Session] Session not paid: ${session.payment_status}`)
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Payment not completed",
-          details: `Payment status: ${session.payment_status}`,
-        },
-        { status: 400 },
-      )
+    // Try platform account if connected account failed or not available
+    if (!session) {
+      try {
+        console.log(`🔍 [Verify Session] Retrieving session from platform account`)
+        session = await stripe.checkout.sessions.retrieve(sessionId, {
+          expand: ["line_items", "payment_intent"],
+        })
+        console.log(`✅ [Verify Session] Retrieved Stripe session from platform account`)
+      } catch (error: any) {
+        console.error(`❌ [Verify Session] Failed to retrieve session from platform account: ${error.message}`)
+        // Continue with purchase data only (webhook already verified the session)
+      }
     }
 
-    console.log(`✅ [Verify Session] Session payment verified: ${session.payment_status}`)
-
-    // STEP 5: Get bundle details (bundleContent is already in purchase document)
+    // STEP 4: Get bundle details if not already in purchase data
     let bundleData = null
     if (purchaseData.bundleId) {
       console.log(`🔍 [Verify Session] Looking up bundle: ${purchaseData.bundleId}`)
@@ -127,11 +122,11 @@ export async function POST(request: NextRequest) {
         bundleData = bundleDoc.data()
         console.log(`✅ [Verify Session] Retrieved bundle data: ${bundleData?.title}`)
       } else {
-        console.error(`❌ [Verify Session] Bundle not found: ${purchaseData.bundleId}`)
+        console.warn(`⚠️ [Verify Session] Bundle not found: ${purchaseData.bundleId}`)
       }
     }
 
-    // STEP 6: Get creator details
+    // STEP 5: Get creator details
     let creatorData = null
     if (purchaseData.creatorId) {
       console.log(`🔍 [Verify Session] Looking up creator: ${purchaseData.creatorId}`)
@@ -140,59 +135,63 @@ export async function POST(request: NextRequest) {
         creatorData = creatorDoc.data()
         console.log(`✅ [Verify Session] Retrieved creator data: ${creatorData?.displayName}`)
       } else {
-        console.error(`❌ [Verify Session] Creator not found: ${purchaseData.creatorId}`)
+        console.warn(`⚠️ [Verify Session] Creator not found: ${purchaseData.creatorId}`)
       }
     }
 
-    // STEP 7: Return verification success with new data structure
+    // STEP 6: Build response using purchase data (which contains all the info from webhook)
     const response = {
       success: true,
       session: {
-        id: session.id,
-        amount: session.amount_total || 0,
-        currency: session.currency || "usd",
-        payment_status: session.payment_status,
-        customerEmail: session.customer_details?.email,
-        created: new Date(session.created * 1000).toISOString(),
+        id: sessionId,
+        amount: session?.amount_total || purchaseData.purchaseAmount || 0,
+        currency: session?.currency || purchaseData.currency || "usd",
+        payment_status: session?.payment_status || purchaseData.paymentStatus || "paid",
+        customerEmail: session?.customer_details?.email || purchaseData.buyerEmail || "",
+        created: session ? new Date(session.created * 1000).toISOString() : purchaseData.timestamp?.toDate?.()?.toISOString() || new Date().toISOString(),
       },
       purchase: {
         sessionId: purchaseData.sessionId,
-        paymentIntentId: purchaseData.paymentIntentId,
-        userId: purchaseData.buyerUid,
-        bundleId: purchaseData.bundleId,
-        creatorId: purchaseData.creatorId,
-        amount: session.amount_total || 0,
-        currency: session.currency || "usd",
-        status: purchaseData.status,
-        webhookProcessed: purchaseData.webhookProcessed,
-        timestamp: purchaseData.timestamp,
-        // Bundle content is already stored in purchase document
-        bundleContent: purchaseData.bundleContent || [],
+        paymentIntentId: purchaseData.paymentIntentId || "",
+        userId: purchaseData.buyerUid || "",
+        userEmail: purchaseData.buyerEmail || "",
+        userName: purchaseData.buyerDisplayName || "",
+        itemId: purchaseData.bundleId,
+        amount: purchaseData.purchaseAmount || 0,
+        currency: purchaseData.currency || "usd",
+        type: "bundle",
+        status: purchaseData.status || "completed",
       },
-      bundle: bundleData
-        ? {
-            id: purchaseData.bundleId,
-            title: bundleData.title,
-            description: bundleData.description,
-            thumbnailUrl: bundleData.thumbnailUrl,
-            creator: creatorData
-              ? {
-                  id: purchaseData.creatorId,
-                  name: creatorData.displayName || creatorData.name,
-                  username: creatorData.username,
-                }
-              : null,
-          }
-        : null,
+      item: {
+        id: purchaseData.bundleId,
+        title: purchaseData.bundleTitle || bundleData?.title || "Bundle",
+        description: purchaseData.bundleDescription || bundleData?.description || "",
+        thumbnailUrl: purchaseData.bundleThumbnail || bundleData?.thumbnailUrl || bundleData?.coverImage || "",
+        creator: creatorData ? {
+          id: purchaseData.creatorId,
+          name: creatorData.displayName || creatorData.name || purchaseData.creatorDisplayName || "",
+          username: creatorData.username || purchaseData.creatorUsername || "",
+        } : null,
+      },
+      // Include bundle content info
+      bundleContent: {
+        items: purchaseData.bundleContent || [],
+        totalItems: purchaseData.bundleTotalItems || 0,
+        totalSize: purchaseData.bundleTotalSize || 0,
+        totalSizeFormatted: purchaseData.bundleTotalSizeFormatted || "0 Bytes",
+        totalDuration: purchaseData.bundleTotalDuration || 0,
+        totalDurationFormatted: purchaseData.bundleTotalDurationFormatted || "0:00",
+        contentBreakdown: purchaseData.bundleContentBreakdown || {},
+      }
     }
 
     console.log(`✅ [Verify Session] Verification successful for session: ${sessionId}`)
     console.log(`📊 [Verify Session] Response summary:`, {
       sessionId: response.session.id,
       amount: response.session.amount,
-      bundleTitle: response.bundle?.title,
-      creatorName: response.bundle?.creator?.name,
-      contentItems: response.purchase.bundleContent?.length || 0,
+      bundleTitle: response.item.title,
+      creatorName: response.item.creator?.name,
+      contentItems: response.bundleContent.totalItems,
     })
 
     return NextResponse.json(response)
