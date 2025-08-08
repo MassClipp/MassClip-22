@@ -37,58 +37,62 @@ export async function POST(request: NextRequest) {
 
     const { uploadId, fileName, fileSize, fileType, totalChunks, chunkSize } = await request.json()
 
-    if (!uploadId || !fileName || !fileSize || !fileType || !totalChunks) {
+    if (!uploadId || !fileName || !fileSize || !fileType || !totalChunks || !chunkSize) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
-    // Get user's username for folder organization
-    let username = null
-    try {
-      const userDocRef = db.collection("users").doc(user.uid)
-      const userDoc = await userDocRef.get()
-
-      if (userDoc && userDoc.exists) {
-        const userData = userDoc.data() || {}
-        username = userData.username
-      }
-    } catch (error) {
-      console.error("Error fetching user profile:", error)
+    // Get user profile to determine upload path
+    const userProfileDoc = await db.collection("userProfiles").doc(user.uid).get()
+    if (!userProfileDoc.exists) {
+      return NextResponse.json({ error: "User profile not found" }, { status: 404 })
     }
 
-    // Create file path
+    const userProfile = userProfileDoc.data()!
+    const username = userProfile.username
+
+    if (!username) {
+      return NextResponse.json({ error: "Username not found in profile" }, { status: 400 })
+    }
+
+    // Generate unique filename with timestamp
     const timestamp = Date.now()
-    const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, "_")
-    const fileKey = username 
-      ? `creators/${username}/${timestamp}-${sanitizedFileName}`
-      : `users/${user.uid}/${timestamp}-${sanitizedFileName}`
+    const uniqueFileName = `${timestamp}-${fileName}`
+    const r2Key = `creators/${username}/${uniqueFileName}`
+    
+    const publicUrl = `${process.env.CLOUDFLARE_R2_PUBLIC_URL || process.env.R2_PUBLIC_URL}/${r2Key}`
 
-    const publicUrl = `${process.env.CLOUDFLARE_R2_PUBLIC_URL || process.env.R2_PUBLIC_URL}/${fileKey}`
-
-    // Store upload session in database
-    const uploadSession = {
+    // Create upload session in Firestore
+    const sessionData = {
       uploadId,
       uid: user.uid,
       fileName,
+      originalFileName: fileName,
       fileSize,
       fileType,
       totalChunks,
       chunkSize,
-      r2Key: fileKey,
+      r2Key,
       publicUrl,
+      username,
+      status: 'initializing',
       completedChunks: [],
-      status: 'initialized',
       createdAt: new Date(),
       updatedAt: new Date()
     }
 
-    await db.collection("uploadSessions").doc(uploadId).set(uploadSession)
+    await db.collection("uploadSessions").doc(uploadId).set(sessionData)
+
+    console.log(`✅ [Chunked Upload] Initialized session: ${uploadId}`)
+    console.log(`📁 [Chunked Upload] R2 Key: ${r2Key}`)
+    console.log(`🌐 [Chunked Upload] Public URL: ${publicUrl}`)
 
     return NextResponse.json({
       success: true,
       uploadId,
       publicUrl,
-      r2Key: fileKey,
-      totalChunks
+      r2Key,
+      totalChunks,
+      chunkSize
     })
 
   } catch (error) {
