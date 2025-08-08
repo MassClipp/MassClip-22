@@ -6,49 +6,94 @@ export async function GET(request: NextRequest) {
     const videoUrl = searchParams.get("url")
 
     if (!videoUrl) {
+      console.error("❌ Proxy Video: No URL provided")
       return NextResponse.json({ error: "Video URL is required" }, { status: 400 })
     }
 
     console.log("🎥 Proxying video request for:", videoUrl)
 
-    // Fetch the video from the original URL
-    const response = await fetch(videoUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; MassClip/1.0)",
-      },
-    })
-
-    if (!response.ok) {
-      console.error("❌ Failed to fetch video:", response.status, response.statusText)
-      return NextResponse.json({ error: "Failed to fetch video" }, { status: response.status })
+    // Validate URL format
+    try {
+      new URL(videoUrl)
+    } catch (urlError) {
+      console.error("❌ Proxy Video: Invalid URL format:", videoUrl)
+      return NextResponse.json({ error: "Invalid video URL format" }, { status: 400 })
     }
 
-    // Get the video data
-    const videoBuffer = await response.arrayBuffer()
-    const contentType = response.headers.get("content-type") || "video/mp4"
-    const contentLength = response.headers.get("content-length")
+    // Fetch the video from the original URL with timeout
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 second timeout
 
-    console.log("✅ Video fetched successfully:", {
-      contentType,
-      contentLength,
-      size: videoBuffer.byteLength,
-    })
+    try {
+      const response = await fetch(videoUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (compatible; MassClip/1.0)",
+          "Accept": "video/*,*/*;q=0.9",
+          "Accept-Encoding": "identity", // Prevent compression issues
+        },
+        signal: controller.signal,
+      })
 
-    // Return the video with proper headers
-    return new NextResponse(videoBuffer, {
-      status: 200,
-      headers: {
-        "Content-Type": contentType,
-        "Content-Length": contentLength || videoBuffer.byteLength.toString(),
-        "Cache-Control": "public, max-age=31536000", // Cache for 1 year
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-        "Access-Control-Allow-Headers": "Range, Content-Range",
-        "Accept-Ranges": "bytes",
-      },
-    })
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        console.error("❌ Failed to fetch video:", {
+          url: videoUrl,
+          status: response.status,
+          statusText: response.statusText,
+          headers: Object.fromEntries(response.headers.entries())
+        })
+        return NextResponse.json({ 
+          error: "Failed to fetch video", 
+          details: `${response.status}: ${response.statusText}` 
+        }, { status: response.status })
+      }
+
+      // Get the video data
+      const videoBuffer = await response.arrayBuffer()
+      const contentType = response.headers.get("content-type") || "video/mp4"
+      const contentLength = response.headers.get("content-length")
+
+      console.log("✅ Video fetched successfully:", {
+        url: videoUrl,
+        contentType,
+        contentLength,
+        size: videoBuffer.byteLength,
+      })
+
+      // Return the video with proper headers
+      return new NextResponse(videoBuffer, {
+        status: 200,
+        headers: {
+          "Content-Type": contentType,
+          "Content-Length": contentLength || videoBuffer.byteLength.toString(),
+          "Cache-Control": "public, max-age=31536000", // Cache for 1 year
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+          "Access-Control-Allow-Headers": "Range, Content-Range",
+          "Accept-Ranges": "bytes",
+        },
+      })
+    } catch (fetchError) {
+      clearTimeout(timeoutId)
+      
+      if (fetchError.name === 'AbortError') {
+        console.error("❌ Video fetch timeout:", videoUrl)
+        return NextResponse.json({ error: "Video fetch timeout" }, { status: 408 })
+      }
+      
+      console.error("❌ Video fetch error:", {
+        url: videoUrl,
+        error: fetchError.message,
+        name: fetchError.name
+      })
+      throw fetchError
+    }
   } catch (error) {
-    console.error("❌ Video proxy error:", error)
+    console.error("❌ Video proxy error:", {
+      error: error instanceof Error ? error.message : "Unknown error",
+      stack: error instanceof Error ? error.stack : undefined
+    })
     return NextResponse.json(
       {
         error: "Failed to proxy video",
@@ -68,28 +113,54 @@ export async function HEAD(request: NextRequest) {
       return new NextResponse(null, { status: 400 })
     }
 
-    // HEAD request for video metadata
-    const response = await fetch(videoUrl, { method: "HEAD" })
-
-    if (!response.ok) {
-      return new NextResponse(null, { status: response.status })
+    // Validate URL format
+    try {
+      new URL(videoUrl)
+    } catch (urlError) {
+      console.error("❌ Proxy Video HEAD: Invalid URL format:", videoUrl)
+      return new NextResponse(null, { status: 400 })
     }
 
-    const contentType = response.headers.get("content-type") || "video/mp4"
-    const contentLength = response.headers.get("content-length")
+    // HEAD request for video metadata with timeout
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout for HEAD
 
-    return new NextResponse(null, {
-      status: 200,
-      headers: {
-        "Content-Type": contentType,
-        "Content-Length": contentLength || "0",
-        "Cache-Control": "public, max-age=31536000",
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-        "Access-Control-Allow-Headers": "Range, Content-Range",
-        "Accept-Ranges": "bytes",
-      },
-    })
+    try {
+      const response = await fetch(videoUrl, { 
+        method: "HEAD",
+        signal: controller.signal,
+        headers: {
+          "User-Agent": "Mozilla/5.0 (compatible; MassClip/1.0)",
+        }
+      })
+
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        console.error("❌ HEAD request failed:", videoUrl, response.status)
+        return new NextResponse(null, { status: response.status })
+      }
+
+      const contentType = response.headers.get("content-type") || "video/mp4"
+      const contentLength = response.headers.get("content-length")
+
+      return new NextResponse(null, {
+        status: 200,
+        headers: {
+          "Content-Type": contentType,
+          "Content-Length": contentLength || "0",
+          "Cache-Control": "public, max-age=31536000",
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+          "Access-Control-Allow-Headers": "Range, Content-Range",
+          "Accept-Ranges": "bytes",
+        },
+      })
+    } catch (fetchError) {
+      clearTimeout(timeoutId)
+      console.error("❌ Video HEAD proxy error:", videoUrl, fetchError.message)
+      return new NextResponse(null, { status: 500 })
+    }
   } catch (error) {
     console.error("❌ Video HEAD proxy error:", error)
     return new NextResponse(null, { status: 500 })

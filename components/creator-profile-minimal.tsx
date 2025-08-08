@@ -368,7 +368,7 @@ function ContentCard({ item }: { item: ContentItem }) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [videoError, setVideoError] = useState(false)
   const [videoLoaded, setVideoLoaded] = useState(false)
-  const [isDownloading, setIsDownloading] = useState(false)
+  const [isDownloading, setIsDownloading] = useState(isDownloading)
   const [loadAttempts, setLoadAttempts] = useState(0)
   const videoRef = useRef<HTMLVideoElement>(null)
   const { toast } = useToast()
@@ -457,15 +457,17 @@ function ContentCard({ item }: { item: ContentItem }) {
     }
   }
 
-  // Enhanced video loading with retry logic
+  // Enhanced video loading with better error handling and fallbacks
   useEffect(() => {
     const videoElement = videoRef.current
-    if (!videoElement || !proxiedVideoUrl || videoError) return
+    if (!videoElement || !proxiedVideoUrl) return
 
     let timeoutId: NodeJS.Timeout
+    let loadTimeoutId: NodeJS.Timeout
 
     const handleLoadedMetadata = () => {
       console.log("✅ Video metadata loaded for:", item.title)
+      clearTimeout(loadTimeoutId)
       setVideoLoaded(true)
       setVideoError(false)
       // Seek to first frame to show video immediately
@@ -474,22 +476,33 @@ function ContentCard({ item }: { item: ContentItem }) {
 
     const handleLoadedData = () => {
       console.log("✅ Video data loaded for:", item.title)
+      clearTimeout(loadTimeoutId)
       setVideoLoaded(true)
       setVideoError(false)
     }
 
     const handleError = (e: Event) => {
-      console.error("❌ Video loading error for", item.title, ":", e)
+      console.error("❌ Video loading error for", item.title, ":", {
+        error: e,
+        videoError: videoElement.error,
+        networkState: videoElement.networkState,
+        readyState: videoElement.readyState,
+        currentSrc: videoElement.currentSrc
+      })
       
-      // Retry logic - try up to 3 times
-      if (loadAttempts < 3) {
+      clearTimeout(loadTimeoutId)
+      
+      // Retry logic - try up to 2 times (reduced from 3 for faster fallback)
+      if (loadAttempts < 2) {
         console.log(`🔄 Retrying video load for ${item.title}, attempt ${loadAttempts + 1}`)
         setLoadAttempts(prev => prev + 1)
         
-        // Wait a bit before retrying
+        // Wait before retrying with exponential backoff
         timeoutId = setTimeout(() => {
-          videoElement.load()
-        }, 1000 * (loadAttempts + 1)) // Exponential backoff
+          if (videoElement) {
+            videoElement.load()
+          }
+        }, 2000 * (loadAttempts + 1))
       } else {
         console.error("❌ Max retry attempts reached for:", item.title)
         setVideoError(true)
@@ -499,12 +512,28 @@ function ContentCard({ item }: { item: ContentItem }) {
 
     const handleCanPlay = () => {
       console.log("✅ Video can play:", item.title)
+      clearTimeout(loadTimeoutId)
       setVideoLoaded(true)
       setVideoError(false)
     }
 
     const handleLoadStart = () => {
       console.log("🔄 Video load started for:", item.title)
+      // Set a timeout for loading - if it takes too long, consider it failed
+      loadTimeoutId = setTimeout(() => {
+        console.warn("⚠️ Video loading timeout for:", item.title)
+        if (!videoLoaded) {
+          handleError(new Event('timeout'))
+        }
+      }, 15000) // 15 second timeout
+    }
+
+    const handleStalled = () => {
+      console.warn("⚠️ Video stalled for:", item.title)
+    }
+
+    const handleSuspend = () => {
+      console.warn("⚠️ Video suspended for:", item.title)
     }
 
     // Add all event listeners
@@ -513,17 +542,22 @@ function ContentCard({ item }: { item: ContentItem }) {
     videoElement.addEventListener("error", handleError)
     videoElement.addEventListener("canplay", handleCanPlay)
     videoElement.addEventListener("loadstart", handleLoadStart)
+    videoElement.addEventListener("stalled", handleStalled)
+    videoElement.addEventListener("suspend", handleSuspend)
 
     // Start loading the video
     videoElement.load()
 
     return () => {
       if (timeoutId) clearTimeout(timeoutId)
+      if (loadTimeoutId) clearTimeout(loadTimeoutId)
       videoElement.removeEventListener("loadedmetadata", handleLoadedMetadata)
       videoElement.removeEventListener("loadeddata", handleLoadedData)
       videoElement.removeEventListener("error", handleError)
       videoElement.removeEventListener("canplay", handleCanPlay)
       videoElement.removeEventListener("loadstart", handleLoadStart)
+      videoElement.removeEventListener("stalled", handleStalled)
+      videoElement.removeEventListener("suspend", handleSuspend)
     }
   }, [proxiedVideoUrl, item.title, loadAttempts])
 
@@ -721,17 +755,31 @@ function ContentCard({ item }: { item: ContentItem }) {
             !videoLoaded || videoError ? "opacity-100" : "opacity-0"
           }`}
         >
-          {!videoError && loadAttempts < 3 ? (
+          {!videoError && loadAttempts < 2 ? (
             <div className="text-center">
               <div className="w-4 h-4 border border-zinc-600 border-t-white rounded-full animate-spin mx-auto mb-2" />
               <p className="text-xs text-zinc-500">
-                {loadAttempts > 0 ? `Retrying... (${loadAttempts}/3)` : "Loading..."}
+                {loadAttempts > 0 ? `Retrying... (${loadAttempts}/2)` : "Loading..."}
               </p>
             </div>
-          ) : (
+          ) : videoError ? (
             <div className="text-center">
               <AlertCircle className="w-8 h-8 text-zinc-600 mx-auto mb-2" />
               <p className="text-xs text-zinc-500">Video unavailable</p>
+              {/* Show thumbnail as fallback if available */}
+              {item.thumbnailUrl && (
+                <img 
+                  src={item.thumbnailUrl || "/placeholder.svg"} 
+                  alt={item.title}
+                  className="w-full h-full object-cover absolute inset-0 -z-10 opacity-30"
+                  onError={() => {}}
+                />
+              )}
+            </div>
+          ) : (
+            <div className="text-center">
+              <div className="w-4 h-4 border border-zinc-600 border-t-white rounded-full animate-spin mx-auto mb-2" />
+              <p className="text-xs text-zinc-500">Loading...</p>
             </div>
           )}
         </div>
