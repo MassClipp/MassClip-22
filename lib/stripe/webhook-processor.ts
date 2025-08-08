@@ -114,25 +114,62 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
     id: bundleId,
     title: bundleData.title,
     price: bundleData.price,
-    detailedContentItemsCount: bundleData.detailedContentItems?.length || 0,
+    availableFields: Object.keys(bundleData),
   })
 
-  // Extract content from detailedContentItems (THE CORRECT FIELD WITH ALL DATA)
-  const bundleContent = bundleData.detailedContentItems || []
-
-  if (!Array.isArray(bundleContent) || bundleContent.length === 0) {
-    console.error(`❌ No detailedContentItems found in bundle: ${bundleId}`)
-    console.error(`Available fields:`, Object.keys(bundleData))
-    throw new Error(`No detailedContentItems found in bundle: ${bundleId}`)
+  // FIXED: Look for detailedContentItems in the bundle document
+  let bundleContent = []
+  
+  // Try to get detailedContentItems from the bundle document
+  if (bundleData.detailedContentItems && Array.isArray(bundleData.detailedContentItems)) {
+    bundleContent = bundleData.detailedContentItems
+    console.log(`✅ Found ${bundleContent.length} items in detailedContentItems`)
+  } else {
+    console.log(`⚠️ detailedContentItems not found or not an array. Available fields:`, Object.keys(bundleData))
+    
+    // Fallback: try other possible field names
+    const possibleContentFields = [
+      'contentItems',
+      'items',
+      'videos',
+      'content',
+      'files',
+      'media'
+    ]
+    
+    for (const field of possibleContentFields) {
+      if (bundleData[field] && Array.isArray(bundleData[field])) {
+        bundleContent = bundleData[field]
+        console.log(`✅ Found ${bundleContent.length} items in fallback field: ${field}`)
+        break
+      }
+    }
   }
 
-  // Format content with ALL data from detailedContentItems
+  if (!Array.isArray(bundleContent) || bundleContent.length === 0) {
+    console.error(`❌ No content found in bundle: ${bundleId}`)
+    console.error(`Available bundle fields:`, Object.keys(bundleData))
+    
+    // Log the first few characters of each field to help debug
+    Object.entries(bundleData).forEach(([key, value]) => {
+      if (Array.isArray(value)) {
+        console.error(`  - ${key}: Array with ${value.length} items`)
+      } else if (typeof value === 'object' && value !== null) {
+        console.error(`  - ${key}: Object with keys: ${Object.keys(value)}`)
+      } else {
+        console.error(`  - ${key}: ${typeof value} - ${String(value).substring(0, 50)}...`)
+      }
+    })
+    
+    throw new Error(`No content items found in bundle: ${bundleId}`)
+  }
+
+  // Format content with ALL data from the content items
   const formattedBundleContent = bundleContent.map((item: any, index: number) => {
-    console.log(`📄 Processing detailedContentItem ${index}:`, {
+    console.log(`📄 Processing content item ${index}:`, {
       id: item.id,
       title: item.title,
-      fileUrl: item.fileUrl,
-      downloadUrl: item.downloadUrl,
+      fileUrl: item.fileUrl || item.downloadUrl,
       fileSize: item.fileSize,
       fileSizeFormatted: item.fileSizeFormatted,
     })
@@ -183,7 +220,7 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
     }
   })
 
-  console.log(`✅ Formatted ${formattedBundleContent.length} content items from detailedContentItems`)
+  console.log(`✅ Formatted ${formattedBundleContent.length} content items`)
   console.log(`📊 Total bundle size: ${bundleData.contentMetadata?.totalSizeFormatted || "Unknown"}`)
 
   // Create comprehensive purchase record with ALL bundle data AND platform fee information
