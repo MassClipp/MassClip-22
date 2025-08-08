@@ -286,22 +286,33 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
       return { alreadyProcessed: true, sessionId: session.id }
     }
 
-    // Get bundle data
-    const bundleDoc = await db.collection("bundles").doc(bundleId).get()
-    if (!bundleDoc.exists) {
-      throw new Error(`Bundle not found: ${bundleId}`)
+    // Try to get bundle data - but don't fail if it doesn't exist
+    let bundleData = null
+    try {
+      const bundleDoc = await db.collection("bundles").doc(bundleId).get()
+      if (bundleDoc.exists) {
+        bundleData = bundleDoc.data()!
+        console.log(`📊 [Webhook] Bundle data loaded for: ${bundleData.title}`)
+      } else {
+        console.warn(`⚠️ [Webhook] Bundle document not found: ${bundleId}`)
+        // Try to find bundle by searching in productBoxes collection as fallback
+        const productBoxQuery = await db.collection("productBoxes").where("id", "==", bundleId).limit(1).get()
+        if (!productBoxQuery.empty) {
+          bundleData = productBoxQuery.docs[0].data()
+          console.log(`📊 [Webhook] Found bundle in productBoxes: ${bundleData.title}`)
+        }
+      }
+    } catch (error) {
+      console.error(`❌ [Webhook] Error fetching bundle ${bundleId}:`, error)
     }
-
-    const bundleData = bundleDoc.data()!
-    console.log(`📊 [Webhook] Bundle data loaded for: ${bundleData.title}`)
 
     // Get comprehensive content metadata
     const contentItems = await getComprehensiveContentMetadata(bundleId)
     
-    if (contentItems.length === 0) {
-      console.error(`❌ [Webhook] No content items found in bundle: ${bundleId}`)
-      console.error(`📊 [Webhook] Bundle fields:`, Object.keys(bundleData))
-      throw new Error(`No content items found in bundle: ${bundleId}`)
+    // If no content found and no bundle data, create minimal purchase record
+    if (contentItems.length === 0 && !bundleData) {
+      console.warn(`⚠️ [Webhook] No content items or bundle data found for: ${bundleId}`)
+      console.warn(`⚠️ [Webhook] Creating minimal purchase record for session: ${session.id}`)
     }
 
     console.log(`✅ [Webhook] Found ${contentItems.length} content items for purchase`)
@@ -339,16 +350,16 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
       paymentIntentId: typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id || "",
       bundleId: bundleId,
       
-      // Bundle information
-      bundleTitle: bundleData.title || "Untitled Bundle",
-      bundleDescription: bundleData.description || "",
-      bundlePrice: bundleData.price || 0,
-      bundleCurrency: bundleData.currency || "usd",
-      bundleType: bundleData.type || "one_time",
-      bundleThumbnail: bundleData.coverImage || bundleData.thumbnailUrl || bundleData.customPreviewThumbnail || "",
-      bundleCoverImage: bundleData.coverImage || bundleData.thumbnailUrl || bundleData.customPreviewThumbnail || "",
-      bundleCreatedAt: bundleData.createdAt || null,
-      bundleUpdatedAt: bundleData.updatedAt || null,
+      // Bundle information (use fallback values if bundle not found)
+      bundleTitle: bundleData?.title || `Bundle ${bundleId}`,
+      bundleDescription: bundleData?.description || "",
+      bundlePrice: bundleData?.price || (totalAmountCents / 100),
+      bundleCurrency: bundleData?.currency || session.currency || "usd",
+      bundleType: bundleData?.type || "one_time",
+      bundleThumbnail: bundleData?.coverImage || bundleData?.thumbnailUrl || bundleData?.customPreviewThumbnail || "",
+      bundleCoverImage: bundleData?.coverImage || bundleData?.thumbnailUrl || bundleData?.customPreviewThumbnail || "",
+      bundleCreatedAt: bundleData?.createdAt || null,
+      bundleUpdatedAt: bundleData?.updatedAt || null,
       
       // Bundle content metadata - cleaned content items
       bundleContent: contentItems,
@@ -388,13 +399,13 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
       contentUrls: contentItems.map(item => item.fileUrl),
       contentThumbnails: contentItems.map(item => item.thumbnailUrl).filter(Boolean),
       contentCount: contentItems.length,
-      contentLastUpdated: bundleData.contentLastUpdated || bundleData.updatedAt || null,
+      contentLastUpdated: bundleData?.contentLastUpdated || bundleData?.updatedAt || null,
       
       // Creator information
-      creatorId: bundleData.creatorId || "",
+      creatorId: bundleData?.creatorId || session.metadata?.creatorId || "",
       creatorUsername: session.metadata?.creatorUsername || "",
       creatorDisplayName: session.metadata?.creatorDisplayName || "",
-      creatorStripeAccountId: bundleData.stripeAccountId || "",
+      creatorStripeAccountId: bundleData?.stripeAccountId || session.metadata?.stripeAccountId || "",
       
       // Buyer information
       buyerUid: session.metadata?.buyerUid || session.client_reference_id || "",
@@ -414,8 +425,8 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
       creatorEarningsDollars: creatorEarningsCents / 100,
       
       // Stripe information
-      stripeProductId: bundleData.stripeProductId || bundleData.productId || "",
-      stripePriceId: bundleData.stripePriceId || bundleData.priceId || "",
+      stripeProductId: bundleData?.stripeProductId || bundleData?.productId || "",
+      stripePriceId: bundleData?.stripePriceId || bundleData?.priceId || "",
       
       // Connected account information
       connectedAccountEmail: session.metadata?.connectedAccountEmail || "",
@@ -432,9 +443,9 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
     // Save purchase record
     await db.collection("bundlePurchases").add(purchaseData)
     
-    console.log(`✅ [Webhook] Purchase record created successfully for bundle: ${bundleData.title}`)
+    console.log(`✅ [Webhook] Purchase record created successfully for bundle: ${bundleData?.title || bundleId}`)
     console.log(`💰 [Webhook] Purchase details:`, {
-      bundleTitle: bundleData.title,
+      bundleTitle: bundleData?.title || bundleId,
       contentItems: contentItems.length,
       totalSize: formatFileSize(totalSize),
       totalDuration: formatDuration(totalDuration),
