@@ -34,22 +34,22 @@ interface ContentItem {
   fileUrl: string
   downloadUrl: string
   publicUrl: string
-  thumbnailUrl?: string
-  previewUrl?: string
+  thumbnailUrl: string
+  previewUrl: string
   mimeType: string
   fileType: string
   fileSize: number
   fileSizeFormatted: string
   displaySize: string
-  duration?: number
+  duration: number
   durationFormatted: string
   displayDuration: string
   contentType: "video" | "audio" | "image" | "document"
-  quality?: string
-  format?: string
-  resolution?: string
-  description?: string
-  tags?: string[]
+  quality: string
+  format: string
+  resolution: string
+  description: string
+  tags: string[]
   createdAt: any
   uploadedAt: any
   isPublic: boolean
@@ -89,6 +89,62 @@ function getContentType(mimeType: string): "video" | "audio" | "image" | "docume
   return "document"
 }
 
+// Helper function to clean object of undefined values
+function cleanObject(obj: any): any {
+  if (obj === null || obj === undefined) {
+    return null
+  }
+  
+  if (Array.isArray(obj)) {
+    return obj.map(item => cleanObject(item))
+  }
+  
+  if (typeof obj === 'object') {
+    const cleaned: any = {}
+    for (const [key, value] of Object.entries(obj)) {
+      if (value !== undefined) {
+        cleaned[key] = cleanObject(value)
+      }
+    }
+    return cleaned
+  }
+  
+  return obj
+}
+
+// Helper function to create a clean content item
+function createCleanContentItem(item: any): ContentItem {
+  return {
+    id: item.id || `content_${Date.now()}`,
+    title: item.title || item.displayTitle || item.filename || "Untitled",
+    filename: item.filename || item.title || "unknown.file",
+    fileUrl: item.fileUrl || "",
+    downloadUrl: item.downloadUrl || item.fileUrl || "",
+    publicUrl: item.publicUrl || item.fileUrl || "",
+    thumbnailUrl: item.thumbnailUrl || "",
+    previewUrl: item.previewUrl || item.thumbnailUrl || "",
+    mimeType: item.mimeType || "application/octet-stream",
+    fileType: item.fileType || item.mimeType || "application/octet-stream",
+    fileSize: item.fileSize || 0,
+    fileSizeFormatted: item.fileSizeFormatted || formatFileSize(item.fileSize || 0),
+    displaySize: item.displaySize || formatFileSize(item.fileSize || 0),
+    duration: item.duration || 0,
+    durationFormatted: item.durationFormatted || formatDuration(item.duration || 0),
+    displayDuration: item.displayDuration || formatDuration(item.duration || 0),
+    contentType: item.contentType || getContentType(item.mimeType || ""),
+    quality: item.quality || "HD",
+    format: item.format || (item.mimeType ? item.mimeType.split("/")[1] : "unknown"),
+    resolution: item.resolution || "",
+    description: item.description || "",
+    tags: item.tags || [],
+    createdAt: item.createdAt || new Date(),
+    uploadedAt: item.uploadedAt || new Date(),
+    isPublic: item.isPublic !== false,
+    downloadCount: item.downloadCount || 0,
+    viewCount: item.viewCount || 0,
+  }
+}
+
 // Get comprehensive content metadata from multiple sources
 async function getComprehensiveContentMetadata(bundleId: string): Promise<ContentItem[]> {
   try {
@@ -108,35 +164,8 @@ async function getComprehensiveContentMetadata(bundleId: string): Promise<Conten
         
         bundleData.detailedContentItems.forEach((item: any) => {
           if (item.fileUrl && item.fileUrl.startsWith("http")) {
-            contentItems.push({
-              id: item.id || `content_${Date.now()}`,
-              title: item.title || item.displayTitle || item.filename || "Untitled",
-              filename: item.filename || item.title || "unknown.file",
-              fileUrl: item.fileUrl,
-              downloadUrl: item.downloadUrl || item.fileUrl,
-              publicUrl: item.publicUrl || item.fileUrl,
-              thumbnailUrl: item.thumbnailUrl || "",
-              previewUrl: item.previewUrl || item.thumbnailUrl || "",
-              mimeType: item.mimeType || "application/octet-stream",
-              fileType: item.fileType || item.mimeType || "application/octet-stream",
-              fileSize: item.fileSize || 0,
-              fileSizeFormatted: item.fileSizeFormatted || formatFileSize(item.fileSize || 0),
-              displaySize: item.displaySize || formatFileSize(item.fileSize || 0),
-              duration: item.duration || 0,
-              durationFormatted: item.durationFormatted || formatDuration(item.duration || 0),
-              displayDuration: item.displayDuration || formatDuration(item.duration || 0),
-              contentType: item.contentType || getContentType(item.mimeType || ""),
-              quality: item.quality || "HD",
-              format: item.format || (item.mimeType ? item.mimeType.split("/")[1] : "unknown"),
-              resolution: item.resolution,
-              description: item.description || "",
-              tags: item.tags || [],
-              createdAt: item.createdAt || new Date(),
-              uploadedAt: item.uploadedAt || new Date(),
-              isPublic: item.isPublic !== false,
-              downloadCount: item.downloadCount || 0,
-              viewCount: item.viewCount || 0,
-            })
+            const cleanItem = createCleanContentItem(item)
+            contentItems.push(cleanItem)
           }
         })
       }
@@ -160,7 +189,7 @@ async function getComprehensiveContentMetadata(bundleId: string): Promise<Conten
               const contentData = contentDoc.data()
               
               if (contentData.fileUrl && contentData.fileUrl.startsWith("http")) {
-                contentItems.push({
+                const cleanItem = createCleanContentItem({
                   id: contentId,
                   title: contentData.title || contentData.filename || "Untitled",
                   filename: contentData.filename || contentData.title || "unknown.file",
@@ -172,14 +201,11 @@ async function getComprehensiveContentMetadata(bundleId: string): Promise<Conten
                   mimeType: contentData.mimeType || "application/octet-stream",
                   fileType: contentData.fileType || contentData.mimeType || "application/octet-stream",
                   fileSize: contentData.fileSize || 0,
-                  fileSizeFormatted: formatFileSize(contentData.fileSize || 0),
-                  displaySize: formatFileSize(contentData.fileSize || 0),
                   duration: contentData.duration || 0,
-                  durationFormatted: formatDuration(contentData.duration || 0),
-                  displayDuration: formatDuration(contentData.duration || 0),
                   contentType: getContentType(contentData.mimeType || ""),
                   quality: "HD",
                   format: contentData.mimeType ? contentData.mimeType.split("/")[1] : "unknown",
+                  resolution: "",
                   description: "",
                   tags: [],
                   createdAt: contentData.createdAt || new Date(),
@@ -188,6 +214,7 @@ async function getComprehensiveContentMetadata(bundleId: string): Promise<Conten
                   downloadCount: 0,
                   viewCount: 0,
                 })
+                contentItems.push(cleanItem)
               }
             } else {
               // Try uploads collection as fallback
@@ -196,7 +223,7 @@ async function getComprehensiveContentMetadata(bundleId: string): Promise<Conten
                 const uploadData = uploadDoc.data()!
                 
                 if (uploadData.fileUrl && uploadData.fileUrl.startsWith("http")) {
-                  contentItems.push({
+                  const cleanItem = createCleanContentItem({
                     id: contentId,
                     title: uploadData.title || uploadData.filename || uploadData.originalFileName || "Untitled",
                     filename: uploadData.filename || uploadData.originalFileName || "unknown.file",
@@ -208,14 +235,11 @@ async function getComprehensiveContentMetadata(bundleId: string): Promise<Conten
                     mimeType: uploadData.mimeType || uploadData.fileType || "application/octet-stream",
                     fileType: uploadData.fileType || uploadData.mimeType || "application/octet-stream",
                     fileSize: uploadData.fileSize || uploadData.size || 0,
-                    fileSizeFormatted: formatFileSize(uploadData.fileSize || uploadData.size || 0),
-                    displaySize: formatFileSize(uploadData.fileSize || uploadData.size || 0),
                     duration: uploadData.duration || uploadData.videoDuration || 0,
-                    durationFormatted: formatDuration(uploadData.duration || uploadData.videoDuration || 0),
-                    displayDuration: formatDuration(uploadData.duration || uploadData.videoDuration || 0),
                     contentType: getContentType(uploadData.mimeType || uploadData.fileType || ""),
                     quality: "HD",
                     format: uploadData.mimeType ? uploadData.mimeType.split("/")[1] : "unknown",
+                    resolution: uploadData.resolution || "",
                     description: uploadData.description || "",
                     tags: uploadData.tags || [],
                     createdAt: uploadData.createdAt || uploadData.uploadedAt || new Date(),
@@ -224,6 +248,7 @@ async function getComprehensiveContentMetadata(bundleId: string): Promise<Conten
                     downloadCount: uploadData.downloadCount || 0,
                     viewCount: uploadData.viewCount || 0,
                   })
+                  contentItems.push(cleanItem)
                 }
               }
             }
@@ -307,25 +332,25 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
       }
     }
 
-    // Create comprehensive purchase record
-    const purchaseData = {
+    // Create comprehensive purchase record - clean all data before saving
+    const purchaseData = cleanObject({
       // Purchase identification
       sessionId: session.id,
       paymentIntentId: typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id || "",
       bundleId: bundleId,
       
       // Bundle information
-      bundleTitle: bundleData.title,
+      bundleTitle: bundleData.title || "Untitled Bundle",
       bundleDescription: bundleData.description || "",
-      bundlePrice: bundleData.price,
+      bundlePrice: bundleData.price || 0,
       bundleCurrency: bundleData.currency || "usd",
       bundleType: bundleData.type || "one_time",
       bundleThumbnail: bundleData.coverImage || bundleData.thumbnailUrl || bundleData.customPreviewThumbnail || "",
       bundleCoverImage: bundleData.coverImage || bundleData.thumbnailUrl || bundleData.customPreviewThumbnail || "",
-      bundleCreatedAt: bundleData.createdAt,
-      bundleUpdatedAt: bundleData.updatedAt,
+      bundleCreatedAt: bundleData.createdAt || null,
+      bundleUpdatedAt: bundleData.updatedAt || null,
       
-      // Bundle content metadata
+      // Bundle content metadata - cleaned content items
       bundleContent: contentItems,
       bundleContentMetadata: {
         totalItems: contentItems.length,
@@ -363,13 +388,13 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
       contentUrls: contentItems.map(item => item.fileUrl),
       contentThumbnails: contentItems.map(item => item.thumbnailUrl).filter(Boolean),
       contentCount: contentItems.length,
-      contentLastUpdated: bundleData.contentLastUpdated || bundleData.updatedAt,
+      contentLastUpdated: bundleData.contentLastUpdated || bundleData.updatedAt || null,
       
       // Creator information
-      creatorId: bundleData.creatorId,
+      creatorId: bundleData.creatorId || "",
       creatorUsername: session.metadata?.creatorUsername || "",
       creatorDisplayName: session.metadata?.creatorDisplayName || "",
-      creatorStripeAccountId: bundleData.stripeAccountId,
+      creatorStripeAccountId: bundleData.stripeAccountId || "",
       
       // Buyer information
       buyerUid: session.metadata?.buyerUid || session.client_reference_id || "",
@@ -389,8 +414,8 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
       creatorEarningsDollars: creatorEarningsCents / 100,
       
       // Stripe information
-      stripeProductId: bundleData.stripeProductId || bundleData.productId,
-      stripePriceId: bundleData.stripePriceId || bundleData.priceId,
+      stripeProductId: bundleData.stripeProductId || bundleData.productId || "",
+      stripePriceId: bundleData.stripePriceId || bundleData.priceId || "",
       
       // Connected account information
       connectedAccountEmail: session.metadata?.connectedAccountEmail || "",
@@ -402,7 +427,7 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
       status: "completed",
       timestamp: new Date(),
       webhookProcessed: true,
-    }
+    })
 
     // Save purchase record
     await db.collection("bundlePurchases").add(purchaseData)
