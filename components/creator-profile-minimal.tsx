@@ -368,7 +368,7 @@ function ContentCard({ item }: { item: ContentItem }) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [videoError, setVideoError] = useState(false)
   const [videoLoaded, setVideoLoaded] = useState(false)
-  const [isDownloading, setIsDownloading] = useState(isDownloading)
+  const [isDownloading, setIsDownloading] = useState(false)
   const [loadAttempts, setLoadAttempts] = useState(0)
   const videoRef = useRef<HTMLVideoElement>(null)
   const { toast } = useToast()
