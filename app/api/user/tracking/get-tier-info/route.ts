@@ -4,29 +4,18 @@ import { initializeFirebaseAdmin } from "@/lib/firebase-admin"
 
 initializeFirebaseAdmin()
 
-export async function GET(request: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const uid = searchParams.get("uid")
-
+    const body = await request.json()
+    const { uid } = body || {}
     if (!uid) {
-      return NextResponse.json(
-        { error: "Missing uid parameter" },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: "Missing uid" }, { status: 400 })
     }
 
-    const tierInfo = await UserTrackingService.getUserTierInfo(uid)
-
-    return NextResponse.json({
-      success: true,
-      data: tierInfo,
-    })
+    const info = await UserTrackingService.getUserTierInfo(uid)
+    return NextResponse.json({ success: true, data: info })
   } catch (error) {
     console.error("❌ Error getting user tier info:", error)
-    return NextResponse.json(
-      { error: "Failed to get user tier info" },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: "Failed to get user tier info" }, { status: 500 })
   }
 }

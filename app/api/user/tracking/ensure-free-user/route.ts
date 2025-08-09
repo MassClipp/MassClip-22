@@ -1,38 +1,20 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { initializeFirebaseAdmin } from "@/lib/firebase-admin"
-import { getAuth } from "firebase-admin/auth"
 import { UserTrackingService } from "@/lib/user-tracking-service"
+import { initializeFirebaseAdmin } from "@/lib/firebase-admin"
 
 initializeFirebaseAdmin()
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json().catch(() => ({}))
-    const { uid, email, geoLocation, referralCodeUsed } = body as {
-      uid?: string
-      email?: string
-      geoLocation?: string
-      referralCodeUsed?: string
-    }
+    const body = await request.json()
+    const { uid, email, ipAddress, geoLocation, referralCodeUsed } = body || {}
 
-    if (!uid || !email) {
-      return NextResponse.json({ error: "Missing required fields: uid and email" }, { status: 400 })
+    if (!uid || typeof email === "undefined") {
+      return NextResponse.json({ error: "Missing uid or email" }, { status: 400 })
     }
-
-    // Verify the user exists in Firebase Auth
-    const auth = getAuth()
-    try {
-      await auth.getUser(uid)
-    } catch {
-      return NextResponse.json({ error: "Invalid user ID" }, { status: 400 })
-    }
-
-    // Extract best-effort IP from headers
-    const ip =
-      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || undefined
 
     const result = await UserTrackingService.ensureFreeUserForNonPro(uid, email, {
-      ipAddress: ip,
+      ipAddress,
       geoLocation,
       referralCodeUsed,
     })
@@ -42,11 +24,11 @@ export async function POST(request: NextRequest) {
       ensured: result.ensured,
       reason: result.reason,
       message: result.ensured
-        ? "freeUsers record ensured/updated."
-        : "User is Creator Pro and active; no freeUsers record needed.",
+        ? "Ensured freeUsers record for non-pro user"
+        : "User is active Creator Pro; no freeUsers changes",
     })
   } catch (error) {
-    console.error("❌ Error ensuring free user record:", error)
-    return NextResponse.json({ error: "Failed to ensure free user record" }, { status: 500 })
+    console.error("❌ Error ensuring free user:", error)
+    return NextResponse.json({ error: "Failed to ensure free user" }, { status: 500 })
   }
 }

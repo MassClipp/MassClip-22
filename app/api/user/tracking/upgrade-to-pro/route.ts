@@ -17,39 +17,31 @@ export async function POST(request: NextRequest) {
       totalPaid,
       ipAddress,
       geoLocation,
+      paymentMethodLast4,
+      revenueSplit,
     } = body
 
     if (!uid || !stripeCustomerId || !subscriptionId || !email) {
-      return NextResponse.json(
-        { error: "Missing required fields" },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
-    // Upgrade user to creator pro
-    await UserTrackingService.upgradeToCreatorPro(
-      uid,
-      stripeCustomerId,
-      subscriptionId,
-      email,
-      {
-        tier,
-        promotionCodeUsed,
-        totalPaid,
-        ipAddress,
-        geoLocation,
-      }
-    )
+    await UserTrackingService.upgradeToCreatorPro(uid, stripeCustomerId, subscriptionId, email, {
+      tier,
+      promotionCodeUsed,
+      totalPaid,
+      ipAddress,
+      geoLocation,
+      paymentMethodLast4,
+      revenueSplit,
+      subscriptionStatus: "active",
+    })
 
     return NextResponse.json({
       success: true,
-      message: "User successfully upgraded to Creator Pro",
+      message: "User soft-upgraded to Creator Pro",
     })
   } catch (error) {
     console.error("❌ Error upgrading user to Creator Pro:", error)
-    return NextResponse.json(
-      { error: "Failed to upgrade user" },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: "Failed to upgrade user" }, { status: 500 })
   }
 }
