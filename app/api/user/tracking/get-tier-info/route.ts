@@ -1,21 +1,16 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse, type NextRequest } from "next/server"
+import { getAuthenticatedUser } from "@/lib/firebase-admin"
 import { UserTrackingService } from "@/lib/user-tracking-service"
-import { initializeFirebaseAdmin } from "@/lib/firebase-admin"
 
-initializeFirebaseAdmin()
+export const runtime = "nodejs"
 
-export async function POST(request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { uid } = body || {}
-    if (!uid) {
-      return NextResponse.json({ error: "Missing uid" }, { status: 400 })
-    }
-
+    const { uid } = await getAuthenticatedUser(request.headers)
     const info = await UserTrackingService.getUserTierInfo(uid)
     return NextResponse.json({ success: true, data: info })
-  } catch (error) {
-    console.error("❌ Error getting user tier info:", error)
-    return NextResponse.json({ error: "Failed to get user tier info" }, { status: 500 })
+  } catch (error: any) {
+    console.error("❌ [/api/user/tracking/get-tier-info] Error:", error?.message || error)
+    return NextResponse.json({ success: false, error: error?.message || "Failed to get tier info" }, { status: 400 })
   }
 }

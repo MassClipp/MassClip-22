@@ -1,47 +1,27 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse, type NextRequest } from "next/server"
+import { getAuthenticatedUser } from "@/lib/firebase-admin"
 import { UserTrackingService } from "@/lib/user-tracking-service"
-import { initializeFirebaseAdmin } from "@/lib/firebase-admin"
 
-initializeFirebaseAdmin()
+/**
+ * Soft upgrade endpoint: keeps freeUsers history and creates/merges creatorProUsers.
+ * Expect the client (post-checkout success) to send stripeCustomerId and subscriptionId.
+ */
+export const runtime = "nodejs"
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const {
-      uid,
-      stripeCustomerId,
-      subscriptionId,
-      email,
-      tier = "creator_pro",
-      promotionCodeUsed,
-      totalPaid,
-      ipAddress,
-      geoLocation,
-      paymentMethodLast4,
-      revenueSplit,
-    } = body
+    const { uid, email } = await getAuthenticatedUser(request.headers)
+    const body = await request.json().catch(() => ({}))
+    const { stripeCustomerId, subscriptionId } = body || {}
 
-    if (!uid || !stripeCustomerId || !subscriptionId || !email) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
+    if (!stripeCustomerId || !subscriptionId) {
+      return NextResponse.json({ success: false, error: "Missing stripeCustomerId or subscriptionId" }, { status: 400 })
     }
 
-    await UserTrackingService.upgradeToCreatorPro(uid, stripeCustomerId, subscriptionId, email, {
-      tier,
-      promotionCodeUsed,
-      totalPaid,
-      ipAddress,
-      geoLocation,
-      paymentMethodLast4,
-      revenueSplit,
-      subscriptionStatus: "active",
-    })
-
-    return NextResponse.json({
-      success: true,
-      message: "User soft-upgraded to Creator Pro",
-    })
-  } catch (error) {
-    console.error("❌ Error upgrading user to Creator Pro:", error)
-    return NextResponse.json({ error: "Failed to upgrade user" }, { status: 500 })
+    await UserTrackingService.upgradeToCreatorPro(uid, String(stripeCustomerId), String(subscriptionId), email || "")
+    return NextResponse.json({ success: true })
+  } catch (error: any) {
+    console.error("❌ [/api/user/tracking/upgrade-to-pro] Error:", error?.message || error)
+    return NextResponse.json({ success: false, error: error?.message || "Upgrade failed" }, { status: 400 })
   }
 }

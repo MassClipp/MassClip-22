@@ -1,34 +1,26 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse, type NextRequest } from "next/server"
+import { getAuthenticatedUser } from "@/lib/firebase-admin"
 import { UserTrackingService } from "@/lib/user-tracking-service"
-import { initializeFirebaseAdmin } from "@/lib/firebase-admin"
 
-initializeFirebaseAdmin()
+export const runtime = "nodejs"
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { uid, email, ipAddress, geoLocation, referralCodeUsed } = body || {}
+    // Securely identify the current Firebase user via ID token
+    const { uid, email } = await getAuthenticatedUser(request.headers)
 
-    if (!uid || typeof email === "undefined") {
-      return NextResponse.json({ error: "Missing uid or email" }, { status: 400 })
-    }
+    // Derive IP metadata (best effort)
+    const ip =
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || undefined
 
-    const result = await UserTrackingService.ensureFreeUserForNonPro(uid, email, {
-      ipAddress,
-      geoLocation,
-      referralCodeUsed,
+    const result = await UserTrackingService.ensureFreeUserForNonPro(uid, email || "", {
+      ipAddress: ip,
     })
 
-    return NextResponse.json({
-      success: true,
-      ensured: result.ensured,
-      reason: result.reason,
-      message: result.ensured
-        ? "Ensured freeUsers record for non-pro user"
-        : "User is active Creator Pro; no freeUsers changes",
-    })
-  } catch (error) {
-    console.error("❌ Error ensuring free user:", error)
-    return NextResponse.json({ error: "Failed to ensure free user" }, { status: 500 })
+    return NextResponse.json({ success: true, ensured: result.ensured, reason: result.reason })
+  } catch (error: any) {
+    const message = error?.message || "Failed to ensure free user"
+    console.error("❌ [/api/user/tracking/ensure-free-user] Error:", message)
+    return NextResponse.json({ success: false, error: message }, { status: 400 })
   }
 }
