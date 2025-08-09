@@ -112,6 +112,35 @@ export async function getMembership(uid: string): Promise<MembershipDoc | null> 
   return snap.data() as MembershipDoc
 }
 
+/**
+ * Ensure a membership document exists for a user.
+ * If missing, creates a free plan doc and returns it.
+ */
+export async function ensureMembership(uid: string, email?: string): Promise<MembershipDoc> {
+  const existing = await getMembership(uid)
+  if (existing) return existing
+
+  const { db } = getAdmin()
+  const ref = db.collection("memberships").doc(uid)
+  const payload: MembershipDoc = {
+    uid,
+    email,
+    plan: "free",
+    status: "active",
+    // For free users, entitlements are free-level; keep isActive false to indicate "not paid"
+    isActive: false,
+    downloadsUsed: 0,
+    bundlesCreated: 0,
+    features: computeFeatures("free", false),
+    createdAt: FieldValue.serverTimestamp() as unknown as Timestamp,
+    updatedAt: FieldValue.serverTimestamp() as unknown as Timestamp,
+  }
+  await ref.set(payload, { merge: true })
+  // Read back to materialize server timestamps
+  const snap = await ref.get()
+  return snap.data() as MembershipDoc
+}
+
 export async function upsertMembership(doc: MembershipDoc): Promise<void> {
   const { db } = getAdmin()
   const ref = db.collection("memberships").doc(doc.uid)
@@ -185,11 +214,43 @@ export function mapFreeToMembership(uid: string, data: DocumentData, email?: str
     uid,
     email,
     plan: "free",
-    // "active" here means the membership record is valid, not a paid status.
+    // "active" here means the membership record exists; not a paid status.
     status: "active",
     isActive: false,
     downloadsUsed: typeof data.downloadsUsed === "number" ? data.downloadsUsed : undefined,
     bundlesCreated: typeof data.bundlesCreated === "number" ? data.bundlesCreated : undefined,
     features: computeFeatures("free", false, overrides),
   }
+}
+
+/**
+ * Convert a membership doc to a concise tier info shape for UI/logic.
+ */
+export function toTierInfo(m: MembershipDoc) {
+  const tier: "free" | "creator_pro" = m.plan === "creator_pro" && m.isActive ? "creator_pro" : "free"
+
+  const unlimited = m.features?.unlimitedDownloads === true
+  const downloadsUsed = m.downloadsUsed ?? 0
+  const defaultFreeLimit = 15
+
+  return {
+    tier,
+    isActive: m.isActive,
+    status: m.status,
+    downloadsUsed,
+    downloadsLimit: unlimited ? null : defaultFreeLimit,
+    reachedDownloadLimit: unlimited ? false : downloadsUsed >= defaultFreeLimit,
+    bundlesCreated: m.bundlesCreated ?? 0,
+    bundlesLimit: m.features?.maxBundles ?? 0, // null means unlimited
+    maxVideosPerBundle: m.features?.maxVideosPerBundle ?? 0,
+    platformFeePercentage: m.features?.platformFeePercentage ?? 20,
+  }
+}
+
+/**
+ * Ensure a membership exists, then return tier info.
+ */
+export async function getTierInfo(uid: string) {
+  const membership = (await getMembership(uid)) ?? (await ensureMembership(uid))
+  return toTierInfo(membership)
 }
