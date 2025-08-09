@@ -9,7 +9,14 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogDescription,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -1616,6 +1623,9 @@ export default function BundlesPage() {
         <DialogContent className="bg-zinc-900 border-zinc-800 text-white max-w-4xl h-[80vh] flex flex-col">
           <DialogHeader className="flex-shrink-0">
             <DialogTitle>Add Content to Bundle</DialogTitle>
+            <DialogDescription className="text-zinc-500">
+              Select content from your uploads and add up to 10 items per bundle on the free plan.
+            </DialogDescription>
             {!isProUser && (
               <p className="text-xs text-zinc-500 mt-1">Free plan limit: {CONTENT_LIMIT_FREE} items per bundle.</p>
             )}

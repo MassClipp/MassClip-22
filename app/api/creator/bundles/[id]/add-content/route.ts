@@ -1,27 +1,19 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { cert, getApps, initializeApp } from "firebase-admin/app"
 import { getAuth } from "firebase-admin/auth"
-import { getFirestore, FieldValue } from "firebase-admin/firestore"
-import { UserTrackingService } from "@/lib/user-tracking-service"
+import { getFirestore } from "firebase-admin/firestore"
 
-// Initialize Firebase Admin with only the required fields to avoid missing env crashes
+// Initialize Firebase Admin (minimal required fields)
 if (!getApps().length) {
   const projectId = process.env.FIREBASE_PROJECT_ID
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL
   const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n")
 
   if (!projectId || !clientEmail || !privateKey) {
-    // We still initialize to surface a clear error later if missing
-    console.error(
-      "❌ [Add Content] Missing Firebase Admin credentials. Check FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY.",
-    )
+    console.error("❌ [Add Content] Missing Firebase Admin credentials.")
   } else {
     initializeApp({
-      credential: cert({
-        projectId,
-        clientEmail,
-        privateKey,
-      }),
+      credential: cert({ projectId, clientEmail, privateKey }),
     })
   }
 }
@@ -58,151 +50,26 @@ function getContentType(mimeType: string): ContentType {
   return "document"
 }
 
-// Safe tier lookup: try service first, then fallback to raw Firestore docs.
-async function getTierInfoSafe(uid: string): Promise<{ maxVideosPerBundle: number | null; maxBundles: number | null }> {
-  // 1) Try existing service (may throw if it uses client SDK)
+// Very small, safe tier defaults for free users; pro users unlimited
+async function getTierInfo(uid: string): Promise<{ maxVideosPerBundle: number | null }> {
   try {
-    const tier = await UserTrackingService.getUserTierInfo(uid)
-    // Expect shape to contain maxVideosPerBundle and maxBundles (null for unlimited)
-    if (tier && ("maxVideosPerBundle" in tier || "maxBundles" in tier)) {
-      return {
-        maxVideosPerBundle: tier.maxVideosPerBundle ?? 10,
-        maxBundles: tier.maxBundles ?? 2,
-      }
-    }
-  } catch (e) {
-    console.warn("⚠️ [Add Content] UserTrackingService.getUserTierInfo failed. Falling back to Firestore lookup.", e)
-  }
-
-  // 2) Fallback: look for a pro record, otherwise a free record
-  try {
+    // Prefer explicit per-user config if present
     const proDoc = await db.collection("creatorProUsers").doc(uid).get()
     if (proDoc.exists) {
-      const active = proDoc.get("active")
-      // Treat any pro record as unlimited unless explicitly capped
-      const maxVideosPerBundle = proDoc.get("maxVideosPerBundle")
-      const maxBundles = proDoc.get("maxBundles")
-      return {
-        maxVideosPerBundle: typeof maxVideosPerBundle === "number" ? maxVideosPerBundle : null,
-        maxBundles: typeof maxBundles === "number" ? maxBundles : null,
-      }
+      const mvb = proDoc.get("maxVideosPerBundle")
+      return { maxVideosPerBundle: typeof mvb === "number" ? mvb : null } // null => unlimited
     }
 
     const freeDoc = await db.collection("freeUsers").doc(uid).get()
     if (freeDoc.exists) {
       const mvb = freeDoc.get("maxVideosPerBundle")
-      const mb = freeDoc.get("bundlesLimit") ?? freeDoc.get("maxBundles")
-      return {
-        maxVideosPerBundle: typeof mvb === "number" ? mvb : 10,
-        maxBundles: typeof mb === "number" ? mb : 2,
-      }
+      return { maxVideosPerBundle: typeof mvb === "number" ? mvb : 10 }
     }
   } catch (e) {
-    console.warn("⚠️ [Add Content] Firestore tier lookup failed.", e)
+    console.warn("⚠️ [Add Content] Tier lookup failed, using defaults.", e)
   }
-
-  // 3) Final defaults
-  return { maxVideosPerBundle: 10, maxBundles: 2 }
-}
-
-async function buildDetailedItemsForIds(idsToAdd: string[]) {
-  const results: any[] = []
-
-  for (const contentId of idsToAdd) {
-    try {
-      // Look up by uploads/<id>
-      const uploadDoc = await db.collection("uploads").doc(contentId).get()
-      let uploadData: any | null = null
-
-      if (uploadDoc.exists) {
-        uploadData = uploadDoc.data()
-      } else {
-        // Fallback to creatorUploads by uploadId
-        const creatorUploadsQuery = await db
-          .collection("creatorUploads")
-          .where("uploadId", "==", contentId)
-          .limit(1)
-          .get()
-        if (!creatorUploadsQuery.empty) {
-          uploadData = creatorUploadsQuery.docs[0].data()
-        }
-      }
-
-      if (!uploadData) {
-        console.warn(`⚠️ [Add Content] Skipping content ${contentId}: not found in uploads or creatorUploads.`)
-        continue
-      }
-
-      const fileUrl =
-        uploadData.fileUrl || uploadData.downloadUrl || uploadData.publicUrl || uploadData.url || uploadData.sourceUrl
-      if (!fileUrl || typeof fileUrl !== "string") {
-        console.warn(`⚠️ [Add Content] Skipping content ${contentId}: invalid fileUrl.`)
-        continue
-      }
-
-      const fileSize = Number(uploadData.fileSize ?? uploadData.size ?? 0) || 0
-      const duration = Number(uploadData.duration ?? uploadData.videoDuration ?? 0) || 0
-      const mimeType = uploadData.mimeType || uploadData.fileType || "application/octet-stream"
-      const contentType = getContentType(mimeType)
-      const format = (typeof mimeType === "string" && mimeType.split("/")[1]) || "unknown"
-
-      const title =
-        uploadData.title || uploadData.filename || uploadData.originalFileName || uploadData.name || "Untitled"
-
-      const filename = uploadData.filename || uploadData.originalFileName || title || "unknown.file"
-
-      const detailedItem = {
-        id: contentId,
-        uploadId: contentId,
-        fileUrl,
-        downloadUrl: uploadData.downloadUrl || fileUrl,
-        publicUrl: uploadData.publicUrl || fileUrl,
-        filename,
-        fileSize,
-        fileSizeFormatted: formatFileSize(fileSize),
-        title,
-        displayTitle: title,
-        description: uploadData.description || "",
-        mimeType,
-        fileType: mimeType,
-        contentType,
-        format,
-        quality: "HD",
-        resolution: uploadData.resolution || "",
-        duration,
-        durationFormatted: formatDuration(duration),
-        displayDuration: formatDuration(duration),
-        thumbnailUrl: uploadData.thumbnailUrl || "",
-        previewUrl: uploadData.previewUrl || uploadData.thumbnailUrl || "",
-        tags: Array.isArray(uploadData.tags) ? uploadData.tags : [],
-        isPublic: uploadData.isPublic !== false,
-        viewCount: Number(uploadData.viewCount ?? 0) || 0,
-        downloadCount: Number(uploadData.downloadCount ?? 0) || 0,
-        createdAt: uploadData.createdAt || uploadData.uploadedAt || FieldValue.serverTimestamp(),
-        uploadedAt: uploadData.uploadedAt || uploadData.createdAt || FieldValue.serverTimestamp(),
-        addedToBundleAt: new Date(),
-      }
-
-      results.push(detailedItem)
-
-      // Backward-compatibility entry in productBoxContent so existing listeners/UI update immediately
-      await db.collection("productBoxContent").add({
-        productBoxId: "", // set by caller when known
-        uploadId: contentId,
-        title,
-        fileUrl,
-        thumbnailUrl: detailedItem.thumbnailUrl,
-        mimeType,
-        fileSize,
-        filename,
-        createdAt: new Date(),
-      })
-    } catch (e) {
-      console.error("❌ [Add Content] Failed processing content:", contentId, e)
-    }
-  }
-
-  return results
+  // Defaults: free = 10
+  return { maxVideosPerBundle: 10 }
 }
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
@@ -224,10 +91,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
     const uid = decoded.uid
 
+    // Inputs
     const bundleId = params.id
-    if (!bundleId) {
-      return NextResponse.json({ error: "Missing bundle id" }, { status: 400 })
-    }
+    if (!bundleId) return NextResponse.json({ error: "Missing bundle id" }, { status: 400 })
 
     let body: any
     try {
@@ -235,49 +101,32 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     } catch {
       return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
     }
-
     const { contentIds } = body || {}
     if (!Array.isArray(contentIds) || contentIds.length === 0) {
       return NextResponse.json({ error: "contentIds must be a non-empty array" }, { status: 400 })
     }
 
-    // Get bundle doc
+    // Bundle
     const bundleRef = db.collection("bundles").doc(bundleId)
     const bundleSnap = await bundleRef.get()
-    if (!bundleSnap.exists) {
-      return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
-    }
+    if (!bundleSnap.exists) return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
     const bundleData = bundleSnap.data() || {}
-
-    // Enforce tier limits
-    const tier = await getTierInfoSafe(uid)
     const existingIds: string[] = Array.isArray(bundleData.contentItems) ? bundleData.contentItems : []
-    const maxPerBundle = tier.maxVideosPerBundle // null => unlimited
+
+    // Limits
+    const { maxVideosPerBundle } = await getTierInfo(uid)
     const remaining =
-      maxPerBundle === null ? Number.POSITIVE_INFINITY : Math.max(0, (maxPerBundle as number) - existingIds.length)
+      maxVideosPerBundle === null ? Number.POSITIVE_INFINITY : Math.max(0, maxVideosPerBundle - existingIds.length)
+    const idsToConsider = contentIds.slice(0, remaining as number)
 
-    const idsToAdd = contentIds.slice(0, remaining as number)
-    const skipped = contentIds.length - idsToAdd.length
-
-    if (idsToAdd.length === 0) {
-      return NextResponse.json(
-        {
-          error:
-            maxPerBundle === null
-              ? "No remaining capacity in this bundle."
-              : `Free plan limit reached: maximum ${maxPerBundle} items per bundle.`,
-          remainingBefore: remaining,
-          maxPerBundle,
-        },
-        { status: 400 },
-      )
-    }
-
-    // Build detailed items and also write backwards-compat productBoxContent docs
+    // Build detailed entries; only successful ones will count toward the bundle
     const detailedToAdd: any[] = []
-    for (const contentId of idsToAdd) {
+    const successIds: string[] = []
+    const skippedInvalidIds: string[] = []
+
+    for (const contentId of idsToConsider) {
       try {
-        // Look up upload
+        // Lookup upload by id, or creatorUploads by uploadId
         const uploadDoc = await db.collection("uploads").doc(contentId).get()
         let uploadData: any | null = null
 
@@ -294,11 +143,17 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           }
         }
 
-        if (!uploadData) continue
+        if (!uploadData) {
+          skippedInvalidIds.push(contentId)
+          continue
+        }
 
         const fileUrl =
           uploadData.fileUrl || uploadData.downloadUrl || uploadData.publicUrl || uploadData.url || uploadData.sourceUrl
-        if (!fileUrl || typeof fileUrl !== "string") continue
+        if (!fileUrl || typeof fileUrl !== "string" || !fileUrl.startsWith("http")) {
+          skippedInvalidIds.push(contentId)
+          continue
+        }
 
         const fileSize = Number(uploadData.fileSize ?? uploadData.size ?? 0) || 0
         const duration = Number(uploadData.duration ?? uploadData.videoDuration ?? 0) || 0
@@ -342,21 +197,32 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         }
 
         detailedToAdd.push(detailedItem)
+        successIds.push(contentId)
 
-        // Backward-compatibility: productBoxContent
-        await db.collection("productBoxContent").add({
-          productBoxId: bundleId,
-          uploadId: contentId,
-          title,
-          fileUrl,
-          thumbnailUrl: detailedItem.thumbnailUrl,
-          mimeType,
-          fileSize,
-          filename,
-          createdAt: new Date(),
-        })
+        // Ensure productBoxContent doc exists (avoid duplicates)
+        const existing = await db
+          .collection("productBoxContent")
+          .where("productBoxId", "==", bundleId)
+          .where("uploadId", "==", contentId)
+          .limit(1)
+          .get()
+
+        if (existing.empty) {
+          await db.collection("productBoxContent").add({
+            productBoxId: bundleId,
+            uploadId: contentId,
+            title,
+            fileUrl,
+            thumbnailUrl: detailedItem.thumbnailUrl,
+            mimeType,
+            fileSize,
+            filename,
+            createdAt: new Date(),
+          })
+        }
       } catch (e) {
         console.error("❌ [Add Content] Failed to process contentId:", contentId, e)
+        skippedInvalidIds.push(contentId)
       }
     }
 
@@ -364,10 +230,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ error: "No valid content items found" }, { status: 400 })
     }
 
-    // Merge with existing bundle arrays and recalc metadata
-    const mergedIds = Array.from(new Set([...existingIds, ...idsToAdd]))
-    const previousDetailed = Array.isArray(bundleData.detailedContentItems) ? bundleData.detailedContentItems : []
-    const mergedDetailed = [...previousDetailed, ...detailedToAdd]
+    // Merge ONLY successful ids so invalid items do not consume the limit
+    const mergedIds = Array.from(new Set([...existingIds, ...successIds]))
+    const prevDetailed = Array.isArray(bundleData.detailedContentItems) ? bundleData.detailedContentItems : []
+    const mergedDetailed = [...prevDetailed, ...detailedToAdd]
 
     const totalSize = mergedDetailed.reduce((s: number, it: any) => s + (Number(it.fileSize) || 0), 0)
     const totalDuration = mergedDetailed.reduce((s: number, it: any) => s + (Number(it.duration) || 0), 0)
@@ -396,10 +262,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       contentTitles: mergedDetailed.map((i: any) => i.title),
       contentDescriptions: mergedDetailed.map((i: any) => i.description).filter(Boolean),
       contentTags: Array.from(new Set(mergedDetailed.flatMap((i: any) => (Array.isArray(i.tags) ? i.tags : [])))),
-
       contentUrls: mergedDetailed.map((i: any) => i.fileUrl),
       contentThumbnails: mergedDetailed.map((i: any) => i.thumbnailUrl).filter(Boolean),
-
       updatedAt: new Date(),
       contentLastUpdated: new Date(),
     })
@@ -407,9 +271,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     return NextResponse.json({
       success: true,
       added: detailedToAdd.length,
-      skipped,
-      maxPerBundle,
-      remainingBefore: remaining,
+      skippedForLimit: Math.max(0, idsToConsider.length - detailedToAdd.length - skippedInvalidIds.length),
+      skippedInvalid: skippedInvalidIds.length,
+      maxPerBundle: maxVideosPerBundle,
       durationMs: Date.now() - startedAt,
     })
   } catch (error: any) {
@@ -423,9 +287,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   try {
     const bundleId = params.id
     const snap = await db.collection("bundles").doc(bundleId).get()
-    if (!snap.exists) {
-      return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
-    }
+    if (!snap.exists) return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
     const data = snap.data()!
     return NextResponse.json({
       success: true,
