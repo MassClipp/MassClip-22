@@ -52,6 +52,9 @@ async function getStripeEarnings(stripeAccountId: string) {
     const now = new Date()
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
 
+    console.log(`💳 [Stats] Fetching Stripe charges for account: ${stripeAccountId}`)
+    console.log(`💳 [Stats] Date range: ${thirtyDaysAgo.toISOString()} to ${now.toISOString()}`)
+
     // Fetch charges from last 30 days
     const charges = await stripe.charges.list(
       {
@@ -65,15 +68,25 @@ async function getStripeEarnings(stripeAccountId: string) {
       },
     )
 
+    console.log(`💳 [Stats] Found ${charges.data.length} total charges`)
+
     // Calculate earnings (net amounts after fees)
     const successfulCharges = charges.data.filter((charge) => charge.status === "succeeded")
-    const totalEarnings =
-      successfulCharges.reduce((total, charge) => {
-        const netAmount = charge.amount - (charge.application_fee_amount || 0)
-        return total + netAmount
-      }, 0) / 100 // Convert from cents to dollars
+    console.log(`💳 [Stats] Found ${successfulCharges.length} successful charges`)
+
+    let totalEarnings = 0
+    successfulCharges.forEach((charge, index) => {
+      const grossAmount = charge.amount / 100 // Convert from cents
+      const applicationFee = (charge.application_fee_amount || 0) / 100
+      const netAmount = grossAmount - applicationFee
+
+      console.log(`💳 [Stats] Charge ${index + 1}: $${grossAmount} gross, $${applicationFee} fee, $${netAmount} net`)
+      totalEarnings += netAmount
+    })
 
     const salesCount = successfulCharges.length
+
+    console.log(`💳 [Stats] Final calculation: ${salesCount} sales, $${totalEarnings} total earnings`)
 
     return {
       totalEarnings,
