@@ -4,7 +4,7 @@ import { useRef } from "react"
 
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Plus, Edit, Eye, EyeOff, Loader2, AlertCircle, Upload, X, Check, Trash2, ImageIcon } from 'lucide-react'
+import { Plus, Edit, Eye, EyeOff, Loader2, AlertCircle, Upload, X, Check, Trash2, ImageIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -85,7 +85,8 @@ export default function BundlesPage() {
 
   // Bundle limit logic for free users
   const { planData, isProUser } = useUserPlan()
-  const bundleLimit = isProUser ? Infinity : 2
+  const CONTENT_LIMIT_FREE = 10
+  const bundleLimit = isProUser ? Number.POSITIVE_INFINITY : 2
   const isAtBundleLimit = !isProUser && productBoxes.length >= bundleLimit
 
   const [availableUploads, setAvailableUploads] = useState<ContentItem[]>([])
@@ -756,7 +757,7 @@ export default function BundlesPage() {
   }
 
   // Handle adding content to bundle with detailed metadata storage - ENHANCED VERSION
-  const handleAddContentToBundle = async (productBoxId: string) => {
+  async function handleAddContentToBundle(productBoxId: string) {
     if (selectedContentIds.length === 0) {
       toast({
         title: "No Content Selected",
@@ -769,53 +770,71 @@ export default function BundlesPage() {
     try {
       setAddContentLoading(true)
 
-      console.log(`🔄 [Bundle Content] Adding ${selectedContentIds.length} items to bundle ${productBoxId}`)
+      // Determine current count for this bundle
+      const currentBox = productBoxes.find((box) => box.id === productBoxId)
+      const existingCount = (contentItems[productBoxId]?.length ?? 0) || (currentBox?.contentItems?.length ?? 0)
 
-      // Get detailed metadata for each selected content item
+      // Compute remaining slots based on tier
+      const maxPerBundle = isProUser ? Number.POSITIVE_INFINITY : CONTENT_LIMIT_FREE
+      const remaining = Math.max(0, (maxPerBundle as number) - existingCount)
+
+      if (remaining <= 0) {
+        toast({
+          title: "Bundle is Full",
+          description: isProUser
+            ? "This bundle cannot accept more content."
+            : `Free plan allows up to ${CONTENT_LIMIT_FREE} items per bundle.`,
+          variant: "destructive",
+        })
+        return
+      }
+
+      // Only take up to the remaining allowed items
+      const idsToAdd = selectedContentIds.slice(0, remaining)
+      const skipped = selectedContentIds.length - idsToAdd.length
+      if (skipped > 0) {
+        toast({
+          title: "Limit Reached",
+          description: `Only ${idsToAdd.length} item${idsToAdd.length !== 1 ? "s" : ""} added. Free plan max is ${CONTENT_LIMIT_FREE} per bundle.`,
+        })
+      }
+
+      console.log(`🔄 [Bundle Content] Adding ${idsToAdd.length} item(s) to bundle ${productBoxId}`)
+
+      // Build detailed metadata for idsToAdd only (existing logic preserved)
       const detailedContentItems: any[] = []
       let totalSize = 0
       let totalDuration = 0
 
-      for (const contentId of selectedContentIds) {
+      for (const contentId of idsToAdd) {
         const contentItem = availableUploads.find((item) => item.id === contentId)
         if (!contentItem) continue
 
-        // Create comprehensive metadata object
         const detailedItem = {
           id: contentId,
           title: contentItem.title,
           filename: contentItem.filename,
           fileUrl: contentItem.fileUrl,
-          publicUrl: contentItem.fileUrl, // Assuming fileUrl is the public URL
+          publicUrl: contentItem.fileUrl,
           downloadUrl: contentItem.fileUrl,
           thumbnailUrl: contentItem.thumbnailUrl || "",
           previewUrl: contentItem.thumbnailUrl || "",
-
-          // File metadata
           mimeType: contentItem.mimeType,
           fileType: contentItem.mimeType,
           fileSize: contentItem.fileSize,
           fileSizeFormatted: formatFileSize(contentItem.fileSize),
-
-          // Video/Audio specific
           duration: contentItem.duration || 0,
           durationFormatted: contentItem.duration ? formatDuration(contentItem.duration) : "0:00",
           contentType: contentItem.contentType,
-
-          // Upload metadata
           uploadedAt: new Date(),
           createdAt: new Date(),
           creatorId: user?.uid || "",
-
-          // Additional metadata
           description: "",
           isPublic: true,
           downloadCount: 0,
           viewCount: 0,
           tags: [],
-
-          // Quality indicators
-          quality: "HD", // Default, could be determined from resolution
+          quality: "HD",
           format: contentItem.mimeType.split("/")[1] || "unknown",
         }
 
@@ -823,7 +842,7 @@ export default function BundlesPage() {
         totalSize += contentItem.fileSize
         totalDuration += contentItem.duration || 0
 
-        // Create productBoxContent entry for backward compatibility
+        // Backward-compatibility entry in productBoxContent
         await addDoc(collection(db, "productBoxContent"), {
           productBoxId,
           uploadId: contentId,
@@ -837,21 +856,19 @@ export default function BundlesPage() {
         })
       }
 
-      // Get current bundle data
-      const currentBox = productBoxes.find((box) => box.id === productBoxId)
-      if (currentBox) {
-        const updatedContentItems = [...currentBox.contentItems, ...selectedContentIds]
+      // Merge into bundle doc and recalc metadata
+      const currentForBox = productBoxes.find((box) => box.id === productBoxId)
+      if (currentForBox) {
+        const updatedContentItems = [...currentForBox.contentItems, ...idsToAdd]
 
-        // Calculate enhanced metadata for ALL content (existing + new)
-        const allDetailedItems = [...(currentBox.detailedContentItems || []), ...detailedContentItems]
-        const allTotalDuration = allDetailedItems.reduce((sum, item) => sum + (item.duration || 0), 0)
-        const allTotalSize = allDetailedItems.reduce((sum, item) => sum + (item.fileSize || 0), 0)
-        const videoCount = allDetailedItems.filter((item) => item.contentType === "video").length
-        const audioCount = allDetailedItems.filter((item) => item.contentType === "audio").length
-        const imageCount = allDetailedItems.filter((item) => item.contentType === "image").length
-        const documentCount = allDetailedItems.filter((item) => item.contentType === "document").length
+        const allDetailedItems = [...((currentForBox as any).detailedContentItems ?? []), ...detailedContentItems]
+        const allTotalDuration = allDetailedItems.reduce((sum: number, item: any) => sum + (item.duration || 0), 0)
+        const allTotalSize = allDetailedItems.reduce((sum: number, item: any) => sum + (item.fileSize || 0), 0)
+        const videoCount = allDetailedItems.filter((item: any) => item.contentType === "video").length
+        const audioCount = allDetailedItems.filter((item: any) => item.contentType === "audio").length
+        const imageCount = allDetailedItems.filter((item: any) => item.contentType === "image").length
+        const documentCount = allDetailedItems.filter((item: any) => item.contentType === "document").length
 
-        // Update bundle with comprehensive metadata - THIS IS THE KEY FIX
         await updateDoc(doc(db, "bundles", productBoxId), {
           contentItems: updatedContentItems,
           detailedContentItems: allDetailedItems,
@@ -869,34 +886,27 @@ export default function BundlesPage() {
             },
             averageDuration: allDetailedItems.length > 0 ? allTotalDuration / allDetailedItems.length : 0,
             averageSize: allDetailedItems.length > 0 ? allTotalSize / allDetailedItems.length : 0,
-            resolutions: [...new Set(allDetailedItems.map((item) => item.resolution).filter(Boolean))],
-            formats: [...new Set(allDetailedItems.map((item) => item.format).filter(Boolean))],
-            qualities: [...new Set(allDetailedItems.map((item) => item.quality).filter(Boolean))],
+            resolutions: [...new Set(allDetailedItems.map((item: any) => item.resolution).filter(Boolean))],
+            formats: [...new Set(allDetailedItems.map((item: any) => item.format).filter(Boolean))],
+            qualities: [...new Set(allDetailedItems.map((item: any) => item.quality).filter(Boolean))],
           },
-          contentTitles: allDetailedItems.map((item) => item.title),
-          contentDescriptions: allDetailedItems.map((item) => item.description || "").filter(Boolean),
-          contentTags: [...new Set(allDetailedItems.flatMap((item) => item.tags || []))],
+          contentTitles: allDetailedItems.map((item: any) => item.title),
+          contentDescriptions: allDetailedItems.map((item: any) => item.description || "").filter(Boolean),
+          contentTags: [...new Set(allDetailedItems.flatMap((item: any) => item.tags || []))],
           updatedAt: new Date(),
-        })
-
-        console.log(`✅ [Bundle Content] Enhanced metadata stored for bundle ${productBoxId}:`, {
-          totalItems: allDetailedItems.length,
-          totalDuration: formatDuration(allTotalDuration),
-          totalSize: formatFileSize(allTotalSize),
-          contentBreakdown: { videos: videoCount, audio: audioCount, images: imageCount, documents: documentCount },
         })
       }
 
       toast({
         title: "Success",
-        description: `Added ${selectedContentIds.length} content item${selectedContentIds.length !== 1 ? "s" : ""} to bundle with detailed metadata`,
+        description: `Added ${idsToAdd.length} content item${idsToAdd.length !== 1 ? "s" : ""} to bundle`,
       })
 
       setShowAddContentModal(null)
       setSelectedContentIds([])
-      fetchProductBoxes() // Refresh bundles to show updated metadata
+      await fetchProductBoxes()
     } catch (error) {
-      console.error("Error adding content to bundle:", error)
+      console.error("❌ Error adding content to bundle:", error)
       toast({
         title: "Error",
         description: "Failed to add content to bundle",
@@ -1696,6 +1706,9 @@ export default function BundlesPage() {
         <DialogContent className="bg-zinc-900 border-zinc-800 text-white max-w-4xl h-[80vh] flex flex-col">
           <DialogHeader className="flex-shrink-0">
             <DialogTitle>Add Content to Bundle</DialogTitle>
+            {!isProUser && (
+              <p className="text-xs text-zinc-500 mt-1">Free plan limit: {CONTENT_LIMIT_FREE} items per bundle.</p>
+            )}
           </DialogHeader>
           <div className="flex flex-col flex-1 min-h-0 space-y-4">
             <p className="text-sm text-zinc-400 flex-shrink-0">
@@ -1768,20 +1781,34 @@ export default function BundlesPage() {
                 <Button variant="outline" onClick={() => setShowAddContentModal(null)} className="border-zinc-700">
                   Cancel
                 </Button>
-                <Button
-                  onClick={() => showAddContentModal && handleAddContentToBundle(showAddContentModal)}
-                  disabled={selectedContentIds.length === 0 || addContentLoading}
-                  className="bg-red-600 hover:bg-red-700"
-                >
-                  {addContentLoading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Adding...
-                    </>
-                  ) : (
-                    `Add ${selectedContentIds.length} Item${selectedContentIds.length !== 1 ? "s" : ""}`
-                  )}
-                </Button>
+                {(() => {
+                  const targetBox = productBoxes.find((b) => b.id === showAddContentModal)
+                  const existingCount = targetBox
+                    ? (contentItems[targetBox.id]?.length ?? targetBox.contentItems.length ?? 0)
+                    : 0
+                  const maxPerBundle = isProUser ? Number.POSITIVE_INFINITY : CONTENT_LIMIT_FREE
+                  const remaining = Math.max(0, (maxPerBundle as number) - existingCount)
+                  const overLimit = !isProUser && selectedContentIds.length > remaining
+
+                  return (
+                    <Button
+                      onClick={() => showAddContentModal && handleAddContentToBundle(showAddContentModal)}
+                      disabled={selectedContentIds.length === 0 || addContentLoading || remaining === 0}
+                      className="bg-red-600 hover:bg-red-700"
+                    >
+                      {addContentLoading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Adding...
+                        </>
+                      ) : remaining === Number.POSITIVE_INFINITY ? (
+                        `Add ${selectedContentIds.length} Item${selectedContentIds.length !== 1 ? "s" : ""}`
+                      ) : (
+                        `Add ${Math.min(selectedContentIds.length, remaining)} Item${Math.min(selectedContentIds.length, remaining) !== 1 ? "s" : ""} (remaining ${remaining})`
+                      )}
+                    </Button>
+                  )
+                })()}
               </div>
             </div>
           </div>

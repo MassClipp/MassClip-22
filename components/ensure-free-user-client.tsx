@@ -1,71 +1,36 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef } from "react"
+import { useAuth } from "@/contexts/auth-context"
 
-// Minimal Firebase client init (safe to coexist with your existing init)
-import { initializeApp, getApps } from "firebase/app"
-import { getAuth, onAuthStateChanged } from "firebase/auth"
-
-const firebaseApp =
-  getApps().length > 0
-    ? getApps()[0]!
-    : initializeApp({
-        apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY!,
-        authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN!,
-        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!,
-        storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET!,
-        messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID!,
-        appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID!,
-      })
-
-const auth = getAuth(firebaseApp)
-
-/**
- * Mount this anywhere in your app (e.g., in app/layout.tsx) so that after a user signs in,
- * we immediately ensure they have a freeUsers document unless they are active Creator Pro.
- */
 export default function EnsureFreeUserClient() {
-  const lastEnsuredUid = useRef<string | null>(null)
-  const [status, setStatus] = useState<"idle" | "pending" | "done" | "error">("idle")
+  const { user } = useAuth()
+  const didEnsure = useRef<string | null>(null)
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (user) => {
+    const run = async () => {
       if (!user) return
-      if (lastEnsuredUid.current === user.uid) return // only once per session
+      if (didEnsure.current === user.uid) return
 
       try {
-        setStatus("pending")
-        const token = await user.getIdToken(/* forceRefresh */ false)
+        const token = await user.getIdToken()
         const res = await fetch("/api/user/tracking/ensure-free-user", {
           method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { Authorization: `Bearer ${token}` },
         })
-
+        const data = await res.json()
         if (!res.ok) {
-          const body = await res.json().catch(() => ({}))
-          console.warn("⚠️ ensure-free-user failed", body)
-          setStatus("error")
-          return
-        }
-
-        const body = await res.json()
-        if (body?.success) {
-          lastEnsuredUid.current = user.uid
-          setStatus("done")
+          console.error("❌ ensure-free-user failed:", data)
         } else {
-          setStatus("error")
+          console.log("✅ ensured free user:", data)
+          didEnsure.current = user.uid
         }
       } catch (e) {
         console.error("❌ ensure-free-user error:", e)
-        setStatus("error")
       }
-    })
+    }
+    run()
+  }, [user])
 
-    return () => unsub()
-  }, [])
-
-  // This component renders nothing; it just runs the side-effect.
   return null
 }

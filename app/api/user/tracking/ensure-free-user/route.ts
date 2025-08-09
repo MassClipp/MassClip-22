@@ -1,26 +1,45 @@
-import { NextResponse, type NextRequest } from "next/server"
-import { getAuthenticatedUser } from "@/lib/firebase-admin"
+import { type NextRequest, NextResponse } from "next/server"
+import { getApps, initializeApp, cert } from "firebase-admin/app"
+import { getAuth } from "firebase-admin/auth"
 import { UserTrackingService } from "@/lib/user-tracking-service"
 
-export const runtime = "nodejs"
+// Initialize Firebase Admin once
+function initAdmin() {
+  if (!getApps().length) {
+    const serviceAccount = {
+      type: "service_account",
+      project_id: process.env.FIREBASE_PROJECT_ID,
+      private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
+      private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+      client_email: process.env.FIREBASE_CLIENT_EMAIL,
+      client_id: process.env.FIREBASE_CLIENT_ID,
+      auth_uri: "https://accounts.google.com/o/oauth2/auth",
+      token_uri: "https://oauth2.googleapis.com/token",
+      auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
+      client_x509_cert_url: `https://www.googleapis.com/robot/v1/metadata/x509/${process.env.FIREBASE_CLIENT_EMAIL}`,
+    }
+    initializeApp({ credential: cert(serviceAccount as any) })
+  }
+}
+initAdmin()
 
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
-    // Securely identify the current Firebase user via ID token
-    const { uid, email } = await getAuthenticatedUser(request.headers)
+    const authHeader = req.headers.get("authorization") || ""
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null
+    if (!token) {
+      return NextResponse.json({ error: "Missing Authorization Bearer token" }, { status: 401 })
+    }
 
-    // Derive IP metadata (best effort)
-    const ip =
-      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || undefined
+    const auth = getAuth()
+    const decoded = await auth.verifyIdToken(token)
+    const uid = decoded.uid
+    const email = decoded.email || ""
 
-    const result = await UserTrackingService.ensureFreeUserForNonPro(uid, email || "", {
-      ipAddress: ip,
-    })
-
-    return NextResponse.json({ success: true, ensured: result.ensured, reason: result.reason })
-  } catch (error: any) {
-    const message = error?.message || "Failed to ensure free user"
-    console.error("❌ [/api/user/tracking/ensure-free-user] Error:", message)
-    return NextResponse.json({ success: false, error: message }, { status: 400 })
+    const { ensured, reason } = await UserTrackingService.ensureFreeUserForNonPro(uid, email)
+    return NextResponse.json({ success: true, ensured, reason })
+  } catch (err: any) {
+    console.error("❌ [ensure-free-user] Error:", err)
+    return NextResponse.json({ error: "Failed to ensure free user" }, { status: 500 })
   }
 }

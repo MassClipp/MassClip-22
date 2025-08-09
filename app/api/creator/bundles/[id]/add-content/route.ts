@@ -1,6 +1,8 @@
-import { NextRequest, NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { getFirestore } from "firebase-admin/firestore"
 import { initializeApp, getApps, cert } from "firebase-admin/app"
+import { getAuth } from "firebase-admin/auth"
+import { UserTrackingService } from "@/lib/user-tracking-service"
 
 // Initialize Firebase Admin
 if (!getApps().length) {
@@ -36,11 +38,9 @@ function formatFileSize(bytes: number): string {
 // Helper function to format duration
 function formatDuration(seconds: number): string {
   if (!seconds || seconds <= 0) return "0:00"
-
   const hours = Math.floor(seconds / 3600)
   const minutes = Math.floor((seconds % 3600) / 60)
   const remainingSeconds = Math.floor(seconds % 60)
-
   if (hours > 0) {
     return `${hours}:${minutes.toString().padStart(2, "0")}:${remainingSeconds.toString().padStart(2, "0")}`
   } else {
@@ -48,7 +48,6 @@ function formatDuration(seconds: number): string {
   }
 }
 
-// Helper function to determine content type
 function getContentType(mimeType: string): "video" | "audio" | "image" | "document" {
   if (mimeType.startsWith("video/")) return "video"
   if (mimeType.startsWith("audio/")) return "audio"
@@ -56,38 +55,55 @@ function getContentType(mimeType: string): "video" | "audio" | "image" | "docume
   return "document"
 }
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
+    // Auth check
+    const authHeader = request.headers.get("authorization") || ""
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null
+    if (!token) {
+      return NextResponse.json({ error: "Missing Authorization Bearer token" }, { status: 401 })
+    }
+    const decoded = await getAuth().verifyIdToken(token)
+    const uid = decoded.uid
+
     const bundleId = params.id
     const { contentIds } = await request.json()
-
-    console.log(`📦 [Add Content] Adding content to bundle: ${bundleId}`)
-    console.log(`📋 [Add Content] Content IDs:`, contentIds)
-
     if (!contentIds || !Array.isArray(contentIds) || contentIds.length === 0) {
-      return NextResponse.json(
-        { error: "Content IDs are required and must be a non-empty array" },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: "Content IDs are required and must be a non-empty array" }, { status: 400 })
     }
 
     // Get bundle document
-    const bundleDoc = await db.collection("bundles").doc(bundleId).get()
+    const bundleRef = db.collection("bundles").doc(bundleId)
+    const bundleDoc = await bundleRef.get()
     if (!bundleDoc.exists) {
+      return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
+    }
+    const bundleData = bundleDoc.data() || {}
+
+    // Determine user's tier limits
+    const tier = await UserTrackingService.getUserTierInfo(uid)
+    const maxPerBundle = tier.maxVideosPerBundle // null means unlimited
+    const existingIds: string[] = Array.isArray(bundleData.contentItems) ? bundleData.contentItems : []
+    const remaining = maxPerBundle === null ? Number.POSITIVE_INFINITY : Math.max(0, maxPerBundle - existingIds.length)
+
+    // Only accept up to remaining items
+    const idsToAdd = contentIds.slice(0, remaining as number)
+    const skipped = contentIds.length - idsToAdd.length
+
+    if (idsToAdd.length === 0) {
       return NextResponse.json(
-        { error: "Bundle not found" },
-        { status: 404 }
+        {
+          error:
+            maxPerBundle === null
+              ? "No remaining capacity in this bundle."
+              : `Free plan limit reached: maximum ${maxPerBundle} items per bundle.`,
+        },
+        { status: 400 },
       )
     }
 
-    const bundleData = bundleDoc.data()!
-    console.log(`✅ [Add Content] Bundle found: ${bundleData.title}`)
-
-    // Get detailed content information for each content ID
-    const detailedContentItems = []
+    // Build detailed entries from uploads or creatorUploads
+    const detailedContentItems: any[] = []
     const contentMetadata = {
       totalSize: 0,
       totalDuration: 0,
@@ -102,268 +118,136 @@ export async function POST(
       qualities: new Set<string>(),
     }
 
-    for (const contentId of contentIds) {
+    for (const contentId of idsToAdd) {
       try {
-        console.log(`🔍 [Add Content] Processing content ID: ${contentId}`)
+        let uploadData: any | null = null
 
-        // Try to get from uploads collection first
         const uploadDoc = await db.collection("uploads").doc(contentId).get()
         if (uploadDoc.exists) {
-          const uploadData = uploadDoc.data()!
-          console.log(`📄 [Add Content] Found upload data for: ${uploadData.title || uploadData.filename}`)
-
-          const fileSize = uploadData.fileSize || uploadData.size || 0
-          const duration = uploadData.duration || uploadData.videoDuration || 0
-          const mimeType = uploadData.mimeType || uploadData.fileType || "application/octet-stream"
-          const contentType = getContentType(mimeType)
-          const format = mimeType.split("/")[1] || "unknown"
-
-          const detailedItem = {
-            // Core identifiers
-            id: contentId,
-            uploadId: contentId,
-
-            // File URLs
-            fileUrl: uploadData.fileUrl || uploadData.downloadUrl || uploadData.publicUrl || "",
-            downloadUrl: uploadData.downloadUrl || uploadData.fileUrl || uploadData.publicUrl || "",
-            publicUrl: uploadData.publicUrl || uploadData.fileUrl || "",
-
-            // File information
-            filename: uploadData.filename || uploadData.originalFileName || uploadData.title || "unknown.file",
-            fileSize: fileSize,
-            fileSizeFormatted: formatFileSize(fileSize),
-            displaySize: formatFileSize(fileSize),
-
-            // Content details
-            title: uploadData.title || uploadData.filename || uploadData.originalFileName || "Untitled",
-            displayTitle: uploadData.title || uploadData.filename || uploadData.originalFileName || "Untitled",
-            description: uploadData.description || "",
-
-            // Media properties
-            mimeType: mimeType,
-            fileType: mimeType,
-            contentType: contentType,
-            format: format,
-            quality: "HD",
-            resolution: uploadData.resolution || "",
-
-            // Duration
-            duration: duration,
-            durationFormatted: formatDuration(duration),
-            displayDuration: formatDuration(duration),
-
-            // Visual assets
-            thumbnailUrl: uploadData.thumbnailUrl || "",
-            previewUrl: uploadData.previewUrl || uploadData.thumbnailUrl || "",
-
-            // Metadata
-            tags: uploadData.tags || [],
-            isPublic: uploadData.isPublic !== false,
-
-            // Stats
-            viewCount: uploadData.viewCount || 0,
-            downloadCount: uploadData.downloadCount || 0,
-
-            // Timestamps
-            createdAt: uploadData.createdAt || uploadData.uploadedAt || new Date(),
-            uploadedAt: uploadData.uploadedAt || uploadData.createdAt || new Date(),
-            addedToBundleAt: new Date(),
-          }
-
-          detailedContentItems.push(detailedItem)
-
-          // Update metadata
-          contentMetadata.totalSize += fileSize
-          contentMetadata.totalDuration += duration
-          contentMetadata.totalItems += 1
-          contentMetadata.contentBreakdown[contentType] += 1
-          contentMetadata.formats.add(format)
-          contentMetadata.qualities.add("HD")
-
-          console.log(`✅ [Add Content] Added detailed item: ${detailedItem.title}`)
+          uploadData = uploadDoc.data()
         } else {
-          // Try creatorUploads collection as fallback
           const creatorUploadsQuery = await db
             .collection("creatorUploads")
             .where("uploadId", "==", contentId)
             .limit(1)
             .get()
-
           if (!creatorUploadsQuery.empty) {
-            const creatorUploadDoc = creatorUploadsQuery.docs[0]
-            const creatorUploadData = creatorUploadDoc.data()
-            console.log(`📄 [Add Content] Found creator upload data for: ${creatorUploadData.title}`)
-
-            const fileSize = creatorUploadData.fileSize || 0
-            const duration = creatorUploadData.duration || 0
-            const mimeType = creatorUploadData.mimeType || "video/mp4"
-            const contentType = getContentType(mimeType)
-            const format = mimeType.split("/")[1] || "mp4"
-
-            const detailedItem = {
-              // Core identifiers
-              id: contentId,
-              uploadId: contentId,
-
-              // File URLs
-              fileUrl: creatorUploadData.fileUrl || "",
-              downloadUrl: creatorUploadData.downloadUrl || creatorUploadData.fileUrl || "",
-              publicUrl: creatorUploadData.publicUrl || creatorUploadData.fileUrl || "",
-
-              // File information
-              filename: creatorUploadData.filename || creatorUploadData.title || "unknown.file",
-              fileSize: fileSize,
-              fileSizeFormatted: formatFileSize(fileSize),
-              displaySize: formatFileSize(fileSize),
-
-              // Content details
-              title: creatorUploadData.title || "Untitled",
-              displayTitle: creatorUploadData.title || "Untitled",
-              description: creatorUploadData.description || "",
-
-              // Media properties
-              mimeType: mimeType,
-              fileType: mimeType,
-              contentType: contentType,
-              format: format,
-              quality: "HD",
-              resolution: "",
-
-              // Duration
-              duration: duration,
-              durationFormatted: formatDuration(duration),
-              displayDuration: formatDuration(duration),
-
-              // Visual assets
-              thumbnailUrl: creatorUploadData.thumbnailUrl || "",
-              previewUrl: creatorUploadData.previewUrl || "",
-
-              // Metadata
-              tags: creatorUploadData.tags || [],
-              isPublic: true,
-
-              // Stats
-              viewCount: 0,
-              downloadCount: 0,
-
-              // Timestamps
-              createdAt: creatorUploadData.createdAt || new Date(),
-              uploadedAt: creatorUploadData.uploadedAt || new Date(),
-              addedToBundleAt: new Date(),
-            }
-
-            detailedContentItems.push(detailedItem)
-
-            // Update metadata
-            contentMetadata.totalSize += fileSize
-            contentMetadata.totalDuration += duration
-            contentMetadata.totalItems += 1
-            contentMetadata.contentBreakdown[contentType] += 1
-            contentMetadata.formats.add(format)
-            contentMetadata.qualities.add("HD")
-
-            console.log(`✅ [Add Content] Added detailed item from creator uploads: ${detailedItem.title}`)
-          } else {
-            console.warn(`⚠️ [Add Content] Content not found in any collection: ${contentId}`)
+            uploadData = creatorUploadsQuery.docs[0].data()
           }
         }
-      } catch (error) {
-        console.error(`❌ [Add Content] Error processing content ${contentId}:`, error)
+
+        if (!uploadData) continue
+
+        const fileSize = uploadData.fileSize || uploadData.size || 0
+        const duration = uploadData.duration || uploadData.videoDuration || 0
+        const mimeType = uploadData.mimeType || uploadData.fileType || "application/octet-stream"
+        const contentType = getContentType(mimeType)
+        const format = mimeType.split("/")[1] || "unknown"
+
+        const detailedItem = {
+          id: contentId,
+          uploadId: contentId,
+          fileUrl: uploadData.fileUrl || uploadData.downloadUrl || uploadData.publicUrl || "",
+          downloadUrl: uploadData.downloadUrl || uploadData.fileUrl || uploadData.publicUrl || "",
+          publicUrl: uploadData.publicUrl || uploadData.fileUrl || "",
+          filename: uploadData.filename || uploadData.originalFileName || uploadData.title || "unknown.file",
+          fileSize,
+          fileSizeFormatted: formatFileSize(fileSize),
+          title: uploadData.title || uploadData.filename || uploadData.originalFileName || "Untitled",
+          displayTitle: uploadData.title || uploadData.filename || uploadData.originalFileName || "Untitled",
+          description: uploadData.description || "",
+          mimeType,
+          fileType: mimeType,
+          contentType,
+          format,
+          quality: "HD",
+          resolution: uploadData.resolution || "",
+          duration,
+          durationFormatted: formatDuration(duration),
+          displayDuration: formatDuration(duration),
+          thumbnailUrl: uploadData.thumbnailUrl || "",
+          previewUrl: uploadData.previewUrl || uploadData.thumbnailUrl || "",
+          tags: uploadData.tags || [],
+          isPublic: uploadData.isPublic !== false,
+          viewCount: uploadData.viewCount || 0,
+          downloadCount: uploadData.downloadCount || 0,
+          createdAt: uploadData.createdAt || uploadData.uploadedAt || new Date(),
+          uploadedAt: uploadData.uploadedAt || uploadData.createdAt || new Date(),
+          addedToBundleAt: new Date(),
+        }
+
+        detailedContentItems.push(detailedItem)
+        contentMetadata.totalSize += fileSize
+        contentMetadata.totalDuration += duration
+        contentMetadata.totalItems += 1
+        contentMetadata.contentBreakdown[contentType] += 1
+        contentMetadata.formats.add(format)
+        contentMetadata.qualities.add("HD")
+      } catch (e) {
+        console.error("❌ [Add Content] Failed processing content:", contentId, e)
       }
     }
 
     if (detailedContentItems.length === 0) {
-      return NextResponse.json(
-        { error: "No valid content items found" },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: "No valid content items found" }, { status: 400 })
     }
 
-    // Prepare final metadata
+    // Merge with existing arrays
+    const mergedIds = Array.from(new Set([...existingIds, ...idsToAdd]))
+    const previousDetailed = Array.isArray(bundleData.detailedContentItems) ? bundleData.detailedContentItems : []
+    const mergedDetailed = [...previousDetailed, ...detailedContentItems]
+
     const finalContentMetadata = {
-      totalItems: contentMetadata.totalItems,
-      totalSize: contentMetadata.totalSize,
-      totalSizeFormatted: formatFileSize(contentMetadata.totalSize),
-      totalDuration: contentMetadata.totalDuration,
-      totalDurationFormatted: formatDuration(contentMetadata.totalDuration),
-      contentBreakdown: contentMetadata.contentBreakdown,
-      formats: Array.from(contentMetadata.formats),
-      qualities: Array.from(contentMetadata.qualities),
+      totalItems: mergedDetailed.length,
+      totalSize: mergedDetailed.reduce((s: number, it: any) => s + (it.fileSize || 0), 0),
+      totalSizeFormatted: formatFileSize(mergedDetailed.reduce((s: number, it: any) => s + (it.fileSize || 0), 0)),
+      totalDuration: mergedDetailed.reduce((s: number, it: any) => s + (it.duration || 0), 0),
+      totalDurationFormatted: formatDuration(mergedDetailed.reduce((s: number, it: any) => s + (it.duration || 0), 0)),
+      contentBreakdown: {
+        videos: mergedDetailed.filter((i: any) => i.contentType === "video").length,
+        audio: mergedDetailed.filter((i: any) => i.contentType === "audio").length,
+        images: mergedDetailed.filter((i: any) => i.contentType === "image").length,
+        documents: mergedDetailed.filter((i: any) => i.contentType === "document").length,
+      },
+      formats: Array.from(new Set(mergedDetailed.map((i: any) => i.format).filter(Boolean))),
+      qualities: Array.from(new Set(mergedDetailed.map((i: any) => i.quality).filter(Boolean))),
       lastUpdated: new Date(),
     }
 
-    // Prepare arrays for quick access
-    const contentTitles = detailedContentItems.map(item => item.title)
-    const contentDescriptions = detailedContentItems.map(item => item.description).filter(Boolean)
-    const contentTags = [...new Set(detailedContentItems.flatMap(item => item.tags || []))]
-    const contentUrls = detailedContentItems.map(item => item.fileUrl)
-    const contentThumbnails = detailedContentItems.map(item => item.thumbnailUrl).filter(Boolean)
-
-    // Update bundle with comprehensive content data
-    const updateData = {
-      // Content arrays
-      contentItems: contentIds,
-      detailedContentItems: detailedContentItems,
-
-      // Content metadata
+    await bundleRef.update({
+      contentItems: mergedIds,
+      detailedContentItems: mergedDetailed,
       contentMetadata: finalContentMetadata,
-
-      // Quick access arrays
-      contentTitles: contentTitles,
-      contentDescriptions: contentDescriptions,
-      contentTags: contentTags,
-      contentUrls: contentUrls,
-      contentThumbnails: contentThumbnails,
-
-      // Timestamps
+      contentTitles: mergedDetailed.map((i: any) => i.title),
+      contentDescriptions: mergedDetailed.map((i: any) => i.description).filter(Boolean),
+      contentTags: Array.from(new Set(mergedDetailed.flatMap((i: any) => i.tags || []))),
+      contentUrls: mergedDetailed.map((i: any) => i.fileUrl),
+      contentThumbnails: mergedDetailed.map((i: any) => i.thumbnailUrl).filter(Boolean),
       updatedAt: new Date(),
       contentLastUpdated: new Date(),
-    }
-
-    await db.collection("bundles").doc(bundleId).update(updateData)
-
-    console.log(`✅ [Add Content] Successfully added ${detailedContentItems.length} content items to bundle`)
-    console.log(`📊 [Add Content] Bundle metadata:`, {
-      totalItems: finalContentMetadata.totalItems,
-      totalSize: finalContentMetadata.totalSizeFormatted,
-      totalDuration: finalContentMetadata.totalDurationFormatted,
-      contentBreakdown: finalContentMetadata.contentBreakdown,
     })
 
     return NextResponse.json({
       success: true,
-      message: `Added ${detailedContentItems.length} content items to bundle`,
-      bundleId: bundleId,
-      contentItems: detailedContentItems,
-      contentMetadata: finalContentMetadata,
+      added: detailedContentItems.length,
+      skipped,
+      maxPerBundle,
+      remainingBefore: remaining,
     })
   } catch (error) {
     console.error(`❌ [Add Content] Error adding content to bundle:`, error)
-    return NextResponse.json(
-      { error: "Failed to add content to bundle" },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: "Failed to add content to bundle" }, { status: 500 })
   }
 }
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const bundleId = params.id
-
-    // Get bundle document
     const bundleDoc = await db.collection("bundles").doc(bundleId).get()
     if (!bundleDoc.exists) {
-      return NextResponse.json(
-        { error: "Bundle not found" },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
     }
-
     const bundleData = bundleDoc.data()!
-
     return NextResponse.json({
       success: true,
       bundle: {
@@ -379,9 +263,6 @@ export async function GET(
     })
   } catch (error) {
     console.error(`❌ [Get Bundle Content] Error:`, error)
-    return NextResponse.json(
-      { error: "Failed to get bundle content" },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: "Failed to get bundle content" }, { status: 500 })
   }
 }
