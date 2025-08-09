@@ -80,3 +80,45 @@ export async function checkClientSubscription(): Promise<SubscriptionInfo> {
     return { ...FREE_DEFAULTS }
   }
 }
+
+// --- BACKWARD COMPATIBILITY LAYER ---
+
+// Re-exporting `checkSubscription` which now uses the new client-side fetch.
+// Note: This is now an async function. Callers may need to be updated.
+export async function checkSubscription(userId?: string): Promise<SubscriptionInfo> {
+  // If no userId is provided, or it doesn't match the current user, return free defaults.
+  const currentUser = auth.currentUser
+  if (!userId || !currentUser || currentUser.uid !== userId) {
+    return FREE_DEFAULTS
+  }
+  return checkClientSubscription()
+}
+
+export function getPlatformFeePercentage(plan: string): number {
+  return plan === "creator_pro" ? 10 : 20
+}
+
+export function calculatePlatformFee(amount: number, plan: string): number {
+  const feePercentage = getPlatformFeePercentage(plan)
+  return Math.round((amount * feePercentage) / 100)
+}
+
+function getMaxVideosPerBundle(plan: string): number | null {
+  return plan === "creator_pro" ? null : 10
+}
+
+function getMaxBundles(plan: string): number | null {
+  return plan === "creator_pro" ? null : 2
+}
+
+export function canAddVideoToBundle(currentVideoCount: number, plan: string): boolean {
+  const maxVideos = getMaxVideosPerBundle(plan)
+  if (maxVideos === null) return true // unlimited
+  return currentVideoCount < maxVideos
+}
+
+export function canCreateBundle(currentBundleCount: number, plan: string): boolean {
+  const maxBundles = getMaxBundles(plan)
+  if (maxBundles === null) return true // unlimited
+  return currentBundleCount < maxBundles
+}
