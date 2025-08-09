@@ -8,6 +8,8 @@ import { Card } from "@/components/ui/card"
 import { useAuth } from "@/contexts/auth-context"
 import { useUserPlan } from "@/hooks/use-user-plan"
 
+const TEMP_PAYMENT_LINK = "https://buy.stripe.com/aFa3cvbKsgRvexnfxdeIw05"
+
 export default function MembershipPage() {
   const router = useRouter()
   const { user } = useAuth()
@@ -22,31 +24,25 @@ export default function MembershipPage() {
       const res = await fetch("/api/stripe/checkout/membership", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          idToken,
-          // optional: override priceId or success/cancel URLs here
-        }),
+        body: JSON.stringify({ idToken }),
       })
 
       if (!res.ok) {
-        // Fallback: open the temporary Payment Link if server creation fails
         console.warn("[Membership] Failed to create checkout session, falling back to payment link.")
-        window.open("https://buy.stripe.com/aFa3cvbKsgRvexnfxdeIw05", "_blank")
+        window.open(TEMP_PAYMENT_LINK, "_blank")
         setIsRedirecting(false)
         return
       }
 
-      const data = await res.json()
+      const data = (await res.json()) as { url?: string }
       if (data?.url) {
         window.location.href = data.url
       } else {
-        // Fallback to payment link if no URL returned
-        window.open("https://buy.stripe.com/aFa3cvbKsgRvexnfxdeIw05", "_blank")
+        window.open(TEMP_PAYMENT_LINK, "_blank")
       }
     } catch (err) {
       console.error("[Membership] Error starting checkout:", err)
-      // Fallback to payment link
-      window.open("https://buy.stripe.com/aFa3cvbKsgRvexnfxdeIw05", "_blank")
+      window.open(TEMP_PAYMENT_LINK, "_blank")
     } finally {
       setIsRedirecting(false)
     }
@@ -243,15 +239,6 @@ export default function MembershipPage() {
                 Yes, you can cancel your subscription anytime. You'll continue to have access until the end of your
                 billing period, after which you'll return to the Free plan with bundle video limits and 20% platform
                 fees.
-              </p>
-            </div>
-          </Card>
-
-          <Card className="overflow-hidden border-zinc-800/50 bg-gradient-to-b from-zinc-900/50 to-black/70 transition-all duration-300 hover:border-zinc-700/70">
-            <div className="p-6">
-              <h4 className="mb-3 text-lg font-medium text-white">What payment methods do you accept?</h4>
-              <p className="text-zinc-400">
-                We accept all major credit cards, including Visa, Mastercard, and American Express.
               </p>
             </div>
           </Card>
