@@ -30,8 +30,8 @@ importers:
         specifier: latest
         version: 11.14.0(@types/react@19.0.0)(react@19.0.0)
       '@hookform/resolvers':
-        specifier: latest
-        version: 5.2.1(react-hook-form@7.62.0(react@19.0.0))
+        specifier: ^3.9.1
+        version: 3.9.1(react-hook-form@7.62.0(react@19.0.0))
       '@prisma/client':
         specifier: latest
         version: 6.13.0(prisma@6.13.0(typescript@5.0.2))(typescript@5.0.2)
@@ -812,10 +812,10 @@ packages:
     engines: {node: '>=6'}
     hasBin: true
 
-  '@hookform/resolvers@5.2.1':
-    resolution: {integrity: sha512-u0+6X58gkjMcxur1wRWokA7XsiiBJ6aK17aPZxhkoYiK5J+HcTx0Vhu9ovXe6H+dVpO6cjrn2FkJTryXEMlryQ==}
+  '@hookform/resolvers@3.9.1':
+    resolution: {integrity: sha512-ud2HqmGBM0P0IABqoskKWI6PEf6ZDDBZkFqe2Vnl+mTHCEHzr3ISjjZyCwTjC/qpL25JC9aIDkloQejvMeq0ug==}
     peerDependencies:
-      react-hook-form: ^7.55.0
+      react-hook-form: ^7.0.0
 
   '@img/sharp-darwin-arm64@0.33.5':
     resolution: {integrity: sha512-UT4p+iz/2H4twwAoLCqfA9UH5pI6DggwKEGuaPy7nCVQ8ZsiY5PIcrRvD1DzuY3qYL07NtIQcWnBSY/heikIFQ==}
@@ -5084,9 +5084,8 @@ snapshots:
       protobufjs: 7.5.3
       yargs: 17.7.2
 
-  '@hookform/resolvers@5.2.1(react-hook-form@7.62.0(react@19.0.0))':
+  '@hookform/resolvers@3.9.1(react-hook-form@7.62.0(react@19.0.0))':
     dependencies:
-      '@standard-schema/utils': 0.3.0
       react-hook-form: 7.62.0(react@19.0.0)
 
   '@img/sharp-darwin-arm64@0.33.5':

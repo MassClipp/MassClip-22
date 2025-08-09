@@ -16,7 +16,7 @@
     "@chakra-ui/react": "latest",
     "@emotion/is-prop-valid": "latest",
     "@emotion/react": "latest",
-    "@hookform/resolvers": "latest",
+    "@hookform/resolvers": "^3.9.1",
     "@prisma/client": "latest",
     "@radix-ui/react-accordion": "latest",
     "@radix-ui/react-alert-dialog": "latest",
