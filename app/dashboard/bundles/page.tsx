@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
-import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, onSnapshot, addDoc } from "firebase/firestore"
+import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, onSnapshot } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { useAuth } from "@/contexts/auth-context"
 import { useUserPlan } from "@/hooks/use-user-plan"
@@ -770,146 +770,56 @@ export default function BundlesPage() {
     try {
       setAddContentLoading(true)
 
-      // Determine current count for this bundle
-      const currentBox = productBoxes.find((box) => box.id === productBoxId)
-      const existingCount = (contentItems[productBoxId]?.length ?? 0) || (currentBox?.contentItems?.length ?? 0)
-
-      // Compute remaining slots based on tier
-      const maxPerBundle = isProUser ? Number.POSITIVE_INFINITY : CONTENT_LIMIT_FREE
-      const remaining = Math.max(0, (maxPerBundle as number) - existingCount)
-
-      if (remaining <= 0) {
-        toast({
-          title: "Bundle is Full",
-          description: isProUser
-            ? "This bundle cannot accept more content."
-            : `Free plan allows up to ${CONTENT_LIMIT_FREE} items per bundle.`,
-          variant: "destructive",
-        })
-        return
+      // Always enforce on the server to ensure correct tier limits
+      const idToken = await user?.getIdToken()
+      if (!idToken) {
+        throw new Error("Not authenticated")
       }
 
-      // Only take up to the remaining allowed items
-      const idsToAdd = selectedContentIds.slice(0, remaining)
-      const skipped = selectedContentIds.length - idsToAdd.length
-      if (skipped > 0) {
-        toast({
-          title: "Limit Reached",
-          description: `Only ${idsToAdd.length} item${idsToAdd.length !== 1 ? "s" : ""} added. Free plan max is ${CONTENT_LIMIT_FREE} per bundle.`,
-        })
+      // Call the server API to add content with limit enforcement
+      const response = await fetch(`/api/creator/bundles/${productBoxId}/add-content`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          contentIds: selectedContentIds,
+        }),
+      })
+
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        const message =
+          (data && (data.error || data.message)) ||
+          (response.status === 400
+            ? "Bundle limit reached or invalid request"
+            : `Failed with status ${response.status}`)
+        throw new Error(message)
       }
 
-      console.log(`🔄 [Bundle Content] Adding ${idsToAdd.length} item(s) to bundle ${productBoxId}`)
-
-      // Build detailed metadata for idsToAdd only (existing logic preserved)
-      const detailedContentItems: any[] = []
-      let totalSize = 0
-      let totalDuration = 0
-
-      for (const contentId of idsToAdd) {
-        const contentItem = availableUploads.find((item) => item.id === contentId)
-        if (!contentItem) continue
-
-        const detailedItem = {
-          id: contentId,
-          title: contentItem.title,
-          filename: contentItem.filename,
-          fileUrl: contentItem.fileUrl,
-          publicUrl: contentItem.fileUrl,
-          downloadUrl: contentItem.fileUrl,
-          thumbnailUrl: contentItem.thumbnailUrl || "",
-          previewUrl: contentItem.thumbnailUrl || "",
-          mimeType: contentItem.mimeType,
-          fileType: contentItem.mimeType,
-          fileSize: contentItem.fileSize,
-          fileSizeFormatted: formatFileSize(contentItem.fileSize),
-          duration: contentItem.duration || 0,
-          durationFormatted: contentItem.duration ? formatDuration(contentItem.duration) : "0:00",
-          contentType: contentItem.contentType,
-          uploadedAt: new Date(),
-          createdAt: new Date(),
-          creatorId: user?.uid || "",
-          description: "",
-          isPublic: true,
-          downloadCount: 0,
-          viewCount: 0,
-          tags: [],
-          quality: "HD",
-          format: contentItem.mimeType.split("/")[1] || "unknown",
-        }
-
-        detailedContentItems.push(detailedItem)
-        totalSize += contentItem.fileSize
-        totalDuration += contentItem.duration || 0
-
-        // Backward-compatibility entry in productBoxContent
-        await addDoc(collection(db, "productBoxContent"), {
-          productBoxId,
-          uploadId: contentId,
-          title: contentItem.title,
-          fileUrl: contentItem.fileUrl,
-          thumbnailUrl: contentItem.thumbnailUrl || "",
-          mimeType: contentItem.mimeType,
-          fileSize: contentItem.fileSize,
-          filename: contentItem.filename,
-          createdAt: new Date(),
-        })
-      }
-
-      // Merge into bundle doc and recalc metadata
-      const currentForBox = productBoxes.find((box) => box.id === productBoxId)
-      if (currentForBox) {
-        const updatedContentItems = [...currentForBox.contentItems, ...idsToAdd]
-
-        const allDetailedItems = [...((currentForBox as any).detailedContentItems ?? []), ...detailedContentItems]
-        const allTotalDuration = allDetailedItems.reduce((sum: number, item: any) => sum + (item.duration || 0), 0)
-        const allTotalSize = allDetailedItems.reduce((sum: number, item: any) => sum + (item.fileSize || 0), 0)
-        const videoCount = allDetailedItems.filter((item: any) => item.contentType === "video").length
-        const audioCount = allDetailedItems.filter((item: any) => item.contentType === "audio").length
-        const imageCount = allDetailedItems.filter((item: any) => item.contentType === "image").length
-        const documentCount = allDetailedItems.filter((item: any) => item.contentType === "document").length
-
-        await updateDoc(doc(db, "bundles", productBoxId), {
-          contentItems: updatedContentItems,
-          detailedContentItems: allDetailedItems,
-          contentMetadata: {
-            totalItems: allDetailedItems.length,
-            totalDuration: allTotalDuration,
-            totalDurationFormatted: formatDuration(allTotalDuration),
-            totalSize: allTotalSize,
-            totalSizeFormatted: formatFileSize(allTotalSize),
-            contentBreakdown: {
-              videos: videoCount,
-              audio: audioCount,
-              images: imageCount,
-              documents: documentCount,
-            },
-            averageDuration: allDetailedItems.length > 0 ? allTotalDuration / allDetailedItems.length : 0,
-            averageSize: allDetailedItems.length > 0 ? allTotalSize / allDetailedItems.length : 0,
-            resolutions: [...new Set(allDetailedItems.map((item: any) => item.resolution).filter(Boolean))],
-            formats: [...new Set(allDetailedItems.map((item: any) => item.format).filter(Boolean))],
-            qualities: [...new Set(allDetailedItems.map((item: any) => item.quality).filter(Boolean))],
-          },
-          contentTitles: allDetailedItems.map((item: any) => item.title),
-          contentDescriptions: allDetailedItems.map((item: any) => item.description || "").filter(Boolean),
-          contentTags: [...new Set(allDetailedItems.flatMap((item: any) => item.tags || []))],
-          updatedAt: new Date(),
-        })
-      }
+      // Server returns { success, added, skipped, maxPerBundle, remainingBefore }
+      const added = typeof data.added === "number" ? data.added : 0
+      const skipped = typeof data.skipped === "number" ? data.skipped : 0
 
       toast({
         title: "Success",
-        description: `Added ${idsToAdd.length} content item${idsToAdd.length !== 1 ? "s" : ""} to bundle`,
+        description:
+          skipped > 0
+            ? `Added ${added} item${added !== 1 ? "s" : ""}. Skipped ${skipped} due to bundle limit.`
+            : `Added ${added} item${added !== 1 ? "s" : ""} to bundle`,
       })
 
+      // Reset selection and close modal, then refresh bundles to reflect changes
       setShowAddContentModal(null)
       setSelectedContentIds([])
       await fetchProductBoxes()
     } catch (error) {
-      console.error("❌ Error adding content to bundle:", error)
+      console.error("❌ [Bundles] Error adding content (server):", error)
       toast({
         title: "Error",
-        description: "Failed to add content to bundle",
+        description: error instanceof Error ? error.message : "Failed to add content to bundle",
         variant: "destructive",
       })
     } finally {
