@@ -1,65 +1,76 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createUserWithEmailAndPassword } from "firebase/auth"
-import { auth as clientAuth } from "@/firebase/config"
+import { auth } from "@/lib/firebase"
+import { ProfileManager } from "@/lib/profile-manager"
+import { UserTrackingService } from "@/lib/user-tracking-service"
 
-// This endpoint can remain on the edge or node, as it no longer uses the Admin SDK.
-// We'll keep it as nodejs for consistency.
 export const runtime = "nodejs"
-
-async function triggerPostSignupSetup(uid: string, email: string, displayName: string, photoURL?: string) {
-  const absoluteUrl = new URL("/api/user/post-signup-setup", process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000")
-
-  try {
-    // This is a "fire-and-forget" call. We don't wait for it to complete
-    // to ensure the user's signup process is fast. The backend will handle it.
-    fetch(absoluteUrl.href, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ uid, email, displayName, photoURL: photoURL || null }),
-    })
-    console.log(`[create-user] Triggered post-signup setup for UID: ${uid}`)
-  } catch (error) {
-    console.error(`[create-user] Failed to trigger post-signup setup for UID: ${uid}`, error)
-  }
-}
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("🔐 [create-user] Received request")
-    const body = await request.json()
-    const { email, password, username, displayName } = body
+    console.log("🔐 User creation request received")
+
+    const { email, password, username, displayName } = await request.json()
 
     if (!email || !password || !username || !displayName) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
-    // 1. Create user in Firebase Authentication
-    const userCredential = await createUserWithEmailAndPassword(clientAuth, email, password)
-    const user = userCredential.user
-    console.log(`✅ [create-user] Firebase Auth user created successfully. UID: ${user.uid}`)
+    console.log(`🔐 Creating user account for: ${email}`)
 
-    // 2. Trigger the separate, reliable backend process to set up database documents
-    await triggerPostSignupSetup(user.uid, email, displayName, user.photoURL || undefined)
+    // Create Firebase user
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password)
+    const user = userCredential.user
+
+    console.log(`✅ Firebase user created: ${user.uid}`)
+
+    // Create complete profile using ProfileManager
+    const profileResult = await ProfileManager.setupCompleteProfile(
+      user.uid,
+      email,
+      displayName,
+      user.photoURL || undefined,
+    )
+
+    if (!profileResult.success) {
+      console.error("❌ Failed to create user profile:", profileResult.error)
+      // Don't fail the entire signup, just log the error
+    }
+
+    // Ensure freeUsers tracking exists for all non-Creator Pro users
+    try {
+      const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || ""
+      await UserTrackingService.ensureFreeUserForNonPro(user.uid, user.email || "", {
+        ipAddress: ip || undefined,
+      })
+    } catch (e) {
+      // Don't block signup on tracking errors; just log
+      console.warn("⚠️ [UserTracking] Could not ensure free user record at signup:", e)
+    }
+
+    console.log(`✅ User signup completed successfully for: ${username}`)
 
     return NextResponse.json({
       success: true,
       user: {
         uid: user.uid,
         email: user.email,
+        username: profileResult.username || username,
       },
     })
   } catch (error: any) {
-    console.error("❌ [create-user] Top-level error during user creation:", error)
-    let errorMessage = "Failed to create account. Please try again."
+    console.error("❌ Error creating user:", error)
+
+    let errorMessage = "Failed to create account"
+
     if (error.code === "auth/email-already-in-use") {
-      errorMessage = "An account with this email already exists."
+      errorMessage = "An account with this email already exists"
     } else if (error.code === "auth/weak-password") {
-      errorMessage = "Password is too weak."
+      errorMessage = "Password is too weak"
     } else if (error.code === "auth/invalid-email") {
-      errorMessage = "The email address is not valid."
+      errorMessage = "Invalid email address"
     }
+
     return NextResponse.json({ error: errorMessage }, { status: 400 })
   }
 }

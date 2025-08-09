@@ -1,26 +1,18 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse, type NextRequest } from "next/server"
 import { getAuthenticatedUser } from "@/lib/firebase-admin"
-import { MembershipService } from "@/lib/membership-service"
+import { ensureMembership, getTierInfo } from "@/lib/memberships-service"
+
+export const runtime = "nodejs"
 
 export async function GET(request: NextRequest) {
   try {
     const { uid, email } = await getAuthenticatedUser(request.headers)
-    if (!uid) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    await ensureMembership(uid, email)
+    const info = await getTierInfo(uid)
 
-    // ensureMembership will get or create the doc.
-    const membership = await MembershipService.ensureMembership(uid, email || "")
-
-    return NextResponse.json(membership)
-  } catch (error) {
-    console.error("[API /user/membership] Error:", error)
-    if (
-      error instanceof Error &&
-      (error.message.includes("Missing Bearer token") || error.message.includes("Token verification failed"))
-    ) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+    return NextResponse.json({ success: true, data: info })
+  } catch (error: any) {
+    console.error("❌ [/api/user/membership] Error:", error?.message || error)
+    return NextResponse.json({ success: false, error: error?.message || "Failed to fetch membership" }, { status: 400 })
   }
 }

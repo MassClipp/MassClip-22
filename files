@@ -1,4 +1,4 @@
-import { db } from "@/lib/firebase"
+/import { db } from "@/lib/firebase"
 import { doc, getDoc } from "firebase/firestore"
 
 export interface SubscriptionData {
@@ -13,8 +13,8 @@ export interface SubscriptionData {
     noWatermark: boolean
     prioritySupport: boolean
     platformFeePercentage: number
-    maxVideosPerBundle: number | null // null means unlimited
-    maxBundles: number | null // null means unlimited
+    maxVideosPerBundle: number | null
+    maxBundles: number | null
   }
 }
 
@@ -29,10 +29,20 @@ const FREE_DEFAULTS = {
   maxBundles: 2,
 }
 
+async function fetchMembership(userId: string) {
+  try {
+    const snap = await getDoc(doc(db, "memberships", userId))
+    if (!snap.exists()) return null
+    return snap.data() as any
+  } catch (e) {
+    console.warn("[subscription] memberships lookup failed, falling back:", e)
+    return null
+  }
+}
+
 export async function checkSubscription(userId?: string): Promise<SubscriptionData> {
   try {
     if (!userId) {
-      // Anonymous/unauthenticated -> treat as free
       return {
         isActive: false,
         plan: "free",
@@ -40,51 +50,95 @@ export async function checkSubscription(userId?: string): Promise<SubscriptionDa
       }
     }
 
-    // 1) Check creatorProUsers first
-    const proSnap = await getDoc(doc(db, "creatorProUsers", userId))
-    if (proSnap.exists()) {
-      const data = proSnap.data() as any
-      const isActive = (data.subscriptionStatus ?? "inactive") === "active"
+    // 0) Prefer central memberships
+    const membership = await fetchMembership(userId)
+    if (membership) {
+      const isProActive =
+        (membership.plan === "creator_pro") &&
+        (membership.isActive === true || membership.status === "active" || membership.status === "trialing")
 
-      // Use Creator Pro features only if subscription is active
-      if (isActive) {
-        const renewal = data.renewalDate
-        const currentPeriodEnd = renewal?.toDate?.() ?? (typeof renewal === "number" ? new Date(renewal) : renewal)
+      if (isProActive) {
+        const currentPeriodEnd = membership.currentPeriodEnd
+          ? (membership.currentPeriodEnd.toDate?.() ?? new Date(membership.currentPeriodEnd))
+          : undefined
 
         return {
           isActive: true,
           plan: "creator_pro",
-          stripeCustomerId: data.stripeCustomerId,
-          stripeSubscriptionId: data.subscriptionId,
-          currentPeriodEnd: currentPeriodEnd,
+          stripeCustomerId: membership.stripeCustomerId,
+          stripeSubscriptionId: membership.stripeSubscriptionId,
+          currentPeriodEnd,
           features: {
             unlimitedDownloads: true,
             premiumContent: true,
             noWatermark: true,
             prioritySupport: true,
             platformFeePercentage: 10,
-            maxVideosPerBundle: null, // unlimited
-            maxBundles: null, // unlimited
+            maxVideosPerBundle: null,
+            maxBundles: null,
+          },
+        }
+      } else {
+        // Free membership with stored caps if provided
+        const f = membership.features || {}
+        return {
+          isActive: false,
+          plan: "free",
+          features: {
+            unlimitedDownloads: !!f.unlimitedDownloads || false,
+            premiumContent: !!f.premiumContent || false,
+            noWatermark: !!f.noWatermark || false,
+            prioritySupport: !!f.prioritySupport || false,
+            platformFeePercentage:
+              typeof f.platformFeePercentage === "number" ? f.platformFeePercentage : FREE_DEFAULTS.platformFeePercentage,
+            maxVideosPerBundle:
+              typeof f.maxVideosPerBundle === "number" || f.maxVideosPerBundle === null
+                ? f.maxVideosPerBundle
+                : FREE_DEFAULTS.maxVideosPerBundle,
+            maxBundles:
+              typeof f.maxBundles === "number" || f.maxBundles === null
+                ? f.maxBundles
+                : FREE_DEFAULTS.maxBundles,
           },
         }
       }
-      // If creatorProUsers doc exists but is not active, fall through to free behavior
     }
 
-    // 2) Check freeUsers
+    // 1) Legacy: creatorProUsers
+    const proSnap = await getDoc(doc(db, "creatorProUsers", userId))
+    if (proSnap.exists()) {
+      const data = proSnap.data() as any
+      const isActive = (data.subscriptionStatus ?? "inactive") === "active"
+      if (isActive) {
+        const renewal = data.renewalDate
+        const currentPeriodEnd = renewal?.toDate?.() ?? (typeof renewal === "number" ? new Date(renewal) : renewal)
+        return {
+          isActive: true,
+          plan: "creator_pro",
+          stripeCustomerId: data.stripeCustomerId,
+          stripeSubscriptionId: data.subscriptionId,
+          currentPeriodEnd,
+          features: {
+            unlimitedDownloads: true,
+            premiumContent: true,
+            noWatermark: true,
+            prioritySupport: true,
+            platformFeePercentage: 10,
+            maxVideosPerBundle: null,
+            maxBundles: null,
+          },
+        }
+      }
+    }
+
+    // 2) Legacy: freeUsers
     const freeSnap = await getDoc(doc(db, "freeUsers", userId))
     if (freeSnap.exists()) {
       const data = freeSnap.data() as any
-
-      // Prefer stored limits if present, fallback to defaults
       const platformFeePercentage =
-        typeof data.platformFeePercentage === "number"
-          ? data.platformFeePercentage
-          : FREE_DEFAULTS.platformFeePercentage
-
+        typeof data.platformFeePercentage === "number" ? data.platformFeePercentage : FREE_DEFAULTS.platformFeePercentage
       const maxVideosPerBundle =
         typeof data.maxVideosPerBundle === "number" ? data.maxVideosPerBundle : FREE_DEFAULTS.maxVideosPerBundle
-
       const maxBundles = typeof data.bundlesLimit === "number" ? data.bundlesLimit : FREE_DEFAULTS.maxBundles
 
       return {
@@ -102,7 +156,7 @@ export async function checkSubscription(userId?: string): Promise<SubscriptionDa
       }
     }
 
-    // 3) No record found in creatorProUsers or freeUsers -> treat as free defaults
+    // 3) Default free
     return {
       isActive: false,
       plan: "free",
@@ -118,7 +172,6 @@ export async function checkSubscription(userId?: string): Promise<SubscriptionDa
   }
 }
 
-// Kept for compatibility with any existing callers that check "pro" too.
 export function getSubscriptionFeatures(plan: string) {
   switch (plan) {
     case "pro":
@@ -129,8 +182,8 @@ export function getSubscriptionFeatures(plan: string) {
         noWatermark: true,
         prioritySupport: true,
         platformFeePercentage: 10,
-        maxVideosPerBundle: null, // unlimited
-        maxBundles: null, // unlimited
+        maxVideosPerBundle: null,
+        maxBundles: null,
       }
     default:
       return { ...FREE_DEFAULTS }
@@ -161,12 +214,12 @@ export function getMaxBundles(plan: string): number | null {
 
 export function canAddVideoToBundle(currentVideoCount: number, plan: string): boolean {
   const maxVideos = getMaxVideosPerBundle(plan)
-  if (maxVideos === null) return true // unlimited
+  if (maxVideos === null) return true
   return currentVideoCount < maxVideos
 }
 
 export function canCreateBundle(currentBundleCount: number, plan: string): boolean {
   const maxBundles = getMaxBundles(plan)
-  if (maxBundles === null) return true // unlimited
+  if (maxBundles === null) return true
   return currentBundleCount < maxBundles
 }
