@@ -7,8 +7,8 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, Eye, EyeOff } from 'lucide-react'
-import { createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from "firebase/auth"
+import { Loader2, Eye, EyeOff } from "lucide-react"
+import { createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, OAuthProvider } from "firebase/auth"
 import { auth } from "@/lib/firebase"
 import Logo from "@/components/logo"
 
@@ -20,13 +20,14 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
+  const [appleLoading, setAppleLoading] = useState(false)
   const [error, setError] = useState("")
   const [showEmailForm, setShowEmailForm] = useState(false)
   const router = useRouter()
 
   const handleEmailSignup = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!email || !password || !confirmPassword) {
       setError("Please fill in all fields")
       return
@@ -87,10 +88,42 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
     }
   }
 
-  const handleAppleSignup = () => {
-    // Apple signup implementation would go here
-    console.log("Apple signup clicked")
-    setError("Apple Sign-Up is not yet implemented")
+  const handleAppleSignup = async () => {
+    setAppleLoading(true)
+    setError("")
+
+    try {
+      const provider = new OAuthProvider("apple.com")
+      provider.addScope("email")
+      provider.addScope("name")
+
+      // Set custom parameters for Apple Sign-In
+      provider.setCustomParameters({
+        locale: "en",
+      })
+
+      const result = await signInWithPopup(auth, provider)
+
+      if (result.user) {
+        console.log("Apple signup successful:", result.user.email)
+        router.push("/login-success")
+      }
+    } catch (error: any) {
+      console.error("Apple signup error:", error)
+      if (error.code === "auth/popup-closed-by-user") {
+        setError("Sign-up was cancelled")
+      } else if (error.code === "auth/popup-blocked") {
+        setError("Popup was blocked. Please allow popups and try again.")
+      } else if (error.code === "auth/unauthorized-domain") {
+        setError("This domain is not authorized for Apple sign-up. Please contact support.")
+      } else if (error.code === "auth/operation-not-allowed") {
+        setError("Apple Sign-In is not enabled. Please contact support.")
+      } else {
+        setError("Failed to sign up with Apple. Please try again.")
+      }
+    } finally {
+      setAppleLoading(false)
+    }
   }
 
   return (
@@ -129,7 +162,7 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
                   <Button
                     onClick={handleGoogleSignup}
                     className="w-full h-12 bg-white hover:bg-gray-100 text-gray-900 font-medium rounded-lg transition-all duration-200 flex items-center justify-center space-x-3 backdrop-blur-sm"
-                    disabled={googleLoading || loading}
+                    disabled={googleLoading || loading || appleLoading}
                   >
                     {googleLoading ? (
                       <Loader2 className="w-5 h-5 animate-spin" />
@@ -160,12 +193,16 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
                   <Button
                     onClick={handleAppleSignup}
                     className="w-full h-12 bg-black hover:bg-gray-900 text-white font-medium rounded-lg transition-all duration-200 flex items-center justify-center space-x-3 border border-gray-700 backdrop-blur-sm"
-                    disabled={loading || googleLoading}
+                    disabled={loading || googleLoading || appleLoading}
                   >
-                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
-                    </svg>
-                    <span>Continue with Apple</span>
+                    {appleLoading ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
+                      </svg>
+                    )}
+                    <span>{appleLoading ? "Signing up..." : "Continue with Apple"}</span>
                   </Button>
 
                   {/* Divider */}
@@ -259,7 +296,7 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
                   <Button
                     type="submit"
                     className="w-full h-12 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-all duration-200"
-                    disabled={loading || googleLoading}
+                    disabled={loading || googleLoading || appleLoading}
                   >
                     {loading ? (
                       <>
