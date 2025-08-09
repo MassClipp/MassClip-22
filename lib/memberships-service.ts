@@ -1,13 +1,7 @@
-/**
- * Central Memberships service: read/write memberships docs.
- * Uses Firebase Admin so it runs server-side in scripts and API routes.
- */
-
-import { getApps, initializeApp, cert, type App } from "firebase-admin/app"
-import { getFirestore, FieldValue, type Timestamp, type Firestore, type DocumentData } from "firebase-admin/firestore"
+import { db, FieldValue } from "@/lib/firebase-admin"
 
 export type MembershipPlan = "free" | "creator_pro"
-export type MembershipStatus = "active" | "trialing" | "past_due" | "canceled" | "inactive"
+export type MembershipStatus = "active" | "inactive" | "canceled" | "past_due" | "trialing"
 
 export interface MembershipFeatures {
   unlimitedDownloads: boolean
@@ -25,25 +19,27 @@ export interface MembershipDoc {
   plan: MembershipPlan
   status: MembershipStatus
   isActive: boolean
+
+  // Stripe related
   stripeCustomerId?: string
   stripeSubscriptionId?: string
+  currentPeriodEnd?: Date
   priceId?: string
   connectedAccountId?: string
-  currentPeriodEnd?: Timestamp | Date | null
 
-  // Usage counters
-  downloadsUsed?: number
-  bundlesCreated?: number
+  // Usage
+  downloadsUsed: number
+  bundlesCreated: number
 
-  // Normalized entitlement set
+  // Features/caps (single place to read app limits)
   features: MembershipFeatures
 
-  // Bookkeeping
-  createdAt?: Timestamp
-  updatedAt?: Timestamp
+  // Metadata
+  createdAt: Date
+  updatedAt: Date
 }
 
-const FREE_DEFAULTS: MembershipFeatures = {
+const FREE_FEATURES: MembershipFeatures = {
   unlimitedDownloads: false,
   premiumContent: false,
   noWatermark: false,
@@ -53,7 +49,7 @@ const FREE_DEFAULTS: MembershipFeatures = {
   maxBundles: 2,
 }
 
-const PRO_DEFAULTS: MembershipFeatures = {
+const PRO_FEATURES: MembershipFeatures = {
   unlimitedDownloads: true,
   premiumContent: true,
   noWatermark: true,
@@ -63,194 +59,140 @@ const PRO_DEFAULTS: MembershipFeatures = {
   maxBundles: null,
 }
 
-function getAdmin(): { app: App; db: Firestore } {
-  if (!getApps().length) {
-    const projectId = process.env.FIREBASE_PROJECT_ID
-    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL
-    let privateKey = process.env.FIREBASE_PRIVATE_KEY
-
-    // Vercel often stores the private key with literal \n
-    if (privateKey && privateKey.includes("\\n")) {
-      privateKey = privateKey.replace(/\\n/g, "\n")
-    }
-
-    if (!projectId || !clientEmail || !privateKey) {
-      throw new Error(
-        "Missing Firebase Admin credentials. Ensure FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY are set.",
-      )
-    }
-
-    initializeApp({
-      credential: cert({
-        projectId,
-        clientEmail,
-        privateKey,
-      }),
-    })
-  }
-  const db = getFirestore()
-  return { app: getApps()[0]!, db }
-}
-
-export function computeFeatures(
-  plan: MembershipPlan,
-  isActive: boolean,
-  freeOverrides?: Partial<MembershipFeatures>,
-): MembershipFeatures {
-  if (plan === "creator_pro" && isActive) {
-    return { ...PRO_DEFAULTS }
-  }
-  // Free or inactive pro falls back to free-level entitlements,
-  // honoring overrides if present (from legacy freeUsers).
-  return { ...FREE_DEFAULTS, ...(freeOverrides ?? {}) }
+function col() {
+  return db.collection("memberships")
 }
 
 export async function getMembership(uid: string): Promise<MembershipDoc | null> {
-  const { db } = getAdmin()
-  const snap = await db.collection("memberships").doc(uid).get()
-  if (!snap.exists) return null
-  return snap.data() as MembershipDoc
+  const snap = await col().doc(uid).get()
+  return snap.exists ? (snap.data() as MembershipDoc) : null
 }
 
-/**
- * Ensure a membership document exists for a user.
- * If missing, creates a free plan doc and returns it.
- */
 export async function ensureMembership(uid: string, email?: string): Promise<MembershipDoc> {
   const existing = await getMembership(uid)
   if (existing) return existing
 
-  const { db } = getAdmin()
-  const ref = db.collection("memberships").doc(uid)
-  const payload: MembershipDoc = {
+  const now = new Date()
+  const doc: MembershipDoc = {
     uid,
     email,
     plan: "free",
     status: "active",
-    // For free users, entitlements are free-level; keep isActive false to indicate "not paid"
-    isActive: false,
+    isActive: true,
     downloadsUsed: 0,
     bundlesCreated: 0,
-    features: computeFeatures("free", false),
-    createdAt: FieldValue.serverTimestamp() as unknown as Timestamp,
-    updatedAt: FieldValue.serverTimestamp() as unknown as Timestamp,
+    features: { ...FREE_FEATURES },
+    createdAt: now,
+    updatedAt: now,
   }
-  await ref.set(payload, { merge: true })
-  // Read back to materialize server timestamps
-  const snap = await ref.get()
-  return snap.data() as MembershipDoc
+  await col().doc(uid).set(doc, { merge: true })
+  return doc
 }
 
-export async function upsertMembership(doc: MembershipDoc): Promise<void> {
-  const { db } = getAdmin()
-  const ref = db.collection("memberships").doc(doc.uid)
-  const payload: MembershipDoc = {
-    ...doc,
-    createdAt: doc.createdAt ?? (FieldValue.serverTimestamp() as unknown as Timestamp),
-    updatedAt: FieldValue.serverTimestamp() as unknown as Timestamp,
-  }
-  await ref.set(payload, { merge: true })
+export async function setFree(uid: string, opts?: { email?: string; overrides?: Partial<MembershipFeatures> }) {
+  const now = new Date()
+  const features = { ...FREE_FEATURES, ...(opts?.overrides || {}) }
+  await col().doc(uid).set(
+    {
+      uid,
+      email: opts?.email,
+      plan: "free",
+      status: "active",
+      isActive: true,
+      features,
+      // keep usage if exists; only stamp updatedAt
+      updatedAt: now,
+      createdAt: now,
+    },
+    { merge: true },
+  )
 }
 
-/**
- * Map a legacy "creatorProUsers/{uid}" document to a MembershipDoc.
- */
-export function mapCreatorProToMembership(uid: string, data: DocumentData, email?: string): MembershipDoc {
-  const rawStatus: string = (data.subscriptionStatus || "").toString().toLowerCase()
-  const status: MembershipStatus =
-    rawStatus === "active" || rawStatus === "trialing"
-      ? (rawStatus as MembershipStatus)
-      : rawStatus === "past_due" || rawStatus === "canceled" || rawStatus === "inactive"
-        ? (rawStatus as MembershipStatus)
-        : "inactive"
-
-  const isActive = status === "active" || status === "trialing"
-
-  let currentPeriodEnd: Date | Timestamp | null = null
-  const renewal = data.renewalDate ?? data.currentPeriodEnd
-  if (renewal) {
-    if (typeof renewal?.toDate === "function") {
-      currentPeriodEnd = renewal.toDate()
-    } else if (typeof renewal === "number") {
-      currentPeriodEnd = new Date(renewal)
-    } else if (renewal instanceof Date) {
-      currentPeriodEnd = renewal
-    }
-  }
-
-  return {
-    uid,
-    email,
-    plan: "creator_pro",
-    status,
-    isActive,
-    stripeCustomerId: data.stripeCustomerId || data.customerId,
-    stripeSubscriptionId: data.subscriptionId || data.stripeSubscriptionId,
-    priceId: data.priceId,
-    connectedAccountId: data.connectedAccountId,
-    currentPeriodEnd,
-    downloadsUsed: typeof data.downloadsUsed === "number" ? data.downloadsUsed : undefined,
-    bundlesCreated: typeof data.bundlesCreated === "number" ? data.bundlesCreated : undefined,
-    features: computeFeatures("creator_pro", isActive),
-  }
+export async function setCreatorPro(
+  uid: string,
+  params: {
+    email?: string
+    stripeCustomerId: string
+    stripeSubscriptionId: string
+    currentPeriodEnd?: Date
+    priceId?: string
+    connectedAccountId?: string
+    status?: Exclude<MembershipStatus, "inactive"> // usually "active", "past_due", "trialing", "canceled"
+  },
+) {
+  const now = new Date()
+  await col()
+    .doc(uid)
+    .set(
+      {
+        uid,
+        email: params.email,
+        plan: "creator_pro",
+        status: params.status ?? "active",
+        isActive: (params.status ?? "active") === "active" || (params.status ?? "active") === "trialing",
+        stripeCustomerId: params.stripeCustomerId,
+        stripeSubscriptionId: params.stripeSubscriptionId,
+        currentPeriodEnd: params.currentPeriodEnd,
+        priceId: params.priceId,
+        connectedAccountId: params.connectedAccountId,
+        features: { ...PRO_FEATURES },
+        updatedAt: now,
+        createdAt: now,
+      },
+      { merge: true },
+    )
 }
 
-/**
- * Map a legacy "freeUsers/{uid}" document to a MembershipDoc (plan free).
- */
-export function mapFreeToMembership(uid: string, data: DocumentData, email?: string): MembershipDoc {
-  const overrides: Partial<MembershipFeatures> = {}
-  if (typeof data.platformFeePercentage === "number") {
-    overrides.platformFeePercentage = data.platformFeePercentage
-  }
-  if (typeof data.maxVideosPerBundle === "number") {
-    overrides.maxVideosPerBundle = data.maxVideosPerBundle
-  }
-  if (typeof data.bundlesLimit === "number") {
-    overrides.maxBundles = data.bundlesLimit
-  }
-
-  return {
-    uid,
-    email,
-    plan: "free",
-    // "active" here means the membership record exists; not a paid status.
-    status: "active",
-    isActive: false,
-    downloadsUsed: typeof data.downloadsUsed === "number" ? data.downloadsUsed : undefined,
-    bundlesCreated: typeof data.bundlesCreated === "number" ? data.bundlesCreated : undefined,
-    features: computeFeatures("free", false, overrides),
-  }
+export async function setCreatorProStatus(uid: string, status: MembershipStatus, updates?: Partial<MembershipDoc>) {
+  const now = new Date()
+  await col()
+    .doc(uid)
+    .set(
+      {
+        status,
+        isActive: status === "active" || status === "trialing",
+        updatedAt: now,
+        ...updates,
+      },
+      { merge: true },
+    )
 }
 
-/**
- * Convert a membership doc to a concise tier info shape for UI/logic.
- */
+export async function incrementDownloads(uid: string) {
+  const now = new Date()
+  await col()
+    .doc(uid)
+    .set({ downloadsUsed: FieldValue.increment(1), updatedAt: now }, { merge: true })
+}
+
+export async function incrementBundles(uid: string) {
+  const now = new Date()
+  await col()
+    .doc(uid)
+    .set({ bundlesCreated: FieldValue.increment(1), updatedAt: now }, { merge: true })
+}
+
 export function toTierInfo(m: MembershipDoc) {
+  // Conform to the UI expectations (free vs creator_pro, limits and flags)
   const tier: "free" | "creator_pro" = m.plan === "creator_pro" && m.isActive ? "creator_pro" : "free"
-
-  const unlimited = m.features?.unlimitedDownloads === true
-  const downloadsUsed = m.downloadsUsed ?? 0
-  const defaultFreeLimit = 15
 
   return {
     tier,
-    isActive: m.isActive,
-    status: m.status,
-    downloadsUsed,
-    downloadsLimit: unlimited ? null : defaultFreeLimit,
-    reachedDownloadLimit: unlimited ? false : downloadsUsed >= defaultFreeLimit,
+    downloadsUsed: m.downloadsUsed ?? 0,
+    downloadsLimit: m.features.unlimitedDownloads ? null : ((m as any).downloadsLimit ?? 15), // optional legacy fallback
     bundlesCreated: m.bundlesCreated ?? 0,
-    bundlesLimit: m.features?.maxBundles ?? 0, // null means unlimited
-    maxVideosPerBundle: m.features?.maxVideosPerBundle ?? 0,
-    platformFeePercentage: m.features?.platformFeePercentage ?? 20,
+    bundlesLimit: m.features.maxBundles, // null means unlimited
+    maxVideosPerBundle: m.features.maxVideosPerBundle,
+    platformFeePercentage: m.features.platformFeePercentage,
+    reachedDownloadLimit: m.features.unlimitedDownloads
+      ? false
+      : (m.downloadsUsed ?? 0) >= ((m as any).downloadsLimit ?? 15),
+    reachedBundleLimit:
+      m.features.maxBundles === null ? false : (m.bundlesCreated ?? 0) >= (m.features.maxBundles ?? 0),
   }
 }
 
-/**
- * Ensure a membership exists, then return tier info.
- */
 export async function getTierInfo(uid: string) {
-  const membership = (await getMembership(uid)) ?? (await ensureMembership(uid))
-  return toTierInfo(membership)
+  const m = await ensureMembership(uid)
+  return toTierInfo(m)
 }
