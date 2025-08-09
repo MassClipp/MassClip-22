@@ -1,224 +1,286 @@
-import { StripeEarningsService } from "@/lib/stripe-earnings-service"
-import { ProductBoxSalesService } from "@/lib/product-box-sales-service"
+import { getFirestore } from "firebase-admin/firestore"
+import { initializeApp, getApps, cert } from "firebase-admin/app"
+import Stripe from "stripe"
+
+// Initialize Firebase Admin if not already initialized
+if (!getApps().length) {
+  const serviceAccount = {
+    type: "service_account",
+    project_id: process.env.FIREBASE_PROJECT_ID,
+    private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
+    private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+    client_email: process.env.FIREBASE_CLIENT_EMAIL,
+    client_id: process.env.FIREBASE_CLIENT_ID,
+    auth_uri: "https://accounts.google.com/o/oauth2/auth",
+    token_uri: "https://oauth2.googleapis.com/token",
+    auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
+    client_x509_cert_url: `https://www.googleapis.com/robot/v1/metadata/x509/${process.env.FIREBASE_CLIENT_EMAIL}`,
+  }
+
+  initializeApp({
+    credential: cert(serviceAccount as any),
+  })
+}
+
+const db = getFirestore()
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2024-06-20",
+})
 
 export interface SalesForecastData {
-  past30DaysAverage: number
-  projectedNext30Days: number
+  // Weekly projections (changed from monthly)
+  projectedNextWeek: number
+  pastWeekAverage: number
+  weeklyGoal: number
+  progressToGoal: number
+
+  // Daily metrics
   dailyAverageRevenue: number
   projectedDailyRevenue: number
-  confidenceLevel: "low" | "medium" | "high"
+
+  // Trend analysis
   trendDirection: "up" | "down" | "stable"
-  motivationalMessage: string
-  chartData: {
+  confidenceLevel: "high" | "medium" | "low"
+
+  // Chart data for visualization
+  chartData: Array<{
     date: string
     revenue: number
     isProjected: boolean
-  }[]
+  }>
+
+  // Motivational content
+  motivationalMessage: string
+}
+
+// Helper function to safely convert to number
+function safeNumber(value: any): number {
+  if (typeof value === "number" && !isNaN(value) && isFinite(value)) {
+    return value
+  }
+  if (typeof value === "string") {
+    const parsed = Number.parseFloat(value)
+    if (!isNaN(parsed) && isFinite(parsed)) {
+      return parsed
+    }
+  }
+  return 0
+}
+
+// Helper function to get connected Stripe account
+async function getConnectedStripeAccount(userId: string) {
+  try {
+    const connectedAccountDoc = await db.collection("connectedStripeAccounts").doc(userId).get()
+    if (connectedAccountDoc.exists) {
+      return connectedAccountDoc.data()
+    }
+    return null
+  } catch (error) {
+    console.error(`❌ [Forecast] Error fetching connected account:`, error)
+    return null
+  }
+}
+
+// Helper function to fetch Stripe earnings data for weekly forecast
+async function getWeeklyStripeData(stripeAccountId: string) {
+  try {
+    const now = new Date()
+    const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000) // Get 2 weeks of data
+
+    const charges = await stripe.charges.list(
+      {
+        created: {
+          gte: Math.floor(fourteenDaysAgo.getTime() / 1000),
+        },
+        limit: 100,
+      },
+      {
+        stripeAccount: stripeAccountId,
+      },
+    )
+
+    const successfulCharges = charges.data.filter((charge) => charge.status === "succeeded")
+
+    // Group charges by day
+    const dailyRevenue: { [key: string]: number } = {}
+
+    successfulCharges.forEach((charge) => {
+      const chargeDate = new Date(charge.created * 1000)
+      const dateKey = chargeDate.toISOString().split("T")[0]
+      const netAmount = (charge.amount - (charge.application_fee_amount || 0)) / 100
+
+      dailyRevenue[dateKey] = (dailyRevenue[dateKey] || 0) + netAmount
+    })
+
+    return {
+      dailyRevenue,
+      totalCharges: successfulCharges.length,
+      hasData: successfulCharges.length > 0,
+    }
+  } catch (error) {
+    console.error(`❌ [Forecast] Error fetching Stripe data:`, error)
+    return {
+      dailyRevenue: {},
+      totalCharges: 0,
+      hasData: false,
+    }
+  }
 }
 
 export class SalesForecastService {
-  /**
-   * Generate sales forecast based on the same data source as dashboard sales
-   */
   static async generateForecast(userId: string): Promise<SalesForecastData> {
-    console.log(`📊 Generating sales forecast for user: ${userId}`)
-
     try {
-      // Use the same data source as dashboard sales
-      let salesData = null
+      console.log(`📊 [Forecast] Generating weekly forecast for user: ${userId}`)
 
-      // Try Stripe first (same as dashboard)
-      try {
-        const stripeData = await StripeEarningsService.getEarningsData(userId)
-        if (stripeData && !stripeData.error && stripeData.totalEarnings > 0) {
-          salesData = {
-            last30DaysRevenue: stripeData.last30DaysEarnings || 0,
-            last30DaysSales: stripeData.salesMetrics?.last30DaysSales || 0,
-            thisMonthRevenue: stripeData.thisMonthEarnings || 0,
-            totalRevenue: stripeData.totalEarnings || 0,
-            recentTransactions: stripeData.recentTransactions || [],
-          }
-          console.log(`💳 Using live data for forecast:`, {
-            last30DaysRevenue: salesData.last30DaysRevenue,
-            last30DaysSales: salesData.last30DaysSales,
-          })
-        }
-      } catch (error) {
-        console.warn(`⚠️ Primary data source failed, trying fallback:`, error)
+      // Get connected Stripe account
+      const connectedAccount = await getConnectedStripeAccount(userId)
+
+      if (!connectedAccount?.stripe_user_id || !connectedAccount.charges_enabled) {
+        console.log(`⚠️ [Forecast] No connected Stripe account for user: ${userId}`)
+        return this.createDefaultForecast("Connect your Stripe account to see sales forecasts")
       }
 
-      // Fallback to ProductBoxSalesService if needed
-      if (!salesData) {
-        const fallbackData = await ProductBoxSalesService.getSalesStats(userId)
-        salesData = {
-          last30DaysRevenue: fallbackData.last30DaysRevenue || 0,
-          last30DaysSales: fallbackData.last30DaysSales || 0,
-          thisMonthRevenue: fallbackData.thisMonthRevenue || 0,
-          totalRevenue: fallbackData.totalRevenue || 0,
-          recentTransactions: fallbackData.recentSales || [],
-        }
-        console.log(`📦 Using fallback data for forecast:`, {
-          last30DaysRevenue: salesData.last30DaysRevenue,
-          last30DaysSales: salesData.last30DaysSales,
-        })
+      // Fetch Stripe data
+      const stripeData = await getWeeklyStripeData(connectedAccount.stripe_user_id)
+
+      if (!stripeData.hasData) {
+        console.log(`📊 [Forecast] No sales data available for user: ${userId}`)
+        return this.createDefaultForecast("Start making sales to see your weekly forecast")
       }
 
-      // Calculate metrics based on actual sales data
-      const last30DaysRevenue = salesData.last30DaysRevenue
-      const last30DaysSales = salesData.last30DaysSales
-      const dailyAverageRevenue = last30DaysRevenue / 30
+      // Calculate weekly metrics
+      const now = new Date()
+      const pastWeekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
 
-      // For trend analysis, compare with previous period if we have enough data
-      let trendDirection: "up" | "down" | "stable" = "stable"
-      let trendMultiplier = 1
+      // Get past week's revenue
+      let pastWeekRevenue = 0
+      let pastWeekDays = 0
 
-      // If we have recent sales, assume positive trend
-      if (last30DaysRevenue > 0) {
-        trendDirection = "up"
-        trendMultiplier = 1.2 // Modest growth assumption
+      for (let i = 0; i < 7; i++) {
+        const date = new Date(pastWeekStart.getTime() + i * 24 * 60 * 60 * 1000)
+        const dateKey = date.toISOString().split("T")[0]
+        const dayRevenue = stripeData.dailyRevenue[dateKey] || 0
+        pastWeekRevenue += dayRevenue
+        if (dayRevenue > 0) pastWeekDays++
       }
 
-      // Calculate projected revenue
-      const baseProjection = dailyAverageRevenue * 30
-      const trendAdjustedProjection = baseProjection * trendMultiplier
-      const projectedNext30Days = Math.max(trendAdjustedProjection, 0)
+      const pastWeekAverage = safeNumber(pastWeekRevenue)
+      const dailyAverageRevenue = pastWeekDays > 0 ? pastWeekAverage / 7 : 0
 
-      // Determine confidence level based on sales volume
-      let confidenceLevel: "low" | "medium" | "high" = "low"
-      if (last30DaysSales >= 10) {
-        confidenceLevel = "high"
-      } else if (last30DaysSales >= 3) {
-        confidenceLevel = "medium"
-      }
+      // Project next week based on past week's performance
+      const projectedNextWeek = safeNumber(dailyAverageRevenue * 7)
+      const projectedDailyRevenue = safeNumber(dailyAverageRevenue)
 
-      // Generate motivational message
-      const motivationalMessage = this.generateMotivationalMessage(
-        last30DaysRevenue,
-        projectedNext30Days,
-        trendDirection,
-        confidenceLevel,
-      )
+      // Set weekly goal (20% higher than past week average, minimum $50)
+      const weeklyGoal = Math.max(50, pastWeekAverage * 1.2)
+      const progressToGoal = weeklyGoal > 0 ? (pastWeekAverage / weeklyGoal) * 100 : 0
+
+      // Determine trend
+      const trendDirection = this.calculateTrend(stripeData.dailyRevenue)
+      const confidenceLevel = this.calculateConfidence(stripeData.totalCharges, pastWeekDays)
 
       // Generate chart data
-      const chartData = this.generateChartData(last30DaysRevenue, dailyAverageRevenue, trendMultiplier)
+      const chartData = this.generateWeeklyChartData(stripeData.dailyRevenue, dailyAverageRevenue)
 
-      const forecastData: SalesForecastData = {
-        past30DaysAverage: last30DaysRevenue,
-        projectedNext30Days,
-        dailyAverageRevenue,
-        projectedDailyRevenue: dailyAverageRevenue * trendMultiplier,
-        confidenceLevel,
+      // Generate motivational message
+      const motivationalMessage = this.generateWeeklyMotivationalMessage(
+        pastWeekAverage,
+        projectedNextWeek,
         trendDirection,
-        motivationalMessage,
+        progressToGoal,
+      )
+
+      const forecast: SalesForecastData = {
+        projectedNextWeek,
+        pastWeekAverage,
+        weeklyGoal: safeNumber(weeklyGoal),
+        progressToGoal: safeNumber(progressToGoal),
+        dailyAverageRevenue: safeNumber(dailyAverageRevenue),
+        projectedDailyRevenue: safeNumber(projectedDailyRevenue),
+        trendDirection,
+        confidenceLevel,
         chartData,
+        motivationalMessage,
       }
 
-      console.log(`✅ Sales forecast generated:`, {
-        past30Days: last30DaysRevenue,
-        projected: projectedNext30Days,
+      console.log(`✅ [Forecast] Weekly forecast generated:`, {
+        pastWeek: pastWeekAverage,
+        projectedNextWeek,
+        weeklyGoal,
         trend: trendDirection,
-        confidence: confidenceLevel,
       })
 
-      return forecastData
+      return forecast
     } catch (error) {
-      console.error(`❌ Error generating sales forecast:`, error)
-
-      // Return aspirational forecast for new creators
-      return {
-        past30DaysAverage: 0,
-        projectedNext30Days: 50,
-        dailyAverageRevenue: 0,
-        projectedDailyRevenue: 1.67,
-        confidenceLevel: "low",
-        trendDirection: "stable",
-        motivationalMessage:
-          "🚀 Ready to launch your first sales? Create premium content and watch your earnings grow!",
-        chartData: this.generateEmptyChartData(),
-      }
+      console.error(`❌ [Forecast] Error generating forecast:`, error)
+      return this.createDefaultForecast("Unable to generate forecast at this time")
     }
   }
 
-  /**
-   * Generate motivational message based on performance
-   */
-  private static generateMotivationalMessage(
-    past30Days: number,
-    projected: number,
-    trend: "up" | "down" | "stable",
-    confidence: "low" | "medium" | "high",
-  ): string {
-    if (past30Days === 0) {
-      const motivationalMessages = [
-        "🚀 Ready to launch your first sales? Create premium content and watch your earnings grow!",
-        "💡 Your journey to financial success starts with your first premium upload!",
-        "🌟 Every successful creator started with zero sales. Your breakthrough moment is coming!",
-        "🎯 The best time to start was yesterday, the second best time is now. Upload premium content!",
-        "⚡ Transform your passion into profit. Your audience is waiting for premium content!",
-      ]
-      return motivationalMessages[Math.floor(Math.random() * motivationalMessages.length)]
+  private static createDefaultForecast(message: string): SalesForecastData {
+    return {
+      projectedNextWeek: 0,
+      pastWeekAverage: 0,
+      weeklyGoal: 50, // Default weekly goal
+      progressToGoal: 0,
+      dailyAverageRevenue: 0,
+      projectedDailyRevenue: 0,
+      trendDirection: "stable",
+      confidenceLevel: "low",
+      chartData: [],
+      motivationalMessage: message,
     }
-
-    const messages = {
-      up: {
-        high: `🔥 Excellent momentum! Your consistent sales show strong audience engagement. Keep scaling!`,
-        medium: `📈 Great progress! Your growing sales indicate solid market fit. Time to accelerate!`,
-        low: `🌱 Positive signs detected! Your initial sales show promise. Build on this foundation!`,
-      },
-      stable: {
-        high: `💪 Solid performance! You've built reliable revenue. Ready to optimize and grow?`,
-        medium: `⚖️ Steady progress! Your consistent sales show reliability. Scale up your efforts!`,
-        low: `🎯 Finding your rhythm! Keep experimenting to unlock your full potential.`,
-      },
-      down: {
-        high: `💡 Market fluctuations are normal. Your strong foundation means recovery is achievable!`,
-        medium: `🔄 Time to innovate! Your audience is waiting for your next breakthrough content.`,
-        low: `🌟 Every expert was once a beginner. Focus on quality and growth will follow.`,
-      },
-    }
-
-    return messages[trend][confidence]
   }
 
-  /**
-   * Generate chart data based on actual sales performance
-   */
-  private static generateChartData(
-    actualRevenue: number,
+  private static calculateTrend(dailyRevenue: { [key: string]: number }): "up" | "down" | "stable" {
+    const dates = Object.keys(dailyRevenue).sort()
+    if (dates.length < 4) return "stable"
+
+    const firstHalf = dates.slice(0, Math.floor(dates.length / 2))
+    const secondHalf = dates.slice(Math.floor(dates.length / 2))
+
+    const firstHalfAvg = firstHalf.reduce((sum, date) => sum + (dailyRevenue[date] || 0), 0) / firstHalf.length
+    const secondHalfAvg = secondHalf.reduce((sum, date) => sum + (dailyRevenue[date] || 0), 0) / secondHalf.length
+
+    const difference = secondHalfAvg - firstHalfAvg
+    const threshold = firstHalfAvg * 0.1 // 10% threshold
+
+    if (difference > threshold) return "up"
+    if (difference < -threshold) return "down"
+    return "stable"
+  }
+
+  private static calculateConfidence(totalCharges: number, activeDays: number): "high" | "medium" | "low" {
+    if (totalCharges >= 10 && activeDays >= 5) return "high"
+    if (totalCharges >= 5 && activeDays >= 3) return "medium"
+    return "low"
+  }
+
+  private static generateWeeklyChartData(
+    dailyRevenue: { [key: string]: number },
     dailyAverage: number,
-    trendMultiplier: number,
-  ): { date: string; revenue: number; isProjected: boolean }[] {
-    const chartData: { date: string; revenue: number; isProjected: boolean }[] = []
+  ): Array<{ date: string; revenue: number; isProjected: boolean }> {
+    const chartData: Array<{ date: string; revenue: number; isProjected: boolean }> = []
     const now = new Date()
 
-    // Generate past 30 days - distribute actual revenue across the period
-    for (let i = 29; i >= 0; i--) {
+    // Add past 7 days
+    for (let i = 6; i >= 0; i--) {
       const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000)
-
-      // Distribute revenue with some realistic variance
-      const baseDaily = actualRevenue / 30
-      const variance = 0.5 + Math.random() * 1.5 // 0.5x to 2x variance
-      const dayRevenue = baseDaily * variance
-
+      const dateKey = date.toISOString().split("T")[0]
       chartData.push({
-        date: date.toISOString().split("T")[0],
-        revenue: Math.max(dayRevenue, 0),
+        date: dateKey,
+        revenue: safeNumber(dailyRevenue[dateKey] || 0),
         isProjected: false,
       })
     }
 
-    // Generate projected 30 days
-    const projectedDailyRevenue = dailyAverage * trendMultiplier
-    for (let i = 1; i <= 30; i++) {
+    // Add next 7 days (projected)
+    for (let i = 1; i <= 7; i++) {
       const date = new Date(now.getTime() + i * 24 * 60 * 60 * 1000)
-
-      // Add realistic variance to projections
-      const variance = 0.8 + Math.random() * 0.4 // 0.8 to 1.2
-      const projectedRevenue = projectedDailyRevenue * variance
-
+      const dateKey = date.toISOString().split("T")[0]
       chartData.push({
-        date: date.toISOString().split("T")[0],
-        revenue: Math.max(projectedRevenue, 0),
+        date: dateKey,
+        revenue: safeNumber(dailyAverage),
         isProjected: true,
       })
     }
@@ -226,37 +288,47 @@ export class SalesForecastService {
     return chartData
   }
 
-  /**
-   * Generate aspirational chart data for creators with no sales
-   */
-  private static generateEmptyChartData(): { date: string; revenue: number; isProjected: boolean }[] {
-    const chartData: { date: string; revenue: number; isProjected: boolean }[] = []
-    const now = new Date()
-
-    // Generate past 30 days with zero revenue
-    for (let i = 29; i >= 0; i--) {
-      const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000)
-      chartData.push({
-        date: date.toISOString().split("T")[0],
-        revenue: 0,
-        isProjected: false,
-      })
+  private static generateWeeklyMotivationalMessage(
+    pastWeek: number,
+    projectedNextWeek: number,
+    trend: string,
+    progressToGoal: number,
+  ): string {
+    const messages = {
+      noSales: [
+        "🚀 This week is your opportunity to make your first sale! Your audience is waiting.",
+        "💡 Every successful creator started with zero sales. Your breakthrough week is coming!",
+        "🎯 Focus on creating value this week - your first sale could be just around the corner.",
+      ],
+      lowSales: [
+        "📈 You're building momentum! Each week brings new opportunities to grow.",
+        "💪 Consistency is key - keep creating and your weekly earnings will compound.",
+        "🌟 Small wins lead to big victories. This week could be your best yet!",
+      ],
+      goodSales: [
+        "🔥 You're on fire! Your weekly performance shows real potential for growth.",
+        "🎉 Great work this week! Your content is resonating with your audience.",
+        "⚡ Your weekly momentum is building - keep pushing forward!",
+      ],
+      excellentSales: [
+        "🏆 Outstanding weekly performance! You're setting the standard for success.",
+        "💎 Your weekly earnings show you've mastered the art of content monetization.",
+        "🚀 Incredible week! Your growth trajectory is inspiring.",
+      ],
     }
 
-    // Generate projected 30 days with gradual growth
-    const baseProjection = 1.67 // $50/30 days
-    for (let i = 1; i <= 30; i++) {
-      const date = new Date(now.getTime() + i * 24 * 60 * 60 * 1000)
-      const growthFactor = Math.min(i / 30, 1)
-      const projectedRevenue = baseProjection * (0.5 + growthFactor * 1.5)
-
-      chartData.push({
-        date: date.toISOString().split("T")[0],
-        revenue: projectedRevenue,
-        isProjected: true,
-      })
+    let category: keyof typeof messages
+    if (pastWeek === 0) {
+      category = "noSales"
+    } else if (pastWeek < 25) {
+      category = "lowSales"
+    } else if (pastWeek < 100) {
+      category = "goodSales"
+    } else {
+      category = "excellentSales"
     }
 
-    return chartData
+    const categoryMessages = messages[category]
+    return categoryMessages[Math.floor(Math.random() * categoryMessages.length)]
   }
 }

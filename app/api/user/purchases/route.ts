@@ -143,6 +143,32 @@ export async function GET(request: NextRequest) {
         const data = doc.data()
         console.log(`📦 [Get Purchases] Processing purchase: ${doc.id} - ${data.title}`)
 
+        // Calculate price properly - prioritize bundlePrice, then purchaseAmount, then amount
+        let priceInDollars = 0
+        if (data.bundlePrice !== undefined && data.bundlePrice !== null) {
+          // bundlePrice is already in dollars
+          priceInDollars = Number(data.bundlePrice)
+          console.log(`💰 [Get Purchases] Using bundlePrice: $${priceInDollars}`)
+        } else if (data.purchaseAmount !== undefined && data.purchaseAmount !== null) {
+          // purchaseAmount is in cents
+          priceInDollars = Number(data.purchaseAmount) / 100
+          console.log(`💰 [Get Purchases] Using purchaseAmount: $${priceInDollars} (converted from ${data.purchaseAmount} cents)`)
+        } else if (data.amount !== undefined && data.amount !== null) {
+          // amount could be in cents or dollars, check the value
+          const amountValue = Number(data.amount)
+          if (amountValue > 100) {
+            // Likely in cents
+            priceInDollars = amountValue / 100
+            console.log(`💰 [Get Purchases] Using amount as cents: $${priceInDollars} (converted from ${amountValue} cents)`)
+          } else {
+            // Likely in dollars
+            priceInDollars = amountValue
+            console.log(`💰 [Get Purchases] Using amount as dollars: $${priceInDollars}`)
+          }
+        } else {
+          console.warn(`⚠️ [Get Purchases] No price found for purchase ${doc.id}`)
+        }
+
         purchases.push({
           id: doc.id,
           sessionId: data.sessionId || doc.id,
@@ -150,7 +176,7 @@ export async function GET(request: NextRequest) {
           itemType: data.itemType || (data.bundleId ? "bundle" : "productBox"),
           bundleId: data.bundleId,
           productBoxId: data.productBoxId,
-          title: data.title || "Untitled Purchase",
+          title: data.title || data.bundleTitle || "Untitled Purchase",
           description: data.description || "",
           thumbnailUrl: data.thumbnailUrl || "",
 
@@ -166,8 +192,9 @@ export async function GET(request: NextRequest) {
           creatorName: data.creatorName || "Unknown Creator",
           creatorUsername: data.creatorUsername || "",
 
-          // Purchase details
-          amount: data.amount || 0,
+          // Purchase details - use calculated price
+          amount: priceInDollars,
+          price: priceInDollars,
           currency: data.currency || "usd",
           status: data.status || "completed",
           purchasedAt: data.purchasedAt || data.createdAt || new Date(),
@@ -186,10 +213,20 @@ export async function GET(request: NextRequest) {
           // Metadata
           source: data.source || "webhook",
           webhookProcessed: data.webhookProcessed || false,
+          
+          // Price metadata for debugging
+          priceMetadata: {
+            bundlePrice: data.bundlePrice,
+            purchaseAmount: data.purchaseAmount,
+            amount: data.amount,
+            calculatedPrice: priceInDollars
+          }
         })
       })
 
-      console.log("✅ [Get Purchases] Successfully processed", purchases.length, "purchases")
+      console.log("✅ [Get Purchases] Successfully processed", purchases.length, "purchases with prices:",
+        purchases.map(p => ({ id: p.id, title: p.title, price: p.price }))
+      )
 
       return NextResponse.json({
         success: true,

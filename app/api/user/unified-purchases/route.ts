@@ -33,7 +33,13 @@ export async function GET(request: NextRequest) {
 
     for (const doc of bundlePurchasesSnapshot.docs) {
       const data = doc.data()
-      console.log(`🔍 [Unified Purchases API] Processing bundle purchase:`, data)
+      console.log(`🔍 [Unified Purchases API] Processing bundle purchase:`, {
+        id: doc.id,
+        bundlePrice: data.bundlePrice,
+        purchaseAmount: data.purchaseAmount,
+        amount: data.amount,
+        bundleTitle: data.bundleTitle
+      })
 
       // Get creator info safely
       let creatorUsername = "Unknown Creator"
@@ -69,11 +75,37 @@ export async function GET(request: NextRequest) {
         }
       }
 
+      // Calculate price properly - prioritize bundlePrice, then purchaseAmount, then amount
+      let priceInDollars = 0
+      if (data.bundlePrice !== undefined && data.bundlePrice !== null) {
+        // bundlePrice is already in dollars
+        priceInDollars = Number(data.bundlePrice)
+        console.log(`💰 [Unified Purchases API] Using bundlePrice: $${priceInDollars}`)
+      } else if (data.purchaseAmount !== undefined && data.purchaseAmount !== null) {
+        // purchaseAmount is in cents
+        priceInDollars = Number(data.purchaseAmount) / 100
+        console.log(`💰 [Unified Purchases API] Using purchaseAmount: $${priceInDollars} (converted from ${data.purchaseAmount} cents)`)
+      } else if (data.amount !== undefined && data.amount !== null) {
+        // amount could be in cents or dollars, check the value
+        const amountValue = Number(data.amount)
+        if (amountValue > 100) {
+          // Likely in cents
+          priceInDollars = amountValue / 100
+          console.log(`💰 [Unified Purchases API] Using amount as cents: $${priceInDollars} (converted from ${amountValue} cents)`)
+        } else {
+          // Likely in dollars
+          priceInDollars = amountValue
+          console.log(`💰 [Unified Purchases API] Using amount as dollars: $${priceInDollars}`)
+        }
+      } else {
+        console.warn(`⚠️ [Unified Purchases API] No price found for purchase ${doc.id}`)
+      }
+
       purchases.push({
         id: doc.id,
         title: bundleTitle,
         description: data.description || "",
-        price: (data.amount || 0) / 100, // Convert cents to dollars
+        price: priceInDollars,
         currency: "usd",
         status: "completed",
         createdAt: data.createdAt || data.completedAt || new Date(),
@@ -88,6 +120,9 @@ export async function GET(request: NextRequest) {
           description: data.description || "",
           contentCount,
           thumbnailUrl,
+          bundlePrice: data.bundlePrice,
+          purchaseAmount: data.purchaseAmount,
+          amount: data.amount,
         },
       })
     }
@@ -108,7 +143,12 @@ export async function GET(request: NextRequest) {
 
       for (const doc of productBoxPurchasesSnapshot.docs) {
         const data = doc.data()
-        console.log(`🔍 [Unified Purchases API] Processing product box purchase:`, data)
+        console.log(`🔍 [Unified Purchases API] Processing product box purchase:`, {
+          id: doc.id,
+          productBoxPrice: data.productBoxPrice,
+          purchaseAmount: data.purchaseAmount,
+          amount: data.amount
+        })
 
         // Get creator info safely
         let creatorUsername = "Unknown Creator"
@@ -125,11 +165,26 @@ export async function GET(request: NextRequest) {
           }
         }
 
+        // Calculate price properly for product boxes
+        let priceInDollars = 0
+        if (data.productBoxPrice !== undefined && data.productBoxPrice !== null) {
+          priceInDollars = Number(data.productBoxPrice)
+        } else if (data.purchaseAmount !== undefined && data.purchaseAmount !== null) {
+          priceInDollars = Number(data.purchaseAmount) / 100
+        } else if (data.amount !== undefined && data.amount !== null) {
+          const amountValue = Number(data.amount)
+          if (amountValue > 100) {
+            priceInDollars = amountValue / 100
+          } else {
+            priceInDollars = amountValue
+          }
+        }
+
         purchases.push({
           id: doc.id,
           title: data.productBoxTitle || "Untitled Product",
           description: data.description || "",
-          price: (data.amount || 0) / 100, // Convert cents to dollars
+          price: priceInDollars,
           currency: "usd",
           status: "completed",
           createdAt: data.createdAt || data.completedAt || new Date(),
@@ -142,6 +197,9 @@ export async function GET(request: NextRequest) {
             title: data.productBoxTitle || "Untitled Product",
             description: data.description || "",
             contentCount: data.contentCount || 0,
+            productBoxPrice: data.productBoxPrice,
+            purchaseAmount: data.purchaseAmount,
+            amount: data.amount,
           },
         })
       }
@@ -171,7 +229,9 @@ export async function GET(request: NextRequest) {
       return getTime(b.createdAt) - getTime(a.createdAt) // Newest first
     })
 
-    console.log(`✅ [Unified Purchases API] Returning ${purchases.length} purchases`)
+    console.log(`✅ [Unified Purchases API] Returning ${purchases.length} purchases with prices:`, 
+      purchases.map(p => ({ id: p.id, title: p.title, price: p.price }))
+    )
 
     return NextResponse.json({
       success: true,

@@ -5,9 +5,12 @@ import { useParams, useRouter } from "next/navigation"
 import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { ArrowLeft, AlertCircle, Play, Package, Volume2, VolumeX, Pause } from "lucide-react"
+import { ArrowLeft, AlertCircle, Play, Package, Volume2, VolumeX, Pause, Download, Lock } from 'lucide-react'
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { toast } from "@/hooks/use-toast"
+import { useDownloadLimit } from "@/contexts/download-limit-context"
+import { doc, updateDoc, increment } from "firebase/firestore"
+import { db } from "@/lib/firebase"
 
 interface BundleContent {
   id: string
@@ -42,16 +45,20 @@ interface PurchaseInfo {
   status: string
 }
 
-// Video player component with hover effects and smaller play button
+// Video player component with hover effects and download tracking
 const VideoPlayer = ({ content }: { content: BundleContent }) => {
   const [isPlaying, setIsPlaying] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
   const [isMuted, setIsMuted] = useState(true)
+  const [isDownloading, setIsDownloading] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const { user } = useFirebaseAuth()
+  const { hasReachedLimit, isProUser, forceRefresh } = useDownloadLimit()
 
   // Get the best available video URL
   const videoUrl = content.fileUrl || content.videoUrl || content.downloadUrl || ""
   const thumbnailUrl = content.thumbnailUrl || ""
+  const downloadUrl = content.downloadUrl || content.fileUrl || content.videoUrl || ""
 
   const handlePlay = () => {
     if (!videoRef.current || !videoUrl) {
@@ -118,6 +125,157 @@ const VideoPlayer = ({ content }: { content: BundleContent }) => {
     })
   }
 
+  // Record a download in Firestore (same logic as VimeoCard)
+  const recordDownload = async () => {
+    if (!user) return { success: false, message: "User not authenticated" }
+
+    // Creator Pro users don't need to track downloads but we still record for analytics
+    if (isProUser) return { success: true }
+
+    try {
+      const userDocRef = doc(db, "users", user.uid)
+
+      // Increment download count
+      await updateDoc(userDocRef, {
+        downloads: increment(1),
+      })
+
+      // Force refresh the global limit status
+      forceRefresh()
+
+      return { success: true }
+    } catch (err) {
+      console.error("Error recording download:", err)
+      return {
+        success: false,
+        message: "Failed to record download. Please try again.",
+      }
+    }
+  }
+
+  // Direct download function for desktop
+  const startDirectDownload = async (url: string, filename: string) => {
+    try {
+      // Fetch the file
+      const response = await fetch(url)
+      if (!response.ok) throw new Error("Network response was not ok")
+
+      // Get the blob
+      const blob = await response.blob()
+
+      // Create object URL
+      const objectUrl = URL.createObjectURL(blob)
+
+      // Create anchor element for download
+      const link = document.createElement('a')
+      link.href = objectUrl
+      link.download = filename
+      link.style.display = 'none'
+      
+      // Append to body, click, and remove
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+
+      // Clean up
+      setTimeout(() => {
+        URL.revokeObjectURL(objectUrl)
+      }, 100)
+
+      return true
+    } catch (error) {
+      console.error("Direct download failed:", error)
+      return false
+    }
+  }
+
+  const handleDownload = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    
+    // Prevent multiple clicks
+    if (isDownloading) return
+
+    setIsDownloading(true)
+
+    try {
+      // 1. Basic authentication check
+      if (!user) {
+        toast({
+          title: "Authentication Required",
+          description: "Please log in to download videos",
+          variant: "destructive",
+        })
+        return
+      }
+
+      // 2. Check if download link exists
+      if (!downloadUrl) {
+        toast({
+          title: "Download Error",
+          description: "No download links available for this video.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      // 3. CRITICAL: Check if user has reached download limit BEFORE downloading
+      if (hasReachedLimit && !isProUser) {
+        toast({
+          title: "Download Limit Reached",
+          description: "You've reached your monthly download limit of 15. Upgrade to Creator Pro for unlimited downloads.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      // 4. Record the download for tracking purposes
+      const result = await recordDownload()
+      if (!result.success && !isProUser) {
+        toast({
+          title: "Download Error",
+          description: result.message || "Failed to record download.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      // 5. Trigger the actual download
+      const filename = `${content.title?.replace(/[^\w\s]/gi, "") || "video"}.${content.fileType || 'mp4'}`
+
+      // Try direct download first
+      const success = await startDirectDownload(downloadUrl, filename)
+
+      if (!success) {
+        // Fallback to traditional method if direct download fails
+        const link = document.createElement('a')
+        link.href = downloadUrl
+        link.download = filename
+        link.target = '_blank'
+        link.style.display = 'none'
+        
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+      }
+
+      // Show success toast
+      toast({
+        title: "Download Started",
+        description: `Downloading ${content.title}`,
+      })
+
+    } catch (error) {
+      console.error("Download failed:", error)
+      toast({
+        title: "Download Error",
+        description: "There was an issue starting your download. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsDownloading(false)
+    }
+  }
+
   if (!videoUrl) {
     return (
       <div className="relative w-full aspect-[9/16] bg-black border border-white/20 overflow-hidden rounded-lg">
@@ -179,6 +337,28 @@ const VideoPlayer = ({ content }: { content: BundleContent }) => {
           {isMuted ? <VolumeX className="w-4 h-4 text-white" /> : <Volume2 className="w-4 h-4 text-white" />}
         </button>
       )}
+
+      {/* Download button - bottom right corner, shows lock if limit reached */}
+      <button
+        onClick={handleDownload}
+        disabled={isDownloading || !downloadUrl || (hasReachedLimit && !isProUser)}
+        className={`absolute bottom-3 right-3 w-8 h-8 backdrop-blur-sm rounded-full flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+          hasReachedLimit && !isProUser 
+            ? "bg-zinc-800/90 cursor-not-allowed" 
+            : "bg-black/70 hover:bg-black/90"
+        }`}
+        title={
+          hasReachedLimit && !isProUser 
+            ? "Upgrade to Creator Pro for unlimited downloads" 
+            : `Download ${content.title}`
+        }
+      >
+        {hasReachedLimit && !isProUser ? (
+          <Lock className="w-4 h-4 text-zinc-400" />
+        ) : (
+          <Download className={`w-4 h-4 text-white ${isDownloading ? 'animate-pulse' : ''}`} />
+        )}
+      </button>
     </div>
   )
 }

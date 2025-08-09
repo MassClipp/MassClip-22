@@ -20,17 +20,37 @@ export function useSalesForecast() {
       setLoading(true)
       setError(null)
 
-      const response = await fetch(`/api/dashboard/sales-forecast?userId=${user.uid}`)
+      console.log(`📊 Fetching weekly sales forecast for user: ${user.uid}`)
+
+      // Get the Firebase ID token for authentication
+      const idToken = await user.getIdToken(true)
+
+      const response = await fetch(`/api/dashboard/sales-forecast`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+          "Content-Type": "application/json",
+        },
+        cache: "no-store", // Ensure fresh data
+      })
 
       if (!response.ok) {
-        throw new Error("Failed to fetch sales forecast")
+        throw new Error("Failed to fetch weekly sales forecast")
       }
 
       const data = await response.json()
+      console.log(`✅ Weekly forecast received:`, {
+        pastWeek: data.pastWeekAverage,
+        projectedNextWeek: data.projectedNextWeek,
+        weeklyGoal: data.weeklyGoal,
+        progressToGoal: data.progressToGoal,
+        trend: data.trendDirection,
+      })
+
       setForecast(data)
     } catch (err) {
-      console.error("Error fetching sales forecast:", err)
-      setError(err instanceof Error ? err.message : "Failed to load forecast")
+      console.error("Error fetching weekly sales forecast:", err)
+      setError(err instanceof Error ? err.message : "Failed to load weekly forecast")
     } finally {
       setLoading(false)
     }

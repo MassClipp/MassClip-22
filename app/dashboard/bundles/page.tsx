@@ -18,7 +18,7 @@ import { useToast } from "@/hooks/use-toast"
 import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, onSnapshot, addDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { useAuth } from "@/contexts/auth-context"
-import { checkBundleLimit, formatBundleLimitStatus, type BundleLimitCheck } from "@/lib/bundle-limits-service"
+import { useUserPlan } from "@/hooks/use-user-plan"
 
 interface ContentItem {
   id: string
@@ -83,6 +83,11 @@ export default function BundlesPage() {
   })
   const { toast } = useToast()
 
+  // Bundle limit logic for free users
+  const { planData, isProUser } = useUserPlan()
+  const bundleLimit = isProUser ? Infinity : 2
+  const isAtBundleLimit = !isProUser && productBoxes.length >= bundleLimit
+
   const [availableUploads, setAvailableUploads] = useState<ContentItem[]>([])
   const [showAddContentModal, setShowAddContentModal] = useState<string | null>(null)
   const [selectedContentIds, setSelectedContentIds] = useState<string[]>([])
@@ -99,9 +104,6 @@ export default function BundlesPage() {
     price: "",
     coverImage: "",
   })
-
-  const [bundleLimitCheck, setBundleLimitCheck] = useState<BundleLimitCheck | null>(null)
-  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false)
 
   // Real-time listeners for content updates
   const contentListeners = useRef<{ [key: string]: () => void }>({})
@@ -126,19 +128,6 @@ export default function BundlesPage() {
       return `${hours}:${minutes.toString().padStart(2, "0")}:${remainingSeconds.toString().padStart(2, "0")}`
     } else {
       return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
-    }
-  }
-
-  // Check bundle limits
-  const checkUserBundleLimit = async () => {
-    if (!user) return
-
-    try {
-      const limitCheck = await checkBundleLimit(user.uid)
-      setBundleLimitCheck(limitCheck)
-      console.log("📊 [Bundles] Bundle limit check:", limitCheck)
-    } catch (error) {
-      console.error("❌ [Bundles] Error checking bundle limits:", error)
     }
   }
 
@@ -416,7 +405,7 @@ export default function BundlesPage() {
     setShowContent((prev) => ({ ...prev, [productBoxId]: !prev[productBoxId] }))
   }
 
-  // Handle create bundle with limit check
+  // Handle create bundle
   const handleCreateBundle = async () => {
     if (!createForm.title.trim() || !createForm.price) {
       toast({
@@ -424,20 +413,6 @@ export default function BundlesPage() {
         description: "Please fill in all required fields",
         variant: "destructive",
       })
-      return
-    }
-
-    // Check bundle limits before creating
-    if (!user) return
-    
-    const limitCheck = await checkBundleLimit(user.uid)
-    if (!limitCheck.canCreate) {
-      toast({
-        title: "Bundle Limit Reached",
-        description: limitCheck.message || "You have reached your bundle creation limit",
-        variant: "destructive",
-      })
-      setShowUpgradePrompt(true)
       return
     }
 
@@ -496,6 +471,24 @@ export default function BundlesPage() {
           // Don't fail the entire creation for thumbnail upload issues
         }
       }
+
+      toast({
+        title: "Success",
+        description: data.message || "Bundle created successfully",
+      })
+
+      // Reset form and close modal
+      setCreateForm({
+        title: "",
+        description: "",
+        price: "",
+        billingType: "one_time",
+        thumbnail: null,
+      })
+      setShowCreateModal(false)
+
+      // Refresh bundles to show the new one
+      await fetchProductBoxes()
     } catch (error) {
       console.error("Error creating bundle:", error)
       toast({
@@ -1034,7 +1027,6 @@ export default function BundlesPage() {
   useEffect(() => {
     if (user) {
       fetchProductBoxes()
-      checkUserBundleLimit()
     }
   }, [user])
 
@@ -1069,25 +1061,37 @@ export default function BundlesPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Bundles</h1>
-          <div className="flex items-center gap-4">
-            <p className="text-zinc-400">Create and manage premium content packages for your audience</p>
-            {bundleLimitCheck && (
-              <Badge variant={bundleLimitCheck.canCreate ? "default" : "secondary"} className="text-xs">
-                {formatBundleLimitStatus(bundleLimitCheck)}
-              </Badge>
+          <div className="flex items-center gap-3 mb-2">
+            <h1 className="text-2xl font-bold text-white">Bundles</h1>
+            {!isProUser && (
+              <div className="text-sm text-zinc-400 bg-zinc-800 px-2 py-1 rounded">
+                {productBoxes.length}/{bundleLimit}
+              </div>
             )}
           </div>
+          <p className="text-zinc-400">Create and manage premium content packages for your audience</p>
         </div>
 
         <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
           <DialogTrigger asChild>
-            <Button 
+            <Button
               className="bg-red-600 hover:bg-red-700"
-              disabled={bundleLimitCheck && !bundleLimitCheck.canCreate}
+              disabled={isAtBundleLimit}
+              onClick={() => {
+                if (isAtBundleLimit) {
+                  toast({
+                    title: "Bundle Limit Reached",
+                    description: "Free users can create up to 2 bundles. Upgrade to Creator Pro for unlimited bundles.",
+                    variant: "destructive",
+                  })
+                  return
+                }
+                setShowCreateModal(true)
+              }}
             >
               <Plus className="h-4 w-4 mr-2" />
               Create Bundle
+              {isAtBundleLimit && " (Limit Reached)"}
             </Button>
           </DialogTrigger>
           <DialogContent className="bg-zinc-900 border-zinc-800 text-white">
@@ -1228,7 +1232,7 @@ export default function BundlesPage() {
                     const file = e.target.files?.[0]
                     if (file) {
                       // Validate file type
-                      const allowedTypes = ["image/jpeg", "image/jpg,image/png", "image/webp"]
+                      const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"]
                       if (!allowedTypes.includes(file.type)) {
                         toast({
                           title: "Invalid File Type",
@@ -1281,7 +1285,21 @@ export default function BundlesPage() {
           <div className="text-6xl mb-4">📦</div>
           <h3 className="text-xl font-medium text-white mb-2">No Bundles Yet</h3>
           <p className="text-zinc-400 mb-4">Create your first premium content bundle to get started</p>
-          <Button className="bg-red-600 hover:bg-red-700" onClick={() => setShowCreateModal(true)}>
+          <Button
+            className="bg-red-600 hover:bg-red-700"
+            disabled={isAtBundleLimit}
+            onClick={() => {
+              if (isAtBundleLimit) {
+                toast({
+                  title: "Bundle Limit Reached",
+                  description: "Free users can create up to 2 bundles. Upgrade to Creator Pro for unlimited bundles.",
+                  variant: "destructive",
+                })
+                return
+              }
+              setShowCreateModal(true)
+            }}
+          >
             <Plus className="h-4 w-4 mr-2" />
             Create Your First Bundle
           </Button>
@@ -1765,44 +1783,6 @@ export default function BundlesPage() {
                   )}
                 </Button>
               </div>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Upgrade Prompt Dialog */}
-      <Dialog open={showUpgradePrompt} onOpenChange={setShowUpgradePrompt}>
-        <DialogContent className="bg-zinc-900 border-zinc-800 text-white">
-          <DialogHeader>
-            <DialogTitle>Bundle Limit Reached</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <p className="text-zinc-300">
-              {bundleLimitCheck?.message || "You have reached your bundle creation limit."}
-            </p>
-            <div className="bg-zinc-800/50 p-4 rounded-lg">
-              <h4 className="font-medium text-white mb-2">Upgrade Benefits:</h4>
-              <ul className="text-sm text-zinc-300 space-y-1">
-                <li>• Create unlimited bundles</li>
-                <li>• Advanced analytics</li>
-                <li>• Priority support</li>
-                <li>• Custom branding options</li>
-              </ul>
-            </div>
-            <div className="flex justify-end gap-3">
-              <Button variant="outline" onClick={() => setShowUpgradePrompt(false)} className="border-zinc-700">
-                Maybe Later
-              </Button>
-              <Button 
-                className="bg-red-600 hover:bg-red-700"
-                onClick={() => {
-                  setShowUpgradePrompt(false)
-                  // Navigate to pricing page
-                  window.location.href = "/pricing"
-                }}
-              >
-                Upgrade Now
-              </Button>
             </div>
           </div>
         </DialogContent>

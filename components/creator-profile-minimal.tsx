@@ -5,10 +5,25 @@ import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Share2, Play, Calendar, Users, Heart, Check, Package, Download, Pause } from "lucide-react"
+import { Share2, Play, Calendar, Users, Heart, Check, Package, Download, Pause, Lock } from 'lucide-react'
 import { useAuthState } from "react-firebase-hooks/auth"
-import { auth } from "@/lib/firebase"
+import { auth, db } from "@/lib/firebase"
 import { UnlockButton } from "@/components/unlock-button"
+import { trackFirestoreWrite } from "@/lib/firestore-optimizer"
+import {
+  collection,
+  addDoc,
+  serverTimestamp,
+  doc,
+  updateDoc,
+  increment,
+  deleteDoc,
+  query,
+  where,
+  getDocs,
+} from "firebase/firestore"
+import { useToast } from "@/hooks/use-toast"
+import { useDownloadLimit } from "@/contexts/download-limit-context"
 
 interface CreatorData {
   uid: string
@@ -348,12 +363,16 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
 }
 
 function ContentCard({ item }: { item: ContentItem }) {
+  const [user] = useAuthState(auth)
   const [isHovered, setIsHovered] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
   const [thumbnailError, setThumbnailError] = useState(false)
   const [videoError, setVideoError] = useState(false)
   const [videoLoaded, setVideoLoaded] = useState(false)
+  const [isDownloading, setIsDownloading] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const { toast } = useToast()
+  const { hasReachedLimit, isProUser, forceRefresh } = useDownloadLimit()
 
   // Create proxied video URL to bypass CORS
   const getProxiedVideoUrl = (originalUrl: string) => {
@@ -370,6 +389,70 @@ function ContentCard({ item }: { item: ContentItem }) {
     proxiedVideoUrl: proxiedVideoUrl,
     thumbnailUrl: item.thumbnailUrl,
   })
+
+  // Record a download in Firestore (same logic as VimeoCard)
+  const recordDownload = async () => {
+    if (!user) return { success: false, message: "User not authenticated" }
+
+    // Creator Pro users don't need to track downloads but we still record for analytics
+    if (isProUser) return { success: true }
+
+    try {
+      const userDocRef = doc(db, "users", user.uid)
+
+      // Increment download count
+      await updateDoc(userDocRef, {
+        downloads: increment(1),
+      })
+
+      // Force refresh the global limit status
+      forceRefresh()
+
+      return { success: true }
+    } catch (err) {
+      console.error("Error recording download:", err)
+      return {
+        success: false,
+        message: "Failed to record download. Please try again.",
+      }
+    }
+  }
+
+  // Direct download function for desktop
+  const startDirectDownload = async (url: string, filename: string) => {
+    try {
+      // Fetch the file
+      const response = await fetch(url)
+      if (!response.ok) throw new Error("Network response was not ok")
+
+      // Get the blob
+      const blob = await response.blob()
+
+      // Create object URL
+      const objectUrl = URL.createObjectURL(blob)
+
+      // Create anchor element for download
+      const link = document.createElement('a')
+      link.href = objectUrl
+      link.download = filename
+      link.style.display = 'none'
+      
+      // Append to body, click, and remove
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+
+      // Clean up
+      setTimeout(() => {
+        URL.revokeObjectURL(objectUrl)
+      }, 100)
+
+      return true
+    } catch (error) {
+      console.error("Direct download failed:", error)
+      return false
+    }
+  }
 
   // Load video metadata and show first frame
   useEffect(() => {
@@ -471,25 +554,88 @@ function ContentCard({ item }: { item: ContentItem }) {
     e.preventDefault()
     e.stopPropagation()
 
-    if (!item.fileUrl) {
-      console.error("❌ No fileUrl available for download")
-      return
-    }
+    // Prevent multiple clicks
+    if (isDownloading) return
+
+    setIsDownloading(true)
 
     try {
-      console.log("📥 Downloading via proxy:", proxiedVideoUrl)
-      const response = await fetch(proxiedVideoUrl)
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = `${item.title}.mp4`
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
+      // 1. Basic authentication check
+      if (!user) {
+        toast({
+          title: "Authentication Required",
+          description: "Please log in to download videos",
+          variant: "destructive",
+        })
+        return
+      }
+
+      // 2. Check if download link exists
+      if (!item.fileUrl) {
+        toast({
+          title: "Download Error",
+          description: "No download links available for this video.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      // 3. CRITICAL: Check if user has reached download limit BEFORE downloading
+      if (hasReachedLimit && !isProUser) {
+        toast({
+          title: "Download Limit Reached",
+          description:
+            "You've reached your monthly download limit of 15. Upgrade to Creator Pro for unlimited downloads.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      // 4. Record the download for tracking purposes
+      const result = await recordDownload()
+      if (!result.success && !isProUser) {
+        toast({
+          title: "Download Error",
+          description: result.message || "Failed to record download.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      // 5. Trigger the actual download
+      const filename = `${item.title?.replace(/[^\w\s]/gi, "") || "video"}.mp4`
+
+      // Try direct download first
+      const success = await startDirectDownload(proxiedVideoUrl, filename)
+
+      if (!success) {
+        // Fallback to traditional method if direct download fails
+        const link = document.createElement('a')
+        link.href = proxiedVideoUrl
+        link.download = filename
+        link.target = '_blank'
+        link.style.display = 'none'
+        
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+      }
+
+      // Show success toast
+      toast({
+        title: "Download Started",
+        description: "Your video is downloading",
+      })
     } catch (error) {
-      console.error("❌ Download failed:", error)
+      console.error("Download failed:", error)
+
+      toast({
+        title: "Download Error",
+        description: "There was an issue starting your download. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsDownloading(false)
     }
   }
 
@@ -582,16 +728,32 @@ function ContentCard({ item }: { item: ContentItem }) {
           </button>
         </div>
 
-        {/* Download button */}
+        {/* Download button - bottom right corner, shows lock if limit reached */}
         {proxiedVideoUrl && !videoError && videoLoaded && (
           <button
             onClick={handleDownload}
-            className={`absolute bottom-2 right-2 bg-black/60 backdrop-blur-sm p-1.5 rounded-full transition-all duration-200 hover:bg-black/80 hover:scale-110 ${
-              isHovered ? "opacity-100" : "opacity-70"
-            }`}
-            aria-label="Download video"
+            disabled={isDownloading || (hasReachedLimit && !isProUser)}
+            className={`absolute bottom-2 right-2 backdrop-blur-sm p-1.5 rounded-full transition-all duration-200 hover:scale-110 ${
+              hasReachedLimit && !isProUser 
+                ? "bg-zinc-800/90 cursor-not-allowed" 
+                : "bg-black/60 hover:bg-black/80"
+            } ${isHovered ? "opacity-100" : "opacity-70"}`}
+            aria-label={
+              hasReachedLimit && !isProUser 
+                ? "Upgrade to Creator Pro for unlimited downloads" 
+                : "Download video"
+            }
+            title={
+              hasReachedLimit && !isProUser 
+                ? "Upgrade to Creator Pro for unlimited downloads" 
+                : "Download video"
+            }
           >
-            <Download className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-white" />
+            {hasReachedLimit && !isProUser ? (
+              <Lock className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-zinc-400" />
+            ) : (
+              <Download className={`h-3 w-3 sm:h-3.5 sm:w-3.5 text-white ${isDownloading ? 'animate-pulse' : ''}`} />
+            )}
           </button>
         )}
       </div>
