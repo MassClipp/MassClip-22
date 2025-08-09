@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { getAuth } from "firebase-admin/auth"
 import { getFirestore } from "firebase-admin/firestore"
 import { initializeApp, getApps, cert } from "firebase-admin/app"
@@ -30,6 +30,45 @@ const auth = getAuth()
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
 })
+
+// Helper function to safely convert Firestore timestamp to Date
+function safeTimestampToDate(timestamp: any): Date {
+  try {
+    if (!timestamp) return new Date()
+
+    // If it's already a Date object
+    if (timestamp instanceof Date) {
+      return timestamp
+    }
+
+    // If it's a Firestore Timestamp with toDate method
+    if (timestamp && typeof timestamp.toDate === "function") {
+      return timestamp.toDate()
+    }
+
+    // If it's a timestamp object with seconds
+    if (timestamp && typeof timestamp.seconds === "number") {
+      return new Date(timestamp.seconds * 1000)
+    }
+
+    // If it's a string, try to parse it
+    if (typeof timestamp === "string") {
+      const parsed = new Date(timestamp)
+      return isNaN(parsed.getTime()) ? new Date() : parsed
+    }
+
+    // If it's a number (unix timestamp)
+    if (typeof timestamp === "number") {
+      return new Date(timestamp * 1000)
+    }
+
+    // Fallback to current date
+    return new Date()
+  } catch (error) {
+    console.warn("Error converting timestamp:", error)
+    return new Date()
+  }
+}
 
 // Helper function to get connected Stripe account
 async function getConnectedStripeAccount(userId: string) {
@@ -67,7 +106,7 @@ export async function GET(request: NextRequest) {
 
     // Get connected Stripe account
     const connectedAccount = await getConnectedStripeAccount(userId)
-    
+
     if (!connectedAccount || !connectedAccount.stripe_user_id) {
       console.log(`⚠️ [Earnings] No connected Stripe account found for user: ${userId}`)
       return NextResponse.json({
@@ -104,7 +143,7 @@ export async function GET(request: NextRequest) {
 
     // Get earnings data from bundlePurchases collection (includes platform fee breakdown)
     console.log(`📊 [Earnings] Fetching purchase data from bundlePurchases collection...`)
-    
+
     const allPurchasesQuery = await db
       .collection("bundlePurchases")
       .where("creatorId", "==", userId)
@@ -127,40 +166,57 @@ export async function GET(request: NextRequest) {
     let last30DaysSales = 0
 
     allPurchasesQuery.forEach((doc) => {
-      const purchase = doc.data()
-      const purchaseDate = purchase.timestamp?.toDate() || new Date()
-      
-      // Use creator earnings (after platform fees) for earnings calculations
-      const creatorEarnings = purchase.creatorEarningsDollars || purchase.creatorEarningsCents / 100 || 0
-      const grossAmount = purchase.purchaseAmountDollars || purchase.purchaseAmount / 100 || 0
-      const platformFee = purchase.platformFeeDollars || purchase.platformFeeCents / 100 || 0
+      try {
+        const purchase = doc.data()
 
-      // Add to totals
-      totalEarnings += creatorEarnings
-      grossSales += grossAmount
-      totalPlatformFees += platformFee
-      totalSales += 1
+        // Safely convert timestamp to Date
+        const purchaseDate = safeTimestampToDate(purchase.timestamp)
 
-      // This month
-      if (purchaseDate >= startOfMonth) {
-        thisMonth += creatorEarnings
-        thisMonthGross += grossAmount
-        thisMonthPlatformFees += platformFee
-        thisMonthSales += 1
-      }
+        // Use creator earnings (after platform fees) for earnings calculations
+        const creatorEarnings = Number(purchase.creatorEarningsDollars || purchase.creatorEarningsCents / 100 || 0)
+        const grossAmount = Number(purchase.purchaseAmountDollars || purchase.purchaseAmount / 100 || 0)
+        const platformFee = Number(purchase.platformFeeDollars || purchase.platformFeeCents / 100 || 0)
 
-      // Last month
-      if (purchaseDate >= startOfLastMonth && purchaseDate <= endOfLastMonth) {
-        lastMonth += creatorEarnings
-        lastMonthGross += grossAmount
-      }
+        // Validate numbers
+        if (isNaN(creatorEarnings) || isNaN(grossAmount) || isNaN(platformFee)) {
+          console.warn(`[Earnings] Invalid numbers in purchase ${doc.id}:`, {
+            creatorEarnings,
+            grossAmount,
+            platformFee,
+          })
+          return // Skip this purchase
+        }
 
-      // Last 30 days
-      if (purchaseDate >= thirtyDaysAgo) {
-        last30Days += creatorEarnings
-        last30DaysGross += grossAmount
-        last30DaysPlatformFees += platformFee
-        last30DaysSales += 1
+        // Add to totals
+        totalEarnings += creatorEarnings
+        grossSales += grossAmount
+        totalPlatformFees += platformFee
+        totalSales += 1
+
+        // This month
+        if (purchaseDate >= startOfMonth) {
+          thisMonth += creatorEarnings
+          thisMonthGross += grossAmount
+          thisMonthPlatformFees += platformFee
+          thisMonthSales += 1
+        }
+
+        // Last month
+        if (purchaseDate >= startOfLastMonth && purchaseDate <= endOfLastMonth) {
+          lastMonth += creatorEarnings
+          lastMonthGross += grossAmount
+        }
+
+        // Last 30 days
+        if (purchaseDate >= thirtyDaysAgo) {
+          last30Days += creatorEarnings
+          last30DaysGross += grossAmount
+          last30DaysPlatformFees += platformFee
+          last30DaysSales += 1
+        }
+      } catch (error) {
+        console.error(`[Earnings] Error processing purchase ${doc.id}:`, error)
+        // Continue processing other purchases
       }
     })
 
@@ -185,8 +241,8 @@ export async function GET(request: NextRequest) {
     }
 
     // Calculate available balance (in dollars)
-    const availableBalance = balance.available?.reduce((sum, bal) => sum + bal.amount, 0) / 100 || 0
-    const pendingPayout = balance.pending?.reduce((sum, bal) => sum + bal.amount, 0) / 100 || 0
+    const availableBalance = balance.available?.reduce((sum, bal) => sum + (bal.amount || 0), 0) / 100 || 0
+    const pendingPayout = balance.pending?.reduce((sum, bal) => sum + (bal.amount || 0), 0) / 100 || 0
 
     // Calculate growth percentage (based on net earnings)
     const monthlyGrowth = lastMonth > 0 ? ((thisMonth - lastMonth) / lastMonth) * 100 : thisMonth > 0 ? 100 : 0
@@ -199,31 +255,31 @@ export async function GET(request: NextRequest) {
 
     const earningsData = {
       // Net earnings (after platform fees)
-      totalEarnings,
-      thisMonth,
-      last30Days,
-      
+      totalEarnings: Number(totalEarnings.toFixed(2)),
+      thisMonth: Number(thisMonth.toFixed(2)),
+      last30Days: Number(last30Days.toFixed(2)),
+
       // Gross sales (before platform fees)
-      grossSales,
-      thisMonthGross,
-      last30DaysGross,
-      
+      grossSales: Number(grossSales.toFixed(2)),
+      thisMonthGross: Number(thisMonthGross.toFixed(2)),
+      last30DaysGross: Number(last30DaysGross.toFixed(2)),
+
       // Platform fees
-      totalPlatformFees,
-      thisMonthPlatformFees,
-      last30DaysPlatformFees,
-      
+      totalPlatformFees: Number(totalPlatformFees.toFixed(2)),
+      thisMonthPlatformFees: Number(thisMonthPlatformFees.toFixed(2)),
+      last30DaysPlatformFees: Number(last30DaysPlatformFees.toFixed(2)),
+
       // Stripe balance
-      availableBalance,
-      pendingPayout,
-      
+      availableBalance: Number(availableBalance.toFixed(2)),
+      pendingPayout: Number(pendingPayout.toFixed(2)),
+
       // Sales metrics
       totalSales,
       thisMonthSales,
       last30DaysSales,
-      avgOrderValue,
-      monthlyGrowth,
-      
+      avgOrderValue: Number(avgOrderValue.toFixed(2)),
+      monthlyGrowth: Number(monthlyGrowth.toFixed(2)),
+
       // Account info
       accountStatus,
       stripeAccountId,
@@ -231,14 +287,14 @@ export async function GET(request: NextRequest) {
     }
 
     console.log(`✅ [Earnings] Data compiled successfully:`, {
-      totalEarnings: totalEarnings.toFixed(2),
-      grossSales: grossSales.toFixed(2),
-      totalPlatformFees: totalPlatformFees.toFixed(2),
-      thisMonth: thisMonth.toFixed(2),
-      thisMonthGross: thisMonthGross.toFixed(2),
-      availableBalance: availableBalance.toFixed(2),
-      totalSales,
-      accountStatus,
+      totalEarnings: earningsData.totalEarnings,
+      grossSales: earningsData.grossSales,
+      totalPlatformFees: earningsData.totalPlatformFees,
+      thisMonth: earningsData.thisMonth,
+      thisMonthGross: earningsData.thisMonthGross,
+      availableBalance: earningsData.availableBalance,
+      totalSales: earningsData.totalSales,
+      accountStatus: earningsData.accountStatus,
     })
 
     return NextResponse.json(earningsData)
@@ -249,7 +305,7 @@ export async function GET(request: NextRequest) {
         error: "Failed to fetch earnings data",
         details: error instanceof Error ? error.message : "Unknown error",
       },
-      { status: 500 }
+      { status: 500 },
     )
   }
 }
