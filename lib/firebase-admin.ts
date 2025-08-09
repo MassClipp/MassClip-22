@@ -8,27 +8,26 @@ import { getStorage } from "firebase-admin/storage"
  * serverless / hot-reload scenarios).
  * All logic calling `auth` / `db` must import from this file.
  */
-export function initializeFirebaseAdmin(): App {
+function initializeAdmin() {
   if (getApps().length > 0) {
-    console.log("🔄 [Firebase Admin] Using existing Firebase Admin instance")
-    return getApps()[0]!
+    console.log("✅ [Firebase Admin] Using existing app instance.")
+    return getApps()[0] as App
   }
+
+  console.log("🔄 [Firebase Admin] Initializing new app instance...")
 
   const { FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY } = process.env
 
   if (!FIREBASE_PROJECT_ID || !FIREBASE_CLIENT_EMAIL || !FIREBASE_PRIVATE_KEY) {
-    console.error("❌ [Firebase Admin] Missing Firebase Admin credentials in environment variables")
-    throw new Error(
-      "Missing Firebase Admin credentials. Make sure " +
-        "FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY " +
-        "environment variables are set.",
-    )
+    const errorMessage =
+      "❌ [Firebase Admin] Missing required environment variables. " +
+      "Ensure FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY are set."
+    console.error(errorMessage)
+    throw new Error(errorMessage)
   }
 
   try {
-    console.log("🔄 [Firebase Admin] Initializing Firebase Admin SDK")
-
-    // Firebase Admin expects real line breaks in the private key
+    // The private key from environment variables needs newlines to be correctly parsed.
     const privateKey = FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n")
 
     const app = initializeAdminApp({
@@ -40,56 +39,31 @@ export function initializeFirebaseAdmin(): App {
       projectId: FIREBASE_PROJECT_ID,
     })
 
-    console.log("✅ [Firebase Admin] Firebase Admin SDK initialized successfully")
+    console.log("✅ [Firebase Admin] Initialization successful.")
     return app
   } catch (error: any) {
-    console.error("❌ [Firebase Admin] Failed to initialize Firebase Admin SDK:", error.message)
-    console.error("❌ [Firebase Admin] Error stack:", error.stack)
-    throw new Error(`Failed to initialize Firebase Admin: ${error.message}`)
+    console.error("❌ [Firebase Admin] Initialization failed:", error.message)
+    throw new Error(`Firebase Admin initialization failed: ${error.message}`)
   }
 }
 
-let adminApp: App
+// Initialize the app
+const adminApp = initializeAdmin()
 
-if (getApps().length === 0) {
-  try {
-    // Initialize Firebase Admin with service account
-    adminApp = initializeFirebaseAdmin()
-  } catch (error) {
-    console.error("❌ Firebase Admin initialization error:", error)
-    throw error
-  }
-} else {
-  adminApp = getApps()[0]
-  console.log("✅ Firebase Admin already initialized")
-}
-
-// Initialize services
+// Export services for use in other server-side files
 export const adminDb: Firestore = getFirestore(adminApp)
-export const auth: Auth = getAuth(adminApp)
-export const storage = getStorage(adminApp)
+export const adminAuth: Auth = getAuth(adminApp)
+export const adminStorage = getStorage(adminApp)
 
-// Export with the exact names the system expects
-export const adminAuth = auth
-export const firestore = adminDb
+// Re-export FieldValue for convenience
+export { FieldValue }
 
-// REQUIRED: Export db as a named export (this was missing)
-export const db: Firestore = adminDb
-
-// REQUIRED: Export admin object with methods that match Firebase Admin SDK usage patterns
-export const admin = {
-  auth: () => auth,
+// Legacy export for backward compatibility
+export const firebaseDb = {
+  auth: () => adminAuth,
   firestore: () => adminDb,
-  storage: () => storage,
-  app: () => adminApp,
-  // Direct access to services for convenience
-  authService: auth,
-  firestoreService: adminDb,
-  storageService: storage,
+  storage: () => adminStorage,
 }
-
-// Default export
-export default adminApp
 
 /**
  * Generic retry helper with exponential back-off – useful for flaky Firestore
@@ -122,7 +96,7 @@ export async function withRetry<T>(op: () => Promise<T>, maxRetries = 3, delay =
 export async function verifyIdToken(idToken: string): Promise<DecodedIdToken> {
   try {
     console.log("🔄 [Auth] Verifying Firebase ID token")
-    const decodedToken = await auth.verifyIdToken(idToken)
+    const decodedToken = await adminAuth.verifyIdToken(idToken)
     console.log(`✅ [Auth] Token verified for user: ${decodedToken.uid}`)
     return decodedToken
   } catch (error: any) {
@@ -183,17 +157,4 @@ export async function createOrUpdateUserProfile(userId: string, profileData: Rec
       throw error
     }
   })
-}
-
-/* -------------------------------------------------------------------------- */
-/*                           Re-export Firestore types                        */
-/* -------------------------------------------------------------------------- */
-
-export { FieldValue }
-
-// Legacy export for backward compatibility
-export const firebaseDb = {
-  auth: () => auth,
-  firestore: () => firestore,
-  storage: () => storage,
 }
