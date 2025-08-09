@@ -8,7 +8,7 @@ import { getStorage } from "firebase-admin/storage"
  * serverless / hot-reload scenarios).
  * All logic calling `auth` / `db` must import from this file.
  */
-function initializeAdmin() {
+export function initializeFirebaseAdmin(): App {
   if (getApps().length > 0) {
     console.log("✅ [Firebase Admin] Using existing app instance.")
     return getApps()[0] as App
@@ -48,21 +48,34 @@ function initializeAdmin() {
 }
 
 // Initialize the app
-const adminApp = initializeAdmin()
+const adminApp = initializeFirebaseAdmin()
 
-// Export services for use in other server-side files
-export const adminDb: Firestore = getFirestore(adminApp)
-export const adminAuth: Auth = getAuth(adminApp)
-export const adminStorage = getStorage(adminApp)
+// --- EXPORTS ---
+// The following exports are structured to satisfy all dependencies across the project.
+
+// Core services
+const adminDbService: Firestore = getFirestore(adminApp)
+const adminAuthService: Auth = getAuth(adminApp)
+const adminStorageService = getStorage(adminApp)
+
+// Export with modern names
+export const adminDb = adminDbService
+export const adminAuth = adminAuthService
+export const adminStorage = adminStorageService
+
+// Export with legacy/aliased names to ensure backward compatibility
+export const db = adminDbService
+export const firestore = adminDbService
+export const auth = adminAuthService
 
 // Re-export FieldValue for convenience
 export { FieldValue }
 
-// Legacy export for backward compatibility
+// Legacy export object for backward compatibility
 export const firebaseDb = {
-  auth: () => adminAuth,
-  firestore: () => adminDb,
-  storage: () => adminStorage,
+  auth: () => adminAuthService,
+  firestore: () => adminDbService,
+  storage: () => adminStorageService,
 }
 
 /**
@@ -96,7 +109,7 @@ export async function withRetry<T>(op: () => Promise<T>, maxRetries = 3, delay =
 export async function verifyIdToken(idToken: string): Promise<DecodedIdToken> {
   try {
     console.log("🔄 [Auth] Verifying Firebase ID token")
-    const decodedToken = await adminAuth.verifyIdToken(idToken)
+    const decodedToken = await adminAuthService.verifyIdToken(idToken)
     console.log(`✅ [Auth] Token verified for user: ${decodedToken.uid}`)
     return decodedToken
   } catch (error: any) {
@@ -136,7 +149,7 @@ export async function getAuthenticatedUser(
  */
 export async function createOrUpdateUserProfile(userId: string, profileData: Record<string, unknown>) {
   return withRetry(async () => {
-    const ref = adminDb.collection("users").doc(userId)
+    const ref = adminDbService.collection("users").doc(userId)
     const now = new Date()
 
     try {
