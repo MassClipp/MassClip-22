@@ -1,288 +1,338 @@
 import { type NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
-import { initializeApp, getApps, cert } from "firebase-admin/app"
+import { db } from "@/lib/firebase-admin"
 import { getAuth } from "firebase-admin/auth"
-import { getFirestore, Timestamp } from "firebase-admin/firestore"
 
-// Initialize Firebase Admin
-if (!getApps().length) {
-  const serviceAccount = {
-    type: "service_account",
-    project_id: process.env.FIREBASE_PROJECT_ID,
-    private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
-    private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-    client_email: process.env.FIREBASE_CLIENT_EMAIL,
-    client_id: process.env.FIREBASE_CLIENT_ID,
-    auth_uri: "https://accounts.google.com/o/oauth2/auth",
-    token_uri: "https://oauth2.googleapis.com/token",
-    auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
-    client_x509_cert_url: `https://www.googleapis.com/robot/v1/metadata/x509/${process.env.FIREBASE_CLIENT_EMAIL}`,
-  }
+// Keep API version consistent with your Stripe usage
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2024-06-20",
+})
 
-  initializeApp({
-    credential: cert(serviceAccount as any),
-  })
-}
-
-const db = getFirestore()
-const auth = getAuth()
-
-// Stripe
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2024-06-20" })
-const webhookSecret =
-  process.env.STRIPE_WEBHOOK_SECRET || process.env.STRIPE_WEBHOOK_SECRET_LIVE || process.env.STRIPE_WEBHOOK_SECRET_TEST
-
-type ProStatus = "active" | "trialing" | "past_due" | "canceled" | "inactive"
-
-function mapSubscriptionStatus(s?: string): ProStatus {
-  switch (s) {
-    case "active":
-    case "trialing":
-      return s
-    case "past_due":
-    case "unpaid":
-      return "past_due"
-    case "canceled":
-      return "canceled"
-    default:
-      return "inactive"
-  }
-}
-
-function proFeatures() {
-  return {
-    unlimitedDownloads: true,
-    premiumContent: true,
-    noWatermark: true,
-    prioritySupport: true,
-    platformFeePercentage: 10,
-    maxVideosPerBundle: null as number | null,
-    maxBundles: null as number | null,
-  }
-}
-
-async function findUidFromSession(session: Stripe.Checkout.Session): Promise<string | null> {
-  // Priority 1: explicit metadata fields
-  const meta = session.metadata || {}
-  const metaUid =
-    (meta.buyerUid as string) ||
-    (meta.uid as string) ||
-    (meta.userId as string) ||
-    (meta.user_id as string) ||
-    (meta.firebase_uid as string)
-  if (metaUid) return metaUid
-
-  // Priority 2: client_reference_id (supported via URL param on Payment Links/Checkout)
-  if (session.client_reference_id) return session.client_reference_id
-
-  // Priority 3: try finding a Firebase user by email
-  const email =
-    session.customer_details?.email ||
-    (typeof session.customer === "string" ? undefined : (session.customer as Stripe.Customer | null)?.email)
-  if (email) {
-    try {
-      const record = await auth.getUserByEmail(email)
-      if (record?.uid) return record.uid
-    } catch {
-      // ignore
-    }
-  }
-
-  return null
-}
-
-async function upsertMembership(uid: string, data: Record<string, any>) {
-  const ref = db.collection("memberships").doc(uid)
-  const now = Timestamp.fromDate(new Date())
-  await ref.set(
-    {
-      uid,
-      updatedAt: now,
-      createdAt: now,
-      ...data,
-    },
-    { merge: true },
-  )
-}
+const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET!
 
 export async function POST(request: NextRequest) {
-  if (!webhookSecret) {
-    console.error("❌ STRIPE_WEBHOOK_SECRET not configured")
-    return NextResponse.json({ error: "Webhook secret not configured" }, { status: 500 })
-  }
-
-  let event: Stripe.Event
-  const body = await request.text()
-  const signature = request.headers.get("stripe-signature")
-
   try {
-    event = stripe.webhooks.constructEvent(body, signature as string, webhookSecret)
-  } catch (err: any) {
-    console.error("❌ Webhook verification failed:", err.message)
-    return NextResponse.json({ error: `Invalid signature: ${err.message}` }, { status: 400 })
-  }
+    const body = await request.text()
+    const signature = request.headers.get("stripe-signature")!
 
-  try {
-    switch (event.type) {
-      case "checkout.session.completed": {
-        const session = event.data.object as Stripe.Checkout.Session
-        const uid = await findUidFromSession(session)
+    let event: Stripe.Event
+    try {
+      event = stripe.webhooks.constructEvent(body, signature, endpointSecret)
+    } catch (err: any) {
+      console.error("❌ [Webhook] Signature verification failed:", err.message)
+      return NextResponse.json({ error: "Invalid signature" }, { status: 400 })
+    }
 
-        if (!uid) {
-          console.error("❌ Could not find user ID on checkout.session.completed", {
-            sessionId: session.id,
-          })
-          return NextResponse.json({ error: "Could not find user ID" }, { status: 400 })
-        }
+    console.log("✅ [Webhook] Received event:", event.type, event.id)
 
-        // If it's a subscription payment link, session.subscription should be present
-        let status: ProStatus = "active"
-        let currentPeriodEnd: Date | undefined
-        let stripeSubscriptionId: string | undefined
+    // Handle membership checkout completion
+    if (event.type === "checkout.session.completed") {
+      const raw = event.data.object as Stripe.Checkout.Session
 
-        if (session.mode === "subscription" && session.subscription) {
-          const subId = typeof session.subscription === "string" ? session.subscription : session.subscription.id
-          const sub = await stripe.subscriptions.retrieve(subId)
-          status = mapSubscriptionStatus(sub.status)
-          currentPeriodEnd = new Date(sub.current_period_end * 1000)
-          stripeSubscriptionId = sub.id
-        }
+      // Retrieve full session with line_items to inspect prices/products when needed
+      const session = await stripe.checkout.sessions.retrieve(raw.id, { expand: ["line_items"] })
 
-        await upsertMembership(uid, {
-          plan: "creator_pro",
-          status,
-          isActive: status === "active" || status === "trialing",
-          stripeCustomerId: typeof session.customer === "string" ? session.customer : session.customer?.id,
-          stripeSubscriptionId,
-          currentPeriodEnd: currentPeriodEnd ? Timestamp.fromDate(currentPeriodEnd) : null,
-          priceId:
-            session.mode === "subscription"
-              ? (session.subscription_items?.[0]?.price?.id ??
-                (session.line_items as any)?.data?.[0]?.price?.id ??
-                null)
-              : ((session.line_items as any)?.data?.[0]?.price?.id ?? null),
-          features: proFeatures(),
-        })
+      const isMembership = session.metadata?.contentType === "membership" || session.mode === "subscription"
 
-        console.log("✅ Membership upgraded via checkout.session.completed", {
-          uid,
-          sessionId: session.id,
-          mode: session.mode,
-        })
-        return NextResponse.json({ received: true })
-      }
-
-      case "customer.subscription.created":
-      case "customer.subscription.updated": {
-        const sub = event.data.object as Stripe.Subscription
-
-        // Try to get uid from subscription metadata or client_reference_id on the latest invoice/checkout
-        let uid =
-          (sub.metadata?.buyerUid as string) ||
-          (sub.metadata?.uid as string) ||
-          (sub.metadata?.userId as string) ||
-          null
-
-        if (!uid) {
-          // Try from the latest checkout session if available
-          const latestInvoiceId = typeof sub.latest_invoice === "string" ? sub.latest_invoice : sub.latest_invoice?.id
-          if (latestInvoiceId) {
-            try {
-              const invoice = await stripe.invoices.retrieve(latestInvoiceId, { expand: ["payment_intent"] })
-              const paymentIntent = invoice.payment_intent as Stripe.PaymentIntent | null
-              const checkoutSessionId = typeof paymentIntent?.latest_charge === "string" ? undefined : undefined // no reliable hop; skip
-              // fallback to customer email lookup
-            } catch {
-              // ignore
-            }
+      if (isMembership) {
+        try {
+          const result = await upsertMembershipFromSession(session)
+          if (!result?.uid) {
+            console.error("❌ [Webhook] Could not resolve user for membership session:", session.id)
+            return NextResponse.json({ error: "Could not find user ID" }, { status: 400 })
           }
-
-          // Fallback by customer email
-          if (typeof sub.customer === "string") {
-            const cust = await stripe.customers.retrieve(sub.customer)
-            const email = (cust as Stripe.Customer).email
-            if (email) {
-              try {
-                const record = await auth.getUserByEmail(email)
-                uid = record.uid
-              } catch {
-                // ignore
-              }
-            }
-          }
-        }
-
-        if (!uid) {
-          console.warn("⚠️ Subscription event without resolvable uid; skipping membership upsert", {
-            subId: sub.id,
-          })
+          console.log("🎉 [Webhook] Membership upsert complete for uid:", result.uid)
           return NextResponse.json({ received: true })
+        } catch (err) {
+          console.error("❌ [Webhook] Membership processing error:", err)
+          return NextResponse.json({ error: "Membership processing failed" }, { status: 500 })
         }
-
-        const status = mapSubscriptionStatus(sub.status)
-        const currentPeriodEnd = new Date(sub.current_period_end * 1000)
-
-        await upsertMembership(uid, {
-          plan: status === "canceled" ? "free" : "creator_pro",
-          status,
-          isActive: status === "active" || status === "trialing",
-          stripeCustomerId: typeof sub.customer === "string" ? sub.customer : sub.customer?.id,
-          stripeSubscriptionId: sub.id,
-          currentPeriodEnd: Timestamp.fromDate(currentPeriodEnd),
-          priceId: sub.items?.data?.[0]?.price?.id ?? null,
-          features: status === "canceled" ? undefined : proFeatures(),
-        })
-
-        console.log("✅ Membership synced from subscription event", { uid, subId: sub.id, status })
-        return NextResponse.json({ received: true })
       }
 
-      case "customer.subscription.deleted": {
-        const sub = event.data.object as Stripe.Subscription
+      // Existing bundle/content purchase flow (kept intact)
+      console.log("ℹ️ [Webhook] Non-membership checkout, continuing bundle flow.")
+      // Existing code below…
 
-        // Try to resolve user
-        let uid =
-          (sub.metadata?.buyerUid as string) ||
-          (sub.metadata?.uid as string) ||
-          (sub.metadata?.userId as string) ||
-          null
+      console.log("🔍 [Webhook] Processing checkout session:", session.id)
+      console.log("📋 [Webhook] Session metadata:", session.metadata)
 
-        if (!uid && typeof sub.customer === "string") {
-          const cust = await stripe.customers.retrieve(sub.customer)
-          const email = (cust as Stripe.Customer).email
-          if (email) {
-            try {
-              const record = await auth.getUserByEmail(email)
-              uid = record.uid
-            } catch {
-              // ignore
-            }
+      const buyerUid = session.metadata?.buyerUid
+      const bundleId = session.metadata?.bundleId || session.metadata?.productBoxId
+      const itemType = session.metadata?.itemType || "bundle"
+
+      if (!buyerUid || !bundleId) {
+        console.error("❌ [Webhook] Missing required metadata:", { buyerUid, bundleId })
+        return NextResponse.json({ error: "Missing metadata" }, { status: 400 })
+      }
+
+      console.log("🔍 [Webhook] Looking up bundle/item:", bundleId)
+
+      let itemData: any = null
+      let creatorData: any = null
+
+      try {
+        const bundleDoc = await db.collection("bundles").doc(bundleId).get()
+        if (bundleDoc.exists) {
+          itemData = { id: bundleDoc.id, ...bundleDoc.data() }
+          console.log("✅ [Webhook] Found bundle:", itemData.title)
+        } else {
+          const productBoxDoc = await db.collection("productBoxes").doc(bundleId).get()
+          if (productBoxDoc.exists) {
+            itemData = { id: productBoxDoc.id, ...productBoxDoc.data() }
+            console.log("✅ [Webhook] Found product box:", itemData.title)
           }
         }
 
-        if (!uid) {
-          console.warn("⚠️ Subscription deleted without resolvable uid; skipping downgrade", { subId: sub.id })
-          return NextResponse.json({ received: true })
+        if (!itemData) {
+          console.error("❌ [Webhook] Item not found:", bundleId)
+          return NextResponse.json({ error: "Item not found" }, { status: 404 })
         }
 
-        await upsertMembership(uid, {
-          plan: "free",
-          status: "canceled",
-          isActive: false,
-          stripeSubscriptionId: sub.id,
-        })
-
-        console.log("✅ Membership downgraded from subscription.deleted", { uid, subId: sub.id })
-        return NextResponse.json({ received: true })
+        if (itemData.creatorId) {
+          const creatorDoc = await db.collection("users").doc(itemData.creatorId).get()
+          if (creatorDoc.exists) {
+            creatorData = creatorDoc.data()
+            console.log("✅ [Webhook] Found creator:", creatorData.displayName || creatorData.username)
+          }
+        }
+      } catch (error) {
+        console.error("❌ [Webhook] Error looking up item/creator:", error)
+        return NextResponse.json({ error: "Database lookup failed" }, { status: 500 })
       }
 
-      default: {
-        // Ignore other events
+      const purchaseData = {
+        sessionId: session.id,
+        paymentIntentId: session.payment_intent,
+        buyerUid: buyerUid,
+        buyerEmail: session.customer_details?.email || "",
+        buyerName: session.customer_details?.name || "",
+        itemId: bundleId,
+        itemType: itemType,
+        bundleId: itemType === "bundle" ? bundleId : null,
+        productBoxId: itemType === "product_box" ? bundleId : null,
+        title: itemData.title || "Untitled",
+        description: itemData.description || "",
+        thumbnailUrl: itemData.thumbnailUrl || itemData.customPreviewThumbnail || "",
+        downloadUrl: itemData.downloadUrl || "",
+        fileSize: itemData.fileSize || 0,
+        fileType: itemData.fileType || "",
+        duration: itemData.duration || 0,
+        creatorId: itemData.creatorId || "",
+        creatorName: creatorData?.displayName || creatorData?.username || "Unknown Creator",
+        creatorUsername: creatorData?.username || "",
+        amount: (session.amount_total || 0) / 100,
+        currency: session.currency || "usd",
+        status: "completed",
+        accessUrl: itemType === "bundle" ? `/bundles/${bundleId}` : `/product-box/${bundleId}/content`,
+        accessGranted: true,
+        downloadCount: 0,
+        purchasedAt: new Date(),
+        createdAt: new Date(),
+        environment: process.env.NODE_ENV === "production" ? "live" : "test",
+      }
+
+      try {
+        await db.collection("bundlePurchases").doc(session.id).set(purchaseData)
+        console.log("✅ [Webhook] Created purchase record in bundlePurchases:", session.id)
+
+        if (itemData.creatorId) {
+          const creatorRef = db.collection("users").doc(itemData.creatorId)
+          const creatorDoc = await creatorRef.get()
+          const creatorDataExisting = creatorDoc.data() || {}
+          await creatorRef.update({
+            totalSales: (creatorDataExisting.totalSales || 0) + purchaseData.amount,
+            totalPurchases: (creatorDataExisting.totalPurchases || 0) + 1,
+            lastSaleAt: new Date(),
+          })
+          console.log("✅ [Webhook] Updated creator sales stats")
+        }
+
+        const itemRef =
+          itemType === "bundle" ? db.collection("bundles").doc(bundleId) : db.collection("productBoxes").doc(bundleId)
+
+        const itemDoc = await itemRef.get()
+        const itemExisting = itemDoc.data() || {}
+        await itemRef.update({
+          downloadCount: (itemExisting.downloadCount || 0) + 1,
+          lastPurchaseAt: new Date(),
+        })
+        console.log("✅ [Webhook] Updated item stats")
+      } catch (error) {
+        console.error("❌ [Webhook] Error creating purchase record:", error)
+        return NextResponse.json({ error: "Failed to create purchase record" }, { status: 500 })
+      }
+
+      console.log("🎉 [Webhook] Purchase processing completed successfully")
+      return NextResponse.json({ received: true })
+    }
+
+    // Optionally respond to subscription lifecycle events, too
+    if (
+      event.type === "customer.subscription.created" ||
+      event.type === "customer.subscription.updated" ||
+      event.type === "customer.subscription.deleted"
+    ) {
+      try {
+        const sub = event.data.object as Stripe.Subscription
+        await syncMembershipFromSubscription(sub)
         return NextResponse.json({ received: true })
+      } catch (err) {
+        console.error("❌ [Webhook] Subscription sync error:", err)
+        return NextResponse.json({ error: "Subscription sync failed" }, { status: 500 })
       }
     }
-  } catch (error: any) {
-    console.error("❌ Webhook processing failed:", error)
-    return NextResponse.json({ error: error.message ?? "Webhook processing failed" }, { status: 500 })
+
+    return NextResponse.json({ received: true })
+  } catch (error) {
+    console.error("❌ [Webhook] Unexpected error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
+}
+
+/**
+ * Upserts memberships/{uid} for Creator Pro from a Checkout Session.
+ * Tries multiple ways to resolve the user:
+ * - metadata.buyerUid
+ * - client_reference_id
+ * - Stripe Customer email -> Firebase Auth user or users collection lookup
+ */
+async function upsertMembershipFromSession(session: Stripe.Checkout.Session) {
+  // 1) Resolve UID
+  let uid = (session.metadata?.buyerUid as string | undefined) || (session.client_reference_id as string | undefined)
+
+  if (!uid) {
+    const email = session.customer_details?.email
+    if (email) {
+      // Try Firebase Auth
+      try {
+        const auth = getAuth()
+        const userRecord = await auth.getUserByEmail(email)
+        uid = userRecord.uid
+      } catch {
+        // Fallback: try Firestore users collection
+        const usersQuery = await db.collection("users").where("email", "==", email).limit(1).get()
+        if (!usersQuery.empty) {
+          uid = usersQuery.docs[0].id
+        }
+      }
+    }
+  }
+
+  if (!uid) {
+    return { ok: false }
+  }
+
+  // 2) Get subscription info (period end)
+  let subscriptionId: string | undefined
+  if (typeof session.subscription === "string") {
+    subscriptionId = session.subscription
+  } else if (session.subscription && typeof session.subscription === "object") {
+    subscriptionId = (session.subscription as any).id
+  }
+
+  let currentPeriodEnd: Date | undefined
+  if (subscriptionId) {
+    try {
+      const sub = await stripe.subscriptions.retrieve(subscriptionId)
+      if (sub.current_period_end) {
+        currentPeriodEnd = new Date(sub.current_period_end * 1000)
+      }
+    } catch (e) {
+      console.warn("⚠️ [Webhook] Could not retrieve subscription:", subscriptionId)
+    }
+  }
+
+  // 3) Determine priceId if needed (expanded line_items included above)
+  const priceId =
+    (session.line_items?.data?.[0]?.price?.id as string | undefined) ||
+    (session.metadata?.priceId as string | undefined) ||
+    process.env.STRIPE_PRICE_ID
+
+  const docRef = db.collection("memberships").doc(uid)
+  const payload = {
+    uid,
+    email: session.customer_details?.email || "",
+    plan: "creator_pro" as const,
+    status: "active" as const,
+    isActive: true,
+    stripeCustomerId: typeof session.customer === "string" ? session.customer : (session.customer as any)?.id || "",
+    stripeSubscriptionId: subscriptionId || "",
+    priceId: priceId || "",
+    currentPeriodEnd: currentPeriodEnd || null,
+    updatedAt: new Date(),
+    createdAt: new Date(),
+    features: {
+      unlimitedDownloads: true,
+      premiumContent: true,
+      noWatermark: true,
+      prioritySupport: true,
+      platformFeePercentage: 10,
+      maxVideosPerBundle: null,
+      maxBundles: null,
+    },
+    source: "checkout.session.completed",
+  }
+
+  await docRef.set(payload, { merge: true })
+  return { ok: true, uid }
+}
+
+/**
+ * Keeps memberships in sync from subscription lifecycle events (created/updated/deleted)
+ * Attempts to resolve uid via Customer email or stored mapping.
+ */
+async function syncMembershipFromSubscription(sub: Stripe.Subscription) {
+  // Resolve customer email
+  let email = ""
+  if (typeof sub.customer === "string") {
+    try {
+      const customer = await stripe.customers.retrieve(sub.customer as string)
+      email = (customer as any)?.email || ""
+    } catch (e) {
+      console.warn("⚠️ [Webhook] Could not load customer:", sub.customer)
+    }
+  } else {
+    email = (sub.customer as any)?.email || ""
+  }
+
+  // Resolve uid by email
+  let uid: string | undefined
+  if (email) {
+    try {
+      const auth = getAuth()
+      const userRecord = await auth.getUserByEmail(email)
+      uid = userRecord.uid
+    } catch {
+      const usersQuery = await db.collection("users").where("email", "==", email).limit(1).get()
+      if (!usersQuery.empty) {
+        uid = usersQuery.docs[0].id
+      }
+    }
+  }
+
+  if (!uid) {
+    console.warn("⚠️ [Webhook] Subscription event without resolvable uid; skipping.")
+    return
+  }
+
+  const status = sub.status // trialing | active | past_due | canceled | incomplete | ...
+  const isActive = status === "active" || status === "trialing"
+
+  const currentPeriodEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000) : null
+  const docRef = db.collection("memberships").doc(uid)
+
+  const payload = {
+    uid,
+    plan: "creator_pro" as const,
+    status,
+    isActive,
+    stripeCustomerId: typeof sub.customer === "string" ? sub.customer : (sub.customer as any)?.id || "",
+    stripeSubscriptionId: sub.id,
+    currentPeriodEnd,
+    updatedAt: new Date(),
+    source: `subscription.${status}`,
+  }
+
+  // On canceled/deleted, keep doc but flip flags
+  await docRef.set(payload, { merge: true })
 }
