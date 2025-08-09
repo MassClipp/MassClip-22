@@ -1,307 +1,178 @@
+export const runtime = "nodejs"
+
 import { type NextRequest, NextResponse } from "next/server"
-import { getAuth } from "firebase-admin/auth"
-import { getFirestore } from "firebase-admin/firestore"
-import { initializeApp, getApps, cert } from "firebase-admin/app"
+import { getAuthenticatedUser } from "@/lib/firebase-admin"
 import Stripe from "stripe"
-
-// Initialize Firebase Admin
-if (!getApps().length) {
-  const serviceAccount = {
-    type: "service_account",
-    project_id: process.env.FIREBASE_PROJECT_ID,
-    private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
-    private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-    client_email: process.env.FIREBASE_CLIENT_EMAIL,
-    client_id: process.env.FIREBASE_CLIENT_ID,
-    auth_uri: "https://accounts.google.com/o/oauth2/auth",
-    token_uri: "https://oauth2.googleapis.com/token",
-    auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
-    client_x509_cert_url: `https://www.googleapis.com/robot/v1/metadata/x509/${process.env.FIREBASE_CLIENT_EMAIL}`,
-  }
-
-  initializeApp({
-    credential: cert(serviceAccount as any),
-  })
-}
-
-const db = getFirestore()
-const auth = getAuth()
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
 })
 
-// Helper function to safely convert Firestore timestamp to Date
-function safeTimestampToDate(timestamp: any): Date {
-  try {
-    if (!timestamp) return new Date()
-
-    // If it's already a Date object
-    if (timestamp instanceof Date) {
-      return timestamp
-    }
-
-    // If it's a Firestore Timestamp with toDate method
-    if (timestamp && typeof timestamp.toDate === "function") {
-      return timestamp.toDate()
-    }
-
-    // If it's a timestamp object with seconds
-    if (timestamp && typeof timestamp.seconds === "number") {
-      return new Date(timestamp.seconds * 1000)
-    }
-
-    // If it's a string, try to parse it
-    if (typeof timestamp === "string") {
-      const parsed = new Date(timestamp)
-      return isNaN(parsed.getTime()) ? new Date() : parsed
-    }
-
-    // If it's a number (unix timestamp)
-    if (typeof timestamp === "number") {
-      return new Date(timestamp * 1000)
-    }
-
-    // Fallback to current date
-    return new Date()
-  } catch (error) {
-    console.warn("Error converting timestamp:", error)
-    return new Date()
-  }
-}
-
-// Helper function to get connected Stripe account
-async function getConnectedStripeAccount(userId: string) {
-  try {
-    const connectedAccountDoc = await db.collection("connectedStripeAccounts").doc(userId).get()
-    if (connectedAccountDoc.exists) {
-      const accountData = connectedAccountDoc.data()
-      console.log(`✅ [Earnings] Found connected Stripe account:`, {
-        userId,
-        stripe_user_id: accountData?.stripe_user_id,
-        charges_enabled: accountData?.charges_enabled,
-        details_submitted: accountData?.details_submitted,
-      })
-      return accountData
-    }
-    return null
-  } catch (error) {
-    console.error(`❌ [Earnings] Error fetching connected account:`, error)
-    return null
-  }
-}
-
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get("authorization")
-    if (!authHeader?.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    console.log("🏦 [Earnings API] Starting earnings fetch...")
+
+    // Get authenticated user
+    const user = await getAuthenticatedUser(request.headers)
+    console.log(`👤 [Earnings API] User: ${user.uid}`)
+
+    // Get user's Stripe account ID from Firebase
+    const { db } = await import("@/lib/firebase-admin")
+    const userDoc = await db.collection("users").doc(user.uid).get()
+
+    if (!userDoc.exists) {
+      console.log("❌ [Earnings API] User document not found")
+      return NextResponse.json(
+        {
+          success: false,
+          error: "User not found",
+        },
+        { status: 404 },
+      )
     }
 
-    const idToken = authHeader.split("Bearer ")[1]
-    const decodedToken = await auth.verifyIdToken(idToken)
-    const userId = decodedToken.uid
+    const userData = userDoc.data()
+    const stripeAccountId = userData?.stripeAccountId
 
-    console.log(`🔍 [Earnings] Fetching earnings data for user: ${userId}`)
-
-    // Get connected Stripe account
-    const connectedAccount = await getConnectedStripeAccount(userId)
-
-    if (!connectedAccount || !connectedAccount.stripe_user_id) {
-      console.log(`⚠️ [Earnings] No connected Stripe account found for user: ${userId}`)
+    if (!stripeAccountId) {
+      console.log("⚠️ [Earnings API] No Stripe account connected")
       return NextResponse.json({
-        totalEarnings: 0,
-        grossSales: 0,
-        totalPlatformFees: 0,
-        thisMonth: 0,
-        thisMonthGross: 0,
-        thisMonthPlatformFees: 0,
-        availableBalance: 0,
-        totalSales: 0,
-        avgOrderValue: 0,
-        monthlyGrowth: 0,
-        last30Days: 0,
-        last30DaysGross: 0,
-        last30DaysPlatformFees: 0,
-        thisMonthSales: 0,
-        last30DaysSales: 0,
-        pendingPayout: 0,
-        accountStatus: "Not Connected",
-        stripeAccountId: null,
-        connectedAccountData: null,
+        success: true,
+        data: {
+          totalEarnings: 0,
+          last30DaysEarnings: 0,
+          thisMonthEarnings: 0,
+          last30DaysSales: 0,
+          thisMonthSales: 0,
+          averageTransactionValue: 0,
+          recentTransactions: [],
+          salesMetrics: {
+            last30DaysSales: 0,
+            thisMonthSales: 0,
+          },
+        },
       })
     }
 
-    const stripeAccountId = connectedAccount.stripe_user_id
+    console.log(`💳 [Earnings API] Using Stripe account: ${stripeAccountId}`)
 
-    // Get date ranges
+    // Calculate date ranges
     const now = new Date()
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0)
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
 
-    // Get earnings data from bundlePurchases collection (includes platform fee breakdown)
-    console.log(`📊 [Earnings] Fetching purchase data from bundlePurchases collection...`)
+    // Fetch charges from connected account
+    console.log("📊 [Earnings API] Fetching charges from Stripe...")
 
-    const allPurchasesQuery = await db
-      .collection("bundlePurchases")
-      .where("creatorId", "==", userId)
-      .where("status", "==", "completed")
-      .get()
-
-    let totalEarnings = 0
-    let grossSales = 0
-    let totalPlatformFees = 0
-    let thisMonth = 0
-    let thisMonthGross = 0
-    let thisMonthPlatformFees = 0
-    let lastMonth = 0
-    let lastMonthGross = 0
-    let last30Days = 0
-    let last30DaysGross = 0
-    let last30DaysPlatformFees = 0
-    let totalSales = 0
-    let thisMonthSales = 0
-    let last30DaysSales = 0
-
-    allPurchasesQuery.forEach((doc) => {
-      try {
-        const purchase = doc.data()
-
-        // Safely convert timestamp to Date
-        const purchaseDate = safeTimestampToDate(purchase.timestamp)
-
-        // Use creator earnings (after platform fees) for earnings calculations
-        const creatorEarnings = Number(purchase.creatorEarningsDollars || purchase.creatorEarningsCents / 100 || 0)
-        const grossAmount = Number(purchase.purchaseAmountDollars || purchase.purchaseAmount / 100 || 0)
-        const platformFee = Number(purchase.platformFeeDollars || purchase.platformFeeCents / 100 || 0)
-
-        // Validate numbers
-        if (isNaN(creatorEarnings) || isNaN(grossAmount) || isNaN(platformFee)) {
-          console.warn(`[Earnings] Invalid numbers in purchase ${doc.id}:`, {
-            creatorEarnings,
-            grossAmount,
-            platformFee,
-          })
-          return // Skip this purchase
-        }
-
-        // Add to totals
-        totalEarnings += creatorEarnings
-        grossSales += grossAmount
-        totalPlatformFees += platformFee
-        totalSales += 1
-
-        // This month
-        if (purchaseDate >= startOfMonth) {
-          thisMonth += creatorEarnings
-          thisMonthGross += grossAmount
-          thisMonthPlatformFees += platformFee
-          thisMonthSales += 1
-        }
-
-        // Last month
-        if (purchaseDate >= startOfLastMonth && purchaseDate <= endOfLastMonth) {
-          lastMonth += creatorEarnings
-          lastMonthGross += grossAmount
-        }
-
-        // Last 30 days
-        if (purchaseDate >= thirtyDaysAgo) {
-          last30Days += creatorEarnings
-          last30DaysGross += grossAmount
-          last30DaysPlatformFees += platformFee
-          last30DaysSales += 1
-        }
-      } catch (error) {
-        console.error(`[Earnings] Error processing purchase ${doc.id}:`, error)
-        // Continue processing other purchases
-      }
-    })
-
-    console.log(`💰 [Earnings] Purchase data summary:`, {
-      totalPurchases: allPurchasesQuery.size,
-      totalEarnings: totalEarnings.toFixed(2),
-      grossSales: grossSales.toFixed(2),
-      totalPlatformFees: totalPlatformFees.toFixed(2),
-      thisMonthEarnings: thisMonth.toFixed(2),
-      thisMonthGross: thisMonthGross.toFixed(2),
-    })
-
-    // Fetch balance from Stripe
-    let balance
-    try {
-      balance = await stripe.balance.retrieve({
+    const charges = await stripe.charges.list(
+      {
+        limit: 100,
+        created: {
+          gte: Math.floor(thirtyDaysAgo.getTime() / 1000),
+        },
+      },
+      {
         stripeAccount: stripeAccountId,
-      })
-    } catch (error) {
-      console.error(`❌ [Earnings] Error fetching Stripe balance:`, error)
-      balance = { available: [], pending: [] }
-    }
+      },
+    )
 
-    // Calculate available balance (in dollars)
-    const availableBalance = balance.available?.reduce((sum, bal) => sum + (bal.amount || 0), 0) / 100 || 0
-    const pendingPayout = balance.pending?.reduce((sum, bal) => sum + (bal.amount || 0), 0) / 100 || 0
+    console.log(`💰 [Earnings API] Found ${charges.data.length} charges`)
 
-    // Calculate growth percentage (based on net earnings)
-    const monthlyGrowth = lastMonth > 0 ? ((thisMonth - lastMonth) / lastMonth) * 100 : thisMonth > 0 ? 100 : 0
+    // Filter successful charges only
+    const successfulCharges = charges.data.filter((charge) => charge.status === "succeeded" && charge.paid)
 
-    // Calculate average order value (based on gross sales)
-    const avgOrderValue = totalSales > 0 ? grossSales / totalSales : 0
+    console.log(`✅ [Earnings API] ${successfulCharges.length} successful charges`)
 
-    // Determine account status
-    const accountStatus = connectedAccount.charges_enabled && connectedAccount.details_submitted ? "Active" : "Pending"
+    // Calculate last 30 days metrics
+    const last30DaysCharges = successfulCharges.filter((charge) => {
+      const chargeDate = new Date(charge.created * 1000)
+      return chargeDate >= thirtyDaysAgo
+    })
+
+    const last30DaysEarnings = last30DaysCharges.reduce((sum, charge) => {
+      // Convert from cents to dollars and account for Stripe fees
+      const grossAmount = charge.amount / 100
+      const netAmount = grossAmount - (charge.application_fee_amount || 0) / 100
+      return sum + netAmount
+    }, 0)
+
+    const last30DaysSales = last30DaysCharges.length
+
+    // Calculate this month metrics
+    const thisMonthCharges = successfulCharges.filter((charge) => {
+      const chargeDate = new Date(charge.created * 1000)
+      return chargeDate >= startOfMonth
+    })
+
+    const thisMonthEarnings = thisMonthCharges.reduce((sum, charge) => {
+      const grossAmount = charge.amount / 100
+      const netAmount = grossAmount - (charge.application_fee_amount || 0) / 100
+      return sum + netAmount
+    }, 0)
+
+    const thisMonthSales = thisMonthCharges.length
+
+    // Calculate total earnings (all time)
+    const allTimeCharges = await stripe.charges.list(
+      {
+        limit: 100,
+      },
+      {
+        stripeAccount: stripeAccountId,
+      },
+    )
+
+    const totalEarnings = allTimeCharges.data
+      .filter((charge) => charge.status === "succeeded" && charge.paid)
+      .reduce((sum, charge) => {
+        const grossAmount = charge.amount / 100
+        const netAmount = grossAmount - (charge.application_fee_amount || 0) / 100
+        return sum + netAmount
+      }, 0)
+
+    // Calculate average transaction value
+    const averageTransactionValue = last30DaysSales > 0 ? last30DaysEarnings / last30DaysSales : 0
+
+    // Get recent transactions for display
+    const recentTransactions = successfulCharges.slice(0, 10).map((charge) => ({
+      id: charge.id,
+      amount: charge.amount / 100,
+      netAmount: (charge.amount - (charge.application_fee_amount || 0)) / 100,
+      created: new Date(charge.created * 1000).toISOString(),
+      status: charge.status,
+      description: charge.description || "Purchase",
+      customer: charge.billing_details?.name || "Anonymous",
+    }))
 
     const earningsData = {
-      // Net earnings (after platform fees)
       totalEarnings: Number(totalEarnings.toFixed(2)),
-      thisMonth: Number(thisMonth.toFixed(2)),
-      last30Days: Number(last30Days.toFixed(2)),
-
-      // Gross sales (before platform fees)
-      grossSales: Number(grossSales.toFixed(2)),
-      thisMonthGross: Number(thisMonthGross.toFixed(2)),
-      last30DaysGross: Number(last30DaysGross.toFixed(2)),
-
-      // Platform fees
-      totalPlatformFees: Number(totalPlatformFees.toFixed(2)),
-      thisMonthPlatformFees: Number(thisMonthPlatformFees.toFixed(2)),
-      last30DaysPlatformFees: Number(last30DaysPlatformFees.toFixed(2)),
-
-      // Stripe balance
-      availableBalance: Number(availableBalance.toFixed(2)),
-      pendingPayout: Number(pendingPayout.toFixed(2)),
-
-      // Sales metrics
-      totalSales,
-      thisMonthSales,
+      last30DaysEarnings: Number(last30DaysEarnings.toFixed(2)),
+      thisMonthEarnings: Number(thisMonthEarnings.toFixed(2)),
       last30DaysSales,
-      avgOrderValue: Number(avgOrderValue.toFixed(2)),
-      monthlyGrowth: Number(monthlyGrowth.toFixed(2)),
-
-      // Account info
-      accountStatus,
-      stripeAccountId,
-      connectedAccountData: connectedAccount,
+      thisMonthSales,
+      averageTransactionValue: Number(averageTransactionValue.toFixed(2)),
+      recentTransactions,
+      salesMetrics: {
+        last30DaysSales,
+        thisMonthSales,
+      },
     }
 
-    console.log(`✅ [Earnings] Data compiled successfully:`, {
+    console.log("📈 [Earnings API] Final earnings data:", {
       totalEarnings: earningsData.totalEarnings,
-      grossSales: earningsData.grossSales,
-      totalPlatformFees: earningsData.totalPlatformFees,
-      thisMonth: earningsData.thisMonth,
-      thisMonthGross: earningsData.thisMonthGross,
-      availableBalance: earningsData.availableBalance,
-      totalSales: earningsData.totalSales,
-      accountStatus: earningsData.accountStatus,
+      last30DaysEarnings: earningsData.last30DaysEarnings,
+      last30DaysSales: earningsData.last30DaysSales,
     })
 
-    return NextResponse.json(earningsData)
+    return NextResponse.json({
+      success: true,
+      data: earningsData,
+    })
   } catch (error) {
-    console.error("❌ [Earnings] Error:", error)
+    console.error("❌ [Earnings API] Error:", error)
     return NextResponse.json(
       {
+        success: false,
         error: "Failed to fetch earnings data",
         details: error instanceof Error ? error.message : "Unknown error",
       },
