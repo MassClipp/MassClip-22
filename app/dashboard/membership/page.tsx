@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card"
 import { useAuth } from "@/contexts/auth-context"
 import { useUserPlan } from "@/hooks/use-user-plan"
 
+// Strict test Payment Link fallback
 const TEMP_PAYMENT_LINK = "https://buy.stripe.com/fZu3cvbKsgRv1KBgBheIw06"
 
 export default function MembershipPage() {
@@ -22,18 +23,14 @@ export default function MembershipPage() {
       setIsRedirecting(true)
       const idToken = await user?.getIdToken?.()
 
+      // Server is hard-pinned to test price; this body is minimal by design
       const res = await fetch("/api/stripe/checkout/membership", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          idToken,
-          // Explicitly pass the test price as an extra guard. Server also defaults to env or this same value.
-          priceId: "price_1RuLpLDheyb0pkWF5v2Psykg",
-        }),
+        body: JSON.stringify({ idToken }),
       })
 
       if (!res.ok) {
-        console.warn("[Membership] Failed to create checkout session, opening payment link fallback.")
         window.open(TEMP_PAYMENT_LINK, "_blank")
         setIsRedirecting(false)
         return
@@ -210,53 +207,6 @@ export default function MembershipPage() {
             )}
           </div>
         </Card>
-      </div>
-
-      <div>
-        <h3 className="mb-8 text-center text-2xl font-medium text-white">Frequently Asked Questions</h3>
-
-        <div className="space-y-4">
-          <Card className="overflow-hidden border-zinc-800/50 bg-gradient-to-b from-zinc-900/50 to-black/70 transition-all duration-300 hover:border-zinc-700/70">
-            <div className="p-6">
-              <h4 className="mb-3 text-lg font-medium text-white">What are bundle video limits?</h4>
-              <p className="text-zinc-400">
-                Free users can include up to 10 videos in each bundle they create. Creator Pro users have no limits and
-                can include as many videos as they want in their bundles, perfect for comprehensive content packages.
-              </p>
-            </div>
-          </Card>
-
-          <Card className="overflow-hidden border-zinc-800/50 bg-gradient-to-b from-zinc-900/50 to-black/70 transition-all duration-300 hover:border-zinc-700/70">
-            <div className="p-6">
-              <h4 className="mb-3 text-lg font-medium text-white">What are platform fees?</h4>
-              <p className="text-zinc-400">
-                Platform fees are charged on each sale to cover payment processing, hosting, and platform maintenance.
-                Free users pay 20% while Creator Pro users enjoy a reduced 10% fee, helping you keep more of your
-                earnings.
-              </p>
-            </div>
-          </Card>
-
-          <Card className="overflow-hidden border-zinc-800/50 bg-gradient-to-b from-zinc-900/50 to-black/70 transition-all duration-300 hover:border-zinc-700/70">
-            <div className="p-6">
-              <h4 className="mb-3 text-lg font-medium text-white">Can I cancel my subscription?</h4>
-              <p className="text-zinc-400">
-                Yes, you can cancel your subscription anytime. You'll continue to have access until the end of your
-                billing period, after which you'll return to the Free plan with bundle video limits and 20% platform
-                fees.
-              </p>
-            </div>
-          </Card>
-
-          <Card className="overflow-hidden border-zinc-800/50 bg-gradient-to-b from-zinc-900/50 to-black/70 transition-all duration-300 hover:border-zinc-700/70">
-            <div className="p-6">
-              <h4 className="mb-3 text-lg font-medium text-white">How do I get started?</h4>
-              <p className="text-zinc-400">
-                Click "Upgrade to Creator Pro", complete checkout, and your membership will be activated automatically.
-              </p>
-            </div>
-          </Card>
-        </div>
       </div>
     </div>
   )

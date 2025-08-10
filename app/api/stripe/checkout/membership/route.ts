@@ -1,10 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2024-06-20" })
-
-// Test price fallback (keeps your test product pinned during testing)
+// Strictly use the TEST price for this flow
 const TEST_PRICE_ID = "price_1RuLpLDheyb0pkWF5v2Psykg"
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2024-06-20" })
 
 function getBaseUrl(req: NextRequest) {
   const envUrl =
@@ -21,9 +21,9 @@ function getBaseUrl(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}))
-    const { idToken, priceId: overridePriceId } = body || {}
+    const { idToken } = body || {}
 
-    // decode minimal info from JWT without requiring Admin SDK here
+    // Decode minimal info from idToken (no Admin SDK required in this route)
     let uid = "anonymous"
     let email = ""
     let name = ""
@@ -35,14 +35,12 @@ export async function POST(req: NextRequest) {
         email = decoded?.email || ""
         name = decoded?.name || ""
       } catch {
-        // continue; webhook will try email fallback if needed
+        // continue - webhook will still try email-based resolution if needed
       }
     }
 
-    const priceId = (overridePriceId as string) || (process.env.STRIPE_PRICE_ID as string) || TEST_PRICE_ID
-    if (!priceId) {
-      return NextResponse.json({ error: "Missing STRIPE_PRICE_ID" }, { status: 400 })
-    }
+    // Hard-pin the test price (ignore env/override to prevent wrong product usage)
+    const priceId = TEST_PRICE_ID
 
     const baseUrl = getBaseUrl(req)
     const metadata = {
