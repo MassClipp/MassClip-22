@@ -5,9 +5,6 @@ import { db } from "@/lib/firebase-admin"
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2024-06-20" })
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET!
 
-// Strictly handle the TEST price only for membership
-const TEST_PRICE_ID = "price_1RuLpLDheyb0pkWF5v2Psykg"
-
 export async function POST(request: NextRequest) {
   try {
     const rawBody = await request.text()
@@ -21,24 +18,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid signature" }, { status: 400 })
     }
 
+    // Handle membership checkout completion
     if (event.type === "checkout.session.completed") {
       const baseSession = event.data.object as Stripe.Checkout.Session
       const session = await stripe.checkout.sessions.retrieve(baseSession.id, {
         expand: ["line_items", "customer", "subscription"],
       })
 
-      // Only treat as membership if price matches our test price exactly
-      if (isTestMembershipSession(session)) {
+      if (isMembershipSession(session)) {
         try {
           const uid = await resolveUidForMembership(session)
           if (!uid) {
-            console.warn("⚠️ [Webhook] Test membership checkout: could not resolve uid.", {
+            console.warn("⚠️ [Webhook] Membership checkout: could not resolve uid.", {
               sessionId: session.id,
               client_reference_id: session.client_reference_id,
               metadata: session.metadata,
               email: session.customer_details?.email || (session.customer_email as string | undefined) || null,
             })
             await logWebhookIssue("membership-missing-uid", session)
+            // Always 200 so Stripe stops retrying; subscription.updated will also sync later.
             return NextResponse.json({ received: true })
           }
 
@@ -50,23 +48,23 @@ export async function POST(request: NextRequest) {
             stripeCustomerId: getCustomerId(session),
             stripeSubscriptionId: subscriptionId || "",
             currentPeriodEnd: periodEnd || null,
-            priceId: TEST_PRICE_ID, // pin
+            priceId: getPriceId(session) || process.env.STRIPE_PRICE_ID || "",
             source: "checkout.session.completed",
           })
 
-          console.log("🎉 [Webhook] Test membership upserted for uid:", uid)
+          console.log("🎉 [Webhook] Membership upserted for uid:", uid)
           return NextResponse.json({ received: true })
         } catch (err) {
-          console.error("❌ [Webhook] Test membership processing error:", err)
+          console.error("❌ [Webhook] Membership processing error:", err)
           return NextResponse.json({ received: true })
         }
       }
 
-      // Otherwise, proceed with your non-membership flow (bundles/product boxes)
+      // Non-membership: keep existing bundle/product-box flow
       return handleBundleOrProductBoxPurchase(session)
     }
 
-    // Keep memberships synced with lifecycle events (only if test price matches)
+    // Keep memberships synced with lifecycle events
     if (
       event.type === "customer.subscription.created" ||
       event.type === "customer.subscription.updated" ||
@@ -82,6 +80,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Ack all other events
     return NextResponse.json({ received: true })
   } catch (error) {
     console.error("❌ [Webhook] Unexpected error:", error)
@@ -90,6 +89,16 @@ export async function POST(request: NextRequest) {
 }
 
 /* ---------------- Helpers ---------------- */
+
+function isMembershipSession(session: Stripe.Checkout.Session): boolean {
+  const byMode = session.mode === "subscription"
+  const byMetadata = session.metadata?.contentType === "membership"
+  const byRecurringItem = (() => {
+    const items: any[] = (session.line_items?.data as any[]) || []
+    return items.some((li) => li?.price?.recurring)
+  })()
+  return byMode || byMetadata || byRecurringItem
+}
 
 function getCustomerId(session: Stripe.Checkout.Session): string {
   if (typeof session.customer === "string") return session.customer
@@ -100,11 +109,6 @@ function getCustomerId(session: Stripe.Checkout.Session): string {
 function getPriceId(session: Stripe.Checkout.Session): string | undefined {
   const li = session.line_items?.data?.[0] as any
   return li?.price?.id || session.metadata?.priceId
-}
-
-function isTestMembershipSession(session: Stripe.Checkout.Session): boolean {
-  const priceId = getPriceId(session)
-  return priceId === TEST_PRICE_ID
 }
 
 async function getSubscriptionInfo(
@@ -136,14 +140,14 @@ async function resolveUidForMembership(session: Stripe.Checkout.Session): Promis
   // 2) client_reference_id
   if (session.client_reference_id) return session.client_reference_id
 
-  // 3) email lookup
+  // 3) customer_details / customer_email lookup in users collection
   const email = session.customer_details?.email || (session.customer_email as string | undefined)
   if (email) {
     const q = await db.collection("users").where("email", "==", email).limit(1).get()
     if (!q.empty) return q.docs[0].id
   }
 
-  // 4) load Stripe Customer for email
+  // 4) Load Stripe customer for email if needed
   try {
     const customerId = getCustomerId(session)
     if (customerId) {
@@ -234,6 +238,7 @@ async function logWebhookIssue(code: string, session: Stripe.Checkout.Session) {
 
 /**
  * Non-membership purchase flow (bundles/product boxes).
+ * If required metadata is missing, log and ack to prevent retries.
  */
 async function handleBundleOrProductBoxPurchase(session: Stripe.Checkout.Session) {
   console.log("🔍 [Webhook] Processing non-membership checkout:", session.id)
@@ -255,6 +260,7 @@ async function handleBundleOrProductBoxPurchase(session: Stripe.Checkout.Session
   }
 
   try {
+    // Lookup item (bundles or productBoxes)
     let itemData: any = null
     let creatorData: any = null
 
@@ -343,10 +349,6 @@ async function handleBundleOrProductBoxPurchase(session: Stripe.Checkout.Session
 async function syncMembershipFromSubscription(sub: Stripe.Subscription) {
   // Only sync if the subscription item price is our TEST price
   const priceId = (sub.items?.data?.[0]?.price?.id as string) || ""
-  if (priceId !== TEST_PRICE_ID) {
-    console.log("ℹ️ [Webhook] Skipping non-test subscription:", { sub: sub.id, priceId })
-    return
-  }
 
   // Resolve UID by metadata or customer email -> users collection
   let uid = (sub.metadata as any)?.buyerUid as string | undefined
@@ -382,7 +384,7 @@ async function syncMembershipFromSubscription(sub: Stripe.Subscription) {
     stripeCustomerId: (typeof sub.customer === "string" ? sub.customer : (sub.customer as any)?.id) || "",
     stripeSubscriptionId: sub.id,
     currentPeriodEnd: periodEnd,
-    priceId: TEST_PRICE_ID, // pin
+    priceId: process.env.STRIPE_PRICE_ID || "",
     source: `subscription.${status}`,
   })
 }
