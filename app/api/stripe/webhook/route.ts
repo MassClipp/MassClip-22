@@ -19,13 +19,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid signature" }, { status: 400 })
     }
 
-    // Handle only the events we care about here (others are acked below)
     if (event.type === "checkout.session.completed") {
       const sess = event.data.object as Stripe.Checkout.Session
-      // Retrieve full session with line_items in case we need price/product details
       const session = await stripe.checkout.sessions.retrieve(sess.id, { expand: ["line_items"] })
 
-      // Detect membership (subscription) checkouts — covers both Checkout Sessions and Payment Links
       const isMembership =
         session.mode === "subscription" ||
         session.metadata?.contentType === "membership" ||
@@ -33,21 +30,21 @@ export async function POST(request: NextRequest) {
 
       if (isMembership) {
         try {
-          const uid = await resolveUidForMembership(session)
+          const { uid, debug } = await resolveUidForMembership(session)
           if (!uid) {
-            // Don’t surface a 400 — acknowledge to stop Stripe retries, but log for follow-up.
-            console.error("❌ [Webhook] Membership checkout without resolvable UID. Session:", session.id, {
+            const errorDetails = {
+              message: "Could not find user ID after all attempts.",
+              debugTrace: debug,
+              sessionId: session.id,
               client_reference_id: session.client_reference_id,
               metadata: session.metadata,
-              email: session.customer_details?.email || session.customer_email,
-              fullSession: JSON.stringify(session, null, 2), // Log the full session for deep inspection
-            })
+              customer_email: session.customer_details?.email || session.customer_email,
+            }
+            console.error("❌ [Webhook] Membership checkout without resolvable UID.", errorDetails)
             await logWebhookIssue("membership-missing-uid", session)
-            // Return the specific error you're seeing to confirm we're on the right track
-            return NextResponse.json({ error: "Could not find user ID" }, { status: 400 })
+            return NextResponse.json({ error: "Could not find user ID", details: errorDetails }, { status: 400 })
           }
 
-          // Try to enrich from subscription
           const { subscriptionId, periodEnd } = await getSubscriptionInfo(session)
 
           await upsertMembership(uid, {
@@ -64,16 +61,13 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ received: true })
         } catch (err) {
           console.error("❌ [Webhook] Error processing membership checkout:", err)
-          // Acknowledge to prevent retries; errors are logged for ops visibility
           return NextResponse.json({ received: true })
         }
       }
 
-      // Non-membership path: existing bundle/product-box purchase flow
       return handleBundleOrProductBoxPurchase(session)
     }
 
-    // Keep membership doc in sync for lifecycle events
     if (
       event.type === "customer.subscription.created" ||
       event.type === "customer.subscription.updated" ||
@@ -89,7 +83,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Ack all other events
     return NextResponse.json({ received: true })
   } catch (error) {
     console.error("❌ [Webhook] Unexpected error:", error)
@@ -99,7 +92,6 @@ export async function POST(request: NextRequest) {
 
 /* ---------- Helpers ---------- */
 
-// Determine if any line item looks like a recurring price (subscription)
 function hasRecurringLineItem(session: Stripe.Checkout.Session): boolean {
   const items = (session.line_items?.data as any[]) || []
   return items.some((li) => li?.price?.recurring)
@@ -112,7 +104,6 @@ function getCustomerId(session: Stripe.Checkout.Session): string {
 }
 
 function getPriceId(session: Stripe.Checkout.Session): string | undefined {
-  // Prefer line_items (expanded above)
   const items = session.line_items?.data
   const first = items && items[0]
   // @ts-expect-error Stripe expands price on line item
@@ -141,39 +132,72 @@ async function getSubscriptionInfo(
   }
 }
 
-// Resolve UID for membership using multiple strategies
-async function resolveUidForMembership(session: Stripe.Checkout.Session): Promise<string | null> {
-  // 1) Metadata (from our custom Checkout flow)
+async function resolveUidForMembership(
+  session: Stripe.Checkout.Session,
+): Promise<{ uid: string | null; debug: string[] }> {
+  const debug: string[] = []
+
+  // 1) Metadata
   const metaUid = session.metadata?.buyerUid
-  if (metaUid && typeof metaUid === "string") return metaUid
-
-  // 2) client_reference_id (we also set this in our custom Checkout flow)
-  if (session.client_reference_id) return session.client_reference_id
-
-  // 3) Customer details email (works for Payment Links which lack our metadata)
-  const email = session.customer_details?.email || (session.customer_email as string | undefined)
-  if (email) {
-    // Try users collection by email
-    const q = await db.collection("users").where("email", "==", email).limit(1).get()
-    if (!q.empty) return q.docs[0].id
+  debug.push(`Attempt 1 (metadata.buyerUid): Found '${metaUid || "nothing"}'.`)
+  if (metaUid && typeof metaUid === "string") {
+    debug.push("Success via metadata.buyerUid.")
+    return { uid: metaUid, debug }
   }
 
-  // 4) Try loading Stripe Customer to get email if needed
-  try {
-    const customerId = getCustomerId(session)
-    if (customerId) {
+  // 2) client_reference_id
+  const clientRefId = session.client_reference_id
+  debug.push(`Attempt 2 (client_reference_id): Found '${clientRefId || "nothing"}'.`)
+  if (clientRefId) {
+    debug.push("Success via client_reference_id.")
+    return { uid: clientRefId, debug }
+  }
+
+  // 3) Customer details email
+  const email = session.customer_details?.email || (session.customer_email as string | undefined)
+  debug.push(`Attempt 3 (session email): Found '${email || "nothing"}'.`)
+  if (email) {
+    try {
+      const q = await db.collection("users").where("email", "==", email).limit(1).get()
+      if (!q.empty) {
+        const foundUid = q.docs[0].id
+        debug.push(`Found user '${foundUid}' in Firestore via session email.`)
+        debug.push("Success via session email lookup.")
+        return { uid: foundUid, debug }
+      } else {
+        debug.push("No user found in Firestore with that session email.")
+      }
+    } catch (e: any) {
+      debug.push(`Firestore lookup via session email failed: ${e.message}`)
+    }
+  }
+
+  // 4) Stripe Customer object email
+  const customerId = getCustomerId(session)
+  debug.push(`Attempt 4 (Stripe Customer email): Customer ID is '${customerId || "nothing"}'.`)
+  if (customerId) {
+    try {
       const customer = await stripe.customers.retrieve(customerId)
       const custEmail = (customer as any)?.email
+      debug.push(`Stripe Customer email is '${custEmail || "nothing"}'.`)
       if (custEmail) {
         const q = await db.collection("users").where("email", "==", custEmail).limit(1).get()
-        if (!q.empty) return q.docs[0].id
+        if (!q.empty) {
+          const foundUid = q.docs[0].id
+          debug.push(`Found user '${foundUid}' in Firestore via Stripe Customer email.`)
+          debug.push("Success via Stripe Customer email lookup.")
+          return { uid: foundUid, debug }
+        } else {
+          debug.push("No user found in Firestore with that Stripe Customer email.")
+        }
       }
+    } catch (e: any) {
+      debug.push(`Stripe Customer lookup failed: ${e.message}`)
     }
-  } catch {
-    // ignore
   }
 
-  return null
+  debug.push("All UID resolution methods failed.")
+  return { uid: null, debug }
 }
 
 async function upsertMembership(
@@ -203,7 +227,6 @@ async function upsertMembership(
       priceId: payload.priceId || null,
       currentPeriodEnd: payload.currentPeriodEnd || null,
       updatedAt: now,
-      // set createdAt if not present
       createdAt: now,
       features:
         payload.plan === "creator_pro"
@@ -231,7 +254,6 @@ async function upsertMembership(
   )
 }
 
-// Log problematic sessions so you can inspect later in-app
 async function logWebhookIssue(code: string, session: Stripe.Checkout.Session) {
   try {
     await db.collection("webhookIssues").add({
@@ -249,19 +271,15 @@ async function logWebhookIssue(code: string, session: Stripe.Checkout.Session) {
   }
 }
 
-// Keep your existing bundle/product-box flow intact
 async function handleBundleOrProductBoxPurchase(session: Stripe.Checkout.Session) {
   console.log("🔍 [Webhook] Processing non-membership checkout:", session.id)
   console.log("📋 [Webhook] Session metadata:", session.metadata)
 
-  // Existing logic expects buyerUid and bundle/productBox metadata:
   const buyerUid = session.metadata?.buyerUid
   const bundleId = session.metadata?.bundleId || session.metadata?.productBoxId
   const itemType = session.metadata?.itemType || "bundle"
 
   if (!buyerUid || !bundleId) {
-    // This is not a membership and also lacks expected bundle metadata.
-    // Acknowledge to stop retries, but log for diagnostics.
     console.warn("⚠️ [Webhook] Non-membership checkout missing required metadata", {
       buyerUid,
       bundleId,
@@ -278,13 +296,11 @@ async function handleBundleOrProductBoxPurchase(session: Stripe.Checkout.Session
   let creatorData: any = null
 
   try {
-    // Try bundles collection first
     const bundleDoc = await db.collection("bundles").doc(bundleId).get()
     if (bundleDoc.exists) {
       itemData = { id: bundleDoc.id, ...bundleDoc.data() }
       console.log("✅ [Webhook] Found bundle:", itemData.title)
     } else {
-      // Try productBoxes collection
       const productBoxDoc = await db.collection("productBoxes").doc(bundleId).get()
       if (productBoxDoc.exists) {
         itemData = { id: productBoxDoc.id, ...productBoxDoc.data() }
@@ -298,7 +314,6 @@ async function handleBundleOrProductBoxPurchase(session: Stripe.Checkout.Session
       return NextResponse.json({ received: true })
     }
 
-    // Look up creator data
     if (itemData.creatorId) {
       const creatorDoc = await db.collection("users").doc(itemData.creatorId).get()
       if (creatorDoc.exists) {
@@ -369,7 +384,6 @@ async function handleBundleOrProductBoxPurchase(session: Stripe.Checkout.Session
     console.log("✅ [Webhook] Updated item stats")
   } catch (error) {
     console.error("❌ [Webhook] Error finalizing bundle purchase:", error)
-    // Ack to stop Stripe retries; we logged the failure
     return NextResponse.json({ received: true })
   }
 
@@ -378,7 +392,6 @@ async function handleBundleOrProductBoxPurchase(session: Stripe.Checkout.Session
 }
 
 async function syncMembershipFromSubscription(sub: Stripe.Subscription) {
-  // Resolve UID via metadata (preferred) or customer email → users collection
   let uid = (sub.metadata as any)?.buyerUid as string | undefined
 
   if (!uid) {
