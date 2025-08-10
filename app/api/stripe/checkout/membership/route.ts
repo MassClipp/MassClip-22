@@ -1,19 +1,17 @@
-import { NextResponse, type NextRequest } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
 
-// Use live or test secret depending on env config
-const stripeSecret = process.env.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY_TEST || ""
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2024-06-20" })
 
-const stripe = new Stripe(stripeSecret, {
-  apiVersion: "2024-06-20",
-})
+// Test price fallback (keeps your test product pinned during testing)
+const TEST_PRICE_ID = "price_1RuLpLDheyb0pkWF5v2Psykg"
 
 function getBaseUrl(req: NextRequest) {
-  const fromEnv =
+  const envUrl =
     process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_VERCEL_URL
-  if (fromEnv) {
-    const hasProto = fromEnv.startsWith("http://") || fromEnv.startsWith("https://")
-    return hasProto ? fromEnv : `https://${fromEnv}`
+  if (envUrl) {
+    const hasProto = envUrl.startsWith("http://") || envUrl.startsWith("https://")
+    return hasProto ? envUrl : `https://${envUrl}`
   }
   const proto = req.headers.get("x-forwarded-proto") || "https"
   const host = req.headers.get("host")
@@ -22,36 +20,26 @@ function getBaseUrl(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json().catch(() => ({}) as any)
+    const body = await req.json().catch(() => ({}))
     const { idToken, priceId: overridePriceId } = body || {}
 
-    if (!stripeSecret) {
-      return NextResponse.json({ error: "Stripe secret not configured" }, { status: 500 })
-    }
-
-    if (!idToken) {
-      // We still allow fallback via Payment Link on the client if this fails
-      return NextResponse.json({ error: "Missing idToken" }, { status: 401 })
-    }
-
-    // We don’t strictly require Firebase Admin here in this route to keep it portable in this environment.
-    // Instead, we accept the idToken, pass user context to Stripe via metadata and client_reference_id
-    // derived from the token itself (lightweight decode of JWT payload).
+    // decode minimal info from JWT without requiring Admin SDK here
     let uid = "anonymous"
     let email = ""
     let name = ""
-
-    try {
-      const payloadPart = idToken.split(".")[1]
-      const decoded = JSON.parse(Buffer.from(payloadPart, "base64").toString("utf8"))
-      uid = decoded?.user_id || decoded?.uid || uid
-      email = decoded?.email || ""
-      name = decoded?.name || ""
-    } catch {
-      // If decoding fails, we proceed; webhook will try to recover via email.
+    if (typeof idToken === "string") {
+      try {
+        const payloadPart = idToken.split(".")[1]
+        const decoded = JSON.parse(Buffer.from(payloadPart, "base64").toString("utf8"))
+        uid = decoded?.user_id || decoded?.uid || uid
+        email = decoded?.email || ""
+        name = decoded?.name || ""
+      } catch {
+        // continue; webhook will try email fallback if needed
+      }
     }
 
-    const priceId = (overridePriceId || process.env.STRIPE_PRICE_ID) as string
+    const priceId = (overridePriceId as string) || (process.env.STRIPE_PRICE_ID as string) || TEST_PRICE_ID
     if (!priceId) {
       return NextResponse.json({ error: "Missing STRIPE_PRICE_ID" }, { status: 400 })
     }
@@ -63,6 +51,7 @@ export async function POST(req: NextRequest) {
       buyerName: name || (email ? email.split("@")[0] : ""),
       plan: "creator_pro",
       contentType: "membership",
+      priceId,
       source: "dashboard_membership",
     }
 
@@ -74,15 +63,13 @@ export async function POST(req: NextRequest) {
       client_reference_id: uid,
       customer_email: email || undefined,
       metadata,
-      subscription_data: {
-        metadata,
-      },
+      subscription_data: { metadata },
       allow_promotion_codes: true,
     })
 
     return NextResponse.json({ url: session.url, sessionId: session.id })
-  } catch (err: any) {
-    console.error("Membership checkout create error:", err)
-    return NextResponse.json({ error: err?.message || "Failed to create session" }, { status: 500 })
+  } catch (error: any) {
+    console.error("❌ [Membership Checkout] Error:", error)
+    return NextResponse.json({ error: error?.message || "Failed to create session" }, { status: 500 })
   }
 }

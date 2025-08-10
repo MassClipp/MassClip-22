@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card"
 import { useAuth } from "@/contexts/auth-context"
 import { useUserPlan } from "@/hooks/use-user-plan"
 
-const TEMP_PAYMENT_LINK = "https://buy.stripe.com/aFa3cvbKsgRvexnfxdeIw05"
+const TEMP_PAYMENT_LINK = "https://buy.stripe.com/fZu3cvbKsgRv1KBgBheIw06"
 
 export default function MembershipPage() {
   const router = useRouter()
@@ -21,14 +21,19 @@ export default function MembershipPage() {
     try {
       setIsRedirecting(true)
       const idToken = await user?.getIdToken?.()
+
       const res = await fetch("/api/stripe/checkout/membership", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken }),
+        body: JSON.stringify({
+          idToken,
+          // Explicitly pass the test price as an extra guard. Server also defaults to env or this same value.
+          priceId: "price_1RuLpLDheyb0pkWF5v2Psykg",
+        }),
       })
 
       if (!res.ok) {
-        console.warn("[Membership] Failed to create checkout session, falling back to payment link.")
+        console.warn("[Membership] Failed to create checkout session, opening payment link fallback.")
         window.open(TEMP_PAYMENT_LINK, "_blank")
         setIsRedirecting(false)
         return
