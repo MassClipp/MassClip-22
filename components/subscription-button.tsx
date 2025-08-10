@@ -7,8 +7,6 @@ import { toast } from "@/hooks/use-toast"
 import { Loader2, Crown } from "lucide-react"
 
 interface SubscriptionButtonProps {
-  // priceId is intentionally unused now; kept for backward compatibility in call sites
-  priceId?: string
   planName: string
   price: number
   className?: string
@@ -34,9 +32,8 @@ export function SubscriptionButton({ planName, price, className = "" }: Subscrip
       let idToken = ""
       try {
         idToken = await user.getIdToken()
-        console.log("🔑 [Subscription] Got auth token for user:", user.uid)
       } catch (error) {
-        console.error("❌ [Subscription] Failed to get auth token:", error)
+        console.error("Failed to get auth token:", error)
         toast({
           title: "Authentication Error",
           description: "Please try signing in again",
@@ -45,17 +42,14 @@ export function SubscriptionButton({ planName, price, className = "" }: Subscrip
         return
       }
 
-      console.log("👑 [Subscription] Starting API-created subscription checkout (price from env on server)", {
-        userUid: user.uid,
-      })
-
-      // Create subscription checkout session via our API (uses STRIPE_PRICE_ID on the server)
       const response = await fetch("/api/stripe/checkout/subscription", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           idToken,
-          // successUrl/cancelUrl can be omitted; server derives from env
+          uid: user.uid,
+          successUrl: `${window.location.origin}/subscription/success`,
+          cancelUrl: window.location.href,
         }),
       })
 
@@ -64,16 +58,14 @@ export function SubscriptionButton({ planName, price, className = "" }: Subscrip
         throw new Error(errorData.error || "Failed to create subscription session")
       }
 
-      const { url, sessionId } = await response.json()
-      console.log("✅ [Subscription] Checkout session created:", { sessionId, hasUrl: !!url })
-
+      const { url } = await response.json()
       if (url) {
         window.location.href = url
       } else {
         throw new Error("No checkout URL received")
       }
     } catch (error: any) {
-      console.error("❌ [Subscription] Subscribe failed:", error)
+      console.error("Subscribe failed:", error)
       toast({
         title: "Subscription Failed",
         description: error.message || "Failed to start subscription process",
