@@ -66,6 +66,15 @@ export async function POST(req: NextRequest) {
       source: "dashboard_membership",
     }
 
+    console.log("Creating Stripe checkout session with params:", {
+      priceId,
+      uid,
+      email,
+      name,
+      baseUrl,
+      metadata,
+    })
+
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       line_items: [{ price: priceId, quantity: 1 }],

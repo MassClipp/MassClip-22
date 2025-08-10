@@ -36,13 +36,15 @@ export async function POST(request: NextRequest) {
           const uid = await resolveUidForMembership(session)
           if (!uid) {
             // Don’t surface a 400 — acknowledge to stop Stripe retries, but log for follow-up.
-            console.warn("⚠️ [Webhook] Membership checkout without resolvable UID. Session:", session.id, {
+            console.error("❌ [Webhook] Membership checkout without resolvable UID. Session:", session.id, {
               client_reference_id: session.client_reference_id,
               metadata: session.metadata,
               email: session.customer_details?.email || session.customer_email,
+              fullSession: JSON.stringify(session, null, 2), // Log the full session for deep inspection
             })
             await logWebhookIssue("membership-missing-uid", session)
-            return NextResponse.json({ received: true })
+            // Return the specific error you're seeing to confirm we're on the right track
+            return NextResponse.json({ error: "Could not find user ID" }, { status: 400 })
           }
 
           // Try to enrich from subscription
