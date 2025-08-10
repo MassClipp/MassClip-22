@@ -7,13 +7,46 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { useAuth } from "@/contexts/auth-context"
 import { useUserPlan } from "@/hooks/use-user-plan"
-import { SubscriptionButton } from "@/components/subscription-button"
+
+const TEMP_PAYMENT_LINK = "https://buy.stripe.com/aFa3cvbKsgRvexnfxdeIw05"
 
 export default function MembershipPage() {
   const router = useRouter()
   const { user } = useAuth()
   const { isProUser, loading } = useUserPlan()
   const [selectedPlan, setSelectedPlan] = useState<"free" | "pro">(isProUser ? "pro" : "free")
+  const [isRedirecting, setIsRedirecting] = useState(false)
+
+  const handleUpgradeClick = async () => {
+    try {
+      setIsRedirecting(true)
+      const idToken = await user?.getIdToken?.()
+      const res = await fetch("/api/stripe/checkout/membership", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken }),
+      })
+
+      if (!res.ok) {
+        console.warn("[Membership] Failed to create checkout session, falling back to payment link.")
+        window.open(TEMP_PAYMENT_LINK, "_blank")
+        setIsRedirecting(false)
+        return
+      }
+
+      const data = (await res.json()) as { url?: string }
+      if (data?.url) {
+        window.location.href = data.url
+      } else {
+        window.open(TEMP_PAYMENT_LINK, "_blank")
+      }
+    } catch (err) {
+      console.error("[Membership] Error starting checkout:", err)
+      window.open(TEMP_PAYMENT_LINK, "_blank")
+    } finally {
+      setIsRedirecting(false)
+    }
+  }
 
   return (
     <div className="space-y-8">
@@ -155,18 +188,20 @@ export default function MembershipPage() {
 
             {isProUser ? (
               <Button
-                onClick={() => router.push("/dashboard/profile")}
+                onClick={() => router.push("/dashboard/user")}
                 variant="outline"
                 className="w-full border-red-600 bg-black/30 text-white hover:bg-red-600/10"
               >
                 Manage Subscription
               </Button>
             ) : (
-              <SubscriptionButton
-                planName="Creator Pro"
-                price={15}
+              <Button
+                onClick={handleUpgradeClick}
+                disabled={isRedirecting}
                 className="w-full bg-red-600 hover:bg-red-700 text-white"
-              />
+              >
+                {isRedirecting ? "Redirecting..." : "Upgrade to Creator Pro"}
+              </Button>
             )}
           </div>
         </Card>
@@ -210,20 +245,9 @@ export default function MembershipPage() {
 
           <Card className="overflow-hidden border-zinc-800/50 bg-gradient-to-b from-zinc-900/50 to-black/70 transition-all duration-300 hover:border-zinc-700/70">
             <div className="p-6">
-              <h4 className="mb-3 text-lg font-medium text-white">What payment methods do you accept?</h4>
-              <p className="text-zinc-400">
-                We accept all major credit cards, including Visa, Mastercard, and American Express.
-              </p>
-            </div>
-          </Card>
-
-          <Card className="overflow-hidden border-zinc-800/50 bg-gradient-to-b from-zinc-900/50 to-black/70 transition-all duration-300 hover:border-zinc-700/70">
-            <div className="p-6">
               <h4 className="mb-3 text-lg font-medium text-white">How do I get started?</h4>
               <p className="text-zinc-400">
-                Simply click the "Upgrade to Creator Pro" button, complete the checkout process, and you'll have
-                immediate access to all Creator Pro features including unlimited videos per bundle and the reduced 10%
-                platform fee.
+                Click "Upgrade to Creator Pro", complete checkout, and your membership will be activated automatically.
               </p>
             </div>
           </Card>

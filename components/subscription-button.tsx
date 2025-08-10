@@ -7,12 +7,13 @@ import { toast } from "@/hooks/use-toast"
 import { Loader2, Crown } from "lucide-react"
 
 interface SubscriptionButtonProps {
+  priceId: string
   planName: string
   price: number
   className?: string
 }
 
-export function SubscriptionButton({ planName, price, className = "" }: SubscriptionButtonProps) {
+export function SubscriptionButton({ priceId, planName, price, className = "" }: SubscriptionButtonProps) {
   const [isLoading, setIsLoading] = useState(false)
   const { user } = useAuth()
 
@@ -20,7 +21,22 @@ export function SubscriptionButton({ planName, price, className = "" }: Subscrip
     try {
       setIsLoading(true)
 
-      if (!user) {
+      // Get the Firebase ID token for authentication
+      let idToken = ""
+      if (user) {
+        try {
+          idToken = await user.getIdToken()
+          console.log("🔑 [Subscription] Got auth token for user:", user.uid)
+        } catch (error) {
+          console.error("❌ [Subscription] Failed to get auth token:", error)
+          toast({
+            title: "Authentication Error",
+            description: "Please try signing in again",
+            variant: "destructive",
+          })
+          return
+        }
+      } else {
         toast({
           title: "Sign In Required",
           description: "Please sign in to subscribe",
@@ -29,35 +45,28 @@ export function SubscriptionButton({ planName, price, className = "" }: Subscrip
         return
       }
 
-      // Get auth token (webhook will link via client_reference_id/metadata on server)
-      let idToken = ""
-      try {
-        idToken = await user.getIdToken()
-        console.log("🔑 [Subscription] Got auth token for user:", user.uid)
-      } catch (error) {
-        console.error("❌ [Subscription] Failed to get auth token:", error)
-        toast({
-          title: "Authentication Error",
-          description: "Please try signing in again",
-          variant: "destructive",
-        })
-        return
-      }
+      console.log("👑 [Subscription] Starting subscription checkout:", {
+        priceId,
+        userUid: user.uid,
+        hasToken: !!idToken,
+      })
 
-      // Create subscription checkout session via API.
-      // Server must use STRIPE_PRICE_ID and attach buyerUid.
+      // Create subscription checkout session
       const response = await fetch("/api/stripe/checkout/premium", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
-          idToken,
+          priceId,
+          idToken, // CRITICAL: Include the Firebase auth token
           successUrl: `${window.location.origin}/subscription/success`,
           cancelUrl: window.location.href,
         }),
       })
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
+        const errorData = await response.json()
         throw new Error(errorData.error || "Failed to create subscription session")
       }
 
@@ -68,8 +77,9 @@ export function SubscriptionButton({ planName, price, className = "" }: Subscrip
         hasUrl: !!url,
       })
 
+      // Redirect to Stripe Checkout
       if (url) {
-        window.location.href = url // Stripe Checkout (checkout.stripe.com), not buy.stripe.com
+        window.location.href = url
       } else {
         throw new Error("No checkout URL received")
       }
