@@ -7,36 +7,13 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { useAuth } from "@/contexts/auth-context"
 import { useUserPlan } from "@/hooks/use-user-plan"
+import { SubscriptionButton } from "@/components/subscription-button"
 
 export default function MembershipPage() {
   const router = useRouter()
   const { user } = useAuth()
   const { isProUser, loading } = useUserPlan()
   const [selectedPlan, setSelectedPlan] = useState<"free" | "pro">(isProUser ? "pro" : "free")
-
-  const handleUpgradeClick = async () => {
-    try {
-      const idToken = await user?.getIdToken?.()
-
-      const res = await fetch("/api/stripe/checkout/membership", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken }),
-      })
-
-      if (!res.ok) {
-        console.warn("[Membership] Failed to create checkout session, falling back to payment link.")
-        return
-      }
-
-      const data = (await res.json()) as { url?: string }
-      if (data?.url) {
-        window.location.href = data.url
-      }
-    } catch (err) {
-      console.error("[Membership] Error starting checkout:", err)
-    }
-  }
 
   return (
     <div className="space-y-8">
@@ -185,9 +162,11 @@ export default function MembershipPage() {
                 Manage Subscription
               </Button>
             ) : (
-              <Button onClick={handleUpgradeClick} className="w-full bg-red-600 hover:bg-red-700 text-white">
-                Upgrade to Creator Pro
-              </Button>
+              <SubscriptionButton
+                planName="Creator Pro"
+                price={15}
+                className="w-full bg-red-600 hover:bg-red-700 text-white"
+              />
             )}
           </div>
         </Card>

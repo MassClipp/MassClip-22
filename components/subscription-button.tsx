@@ -29,27 +29,15 @@ export function SubscriptionButton({ planName, price, className = "" }: Subscrip
         return
       }
 
-      let idToken = ""
-      try {
-        idToken = await user.getIdToken()
-      } catch (error) {
-        console.error("Failed to get auth token:", error)
-        toast({
-          title: "Authentication Error",
-          description: "Please try signing in again",
-          variant: "destructive",
-        })
-        return
-      }
+      console.log("👑 [Subscription] Starting API-created subscription checkout (server uses STRIPE_PRICE_ID)", {
+        userUid: user.uid,
+      })
 
       const response = await fetch("/api/stripe/checkout/subscription", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          idToken,
-          uid: user.uid,
-          successUrl: `${window.location.origin}/subscription/success`,
-          cancelUrl: window.location.href,
+          buyerUid: user.uid, // server will use this to tie the session to the user
         }),
       })
 
@@ -58,14 +46,16 @@ export function SubscriptionButton({ planName, price, className = "" }: Subscrip
         throw new Error(errorData.error || "Failed to create subscription session")
       }
 
-      const { url } = await response.json()
+      const { url, sessionId } = await response.json()
+      console.log("✅ [Subscription] Checkout session created:", { sessionId, hasUrl: !!url })
+
       if (url) {
         window.location.href = url
       } else {
         throw new Error("No checkout URL received")
       }
     } catch (error: any) {
-      console.error("Subscribe failed:", error)
+      console.error("❌ [Subscription] Subscribe failed:", error)
       toast({
         title: "Subscription Failed",
         description: error.message || "Failed to start subscription process",
