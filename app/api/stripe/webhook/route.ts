@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
-import { db } from "@/lib/firebase-admin"
+import { db, isFirebaseAdminInitialized } from "@/lib/firebase-admin"
 
 // Stripe setup
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2024-06-20" })
@@ -20,8 +20,9 @@ export async function POST(request: NextRequest) {
     }
 
     if (event.type === "checkout.session.completed") {
-      const sess = event.data.object as Stripe.Checkout.Session
-      const session = await stripe.checkout.sessions.retrieve(sess.id, { expand: ["line_items"] })
+      const session = event.data.object as Stripe.Checkout.Session
+      console.log("Processing checkout.session.completed for session:", session.id)
+      console.log("Firebase Admin Initialized Status:", isFirebaseAdminInitialized())
 
       const isMembership =
         session.mode === "subscription" ||
@@ -36,9 +37,6 @@ export async function POST(request: NextRequest) {
               message: "Could not find user ID after all attempts.",
               debugTrace: debug,
               sessionId: session.id,
-              client_reference_id: session.client_reference_id,
-              metadata: session.metadata,
-              customer_email: session.customer_details?.email || session.customer_email,
             }
             console.error("❌ [Webhook] Membership checkout without resolvable UID.", errorDetails)
             await logWebhookIssue("membership-missing-uid", session)
@@ -136,33 +134,36 @@ async function resolveUidForMembership(
   session: Stripe.Checkout.Session,
 ): Promise<{ uid: string | null; debug: string[] }> {
   const debug: string[] = []
+  debug.push(`Starting UID resolution for session ${session.id}.`)
+  debug.push(`Firebase Admin Initialized: ${isFirebaseAdminInitialized()}.`)
 
   // 1) Metadata
   const metaUid = session.metadata?.buyerUid
-  debug.push(`Attempt 1 (metadata.buyerUid): Found '${metaUid || "nothing"}'.`)
-  if (metaUid && typeof metaUid === "string") {
-    debug.push("Success via metadata.buyerUid.")
+  debug.push(`Attempt 1 (metadata.buyerUid): Value is '${metaUid || "not found"}'. Type is ${typeof metaUid}.`)
+  if (metaUid && typeof metaUid === "string" && metaUid.length > 5) {
+    debug.push("SUCCESS: Found valid UID in metadata.buyerUid.")
     return { uid: metaUid, debug }
   }
 
   // 2) client_reference_id
   const clientRefId = session.client_reference_id
-  debug.push(`Attempt 2 (client_reference_id): Found '${clientRefId || "nothing"}'.`)
-  if (clientRefId) {
-    debug.push("Success via client_reference_id.")
+  debug.push(
+    `Attempt 2 (client_reference_id): Value is '${clientRefId || "not found"}'. Type is ${typeof clientRefId}.`,
+  )
+  if (clientRefId && typeof clientRefId === "string" && clientRefId.length > 5) {
+    debug.push("SUCCESS: Found valid UID in client_reference_id.")
     return { uid: clientRefId, debug }
   }
 
   // 3) Customer details email
   const email = session.customer_details?.email || (session.customer_email as string | undefined)
-  debug.push(`Attempt 3 (session email): Found '${email || "nothing"}'.`)
-  if (email) {
+  debug.push(`Attempt 3 (session email): Found '${email || "not found"}'.`)
+  if (email && isFirebaseAdminInitialized()) {
     try {
       const q = await db.collection("users").where("email", "==", email).limit(1).get()
       if (!q.empty) {
         const foundUid = q.docs[0].id
-        debug.push(`Found user '${foundUid}' in Firestore via session email.`)
-        debug.push("Success via session email lookup.")
+        debug.push(`SUCCESS: Found user '${foundUid}' in Firestore via session email.`)
         return { uid: foundUid, debug }
       } else {
         debug.push("No user found in Firestore with that session email.")
@@ -170,30 +171,8 @@ async function resolveUidForMembership(
     } catch (e: any) {
       debug.push(`Firestore lookup via session email failed: ${e.message}`)
     }
-  }
-
-  // 4) Stripe Customer object email
-  const customerId = getCustomerId(session)
-  debug.push(`Attempt 4 (Stripe Customer email): Customer ID is '${customerId || "nothing"}'.`)
-  if (customerId) {
-    try {
-      const customer = await stripe.customers.retrieve(customerId)
-      const custEmail = (customer as any)?.email
-      debug.push(`Stripe Customer email is '${custEmail || "nothing"}'.`)
-      if (custEmail) {
-        const q = await db.collection("users").where("email", "==", custEmail).limit(1).get()
-        if (!q.empty) {
-          const foundUid = q.docs[0].id
-          debug.push(`Found user '${foundUid}' in Firestore via Stripe Customer email.`)
-          debug.push("Success via Stripe Customer email lookup.")
-          return { uid: foundUid, debug }
-        } else {
-          debug.push("No user found in Firestore with that Stripe Customer email.")
-        }
-      }
-    } catch (e: any) {
-      debug.push(`Stripe Customer lookup failed: ${e.message}`)
-    }
+  } else if (!isFirebaseAdminInitialized()) {
+    debug.push("Skipping email lookup because Firebase Admin is not initialized.")
   }
 
   debug.push("All UID resolution methods failed.")
@@ -255,6 +234,7 @@ async function upsertMembership(
 }
 
 async function logWebhookIssue(code: string, session: Stripe.Checkout.Session) {
+  if (!isFirebaseAdminInitialized()) return
   try {
     await db.collection("webhookIssues").add({
       code,
@@ -272,54 +252,35 @@ async function logWebhookIssue(code: string, session: Stripe.Checkout.Session) {
 }
 
 async function handleBundleOrProductBoxPurchase(session: Stripe.Checkout.Session) {
+  if (!isFirebaseAdminInitialized()) {
+    console.error("CRITICAL: Cannot process bundle purchase, Firebase Admin is not initialized.")
+    return NextResponse.json({ error: "Internal configuration error" }, { status: 500 })
+  }
   console.log("🔍 [Webhook] Processing non-membership checkout:", session.id)
-  console.log("📋 [Webhook] Session metadata:", session.metadata)
-
   const buyerUid = session.metadata?.buyerUid
   const bundleId = session.metadata?.bundleId || session.metadata?.productBoxId
   const itemType = session.metadata?.itemType || "bundle"
 
   if (!buyerUid || !bundleId) {
-    console.warn("⚠️ [Webhook] Non-membership checkout missing required metadata", {
-      buyerUid,
-      bundleId,
-      itemType,
-      sessionId: session.id,
-    })
+    console.warn("⚠️ [Webhook] Non-membership checkout missing required metadata")
     await logWebhookIssue("bundle-missing-metadata", session)
     return NextResponse.json({ received: true })
   }
 
-  console.log("🔍 [Webhook] Looking up item:", bundleId)
-
-  let itemData: any = null
-  let creatorData: any = null
-
+  let itemData: any = null,
+    creatorData: any = null
   try {
-    const bundleDoc = await db.collection("bundles").doc(bundleId).get()
-    if (bundleDoc.exists) {
-      itemData = { id: bundleDoc.id, ...bundleDoc.data() }
-      console.log("✅ [Webhook] Found bundle:", itemData.title)
-    } else {
-      const productBoxDoc = await db.collection("productBoxes").doc(bundleId).get()
-      if (productBoxDoc.exists) {
-        itemData = { id: productBoxDoc.id, ...productBoxDoc.data() }
-        console.log("✅ [Webhook] Found product box:", itemData.title)
-      }
-    }
-
-    if (!itemData) {
-      console.warn("⚠️ [Webhook] Item not found:", bundleId)
+    const itemDoc = await (itemType === "bundle"
+      ? db.collection("bundles").doc(bundleId).get()
+      : db.collection("productBoxes").doc(bundleId).get())
+    if (!itemDoc.exists) {
       await logWebhookIssue("bundle-item-not-found", session)
       return NextResponse.json({ received: true })
     }
-
+    itemData = { id: itemDoc.id, ...itemDoc.data() }
     if (itemData.creatorId) {
       const creatorDoc = await db.collection("users").doc(itemData.creatorId).get()
-      if (creatorDoc.exists) {
-        creatorData = creatorDoc.data()
-        console.log("✅ [Webhook] Found creator:", creatorData.displayName || creatorData.username)
-      }
+      if (creatorDoc.exists) creatorData = creatorDoc.data()
     }
   } catch (error) {
     console.error("❌ [Webhook] Error looking up item/creator:", error)
@@ -334,93 +295,43 @@ async function handleBundleOrProductBoxPurchase(session: Stripe.Checkout.Session
     buyerName: session.customer_details?.name || "",
     itemId: bundleId,
     itemType,
-    bundleId: itemType === "bundle" ? bundleId : null,
-    productBoxId: itemType === "product_box" ? bundleId : null,
     title: itemData.title || "Untitled",
-    description: itemData.description || "",
-    thumbnailUrl: itemData.thumbnailUrl || itemData.customPreviewThumbnail || "",
-    downloadUrl: itemData.downloadUrl || "",
-    fileSize: itemData.fileSize || 0,
-    fileType: itemData.fileType || "",
-    duration: itemData.duration || 0,
     creatorId: itemData.creatorId || "",
-    creatorName: creatorData?.displayName || creatorData?.username || "Unknown Creator",
-    creatorUsername: creatorData?.username || "",
+    creatorName: creatorData?.displayName || creatorData?.username || "Unknown",
     amount: (session.amount_total || 0) / 100,
     currency: session.currency || "usd",
     status: "completed",
-    accessUrl: itemType === "bundle" ? `/bundles/${bundleId}` : `/product-box/${bundleId}/content`,
-    accessGranted: true,
-    downloadCount: 0,
     purchasedAt: new Date(),
-    createdAt: new Date(),
-    environment: process.env.NODE_ENV === "production" ? "live" : "test",
   }
-
-  try {
-    await db.collection("bundlePurchases").doc(session.id).set(purchaseData)
-    console.log("✅ [Webhook] Recorded bundle purchase:", session.id)
-
-    if (itemData.creatorId) {
-      const creatorRef = db.collection("users").doc(itemData.creatorId)
-      const creatorDoc = await creatorRef.get()
-      const creatorExisting = creatorDoc.data() || {}
-      await creatorRef.update({
-        totalSales: (creatorExisting.totalSales || 0) + purchaseData.amount,
-        totalPurchases: (creatorExisting.totalPurchases || 0) + 1,
-        lastSaleAt: new Date(),
-      })
-      console.log("✅ [Webhook] Updated creator stats")
-    }
-
-    const itemRef =
-      itemType === "bundle" ? db.collection("bundles").doc(bundleId) : db.collection("productBoxes").doc(bundleId)
-    const itemDoc = await itemRef.get()
-    const itemExisting = itemDoc.data() || {}
-    await itemRef.update({
-      downloadCount: (itemExisting.downloadCount || 0) + 1,
-      lastPurchaseAt: new Date(),
-    })
-    console.log("✅ [Webhook] Updated item stats")
-  } catch (error) {
-    console.error("❌ [Webhook] Error finalizing bundle purchase:", error)
-    return NextResponse.json({ received: true })
-  }
-
-  console.log("🎉 [Webhook] Non-membership purchase completed")
+  await db.collection("bundlePurchases").doc(session.id).set(purchaseData)
   return NextResponse.json({ received: true })
 }
 
 async function syncMembershipFromSubscription(sub: Stripe.Subscription) {
+  if (!isFirebaseAdminInitialized()) {
+    console.error("CRITICAL: Cannot sync subscription, Firebase Admin is not initialized.")
+    return
+  }
   let uid = (sub.metadata as any)?.buyerUid as string | undefined
-
   if (!uid) {
     const customerId = typeof sub.customer === "string" ? sub.customer : (sub.customer as any)?.id || ""
     let email = ""
-
     if (customerId) {
       try {
         const customer = await stripe.customers.retrieve(customerId)
         email = (customer as any)?.email || ""
-      } catch {
-        // ignore
-      }
+      } catch {}
     }
     if (email) {
       const q = await db.collection("users").where("email", "==", email).limit(1).get()
       if (!q.empty) uid = q.docs[0].id
     }
   }
-
-  if (!uid) {
-    console.warn("⚠️ [Webhook] Subscription event without resolvable UID. sub:", sub.id)
-    return
-  }
+  if (!uid) return
 
   const isActive = sub.status === "active" || sub.status === "trialing"
-  const priceId = (sub.items?.data?.[0]?.price?.id as string) || process.env.STRIPE_PRICE_ID || ""
+  const priceId = (sub.items?.data?.[0]?.price?.id as string) || ""
   const periodEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000) : null
-
   await upsertMembership(uid, {
     plan: isActive ? "creator_pro" : "free",
     status: sub.status,

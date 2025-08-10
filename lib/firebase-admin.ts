@@ -2,6 +2,7 @@ import { initializeApp as initializeAdminApp, getApps, cert, type App } from "fi
 import { getFirestore, FieldValue, type Firestore } from "firebase-admin/firestore"
 import { getAuth, type Auth, type DecodedIdToken } from "firebase-admin/auth"
 import { getStorage } from "firebase-admin/storage"
+import admin from "firebase-admin"
 
 /**
  * Initialise the Firebase Admin SDK exactly once (avoids double-init in
@@ -49,7 +50,44 @@ export function initializeFirebaseAdmin(): App {
   }
 }
 
-let adminApp: App
+// This function ensures we initialize the app only once.
+function getFirebaseAdminApp() {
+  // If the app is already initialized, return it.
+  if (admin.apps.length > 0) {
+    return admin.app()
+  }
+
+  // Format the private key, replacing the escaped newlines.
+  const privateKey = process.env.FIREBASE_PRIVATE_KEY
+    ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n")
+    : undefined
+
+  // Check for essential environment variables.
+  if (!privateKey || !process.env.FIREBASE_CLIENT_EMAIL || !process.env.FIREBASE_PROJECT_ID) {
+    console.error("CRITICAL: Firebase Admin SDK environment variables are not set. Cannot initialize.")
+    // Return null if configuration is missing.
+    return null
+  }
+
+  try {
+    // Initialize the app with the credentials.
+    const app = admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey,
+      }),
+    })
+    console.log("Firebase Admin SDK initialized successfully.")
+    return app
+  } catch (error) {
+    console.error("CRITICAL: Firebase Admin SDK initialization error:", error)
+    // Return null on failure.
+    return null
+  }
+}
+
+let adminApp: App | null
 
 if (getApps().length === 0) {
   try {
@@ -64,10 +102,23 @@ if (getApps().length === 0) {
   console.log("✅ Firebase Admin already initialized")
 }
 
+// Get the initialized app.
+const firebaseAdminApp = getFirebaseAdminApp()
+
+// Export Firestore and Auth instances. If initialization failed, export mock objects to prevent crashes.
+const adminDb: Firestore = firebaseAdminApp ? getFirestore(firebaseAdminApp) : ({} as Firestore)
+const auth: Auth = firebaseAdminApp ? getAuth(firebaseAdminApp) : ({} as Auth)
+const storage = firebaseAdminApp ? getStorage(firebaseAdminApp) : null
+
+// Export a utility function to check the initialization status from other parts of the app.
+export const isFirebaseAdminInitialized = () => {
+  return admin.apps.length > 0 && !!firebaseAdminApp
+}
+
 // Initialize services
-export const adminDb: Firestore = getFirestore(adminApp)
-export const auth: Auth = getAuth(adminApp)
-export const storage = getStorage(adminApp)
+// export const adminDb: Firestore = getFirestore(adminApp)
+// export const auth: Auth = getAuth(adminApp)
+// export const storage = getStorage(adminApp)
 
 // Export with the exact names the system expects
 export const adminAuth = auth
@@ -77,11 +128,11 @@ export const firestore = adminDb
 export const db: Firestore = adminDb
 
 // REQUIRED: Export admin object with methods that match Firebase Admin SDK usage patterns
-export const admin = {
+export const firebaseAdmin = {
   auth: () => auth,
   firestore: () => adminDb,
   storage: () => storage,
-  app: () => adminApp,
+  app: () => firebaseAdminApp,
   // Direct access to services for convenience
   authService: auth,
   firestoreService: adminDb,
@@ -89,7 +140,7 @@ export const admin = {
 }
 
 // Default export
-export default adminApp
+export default firebaseAdminApp
 
 /**
  * Generic retry helper with exponential back-off – useful for flaky Firestore
