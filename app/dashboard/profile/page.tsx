@@ -14,7 +14,20 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/components/ui/use-toast"
-import { Loader2, User, Camera, Instagram, Twitter, Globe, Save, CheckCircle, ExternalLink, XCircle, Crown, RefreshCw } from 'lucide-react'
+import {
+  Loader2,
+  User,
+  Camera,
+  Instagram,
+  Twitter,
+  Globe,
+  Save,
+  CheckCircle,
+  ExternalLink,
+  XCircle,
+  Crown,
+  RefreshCw,
+} from "lucide-react"
 import ReactCrop, { type Crop, centerCrop, makeAspectCrop } from "react-image-crop"
 import "react-image-crop/dist/ReactCrop.css"
 import CancelSubscriptionButton from "@/components/cancel-subscription-button"
@@ -449,7 +462,7 @@ export default function ProfilePage() {
 
   const fetchSubscriptionData = async () => {
     if (!user) return
-    
+
     setLoadingSubscription(true)
     try {
       const response = await fetch("/api/verify-subscription", {
@@ -459,7 +472,7 @@ export default function ProfilePage() {
         },
         body: JSON.stringify({ userId: user.uid }),
       })
-      
+
       if (response.ok) {
         const data = await response.json()
         setSubscriptionData(data)
@@ -744,7 +757,7 @@ export default function ProfilePage() {
               <CardTitle>Membership & Billing</CardTitle>
               <CardDescription>Manage your subscription and billing information</CardDescription>
             </CardHeader>
-            
+
             <CardContent className="space-y-6">
               {loadingSubscription ? (
                 <div className="flex items-center justify-center p-8">
@@ -757,14 +770,14 @@ export default function ProfilePage() {
                   <div className="p-4 rounded-lg border border-zinc-700/50 bg-zinc-800/30">
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="text-lg font-medium">Current Plan</h3>
-                      <Badge 
+                      <Badge
                         variant={subscriptionData?.isActive ? "default" : "secondary"}
                         className={subscriptionData?.isActive ? "bg-green-600" : "bg-zinc-600"}
                       >
                         {subscriptionData?.isActive ? "Active" : "Free"}
                       </Badge>
                     </div>
-                    
+
                     <div className="space-y-3">
                       <div className="flex justify-between">
                         <span className="text-zinc-400">Plan Type:</span>
@@ -772,14 +785,14 @@ export default function ProfilePage() {
                           {subscriptionData?.plan === "creator_pro" ? "Creator Pro" : subscriptionData?.plan || "Free"}
                         </span>
                       </div>
-                      
+
                       {subscriptionData?.isActive && subscriptionData?.currentPeriodEnd && (
                         <div className="flex justify-between">
                           <span className="text-zinc-400">Next Billing:</span>
                           <span>{new Date(subscriptionData.currentPeriodEnd).toLocaleDateString()}</span>
                         </div>
                       )}
-                      
+
                       {subscriptionData?.stripeCustomerId && (
                         <div className="flex justify-between">
                           <span className="text-zinc-400">Customer ID:</span>
@@ -801,7 +814,7 @@ export default function ProfilePage() {
                         )}
                         <span className="text-sm">Unlimited Downloads</span>
                       </div>
-                      
+
                       <div className="flex items-center gap-2">
                         {subscriptionData?.features?.premiumContent ? (
                           <CheckCircle className="h-4 w-4 text-green-500" />
@@ -810,7 +823,7 @@ export default function ProfilePage() {
                         )}
                         <span className="text-sm">Premium Content</span>
                       </div>
-                      
+
                       <div className="flex items-center gap-2">
                         {subscriptionData?.features?.noWatermark ? (
                           <CheckCircle className="h-4 w-4 text-green-500" />
@@ -819,7 +832,7 @@ export default function ProfilePage() {
                         )}
                         <span className="text-sm">No Watermark</span>
                       </div>
-                      
+
                       <div className="flex items-center gap-2">
                         {subscriptionData?.features?.prioritySupport ? (
                           <CheckCircle className="h-4 w-4 text-green-500" />
@@ -834,8 +847,8 @@ export default function ProfilePage() {
                   {/* Actions */}
                   <div className="flex gap-4">
                     {!subscriptionData?.isActive ? (
-                      <Button 
-                        onClick={() => window.open("/pricing", "_blank")}
+                      <Button
+                        onClick={() => router.push("/dashboard/membership")}
                         className="bg-red-600 hover:bg-red-700"
                       >
                         <Crown className="h-4 w-4 mr-2" />
@@ -843,16 +856,16 @@ export default function ProfilePage() {
                       </Button>
                     ) : (
                       <div className="flex gap-4">
-                        <Button 
+                        <Button
                           variant="outline"
                           onClick={fetchSubscriptionData}
                           disabled={loadingSubscription}
-                          className="border-zinc-700 hover:bg-zinc-800"
+                          className="border-zinc-700 hover:bg-zinc-800 bg-transparent"
                         >
                           <RefreshCw className={`h-4 w-4 mr-2 ${loadingSubscription ? "animate-spin" : ""}`} />
                           Refresh Status
                         </Button>
-                        
+
                         <CancelSubscriptionButton />
                       </div>
                     )}
@@ -865,7 +878,7 @@ export default function ProfilePage() {
                       <p className="text-sm text-zinc-400 mb-2">
                         For detailed billing history and invoices, please visit your Stripe customer portal.
                       </p>
-                      <Button 
+                      <Button
                         variant="outline"
                         onClick={() => {
                           // This would need a customer portal API endpoint
