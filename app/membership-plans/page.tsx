@@ -2,11 +2,11 @@
 import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
 import { CheckCircle2, Crown, Shield, Zap, Download } from "lucide-react"
-import { SubscribeButton } from "@/components/subscribe-button"
 import { useAuth } from "@/contexts/auth-context"
 import { useUserPlan } from "@/hooks/use-user-plan"
 import { Button } from "@/components/ui/button"
 import { DashboardHeader } from "@/components/dashboard-header"
+import { SubscriptionButton } from "@/components/subscription-button"
 
 export default function MembershipPlansPage() {
   const { user } = useAuth()
@@ -160,15 +160,17 @@ export default function MembershipPlansPage() {
                     Manage Subscription
                   </Button>
                 ) : (
-                  <SubscribeButton className="w-full bg-red-600 hover:bg-red-700">
-                    Upgrade to Creator Pro
-                  </SubscribeButton>
+                  <SubscriptionButton
+                    className="w-full bg-red-600 hover:bg-red-700"
+                    planName="Creator Pro"
+                    price={19}
+                  />
                 )}
               </div>
             </div>
           </motion.div>
 
-          {/* Features Section */}
+          {/* Features and FAQ sections omitted for brevity (unchanged visual content) */}
           <motion.div variants={itemVariants} className="max-w-3xl mx-auto">
             <h3 className="text-xl font-medium text-white mb-6 text-center">Why Choose MassClip Creator Pro?</h3>
 
@@ -194,7 +196,6 @@ export default function MembershipPlansPage() {
               </div>
             </div>
 
-            {/* FAQ Section */}
             <h3 className="text-xl font-medium text-white mb-6 text-center">Frequently Asked Questions</h3>
 
             <div className="space-y-6">
@@ -216,8 +217,7 @@ export default function MembershipPlansPage() {
               <div className="bg-zinc-900/30 border border-zinc-800/50 rounded-lg p-6 backdrop-blur-sm">
                 <h4 className="text-lg font-medium text-white mb-2">How do I get started?</h4>
                 <p className="text-zinc-400">
-                  Simply click the "Upgrade to Creator Pro" button, complete the checkout process, and you'll have
-                  immediate access to all Creator Pro features.
+                  Click “Upgrade to Creator Pro”, complete checkout, and you’ll have immediate access to all features.
                 </p>
               </div>
             </div>

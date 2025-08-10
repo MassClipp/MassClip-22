@@ -29,15 +29,30 @@ export function SubscriptionButton({ planName, price, className = "" }: Subscrip
         return
       }
 
-      console.log("👑 [Subscription] Starting API-created subscription checkout (server uses STRIPE_PRICE_ID)", {
-        userUid: user.uid,
-      })
+      // Get auth token (webhook will link via client_reference_id/metadata on server)
+      let idToken = ""
+      try {
+        idToken = await user.getIdToken()
+        console.log("🔑 [Subscription] Got auth token for user:", user.uid)
+      } catch (error) {
+        console.error("❌ [Subscription] Failed to get auth token:", error)
+        toast({
+          title: "Authentication Error",
+          description: "Please try signing in again",
+          variant: "destructive",
+        })
+        return
+      }
 
-      const response = await fetch("/api/stripe/checkout/subscription", {
+      // Create subscription checkout session via API.
+      // Server must use STRIPE_PRICE_ID and attach buyerUid.
+      const response = await fetch("/api/stripe/checkout/premium", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          buyerUid: user.uid, // server will use this to tie the session to the user
+          idToken,
+          successUrl: `${window.location.origin}/subscription/success`,
+          cancelUrl: window.location.href,
         }),
       })
 
@@ -47,10 +62,14 @@ export function SubscriptionButton({ planName, price, className = "" }: Subscrip
       }
 
       const { url, sessionId } = await response.json()
-      console.log("✅ [Subscription] Checkout session created:", { sessionId, hasUrl: !!url })
+
+      console.log("✅ [Subscription] Checkout session created:", {
+        sessionId,
+        hasUrl: !!url,
+      })
 
       if (url) {
-        window.location.href = url
+        window.location.href = url // Stripe Checkout (checkout.stripe.com), not buy.stripe.com
       } else {
         throw new Error("No checkout URL received")
       }
