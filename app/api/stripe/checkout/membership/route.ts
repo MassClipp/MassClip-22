@@ -1,97 +1,104 @@
-import { NextResponse, type NextRequest } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
+import { auth, isFirebaseAdminInitialized } from "@/lib/firebase-admin"
 
-// Use live or test secret depending on env config
-const stripeSecret = process.env.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY_TEST || ""
-
-const stripe = new Stripe(stripeSecret, {
+// Initialize Stripe with the secret key from environment variables
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
 })
 
-function getBaseUrl(req: NextRequest) {
-  const fromEnv =
-    process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_VERCEL_URL
-  if (fromEnv) {
-    const hasProto = fromEnv.startsWith("http://") || fromEnv.startsWith("https://")
-    return hasProto ? fromEnv : `https://${fromEnv}`
+// Fallback Price ID for testing if the environment variable is not set
+const FALLBACK_TEST_PRICE_ID = "price_1P0jL4H6aJg9jZ4Y6yZ4jZ4Y" // Replace with a valid test price ID if needed
+
+export async function POST(request: NextRequest) {
+  console.log("🚀 [Membership Checkout] Starting session creation...")
+
+  if (!isFirebaseAdminInitialized()) {
+    console.error("❌ [Membership Checkout] CRITICAL: Firebase Admin SDK is not initialized.")
+    return NextResponse.json({ error: "Server configuration error." }, { status: 500 })
   }
-  const proto = req.headers.get("x-forwarded-proto") || "https"
-  const host = req.headers.get("host")
-  return `${proto}://${host}`
-}
 
-export async function POST(req: NextRequest) {
   try {
-    const body = await req.json().catch(() => ({}) as any)
-    const { idToken, priceId: overridePriceId } = body || {}
-
-    if (!stripeSecret) {
-      return NextResponse.json({ error: "Stripe secret not configured" }, { status: 500 })
-    }
+    const body = await request.json()
+    const { idToken, overridePriceId } = body
+    console.log("📝 [Membership Checkout] Request body received:", { hasIdToken: !!idToken, overridePriceId })
 
     if (!idToken) {
-      // We still allow fallback via Payment Link on the client if this fails
-      return NextResponse.json({ error: "Missing idToken" }, { status: 401 })
+      console.error("❌ [Membership Checkout] Authentication error: Missing idToken.")
+      return NextResponse.json({ error: "User not authenticated." }, { status: 401 })
     }
 
-    // We don’t strictly require Firebase Admin here in this route to keep it portable in this environment.
-    // Instead, we accept the idToken, pass user context to Stripe via metadata and client_reference_id
-    // derived from the token itself (lightweight decode of JWT payload).
-    let uid = "anonymous"
-    let email = ""
-    let name = ""
-
+    // --- Authenticate User ---
+    let decodedToken
     try {
-      const payloadPart = idToken.split(".")[1]
-      const decoded = JSON.parse(Buffer.from(payloadPart, "base64").toString("utf8"))
-      uid = decoded?.user_id || decoded?.uid || uid
-      email = decoded?.email || ""
-      name = decoded?.name || ""
-    } catch {
-      // If decoding fails, we proceed; webhook will try to recover via email.
+      decodedToken = await auth.verifyIdToken(idToken)
+    } catch (error) {
+      console.error("❌ [Membership Checkout] Firebase token verification failed:", error)
+      return NextResponse.json({ error: "Invalid authentication token." }, { status: 403 })
     }
 
-    const priceId = (overridePriceId || process.env.STRIPE_PRICE_ID) as string
+    const { uid, email, name } = decodedToken
+    console.log("✅ [Membership Checkout] User authenticated:", { uid, email })
+
+    // --- Determine Stripe Price ID ---
+    const priceId = overridePriceId || process.env.STRIPE_PRICE_ID || FALLBACK_TEST_PRICE_ID
     if (!priceId) {
-      return NextResponse.json({ error: "Missing STRIPE_PRICE_ID" }, { status: 400 })
+      console.error("❌ [Membership Checkout] Configuration error: Missing Stripe Price ID.")
+      return NextResponse.json({ error: "Stripe Price ID is not configured." }, { status: 500 })
     }
+    console.log(`💲 [Membership Checkout] Using Stripe Price ID: ${priceId}`)
 
-    const baseUrl = getBaseUrl(req)
+    // --- Construct Metadata ---
+    // This metadata is CRITICAL for the webhook to identify the user
     const metadata = {
-      buyerUid: uid,
-      buyerEmail: email,
-      buyerName: name || (email ? email.split("@")[0] : ""),
+      buyerUid: uid, // The most important piece of data
+      buyerEmail: email || "",
+      buyerName: name || email?.split("@")[0] || "",
       plan: "creator_pro",
-      contentType: "membership",
-      source: "dashboard_membership",
+      contentType: "membership", // Differentiates from bundle purchases
+      source: "dashboard_membership_upgrade",
     }
+    console.log("📋 [Membership Checkout] Constructed metadata for Stripe:", metadata)
 
-    console.log("Creating Stripe checkout session with params:", {
-      priceId,
-      uid,
-      email,
-      name,
-      baseUrl,
-      metadata,
-    })
+    // --- Get Site URL for Redirects ---
+    const host = request.headers.get("host")!
+    const protocol = process.env.NODE_ENV === "development" ? "http" : "https"
+    const siteUrl = `${protocol}://${host}`
 
+    // --- Create Stripe Checkout Session ---
+    console.log("🔄 [Membership Checkout] Creating Stripe session on PLATFORM account...")
     const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
       mode: "subscription",
-      line_items: [{ price: priceId, quantity: 1 }],
-      success_url: `${baseUrl}/dashboard/membership?status=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${baseUrl}/dashboard/membership?status=cancel`,
-      client_reference_id: uid,
-      customer_email: email || undefined,
-      metadata,
+      line_items: [
+        {
+          price: priceId,
+          quantity: 1,
+        },
+      ],
+      // Use the authenticated user's email
+      customer_email: email,
+      // Set success and cancel URLs
+      success_url: `${siteUrl}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${siteUrl}/dashboard`,
+      // Attach the critical metadata
+      metadata: metadata,
+      // Also attach metadata to the subscription for easier debugging
       subscription_data: {
-        metadata,
+        metadata: metadata,
       },
-      allow_promotion_codes: true,
     })
+
+    console.log("✅ [Membership Checkout] Stripe session created successfully!")
+    console.log(`   - Session ID: ${session.id}`)
+    console.log(`   - Checkout URL: ${session.url}`)
 
     return NextResponse.json({ url: session.url, sessionId: session.id })
-  } catch (err: any) {
-    console.error("Membership checkout create error:", err)
-    return NextResponse.json({ error: err?.message || "Failed to create session" }, { status: 500 })
+  } catch (error: any) {
+    console.error("❌ [Membership Checkout] An unexpected error occurred:", error)
+    if (error instanceof Stripe.errors.StripeError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: 400 })
+    }
+    return NextResponse.json({ error: "Failed to create checkout session." }, { status: 500 })
   }
 }
