@@ -2,21 +2,33 @@ import { NextResponse } from "next/server"
 import Stripe from "stripe"
 import { initializeFirebaseAdmin } from "@/lib/firebase-admin"
 import { getFirestore, type FirebaseFirestore } from "firebase-admin/firestore"
+import {
+  ensureMembership,
+  setCreatorPro,
+  // setCreatorProStatus, // reserved for future cancel/past_due handling
+  type MembershipStatus,
+} from "@/lib/memberships-service"
 
-type DebugTrace = string[]
-
+// Initialize Firebase Admin outside the handler for better performance
 let firebaseInitialized = false
 let db: FirebaseFirestore | null = null
 
 function initFirebase() {
   if (!firebaseInitialized) {
-    initializeFirebaseAdmin()
-    db = getFirestore()
-    firebaseInitialized = true
-    console.log("🔥 Firebase initialized successfully in webhook handler")
+    try {
+      initializeFirebaseAdmin()
+      db = getFirestore()
+      firebaseInitialized = true
+      console.log("🔥 Firebase initialized successfully in webhook handler")
+    } catch (error) {
+      console.error("🔥 Firebase initialization error:", error)
+      throw error
+    }
   }
   return db!
 }
+
+type DebugTrace = string[]
 
 function getStripe(): Stripe {
   const key = process.env.STRIPE_SECRET_KEY
@@ -46,25 +58,50 @@ async function storeRawEvent(
   }
 }
 
+function firstNonEmpty(...vals: Array<string | null | undefined>): string | null {
+  for (const v of vals) {
+    if (typeof v === "string" && v.trim().length > 0) return v
+  }
+  return null
+}
+
 async function upgradeUserToCreatorPro(
   firestore: FirebaseFirestore,
-  userId: string,
-  opts: {
+  params: {
+    userId: string
     email?: string | null
-    sessionId?: string
-    subscriptionId?: string
+    sessionId?: string | null
+    subscriptionId?: string | null
+    customerId?: string | null
+    priceId?: string | null
+    status?: MembershipStatus
+    currentPeriodEnd?: Date | null
     amountTotal?: number | null
     currency?: string | null
     source?: string
     debugTrace: DebugTrace
   },
 ) {
-  const { email, sessionId, subscriptionId, amountTotal, currency, source = "webhook", debugTrace } = opts
+  const {
+    userId,
+    email,
+    sessionId,
+    subscriptionId,
+    customerId,
+    priceId,
+    status = "active",
+    currentPeriodEnd,
+    amountTotal,
+    currency,
+    source = "webhook",
+    debugTrace,
+  } = params
+
   debugTrace.push(
-    `upgradeUserToCreatorPro(userId=${userId}, sessionId=${sessionId || ""}, subscriptionId=${subscriptionId || ""})`,
+    `upgradeUserToCreatorPro(userId=${userId}, sessionId=${sessionId || ""}, subscriptionId=${subscriptionId || ""}, customerId=${customerId || ""}, priceId=${priceId || ""})`,
   )
 
-  // Ensure user exists
+  // 1) Ensure user exists in users collection (legacy fields update remains)
   const userRef = firestore.collection("users").doc(userId)
   const userDoc = await userRef.get()
   if (!userDoc.exists) {
@@ -72,7 +109,7 @@ async function upgradeUserToCreatorPro(
     throw new Error(`User ${userId} not found`)
   }
 
-  // Update plan and permissions
+  // 2) Update legacy "users" doc (kept for backward compatibility)
   await userRef.update({
     plan: "creator_pro",
     permissions: {
@@ -80,27 +117,26 @@ async function upgradeUserToCreatorPro(
       premium: true,
     },
     updatedAt: new Date(),
-    paymentStatus: "active",
+    paymentStatus: status === "active" || status === "trialing" ? "active" : status,
+    stripeCustomerId: customerId ?? userDoc.get("stripeCustomerId") ?? null,
+    stripeSubscriptionId: subscriptionId ?? userDoc.get("stripeSubscriptionId") ?? null,
   })
-  debugTrace.push(`Updated user ${userId} plan=creator_pro, premium=true`)
+  debugTrace.push(`Updated users/${userId} plan=creator_pro, premium=true`)
 
-  // Store subscription sub-collection, if applicable
-  if (subscriptionId) {
-    await userRef.collection("subscriptions").doc(subscriptionId).set(
-      {
-        subscriptionId,
-        status: "active",
-        createdAt: new Date(),
-        plan: "creator_pro",
-        source,
-      },
-      { merge: true },
-    )
-    debugTrace.push(`Stored subscription ${subscriptionId} under user ${userId}`)
-  }
+  // 3) Ensure memberships/{uid} exists and mark creator_pro (canonical)
+  await ensureMembership(userId, email ?? undefined)
+  await setCreatorPro(userId, {
+    email: email ?? undefined,
+    stripeCustomerId: customerId || "",
+    stripeSubscriptionId: subscriptionId || "",
+    currentPeriodEnd: currentPeriodEnd ?? undefined,
+    priceId: priceId ?? undefined,
+    status, // "active" | "trialing" | "past_due" | "canceled"
+  })
+  debugTrace.push(`Upserted memberships/${userId} with plan=creator_pro, status=${status}`)
 
-  // Log payment summary if a session or invoice amount is available
-  if (amountTotal || sessionId) {
+  // 4) Log payment summary if we have values
+  if (amountTotal || sessionId || subscriptionId) {
     await firestore.collection("payments").add({
       userId,
       email: email || null,
@@ -114,13 +150,6 @@ async function upgradeUserToCreatorPro(
     })
     debugTrace.push(`Logged payment for user ${userId}`)
   }
-}
-
-function firstNonEmpty(...vals: Array<string | null | undefined>): string | null {
-  for (const v of vals) {
-    if (typeof v === "string" && v.trim().length > 0) return v
-  }
-  return null
 }
 
 async function resolveUserFromSession(
@@ -147,7 +176,7 @@ async function resolveUserFromSession(
 
   email = firstNonEmpty((md as any).buyerEmail, session.customer_email || undefined)
 
-  // Fallbacks by customer id then email
+  // Fallback by customer id then email
   if (!userId && session.customer) {
     try {
       const customerId = typeof session.customer === "string" ? session.customer : session.customer.id
@@ -187,16 +216,19 @@ async function resolveUserFromInvoiceOrSubscription(
 ) {
   let userId: string | null = null
   let email: string | null = null
+  let priceId: string | null = null
+  let customerId: string | null = null
+  let currentPeriodEnd: Date | null = null
 
   debugTrace.push("Resolving user from invoice/subscription")
 
-  // 1) From invoice line metadata (as seen in your event)
+  // From invoice
   if (invoice) {
     email = firstNonEmpty(invoice.customer_email || undefined)
+    customerId = typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id || null
 
     const lines = invoice.lines?.data || []
     for (const line of lines) {
-      // Try common metadata keys on line items
       const buyerUid = firstNonEmpty(
         (line.metadata as any)?.buyerUid,
         (line.metadata as any)?.firebaseUid,
@@ -205,11 +237,16 @@ async function resolveUserFromInvoiceOrSubscription(
       if (buyerUid) {
         userId = buyerUid
         debugTrace.push(`Found userId via invoice line metadata: ${userId}`)
-        break
       }
+      // Try to capture priceId
+      const p = (line as any)?.pricing?.price_details?.price || (line as any)?.price?.id
+      if (typeof p === "string" && p) {
+        priceId = p
+      }
+      if (userId && priceId) break
     }
 
-    // Try parent.subscription_details.metadata if provided by API
+    // Parent subscription metadata (present in your event)
     if (!userId) {
       const parent = (invoice as any).parent
       const subMeta = parent?.subscription_details?.metadata
@@ -223,27 +260,29 @@ async function resolveUserFromInvoiceOrSubscription(
     }
   }
 
-  // 2) Load subscription and check metadata
-  if (!userId && subscriptionId) {
+  // Load subscription for price/currentPeriodEnd if needed
+  if (subscriptionId) {
     try {
       const sub = await stripe.subscriptions.retrieve(subscriptionId)
-      const buyerUid = firstNonEmpty(
-        (sub.metadata as any)?.buyerUid,
-        (sub.metadata as any)?.firebaseUid,
-        (sub.metadata as any)?.userId,
-      )
-      if (buyerUid) {
+      const md = sub.metadata || {}
+      const buyerUid = firstNonEmpty((md as any).buyerUid, (md as any).firebaseUid, (md as any).userId)
+      if (!userId && buyerUid) {
         userId = buyerUid
         debugTrace.push(`Found userId via subscription.metadata: ${userId}`)
       }
-      if (!email) {
-        // Try to pull customer email
-        const custId = typeof sub.customer === "string" ? sub.customer : sub.customer?.id
-        if (custId) {
-          const cust = await stripe.customers.retrieve(custId)
-          if (!("deleted" in cust)) {
-            email = firstNonEmpty(cust.email || undefined)
-          }
+      const firstItem = sub.items?.data?.[0]
+      const pId = firstItem?.price?.id
+      if (!priceId && pId) priceId = pId
+      if (!customerId) {
+        customerId = typeof sub.customer === "string" ? sub.customer : sub.customer?.id || null
+      }
+      if (sub.current_period_end) {
+        currentPeriodEnd = new Date(sub.current_period_end * 1000)
+      }
+      if (!email && customerId) {
+        const cust = await stripe.customers.retrieve(customerId)
+        if (!("deleted" in cust)) {
+          email = firstNonEmpty(cust.email || undefined)
         }
       }
     } catch (err) {
@@ -251,25 +290,21 @@ async function resolveUserFromInvoiceOrSubscription(
     }
   }
 
-  // 3) Fallback by customerId mapping in Firestore
-  if (!userId) {
-    const customerId =
-      (invoice?.customer && typeof invoice.customer === "string" && invoice.customer) || (subscriptionId ? null : null)
-    if (customerId) {
-      try {
-        debugTrace.push(`Querying users by stripeCustomerId=${customerId}`)
-        const q = await firestore.collection("users").where("stripeCustomerId", "==", customerId).limit(1).get()
-        if (!q.empty) {
-          userId = q.docs[0].id
-          debugTrace.push(`Found userId by stripeCustomerId: ${userId}`)
-        }
-      } catch (err) {
-        debugTrace.push(`Error querying by customerId: ${(err as Error).message}`)
+  // Fallback by customerId mapping in Firestore
+  if (!userId && customerId) {
+    try {
+      debugTrace.push(`Querying users by stripeCustomerId=${customerId}`)
+      const q = await firestore.collection("users").where("stripeCustomerId", "==", customerId).limit(1).get()
+      if (!q.empty) {
+        userId = q.docs[0].id
+        debugTrace.push(`Found userId by stripeCustomerId: ${userId}`)
       }
+    } catch (err) {
+      debugTrace.push(`Error querying by customerId: ${(err as Error).message}`)
     }
   }
 
-  // 4) Fallback by email
+  // Fallback by email
   if (!userId && email) {
     try {
       debugTrace.push(`Querying users by email=${email}`)
@@ -283,7 +318,7 @@ async function resolveUserFromInvoiceOrSubscription(
     }
   }
 
-  return { userId, email }
+  return { userId, email, priceId, customerId, currentPeriodEnd }
 }
 
 export async function POST(request: Request) {
@@ -291,6 +326,11 @@ export async function POST(request: Request) {
   const debugTrace: DebugTrace = []
 
   try {
+    if (!process.env.STRIPE_SECRET_KEY) {
+      debugTrace.push("Missing STRIPE_SECRET_KEY")
+      return NextResponse.json({ error: "Server configuration error", debugTrace }, { status: 500 })
+    }
+
     if (!process.env.STRIPE_WEBHOOK_SECRET) {
       debugTrace.push("Missing STRIPE_WEBHOOK_SECRET")
       return NextResponse.json({ error: "Server configuration error", debugTrace }, { status: 500 })
@@ -321,7 +361,7 @@ export async function POST(request: Request) {
 
     await storeRawEvent(firestore, event, payload, debugTrace)
 
-    // Handle checkout session completed (primary path)
+    // Membership happy-path
     if (event.type === "checkout.session.completed") {
       const session = event.data.object as Stripe.Checkout.Session
       debugTrace.push(`Handling checkout.session.completed: ${session.id}`)
@@ -329,9 +369,19 @@ export async function POST(request: Request) {
       const { userId, email } = await resolveUserFromSession(firestore, session, debugTrace)
 
       if (userId) {
-        await upgradeUserToCreatorPro(firestore, userId, {
+        const subscriptionId =
+          (typeof session.subscription === "string" ? session.subscription : session.subscription?.id) || null
+        const customerId = (typeof session.customer === "string" ? session.customer : session.customer?.id) || null
+        const priceId = firstNonEmpty((session.metadata as any)?.priceId)
+        await upgradeUserToCreatorPro(firestore, {
+          userId,
           email,
           sessionId: session.id,
+          subscriptionId,
+          customerId,
+          priceId,
+          status: "active",
+          currentPeriodEnd: null, // can be added by fetching subscription if needed
           amountTotal: session.amount_total ?? null,
           currency: session.currency ?? null,
           source: "checkout.session.completed",
@@ -345,7 +395,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // Handle invoice payment succeeded (subscription lifecycle safety net)
+    // Safety net for subscription lifecycle billing
     else if (event.type === "invoice.payment_succeeded") {
       const invoice = event.data.object as Stripe.Invoice
       debugTrace.push(`Handling invoice.payment_succeeded: ${invoice.id}`)
@@ -353,7 +403,7 @@ export async function POST(request: Request) {
       const subscriptionId =
         typeof invoice.subscription === "string" ? invoice.subscription : invoice.subscription?.id || null
 
-      const { userId, email } = await resolveUserFromInvoiceOrSubscription(
+      const { userId, email, priceId, customerId, currentPeriodEnd } = await resolveUserFromInvoiceOrSubscription(
         firestore,
         stripe,
         invoice,
@@ -362,9 +412,14 @@ export async function POST(request: Request) {
       )
 
       if (userId) {
-        await upgradeUserToCreatorPro(firestore, userId, {
+        await upgradeUserToCreatorPro(firestore, {
+          userId,
           email,
-          subscriptionId: subscriptionId || undefined,
+          subscriptionId,
+          customerId,
+          priceId,
+          status: "active",
+          currentPeriodEnd: currentPeriodEnd ?? undefined,
           amountTotal: invoice.total ?? null,
           currency: invoice.currency ?? null,
           source: "invoice.payment_succeeded",
@@ -376,56 +431,52 @@ export async function POST(request: Request) {
         console.error("🪝 WEBHOOK ERROR: Could not find user ID from invoice/subscription")
         return NextResponse.json({ error: "Could not find user ID", debugTrace }, { status: 400 })
       }
-    }
-
-    // Optionally handle subscription created as another safety net
-    else if (event.type === "customer.subscription.created") {
+    } else if (event.type === "customer.subscription.created") {
       const sub = event.data.object as Stripe.Subscription
       debugTrace.push(`Handling customer.subscription.created: ${sub.id}`)
 
-      const buyerUid = firstNonEmpty(
-        (sub.metadata as any)?.buyerUid,
-        (sub.metadata as any)?.firebaseUid,
-        (sub.metadata as any)?.userId,
-      )
-      let email: string | null = null
+      const md = sub.metadata || {}
+      const userId = firstNonEmpty((md as any).buyerUid, (md as any).firebaseUid, (md as any).userId) || null
 
-      // Try load customer email
-      try {
-        const custId = typeof sub.customer === "string" ? sub.customer : sub.customer?.id
-        if (custId) {
-          const stripe = getStripe()
-          const cust = await stripe.customers.retrieve(custId)
+      let email: string | null = null
+      const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer?.id || null
+      if (customerId) {
+        try {
+          const cust = await getStripe().customers.retrieve(customerId)
           if (!("deleted" in cust)) {
             email = firstNonEmpty(cust.email || undefined)
           }
+        } catch {
+          // ignore
         }
-      } catch {
-        // ignore
       }
 
-      let userId = buyerUid
-      if (!userId && email) {
-        const q = await initFirebase().collection("users").where("email", "==", email).limit(1).get()
-        if (!q.empty) userId = q.docs[0].id
-      }
+      const firstItem = sub.items?.data?.[0]
+      const priceId = firstItem?.price?.id || null
+      const currentPeriodEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000) : null
 
       if (userId) {
-        await upgradeUserToCreatorPro(initFirebase(), userId, {
+        await upgradeUserToCreatorPro(firestore, {
+          userId,
           email,
           subscriptionId: sub.id,
+          customerId,
+          priceId,
+          status: (sub.status as MembershipStatus) ?? "active",
+          currentPeriodEnd,
           amountTotal: null,
           currency: null,
           source: "customer.subscription.created",
           debugTrace,
         })
+        debugTrace.push(`Completed upgrade for user ${userId} from subscription ${sub.id}`)
       } else {
         debugTrace.push("Could not resolve user from subscription.created")
         return NextResponse.json({ error: "Could not find user ID", debugTrace }, { status: 400 })
       }
     }
 
-    // Other events (no-op)
+    // Other events: no-op
     else {
       debugTrace.push(`No handler for event type: ${event.type}`)
     }
