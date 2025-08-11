@@ -13,6 +13,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { useUserPlan } from "@/hooks/use-user-plan"
 import { AlertCircle, Crown } from "lucide-react"
 import { toast } from "sonner"
+import { useToast } from "@/hooks/use-toast" // Added custom toast hook for gradient styling
 
 interface BundleCreationFormProps {
   onSuccess?: () => void
@@ -22,6 +23,7 @@ interface BundleCreationFormProps {
 export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormProps) {
   const { user } = useAuth()
   const { isProUser, loading: planLoading } = useUserPlan()
+  const { toast: customToast } = useToast() // Added custom toast for gradient styling
   const [loading, setLoading] = useState(false)
   const [canCreateBundle, setCanCreateBundle] = useState(true)
   const [bundleLimitInfo, setBundleLimitInfo] = useState<any>(null)
@@ -56,7 +58,21 @@ export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormPr
     e.preventDefault()
 
     if (!canCreateBundle) {
-      toast.error("Bundle limit reached. Upgrade to Creator Pro for unlimited bundles.")
+      customToast({
+        variant: "gradient",
+        title: "Bundle Limit Reached",
+        description: "Upgrade to Creator Pro for unlimited bundles and more features.",
+        action: (
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-white/20 text-white hover:bg-white/10 bg-transparent"
+            onClick={() => window.open("https://buy.stripe.com/14A6oHeWEeJngFv4SzeIw04", "_blank")}
+          >
+            Upgrade Now
+          </Button>
+        ),
+      })
       return
     }
 
@@ -79,14 +95,14 @@ export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormPr
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${idToken}`, // Added missing auth header
+          Authorization: `Bearer ${idToken}`,
         },
         body: JSON.stringify({
           title: formData.title.trim(),
           description: formData.description.trim(),
           price: Number.parseFloat(formData.price),
           thumbnailUrl: formData.thumbnailUrl.trim() || null,
-          contentItems: [], // Added empty content items array
+          contentItems: [],
         }),
       })
 
@@ -94,21 +110,39 @@ export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormPr
         const errorData = await response.json()
 
         if (errorData.code === "NO_STRIPE_ACCOUNT") {
-          toast.error("Please connect your Stripe account before creating bundles", {
-            action: {
-              label: "Connect Stripe",
-              onClick: () => window.open("/dashboard/stripe-connect", "_blank"),
-            },
+          customToast({
+            variant: "gradient",
+            title: "Stripe Account Required",
+            description: "You need to connect your Stripe account to sell bundles and receive payments.",
+            action: (
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-white/20 text-white hover:bg-white/10 bg-transparent"
+                onClick={() => window.open("/dashboard/stripe-connect", "_blank")}
+              >
+                Connect Stripe
+              </Button>
+            ),
           })
           return
         }
 
         if (errorData.code === "STRIPE_ACCOUNT_INCOMPLETE") {
-          toast.error("Please complete your Stripe account setup before creating bundles", {
-            action: {
-              label: "Complete Setup",
-              onClick: () => window.open("/dashboard/stripe-connect", "_blank"),
-            },
+          customToast({
+            variant: "gradient",
+            title: "Complete Stripe Setup",
+            description: "Your Stripe account setup is incomplete. Please finish the setup process to start selling.",
+            action: (
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-white/20 text-white hover:bg-white/10 bg-transparent"
+                onClick={() => window.open("/dashboard/stripe-connect", "_blank")}
+              >
+                Complete Setup
+              </Button>
+            ),
           })
           return
         }
