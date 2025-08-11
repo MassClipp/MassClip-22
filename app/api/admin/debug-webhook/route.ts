@@ -1,55 +1,54 @@
 import { NextResponse } from "next/server"
-import { db } from "@/lib/firebase/admin" // Import the db instance
+import { db } from "@/lib/firebase/admin"
+
+export const dynamic = "force-dynamic"
+
+async function checkModuleImport() {
+  try {
+    await import("@/lib/stripe/webhook-processor")
+    return true
+  } catch (e) {
+    console.error("Failed to import webhook processor:", e)
+    return false
+  }
+}
+
+async function checkFirestoreWrite() {
+  if (!db) return false
+  try {
+    const docRef = db.collection("internal-diagnostics").doc("write-test")
+    await docRef.set({ timestamp: new Date().toISOString() })
+    await docRef.delete()
+    return true
+  } catch (e) {
+    console.error("Firestore write test failed:", e)
+    return false
+  }
+}
 
 export async function GET() {
-  const results = {
-    envVars: {
-      stripeWebhookSecret: !!process.env.STRIPE_WEBHOOK_SECRET,
-      firebaseProjectId: !!process.env.FIREBASE_PROJECT_ID,
-      firebaseClientEmail: !!process.env.FIREBASE_CLIENT_EMAIL,
-      firebasePrivateKey: !!process.env.FIREBASE_PRIVATE_KEY,
-    },
-    firebase: {
-      dbInstanceAvailable: false,
-      firestoreWriteSuccess: false,
-      errorMessage: "",
-    },
-    webhookProcessor: {
-      canImport: false,
-      errorMessage: "",
-    },
-  }
-
-  // Test Firebase Initialization and Write
-  if (db) {
-    results.firebase.dbInstanceAvailable = true
-    try {
-      const docRef = db.collection("webhook-debug-logs").doc(new Date().toISOString())
-      await docRef.set({ status: "ok", timestamp: new Date() })
-      results.firebase.firestoreWriteSuccess = true
-    } catch (e: any) {
-      results.firebase.errorMessage = e.message
-    }
-  } else {
-    results.firebase.errorMessage =
-      "Firebase DB instance is not available. Check server logs and environment variables."
-  }
-
-  // Test importing from the webhook processor
   try {
-    const processor = await import("@/lib/stripe/webhook-processor")
-    if (
-      processor.processCheckoutSessionCompleted &&
-      processor.processSubscriptionDeleted &&
-      processor.processSubscriptionUpdated
-    ) {
-      results.webhookProcessor.canImport = true
-    } else {
-      results.webhookProcessor.errorMessage = "One or more required functions are not exported from the module."
-    }
-  } catch (e: any) {
-    results.webhookProcessor.errorMessage = e.message
-  }
+    const stripeWebhookSecret = !!process.env.STRIPE_WEBHOOK_SECRET
+    const firebaseProjectId = !!process.env.FIREBASE_PROJECT_ID
+    const firebaseClientEmail = !!process.env.FIREBASE_CLIENT_EMAIL
+    const firebasePrivateKey = !!process.env.FIREBASE_PRIVATE_KEY
 
-  return NextResponse.json(results)
+    const dbInstanceAvailable = !!db
+
+    const firestoreWriteTest = await checkFirestoreWrite()
+    const moduleImportable = await checkModuleImport()
+
+    return NextResponse.json({
+      stripeWebhookSecret,
+      firebaseProjectId,
+      firebaseClientEmail,
+      firebasePrivateKey,
+      dbInstanceAvailable,
+      firestoreWriteTest,
+      moduleImportable,
+    })
+  } catch (error: any) {
+    console.error("Webhook diagnostic API error:", error)
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
 }
