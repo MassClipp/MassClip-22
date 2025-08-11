@@ -222,6 +222,42 @@ function convertDatesToTimestamps(obj: any): any {
   return obj
 }
 
+// Helper function to remove undefined values from objects
+function removeUndefinedValues(obj: any): any {
+  if (Array.isArray(obj)) {
+    return obj.map(removeUndefinedValues).filter((item) => item !== undefined)
+  }
+  if (obj && typeof obj === "object" && !(obj instanceof Date)) {
+    const cleaned: any = {}
+    for (const [key, value] of Object.entries(obj)) {
+      if (value !== undefined) {
+        cleaned[key] = removeUndefinedValues(value)
+      }
+    }
+    return cleaned
+  }
+  return obj
+}
+
+// Helper function to ensure string values are never undefined
+function ensureString(value: any, fallback = ""): string {
+  if (typeof value === "string" && value.length > 0) {
+    return value
+  }
+  return fallback
+}
+
+// Helper function to ensure array values are never undefined
+function ensureStringArray(arr: any[], mapper: (item: any) => string, fallback = ""): string[] {
+  if (!Array.isArray(arr)) return []
+  return arr
+    .map((item) => {
+      const result = mapper(item)
+      return ensureString(result, fallback)
+    })
+    .filter((item) => item.length > 0)
+}
+
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const startedAt = Date.now()
   try {
@@ -273,9 +309,16 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     // Use UNIQUE count for limit
     const existingSet = new Set(rawExistingIds.filter((id: any) => typeof id === "string" && id.length > 0))
     const currentCount = existingSet.size
-    const maxPerBundle = tier.maxVideosPerBundle // null => unlimited
+    const maxPerBundle = tier.maxVideosPerBundle === null ? null : 10
 
     const remaining = maxPerBundle === null ? Number.POSITIVE_INFINITY : Math.max(0, maxPerBundle - currentCount)
+
+    console.log("🔍 [Add Content] Bundle limit check:", {
+      currentCount,
+      maxPerBundle,
+      remaining,
+      tier: tier.maxVideosPerBundle,
+    })
 
     // Remove already-in-bundle from selection BEFORE slicing to limit
     const inputIds: string[] = (contentIds as string[]).filter((id) => typeof id === "string" && id.length > 0)
@@ -334,7 +377,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const totalItems = Array.isArray(mergedDetailed) ? mergedDetailed.length : 0
 
     const finalContentMetadata = {
-      totalItems: totalItems, // Ensure this is never undefined
+      totalItems: totalItems || 0,
       totalSize: totalSize || 0,
       totalSizeFormatted: formatFileSize(totalSize || 0),
       totalDuration: totalDuration || 0,
@@ -353,18 +396,35 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const serializedDetailed = convertDatesToTimestamps(mergedDetailed)
     const serializedMetadata = convertDatesToTimestamps(finalContentMetadata)
 
-    await bundleRef.update({
+    const updateData = {
       contentItems: mergedIds,
       detailedContentItems: serializedDetailed,
       contentMetadata: serializedMetadata,
-      contentTitles: mergedDetailed.map((i: any) => i.title || "Untitled"),
-      contentDescriptions: mergedDetailed.map((i: any) => i.description || "").filter(Boolean),
-      contentTags: Array.from(new Set(mergedDetailed.flatMap((i: any) => (Array.isArray(i.tags) ? i.tags : [])))),
-      contentUrls: mergedDetailed.map((i: any) => i.fileUrl || ""),
-      contentThumbnails: mergedDetailed.map((i: any) => i.thumbnailUrl || "").filter(Boolean),
+      contentTitles: ensureStringArray(mergedDetailed, (i: any) => i.title, "Untitled"),
+      contentDescriptions: ensureStringArray(mergedDetailed, (i: any) => i.description, ""),
+      contentTags: Array.from(
+        new Set(
+          mergedDetailed
+            .flatMap((i: any) => (Array.isArray(i.tags) ? i.tags : []))
+            .filter((tag: any) => typeof tag === "string" && tag.length > 0),
+        ),
+      ),
+      contentUrls: ensureStringArray(mergedDetailed, (i: any) => i.fileUrl, ""),
+      contentThumbnails: ensureStringArray(mergedDetailed, (i: any) => i.thumbnailUrl, ""),
       updatedAt: Timestamp.now(),
       contentLastUpdated: Timestamp.now(),
+    }
+
+    const cleanedUpdateData = removeUndefinedValues(updateData)
+
+    console.log("📝 [Add Content] Updating bundle with data:", {
+      contentItemsCount: cleanedUpdateData.contentItems?.length,
+      detailedItemsCount: cleanedUpdateData.detailedContentItems?.length,
+      totalItems: cleanedUpdateData.contentMetadata?.totalItems,
+      contentTitlesCount: cleanedUpdateData.contentTitles?.length,
     })
+
+    await bundleRef.update(cleanedUpdateData)
 
     return NextResponse.json({
       success: true,
