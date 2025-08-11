@@ -81,7 +81,7 @@ export default function BundlesPage() {
     billingType: "one_time",
     thumbnail: null,
   })
-  const { toast } = useToast()
+  const { toast, toast: customToast } = useToast()
 
   // Bundle limit logic for free users
   const { planData, isProUser } = useUserPlan()
@@ -440,8 +440,78 @@ export default function BundlesPage() {
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.message || "Failed to create bundle")
+        let errorData
+        try {
+          errorData = await response.json()
+        } catch {
+          // If we can't parse the response, assume it's a Stripe connection issue for 400 errors
+          if (response.status === 400) {
+            customToast({
+              variant: "gradient",
+              title: "Stripe Account Required",
+              description: "You need to connect your Stripe account to sell bundles and receive payments.",
+              action: (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-white/20 text-white hover:bg-white/10 bg-transparent"
+                  onClick={() => window.open("/dashboard/stripe-connect", "_blank")}
+                >
+                  Connect Stripe
+                </Button>
+              ),
+            })
+            return
+          }
+          throw new Error("Failed to create bundle")
+        }
+
+        // Handle specific Stripe-related errors with gradient toast
+        if (errorData.code === "NO_STRIPE_ACCOUNT" || response.status === 400) {
+          customToast({
+            variant: "gradient",
+            title: "Stripe Account Required",
+            description: "You need to connect your Stripe account to sell bundles and receive payments.",
+            action: (
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-white/20 text-white hover:bg-white/10 bg-transparent"
+                onClick={() => window.open("/dashboard/stripe-connect", "_blank")}
+              >
+                Connect Stripe
+              </Button>
+            ),
+          })
+          return
+        }
+
+        if (errorData.code === "STRIPE_ACCOUNT_INCOMPLETE") {
+          customToast({
+            variant: "gradient",
+            title: "Complete Stripe Setup",
+            description: "Your Stripe account setup is incomplete. Please finish the setup process to start selling.",
+            action: (
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-white/20 text-white hover:bg-white/10 bg-transparent"
+                onClick={() => window.open("/dashboard/stripe-connect", "_blank")}
+              >
+                Complete Setup
+              </Button>
+            ),
+          })
+          return
+        }
+
+        // For other errors, use gradient toast as well
+        customToast({
+          variant: "gradient",
+          title: "Bundle Creation Failed",
+          description: errorData.error || errorData.message || "Unable to create bundle. Please try again.",
+        })
+        return
       }
 
       const data = await response.json()
@@ -492,10 +562,10 @@ export default function BundlesPage() {
       await fetchProductBoxes()
     } catch (error) {
       console.error("Error creating bundle:", error)
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create bundle",
-        variant: "destructive",
+      customToast({
+        variant: "gradient",
+        title: "Connection Error",
+        description: "Unable to connect to the server. Please check your connection and try again.",
       })
     } finally {
       setCreateLoading(false)
