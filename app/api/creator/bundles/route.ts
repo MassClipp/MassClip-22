@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { getAuth } from "firebase-admin/auth"
 import { getFirestore } from "firebase-admin/firestore"
 import { initializeApp, getApps, cert } from "firebase-admin/app"
@@ -106,7 +106,7 @@ export async function GET(request: NextRequest) {
         error: "Failed to fetch bundles",
         details: error.message,
       },
-      { status: 500 }
+      { status: 500 },
     )
   }
 }
@@ -157,7 +157,7 @@ export async function POST(request: NextRequest) {
           error: "Please connect your Stripe account before creating bundles",
           code: "NO_STRIPE_ACCOUNT",
         },
-        { status: 400 }
+        { status: 400 },
       )
     }
 
@@ -172,7 +172,7 @@ export async function POST(request: NextRequest) {
           error: "Please complete your Stripe account setup before creating bundles",
           code: "STRIPE_ACCOUNT_INCOMPLETE",
         },
-        { status: 400 }
+        { status: 400 },
       )
     }
 
@@ -190,7 +190,7 @@ export async function POST(request: NextRequest) {
         {
           error: "Missing required fields: title and price are required",
         },
-        { status: 400 }
+        { status: 400 },
       )
     }
 
@@ -208,7 +208,7 @@ export async function POST(request: NextRequest) {
       },
       {
         stripeAccount: stripeAccountId,
-      }
+      },
     )
 
     console.log("✅ [Bundle Creation] Stripe product created:", product.id)
@@ -227,7 +227,7 @@ export async function POST(request: NextRequest) {
       },
       {
         stripeAccount: stripeAccountId,
-      }
+      },
     )
 
     console.log("✅ [Bundle Creation] Stripe price created:", stripePrice.id)
@@ -254,24 +254,25 @@ export async function POST(request: NextRequest) {
       uploadedAt: item.uploadedAt || new Date().toISOString(),
     }))
 
-    // Calculate content metadata
+    // Calculate content metadata with guaranteed non-undefined values
     const totalSize = processedContentItems.reduce((sum, item) => sum + (item.fileSize || 0), 0)
     const totalDuration = processedContentItems.reduce((sum, item) => sum + (item.duration || 0), 0)
 
     const contentMetadata = {
-      totalItems: processedContentItems.length,
-      totalSize: totalSize,
-      totalSizeFormatted: formatFileSize(totalSize),
-      totalDuration: totalDuration,
-      totalDurationFormatted: formatDuration(totalDuration),
-      formats: [...new Set(processedContentItems.map(item => item.format))],
-      qualities: [...new Set(processedContentItems.map(item => item.quality))],
+      totalItems: processedContentItems.length || 0, // Ensure never undefined
+      totalSize: totalSize || 0,
+      totalSizeFormatted: formatFileSize(totalSize || 0),
+      totalDuration: totalDuration || 0,
+      totalDurationFormatted: formatDuration(totalDuration || 0),
+      formats: [...new Set(processedContentItems.map((item) => item.format))],
+      qualities: [...new Set(processedContentItems.map((item) => item.quality))],
       contentBreakdown: {
-        videos: processedContentItems.filter(item => item.contentType === "video").length,
-        audios: processedContentItems.filter(item => item.contentType === "audio").length,
-        images: processedContentItems.filter(item => item.contentType === "image").length,
-        documents: processedContentItems.filter(item => item.contentType === "document").length,
+        videos: processedContentItems.filter((item) => item.contentType === "video").length || 0,
+        audios: processedContentItems.filter((item) => item.contentType === "audio").length || 0,
+        images: processedContentItems.filter((item) => item.contentType === "image").length || 0,
+        documents: processedContentItems.filter((item) => item.contentType === "document").length || 0,
       },
+      lastUpdated: new Date(),
     }
 
     // Create bundle document
@@ -297,15 +298,15 @@ export async function POST(request: NextRequest) {
 
       // Content
       detailedContentItems: processedContentItems,
-      contentItems: processedContentItems.map(item => item.id), // Array of IDs for compatibility
+      contentItems: processedContentItems.map((item) => item.id), // Array of IDs for compatibility
       contentMetadata,
 
       // Quick access arrays
-      contentTitles: processedContentItems.map(item => item.title),
-      contentDescriptions: processedContentItems.map(item => item.description),
-      contentTags: processedContentItems.flatMap(item => item.tags || []),
-      contentThumbnails: processedContentItems.map(item => item.thumbnailUrl).filter(Boolean),
-      contentUrls: processedContentItems.map(item => item.fileUrl).filter(Boolean),
+      contentTitles: processedContentItems.map((item) => item.title),
+      contentDescriptions: processedContentItems.map((item) => item.description),
+      contentTags: processedContentItems.flatMap((item) => item.tags || []),
+      contentThumbnails: processedContentItems.map((item) => item.thumbnailUrl).filter(Boolean),
+      contentUrls: processedContentItems.map((item) => item.fileUrl).filter(Boolean),
 
       // Visual
       thumbnailUrl: thumbnailUrl || processedContentItems[0]?.thumbnailUrl || "",
@@ -363,7 +364,7 @@ export async function POST(request: NextRequest) {
           details: error.message,
           code: error.code,
         },
-        { status: 400 }
+        { status: 400 },
       )
     }
 
@@ -372,7 +373,7 @@ export async function POST(request: NextRequest) {
         error: "Failed to create bundle",
         details: error.message,
       },
-      { status: 500 }
+      { status: 500 },
     )
   }
 }

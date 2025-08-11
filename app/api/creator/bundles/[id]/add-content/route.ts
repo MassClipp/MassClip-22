@@ -329,42 +329,58 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const combinedDetailed = [...previousDetailed, ...detailedToAdd]
     const mergedDetailed = Array.from(new Map(combinedDetailed.map((i: any) => [i.uploadId ?? i.id, i]))).values()
 
-    // Recalculate metadata
-    const totalSize = mergedDetailed.reduce((s: number, it: any) => s + (Number(it.fileSize) || 0), 0)
-    const totalDuration = mergedDetailed.reduce((s: number, it: any) => s + (Number(it.duration) || 0), 0)
+    // Ensure mergedDetailed is always an array and calculate safe metadata
+    const safeDetailedArray = Array.isArray(mergedDetailed) ? mergedDetailed : []
+    const totalSize = safeDetailedArray.reduce((s: number, it: any) => s + (Number(it.fileSize) || 0), 0)
+    const totalDuration = safeDetailedArray.reduce((s: number, it: any) => s + (Number(it.duration) || 0), 0)
 
+    // Build metadata object with guaranteed non-undefined values
     const finalContentMetadata = {
-      totalItems: mergedDetailed.length,
-      totalSize,
-      totalSizeFormatted: formatFileSize(totalSize),
-      totalDuration,
-      totalDurationFormatted: formatDuration(totalDuration),
+      totalItems: safeDetailedArray.length || 0, // Ensure never undefined
+      totalSize: totalSize || 0,
+      totalSizeFormatted: formatFileSize(totalSize || 0),
+      totalDuration: totalDuration || 0,
+      totalDurationFormatted: formatDuration(totalDuration || 0),
       contentBreakdown: {
-        videos: mergedDetailed.filter((i: any) => i.contentType === "video").length,
-        audio: mergedDetailed.filter((i: any) => i.contentType === "audio").length,
-        images: mergedDetailed.filter((i: any) => i.contentType === "image").length,
-        documents: mergedDetailed.filter((i: any) => i.contentType === "document").length,
+        videos: safeDetailedArray.filter((i: any) => i.contentType === "video").length || 0,
+        audio: safeDetailedArray.filter((i: any) => i.contentType === "audio").length || 0,
+        images: safeDetailedArray.filter((i: any) => i.contentType === "image").length || 0,
+        documents: safeDetailedArray.filter((i: any) => i.contentType === "document").length || 0,
       },
-      formats: Array.from(new Set(mergedDetailed.map((i: any) => i.format).filter(Boolean))),
-      qualities: Array.from(new Set(mergedDetailed.map((i: any) => i.quality).filter(Boolean))),
+      formats: Array.from(new Set(safeDetailedArray.map((i: any) => i.format).filter(Boolean))),
+      qualities: Array.from(new Set(safeDetailedArray.map((i: any) => i.quality).filter(Boolean))),
       lastUpdated: new Date(),
     }
 
-    const serializedDetailed = convertDatesToTimestamps(mergedDetailed)
+    const serializedDetailed = convertDatesToTimestamps(safeDetailedArray)
     const serializedMetadata = convertDatesToTimestamps(finalContentMetadata)
 
-    await bundleRef.update({
+    // Use dot-path updates to avoid overwriting entire objects and ensure no undefined values
+    const updateData: any = {
       contentItems: mergedIds,
       detailedContentItems: serializedDetailed,
-      contentMetadata: serializedMetadata,
-      contentTitles: mergedDetailed.map((i: any) => i.title),
-      contentDescriptions: mergedDetailed.map((i: any) => i.description).filter(Boolean),
-      contentTags: Array.from(new Set(mergedDetailed.flatMap((i: any) => (Array.isArray(i.tags) ? i.tags : [])))),
-      contentUrls: mergedDetailed.map((i: any) => i.fileUrl),
-      contentThumbnails: mergedDetailed.map((i: any) => i.thumbnailUrl).filter(Boolean),
+      "contentMetadata.totalItems": serializedMetadata.totalItems,
+      "contentMetadata.totalSize": serializedMetadata.totalSize,
+      "contentMetadata.totalSizeFormatted": serializedMetadata.totalSizeFormatted,
+      "contentMetadata.totalDuration": serializedMetadata.totalDuration,
+      "contentMetadata.totalDurationFormatted": serializedMetadata.totalDurationFormatted,
+      "contentMetadata.contentBreakdown": serializedMetadata.contentBreakdown,
+      "contentMetadata.formats": serializedMetadata.formats,
+      "contentMetadata.qualities": serializedMetadata.qualities,
+      "contentMetadata.lastUpdated": serializedMetadata.lastUpdated,
+      contentTitles: safeDetailedArray.map((i: any) => i.title || "Untitled"),
+      contentDescriptions: safeDetailedArray.map((i: any) => i.description || "").filter(Boolean),
+      contentTags: Array.from(new Set(safeDetailedArray.flatMap((i: any) => (Array.isArray(i.tags) ? i.tags : [])))),
+      contentUrls: safeDetailedArray.map((i: any) => i.fileUrl || "").filter(Boolean),
+      contentThumbnails: safeDetailedArray.map((i: any) => i.thumbnailUrl || "").filter(Boolean),
       updatedAt: Timestamp.now(),
       contentLastUpdated: Timestamp.now(),
-    })
+    }
+
+    // Remove any undefined values before updating Firestore
+    const cleanUpdateData = Object.fromEntries(Object.entries(updateData).filter(([_, value]) => value !== undefined))
+
+    await bundleRef.update(cleanUpdateData)
 
     return NextResponse.json({
       success: true,
