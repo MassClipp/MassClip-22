@@ -1766,16 +1766,27 @@ export default function BundlesPage() {
                 {(() => {
                   const targetBox = productBoxes.find((b) => b.id === showAddContentModal)
                   const existingCount = targetBox
-                    ? (contentItems[targetBox.id]?.length ?? targetBox.contentItems.length ?? 0)
+                    ? (targetBox.detailedContentItems?.length ??
+                      targetBox.contentItems?.length ??
+                      contentItems[targetBox.id]?.length ??
+                      0)
                     : 0
                   const maxPerBundle = isProUser ? Number.POSITIVE_INFINITY : CONTENT_LIMIT_FREE
-                  const remaining = Math.max(0, (maxPerBundle as number) - existingCount)
-                  const overLimit = !isProUser && selectedContentIds.length > remaining
+                  const remaining =
+                    maxPerBundle === Number.POSITIVE_INFINITY
+                      ? Number.POSITIVE_INFINITY
+                      : Math.max(0, maxPerBundle - existingCount)
+
+                  const canAddMore = remaining > 0 || maxPerBundle === Number.POSITIVE_INFINITY
+                  const itemsToAdd =
+                    maxPerBundle === Number.POSITIVE_INFINITY
+                      ? selectedContentIds.length
+                      : Math.min(selectedContentIds.length, remaining)
 
                   return (
                     <Button
                       onClick={() => showAddContentModal && handleAddContentToBundle(showAddContentModal)}
-                      disabled={selectedContentIds.length === 0 || addContentLoading || remaining === 0}
+                      disabled={selectedContentIds.length === 0 || addContentLoading || !canAddMore}
                       className="bg-red-600 hover:bg-red-700"
                     >
                       {addContentLoading ? (
@@ -1783,10 +1794,10 @@ export default function BundlesPage() {
                           <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                           Adding...
                         </>
-                      ) : remaining === Number.POSITIVE_INFINITY ? (
+                      ) : maxPerBundle === Number.POSITIVE_INFINITY ? (
                         `Add ${selectedContentIds.length} Item${selectedContentIds.length !== 1 ? "s" : ""}`
                       ) : (
-                        `Add ${Math.min(selectedContentIds.length, remaining)} Item${Math.min(selectedContentIds.length, remaining) !== 1 ? "s" : ""} (remaining ${remaining})`
+                        `Add ${itemsToAdd} Item${itemsToAdd !== 1 ? "s" : ""} (${remaining} remaining)`
                       )}
                     </Button>
                   )
