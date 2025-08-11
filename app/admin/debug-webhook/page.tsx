@@ -2,29 +2,41 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
-import { Loader2 } from "lucide-react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
-type DiagnosticResult = {
+interface DiagnosticResults {
   envVars: {
     stripeWebhookSecret: boolean
-    firebaseServiceAccountKey: boolean
+    firebaseProjectId: boolean
+    firebaseClientEmail: boolean
+    firebasePrivateKey: boolean
   }
   firebase: {
-    sdkInitialized: boolean
+    dbInstanceAvailable: boolean
     firestoreWriteSuccess: boolean
-    errorMessage?: string
+    errorMessage: string
   }
   webhookProcessor: {
     canImport: boolean
-    errorMessage?: string
+    errorMessage: string
   }
 }
 
-export default function DebugWebhookPage() {
+const ResultBadge = ({ status }: { status: boolean }) => (
+  <span
+    className={`px-2 py-1 text-xs font-bold rounded-full ${
+      status ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
+    }`}
+  >
+    {status ? "OK" : "FAIL"}
+  </span>
+)
+
+export default function WebhookDiagnosticsPage() {
+  const [results, setResults] = useState<DiagnosticResults | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const [results, setResults] = useState<DiagnosticResult | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const runDiagnostics = async () => {
@@ -33,94 +45,97 @@ export default function DebugWebhookPage() {
     setResults(null)
     try {
       const response = await fetch("/api/admin/debug-webhook")
-      const data = await response.json()
       if (!response.ok) {
-        throw new Error(data.error || "Failed to run diagnostics")
+        throw new Error(`API responded with status: ${response.status}`)
       }
+      const data = await response.json()
       setResults(data)
-    } catch (err: any) {
-      setError(err.message)
+    } catch (e: any) {
+      setError(e.message)
     } finally {
       setIsLoading(false)
     }
   }
 
-  const StatusIndicator = ({ success }: { success: boolean }) => (
-    <span className={`font-bold ${success ? "text-green-500" : "text-red-500"}`}>{success ? "OK" : "FAIL"}</span>
-  )
-
   return (
-    <div className="container mx-auto p-4 md:p-8">
-      <Card className="max-w-2xl mx-auto">
+    <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
+      <Card className="w-full max-w-2xl bg-gray-800 border-gray-700">
         <CardHeader>
           <CardTitle>Webhook Diagnostics</CardTitle>
-          <CardDescription>
+          <p className="text-gray-400">
             This tool checks the server environment to ensure webhooks can be processed correctly.
-          </CardDescription>
+          </p>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-col space-y-4">
-            <Button onClick={runDiagnostics} disabled={isLoading}>
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Running...
-                </>
-              ) : (
-                "Run Webhook Diagnostics"
-              )}
-            </Button>
+          <Button onClick={runDiagnostics} disabled={isLoading} className="w-full bg-pink-600 hover:bg-pink-700">
+            {isLoading ? "Running..." : "Run Webhook Diagnostics"}
+          </Button>
 
-            {error && (
-              <Alert variant="destructive">
-                <AlertTitle>Error</AlertTitle>
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
+          {error && (
+            <Alert variant="destructive" className="mt-4 bg-red-900/50 border-red-500 text-white">
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
 
-            {results && (
-              <div className="space-y-4 pt-4">
-                <h3 className="text-lg font-semibold">Diagnostic Results</h3>
-                <div className="p-4 border rounded-md bg-gray-50 dark:bg-gray-900">
-                  <ul className="space-y-2">
-                    <li>
-                      Stripe Webhook Secret Loaded: <StatusIndicator success={results.envVars.stripeWebhookSecret} />
+          {results && (
+            <div className="mt-6">
+              <h3 className="text-lg font-semibold mb-2">Diagnostic Results</h3>
+              <div className="space-y-3 p-4 rounded-lg bg-gray-900">
+                <div>
+                  <h4 className="font-semibold text-gray-300 mb-2">Environment Variables</h4>
+                  <ul className="space-y-2 text-sm">
+                    <li className="flex justify-between items-center">
+                      <span>Stripe Webhook Secret Loaded</span>
+                      <ResultBadge status={results.envVars.stripeWebhookSecret} />
                     </li>
-                    <li>
-                      Firebase Service Account Key Loaded:{" "}
-                      <StatusIndicator success={results.envVars.firebaseServiceAccountKey} />
+                    <li className="flex justify-between items-center">
+                      <span>Firebase Project ID Loaded</span>
+                      <ResultBadge status={results.envVars.firebaseProjectId} />
                     </li>
-                    <hr />
-                    <li>
-                      Firebase Admin SDK Initialized: <StatusIndicator success={results.firebase.sdkInitialized} />
+                    <li className="flex justify-between items-center">
+                      <span>Firebase Client Email Loaded</span>
+                      <ResultBadge status={results.envVars.firebaseClientEmail} />
                     </li>
-                    <li>
-                      Firestore Write Test: <StatusIndicator success={results.firebase.firestoreWriteSuccess} />
+                    <li className="flex justify-between items-center">
+                      <span>Firebase Private Key Loaded</span>
+                      <ResultBadge status={results.envVars.firebasePrivateKey} />
                     </li>
-                    {results.firebase.errorMessage && (
-                      <li className="text-red-500 text-sm">Error: {results.firebase.errorMessage}</li>
-                    )}
-                    <hr />
-                    <li>
-                      Webhook Processor Module Importable:{" "}
-                      <StatusIndicator success={results.webhookProcessor.canImport} />
-                    </li>
-                    {results.webhookProcessor.errorMessage && (
-                      <li className="text-red-500 text-sm">Error: {results.webhookProcessor.errorMessage}</li>
-                    )}
                   </ul>
                 </div>
-                <Alert>
-                  <AlertTitle>Next Steps</AlertTitle>
-                  <AlertDescription>
-                    If any checks fail, please review your environment variables on Vercel. If the module import fails,
-                    it indicates a syntax error in the `webhook-processor.ts` file. Ensure the old webhook files have
-                    been deleted.
-                  </AlertDescription>
-                </Alert>
+                <Separator className="bg-gray-700" />
+                <div>
+                  <h4 className="font-semibold text-gray-300 mb-2">Firebase Admin</h4>
+                  <ul className="space-y-2 text-sm">
+                    <li className="flex justify-between items-center">
+                      <span>DB Instance Available</span>
+                      <ResultBadge status={results.firebase.dbInstanceAvailable} />
+                    </li>
+                    <li className="flex justify-between items-center">
+                      <span>Firestore Write Test</span>
+                      <ResultBadge status={results.firebase.firestoreWriteSuccess} />
+                    </li>
+                  </ul>
+                  {results.firebase.errorMessage && (
+                    <p className="text-xs text-red-400 mt-2">Error: {results.firebase.errorMessage}</p>
+                  )}
+                </div>
+                <Separator className="bg-gray-700" />
+                <div>
+                  <h4 className="font-semibold text-gray-300 mb-2">Webhook Processor</h4>
+                  <ul className="space-y-2 text-sm">
+                    <li className="flex justify-between items-center">
+                      <span>Module Importable</span>
+                      <ResultBadge status={results.webhookProcessor.canImport} />
+                    </li>
+                  </ul>
+                  {results.webhookProcessor.errorMessage && (
+                    <p className="text-xs text-red-400 mt-2">Error: {results.webhookProcessor.errorMessage}</p>
+                  )}
+                </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
