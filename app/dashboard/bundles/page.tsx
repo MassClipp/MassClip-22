@@ -19,6 +19,7 @@ import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, onSnapsho
 import { db } from "@/lib/firebase"
 import { useAuth } from "@/contexts/auth-context"
 import { useUserPlan } from "@/hooks/use-user-plan"
+import { useRouter } from "next/navigation"
 
 interface ContentItem {
   id: string
@@ -82,6 +83,7 @@ export default function BundlesPage() {
     thumbnail: null,
   })
   const { toast, toast: customToast } = useToast()
+  const router = useRouter()
 
   // Bundle limit logic for free users
   const { planData, isProUser } = useUserPlan()
@@ -455,7 +457,7 @@ export default function BundlesPage() {
                   size="sm"
                   variant="outline"
                   className="border-white/20 text-white hover:bg-white/10 bg-transparent"
-                  onClick={() => window.open("/dashboard/stripe-connect", "_blank")}
+                  onClick={() => router.push("/dashboard/earnings")}
                 >
                   Connect Stripe
                 </Button>
@@ -477,7 +479,7 @@ export default function BundlesPage() {
                 size="sm"
                 variant="outline"
                 className="border-white/20 text-white hover:bg-white/10 bg-transparent"
-                onClick={() => window.open("/dashboard/stripe-connect", "_blank")}
+                onClick={() => router.push("/dashboard/earnings")}
               >
                 Connect Stripe
               </Button>
@@ -496,7 +498,7 @@ export default function BundlesPage() {
                 size="sm"
                 variant="outline"
                 className="border-white/20 text-white hover:bg-white/10 bg-transparent"
-                onClick={() => window.open("/dashboard/stripe-connect", "_blank")}
+                onClick={() => router.push("/dashboard/earnings")}
               >
                 Complete Setup
               </Button>
