@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { cert, getApps, initializeApp } from "firebase-admin/app"
 import { getAuth } from "firebase-admin/auth"
-import { getFirestore } from "firebase-admin/firestore"
+import { getFirestore, Timestamp } from "firebase-admin/firestore"
 import { UserTrackingService } from "@/lib/user-tracking-service"
 
 // Initialize Firebase Admin with only the required fields to avoid missing env crashes
@@ -205,6 +205,23 @@ async function buildDetailedItemsForIds(idsToAdd: string[]) {
   return results
 }
 
+function convertDatesToTimestamps(obj: any): any {
+  if (obj instanceof Date) {
+    return Timestamp.fromDate(obj)
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(convertDatesToTimestamps)
+  }
+  if (obj && typeof obj === "object") {
+    const converted: any = {}
+    for (const [key, value] of Object.entries(obj)) {
+      converted[key] = convertDatesToTimestamps(value)
+    }
+    return converted
+  }
+  return obj
+}
+
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const startedAt = Date.now()
   try {
@@ -333,17 +350,20 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       lastUpdated: new Date(),
     }
 
+    const serializedDetailed = convertDatesToTimestamps(mergedDetailed)
+    const serializedMetadata = convertDatesToTimestamps(finalContentMetadata)
+
     await bundleRef.update({
       contentItems: mergedIds,
-      detailedContentItems: mergedDetailed,
-      contentMetadata: finalContentMetadata,
+      detailedContentItems: serializedDetailed,
+      contentMetadata: serializedMetadata,
       contentTitles: mergedDetailed.map((i: any) => i.title),
       contentDescriptions: mergedDetailed.map((i: any) => i.description).filter(Boolean),
       contentTags: Array.from(new Set(mergedDetailed.flatMap((i: any) => (Array.isArray(i.tags) ? i.tags : [])))),
       contentUrls: mergedDetailed.map((i: any) => i.fileUrl),
       contentThumbnails: mergedDetailed.map((i: any) => i.thumbnailUrl).filter(Boolean),
-      updatedAt: new Date(),
-      contentLastUpdated: new Date(),
+      updatedAt: Timestamp.now(),
+      contentLastUpdated: Timestamp.now(),
     })
 
     return NextResponse.json({
