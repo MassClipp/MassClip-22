@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/firebase-admin"
 import Stripe from "stripe"
+import { setCreatorProStatus } from "@/lib/memberships-service"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2023-10-16",
@@ -48,6 +49,10 @@ export async function POST(request: Request) {
       subscriptionCanceledAt: new Date().toISOString(),
       subscriptionStatus: "canceled",
       subscriptionEndDate: new Date(subscription.current_period_end * 1000).toISOString(),
+    })
+
+    await setCreatorProStatus(userId, "canceled", {
+      currentPeriodEnd: new Date(subscription.current_period_end * 1000),
     })
 
     return NextResponse.json({

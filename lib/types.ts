@@ -412,3 +412,19 @@ export interface Bundle {
   customPreviewThumbnail?: string | null
   customPreviewDescription?: string | null
 }
+
+export interface Profile {
+  uid: string
+  email?: string
+  username: string
+  displayName: string
+  bio?: string
+  profilePic?: string
+  createdAt: any
+  updatedAt: any
+  // Creator-specific fields (optional)
+  totalVideos?: number
+  totalDownloads?: number
+  totalEarnings?: number
+  isVerified?: boolean
+}

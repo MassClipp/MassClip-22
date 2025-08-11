@@ -1,6 +1,8 @@
 import { db } from "@/lib/firebase"
 import { doc, getDoc } from "firebase/firestore"
 
+export type SubscriptionStatus = "active" | "inactive" | "canceled" | "past_due" | "trialing"
+
 export interface SubscriptionData {
   isActive: boolean
   plan: "free" | "pro" | "creator_pro"
