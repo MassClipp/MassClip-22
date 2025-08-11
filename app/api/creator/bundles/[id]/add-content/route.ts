@@ -3,6 +3,7 @@ import { cert, getApps, initializeApp } from "firebase-admin/app"
 import { getAuth } from "firebase-admin/auth"
 import { getFirestore, Timestamp } from "firebase-admin/firestore"
 import { UserTrackingService } from "@/lib/user-tracking-service"
+import { getMembership, toTierInfo } from "@/lib/memberships-service"
 
 // Initialize Firebase Admin with only the required fields to avoid missing env crashes
 if (!getApps().length) {
@@ -60,6 +61,25 @@ function getContentType(mimeType: string): ContentType {
 
 // Safe tier lookup: try service first, then fallback to raw Firestore docs.
 async function getTierInfoSafe(uid: string): Promise<{ maxVideosPerBundle: number | null; maxBundles: number | null }> {
+  try {
+    const membership = await getMembership(uid)
+    if (membership) {
+      const tierInfo = toTierInfo(membership)
+      console.log("🔍 [Add Content] Using memberships collection:", {
+        plan: membership.plan,
+        isActive: membership.isActive,
+        maxVideosPerBundle: tierInfo.maxVideosPerBundle,
+        maxBundles: tierInfo.bundlesLimit,
+      })
+      return {
+        maxVideosPerBundle: tierInfo.maxVideosPerBundle,
+        maxBundles: tierInfo.bundlesLimit,
+      }
+    }
+  } catch (e) {
+    console.warn("⚠️ [Add Content] Memberships service failed. Falling back to legacy lookup.", e)
+  }
+
   // 1) Try existing service (may throw if it uses client SDK)
   try {
     const tier = await UserTrackingService.getUserTierInfo(uid)
@@ -307,7 +327,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     const existingDetailed = Array.isArray(bundleData.detailedContentItems) ? bundleData.detailedContentItems : []
     const currentCount = existingDetailed.length
-    const maxPerBundle = tier.maxVideosPerBundle === null ? null : 10
+    const maxPerBundle = tier.maxVideosPerBundle
 
     const remaining = maxPerBundle === null ? Number.POSITIVE_INFINITY : Math.max(0, maxPerBundle - currentCount)
 
