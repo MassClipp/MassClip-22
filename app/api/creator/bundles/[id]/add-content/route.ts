@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { cert, getApps, initializeApp } from "firebase-admin/app"
 import { getAuth } from "firebase-admin/auth"
-import { getFirestore, FieldValue } from "firebase-admin/firestore"
+import { getFirestore } from "firebase-admin/firestore"
 import { UserTrackingService } from "@/lib/user-tracking-service"
 
 // Initialize Firebase Admin with only the required fields to avoid missing env crashes
@@ -178,8 +178,8 @@ async function buildDetailedItemsForIds(idsToAdd: string[]) {
         isPublic: uploadData.isPublic !== false,
         viewCount: Number(uploadData.viewCount ?? 0) || 0,
         downloadCount: Number(uploadData.downloadCount ?? 0) || 0,
-        createdAt: uploadData.createdAt || uploadData.uploadedAt || FieldValue.serverTimestamp(),
-        uploadedAt: uploadData.uploadedAt || uploadData.createdAt || FieldValue.serverTimestamp(),
+        createdAt: uploadData.createdAt || uploadData.uploadedAt || new Date(),
+        uploadedAt: uploadData.uploadedAt || uploadData.createdAt || new Date(),
         addedToBundleAt: new Date(),
       }
 
@@ -299,99 +299,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     // Build detailed items and write productBoxContent only if missing
-    const detailedToAdd: any[] = []
-    for (const contentId of idsToAdd) {
-      try {
-        // Look up upload
-        const uploadDoc = await db.collection("uploads").doc(contentId).get()
-        let uploadData: any | null = null
-
-        if (uploadDoc.exists) {
-          uploadData = uploadDoc.data()
-        } else {
-          const creatorUploadsQuery = await db
-            .collection("creatorUploads")
-            .where("uploadId", "==", contentId)
-            .limit(1)
-            .get()
-          if (!creatorUploadsQuery.empty) {
-            uploadData = creatorUploadsQuery.docs[0].data()
-          }
-        }
-
-        if (!uploadData) continue
-
-        const fileUrl =
-          uploadData.fileUrl || uploadData.downloadUrl || uploadData.publicUrl || uploadData.url || uploadData.sourceUrl
-        if (!fileUrl || typeof fileUrl !== "string") continue
-
-        const fileSize = Number(uploadData.fileSize ?? uploadData.size ?? 0) || 0
-        const duration = Number(uploadData.duration ?? uploadData.videoDuration ?? 0) || 0
-        const mimeType = uploadData.mimeType || uploadData.fileType || "application/octet-stream"
-        const contentType = getContentType(mimeType)
-        const format = (typeof mimeType === "string" && mimeType.split("/")[1]) || "unknown"
-        const title =
-          uploadData.title || uploadData.filename || uploadData.originalFileName || uploadData.name || "Untitled"
-        const filename = uploadData.filename || uploadData.originalFileName || title || "unknown.file"
-
-        const detailedItem = {
-          id: contentId,
-          uploadId: contentId,
-          fileUrl,
-          downloadUrl: uploadData.downloadUrl || fileUrl,
-          publicUrl: uploadData.publicUrl || fileUrl,
-          filename,
-          fileSize,
-          fileSizeFormatted: formatFileSize(fileSize),
-          title,
-          displayTitle: title,
-          description: uploadData.description || "",
-          mimeType,
-          fileType: mimeType,
-          contentType,
-          format,
-          quality: "HD",
-          resolution: uploadData.resolution || "",
-          duration,
-          durationFormatted: formatDuration(duration),
-          displayDuration: formatDuration(duration),
-          thumbnailUrl: uploadData.thumbnailUrl || "",
-          previewUrl: uploadData.previewUrl || uploadData.thumbnailUrl || "",
-          tags: Array.isArray(uploadData.tags) ? uploadData.tags : [],
-          isPublic: uploadData.isPublic !== false,
-          viewCount: Number(uploadData.viewCount ?? 0) || 0,
-          downloadCount: Number(uploadData.downloadCount ?? 0) || 0,
-          createdAt: uploadData.createdAt || uploadData.uploadedAt || new Date(),
-          uploadedAt: uploadData.uploadedAt || uploadData.createdAt || new Date(),
-          addedToBundleAt: new Date(),
-        }
-
-        detailedToAdd.push(detailedItem)
-
-        // Avoid duplicate productBoxContent entries
-        const existingPbc = await db
-          .collection("productBoxContent")
-          .where("productBoxId", "==", bundleId)
-          .where("uploadId", "==", contentId)
-          .limit(1)
-          .get()
-        if (existingPbc.empty) {
-          await db.collection("productBoxContent").add({
-            productBoxId: bundleId,
-            uploadId: contentId,
-            title,
-            fileUrl,
-            thumbnailUrl: detailedItem.thumbnailUrl,
-            mimeType,
-            fileSize,
-            filename,
-            createdAt: new Date(),
-          })
-        }
-      } catch (e) {
-        console.error("❌ [Add Content] Failed to process contentId:", contentId, e)
-      }
-    }
+    const detailedToAdd: any[] = await buildDetailedItemsForIds(idsToAdd)
 
     if (detailedToAdd.length === 0 && !duplicatesSelected) {
       return NextResponse.json({ error: "No valid content items found" }, { status: 400 })
