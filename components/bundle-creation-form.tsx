@@ -77,12 +77,20 @@ export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormPr
     }
 
     if (!user?.uid) {
-      toast.error("You must be logged in to create a bundle")
+      customToast({
+        variant: "gradient",
+        title: "Authentication Required",
+        description: "You must be logged in to create a bundle.",
+      })
       return
     }
 
     if (!formData.title.trim() || !formData.description.trim() || !formData.price) {
-      toast.error("Please fill in all required fields")
+      customToast({
+        variant: "gradient",
+        title: "Missing Information",
+        description: "Please fill in all required fields to create your bundle.",
+      })
       return
     }
 
@@ -107,9 +115,34 @@ export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormPr
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
+        let errorData
+        try {
+          errorData = await response.json()
+        } catch {
+          // If we can't parse the response, assume it's a Stripe connection issue for 400 errors
+          if (response.status === 400) {
+            customToast({
+              variant: "gradient",
+              title: "Stripe Account Required",
+              description: "You need to connect your Stripe account to sell bundles and receive payments.",
+              action: (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-white/20 text-white hover:bg-white/10 bg-transparent"
+                  onClick={() => window.open("/dashboard/stripe-connect", "_blank")}
+                >
+                  Connect Stripe
+                </Button>
+              ),
+            })
+            return
+          }
+          throw new Error("Failed to create bundle")
+        }
 
-        if (errorData.code === "NO_STRIPE_ACCOUNT") {
+        // Handle specific Stripe-related errors
+        if (errorData.code === "NO_STRIPE_ACCOUNT" || response.status === 400) {
           customToast({
             variant: "gradient",
             title: "Stripe Account Required",
@@ -147,7 +180,13 @@ export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormPr
           return
         }
 
-        throw new Error(errorData.error || "Failed to create bundle")
+        // Handle other errors with gradient toast
+        customToast({
+          variant: "gradient",
+          title: "Bundle Creation Failed",
+          description: errorData.error || "Unable to create bundle. Please try again.",
+        })
+        return
       }
 
       const result = await response.json()
@@ -164,7 +203,11 @@ export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormPr
       onSuccess?.()
     } catch (error) {
       console.error("Error creating bundle:", error)
-      toast.error(error instanceof Error ? error.message : "Failed to create bundle")
+      customToast({
+        variant: "gradient",
+        title: "Connection Error",
+        description: "Unable to connect to the server. Please check your connection and try again.",
+      })
     } finally {
       setLoading(false)
     }
