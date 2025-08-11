@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import Link from "next/link"
 import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { CheckCircle, ArrowRight } from "lucide-react"
@@ -132,18 +131,6 @@ export default function SubscriptionSuccess() {
               Go to Dashboard
               <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
             </Button>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.7, duration: 0.5 }}
-          >
-            <Link href="/dashboard/user">
-              <Button variant="outline" className="w-full border-gray-700 text-gray-300 hover:bg-gray-800">
-                View Account
-              </Button>
-            </Link>
           </motion.div>
         </div>
       </motion.div>
