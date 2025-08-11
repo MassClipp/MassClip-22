@@ -62,7 +62,16 @@ function getContentType(mimeType: string): ContentType {
 // Safe tier lookup: try service first, then fallback to raw Firestore docs.
 async function getTierInfoSafe(uid: string): Promise<{ maxVideosPerBundle: number | null; maxBundles: number | null }> {
   try {
+    console.log("🔍 [Add Content] Looking up membership for UID:", uid)
     const membership = await getMembership(uid)
+    console.log("🔍 [Add Content] Membership lookup result:", {
+      found: !!membership,
+      plan: membership?.plan,
+      isActive: membership?.isActive,
+      features: membership?.features,
+      uid: membership?.uid,
+    })
+
     if (membership) {
       const tierInfo = toTierInfo(membership)
       console.log("🔍 [Add Content] Using memberships collection:", {
@@ -70,14 +79,17 @@ async function getTierInfoSafe(uid: string): Promise<{ maxVideosPerBundle: numbe
         isActive: membership.isActive,
         maxVideosPerBundle: tierInfo.maxVideosPerBundle,
         maxBundles: tierInfo.bundlesLimit,
+        rawFeatures: membership.features,
       })
       return {
         maxVideosPerBundle: tierInfo.maxVideosPerBundle,
         maxBundles: tierInfo.bundlesLimit,
       }
+    } else {
+      console.warn("⚠️ [Add Content] No membership found for UID:", uid)
     }
   } catch (e) {
-    console.warn("⚠️ [Add Content] Memberships service failed. Falling back to legacy lookup.", e)
+    console.error("❌ [Add Content] Memberships service failed:", e)
   }
 
   // 1) Try existing service (may throw if it uses client SDK)
@@ -332,12 +344,15 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const remaining = maxPerBundle === null ? Number.POSITIVE_INFINITY : Math.max(0, maxPerBundle - currentCount)
 
     console.log("🔍 [Add Content] Bundle limit check:", {
+      uid,
       currentCount,
       maxPerBundle,
       remaining,
       tier: tier.maxVideosPerBundle,
       detailedItemsCount: existingDetailed.length,
       contentItemsCount: Array.isArray(bundleData.contentItems) ? bundleData.contentItems.length : 0,
+      isUnlimited: maxPerBundle === null,
+      willSkipDueToLimit: remaining < contentIds.length,
     })
 
     const existingIds = new Set(
