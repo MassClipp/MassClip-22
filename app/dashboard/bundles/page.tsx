@@ -48,6 +48,7 @@ interface ProductBox {
   updatedAt?: any
   productId?: string
   priceId?: string
+  detailedContentItems?: ContentItem[]
 }
 
 interface CreateBundleForm {
@@ -1764,9 +1765,12 @@ export default function BundlesPage() {
                   Cancel
                 </Button>
                 {(() => {
-                  const targetBox = productBoxes.find((b) => b.id === showAddContentModal)
+                  const targetBox = productBoxes.find((box) => box.id === showAddContentModal)
                   const existingCount = targetBox
-                    ? (contentItems[targetBox.id]?.length ?? targetBox.contentItems.length ?? 0)
+                    ? (targetBox.detailedContentItems?.length ??
+                      targetBox.contentItems?.length ??
+                      contentItems[targetBox.id]?.length ??
+                      0)
                     : 0
                   const maxPerBundle = isProUser ? Number.POSITIVE_INFINITY : CONTENT_LIMIT_FREE
                   const remaining = Math.max(0, (maxPerBundle as number) - existingCount)
@@ -1775,7 +1779,7 @@ export default function BundlesPage() {
                   return (
                     <Button
                       onClick={() => showAddContentModal && handleAddContentToBundle(showAddContentModal)}
-                      disabled={selectedContentIds.length === 0 || addContentLoading || remaining === 0}
+                      disabled={selectedContentIds.length === 0 || addContentLoading || (remaining <= 0 && !isProUser)}
                       className="bg-red-600 hover:bg-red-700"
                     >
                       {addContentLoading ? (
@@ -1786,7 +1790,7 @@ export default function BundlesPage() {
                       ) : remaining === Number.POSITIVE_INFINITY ? (
                         `Add ${selectedContentIds.length} Item${selectedContentIds.length !== 1 ? "s" : ""}`
                       ) : (
-                        `Add ${Math.min(selectedContentIds.length, remaining)} Item${Math.min(selectedContentIds.length, remaining) !== 1 ? "s" : ""} (remaining ${remaining})`
+                        `Add ${Math.min(selectedContentIds.length, remaining)} Item${Math.min(selectedContentIds.length, remaining) !== 1 ? "s" : ""} (${remaining} remaining)`
                       )}
                     </Button>
                   )

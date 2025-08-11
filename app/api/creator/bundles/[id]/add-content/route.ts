@@ -274,13 +274,16 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const existingSet = new Set(rawExistingIds.filter((id: any) => typeof id === "string" && id.length > 0))
     const currentCount = existingSet.size
     const maxPerBundle = tier.maxVideosPerBundle // null => unlimited
-    const remaining =
-      maxPerBundle === null ? Number.POSITIVE_INFINITY : Math.max(0, (maxPerBundle as number) - currentCount)
+
+    const remaining = maxPerBundle === null ? Number.POSITIVE_INFINITY : Math.max(0, maxPerBundle - currentCount)
 
     // Remove already-in-bundle from selection BEFORE slicing to limit
     const inputIds: string[] = (contentIds as string[]).filter((id) => typeof id === "string" && id.length > 0)
     const notAlreadyInBundle = inputIds.filter((id) => !existingSet.has(id))
-    const idsToAdd = notAlreadyInBundle.slice(0, remaining as number)
+
+    const idsToAdd =
+      remaining === Number.POSITIVE_INFINITY ? notAlreadyInBundle : notAlreadyInBundle.slice(0, remaining)
+
     const duplicatesSelected = notAlreadyInBundle.length === 0 && inputIds.length > 0
     const skipped = inputIds.length - idsToAdd.length
 
@@ -288,10 +291,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       if (remaining === 0) {
         return NextResponse.json(
           {
-            error:
-              maxPerBundle === null
-                ? "No remaining capacity in this bundle."
-                : `Free plan limit reached: maximum ${maxPerBundle} items per bundle.`,
+            error: `Free plan limit reached: maximum ${maxPerBundle} items per bundle.`,
             remainingBefore: remaining,
             maxPerBundle,
             currentCount,
@@ -329,21 +329,21 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const combinedDetailed = [...previousDetailed, ...detailedToAdd]
     const mergedDetailed = Array.from(new Map(combinedDetailed.map((i: any) => [i.uploadId ?? i.id, i]))).values()
 
-    // Recalculate metadata
     const totalSize = mergedDetailed.reduce((s: number, it: any) => s + (Number(it.fileSize) || 0), 0)
     const totalDuration = mergedDetailed.reduce((s: number, it: any) => s + (Number(it.duration) || 0), 0)
+    const totalItems = Array.isArray(mergedDetailed) ? mergedDetailed.length : 0
 
     const finalContentMetadata = {
-      totalItems: mergedDetailed.length,
-      totalSize,
-      totalSizeFormatted: formatFileSize(totalSize),
-      totalDuration,
-      totalDurationFormatted: formatDuration(totalDuration),
+      totalItems: totalItems, // Ensure this is never undefined
+      totalSize: totalSize || 0,
+      totalSizeFormatted: formatFileSize(totalSize || 0),
+      totalDuration: totalDuration || 0,
+      totalDurationFormatted: formatDuration(totalDuration || 0),
       contentBreakdown: {
-        videos: mergedDetailed.filter((i: any) => i.contentType === "video").length,
-        audio: mergedDetailed.filter((i: any) => i.contentType === "audio").length,
-        images: mergedDetailed.filter((i: any) => i.contentType === "image").length,
-        documents: mergedDetailed.filter((i: any) => i.contentType === "document").length,
+        videos: mergedDetailed.filter((i: any) => i.contentType === "video").length || 0,
+        audio: mergedDetailed.filter((i: any) => i.contentType === "audio").length || 0,
+        images: mergedDetailed.filter((i: any) => i.contentType === "image").length || 0,
+        documents: mergedDetailed.filter((i: any) => i.contentType === "document").length || 0,
       },
       formats: Array.from(new Set(mergedDetailed.map((i: any) => i.format).filter(Boolean))),
       qualities: Array.from(new Set(mergedDetailed.map((i: any) => i.quality).filter(Boolean))),
@@ -357,11 +357,11 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       contentItems: mergedIds,
       detailedContentItems: serializedDetailed,
       contentMetadata: serializedMetadata,
-      contentTitles: mergedDetailed.map((i: any) => i.title),
-      contentDescriptions: mergedDetailed.map((i: any) => i.description).filter(Boolean),
+      contentTitles: mergedDetailed.map((i: any) => i.title || "Untitled"),
+      contentDescriptions: mergedDetailed.map((i: any) => i.description || "").filter(Boolean),
       contentTags: Array.from(new Set(mergedDetailed.flatMap((i: any) => (Array.isArray(i.tags) ? i.tags : [])))),
-      contentUrls: mergedDetailed.map((i: any) => i.fileUrl),
-      contentThumbnails: mergedDetailed.map((i: any) => i.thumbnailUrl).filter(Boolean),
+      contentUrls: mergedDetailed.map((i: any) => i.fileUrl || ""),
+      contentThumbnails: mergedDetailed.map((i: any) => i.thumbnailUrl || "").filter(Boolean),
       updatedAt: Timestamp.now(),
       contentLastUpdated: Timestamp.now(),
     })
