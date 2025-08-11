@@ -49,12 +49,12 @@ async function setMembership(uid: string, data: object) {
 // --- Exported Processing Functions ---
 
 export async function processCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
-  const userId = session.metadata?.userId
+  const userId = session.metadata?.buyerUid
   const customerId = typeof session.customer === "string" ? session.customer : session.customer?.id
   const subscriptionId = typeof session.subscription === "string" ? session.subscription : session.subscription?.id
 
   if (!userId) {
-    throw new Error(`Missing userId in checkout session metadata. Session ID: ${session.id}`)
+    throw new Error(`Missing buyerUid in checkout session metadata. Session ID: ${session.id}`)
   }
   if (!customerId) {
     throw new Error(`Missing customerId in checkout session. Session ID: ${session.id}`)
@@ -120,9 +120,9 @@ export async function processSubscriptionDeleted(subscription: Stripe.Subscripti
 }
 
 export async function processPaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent) {
-  const { userId, productType, productId, creatorId } = paymentIntent.metadata
+  const { buyerUid, productType, productId, creatorId } = paymentIntent.metadata
 
-  if (!userId || !productType || !productId || !creatorId) {
+  if (!buyerUid || !productType || !productId || !creatorId) {
     console.error("Webhook Error: Missing required metadata in paymentIntent.succeeded event.", {
       paymentIntentId: paymentIntent.id,
       metadata: paymentIntent.metadata,
@@ -139,7 +139,7 @@ export async function processPaymentIntentSucceeded(paymentIntent: Stripe.Paymen
   }
 
   const purchaseData = {
-    userId,
+    userId: buyerUid,
     creatorId,
     productType,
     productId,
