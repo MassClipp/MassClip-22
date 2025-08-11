@@ -304,11 +304,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     // Enforce tier limits
     const tier = await getTierInfoSafe(uid)
-    const rawExistingIds: string[] = Array.isArray(bundleData.contentItems) ? bundleData.contentItems : []
 
-    // Use UNIQUE count for limit
-    const existingSet = new Set(rawExistingIds.filter((id: any) => typeof id === "string" && id.length > 0))
-    const currentCount = existingSet.size
+    const existingDetailed = Array.isArray(bundleData.detailedContentItems) ? bundleData.detailedContentItems : []
+    const currentCount = existingDetailed.length
     const maxPerBundle = tier.maxVideosPerBundle === null ? null : 10
 
     const remaining = maxPerBundle === null ? Number.POSITIVE_INFINITY : Math.max(0, maxPerBundle - currentCount)
@@ -318,45 +316,21 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       maxPerBundle,
       remaining,
       tier: tier.maxVideosPerBundle,
+      detailedItemsCount: existingDetailed.length,
+      contentItemsCount: Array.isArray(bundleData.contentItems) ? bundleData.contentItems.length : 0,
     })
+
+    const existingIds = new Set(existingDetailed.map((item: any) => item.uploadId || item.id).filter(Boolean))
 
     // Remove already-in-bundle from selection BEFORE slicing to limit
     const inputIds: string[] = (contentIds as string[]).filter((id) => typeof id === "string" && id.length > 0)
-    const notAlreadyInBundle = inputIds.filter((id) => !existingSet.has(id))
+    const notAlreadyInBundle = inputIds.filter((id) => !existingIds.has(id))
 
     const idsToAdd =
       remaining === Number.POSITIVE_INFINITY ? notAlreadyInBundle : notAlreadyInBundle.slice(0, remaining)
 
     const duplicatesSelected = notAlreadyInBundle.length === 0 && inputIds.length > 0
     const skipped = inputIds.length - idsToAdd.length
-
-    if (idsToAdd.length === 0) {
-      if (remaining === 0) {
-        return NextResponse.json(
-          {
-            error: `Free plan limit reached: maximum ${maxPerBundle} items per bundle.`,
-            remainingBefore: remaining,
-            maxPerBundle,
-            currentCount,
-          },
-          { status: 400 },
-        )
-      }
-      if (duplicatesSelected) {
-        // Nothing to add because all selected were already present; respond gracefully.
-        return NextResponse.json(
-          {
-            success: true,
-            added: 0,
-            skipped: inputIds.length,
-            reason: "already-in-bundle",
-            currentCount,
-            maxPerBundle,
-          },
-          { status: 200 },
-        )
-      }
-    }
 
     // Build detailed items and write productBoxContent only if missing
     const detailedToAdd: any[] = await buildDetailedItemsForIds(idsToAdd)
@@ -366,7 +340,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     // Merge with existing arrays (dedupe IDs and detailed items)
-    const mergedIds = Array.from(new Set<string>([...existingSet, ...idsToAdd]))
+    const mergedIds = Array.from(new Set<string>([...existingIds, ...idsToAdd]))
 
     const previousDetailed = Array.isArray(bundleData.detailedContentItems) ? bundleData.detailedContentItems : []
     const combinedDetailed = [...previousDetailed, ...detailedToAdd]
