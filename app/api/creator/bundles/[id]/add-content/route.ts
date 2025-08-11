@@ -320,17 +320,39 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       contentItemsCount: Array.isArray(bundleData.contentItems) ? bundleData.contentItems.length : 0,
     })
 
-    const existingIds = new Set(existingDetailed.map((item: any) => item.uploadId || item.id).filter(Boolean))
+    const existingIds = new Set(
+      existingDetailed
+        .map((item: any) => {
+          // Normalize ID field - prefer uploadId, fallback to id
+          const itemId = item.uploadId || item.id
+          return typeof itemId === "string" && itemId.length > 0 ? itemId : null
+        })
+        .filter(Boolean),
+    )
+
+    console.log("🔍 [Add Content] Existing content IDs:", Array.from(existingIds))
 
     // Remove already-in-bundle from selection BEFORE slicing to limit
     const inputIds: string[] = (contentIds as string[]).filter((id) => typeof id === "string" && id.length > 0)
     const notAlreadyInBundle = inputIds.filter((id) => !existingIds.has(id))
+
+    console.log("🔍 [Add Content] Content filtering:", {
+      inputIds: inputIds.length,
+      alreadyInBundle: inputIds.length - notAlreadyInBundle.length,
+      notAlreadyInBundle: notAlreadyInBundle.length,
+    })
 
     const idsToAdd =
       remaining === Number.POSITIVE_INFINITY ? notAlreadyInBundle : notAlreadyInBundle.slice(0, remaining)
 
     const duplicatesSelected = notAlreadyInBundle.length === 0 && inputIds.length > 0
     const skipped = inputIds.length - idsToAdd.length
+
+    console.log("🔍 [Add Content] Final selection:", {
+      idsToAdd: idsToAdd.length,
+      skipped,
+      duplicatesSelected,
+    })
 
     // Build detailed items and write productBoxContent only if missing
     const detailedToAdd: any[] = await buildDetailedItemsForIds(idsToAdd)
@@ -339,12 +361,36 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ error: "No valid content items found" }, { status: 400 })
     }
 
-    // Merge with existing arrays (dedupe IDs and detailed items)
-    const mergedIds = Array.from(new Set<string>([...existingIds, ...idsToAdd]))
+    // First, normalize existing detailed items to have consistent uploadId field
+    const normalizedExisting = existingDetailed.map((item: any) => ({
+      ...item,
+      uploadId: item.uploadId || item.id, // Ensure uploadId is set
+      id: item.id || item.uploadId, // Ensure id is set
+    }))
 
-    const previousDetailed = Array.isArray(bundleData.detailedContentItems) ? bundleData.detailedContentItems : []
-    const combinedDetailed = [...previousDetailed, ...detailedToAdd]
-    const mergedDetailed = Array.from(new Map(combinedDetailed.map((i: any) => [i.uploadId ?? i.id, i]))).values()
+    // Ensure new items have consistent ID fields
+    const normalizedNew = detailedToAdd.map((item: any) => ({
+      ...item,
+      uploadId: item.uploadId || item.id,
+      id: item.id || item.uploadId,
+    }))
+
+    // Merge arrays - existing items first, then new items
+    const combinedDetailed = [...normalizedExisting, ...normalizedNew]
+
+    // Deduplicate by uploadId (prefer existing items over new ones in case of conflict)
+    const mergedDetailed = Array.from(new Map(combinedDetailed.map((item: any) => [item.uploadId, item])).values())
+
+    // Create merged ID array from the final detailed items
+    const mergedIds = mergedDetailed.map((item: any) => item.uploadId).filter(Boolean)
+
+    console.log("🔍 [Add Content] Merge results:", {
+      existingItems: normalizedExisting.length,
+      newItems: normalizedNew.length,
+      combinedItems: combinedDetailed.length,
+      finalMergedItems: mergedDetailed.length,
+      finalMergedIds: mergedIds.length,
+    })
 
     const totalSize = mergedDetailed.reduce((s: number, it: any) => s + (Number(it.fileSize) || 0), 0)
     const totalDuration = mergedDetailed.reduce((s: number, it: any) => s + (Number(it.duration) || 0), 0)
@@ -408,6 +454,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       maxPerBundle,
       remainingBefore: remaining,
       currentCountBefore: currentCount,
+      finalCount: mergedDetailed.length,
       durationMs: Date.now() - startedAt,
     })
   } catch (error: any) {
