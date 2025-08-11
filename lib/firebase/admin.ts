@@ -37,6 +37,4 @@ if (hasAllCreds) {
   )
 }
 
-// Export the initialized db instance, or a placeholder if not initialized.
-// This prevents the app from crashing if the credentials are not set in some environments (e.g., local dev without .env).
 export { db }
