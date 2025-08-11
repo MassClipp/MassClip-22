@@ -130,7 +130,7 @@ export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormPr
                   size="sm"
                   variant="outline"
                   className="border-white/20 text-white hover:bg-white/10 bg-transparent"
-                  onClick={() => window.open("/dashboard/stripe-connect", "_blank")}
+                  onClick={() => window.open("/dashboard/earnings", "_blank")}
                 >
                   Connect Stripe
                 </Button>
@@ -152,7 +152,7 @@ export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormPr
                 size="sm"
                 variant="outline"
                 className="border-white/20 text-white hover:bg-white/10 bg-transparent"
-                onClick={() => window.open("/dashboard/stripe-connect", "_blank")}
+                onClick={() => window.open("/dashboard/earnings", "_blank")}
               >
                 Connect Stripe
               </Button>
@@ -171,7 +171,7 @@ export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormPr
                 size="sm"
                 variant="outline"
                 className="border-white/20 text-white hover:bg-white/10 bg-transparent"
-                onClick={() => window.open("/dashboard/stripe-connect", "_blank")}
+                onClick={() => window.open("/dashboard/earnings", "_blank")}
               >
                 Complete Setup
               </Button>
