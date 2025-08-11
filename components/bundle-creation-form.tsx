@@ -1,5 +1,7 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -9,7 +11,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/contexts/auth-context"
 import { useUserPlan } from "@/hooks/use-user-plan"
-import { AlertCircle, Crown, Plus, X } from 'lucide-react'
+import { AlertCircle, Crown } from "lucide-react"
 import { toast } from "sonner"
 
 interface BundleCreationFormProps {
@@ -23,7 +25,7 @@ export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormPr
   const [loading, setLoading] = useState(false)
   const [canCreateBundle, setCanCreateBundle] = useState(true)
   const [bundleLimitInfo, setBundleLimitInfo] = useState<any>(null)
-  
+
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -39,7 +41,7 @@ export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormPr
       try {
         const response = await fetch(`/api/user/check-bundle-limits?type=create`)
         const data = await response.json()
-        
+
         setCanCreateBundle(data.canCreate)
         setBundleLimitInfo(data)
       } catch (error) {
@@ -52,7 +54,7 @@ export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormPr
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!canCreateBundle) {
       toast.error("Bundle limit reached. Upgrade to Creator Pro for unlimited bundles.")
       return
@@ -71,28 +73,52 @@ export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormPr
     setLoading(true)
 
     try {
+      const idToken = await user.getIdToken()
+
       const response = await fetch("/api/creator/bundles", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`, // Added missing auth header
         },
         body: JSON.stringify({
           title: formData.title.trim(),
           description: formData.description.trim(),
-          price: parseFloat(formData.price),
+          price: Number.parseFloat(formData.price),
           thumbnailUrl: formData.thumbnailUrl.trim() || null,
-          creatorId: user.uid,
+          contentItems: [], // Added empty content items array
         }),
       })
 
       if (!response.ok) {
         const errorData = await response.json()
+
+        if (errorData.code === "NO_STRIPE_ACCOUNT") {
+          toast.error("Please connect your Stripe account before creating bundles", {
+            action: {
+              label: "Connect Stripe",
+              onClick: () => window.open("/dashboard/stripe-connect", "_blank"),
+            },
+          })
+          return
+        }
+
+        if (errorData.code === "STRIPE_ACCOUNT_INCOMPLETE") {
+          toast.error("Please complete your Stripe account setup before creating bundles", {
+            action: {
+              label: "Complete Setup",
+              onClick: () => window.open("/dashboard/stripe-connect", "_blank"),
+            },
+          })
+          return
+        }
+
         throw new Error(errorData.error || "Failed to create bundle")
       }
 
       const result = await response.json()
       toast.success("Bundle created successfully!")
-      
+
       // Reset form
       setFormData({
         title: "",
@@ -214,20 +240,11 @@ export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormPr
           </div>
 
           <div className="flex gap-3 pt-4">
-            <Button
-              type="submit"
-              disabled={loading || !canCreateBundle}
-              className="flex-1"
-            >
+            <Button type="submit" disabled={loading || !canCreateBundle} className="flex-1">
               {loading ? "Creating..." : "Create Bundle"}
             </Button>
             {onCancel && (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={onCancel}
-                disabled={loading}
-              >
+              <Button type="button" variant="outline" onClick={onCancel} disabled={loading}>
                 Cancel
               </Button>
             )}
