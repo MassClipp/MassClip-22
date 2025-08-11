@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/firebase-admin"
 import Stripe from "stripe"
-import { setCreatorProStatus } from "@/lib/memberships-service"
+import { setCreatorProStatus, getMembership } from "@/lib/memberships-service"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2023-10-16",
@@ -15,15 +15,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "User ID is required" }, { status: 400 })
     }
 
-    // Get the user from Firestore
-    const userDoc = await db.collection("users").doc(userId).get()
+    const membership = await getMembership(userId)
+    let stripeCustomerId = membership?.stripeCustomerId
 
-    if (!userDoc.exists) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 })
+    if (!stripeCustomerId) {
+      const userDoc = await db.collection("users").doc(userId).get()
+
+      if (!userDoc.exists) {
+        return NextResponse.json({ error: "User not found" }, { status: 404 })
+      }
+
+      const userData = userDoc.data()
+      stripeCustomerId = userData?.stripeCustomerId
     }
-
-    const userData = userDoc.data()
-    const stripeCustomerId = userData?.stripeCustomerId
 
     if (!stripeCustomerId) {
       return NextResponse.json({ error: "No subscription found for this user" }, { status: 404 })
@@ -44,15 +48,19 @@ export async function POST(request: Request) {
       cancel_at_period_end: true,
     })
 
-    // Update the user document with cancellation info
-    await userDoc.ref.update({
-      subscriptionCanceledAt: new Date().toISOString(),
-      subscriptionStatus: "canceled",
-      subscriptionEndDate: new Date(subscription.current_period_end * 1000).toISOString(),
-    })
+    const userDoc = await db.collection("users").doc(userId).get()
+    if (userDoc.exists) {
+      await userDoc.ref.update({
+        subscriptionCanceledAt: new Date().toISOString(),
+        subscriptionStatus: "canceled",
+        subscriptionEndDate: new Date(subscription.current_period_end * 1000).toISOString(),
+      })
+    }
 
     await setCreatorProStatus(userId, "canceled", {
       currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+      stripeSubscriptionId: subscription.id,
+      stripeCustomerId: stripeCustomerId,
     })
 
     return NextResponse.json({
