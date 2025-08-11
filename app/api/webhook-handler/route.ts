@@ -62,8 +62,8 @@ async function upsertMembership(opts: {
     email: email ?? undefined,
     stripeCustomerId: String(stripeCustomerId ?? ""),
     stripeSubscriptionId: String(stripeSubscriptionId ?? ""),
-    currentPeriodEnd: currentPeriodEnd ?? undefined,
-    priceId: priceId ?? undefined,
+    currentPeriodEnd: currentPeriodEnd,
+    priceId: priceId,
     status,
   })
 

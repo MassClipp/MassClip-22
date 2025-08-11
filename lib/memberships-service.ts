@@ -23,7 +23,7 @@ export interface MembershipDoc {
   // Stripe related
   stripeCustomerId?: string
   stripeSubscriptionId?: string
-  currentPeriodEnd?: Date
+  currentPeriodEnd?: Date | null
   priceId?: string
   connectedAccountId?: string
 
@@ -114,8 +114,8 @@ export async function setCreatorPro(
     email?: string
     stripeCustomerId: string
     stripeSubscriptionId: string
-    currentPeriodEnd?: Date
-    priceId?: string
+    currentPeriodEnd?: Date | null
+    priceId?: string | null
     connectedAccountId?: string
     status?: Exclude<MembershipStatus, "inactive"> // usually "active", "past_due", "trialing", "canceled"
   },
@@ -126,15 +126,15 @@ export async function setCreatorPro(
     .set(
       {
         uid,
-        email: params.email,
+        email: params.email ?? null,
         plan: "creator_pro",
         status: params.status ?? "active",
         isActive: (params.status ?? "active") === "active" || (params.status ?? "active") === "trialing",
         stripeCustomerId: params.stripeCustomerId,
         stripeSubscriptionId: params.stripeSubscriptionId,
-        currentPeriodEnd: params.currentPeriodEnd,
-        priceId: params.priceId,
-        connectedAccountId: params.connectedAccountId,
+        currentPeriodEnd: params.currentPeriodEnd ?? null,
+        priceId: params.priceId ?? null,
+        connectedAccountId: params.connectedAccountId ?? null,
         features: { ...PRO_FEATURES },
         updatedAt: now,
         createdAt: now,
