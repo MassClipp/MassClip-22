@@ -32,6 +32,7 @@ export async function POST(req: Request) {
         await processCheckoutSessionCompleted(event.data.object as Stripe.Checkout.Session)
         break
       case "customer.subscription.updated":
+      case "customer.subscription.created":
         await processSubscriptionUpdated(event.data.object as Stripe.Subscription)
         break
       case "customer.subscription.deleted":
