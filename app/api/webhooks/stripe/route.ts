@@ -1,16 +1,12 @@
 import Stripe from "stripe"
-import { headers } from "next/headers"
 import { NextResponse } from "next/server"
+import { headers } from "next/headers"
 import {
   processCheckoutSessionCompleted,
   processSubscriptionUpdated,
   processSubscriptionDeleted,
   processPaymentIntentSucceeded,
 } from "@/lib/stripe/webhook-processor"
-
-if (!process.env.STRIPE_WEBHOOK_SECRET) {
-  throw new Error("STRIPE_WEBHOOK_SECRET environment variable not set")
-}
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!)
 
@@ -24,11 +20,11 @@ export async function POST(req: Request) {
   try {
     event = stripe.webhooks.constructEvent(body, signature, webhookSecret)
   } catch (err: any) {
-    console.error(`❌ Webhook signature verification failed: ${err.message}`)
+    console.error(`❌ Error message: ${err.message}`)
     return new NextResponse(`Webhook Error: ${err.message}`, { status: 400 })
   }
 
-  console.log(`🔔 [Webhook] Received event: ${event.type} (${event.id})`)
+  console.log(`🔔 [Webhook] Received event: ${event.type}`)
 
   try {
     switch (event.type) {
@@ -36,7 +32,6 @@ export async function POST(req: Request) {
         await processCheckoutSessionCompleted(event.data.object as Stripe.Checkout.Session)
         break
       case "customer.subscription.updated":
-      case "customer.subscription.created":
         await processSubscriptionUpdated(event.data.object as Stripe.Subscription)
         break
       case "customer.subscription.deleted":
@@ -46,11 +41,11 @@ export async function POST(req: Request) {
         await processPaymentIntentSucceeded(event.data.object as Stripe.PaymentIntent)
         break
       default:
-        console.log(`🤷‍♀️ Unhandled event type: ${event.type}`)
+        console.log(`[Webhook] Unhandled event type: ${event.type}`)
     }
   } catch (error) {
-    console.error(`Webhook handler error for event ${event.type}:`, error)
-    return new NextResponse("Webhook handler failed. See server logs for details.", { status: 500 })
+    console.error("[Webhook] Error processing event:", error)
+    return new NextResponse("Webhook handler failed. See logs.", { status: 500 })
   }
 
   return NextResponse.json({ received: true })
