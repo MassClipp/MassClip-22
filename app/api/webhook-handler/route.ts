@@ -58,14 +58,21 @@ async function upsertMembership(opts: {
 
   // Ensure the doc exists, then set creator_pro fields
   await ensureMembership(uid, email ?? undefined)
-  await setCreatorPro(uid, {
-    email: email ?? undefined,
-    stripeCustomerId: String(stripeCustomerId ?? ""),
-    stripeSubscriptionId: String(stripeSubscriptionId ?? ""),
-    currentPeriodEnd: currentPeriodEnd,
-    priceId: priceId,
-    status,
-  })
+
+  if (stripeCustomerId && stripeSubscriptionId) {
+    await setCreatorPro(uid, {
+      email: email ?? undefined,
+      stripeCustomerId,
+      stripeSubscriptionId,
+      currentPeriodEnd: currentPeriodEnd,
+      priceId: priceId ?? undefined,
+      status,
+    })
+  } else {
+    debugTrace.push(
+      `Warning: Missing Stripe IDs - customer: ${stripeCustomerId}, subscription: ${stripeSubscriptionId}`,
+    )
+  }
 
   debugTrace.push(`memberships/${uid} upserted to creator_pro`)
 

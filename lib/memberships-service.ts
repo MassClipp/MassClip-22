@@ -112,8 +112,8 @@ export async function setCreatorPro(
   uid: string,
   params: {
     email?: string
-    stripeCustomerId: string
-    stripeSubscriptionId: string
+    stripeCustomerId?: string
+    stripeSubscriptionId?: string
     currentPeriodEnd?: Date | null
     priceId?: string | null
     connectedAccountId?: string
@@ -121,26 +121,30 @@ export async function setCreatorPro(
   },
 ) {
   const now = new Date()
-  await col()
-    .doc(uid)
-    .set(
-      {
-        uid,
-        email: params.email ?? null,
-        plan: "creator_pro",
-        status: params.status ?? "active",
-        isActive: (params.status ?? "active") === "active" || (params.status ?? "active") === "trialing",
-        stripeCustomerId: params.stripeCustomerId,
-        stripeSubscriptionId: params.stripeSubscriptionId,
-        currentPeriodEnd: params.currentPeriodEnd ?? null,
-        priceId: params.priceId ?? null,
-        connectedAccountId: params.connectedAccountId ?? null,
-        features: { ...PRO_FEATURES },
-        updatedAt: now,
-        createdAt: now,
-      },
-      { merge: true },
-    )
+
+  const updateData: any = {
+    uid,
+    email: params.email ?? null,
+    plan: "creator_pro",
+    status: params.status ?? "active",
+    isActive: (params.status ?? "active") === "active" || (params.status ?? "active") === "trialing",
+    currentPeriodEnd: params.currentPeriodEnd ?? null,
+    priceId: params.priceId ?? null,
+    connectedAccountId: params.connectedAccountId ?? null,
+    features: { ...PRO_FEATURES },
+    updatedAt: now,
+    createdAt: now,
+  }
+
+  // Only add Stripe IDs if they exist and are not empty
+  if (params.stripeCustomerId && params.stripeCustomerId.trim()) {
+    updateData.stripeCustomerId = params.stripeCustomerId
+  }
+  if (params.stripeSubscriptionId && params.stripeSubscriptionId.trim()) {
+    updateData.stripeSubscriptionId = params.stripeSubscriptionId
+  }
+
+  await col().doc(uid).set(updateData, { merge: true })
 }
 
 export async function setCreatorProStatus(uid: string, status: MembershipStatus, updates?: Partial<MembershipDoc>) {
