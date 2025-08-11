@@ -1,15 +1,16 @@
 import { NextResponse } from "next/server"
-import { initializeApp, getApps, cert } from "firebase-admin/app"
-import { getFirestore } from "firebase-admin/firestore"
+import { db } from "@/lib/firebase/admin" // Import the db instance
 
 export async function GET() {
   const results = {
     envVars: {
       stripeWebhookSecret: !!process.env.STRIPE_WEBHOOK_SECRET,
-      firebaseServiceAccountKey: !!process.env.FIREBASE_SERVICE_ACCOUNT_KEY,
+      firebaseProjectId: !!process.env.FIREBASE_PROJECT_ID,
+      firebaseClientEmail: !!process.env.FIREBASE_CLIENT_EMAIL,
+      firebasePrivateKey: !!process.env.FIREBASE_PRIVATE_KEY,
     },
     firebase: {
-      sdkInitialized: false,
+      dbInstanceAvailable: false,
       firestoreWriteSuccess: false,
       errorMessage: "",
     },
@@ -20,19 +21,18 @@ export async function GET() {
   }
 
   // Test Firebase Initialization and Write
-  try {
-    if (!getApps().length) {
-      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY!)
-      initializeApp({ credential: cert(serviceAccount) })
+  if (db) {
+    results.firebase.dbInstanceAvailable = true
+    try {
+      const docRef = db.collection("webhook-debug-logs").doc(new Date().toISOString())
+      await docRef.set({ status: "ok", timestamp: new Date() })
+      results.firebase.firestoreWriteSuccess = true
+    } catch (e: any) {
+      results.firebase.errorMessage = e.message
     }
-    results.firebase.sdkInitialized = true
-
-    const db = getFirestore()
-    const docRef = db.collection("webhook-debug-logs").doc(new Date().toISOString())
-    await docRef.set({ status: "ok", timestamp: new Date() })
-    results.firebase.firestoreWriteSuccess = true
-  } catch (e: any) {
-    results.firebase.errorMessage = e.message
+  } else {
+    results.firebase.errorMessage =
+      "Firebase DB instance is not available. Check server logs and environment variables."
   }
 
   // Test importing from the webhook processor
