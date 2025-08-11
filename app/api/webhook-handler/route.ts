@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import Stripe from "stripe"
 import { initializeFirebaseAdmin } from "@/lib/firebase-admin"
-import { getFirestore } from "firebase-admin/firestore"
+import { getFirestore, FieldValue } from "firebase-admin/firestore"
 import { ensureMembership, setCreatorPro } from "@/lib/memberships-service"
 
 type DebugTrace = string[]
@@ -68,6 +68,26 @@ async function upsertMembership(opts: {
   })
 
   debugTrace.push(`memberships/${uid} upserted to creator_pro`)
+
+  // Also update the `users` collection for consistency
+  try {
+    const userRef = initFirestore().collection("users").doc(uid)
+    await userRef.set(
+      {
+        plan: "creator_pro",
+        permissions: {
+          download: true,
+          premium: true,
+        },
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    )
+    debugTrace.push(`users/${uid} also updated to creator_pro`)
+  } catch (e: any) {
+    debugTrace.push(`Failed to update users/${uid}: ${e.message}`)
+    console.error(`Failed to update user doc ${uid}`, e)
+  }
 }
 
 async function handleCheckoutCompleted(stripe: Stripe, event: Stripe.Event, debugTrace: DebugTrace) {

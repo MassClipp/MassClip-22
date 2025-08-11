@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
 import { headers } from "next/headers"
 import { adminDb, auth, isFirebaseAdminInitialized } from "@/lib/firebase-admin"
+import { processCheckoutSessionCompleted } from "@/lib/stripe/webhook-processor"
 
 // Initialize Stripe with the secret key
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -92,9 +93,21 @@ export async function POST(req: NextRequest) {
     }
 
     debugTrace.push(`4. User identified successfully: ${userId}.`)
-    debugTrace.push("5. Updating user membership status in Firestore...")
+    debugTrace.push("5. Updating user data in Firestore...")
 
     try {
+      // --- NEW: Update the 'memberships' collection using the new processor ---
+      debugTrace.push("5a. Calling new membership processor...")
+      // Ensure metadata has the correct key for the processor
+      const sessionForProcessor = {
+        ...session,
+        metadata: { ...session.metadata, userId: userId, buyerUid: userId },
+      }
+      await processCheckoutSessionCompleted(sessionForProcessor)
+      debugTrace.push("✅ New membership processor completed successfully.")
+
+      // --- LEGACY: Update the 'users' collection (for backward compatibility) ---
+      debugTrace.push("5b. Updating legacy 'users' collection...")
       const userRef = adminDb.collection("users").doc(userId)
       await userRef.update({
         plan: "creator_pro",
@@ -103,10 +116,10 @@ export async function POST(req: NextRequest) {
         planStatus: "active",
         upgradedAt: new Date(),
       })
-      debugTrace.push("✅ User membership updated successfully in Firestore.")
+      debugTrace.push("✅ Legacy 'users' collection updated successfully.")
       console.log(`✅ Successfully upgraded user ${userId} to creator_pro.`)
     } catch (error) {
-      const dbError = `❌ Failed to update user in Firestore: ${error instanceof Error ? error.message : "Unknown error"}`
+      const dbError = `❌ Failed to update user data in Firestore: ${error instanceof Error ? error.message : "Unknown error"}`
       console.error(dbError, { userId })
       debugTrace.push(dbError)
       return NextResponse.json({ error: "Failed to update user record.", details: { debugTrace } }, { status: 500 })
