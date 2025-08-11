@@ -792,13 +792,6 @@ export default function ProfilePage() {
                           <span>{new Date(subscriptionData.currentPeriodEnd).toLocaleDateString()}</span>
                         </div>
                       )}
-
-                      {subscriptionData?.stripeCustomerId && (
-                        <div className="flex justify-between">
-                          <span className="text-zinc-400">Customer ID:</span>
-                          <span className="font-mono text-sm">{subscriptionData.stripeCustomerId}</span>
-                        </div>
-                      )}
                     </div>
                   </div>
 
