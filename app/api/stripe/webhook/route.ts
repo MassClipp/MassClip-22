@@ -1,167 +1,119 @@
 import { type NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
-import { db } from "@/lib/firebase-admin"
+import { headers } from "next/headers"
+import { adminDb, auth, isFirebaseAdminInitialized } from "@/lib/firebase-admin"
 
+// Initialize Stripe with the secret key
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
 })
 
-const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET!
+const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
 
-export async function POST(request: NextRequest) {
+// This is the main handler for Stripe webhooks
+export async function POST(req: NextRequest) {
+  const buf = await req.text()
+  const sig = headers().get("Stripe-Signature")!
+
+  let event: Stripe.Event
+  const debugTrace: string[] = []
+
   try {
-    const body = await request.text()
-    const signature = request.headers.get("stripe-signature")!
+    debugTrace.push("1. Verifying webhook signature...")
+    event = stripe.webhooks.constructEvent(buf, sig, webhookSecret)
+    debugTrace.push("✅ Signature verified.")
+  } catch (err) {
+    const errorMessage = `❌ Webhook signature verification failed: ${err instanceof Error ? err.message : "Unknown error"}`
+    console.error(errorMessage)
+    debugTrace.push(errorMessage)
+    return NextResponse.json(
+      { error: "Webhook signature verification failed.", details: { debugTrace } },
+      { status: 400 },
+    )
+  }
 
-    let event: Stripe.Event
+  // Handle the checkout.session.completed event
+  if (event.type === "checkout.session.completed") {
+    const session = event.data.object as Stripe.Checkout.Session
+    debugTrace.push("2. Received checkout.session.completed event.")
+    debugTrace.push(`- Session ID: ${session.id}`)
+
+    let userId: string | null = null
+
+    // --- User Identification Logic ---
+    debugTrace.push("3. Starting user identification process...")
+
+    // Method 1: Check metadata for buyerUid (most reliable)
+    if (session.metadata?.buyerUid) {
+      userId = session.metadata.buyerUid
+      debugTrace.push(`✅ [Method 1] Found user ID in metadata.buyerUid: ${userId}`)
+    } else {
+      debugTrace.push("⚠️ [Method 1] metadata.buyerUid not found.")
+    }
+
+    // Method 2: Check client_reference_id (fallback)
+    if (!userId && session.client_reference_id) {
+      userId = session.client_reference_id
+      debugTrace.push(`✅ [Method 2] Found user ID in client_reference_id: ${userId}`)
+    } else if (!userId) {
+      debugTrace.push("⚠️ [Method 2] client_reference_id not found.")
+    }
+
+    // Method 3: Look up user by email (last resort)
+    if (!userId && session.customer_details?.email) {
+      const email = session.customer_details.email
+      debugTrace.push(`- [Method 3] Attempting to find user by email: ${email}`)
+
+      if (!isFirebaseAdminInitialized()) {
+        const firebaseError = "❌ [Method 3] Firebase Admin SDK is not initialized. Cannot look up user by email."
+        console.error(firebaseError)
+        debugTrace.push(firebaseError)
+      } else {
+        try {
+          const userRecord = await auth.getUserByEmail(email)
+          userId = userRecord.uid
+          debugTrace.push(`✅ [Method 3] Found user by email. User ID: ${userId}`)
+        } catch (error) {
+          const lookupError = `❌ [Method 3] Failed to find user by email: ${error instanceof Error ? error.message : "Unknown error"}`
+          console.error(lookupError)
+          debugTrace.push(lookupError)
+        }
+      }
+    } else if (!userId) {
+      debugTrace.push("⚠️ [Method 3] No email found in session to look up user.")
+    }
+
+    // --- Final Check and Database Update ---
+    if (!userId) {
+      const finalError = "❌ Could not find user ID from any method."
+      console.error(finalError, { session_id: session.id })
+      debugTrace.push(finalError)
+      return NextResponse.json({ error: "Could not find user ID", details: { debugTrace } }, { status: 400 })
+    }
+
+    debugTrace.push(`4. User identified successfully: ${userId}.`)
+    debugTrace.push("5. Updating user membership status in Firestore...")
 
     try {
-      event = stripe.webhooks.constructEvent(body, signature, endpointSecret)
-    } catch (err: any) {
-      console.error("❌ [Webhook] Signature verification failed:", err.message)
-      return NextResponse.json({ error: "Invalid signature" }, { status: 400 })
+      const userRef = adminDb.collection("users").doc(userId)
+      await userRef.update({
+        plan: "creator_pro",
+        stripeCustomerId: session.customer,
+        stripeSubscriptionId: session.subscription,
+        planStatus: "active",
+        upgradedAt: new Date(),
+      })
+      debugTrace.push("✅ User membership updated successfully in Firestore.")
+      console.log(`✅ Successfully upgraded user ${userId} to creator_pro.`)
+    } catch (error) {
+      const dbError = `❌ Failed to update user in Firestore: ${error instanceof Error ? error.message : "Unknown error"}`
+      console.error(dbError, { userId })
+      debugTrace.push(dbError)
+      return NextResponse.json({ error: "Failed to update user record.", details: { debugTrace } }, { status: 500 })
     }
-
-    console.log("✅ [Webhook] Received event:", event.type, event.id)
-
-    if (event.type === "checkout.session.completed") {
-      const session = event.data.object as Stripe.Checkout.Session
-
-      console.log("🔍 [Webhook] Processing checkout session:", session.id)
-      console.log("📋 [Webhook] Session metadata:", session.metadata)
-
-      // Extract metadata
-      const buyerUid = session.metadata?.buyerUid
-      const bundleId = session.metadata?.bundleId || session.metadata?.productBoxId
-      const itemType = session.metadata?.itemType || "bundle"
-
-      if (!buyerUid || !bundleId) {
-        console.error("❌ [Webhook] Missing required metadata:", { buyerUid, bundleId })
-        return NextResponse.json({ error: "Missing metadata" }, { status: 400 })
-      }
-
-      console.log("🔍 [Webhook] Looking up bundle/item:", bundleId)
-
-      // Look up the bundle/item in Firestore
-      let itemData: any = null
-      let creatorData: any = null
-
-      try {
-        // Try bundles collection first
-        const bundleDoc = await db.collection("bundles").doc(bundleId).get()
-        if (bundleDoc.exists) {
-          itemData = { id: bundleDoc.id, ...bundleDoc.data() }
-          console.log("✅ [Webhook] Found bundle:", itemData.title)
-        } else {
-          // Try productBoxes collection
-          const productBoxDoc = await db.collection("productBoxes").doc(bundleId).get()
-          if (productBoxDoc.exists) {
-            itemData = { id: productBoxDoc.id, ...productBoxDoc.data() }
-            console.log("✅ [Webhook] Found product box:", itemData.title)
-          }
-        }
-
-        if (!itemData) {
-          console.error("❌ [Webhook] Item not found:", bundleId)
-          return NextResponse.json({ error: "Item not found" }, { status: 404 })
-        }
-
-        // Look up creator data
-        if (itemData.creatorId) {
-          const creatorDoc = await db.collection("users").doc(itemData.creatorId).get()
-          if (creatorDoc.exists) {
-            creatorData = creatorDoc.data()
-            console.log("✅ [Webhook] Found creator:", creatorData.displayName || creatorData.username)
-          }
-        }
-      } catch (error) {
-        console.error("❌ [Webhook] Error looking up item/creator:", error)
-        return NextResponse.json({ error: "Database lookup failed" }, { status: 500 })
-      }
-
-      // Create purchase record in bundlePurchases collection
-      const purchaseData = {
-        // Purchase identifiers
-        sessionId: session.id,
-        paymentIntentId: session.payment_intent,
-
-        // Buyer information
-        buyerUid: buyerUid,
-        buyerEmail: session.customer_details?.email || "",
-        buyerName: session.customer_details?.name || "",
-
-        // Item information
-        itemId: bundleId,
-        itemType: itemType,
-        bundleId: itemType === "bundle" ? bundleId : null,
-        productBoxId: itemType === "product_box" ? bundleId : null,
-        title: itemData.title || "Untitled",
-        description: itemData.description || "",
-        thumbnailUrl: itemData.thumbnailUrl || itemData.customPreviewThumbnail || "",
-        downloadUrl: itemData.downloadUrl || "",
-        fileSize: itemData.fileSize || 0,
-        fileType: itemData.fileType || "",
-        duration: itemData.duration || 0,
-
-        // Creator information
-        creatorId: itemData.creatorId || "",
-        creatorName: creatorData?.displayName || creatorData?.username || "Unknown Creator",
-        creatorUsername: creatorData?.username || "",
-
-        // Purchase details
-        amount: (session.amount_total || 0) / 100, // Convert from cents
-        currency: session.currency || "usd",
-        status: "completed",
-
-        // Access information
-        accessUrl: itemType === "bundle" ? `/bundles/${bundleId}` : `/product-box/${bundleId}/content`,
-        accessGranted: true,
-        downloadCount: 0,
-
-        // Timestamps
-        purchasedAt: new Date(),
-        createdAt: new Date(),
-
-        // Environment
-        environment: process.env.NODE_ENV === "production" ? "live" : "test",
-      }
-
-      try {
-        // Write to bundlePurchases collection
-        await db.collection("bundlePurchases").doc(session.id).set(purchaseData)
-        console.log("✅ [Webhook] Created purchase record in bundlePurchases:", session.id)
-
-        // Update creator's sales stats
-        if (itemData.creatorId) {
-          const creatorRef = db.collection("users").doc(itemData.creatorId)
-          await creatorRef.update({
-            totalSales: (creatorData?.totalSales || 0) + purchaseData.amount,
-            totalPurchases: (creatorData?.totalPurchases || 0) + 1,
-            lastSaleAt: new Date(),
-          })
-          console.log("✅ [Webhook] Updated creator sales stats")
-        }
-
-        // Update item download/purchase count
-        const itemRef =
-          itemType === "bundle" ? db.collection("bundles").doc(bundleId) : db.collection("productBoxes").doc(bundleId)
-
-        await itemRef.update({
-          downloadCount: (itemData.downloadCount || 0) + 1,
-          lastPurchaseAt: new Date(),
-        })
-        console.log("✅ [Webhook] Updated item stats")
-      } catch (error) {
-        console.error("❌ [Webhook] Error creating purchase record:", error)
-        return NextResponse.json({ error: "Failed to create purchase record" }, { status: 500 })
-      }
-
-      console.log("🎉 [Webhook] Purchase processing completed successfully")
-    }
-
-    return NextResponse.json({ received: true })
-  } catch (error) {
-    console.error("❌ [Webhook] Unexpected error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  } else {
+    debugTrace.push(`- Received unhandled event type: ${event.type}`)
   }
+
+  return NextResponse.json({ received: true, details: { debugTrace } })
 }

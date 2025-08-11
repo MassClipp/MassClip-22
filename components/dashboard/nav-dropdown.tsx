@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { usePathname } from "next/navigation"
 import Link from "next/link"
@@ -35,6 +34,7 @@ interface NavSection {
   items: NavItem[]
 }
 
+// Ensure all sections (including Business and Settings) are present
 const navigationSections: NavSection[] = [
   {
     title: "Main",
@@ -91,16 +91,20 @@ export function NavDropdown() {
         <Button variant="ghost" size="sm" className="gap-2 hover:bg-zinc-800/50 transition-colors duration-200">
           <HamburgerIcon className="h-4 w-4" />
           <ChevronDown className="h-3 w-3 opacity-70" />
+          <span className="sr-only">Open navigation</span>
         </Button>
       </DropdownMenuTrigger>
+
+      {/* Increase z-index and allow vertical overflow so lower sections are reachable */}
       <DropdownMenuContent
-        className="w-56 p-0 bg-zinc-900/95 backdrop-blur-sm border-zinc-800/50 shadow-2xl"
+        className="w-56 p-0 bg-zinc-900/95 backdrop-blur-sm border-zinc-800/50 shadow-2xl overflow-y-auto z-50"
         align="start"
       >
-        <ScrollArea className="max-h-[400px]">
+        {/* Increase the scrollable area height so Business/Settings are visible without clipping */}
+        <ScrollArea className="max-h-[70vh]">
           <div className="p-2">
             {navigationSections.map((section, sectionIndex) => (
-              <div key={section.title}>
+              <div key={section.title} aria-label={section.title}>
                 <div className="px-2 py-1.5 text-xs font-semibold text-zinc-400 uppercase tracking-wider">
                   {section.title}
                 </div>

@@ -57,16 +57,19 @@ export default function UpgradeButton({ children, className, onClick, navigateOn
         console.error("Failed to log payment click:", error)
       }
 
-      // Create checkout session
-      const response = await fetch("/api/create-checkout-session", {
+      // Get idToken for secure authentication on the backend
+      const idToken = await user?.getIdToken?.()
+      if (!idToken) {
+        throw new Error("Could not get user authentication token.")
+      }
+
+      // Create checkout session using the membership endpoint for consistency
+      const response = await fetch("/api/stripe/checkout/membership", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          userId: user?.uid,
-          userEmail: user?.email,
-        }),
+        body: JSON.stringify({ idToken }),
       })
 
       if (!response.ok) {
@@ -75,7 +78,11 @@ export default function UpgradeButton({ children, className, onClick, navigateOn
       }
 
       const data = await response.json()
-      router.push(data.url)
+      if (data.url) {
+        router.push(data.url)
+      } else {
+        throw new Error("Checkout URL not received from server.")
+      }
     } catch (error) {
       console.error("Error creating checkout session:", error)
       // If there's an error, redirect to the membership plans page as a fallback

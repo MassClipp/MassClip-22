@@ -3,6 +3,7 @@ import { getApps, initializeApp, cert } from "firebase-admin/app"
 import { getAuth } from "firebase-admin/auth"
 import { UserTrackingService } from "@/lib/user-tracking-service"
 
+// Initialize Firebase Admin once
 function initAdmin() {
   if (!getApps().length) {
     const serviceAccount = {
@@ -22,7 +23,7 @@ function initAdmin() {
 }
 initAdmin()
 
-export async function GET(req: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
     const authHeader = req.headers.get("authorization") || ""
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null
@@ -33,11 +34,12 @@ export async function GET(req: NextRequest) {
     const auth = getAuth()
     const decoded = await auth.verifyIdToken(token)
     const uid = decoded.uid
+    const email = decoded.email || ""
 
-    const info = await UserTrackingService.getUserTierInfo(uid)
-    return NextResponse.json({ success: true, tier: info })
-  } catch (err) {
-    console.error("❌ [get-tier-info] Error:", err)
-    return NextResponse.json({ error: "Failed to get tier info" }, { status: 500 })
+    const { ensured, reason } = await UserTrackingService.ensureFreeUserForNonPro(uid, email)
+    return NextResponse.json({ success: true, ensured, reason })
+  } catch (err: any) {
+    console.error("❌ [ensure-free-user] Error:", err)
+    return NextResponse.json({ error: "Failed to ensure free user" }, { status: 500 })
   }
 }

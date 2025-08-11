@@ -1,231 +1,288 @@
 import { NextResponse } from "next/server"
 import Stripe from "stripe"
 import { initializeFirebaseAdmin } from "@/lib/firebase-admin"
-import { getFirestore, type FirebaseFirestore } from "firebase-admin/firestore"
+import { getFirestore } from "firebase-admin/firestore"
+import { ensureMembership, setCreatorPro } from "@/lib/memberships-service"
 
-// Initialize Firebase Admin outside the handler for better performance
-let firebaseInitialized = false
-let db: FirebaseFirestore | null = null
+type DebugTrace = string[]
 
-function initFirebase() {
-  if (!firebaseInitialized) {
-    try {
-      initializeFirebaseAdmin()
-      db = getFirestore()
-      firebaseInitialized = true
-      console.log("🔥 Firebase initialized successfully in webhook handler")
-    } catch (error) {
-      console.error("🔥 Firebase initialization error:", error)
-      throw error
+function getStripe(): Stripe {
+  const key = process.env.STRIPE_SECRET_KEY
+  if (!key) throw new Error("Missing STRIPE_SECRET_KEY")
+  return new Stripe(key, { apiVersion: "2023-10-16" })
+}
+
+let initialized = false
+function initFirestore() {
+  if (!initialized) {
+    initializeFirebaseAdmin()
+    initialized = true
+    console.log("🔥 Firebase initialized in webhook handler")
+  }
+  return getFirestore()
+}
+
+function firstNonEmpty(...vals: Array<string | null | undefined>): string | null {
+  for (const v of vals) {
+    if (typeof v === "string" && v.trim().length > 0) return v
+  }
+  return null
+}
+
+async function upsertMembership(opts: {
+  uid: string
+  email?: string | null
+  stripeCustomerId?: string | null
+  stripeSubscriptionId?: string | null
+  priceId?: string | null
+  currentPeriodEnd?: Date | null
+  status?: "active" | "trialing" | "past_due" | "canceled"
+  source: string
+  debugTrace: DebugTrace
+}) {
+  const {
+    uid,
+    email,
+    stripeCustomerId,
+    stripeSubscriptionId,
+    priceId,
+    currentPeriodEnd,
+    status = "active",
+    source,
+    debugTrace,
+  } = opts
+
+  debugTrace.push(
+    `upsertMembership(uid=${uid}, status=${status}, customer=${stripeCustomerId ?? ""}, sub=${stripeSubscriptionId ?? ""}, price=${priceId ?? ""}) [${source}]`,
+  )
+
+  // Ensure the doc exists, then set creator_pro fields
+  await ensureMembership(uid, email ?? undefined)
+  await setCreatorPro(uid, {
+    email: email ?? undefined,
+    stripeCustomerId: String(stripeCustomerId ?? ""),
+    stripeSubscriptionId: String(stripeSubscriptionId ?? ""),
+    currentPeriodEnd: currentPeriodEnd ?? undefined,
+    priceId: priceId ?? undefined,
+    status,
+  })
+
+  debugTrace.push(`memberships/${uid} upserted to creator_pro`)
+}
+
+async function handleCheckoutCompleted(stripe: Stripe, event: Stripe.Event, debugTrace: DebugTrace) {
+  const session = event.data.object as Stripe.Checkout.Session
+  debugTrace.push(`Handling checkout.session.completed: ${session.id}`)
+
+  const md = session.metadata || {}
+  const uid =
+    firstNonEmpty((md as any).buyerUid, (md as any).firebaseUid, (md as any).userId) ||
+    firstNonEmpty(session.client_reference_id || undefined)
+  const email = firstNonEmpty((md as any).buyerEmail, session.customer_email || undefined)
+  const subscriptionId =
+    (typeof session.subscription === "string" ? session.subscription : session.subscription?.id) || null
+  const customerId = (typeof session.customer === "string" ? session.customer : session.customer?.id) || null
+  const priceId = firstNonEmpty((md as any).priceId)
+
+  if (!uid) {
+    debugTrace.push("No uid resolved from session metadata/client_reference_id")
+    return NextResponse.json({ error: "Could not find user ID", debugTrace }, { status: 400 })
+  }
+
+  await upsertMembership({
+    uid,
+    email,
+    stripeCustomerId: customerId,
+    stripeSubscriptionId: subscriptionId,
+    priceId,
+    currentPeriodEnd: null,
+    status: "active",
+    source: "checkout.session.completed",
+    debugTrace,
+  })
+
+  return NextResponse.json({ received: true, debugTrace })
+}
+
+async function handleInvoicePaid(stripe: Stripe, event: Stripe.Event, debugTrace: DebugTrace) {
+  const invoice = event.data.object as Stripe.Invoice
+  debugTrace.push(`Handling invoice.payment_succeeded: ${invoice.id}`)
+
+  const subscriptionId =
+    (typeof invoice.subscription === "string" ? invoice.subscription : invoice.subscription?.id) || null
+  const customerId = (typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id) || null
+  let email = firstNonEmpty(invoice.customer_email || undefined)
+
+  // Try to resolve uid and priceId from invoice line metadata
+  let uid: string | null = null
+  let priceId: string | null = null
+  for (const line of invoice.lines?.data || []) {
+    const buyerUid = firstNonEmpty(
+      (line.metadata as any)?.buyerUid,
+      (line.metadata as any)?.firebaseUid,
+      (line.metadata as any)?.userId,
+    )
+    if (buyerUid && !uid) uid = buyerUid
+
+    // attempt various line shapes for price id
+    const p = (line as any)?.price?.id || (line as any)?.pricing?.price_details?.price
+    if (typeof p === "string" && !priceId) priceId = p
+
+    if (uid && priceId) break
+  }
+
+  // Some APIs expose parent.subscription_details.metadata in the invoice
+  if (!uid) {
+    const parent = (invoice as any).parent
+    const subMeta = parent?.subscription_details?.metadata
+    if (subMeta) {
+      uid = firstNonEmpty(subMeta.buyerUid, subMeta.firebaseUid, subMeta.userId)
+      if (uid) debugTrace.push(`Found uid from invoice.parent.subscription_details.metadata: ${uid}`)
     }
   }
-  return db
+
+  // If still missing, load the subscription and read metadata/email/period
+  let currentPeriodEnd: Date | null = null
+  if (subscriptionId && (!uid || !email || !priceId)) {
+    try {
+      const sub = await stripe.subscriptions.retrieve(subscriptionId)
+      if (!uid) {
+        uid = firstNonEmpty(
+          (sub.metadata as any)?.buyerUid,
+          (sub.metadata as any)?.firebaseUid,
+          (sub.metadata as any)?.userId,
+        )
+      }
+      if (!priceId) priceId = sub.items?.data?.[0]?.price?.id ?? null
+      if (sub.current_period_end) currentPeriodEnd = new Date(sub.current_period_end * 1000)
+
+      if (!email) {
+        const custId = typeof sub.customer === "string" ? sub.customer : sub.customer?.id
+        if (custId) {
+          const cust = await stripe.customers.retrieve(custId)
+          if (!("deleted" in cust)) email = firstNonEmpty(cust.email || undefined)
+        }
+      }
+    } catch (e: any) {
+      debugTrace.push(`Failed to retrieve subscription ${subscriptionId}: ${e.message}`)
+    }
+  }
+
+  if (!uid) {
+    debugTrace.push("No uid resolved from invoice/subscription")
+    return NextResponse.json({ error: "Could not find user ID", debugTrace }, { status: 400 })
+  }
+
+  await upsertMembership({
+    uid,
+    email,
+    stripeCustomerId: customerId,
+    stripeSubscriptionId: subscriptionId,
+    priceId,
+    currentPeriodEnd,
+    status: "active",
+    source: "invoice.payment_succeeded",
+    debugTrace,
+  })
+
+  return NextResponse.json({ received: true, debugTrace })
+}
+
+async function handleSubscriptionCreated(stripe: Stripe, event: Stripe.Event, debugTrace: DebugTrace) {
+  const sub = event.data.object as Stripe.Subscription
+  debugTrace.push(`Handling customer.subscription.created: ${sub.id}`)
+
+  const md = sub.metadata || {}
+  const uid = firstNonEmpty((md as any)?.buyerUid, (md as any)?.firebaseUid, (md as any)?.userId)
+  const priceId = sub.items?.data?.[0]?.price?.id ?? null
+  const customerId = (typeof sub.customer === "string" ? sub.customer : sub.customer?.id) || null
+  const currentPeriodEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000) : null
+
+  let email: string | null = null
+  if (customerId) {
+    try {
+      const cust = await stripe.customers.retrieve(customerId)
+      if (!("deleted" in cust)) email = firstNonEmpty(cust.email || undefined)
+    } catch {
+      // ignore
+    }
+  }
+
+  if (!uid) {
+    debugTrace.push("No uid on subscription.metadata")
+    return NextResponse.json({ error: "Could not find user ID", debugTrace }, { status: 400 })
+  }
+
+  await upsertMembership({
+    uid,
+    email,
+    stripeCustomerId: customerId,
+    stripeSubscriptionId: sub.id,
+    priceId,
+    currentPeriodEnd,
+    status: (sub.status as any) ?? "active",
+    source: "customer.subscription.created",
+    debugTrace,
+  })
+
+  return NextResponse.json({ received: true, debugTrace })
 }
 
 export async function POST(request: Request) {
-  console.log("------------ 🪝 WEBHOOK HANDLER START ------------")
-
+  const debugTrace: DebugTrace = []
   try {
-    // Check for required environment variables
-    if (!process.env.STRIPE_SECRET_KEY) {
-      console.error("🪝 WEBHOOK ERROR: Missing STRIPE_SECRET_KEY")
-      return NextResponse.json({ error: "Server configuration error" }, { status: 500 })
-    }
-
     if (!process.env.STRIPE_WEBHOOK_SECRET) {
-      console.error("🪝 WEBHOOK ERROR: Missing STRIPE_WEBHOOK_SECRET")
-      return NextResponse.json({ error: "Server configuration error" }, { status: 500 })
+      debugTrace.push("Missing STRIPE_WEBHOOK_SECRET")
+      return NextResponse.json({ error: "Server configuration error", debugTrace }, { status: 500 })
     }
 
-    // Initialize Firebase
-    const firestore = initFirebase()
+    const db = initFirestore()
+    const stripe = getStripe()
 
-    // Get the raw request body as text
     const payload = await request.text()
     const sig = request.headers.get("stripe-signature")
-
     if (!sig) {
-      console.error("🪝 WEBHOOK ERROR: Missing stripe-signature header")
-      return NextResponse.json({ error: "Missing stripe-signature header" }, { status: 400 })
+      debugTrace.push("Missing stripe-signature header")
+      return NextResponse.json({ error: "Missing stripe-signature header", debugTrace }, { status: 400 })
     }
 
-    // Initialize Stripe
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-      apiVersion: "2023-10-16",
-    })
-
-    // Verify the webhook signature
     let event: Stripe.Event
     try {
       event = stripe.webhooks.constructEvent(payload, sig, process.env.STRIPE_WEBHOOK_SECRET)
-      console.log(`🪝 WEBHOOK: Received event type: ${event.type}`)
+      debugTrace.push(`Verified signature for event ${event.id} (${event.type})`)
     } catch (err: any) {
-      console.error(`🪝 WEBHOOK ERROR: Signature verification failed: ${err.message}`)
-      return NextResponse.json({ error: `Webhook signature verification failed: ${err.message}` }, { status: 400 })
+      debugTrace.push(`Signature verification failed: ${err.message}`)
+      return NextResponse.json(
+        { error: `Webhook signature verification failed: ${err.message}`, debugTrace },
+        { status: 400 },
+      )
     }
 
-    // Store the raw event for debugging
+    // Store raw event for diagnostics (best-effort)
     try {
-      await firestore.collection("stripeWebhookEvents").add({
+      await db.collection("stripeWebhookEvents").add({
         eventType: event.type,
         eventId: event.id,
-        timestamp: new Date(),
+        receivedAt: new Date(),
         rawEvent: JSON.parse(payload),
       })
-      console.log(`🪝 WEBHOOK: Stored raw event ${event.id} in Firestore`)
-    } catch (error) {
-      console.error("🪝 WEBHOOK ERROR: Failed to store raw event:", error)
-      // Continue anyway, as this is not critical
+    } catch (e) {
+      console.warn("Failed to store raw event:", e)
     }
 
-    // Handle the event based on its type
-    if (event.type === "checkout.session.completed") {
-      const session = event.data.object as Stripe.Checkout.Session
-      console.log(`🪝 WEBHOOK: Processing checkout.session.completed for session ${session.id}`)
-
-      // Try to get the user ID from various sources
-      let userId = null
-      let email = null
-
-      // Method 1: Try to get from session metadata
-      if (session.metadata && session.metadata.firebaseUid) {
-        userId = session.metadata.firebaseUid
-        email = session.metadata.email || session.customer_email
-        console.log(`🪝 WEBHOOK: Found user ID ${userId} in session metadata`)
-      }
-      // Method 2: Try to get from stored session in Firestore
-      else {
-        try {
-          const sessionDoc = await firestore.collection("stripeCheckoutSessions").doc(session.id).get()
-          if (sessionDoc.exists) {
-            const sessionData = sessionDoc.data()
-            userId = sessionData?.userId
-            email = sessionData?.email
-            console.log(`🪝 WEBHOOK: Found user ID ${userId} from stored session in Firestore`)
-          }
-        } catch (error) {
-          console.error("🪝 WEBHOOK ERROR: Failed to get session from Firestore:", error)
-        }
-      }
-
-      // If we still don't have a user ID, try to find by customer ID
-      if (!userId && session.customer) {
-        try {
-          const customerId = typeof session.customer === "string" ? session.customer : session.customer.id
-          const userQuery = await firestore
-            .collection("users")
-            .where("stripeCustomerId", "==", customerId)
-            .limit(1)
-            .get()
-
-          if (!userQuery.empty) {
-            userId = userQuery.docs[0].id
-            console.log(`🪝 WEBHOOK: Found user ID ${userId} by customer ID ${customerId}`)
-          }
-        } catch (error) {
-          console.error("🪝 WEBHOOK ERROR: Failed to query user by customer ID:", error)
-        }
-      }
-
-      // If we still don't have a user ID, try to find by email
-      if (!userId && email) {
-        try {
-          const userQuery = await firestore.collection("users").where("email", "==", email).limit(1).get()
-
-          if (!userQuery.empty) {
-            userId = userQuery.docs[0].id
-            console.log(`🪝 WEBHOOK: Found user ID ${userId} by email ${email}`)
-          }
-        } catch (error) {
-          console.error("🪝 WEBHOOK ERROR: Failed to query user by email:", error)
-        }
-      }
-
-      // If we have a user ID, update their permissions
-      if (userId) {
-        try {
-          // First, check if the user exists
-          const userDoc = await firestore.collection("users").doc(userId).get()
-
-          if (!userDoc.exists) {
-            console.error(`🪝 WEBHOOK ERROR: User ${userId} does not exist in Firestore`)
-            return NextResponse.json({ error: "User not found" }, { status: 404 })
-          }
-
-          // Update user permissions in Firestore - USING creator_pro with underscore for consistency
-          await firestore
-            .collection("users")
-            .doc(userId)
-            .update({
-              plan: "creator_pro", // CHANGED: Using underscore instead of hyphen
-              permissions: {
-                download: true,
-                premium: true,
-              },
-              updatedAt: new Date(),
-              paymentStatus: "active",
-            })
-
-          console.log(`🪝 WEBHOOK: Updated permissions for user ${userId} to creator_pro`)
-
-          // Store the subscription info
-          if (session.subscription) {
-            const subscriptionId =
-              typeof session.subscription === "string" ? session.subscription : session.subscription.id
-
-            await firestore.collection("users").doc(userId).collection("subscriptions").doc(subscriptionId).set({
-              subscriptionId,
-              status: "active",
-              createdAt: new Date(),
-              plan: "creator_pro", // CHANGED: Using underscore instead of hyphen
-              customerId: session.customer,
-            })
-
-            console.log(`🪝 WEBHOOK: Stored subscription ${subscriptionId} for user ${userId}`)
-          }
-
-          // Log the successful payment
-          await firestore.collection("payments").add({
-            userId,
-            email,
-            amount: session.amount_total,
-            currency: session.currency,
-            status: "completed",
-            sessionId: session.id,
-            timestamp: new Date(),
-          })
-
-          console.log(`🪝 WEBHOOK: Logged payment for user ${userId}`)
-        } catch (error) {
-          console.error(`🪝 WEBHOOK ERROR: Failed to update user ${userId}:`, error)
-          return NextResponse.json(
-            { error: `Failed to update user permissions: ${error instanceof Error ? error.message : "Unknown error"}` },
-            { status: 500 },
-          )
-        }
-      } else {
-        console.error("🪝 WEBHOOK ERROR: Could not find user ID from session or customer")
-        return NextResponse.json({ error: "Could not find user ID" }, { status: 400 })
-      }
+    switch (event.type) {
+      case "checkout.session.completed":
+        return await handleCheckoutCompleted(stripe, event, debugTrace)
+      case "invoice.payment_succeeded":
+        return await handleInvoicePaid(stripe, event, debugTrace)
+      case "customer.subscription.created":
+        return await handleSubscriptionCreated(stripe, event, debugTrace)
+      default:
+        debugTrace.push(`No-op for event ${event.type}`)
+        return NextResponse.json({ received: true, debugTrace })
     }
-    // Handle subscription updated/deleted events if needed
-    else if (event.type === "customer.subscription.updated") {
-      // Handle subscription updates
-      console.log(`🪝 WEBHOOK: Received customer.subscription.updated event`)
-      // Implementation omitted for brevity
-    } else if (event.type === "customer.subscription.deleted") {
-      // Handle subscription cancellations
-      console.log(`🪝 WEBHOOK: Received customer.subscription.deleted event`)
-      // Implementation omitted for brevity
-    }
-
-    console.log("------------ 🪝 WEBHOOK HANDLER END ------------")
-    return NextResponse.json({ received: true })
-  } catch (error) {
-    console.error("🪝 WEBHOOK ERROR:", error)
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown error in webhook handler" },
-      { status: 500 },
-    )
+  } catch (error: any) {
+    console.error("Webhook error:", error)
+    return NextResponse.json({ error: error?.message || "Unknown error" }, { status: 500 })
   }
 }

@@ -2,20 +2,50 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { CheckCircle2, Crown, Shield } from 'lucide-react'
+import { CheckCircle2, Crown, Shield } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { useAuth } from "@/contexts/auth-context"
 import { useUserPlan } from "@/hooks/use-user-plan"
+
+const TEMP_PAYMENT_LINK = "https://buy.stripe.com/aFa3cvbKsgRvexnfxdeIw05"
 
 export default function MembershipPage() {
   const router = useRouter()
   const { user } = useAuth()
   const { isProUser, loading } = useUserPlan()
   const [selectedPlan, setSelectedPlan] = useState<"free" | "pro">(isProUser ? "pro" : "free")
+  const [isRedirecting, setIsRedirecting] = useState(false)
 
-  const handleUpgradeClick = () => {
-    window.open("https://buy.stripe.com/14A6oHeWEeJngFv4SzeIw04", "_blank")
+  const handleUpgradeClick = async () => {
+    try {
+      setIsRedirecting(true)
+      const idToken = await user?.getIdToken?.()
+      const res = await fetch("/api/stripe/checkout/membership", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken }),
+      })
+
+      if (!res.ok) {
+        console.warn("[Membership] Failed to create checkout session, falling back to payment link.")
+        window.open(TEMP_PAYMENT_LINK, "_blank")
+        setIsRedirecting(false)
+        return
+      }
+
+      const data = (await res.json()) as { url?: string }
+      if (data?.url) {
+        window.location.href = data.url
+      } else {
+        window.open(TEMP_PAYMENT_LINK, "_blank")
+      }
+    } catch (err) {
+      console.error("[Membership] Error starting checkout:", err)
+      window.open(TEMP_PAYMENT_LINK, "_blank")
+    } finally {
+      setIsRedirecting(false)
+    }
   }
 
   return (
@@ -165,11 +195,12 @@ export default function MembershipPage() {
                 Manage Subscription
               </Button>
             ) : (
-              <Button 
+              <Button
                 onClick={handleUpgradeClick}
+                disabled={isRedirecting}
                 className="w-full bg-red-600 hover:bg-red-700 text-white"
               >
-                Upgrade to Creator Pro
+                {isRedirecting ? "Redirecting..." : "Upgrade to Creator Pro"}
               </Button>
             )}
           </div>
@@ -184,8 +215,8 @@ export default function MembershipPage() {
             <div className="p-6">
               <h4 className="mb-3 text-lg font-medium text-white">What are bundle video limits?</h4>
               <p className="text-zinc-400">
-                Free users can include up to 10 videos in each bundle they create. Creator Pro users have no limits 
-                and can include as many videos as they want in their bundles, perfect for comprehensive content packages.
+                Free users can include up to 10 videos in each bundle they create. Creator Pro users have no limits and
+                can include as many videos as they want in their bundles, perfect for comprehensive content packages.
               </p>
             </div>
           </Card>
@@ -194,8 +225,9 @@ export default function MembershipPage() {
             <div className="p-6">
               <h4 className="mb-3 text-lg font-medium text-white">What are platform fees?</h4>
               <p className="text-zinc-400">
-                Platform fees are charged on each sale to cover payment processing, hosting, and platform maintenance. 
-                Free users pay 20% while Creator Pro users enjoy a reduced 10% fee, helping you keep more of your earnings.
+                Platform fees are charged on each sale to cover payment processing, hosting, and platform maintenance.
+                Free users pay 20% while Creator Pro users enjoy a reduced 10% fee, helping you keep more of your
+                earnings.
               </p>
             </div>
           </Card>
@@ -205,16 +237,8 @@ export default function MembershipPage() {
               <h4 className="mb-3 text-lg font-medium text-white">Can I cancel my subscription?</h4>
               <p className="text-zinc-400">
                 Yes, you can cancel your subscription anytime. You'll continue to have access until the end of your
-                billing period, after which you'll return to the Free plan with bundle video limits and 20% platform fees.
-              </p>
-            </div>
-          </Card>
-
-          <Card className="overflow-hidden border-zinc-800/50 bg-gradient-to-b from-zinc-900/50 to-black/70 transition-all duration-300 hover:border-zinc-700/70">
-            <div className="p-6">
-              <h4 className="mb-3 text-lg font-medium text-white">What payment methods do you accept?</h4>
-              <p className="text-zinc-400">
-                We accept all major credit cards, including Visa, Mastercard, and American Express.
+                billing period, after which you'll return to the Free plan with bundle video limits and 20% platform
+                fees.
               </p>
             </div>
           </Card>
@@ -223,8 +247,7 @@ export default function MembershipPage() {
             <div className="p-6">
               <h4 className="mb-3 text-lg font-medium text-white">How do I get started?</h4>
               <p className="text-zinc-400">
-                Simply click the "Upgrade to Creator Pro" button, complete the checkout process, and you'll have
-                immediate access to all Creator Pro features including unlimited videos per bundle and the reduced 10% platform fee.
+                Click "Upgrade to Creator Pro", complete checkout, and your membership will be activated automatically.
               </p>
             </div>
           </Card>
