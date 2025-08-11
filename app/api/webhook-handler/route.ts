@@ -53,7 +53,7 @@ async function upsertMembership(opts: {
   } = opts
 
   debugTrace.push(
-    `upsertMembership(uid=${uid}, status=${status}, customer=${stripeCustomerId ?? ""}, sub=${stripeSubscriptionId ?? ""}, price=${priceId ?? ""}) [${source}]`,
+    `upsertMembership(uid=${uid}, status=${status}, customer=${stripeCustomerId ?? "null"}, sub=${stripeSubscriptionId ?? "null"}, price=${priceId ?? "null"}) [${source}]`,
   )
 
   // Ensure the doc exists, then set creator_pro fields
@@ -62,19 +62,18 @@ async function upsertMembership(opts: {
   if (stripeCustomerId && stripeSubscriptionId) {
     await setCreatorPro(uid, {
       email: email ?? undefined,
-      stripeCustomerId,
-      stripeSubscriptionId,
+      stripeCustomerId: stripeCustomerId,
+      stripeSubscriptionId: stripeSubscriptionId,
       currentPeriodEnd: currentPeriodEnd,
       priceId: priceId ?? undefined,
       status,
     })
+    debugTrace.push(`memberships/${uid} upserted to creator_pro with Stripe IDs`)
   } else {
     debugTrace.push(
-      `Warning: Missing Stripe IDs - customer: ${stripeCustomerId}, subscription: ${stripeSubscriptionId}`,
+      `Skipping setCreatorPro - missing Stripe IDs (customer: ${stripeCustomerId}, sub: ${stripeSubscriptionId})`,
     )
   }
-
-  debugTrace.push(`memberships/${uid} upserted to creator_pro`)
 
   // Also update the `users` collection for consistency
   try {
