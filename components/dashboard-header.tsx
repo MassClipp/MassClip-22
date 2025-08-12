@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import UserDropdown from "@/components/user-dropdown"
 import Logo from "@/components/logo"
 import { useAuth } from "@/contexts/auth-context"
+import { useUserPlan } from "@/hooks/use-user-plan"
 
 interface DashboardHeaderProps {
   initialSearchQuery?: string
@@ -19,6 +20,7 @@ export default function DashboardHeader({ initialSearchQuery = "" }: DashboardHe
   const router = useRouter()
   const pathname = usePathname()
   const { user } = useAuth()
+  const { isProUser } = useUserPlan()
 
   // Only show search on explore page
   const showSearch = pathname === "/dashboard/explore"
@@ -51,6 +53,20 @@ export default function DashboardHeader({ initialSearchQuery = "" }: DashboardHe
         <div className="flex h-16 items-center justify-between">
           {/* Logo */}
           <div className="flex items-center gap-4">
+            {isProUser && (
+              <div className="relative">
+                <div className="absolute -top-2 -left-2 z-10">
+                  <div className="relative">
+                    {/* Diamond shape with gradient */}
+                    <div className="w-6 h-6 bg-gradient-to-br from-yellow-400 via-orange-500 to-red-500 transform rotate-45 shadow-lg border border-yellow-300/50"></div>
+                    {/* Inner diamond for depth */}
+                    <div className="absolute top-1 left-1 w-4 h-4 bg-gradient-to-br from-yellow-300 to-orange-400 transform rotate-45"></div>
+                    {/* Sparkle effect */}
+                    <div className="absolute -top-1 -right-1 w-2 h-2 bg-white rounded-full opacity-80 animate-pulse"></div>
+                  </div>
+                </div>
+              </div>
+            )}
             <Logo href="/dashboard" size="sm" />
           </div>
 

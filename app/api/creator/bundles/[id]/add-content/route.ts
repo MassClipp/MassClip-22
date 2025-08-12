@@ -90,6 +90,7 @@ async function getTierInfoSafe(uid: string): Promise<{ maxVideosPerBundle: numbe
 
 async function buildDetailedItemsForIds(idsToAdd: string[]) {
   const results: any[] = []
+  const errors: string[] = [] // Track specific validation errors
 
   for (const contentId of idsToAdd) {
     try {
@@ -112,14 +113,18 @@ async function buildDetailedItemsForIds(idsToAdd: string[]) {
       }
 
       if (!uploadData) {
-        console.warn(`⚠️ [Add Content] Skipping content ${contentId}: not found in uploads or creatorUploads.`)
+        const error = `Content ${contentId} not found in uploads or creatorUploads collections`
+        console.warn(`⚠️ [Add Content] ${error}`)
+        errors.push(error) // Track specific error
         continue
       }
 
       const fileUrl =
         uploadData.fileUrl || uploadData.downloadUrl || uploadData.publicUrl || uploadData.url || uploadData.sourceUrl
       if (!fileUrl || typeof fileUrl !== "string") {
-        console.warn(`⚠️ [Add Content] Skipping content ${contentId}: invalid fileUrl.`)
+        const error = `Content ${contentId} has invalid or missing fileUrl`
+        console.warn(`⚠️ [Add Content] ${error}`)
+        errors.push(error) // Track specific error
         continue
       }
 
@@ -181,11 +186,13 @@ async function buildDetailedItemsForIds(idsToAdd: string[]) {
         createdAt: new Date(),
       })
     } catch (e) {
-      console.error("❌ [Add Content] Failed processing content:", contentId, e)
+      const error = `Failed processing content ${contentId}: ${e instanceof Error ? e.message : "Unknown error"}`
+      console.error("❌ [Add Content] " + error, e)
+      errors.push(error) // Track specific error
     }
   }
 
-  return results
+  return { results, errors } // Return both results and errors
 }
 
 function convertDatesToTimestamps(obj: any): any {
@@ -340,10 +347,32 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     })
 
     // Build detailed items and write productBoxContent only if missing
-    const detailedToAdd: any[] = await buildDetailedItemsForIds(idsToAdd)
+    const { results: detailedToAdd, errors: validationErrors } = await buildDetailedItemsForIds(idsToAdd) // Get both results and errors
 
     if (detailedToAdd.length === 0 && !duplicatesSelected) {
-      return NextResponse.json({ error: "No valid content items found" }, { status: 400 })
+      const errorMessage =
+        validationErrors.length > 0
+          ? `Content validation failed: ${validationErrors.join("; ")}`
+          : "No valid content items found"
+
+      console.error("❌ [Add Content] Content validation failed:", {
+        inputIds: idsToAdd,
+        validationErrors,
+        duplicatesSelected,
+      })
+
+      return NextResponse.json(
+        {
+          error: errorMessage,
+          details: validationErrors,
+          debug: {
+            inputIds: idsToAdd,
+            validationErrors,
+            duplicatesSelected,
+          },
+        },
+        { status: 400 },
+      )
     }
 
     // First, normalize existing detailed items to have consistent uploadId field
@@ -446,6 +475,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         membershipFound: tier.maxVideosPerBundle !== 10, // If not 10, membership was found
         isUnlimited: tier.maxVideosPerBundle === null,
         tierInfo: tier,
+        validationErrors: validationErrors.length > 0 ? validationErrors : undefined, // Include validation errors in debug
       },
     })
   } catch (error: any) {
