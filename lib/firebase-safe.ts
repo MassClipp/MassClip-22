@@ -29,7 +29,8 @@ const getFirebaseConfig = () => {
   const usingRealConfig =
     !!process.env.NEXT_PUBLIC_FIREBASE_API_KEY &&
     !!process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN &&
-    !!process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    !!process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID &&
+    process.env.NEXT_PUBLIC_FIREBASE_API_KEY !== "demo-api-key"
 
   return { config, usingRealConfig }
 }
@@ -66,6 +67,14 @@ export function initializeFirebaseSafe() {
     firebaseAuth = getAuth(firebaseApp)
     firebaseDb = getFirestore(firebaseApp)
     firebaseStorage = getStorage(firebaseApp)
+
+    // Configure auth settings for better popup handling
+    if (firebaseAuth && isConfigured) {
+      // Set custom settings for better popup handling
+      firebaseAuth.settings = {
+        appVerificationDisabledForTesting: false,
+      }
+    }
 
     if (!isConfigured) {
       initializationError = "Using demo configuration - authentication features limited"

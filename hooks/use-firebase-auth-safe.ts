@@ -7,6 +7,8 @@ import {
   signOut,
   onAuthStateChanged,
   GoogleAuthProvider,
+  signInWithRedirect,
+  getRedirectResult,
   signInWithPopup,
   sendPasswordResetEmail,
   type User,
@@ -78,6 +80,26 @@ export function useFirebaseAuthSafe() {
       return false
     }
   }, [])
+
+  // Handle redirect result on page load
+  useEffect(() => {
+    if (!auth || !isConfigured) return
+
+    const handleRedirectResult = async () => {
+      try {
+        const result = await getRedirectResult(auth)
+        if (result) {
+          console.log("Google redirect sign-in successful")
+          await setServerSession(result.user)
+        }
+      } catch (error: any) {
+        console.error("Redirect result error:", error)
+        setConfigError(error.message)
+      }
+    }
+
+    handleRedirectResult()
+  }, [setServerSession])
 
   // Set up auth state listener
   useEffect(() => {
@@ -183,7 +205,7 @@ export function useFirebaseAuthSafe() {
     }
   }
 
-  // Sign in with Google
+  // Sign in with Google - using redirect instead of popup
   const signInWithGoogle = async (username?: string, displayName?: string) => {
     if (!auth || !db || !isConfigured) {
       return { success: false, error: "Firebase not configured", demo: true }
@@ -201,7 +223,27 @@ export function useFirebaseAuthSafe() {
       }
 
       const provider = new GoogleAuthProvider()
-      const userCredential = await signInWithPopup(auth, provider)
+      provider.addScope("email")
+      provider.addScope("profile")
+
+      // Add custom parameters to avoid popup issues
+      provider.setCustomParameters({
+        prompt: "select_account",
+      })
+
+      let userCredential
+
+      try {
+        // Try popup first
+        userCredential = await signInWithPopup(auth, provider)
+      } catch (popupError: any) {
+        console.log("Popup failed, trying redirect:", popupError.message)
+
+        // If popup fails, use redirect
+        await signInWithRedirect(auth, provider)
+        return { success: true, redirect: true }
+      }
+
       const user = userCredential.user
 
       // Check if this is a new user

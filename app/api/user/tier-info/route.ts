@@ -1,23 +1,23 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse, type NextRequest } from "next/server"
+import { getAuthenticatedUser } from "@/lib/firebase-admin"
 import { getUserTierInfo } from "@/lib/user-tier-service"
-import { auth } from "@/lib/firebase-admin"
+
+export const runtime = "nodejs"
 
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get("authorization")
-    if (!authHeader?.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const idToken = authHeader.split("Bearer ")[1]
-    const decodedToken = await auth.verifyIdToken(idToken)
-    const uid = decodedToken.uid
-
+    const { uid } = await getAuthenticatedUser(request.headers)
     const tierInfo = await getUserTierInfo(uid)
 
-    return NextResponse.json(tierInfo)
-  } catch (error) {
-    console.error("Error getting tier info:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ success: true, tierInfo })
+  } catch (error: any) {
+    console.error("❌ [/api/user/tier-info] Error:", error?.message || error)
+    return NextResponse.json(
+      {
+        success: false,
+        error: error?.message || "Failed to get tier info",
+      },
+      { status: 400 },
+    )
   }
 }

@@ -1,43 +1,36 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { incrementBundle } from "@/lib/free-users-service"
-import { incrementBundles } from "@/lib/memberships-service"
-import { getUserTierInfo } from "@/lib/user-tier-service"
-import { auth } from "@/lib/firebase-admin"
+import { NextResponse, type NextRequest } from "next/server"
+import { getAuthenticatedUser } from "@/lib/firebase-admin"
+import { incrementUserBundles, canUserCreateBundle } from "@/lib/user-tier-service"
+
+export const runtime = "nodejs"
 
 export async function POST(request: NextRequest) {
   try {
-    const authHeader = request.headers.get("authorization")
-    if (!authHeader?.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const { uid } = await getAuthenticatedUser(request.headers)
+
+    // Check if user can create bundle
+    const canCreate = await canUserCreateBundle(uid)
+    if (!canCreate.allowed) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: canCreate.reason || "Bundle creation not allowed",
+        },
+        { status: 403 },
+      )
     }
 
-    const idToken = authHeader.split("Bearer ")[1]
-    const decodedToken = await auth.verifyIdToken(idToken)
-    const uid = decodedToken.uid
+    await incrementUserBundles(uid)
 
-    // Check user tier to determine which service to use
-    const tierInfo = await getUserTierInfo(uid)
-
-    if (tierInfo.tier === "creator_pro") {
-      // Pro users - increment in memberships (no limits)
-      await incrementBundles(uid)
-      return NextResponse.json({ success: true, unlimited: true })
-    } else {
-      // Free users - check limits and increment
-      const canIncrement = await incrementBundle(uid)
-      if (!canIncrement) {
-        return NextResponse.json(
-          {
-            error: "Bundle limit reached",
-            reachedLimit: true,
-          },
-          { status: 403 },
-        )
-      }
-      return NextResponse.json({ success: true, unlimited: false })
-    }
-  } catch (error) {
-    console.error("Error incrementing bundle:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ success: true })
+  } catch (error: any) {
+    console.error("❌ [/api/user/increment-bundle] Error:", error?.message || error)
+    return NextResponse.json(
+      {
+        success: false,
+        error: error?.message || "Failed to increment bundle",
+      },
+      { status: 400 },
+    )
   }
 }
