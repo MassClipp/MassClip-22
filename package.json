@@ -66,6 +66,7 @@
     "next-themes": "latest",
     "nodemailer": "latest",
     "openai": "latest",
+    "os": "latest",
     "path": "latest",
     "prisma": "latest",
     "react": "^19",

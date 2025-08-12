@@ -1,202 +1,157 @@
 import { doc, setDoc, getDoc, updateDoc, increment, serverTimestamp } from "firebase/firestore"
 import { db } from "@/lib/firebase-safe"
 
-export interface FreeUser {
+export interface FreeUserDoc {
   uid: string
   email: string
   downloadsUsed: number
-  downloadsLimit: number
   bundlesCreated: number
-  bundlesLimit: number
   createdAt: any
   updatedAt: any
 }
 
-export interface FreeUserLimits {
-  canDownload: boolean
-  canCreateBundle: boolean
-  downloadsRemaining: number
-  bundlesRemaining: number
-  downloadsUsed: number
-  bundlesCreated: number
-  downloadsLimit: number
-  bundlesLimit: number
-}
-
-const DEFAULT_DOWNLOAD_LIMIT = 10
-const DEFAULT_BUNDLE_LIMIT = 2
-
-export async function createFreeUser(uid: string, email: string): Promise<FreeUser> {
+export async function getFreeUser(uid: string): Promise<FreeUserDoc | null> {
   if (!db) {
+    console.error("❌ Firestore not initialized")
     throw new Error("Firestore not initialized")
   }
 
-  const freeUserData: FreeUser = {
+  try {
+    console.log("🔄 Getting freeUser for uid:", uid.substring(0, 8) + "...")
+    const docRef = doc(db, "freeUsers", uid)
+    const docSnap = await getDoc(docRef)
+
+    if (docSnap.exists()) {
+      const data = docSnap.data() as FreeUserDoc
+      console.log("✅ Found existing freeUser:", {
+        downloadsUsed: data.downloadsUsed,
+        bundlesCreated: data.bundlesCreated,
+      })
+      return data
+    }
+
+    console.log("ℹ️ No existing freeUser found")
+    return null
+  } catch (error) {
+    console.error("❌ Error getting freeUser:", error)
+    throw error
+  }
+}
+
+export async function createFreeUser(uid: string, email: string): Promise<FreeUserDoc> {
+  if (!db) {
+    console.error("❌ Firestore not initialized")
+    throw new Error("Firestore not initialized")
+  }
+
+  console.log("🔄 Creating freeUser for uid:", uid.substring(0, 8) + "...")
+
+  // Check if already exists
+  const existing = await getFreeUser(uid)
+  if (existing) {
+    console.log("✅ FreeUser already exists, returning existing")
+    return existing
+  }
+
+  const freeUserDoc: FreeUserDoc = {
     uid,
     email,
     downloadsUsed: 0,
-    downloadsLimit: DEFAULT_DOWNLOAD_LIMIT,
     bundlesCreated: 0,
-    bundlesLimit: DEFAULT_BUNDLE_LIMIT,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   }
 
   try {
-    await setDoc(doc(db, "freeUsers", uid), freeUserData)
-    console.log(`✅ Created free user record for: ${uid}`)
-    return freeUserData
-  } catch (error) {
-    console.error("❌ Error creating free user:", error)
-    throw error
-  }
-}
-
-export async function getFreeUser(uid: string): Promise<FreeUser | null> {
-  if (!db) {
-    throw new Error("Firestore not initialized")
-  }
-
-  try {
     const docRef = doc(db, "freeUsers", uid)
-    const docSnap = await getDoc(docRef)
-
-    if (docSnap.exists()) {
-      return docSnap.data() as FreeUser
-    }
-
-    return null
+    await setDoc(docRef, freeUserDoc)
+    console.log("✅ Created new freeUser successfully")
+    return freeUserDoc
   } catch (error) {
-    console.error("❌ Error getting free user:", error)
+    console.error("❌ Error creating freeUser:", error)
     throw error
   }
 }
 
-export async function ensureFreeUser(uid: string, email: string): Promise<FreeUser> {
+export async function ensureFreeUser(uid: string, email: string): Promise<FreeUserDoc> {
   const existing = await getFreeUser(uid)
   if (existing) {
     return existing
   }
-
   return await createFreeUser(uid, email)
 }
 
-export async function incrementFreeUserDownloads(uid: string): Promise<boolean> {
+export async function incrementFreeUserDownloads(uid: string): Promise<void> {
   if (!db) {
     throw new Error("Firestore not initialized")
   }
 
+  console.log("🔄 Incrementing downloads for freeUser:", uid.substring(0, 8) + "...")
+
   try {
-    const freeUser = await getFreeUser(uid)
-    if (!freeUser) {
-      throw new Error(`Free user record not found for uid: ${uid}`)
-    }
-
-    // Check if user has reached limit
-    if (freeUser.downloadsUsed >= freeUser.downloadsLimit) {
-      console.warn(`User ${uid} has reached download limit`)
-      return false
-    }
-
-    // Increment downloads
-    await updateDoc(doc(db, "freeUsers", uid), {
+    const docRef = doc(db, "freeUsers", uid)
+    await updateDoc(docRef, {
       downloadsUsed: increment(1),
       updatedAt: serverTimestamp(),
     })
-
-    console.log(`✅ Incremented downloads for user: ${uid}`)
-    return true
+    console.log("✅ Incremented freeUser downloads")
   } catch (error) {
-    console.error("❌ Error incrementing free user downloads:", error)
+    console.error("❌ Error incrementing freeUser downloads:", error)
     throw error
   }
 }
 
-export async function incrementFreeUserBundles(uid: string): Promise<boolean> {
+export async function incrementFreeUserBundles(uid: string): Promise<void> {
   if (!db) {
     throw new Error("Firestore not initialized")
   }
 
+  console.log("🔄 Incrementing bundles for freeUser:", uid.substring(0, 8) + "...")
+
   try {
-    const freeUser = await getFreeUser(uid)
-    if (!freeUser) {
-      throw new Error(`Free user record not found for uid: ${uid}`)
-    }
-
-    // Check if user has reached limit
-    if (freeUser.bundlesCreated >= freeUser.bundlesLimit) {
-      console.warn(`User ${uid} has reached bundle limit`)
-      return false
-    }
-
-    // Increment bundles
-    await updateDoc(doc(db, "freeUsers", uid), {
+    const docRef = doc(db, "freeUsers", uid)
+    await updateDoc(docRef, {
       bundlesCreated: increment(1),
       updatedAt: serverTimestamp(),
     })
-
-    console.log(`✅ Incremented bundles for user: ${uid}`)
-    return true
+    console.log("✅ Incremented freeUser bundles")
   } catch (error) {
-    console.error("❌ Error incrementing free user bundles:", error)
+    console.error("❌ Error incrementing freeUser bundles:", error)
     throw error
   }
 }
 
-export async function checkFreeUserLimits(uid: string): Promise<FreeUserLimits> {
+export async function getFreeUserLimits(uid: string): Promise<{
+  downloadsUsed: number
+  downloadsLimit: number
+  bundlesCreated: number
+  bundlesLimit: number
+  reachedDownloadLimit: boolean
+  reachedBundleLimit: boolean
+}> {
   const freeUser = await getFreeUser(uid)
 
   if (!freeUser) {
-    throw new Error(`Free user record not found for uid: ${uid}`)
-  }
-
-  const downloadsRemaining = Math.max(0, freeUser.downloadsLimit - freeUser.downloadsUsed)
-  const bundlesRemaining = Math.max(0, freeUser.bundlesLimit - freeUser.bundlesCreated)
-
-  return {
-    canDownload: downloadsRemaining > 0,
-    canCreateBundle: bundlesRemaining > 0,
-    downloadsRemaining,
-    bundlesRemaining,
-    downloadsUsed: freeUser.downloadsUsed,
-    bundlesCreated: freeUser.bundlesCreated,
-    downloadsLimit: freeUser.downloadsLimit,
-    bundlesLimit: freeUser.bundlesLimit,
-  }
-}
-
-export async function resetFreeUserLimits(uid: string): Promise<void> {
-  if (!db) {
-    throw new Error("Firestore not initialized")
-  }
-
-  try {
-    await updateDoc(doc(db, "freeUsers", uid), {
+    // Return default limits if no record exists
+    return {
       downloadsUsed: 0,
+      downloadsLimit: 15,
       bundlesCreated: 0,
-      updatedAt: serverTimestamp(),
-    })
-
-    console.log(`✅ Reset limits for free user: ${uid}`)
-  } catch (error) {
-    console.error("❌ Error resetting free user limits:", error)
-    throw error
+      bundlesLimit: 2,
+      reachedDownloadLimit: false,
+      reachedBundleLimit: false,
+    }
   }
-}
 
-export function getFreeUserLimits(freeUser: FreeUser): any {
-  const downloadsRemaining = Math.max(0, freeUser.downloadsLimit - freeUser.downloadsUsed)
-  const bundlesRemaining = Math.max(0, freeUser.bundlesLimit - freeUser.bundlesCreated)
+  const downloadsLimit = 15
+  const bundlesLimit = 2
 
   return {
-    tier: "free" as const,
     downloadsUsed: freeUser.downloadsUsed,
-    downloadsLimit: freeUser.downloadsLimit,
+    downloadsLimit,
     bundlesCreated: freeUser.bundlesCreated,
-    bundlesLimit: freeUser.bundlesLimit,
-    maxVideosPerBundle: 10,
-    platformFeePercentage: 20,
-    reachedDownloadLimit: downloadsRemaining <= 0,
-    reachedBundleLimit: bundlesRemaining <= 0,
+    bundlesLimit,
+    reachedDownloadLimit: freeUser.downloadsUsed >= downloadsLimit,
+    reachedBundleLimit: freeUser.bundlesCreated >= bundlesLimit,
   }
 }

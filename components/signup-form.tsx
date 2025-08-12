@@ -25,6 +25,39 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
 
   const { signUp, signInWithGoogle, isConfigured, configError } = useFirebaseAuthSafe()
 
+  const createServerSideRecords = async (user: any, email: string) => {
+    console.log("🔄 Creating server-side records for user:", user.uid)
+
+    try {
+      const response = await fetch("/api/auth/create-user", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          uid: user.uid,
+          email: user.email || email,
+          username: (user.email || email).split("@")[0],
+          displayName: user.displayName || (user.email || email).split("@")[0],
+        }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        console.log("✅ Server-side user records created successfully")
+        return true
+      } else {
+        console.error("❌ Failed to create server-side records:", data.error)
+        console.error("❌ Response details:", data.details)
+        return false
+      }
+    } catch (error) {
+      console.error("❌ Error calling create-user API:", error)
+      return false
+    }
+  }
+
   const handleEmailSignup = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -52,34 +85,14 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
       if (result.success && result.user) {
         console.log("🎉 Firebase signup successful, creating server-side records...")
 
-        // Create server-side user records
-        try {
-          const response = await fetch("/api/auth/create-user", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              uid: result.user.uid,
-              email: result.user.email || email,
-              username: email.split("@")[0], // Generate username from email
-              displayName: email.split("@")[0],
-            }),
-          })
+        const serverSuccess = await createServerSideRecords(result.user, email)
 
-          const data = await response.json()
-
-          if (data.success) {
-            console.log("✅ Server-side user records created successfully")
-          } else {
-            console.error("❌ Failed to create server-side records:", data.error)
-          }
-        } catch (error) {
-          console.error("❌ Error calling create-user API:", error)
+        if (serverSuccess) {
+          console.log("🎉 Complete signup process successful, redirecting...")
+          router.push("/login-success")
+        } else {
+          setError("Account created but failed to set up user profile. Please contact support.")
         }
-
-        console.log("🎉 Signup process complete, redirecting...")
-        router.push("/login-success")
       } else {
         setError(result.error || "Failed to create account")
       }
@@ -101,34 +114,14 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
       if (result.success && result.user) {
         console.log("🎉 Google signup successful, creating server-side records...")
 
-        // Create server-side user records
-        try {
-          const response = await fetch("/api/auth/create-user", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              uid: result.user.uid,
-              email: result.user.email,
-              username: result.user.email?.split("@")[0] || "user",
-              displayName: result.user.displayName || result.user.email?.split("@")[0] || "User",
-            }),
-          })
+        const serverSuccess = await createServerSideRecords(result.user, result.user.email || "")
 
-          const data = await response.json()
-
-          if (data.success) {
-            console.log("✅ Server-side user records created successfully")
-          } else {
-            console.error("❌ Failed to create server-side records:", data.error)
-          }
-        } catch (error) {
-          console.error("❌ Error calling create-user API:", error)
+        if (serverSuccess) {
+          console.log("🎉 Complete Google signup process successful, redirecting...")
+          router.push("/login-success")
+        } else {
+          setError("Google account connected but failed to set up user profile. Please contact support.")
         }
-
-        console.log("🎉 Google signup process complete, redirecting...")
-        router.push("/login-success")
       } else {
         if (result.error?.includes("popup-closed-by-user")) {
           setError("Sign-up was cancelled")
@@ -392,5 +385,4 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
   )
 }
 
-// Default export for compatibility
 export default SignupForm
