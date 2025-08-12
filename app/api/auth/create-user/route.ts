@@ -1,123 +1,46 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createUserWithEmailAndPassword } from "firebase/auth"
-import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore"
-import { auth, db } from "@/lib/firebase-safe"
+import { ensureMembership } from "@/lib/memberships-service"
 import { createFreeUser } from "@/lib/free-users-service"
-
-export const runtime = "nodejs"
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("🔐 User creation request received")
+    const { uid, email, username, displayName } = await request.json()
 
-    // Check if Firebase is properly configured
-    if (!auth || !db) {
-      console.error("❌ Firebase not properly initialized")
-      return NextResponse.json(
-        { error: "Authentication service not available. Please check Firebase configuration." },
-        { status: 500 },
-      )
+    if (!uid || !email) {
+      return NextResponse.json({ error: "Missing required fields: uid and email" }, { status: 400 })
     }
 
-    const { email, password, username, displayName } = await request.json()
+    console.log("🔄 Creating user records for:", { uid, email, username, displayName })
 
-    if (!email || !password || !username || !displayName) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
-    }
-
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(email)) {
-      return NextResponse.json({ error: "Invalid email format" }, { status: 400 })
-    }
-
-    // Validate password strength
-    if (password.length < 6) {
-      return NextResponse.json({ error: "Password must be at least 6 characters long" }, { status: 400 })
-    }
-
-    console.log(`🔐 Creating user account for: ${email}`)
-
-    // Check if username is already taken
+    // Create membership record (handles both free and pro tiers)
     try {
-      const usernameDoc = await getDoc(doc(db, "usernames", username))
-      if (usernameDoc.exists()) {
-        return NextResponse.json({ error: "Username is already taken" }, { status: 400 })
-      }
+      const membership = await ensureMembership(uid, email)
+      console.log("✅ Membership record created/ensured:", membership)
     } catch (error) {
-      console.error("❌ Error checking username availability:", error)
-      return NextResponse.json({ error: "Unable to verify username availability" }, { status: 500 })
+      console.error("❌ Failed to create membership record:", error)
+      // Continue with free user creation as fallback
     }
 
-    // Create Firebase user
-    let userCredential
+    // Create free user record for tier limitations
     try {
-      userCredential = await createUserWithEmailAndPassword(auth, email, password)
-    } catch (error: any) {
-      console.error("❌ Firebase user creation error:", error)
-
-      let errorMessage = "Failed to create account"
-      if (error.code === "auth/email-already-in-use") {
-        errorMessage = "An account with this email already exists"
-      } else if (error.code === "auth/weak-password") {
-        errorMessage = "Password is too weak"
-      } else if (error.code === "auth/invalid-email") {
-        errorMessage = "Invalid email address"
-      } else if (error.code === "auth/network-request-failed") {
-        errorMessage = "Network error. Please check your internet connection and try again."
-      } else if (error.code === "auth/internal-error") {
-        errorMessage = "Internal error. Please try again later."
-      }
-
-      return NextResponse.json({ error: errorMessage }, { status: 400 })
-    }
-
-    const user = userCredential.user
-    console.log(`✅ Firebase user created: ${user.uid}`)
-
-    // Create user profile
-    try {
-      await setDoc(doc(db, "users", user.uid), {
-        email,
-        displayName: displayName || username,
-        username,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-
-      // Reserve username
-      await setDoc(doc(db, "usernames", username), {
-        uid: user.uid,
-        createdAt: serverTimestamp(),
-      })
-
-      console.log(`✅ User profile created for: ${username}`)
-    } catch (error) {
-      console.error("❌ Failed to create user profile:", error)
-      // Don't fail the entire signup, just log the error
-    }
-
-    // Create free user record with limitations
-    try {
-      await createFreeUser(user.uid, email)
-      console.log(`✅ Created free user limitations for: ${user.uid}`)
+      const freeUser = await createFreeUser(uid, email)
+      console.log("✅ Free user record created:", freeUser)
     } catch (error) {
       console.error("❌ Failed to create free user record:", error)
-      // Don't fail signup, but log the error
+      // Don't fail the entire request for this
     }
 
-    console.log(`✅ User signup completed successfully for: ${username}`)
+    // TODO: Create user profile record if needed
+    // This would include username, displayName, etc.
 
     return NextResponse.json({
       success: true,
-      user: {
-        uid: user.uid,
-        email: user.email,
-        username: username,
-      },
+      message: "User records created successfully",
+      uid,
+      email,
     })
   } catch (error: any) {
-    console.error("❌ Unexpected error creating user:", error)
-    return NextResponse.json({ error: "An unexpected error occurred. Please try again." }, { status: 500 })
+    console.error("❌ Server-side user creation error:", error)
+    return NextResponse.json({ error: "Failed to create user records", details: error.message }, { status: 500 })
   }
 }

@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, Eye, EyeOff } from "lucide-react"
-import { createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from "firebase/auth"
-import { auth } from "@/lib/firebase"
+import { useFirebaseAuthSafe } from "@/hooks/useFirebaseAuthSafe"
+import { ensureFreeUser } from "@/utils/userUtils"
 import Logo from "@/components/logo"
 
 export function SignupForm({ className, ...props }: React.ComponentProps<"div">) {
@@ -23,6 +23,8 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
   const [error, setError] = useState("")
   const [showEmailForm, setShowEmailForm] = useState(false)
   const router = useRouter()
+
+  const { signUp, signInWithGoogle, isConfigured, configError } = useFirebaseAuthSafe()
 
   const handleEmailSignup = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -46,8 +48,28 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
     setError("")
 
     try {
-      await createUserWithEmailAndPassword(auth, email, password)
-      router.push("/login-success")
+      const result = await signUp(email, password)
+
+      if (result.success) {
+        if (result.demo) {
+          setError("Demo mode: Firebase not configured. Please set up Firebase to enable real authentication.")
+          return
+        }
+
+        // Ensure free user record is created
+        try {
+          await ensureFreeUser("", email) // UID will be handled server-side
+          console.log("✅ Free user record ensured")
+        } catch (error) {
+          console.error("❌ Failed to ensure free user record:", error)
+          // Don't block signup for this error
+        }
+
+        console.log("🎉 Signup successful, redirecting...")
+        router.push("/login-success")
+      } else {
+        setError(result.error || "Failed to create account")
+      }
     } catch (error: any) {
       console.error("Signup error:", error)
       setError("Failed to create account. Please try again.")
@@ -61,30 +83,48 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
     setError("")
 
     try {
-      const provider = new GoogleAuthProvider()
-      provider.addScope("email")
-      provider.addScope("profile")
+      const result = await signInWithGoogle()
 
-      const result = await signInWithPopup(auth, provider)
+      if (result.success) {
+        if (result.demo) {
+          setError("Demo mode: Firebase not configured. Please set up Firebase to enable real authentication.")
+          return
+        }
 
-      if (result.user) {
-        console.log("Google signup successful:", result.user.email)
+        console.log("🎉 Google signup successful, redirecting...")
         router.push("/login-success")
+      } else {
+        if (result.error?.includes("popup-closed-by-user")) {
+          setError("Sign-up was cancelled")
+        } else if (result.error?.includes("popup-blocked")) {
+          setError("Popup was blocked. Please allow popups and try again.")
+        } else if (result.error?.includes("unauthorized-domain")) {
+          setError("This domain is not authorized for Google sign-up. Please contact support.")
+        } else {
+          setError(result.error || "Failed to sign up with Google. Please try again.")
+        }
       }
     } catch (error: any) {
       console.error("Google signup error:", error)
-      if (error.code === "auth/popup-closed-by-user") {
-        setError("Sign-up was cancelled")
-      } else if (error.code === "auth/popup-blocked") {
-        setError("Popup was blocked. Please allow popups and try again.")
-      } else if (error.code === "auth/unauthorized-domain") {
-        setError("This domain is not authorized for Google sign-up. Please contact support.")
-      } else {
-        setError("Failed to sign up with Google. Please try again.")
-      }
+      setError("Failed to sign up with Google. Please try again.")
     } finally {
       setGoogleLoading(false)
     }
+  }
+
+  // Show config error if Firebase is not configured
+  if (!isConfigured && configError) {
+    return (
+      <div className={cn("min-h-screen bg-black flex items-center justify-center p-8", className)} {...props}>
+        <Alert variant="destructive" className="max-w-md">
+          <AlertDescription>
+            Firebase configuration error: {configError}
+            <br />
+            Please check your environment variables.
+          </AlertDescription>
+        </Alert>
+      </div>
+    )
   }
 
   return (

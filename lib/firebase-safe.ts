@@ -29,7 +29,16 @@ function isFirebaseConfigured(): boolean {
   )
 }
 
-function initializeFirebaseSafe(): { success: boolean; error?: string } {
+export function initializeFirebaseSafe() {
+  if (typeof window === "undefined") {
+    // Server-side: return null values
+    return {
+      auth: null,
+      db: null,
+      isConfigured: false,
+    }
+  }
+
   try {
     if (!isFirebaseConfigured()) {
       const error = "Firebase configuration is incomplete. Please check your environment variables."
@@ -94,4 +103,4 @@ if (!initResult.success) {
   console.error("❌ Failed to initialize Firebase:", initResult.error)
 }
 
-export { auth, db, isFirebaseConfigured, firebaseError, initializeFirebaseSafe }
+export { auth, db, isFirebaseConfigured, firebaseError }
