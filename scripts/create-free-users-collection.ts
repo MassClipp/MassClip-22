@@ -1,62 +1,86 @@
-import { db } from "@/lib/firebase-admin"
-import { createFreeUser } from "@/lib/free-users-service"
+import { initializeApp, cert } from "firebase-admin/app"
+import { getFirestore } from "firebase-admin/firestore"
+import { getAuth } from "firebase-admin/auth"
+
+// Initialize Firebase Admin
+const serviceAccount = {
+  projectId: process.env.FIREBASE_PROJECT_ID,
+  clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+  privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+}
+
+if (!serviceAccount.projectId || !serviceAccount.clientEmail || !serviceAccount.privateKey) {
+  throw new Error("Missing Firebase Admin credentials")
+}
+
+const app = initializeApp({
+  credential: cert(serviceAccount),
+})
+
+const db = getFirestore(app)
+const auth = getAuth(app)
 
 async function createFreeUsersCollection() {
-  console.log("🔄 Creating freeUsers collection and setting up indexes...")
-
   try {
-    // Get all user profiles to create free user records
-    const profilesSnapshot = await db.collection("userProfiles").get()
+    console.log("🔄 Starting free users collection creation...")
+
+    // Get all users from Firebase Auth
+    const listUsersResult = await auth.listUsers()
+    const users = listUsersResult.users
+
+    console.log(`📊 Found ${users.length} users in Firebase Auth`)
 
     let created = 0
     let skipped = 0
 
-    for (const doc of profilesSnapshot.docs) {
-      const profile = doc.data()
-      const uid = doc.id
+    for (const user of users) {
+      try {
+        // Check if free user record already exists
+        const freeUserDoc = await db.collection("freeUsers").doc(user.uid).get()
 
-      // Check if free user already exists
-      const existingFreeUser = await db.collection("freeUsers").doc(uid).get()
-      if (existingFreeUser.exists) {
-        skipped++
-        continue
-      }
+        if (freeUserDoc.exists) {
+          console.log(`⏭️  Skipping existing free user: ${user.email}`)
+          skipped++
+          continue
+        }
 
-      // Check if user has active membership (skip if they do)
-      const membership = await db.collection("memberships").doc(uid).get()
-      if (membership.exists && membership.data()?.isActive) {
-        console.log(`⏭️ Skipping ${uid} - has active membership`)
-        skipped++
-        continue
-      }
+        // Create free user record
+        const freeUserData = {
+          uid: user.uid,
+          email: user.email || "",
+          downloadsUsed: 0,
+          downloadsLimit: 10,
+          bundlesCreated: 0,
+          bundlesLimit: 2,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }
 
-      // Create free user record
-      await createFreeUser(uid, profile.email || "")
-      created++
+        await db.collection("freeUsers").doc(user.uid).set(freeUserData)
 
-      if (created % 10 === 0) {
-        console.log(`✅ Created ${created} free user records...`)
+        console.log(`✅ Created free user record for: ${user.email}`)
+        created++
+      } catch (error) {
+        console.error(`❌ Error creating free user record for ${user.email}:`, error)
       }
     }
 
-    console.log(`✅ Completed! Created: ${created}, Skipped: ${skipped}`)
+    console.log(`🎉 Free users collection creation completed!`)
+    console.log(`📈 Created: ${created} records`)
+    console.log(`⏭️  Skipped: ${skipped} existing records`)
   } catch (error) {
     console.error("❌ Error creating free users collection:", error)
     throw error
   }
 }
 
-// Run if called directly
-if (require.main === module) {
-  createFreeUsersCollection()
-    .then(() => {
-      console.log("✅ Script completed successfully")
-      process.exit(0)
-    })
-    .catch((error) => {
-      console.error("❌ Script failed:", error)
-      process.exit(1)
-    })
-}
-
-export { createFreeUsersCollection }
+// Run the script
+createFreeUsersCollection()
+  .then(() => {
+    console.log("✅ Script completed successfully")
+    process.exit(0)
+  })
+  .catch((error) => {
+    console.error("❌ Script failed:", error)
+    process.exit(1)
+  })

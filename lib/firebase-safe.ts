@@ -1,136 +1,97 @@
-"use client"
-
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app"
-import { getAuth, type Auth } from "firebase/auth"
-import { getFirestore, type Firestore } from "firebase/firestore"
-import { getStorage, type FirebaseStorage } from "firebase/storage"
+import { getAuth, type Auth, connectAuthEmulator } from "firebase/auth"
+import { getFirestore, type Firestore, connectFirestoreEmulator } from "firebase/firestore"
 
-// Global state for Firebase initialization
-let firebaseApp: FirebaseApp | null = null
-let firebaseAuth: Auth | null = null
-let firebaseDb: Firestore | null = null
-let firebaseStorage: FirebaseStorage | null = null
-let initializationError: string | null = null
-let isConfigured = false
-
-// Get Firebase configuration with fallbacks
-const getFirebaseConfig = () => {
-  const config = {
-    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "demo-api-key",
-    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "demo-project.firebaseapp.com",
-    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "demo-project",
-    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "demo-project.appspot.com",
-    messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "000000000000",
-    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:000000000000:web:0000000000000000000000",
-    measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
-  }
-
-  // Check if we have real config values or fallbacks
-  const usingRealConfig =
-    !!process.env.NEXT_PUBLIC_FIREBASE_API_KEY &&
-    !!process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN &&
-    !!process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID &&
-    process.env.NEXT_PUBLIC_FIREBASE_API_KEY !== "demo-api-key"
-
-  return { config, usingRealConfig }
+// Firebase configuration
+const firebaseConfig = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 }
 
-// Initialize Firebase safely - REQUIRED EXPORT
-export function initializeFirebaseSafe() {
+let app: FirebaseApp | null = null
+let auth: Auth | null = null
+let db: Firestore | null = null
+let firebaseError: string | null = null
+
+function isFirebaseConfigured(): boolean {
+  return !!(
+    firebaseConfig.apiKey &&
+    firebaseConfig.authDomain &&
+    firebaseConfig.projectId &&
+    firebaseConfig.storageBucket &&
+    firebaseConfig.messagingSenderId &&
+    firebaseConfig.appId
+  )
+}
+
+function initializeFirebaseSafe(): { success: boolean; error?: string } {
   try {
-    // Check if already initialized
-    if (firebaseApp) {
-      return {
-        app: firebaseApp,
-        auth: firebaseAuth,
-        db: firebaseDb,
-        storage: firebaseStorage,
-        isConfigured,
-        error: initializationError,
+    if (!isFirebaseConfigured()) {
+      const error = "Firebase configuration is incomplete. Please check your environment variables."
+      firebaseError = error
+      console.error("❌ Firebase Config Error:", error)
+      return { success: false, error }
+    }
+
+    // Initialize Firebase app if not already initialized
+    if (getApps().length === 0) {
+      app = initializeApp(firebaseConfig)
+      console.log("✅ Firebase app initialized")
+    } else {
+      app = getApps()[0]
+      console.log("✅ Firebase app already initialized")
+    }
+
+    // Initialize Auth
+    if (!auth) {
+      auth = getAuth(app)
+
+      // Connect to emulator in development
+      if (process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === "true") {
+        try {
+          connectAuthEmulator(auth, "http://localhost:9099")
+          console.log("🔧 Connected to Firebase Auth emulator")
+        } catch (error) {
+          console.warn("⚠️ Could not connect to Auth emulator:", error)
+        }
       }
     }
 
-    // Get Firebase configuration
-    const { config, usingRealConfig } = getFirebaseConfig()
-    isConfigured = usingRealConfig
+    // Initialize Firestore
+    if (!db) {
+      db = getFirestore(app)
 
-    // Initialize Firebase only if it hasn't been initialized yet
-    if (!getApps().length) {
-      console.log("🔥 Initializing Firebase app...")
-      firebaseApp = initializeApp(config)
-    } else {
-      console.log("🔥 Firebase already initialized, getting existing app")
-      firebaseApp = getApps()[0]
-    }
-
-    // Initialize Firebase services
-    firebaseAuth = getAuth(firebaseApp)
-    firebaseDb = getFirestore(firebaseApp)
-    firebaseStorage = getStorage(firebaseApp)
-
-    // Configure auth settings for better popup handling
-    if (firebaseAuth && isConfigured) {
-      // Set custom settings for better popup handling
-      firebaseAuth.settings = {
-        appVerificationDisabledForTesting: false,
+      // Connect to emulator in development
+      if (process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === "true") {
+        try {
+          connectFirestoreEmulator(db, "localhost", 8080)
+          console.log("🔧 Connected to Firestore emulator")
+        } catch (error) {
+          console.warn("⚠️ Could not connect to Firestore emulator:", error)
+        }
       }
     }
 
-    if (!isConfigured) {
-      initializationError = "Using demo configuration - authentication features limited"
-      console.warn("⚠️ Firebase using demo configuration")
-    } else {
-      console.log("✅ Firebase initialized with real configuration")
-    }
-
-    return {
-      app: firebaseApp,
-      auth: firebaseAuth,
-      db: firebaseDb,
-      storage: firebaseStorage,
-      isConfigured,
-      error: initializationError,
-    }
+    firebaseError = null
+    console.log("✅ Firebase initialized successfully")
+    return { success: true }
   } catch (error: any) {
-    console.error("❌ Error initializing Firebase:", error)
-    initializationError = error.message || "Failed to initialize Firebase"
-    isConfigured = false
-
-    return {
-      app: null,
-      auth: null,
-      db: null,
-      storage: null,
-      isConfigured: false,
-      error: initializationError,
-    }
+    const errorMessage = `Firebase initialization failed: ${error.message}`
+    firebaseError = errorMessage
+    console.error("❌ Firebase initialization error:", error)
+    return { success: false, error: errorMessage }
   }
 }
 
-// Initialize on module load
-const firebase = initializeFirebaseSafe()
-
-// Export Firebase instances
-export const app = firebase.app
-export const auth = firebase.auth
-export const db = firebase.db
-export const storage = firebase.storage
-
-// REQUIRED EXPORTS
-export const isFirebaseConfigured = firebase.isConfigured
-export const firebaseError = firebase.error
-
-// Helper function to check if Firebase is configured
-export const checkFirebaseConfiguration = () => {
-  return {
-    isConfigured: firebase.isConfigured,
-    error: firebase.error,
-    hasApp: !!firebase.app,
-    hasAuth: !!firebase.auth,
-    hasDb: !!firebase.db,
-    hasStorage: !!firebase.storage,
-  }
+// Initialize Firebase on module load
+const initResult = initializeFirebaseSafe()
+if (!initResult.success) {
+  console.error("❌ Failed to initialize Firebase:", initResult.error)
 }
 
-// Default export
-export default firebase.app
+export { auth, db, isFirebaseConfigured, firebaseError, initializeFirebaseSafe }

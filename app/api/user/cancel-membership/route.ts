@@ -1,24 +1,26 @@
-import { NextResponse, type NextRequest } from "next/server"
-import { getAuthenticatedUser } from "@/lib/firebase-admin"
+import { type NextRequest, NextResponse } from "next/server"
 import { cancelMembership } from "@/lib/memberships-service"
-
-export const runtime = "nodejs"
+import { verifyIdToken } from "firebase-admin/auth"
 
 export async function POST(request: NextRequest) {
   try {
-    const { uid } = await getAuthenticatedUser(request.headers)
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const idToken = authHeader.split("Bearer ")[1]
+    const decodedToken = await verifyIdToken(idToken)
+    const uid = decodedToken.uid
 
     await cancelMembership(uid)
 
-    return NextResponse.json({ success: true })
-  } catch (error: any) {
-    console.error("❌ [/api/user/cancel-membership] Error:", error?.message || error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: error?.message || "Failed to cancel membership",
-      },
-      { status: 400 },
-    )
+    return NextResponse.json({
+      success: true,
+      message: "Membership cancelled successfully. You will now use free tier limitations.",
+    })
+  } catch (error) {
+    console.error("❌ Error cancelling membership:", error)
+    return NextResponse.json({ error: "Failed to cancel membership" }, { status: 500 })
   }
 }

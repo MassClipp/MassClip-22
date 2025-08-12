@@ -1,8 +1,8 @@
 import {
   getFreeUser,
   getFreeUserLimits,
-  incrementDownloads as incrementFreeDownloads,
-  incrementBundles as incrementFreeBundles,
+  incrementFreeUserDownloads,
+  incrementFreeUserBundles,
 } from "./free-users-service"
 import {
   getMembership,
@@ -50,7 +50,7 @@ export async function incrementUserDownloads(uid: string): Promise<void> {
   }
 
   // Otherwise increment free user downloads
-  await incrementFreeDownloads(uid)
+  await incrementFreeUserDownloads(uid)
 }
 
 export async function incrementUserBundles(uid: string): Promise<void> {
@@ -62,7 +62,7 @@ export async function incrementUserBundles(uid: string): Promise<void> {
   }
 
   // Otherwise increment free user bundles
-  await incrementFreeBundles(uid)
+  await incrementFreeUserBundles(uid)
 }
 
 export async function canUserDownload(uid: string): Promise<{ allowed: boolean; reason?: string }> {

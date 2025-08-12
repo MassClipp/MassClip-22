@@ -1,36 +1,26 @@
-import { NextResponse, type NextRequest } from "next/server"
-import { getAuthenticatedUser } from "@/lib/firebase-admin"
-import { incrementUserDownloads, canUserDownload } from "@/lib/user-tier-service"
-
-export const runtime = "nodejs"
+import { type NextRequest, NextResponse } from "next/server"
+import { incrementUserDownloads } from "@/lib/user-tier-service"
+import { verifyIdToken } from "firebase-admin/auth"
 
 export async function POST(request: NextRequest) {
   try {
-    const { uid } = await getAuthenticatedUser(request.headers)
-
-    // Check if user can download
-    const canDownload = await canUserDownload(uid)
-    if (!canDownload.allowed) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: canDownload.reason || "Download not allowed",
-        },
-        { status: 403 },
-      )
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+
+    const idToken = authHeader.split("Bearer ")[1]
+    const decodedToken = await verifyIdToken(idToken)
+    const uid = decodedToken.uid
 
     await incrementUserDownloads(uid)
 
-    return NextResponse.json({ success: true })
-  } catch (error: any) {
-    console.error("❌ [/api/user/increment-download] Error:", error?.message || error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: error?.message || "Failed to increment download",
-      },
-      { status: 400 },
-    )
+    return NextResponse.json({
+      success: true,
+      message: "Download count incremented",
+    })
+  } catch (error) {
+    console.error("❌ Error incrementing download:", error)
+    return NextResponse.json({ error: "Failed to increment download" }, { status: 500 })
   }
 }
