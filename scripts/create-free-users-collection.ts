@@ -1,62 +1,71 @@
 import { db } from "@/lib/firebase-admin"
-import { createFreeUser } from "@/lib/free-users-service"
+
+interface UserProfile {
+  uid: string
+  email?: string
+}
 
 async function createFreeUsersCollection() {
-  console.log("🔄 Creating freeUsers collection and setting up indexes...")
+  console.log("🚀 Creating freeUsers collection for existing users...")
 
   try {
-    // Get all user profiles to create free user records
+    // Get all existing user profiles
     const profilesSnapshot = await db.collection("userProfiles").get()
 
-    let created = 0
-    let skipped = 0
+    if (profilesSnapshot.empty) {
+      console.log("No user profiles found")
+      return
+    }
+
+    const batch = db.batch()
+    let count = 0
 
     for (const doc of profilesSnapshot.docs) {
-      const profile = doc.data()
-      const uid = doc.id
+      const profile = doc.data() as UserProfile
 
-      // Check if free user already exists
-      const existingFreeUser = await db.collection("freeUsers").doc(uid).get()
-      if (existingFreeUser.exists) {
-        skipped++
-        continue
-      }
+      // Check if free user record already exists
+      const freeUserRef = db.collection("freeUsers").doc(profile.uid)
+      const existingFreeUser = await freeUserRef.get()
 
-      // Check if user has active membership (skip if they do)
-      const membership = await db.collection("memberships").doc(uid).get()
-      if (membership.exists && membership.data()?.isActive) {
-        console.log(`⏭️ Skipping ${uid} - has active membership`)
-        skipped++
-        continue
-      }
+      if (!existingFreeUser.exists()) {
+        // Create free user record
+        const freeUserData = {
+          uid: profile.uid,
+          email: profile.email || "",
+          downloadsUsed: 0,
+          downloadsLimit: 5,
+          bundlesCreated: 0,
+          bundlesLimit: 2,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }
 
-      // Create free user record
-      await createFreeUser(uid, profile.email || "")
-      created++
+        batch.set(freeUserRef, freeUserData)
+        count++
 
-      if (created % 10 === 0) {
-        console.log(`✅ Created ${created} free user records...`)
+        console.log(`✅ Queued free user creation for: ${profile.uid}`)
       }
     }
 
-    console.log(`✅ Completed! Created: ${created}, Skipped: ${skipped}`)
+    if (count > 0) {
+      await batch.commit()
+      console.log(`🎉 Successfully created ${count} free user records`)
+    } else {
+      console.log("All users already have free user records")
+    }
   } catch (error) {
     console.error("❌ Error creating free users collection:", error)
     throw error
   }
 }
 
-// Run if called directly
-if (require.main === module) {
-  createFreeUsersCollection()
-    .then(() => {
-      console.log("✅ Script completed successfully")
-      process.exit(0)
-    })
-    .catch((error) => {
-      console.error("❌ Script failed:", error)
-      process.exit(1)
-    })
-}
-
-export { createFreeUsersCollection }
+// Run the script
+createFreeUsersCollection()
+  .then(() => {
+    console.log("✅ Script completed successfully")
+    process.exit(0)
+  })
+  .catch((error) => {
+    console.error("❌ Script failed:", error)
+    process.exit(1)
+  })

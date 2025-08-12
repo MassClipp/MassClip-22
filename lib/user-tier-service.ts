@@ -1,20 +1,8 @@
-import {
-  getFreeUser,
-  getFreeUserLimits,
-  incrementDownloads as incrementFreeDownloads,
-  incrementBundles as incrementFreeBundles,
-} from "./free-users-service"
-import {
-  getMembership,
-  toTierInfo,
-  incrementDownloads as incrementMembershipDownloads,
-  incrementBundles as incrementMembershipBundles,
-} from "./memberships-service"
+import { getMembership, toTierInfo } from "@/lib/memberships-service"
+import { getFreeUserLimits } from "@/lib/free-users-service"
 
-export type UserTier = "free" | "creator_pro"
-
-export interface UserTierInfo {
-  tier: UserTier
+export interface TierInfo {
+  tier: "free" | "creator_pro"
   downloadsUsed: number
   downloadsLimit: number | null
   bundlesCreated: number
@@ -25,70 +13,92 @@ export interface UserTierInfo {
   reachedBundleLimit: boolean
 }
 
-export async function getUserTierInfo(uid: string): Promise<UserTierInfo> {
-  // First check if user has active membership
-  const membership = await getMembership(uid)
-  if (membership && membership.isActive && membership.plan === "creator_pro") {
-    return toTierInfo(membership)
+export class UserTierService {
+  /**
+   * Single source of truth for user tier information
+   * Checks memberships first, then falls back to freeUsers
+   */
+  static async getUserTierInfo(uid: string): Promise<TierInfo> {
+    // First check if user has active membership
+    const membership = await getMembership(uid)
+
+    if (membership && membership.isActive && membership.plan === "creator_pro") {
+      // User has active pro membership - unlimited everything
+      return toTierInfo(membership)
+    }
+
+    // Fall back to free user limitations
+    const freeUserLimits = await getFreeUserLimits(uid)
+
+    if (!freeUserLimits) {
+      // User doesn't exist in either collection - return default free limits
+      return {
+        tier: "free",
+        downloadsUsed: 0,
+        downloadsLimit: 5,
+        bundlesCreated: 0,
+        bundlesLimit: 2,
+        maxVideosPerBundle: 10,
+        platformFeePercentage: 20,
+        reachedDownloadLimit: false,
+        reachedBundleLimit: false,
+      }
+    }
+
+    // Return free user limits
+    return {
+      tier: "free",
+      downloadsUsed: freeUserLimits.downloadsUsed,
+      downloadsLimit: freeUserLimits.downloadsLimit,
+      bundlesCreated: freeUserLimits.bundlesCreated,
+      bundlesLimit: freeUserLimits.bundlesLimit,
+      maxVideosPerBundle: 10,
+      platformFeePercentage: 20,
+      reachedDownloadLimit: freeUserLimits.downloadsUsed >= freeUserLimits.downloadsLimit,
+      reachedBundleLimit: freeUserLimits.bundlesCreated >= freeUserLimits.bundlesLimit,
+    }
   }
 
-  // Fall back to free user limitations
-  const freeUser = await getFreeUser(uid)
-  if (!freeUser) {
-    throw new Error(`No free user record found for uid: ${uid}`)
+  /**
+   * Check if user can download (has remaining downloads)
+   */
+  static async canDownload(uid: string): Promise<boolean> {
+    const tierInfo = await this.getUserTierInfo(uid)
+
+    // Pro users have unlimited downloads
+    if (tierInfo.tier === "creator_pro") {
+      return true
+    }
+
+    // Free users check against limit
+    return !tierInfo.reachedDownloadLimit
   }
 
-  return getFreeUserLimits(freeUser)
+  /**
+   * Check if user can create bundle (has remaining bundle slots)
+   */
+  static async canCreateBundle(uid: string): Promise<boolean> {
+    const tierInfo = await this.getUserTierInfo(uid)
+
+    // Pro users have unlimited bundles
+    if (tierInfo.tier === "creator_pro") {
+      return true
+    }
+
+    // Free users check against limit
+    return !tierInfo.reachedBundleLimit
+  }
 }
 
-export async function incrementUserDownloads(uid: string): Promise<void> {
-  // Check if user has active membership first
-  const membership = await getMembership(uid)
-  if (membership && membership.isActive && membership.plan === "creator_pro") {
-    await incrementMembershipDownloads(uid)
-    return
-  }
-
-  // Otherwise increment free user downloads
-  await incrementFreeDownloads(uid)
+// Named exports for compatibility
+export async function getUserTierInfo(uid: string): Promise<TierInfo> {
+  return UserTierService.getUserTierInfo(uid)
 }
 
-export async function incrementUserBundles(uid: string): Promise<void> {
-  // Check if user has active membership first
-  const membership = await getMembership(uid)
-  if (membership && membership.isActive && membership.plan === "creator_pro") {
-    await incrementMembershipBundles(uid)
-    return
-  }
-
-  // Otherwise increment free user bundles
-  await incrementFreeBundles(uid)
+export async function canDownload(uid: string): Promise<boolean> {
+  return UserTierService.canDownload(uid)
 }
 
-export async function canUserDownload(uid: string): Promise<{ allowed: boolean; reason?: string }> {
-  const tierInfo = await getUserTierInfo(uid)
-
-  if (tierInfo.tier === "creator_pro") {
-    return { allowed: true }
-  }
-
-  if (tierInfo.reachedDownloadLimit) {
-    return { allowed: false, reason: "Download limit reached" }
-  }
-
-  return { allowed: true }
-}
-
-export async function canUserCreateBundle(uid: string): Promise<{ allowed: boolean; reason?: string }> {
-  const tierInfo = await getUserTierInfo(uid)
-
-  if (tierInfo.tier === "creator_pro") {
-    return { allowed: true }
-  }
-
-  if (tierInfo.reachedBundleLimit) {
-    return { allowed: false, reason: "Bundle limit reached" }
-  }
-
-  return { allowed: true }
+export async function canCreateBundle(uid: string): Promise<boolean> {
+  return UserTierService.canCreateBundle(uid)
 }

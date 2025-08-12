@@ -1,125 +1,139 @@
-import { db } from "@/lib/firebase-admin"
+import { doc, setDoc, getDoc, updateDoc, increment, serverTimestamp } from "firebase/firestore"
+import { db } from "@/lib/firebase"
 
-export interface FreeUserDoc {
-  uid: string
-  email: string
-
-  // Usage tracking
+export interface FreeUserLimits {
   downloadsUsed: number
   downloadsLimit: number
   bundlesCreated: number
   bundlesLimit: number
-
-  // Limitations
-  maxVideosPerBundle: number
-  platformFeePercentage: number
-
-  // Status
-  reachedDownloadLimit: boolean
-  reachedBundleLimit: boolean
-  lastDownloadAt?: Date
-
-  // Metadata
-  createdAt: Date
-  updatedAt: Date
+  createdAt: any
+  updatedAt: any
 }
 
-const DEFAULT_FREE_LIMITS = {
-  downloadsLimit: 15,
-  bundlesLimit: 2,
-  maxVideosPerBundle: 10,
-  platformFeePercentage: 20,
-}
+export class FreeUsersService {
+  private static readonly COLLECTION = "freeUsers"
+  private static readonly DEFAULT_DOWNLOAD_LIMIT = 5
+  private static readonly DEFAULT_BUNDLE_LIMIT = 2
 
-function col() {
-  return db.collection("freeUsers")
-}
+  static async createFreeUser(uid: string): Promise<void> {
+    if (!db) throw new Error("Firestore not initialized")
 
-export async function createFreeUser(uid: string, email: string): Promise<FreeUserDoc> {
-  const now = new Date()
-  const doc: FreeUserDoc = {
-    uid,
-    email,
-    downloadsUsed: 0,
-    bundlesCreated: 0,
-    reachedDownloadLimit: false,
-    reachedBundleLimit: false,
-    createdAt: now,
-    updatedAt: now,
-    ...DEFAULT_FREE_LIMITS,
+    const userRef = doc(db, this.COLLECTION, uid)
+
+    // Check if user already exists
+    const existingUser = await getDoc(userRef)
+    if (existingUser.exists()) {
+      console.log("Free user already exists:", uid)
+      return
+    }
+
+    const freeUserData: FreeUserLimits = {
+      downloadsUsed: 0,
+      downloadsLimit: this.DEFAULT_DOWNLOAD_LIMIT,
+      bundlesCreated: 0,
+      bundlesLimit: this.DEFAULT_BUNDLE_LIMIT,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }
+
+    await setDoc(userRef, freeUserData)
+    console.log("Created free user:", uid)
   }
 
-  await col().doc(uid).set(doc)
-  console.log(`✅ Created free user: ${uid}`)
-  return doc
-}
+  static async getFreeUserLimits(uid: string): Promise<FreeUserLimits | null> {
+    if (!db) return null
 
-export async function getFreeUser(uid: string): Promise<FreeUserDoc | null> {
-  const snap = await col().doc(uid).get()
-  return snap.exists ? (snap.data() as FreeUserDoc) : null
-}
+    const userRef = doc(db, this.COLLECTION, uid)
+    const userDoc = await getDoc(userRef)
 
-export async function incrementDownloads(uid: string): Promise<void> {
-  const now = new Date()
-  const userRef = col().doc(uid)
+    if (!userDoc.exists()) {
+      return null
+    }
 
-  await db.runTransaction(async (transaction) => {
-    const doc = await transaction.get(userRef)
-    if (!doc.exists) return
-
-    const data = doc.data() as FreeUserDoc
-    const newDownloadsUsed = (data.downloadsUsed || 0) + 1
-    const reachedLimit = newDownloadsUsed >= (data.downloadsLimit || DEFAULT_FREE_LIMITS.downloadsLimit)
-
-    transaction.update(userRef, {
-      downloadsUsed: newDownloadsUsed,
-      reachedDownloadLimit: reachedLimit,
-      lastDownloadAt: now,
-      updatedAt: now,
-    })
-  })
-}
-
-export async function incrementBundles(uid: string): Promise<void> {
-  const now = new Date()
-  const userRef = col().doc(uid)
-
-  await db.runTransaction(async (transaction) => {
-    const doc = await transaction.get(userRef)
-    if (!doc.exists) return
-
-    const data = doc.data() as FreeUserDoc
-    const newBundlesCreated = (data.bundlesCreated || 0) + 1
-    const reachedLimit = newBundlesCreated >= (data.bundlesLimit || DEFAULT_FREE_LIMITS.bundlesLimit)
-
-    transaction.update(userRef, {
-      bundlesCreated: newBundlesCreated,
-      reachedBundleLimit: reachedLimit,
-      updatedAt: now,
-    })
-  })
-}
-
-export async function resetMonthlyUsage(uid: string): Promise<void> {
-  const now = new Date()
-  await col().doc(uid).update({
-    downloadsUsed: 0,
-    reachedDownloadLimit: false,
-    updatedAt: now,
-  })
-  console.log(`✅ Reset monthly usage for free user: ${uid}`)
-}
-
-export function getFreeUserLimits(user: FreeUserDoc) {
-  return {
-    tier: "free" as const,
-    downloadsUsed: user.downloadsUsed || 0,
-    downloadsLimit: user.downloadsLimit || DEFAULT_FREE_LIMITS.downloadsLimit,
-    bundlesCreated: user.bundlesCreated || 0,
-    bundlesLimit: user.bundlesLimit || DEFAULT_FREE_LIMITS.bundlesLimit,
-    maxVideosPerBundle: user.maxVideosPerBundle || DEFAULT_FREE_LIMITS.maxVideosPerBundle,
-    platformFeePercentage: user.platformFeePercentage || DEFAULT_FREE_LIMITS.platformFeePercentage,
-    reachedDownloadLimit: user.reachedDownloadLimit || false,
-    reachedBundleLimit: user.reachedBundleLimit || false,
+    return userDoc.data() as FreeUserLimits
   }
+
+  static async incrementDownload(uid: string): Promise<boolean> {
+    if (!db) return false
+
+    const userRef = doc(db, this.COLLECTION, uid)
+    const userDoc = await getDoc(userRef)
+
+    if (!userDoc.exists()) {
+      console.error("Free user not found:", uid)
+      return false
+    }
+
+    const userData = userDoc.data() as FreeUserLimits
+
+    if (userData.downloadsUsed >= userData.downloadsLimit) {
+      console.log("Download limit reached for user:", uid)
+      return false
+    }
+
+    await updateDoc(userRef, {
+      downloadsUsed: increment(1),
+      updatedAt: serverTimestamp(),
+    })
+
+    return true
+  }
+
+  static async incrementBundle(uid: string): Promise<boolean> {
+    if (!db) return false
+
+    const userRef = doc(db, this.COLLECTION, uid)
+    const userDoc = await getDoc(userRef)
+
+    if (!userDoc.exists()) {
+      console.error("Free user not found:", uid)
+      return false
+    }
+
+    const userData = userDoc.data() as FreeUserLimits
+
+    if (userData.bundlesCreated >= userData.bundlesLimit) {
+      console.log("Bundle limit reached for user:", uid)
+      return false
+    }
+
+    await updateDoc(userRef, {
+      bundlesCreated: increment(1),
+      updatedAt: serverTimestamp(),
+    })
+
+    return true
+  }
+
+  static async resetLimits(uid: string): Promise<void> {
+    if (!db) return
+
+    const userRef = doc(db, this.COLLECTION, uid)
+    await updateDoc(userRef, {
+      downloadsUsed: 0,
+      bundlesCreated: 0,
+      updatedAt: serverTimestamp(),
+    })
+  }
+}
+
+// Named exports for compatibility
+export async function createFreeUser(uid: string): Promise<void> {
+  return FreeUsersService.createFreeUser(uid)
+}
+
+export async function getFreeUserLimits(uid: string): Promise<FreeUserLimits | null> {
+  return FreeUsersService.getFreeUserLimits(uid)
+}
+
+export async function incrementDownload(uid: string): Promise<boolean> {
+  return FreeUsersService.incrementDownload(uid)
+}
+
+export async function incrementBundle(uid: string): Promise<boolean> {
+  return FreeUsersService.incrementBundle(uid)
+}
+
+export async function resetLimits(uid: string): Promise<void> {
+  return FreeUsersService.resetLimits(uid)
 }
