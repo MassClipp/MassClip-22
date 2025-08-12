@@ -49,6 +49,19 @@ export default function DashboardHeader({ initialSearchQuery = "" }: DashboardHe
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-zinc-800/50 bg-black/80 backdrop-blur-sm">
+      {isProUser && (
+        <div className="absolute top-2 left-4 z-50">
+          <div className="relative">
+            {/* Diamond shape with gradient */}
+            <div className="w-6 h-6 bg-gradient-to-br from-yellow-400 via-orange-500 to-red-500 transform rotate-45 shadow-lg border border-yellow-300/50"></div>
+            {/* Inner diamond for depth */}
+            <div className="absolute top-1 left-1 w-4 h-4 bg-gradient-to-br from-yellow-300 to-orange-400 transform rotate-45"></div>
+            {/* Sparkle effect */}
+            <div className="absolute -top-1 -right-1 w-2 h-2 bg-white rounded-full opacity-80 animate-pulse"></div>
+          </div>
+        </div>
+      )}
+
       <div className="container mx-auto px-4">
         <div className="flex h-16 items-center justify-between">
           {/* Logo */}

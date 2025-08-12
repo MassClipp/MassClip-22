@@ -62,29 +62,20 @@ async function getTierInfoSafe(uid: string): Promise<{ maxVideosPerBundle: numbe
   try {
     const membership = await getMembership(uid)
 
-    if (membership && membership.isActive) {
-      // Creator Pro user - get limits from membership
-      const maxVideos = membership.features?.maxVideosPerBundle ?? null
-      const maxBundles = membership.features?.maxBundles ?? null
-
-      console.log("✅ [Bundle Limit] Creator Pro user detected:", {
-        uid,
-        plan: membership.plan,
-        maxVideosPerBundle: maxVideos,
-        maxBundles: maxBundles,
-        isUnlimited: maxVideos === null,
-      })
-
+    // Dead simple logic: If they have an active Creator Pro membership, unlimited everything
+    if (membership && membership.isActive && membership.plan === "creator_pro") {
+      console.log("🚀 [Bundle Limit] Creator Pro user - UNLIMITED EVERYTHING")
       return {
-        maxVideosPerBundle: maxVideos,
-        maxBundles: maxBundles,
+        maxVideosPerBundle: null, // Unlimited videos per bundle
+        maxBundles: null, // Unlimited bundles
       }
     }
   } catch (e) {
     console.error("❌ [Bundle Limit] Error checking membership:", e)
   }
 
-  console.log("📝 [Bundle Limit] Free user detected:", { uid, maxVideosPerBundle: 10, maxBundles: 2 })
+  // Everyone else gets free tier limits
+  console.log("📝 [Bundle Limit] Free user - 10 videos per bundle, 2 bundles max")
   return { maxVideosPerBundle: 10, maxBundles: 2 }
 }
 
@@ -298,14 +289,14 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const existingDetailed = Array.isArray(bundleData.detailedContentItems) ? bundleData.detailedContentItems : []
     const currentCount = existingDetailed.length
 
-    // Simple logic: null = unlimited, number = that limit
+    // Simplified logic: null means unlimited, period
     let remaining: number
     if (tier.maxVideosPerBundle === null) {
-      remaining = Number.POSITIVE_INFINITY // Unlimited for Creator Pro
-      console.log("🚀 [Bundle Limit] UNLIMITED bundle content for Creator Pro user")
+      remaining = Number.POSITIVE_INFINITY // Creator Pro = unlimited
+      console.log("🚀 [Bundle Limit] Creator Pro user - NO LIMITS APPLIED")
     } else {
       remaining = Math.max(0, tier.maxVideosPerBundle - currentCount)
-      console.log("📊 [Bundle Limit] Limited bundle content:", {
+      console.log("📊 [Bundle Limit] Free user limits applied:", {
         limit: tier.maxVideosPerBundle,
         current: currentCount,
         remaining: remaining,
