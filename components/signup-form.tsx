@@ -8,16 +8,14 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, Eye, EyeOff } from "lucide-react"
-import { signInWithPopup, GoogleAuthProvider } from "firebase/auth"
-import { auth } from "@/lib/firebase-safe"
+import { createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from "firebase/auth"
+import { auth } from "@/lib/firebase"
 import Logo from "@/components/logo"
 
 export function SignupForm({ className, ...props }: React.ComponentProps<"div">) {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
-  const [username, setUsername] = useState("")
-  const [displayName, setDisplayName] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -29,7 +27,7 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
   const handleEmailSignup = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!email || !password || !confirmPassword || !username || !displayName) {
+    if (!email || !password || !confirmPassword) {
       setError("Please fill in all fields")
       return
     }
@@ -44,40 +42,15 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
       return
     }
 
-    if (username.length < 3) {
-      setError("Username must be at least 3 characters")
-      return
-    }
-
     setLoading(true)
     setError("")
 
     try {
-      // Call the server-side API route instead of Firebase Auth directly
-      const response = await fetch("/api/auth/create-user", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email,
-          password,
-          username,
-          displayName,
-        }),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to create account")
-      }
-
-      console.log("✅ Account created successfully:", data)
+      await createUserWithEmailAndPassword(auth, email, password)
       router.push("/login-success")
     } catch (error: any) {
       console.error("Signup error:", error)
-      setError(error.message || "Failed to create account. Please try again.")
+      setError("Failed to create account. Please try again.")
     } finally {
       setLoading(false)
     }
@@ -96,30 +69,6 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
 
       if (result.user) {
         console.log("Google signup successful:", result.user.email)
-
-        // For Google signup, we'll need to create the user profile and free user record
-        // This should be handled in the auth state change listener or we can call an API
-        try {
-          const response = await fetch("/api/auth/google-signup", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              uid: result.user.uid,
-              email: result.user.email,
-              displayName: result.user.displayName,
-              username: result.user.email?.split("@")[0] || "user",
-            }),
-          })
-
-          if (!response.ok) {
-            console.warn("Failed to create user profile for Google signup")
-          }
-        } catch (error) {
-          console.warn("Error creating user profile for Google signup:", error)
-        }
-
         router.push("/login-success")
       }
     } catch (error: any) {
@@ -221,27 +170,6 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
                 </>
               ) : (
                 <form onSubmit={handleEmailSignup} className="space-y-4">
-                  {/* Username Field */}
-                  <Input
-                    type="text"
-                    placeholder="Choose a username"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
-                    className="h-12 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-red-500 focus:ring-red-500 backdrop-blur-sm"
-                    required
-                    minLength={3}
-                  />
-
-                  {/* Display Name Field */}
-                  <Input
-                    type="text"
-                    placeholder="Your display name"
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    className="h-12 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-red-500 focus:ring-red-500 backdrop-blur-sm"
-                    required
-                  />
-
                   {/* Email Field */}
                   <Input
                     type="email"
@@ -261,7 +189,6 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
                       onChange={(e) => setPassword(e.target.value)}
                       className="h-12 pr-10 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-red-500 focus:ring-red-500 backdrop-blur-sm"
                       required
-                      minLength={6}
                     />
                     <Button
                       type="button"
@@ -287,7 +214,6 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       className="h-12 pr-10 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-red-500 focus:ring-red-500 backdrop-blur-sm"
                       required
-                      minLength={6}
                     />
                     <Button
                       type="button"
@@ -390,4 +316,5 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
   )
 }
 
+// Default export for compatibility
 export default SignupForm
