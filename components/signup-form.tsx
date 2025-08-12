@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, Eye, EyeOff } from "lucide-react"
 import { useFirebaseAuthSafe } from "@/hooks/useFirebaseAuthSafe"
-import { ensureFreeUser } from "@/utils/userUtils"
 import Logo from "@/components/logo"
 
 export function SignupForm({ className, ...props }: React.ComponentProps<"div">) {
@@ -50,22 +49,36 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
     try {
       const result = await signUp(email, password)
 
-      if (result.success) {
-        if (result.demo) {
-          setError("Demo mode: Firebase not configured. Please set up Firebase to enable real authentication.")
-          return
-        }
+      if (result.success && result.user) {
+        console.log("🎉 Firebase signup successful, creating server-side records...")
 
-        // Ensure free user record is created
+        // Create server-side user records
         try {
-          await ensureFreeUser("", email) // UID will be handled server-side
-          console.log("✅ Free user record ensured")
+          const response = await fetch("/api/auth/create-user", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              uid: result.user.uid,
+              email: result.user.email || email,
+              username: email.split("@")[0], // Generate username from email
+              displayName: email.split("@")[0],
+            }),
+          })
+
+          const data = await response.json()
+
+          if (data.success) {
+            console.log("✅ Server-side user records created successfully")
+          } else {
+            console.error("❌ Failed to create server-side records:", data.error)
+          }
         } catch (error) {
-          console.error("❌ Failed to ensure free user record:", error)
-          // Don't block signup for this error
+          console.error("❌ Error calling create-user API:", error)
         }
 
-        console.log("🎉 Signup successful, redirecting...")
+        console.log("🎉 Signup process complete, redirecting...")
         router.push("/login-success")
       } else {
         setError(result.error || "Failed to create account")
@@ -85,13 +98,36 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
     try {
       const result = await signInWithGoogle()
 
-      if (result.success) {
-        if (result.demo) {
-          setError("Demo mode: Firebase not configured. Please set up Firebase to enable real authentication.")
-          return
+      if (result.success && result.user) {
+        console.log("🎉 Google signup successful, creating server-side records...")
+
+        // Create server-side user records
+        try {
+          const response = await fetch("/api/auth/create-user", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              uid: result.user.uid,
+              email: result.user.email,
+              username: result.user.email?.split("@")[0] || "user",
+              displayName: result.user.displayName || result.user.email?.split("@")[0] || "User",
+            }),
+          })
+
+          const data = await response.json()
+
+          if (data.success) {
+            console.log("✅ Server-side user records created successfully")
+          } else {
+            console.error("❌ Failed to create server-side records:", data.error)
+          }
+        } catch (error) {
+          console.error("❌ Error calling create-user API:", error)
         }
 
-        console.log("🎉 Google signup successful, redirecting...")
+        console.log("🎉 Google signup process complete, redirecting...")
         router.push("/login-success")
       } else {
         if (result.error?.includes("popup-closed-by-user")) {

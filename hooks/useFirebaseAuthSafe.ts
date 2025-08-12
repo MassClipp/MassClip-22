@@ -14,30 +14,33 @@ import { auth, isFirebaseConfigured, firebaseError } from "@/lib/firebase-safe"
 
 interface AuthResult {
   success: boolean
+  user?: User | null
   error?: string
   demo?: boolean
 }
 
-export function useFirebaseAuthSafe() {
+interface UseFirebaseAuthSafeReturn {
+  user: User | null
+  loading: boolean
+  isConfigured: boolean
+  configError: string | null
+  signUp: (email: string, password: string) => Promise<AuthResult>
+  signIn: (email: string, password: string) => Promise<AuthResult>
+  signInWithGoogle: () => Promise<AuthResult>
+  logout: () => Promise<void>
+}
+
+export function useFirebaseAuthSafe(): UseFirebaseAuthSafeReturn {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
-  const [configError, setConfigError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!isFirebaseConfigured()) {
-      setConfigError(firebaseError || "Firebase not configured")
-      setLoading(false)
-      return
-    }
-
-    if (!auth) {
-      setConfigError("Firebase auth not initialized")
+    if (!isFirebaseConfigured || !auth) {
       setLoading(false)
       return
     }
 
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      console.log("🔄 Auth state changed:", user?.email || "No user")
       setUser(user)
       setLoading(false)
     })
@@ -45,51 +48,25 @@ export function useFirebaseAuthSafe() {
     return () => unsubscribe()
   }, [])
 
-  const signUp = async (
-    email: string,
-    password: string,
-    username?: string,
-    displayName?: string,
-  ): Promise<AuthResult> => {
-    if (!isFirebaseConfigured() || !auth) {
+  const signUp = async (email: string, password: string): Promise<AuthResult> => {
+    if (!isFirebaseConfigured || !auth) {
+      console.warn("Firebase not configured, returning demo mode")
       return {
-        success: false,
-        error: "Firebase not configured",
+        success: true,
         demo: true,
+        error: "Firebase not configured - demo mode",
       }
     }
 
     try {
-      const result = await createUserWithEmailAndPassword(auth, email, password)
-      console.log("✅ User created successfully:", result.user.email)
-
-      // Call server-side user creation
-      try {
-        const response = await fetch("/api/auth/create-user", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            uid: result.user.uid,
-            email: result.user.email,
-            username,
-            displayName,
-          }),
-        })
-
-        if (!response.ok) {
-          console.warn("⚠️ Server-side user creation failed:", await response.text())
-        } else {
-          console.log("✅ Server-side user creation successful")
-        }
-      } catch (error) {
-        console.error("❌ Server-side user creation error:", error)
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password)
+      console.log("✅ Firebase user created:", userCredential.user.uid)
+      return {
+        success: true,
+        user: userCredential.user,
       }
-
-      return { success: true }
     } catch (error: any) {
-      console.error("❌ Signup error:", error)
+      console.error("❌ Firebase signup error:", error)
       return {
         success: false,
         error: error.message || "Failed to create account",
@@ -98,19 +75,21 @@ export function useFirebaseAuthSafe() {
   }
 
   const signIn = async (email: string, password: string): Promise<AuthResult> => {
-    if (!isFirebaseConfigured() || !auth) {
+    if (!isFirebaseConfigured || !auth) {
       return {
-        success: false,
-        error: "Firebase not configured",
+        success: true,
         demo: true,
+        error: "Firebase not configured - demo mode",
       }
     }
 
     try {
-      await signInWithEmailAndPassword(auth, email, password)
-      return { success: true }
+      const userCredential = await signInWithEmailAndPassword(auth, email, password)
+      return {
+        success: true,
+        user: userCredential.user,
+      }
     } catch (error: any) {
-      console.error("❌ Sign in error:", error)
       return {
         success: false,
         error: error.message || "Failed to sign in",
@@ -119,11 +98,11 @@ export function useFirebaseAuthSafe() {
   }
 
   const signInWithGoogle = async (): Promise<AuthResult> => {
-    if (!isFirebaseConfigured() || !auth) {
+    if (!isFirebaseConfigured || !auth) {
       return {
-        success: false,
-        error: "Firebase not configured",
+        success: true,
         demo: true,
+        error: "Firebase not configured - demo mode",
       }
     }
 
@@ -133,33 +112,13 @@ export function useFirebaseAuthSafe() {
       provider.addScope("profile")
 
       const result = await signInWithPopup(auth, provider)
-
-      // Call server-side user creation for Google users
-      try {
-        const response = await fetch("/api/auth/create-user", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            uid: result.user.uid,
-            email: result.user.email,
-            displayName: result.user.displayName,
-          }),
-        })
-
-        if (!response.ok) {
-          console.warn("⚠️ Server-side user creation failed:", await response.text())
-        } else {
-          console.log("✅ Server-side user creation successful")
-        }
-      } catch (error) {
-        console.error("❌ Server-side user creation error:", error)
+      console.log("✅ Google signup successful:", result.user.email)
+      return {
+        success: true,
+        user: result.user,
       }
-
-      return { success: true }
     } catch (error: any) {
-      console.error("❌ Google sign in error:", error)
+      console.error("❌ Google signup error:", error)
       return {
         success: false,
         error: error.message || "Failed to sign in with Google",
@@ -167,28 +126,21 @@ export function useFirebaseAuthSafe() {
     }
   }
 
-  const logout = async (): Promise<AuthResult> => {
-    if (!auth) {
-      return { success: false, error: "Auth not initialized" }
-    }
+  const logout = async (): Promise<void> => {
+    if (!auth) return
 
     try {
       await signOut(auth)
-      return { success: true }
-    } catch (error: any) {
-      console.error("❌ Logout error:", error)
-      return {
-        success: false,
-        error: error.message || "Failed to logout",
-      }
+    } catch (error) {
+      console.error("Logout error:", error)
     }
   }
 
   return {
     user,
     loading,
-    configError,
-    isConfigured: isFirebaseConfigured(),
+    isConfigured: isFirebaseConfigured,
+    configError: firebaseError,
     signUp,
     signIn,
     signInWithGoogle,

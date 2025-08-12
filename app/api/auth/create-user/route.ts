@@ -1,37 +1,46 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { ensureMembership } from "@/lib/memberships-service"
-import { createFreeUser } from "@/lib/free-users-service"
 
 export async function POST(request: NextRequest) {
   try {
+    console.log("🔄 Server-side user creation API called")
+
     const { uid, email, username, displayName } = await request.json()
 
     if (!uid || !email) {
+      console.error("❌ Missing required fields:", { uid: !!uid, email: !!email })
       return NextResponse.json({ error: "Missing required fields: uid and email" }, { status: 400 })
     }
 
-    console.log("🔄 Creating user records for:", { uid, email, username, displayName })
+    console.log("🔄 Creating user records for:", {
+      uid: uid.substring(0, 8) + "...",
+      email,
+      username,
+      displayName,
+    })
 
-    // Create membership record (handles both free and pro tiers)
+    // Create membership record (this will create a free tier membership by default)
     try {
+      console.log("🔄 Creating membership record...")
       const membership = await ensureMembership(uid, email)
-      console.log("✅ Membership record created/ensured:", membership)
+      console.log("✅ Membership record created/ensured:", {
+        uid: membership.uid,
+        plan: membership.plan,
+        status: membership.status,
+        features: membership.features,
+      })
     } catch (error) {
       console.error("❌ Failed to create membership record:", error)
-      // Continue with free user creation as fallback
+      return NextResponse.json(
+        {
+          error: "Failed to create membership record",
+          details: error instanceof Error ? error.message : String(error),
+        },
+        { status: 500 },
+      )
     }
 
-    // Create free user record for tier limitations
-    try {
-      const freeUser = await createFreeUser(uid, email)
-      console.log("✅ Free user record created:", freeUser)
-    } catch (error) {
-      console.error("❌ Failed to create free user record:", error)
-      // Don't fail the entire request for this
-    }
-
-    // TODO: Create user profile record if needed
-    // This would include username, displayName, etc.
+    console.log("✅ Server-side user creation completed successfully")
 
     return NextResponse.json({
       success: true,
@@ -41,6 +50,12 @@ export async function POST(request: NextRequest) {
     })
   } catch (error: any) {
     console.error("❌ Server-side user creation error:", error)
-    return NextResponse.json({ error: "Failed to create user records", details: error.message }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: "Failed to create user records",
+        details: error.message,
+      },
+      { status: 500 },
+    )
   }
 }

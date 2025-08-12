@@ -62,17 +62,22 @@ const PRO_FEATURES: MembershipFeatures = {
 
 export async function getMembership(uid: string): Promise<MembershipDoc | null> {
   if (!db) {
+    console.error("❌ Firestore not initialized")
     throw new Error("Firestore not initialized")
   }
 
   try {
+    console.log("🔄 Getting membership for uid:", uid.substring(0, 8) + "...")
     const docRef = doc(db, "memberships", uid)
     const docSnap = await getDoc(docRef)
 
     if (docSnap.exists()) {
-      return docSnap.data() as MembershipDoc
+      const data = docSnap.data() as MembershipDoc
+      console.log("✅ Found existing membership:", { plan: data.plan, status: data.status })
+      return data
     }
 
+    console.log("ℹ️ No existing membership found")
     return null
   } catch (error) {
     console.error("❌ Error getting membership:", error)
@@ -83,10 +88,17 @@ export async function getMembership(uid: string): Promise<MembershipDoc | null> 
 export const getUserMembership = getMembership
 
 export async function ensureMembership(uid: string, email?: string): Promise<MembershipDoc> {
-  const existing = await getMembership(uid)
-  if (existing) return existing
+  console.log("🔄 Ensuring membership for uid:", uid.substring(0, 8) + "...")
 
-  const doc: MembershipDoc = {
+  const existing = await getMembership(uid)
+  if (existing) {
+    console.log("✅ Membership already exists, returning existing")
+    return existing
+  }
+
+  console.log("🔄 Creating new free membership...")
+
+  const membershipDoc: MembershipDoc = {
     uid,
     email,
     plan: "free",
@@ -100,11 +112,19 @@ export async function ensureMembership(uid: string, email?: string): Promise<Mem
   }
 
   if (!db) {
+    console.error("❌ Firestore not initialized")
     throw new Error("Firestore not initialized")
   }
 
-  await setDoc(doc(db, "memberships", uid), doc, { merge: true })
-  return doc
+  try {
+    const docRef = doc(db, "memberships", uid)
+    await setDoc(docRef, membershipDoc, { merge: true })
+    console.log("✅ Created new free membership successfully")
+    return membershipDoc
+  } catch (error) {
+    console.error("❌ Error creating membership:", error)
+    throw error
+  }
 }
 
 export async function setFree(uid: string, opts?: { email?: string; overrides?: Partial<MembershipFeatures> }) {
