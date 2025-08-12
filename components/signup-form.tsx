@@ -1,301 +1,339 @@
 "use client"
 
 import type React from "react"
+
 import { useState } from "react"
-import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth"
-import { doc, setDoc, serverTimestamp } from "firebase/firestore"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, Eye, EyeOff } from "lucide-react"
-import { auth, db } from "@/lib/firebase-safe"
-import { toast } from "sonner"
+import { Loader2, Eye, EyeOff, AlertCircle } from "lucide-react"
+import { useFirebaseAuthSafe } from "@/hooks/use-firebase-auth-safe"
+import { GoogleAuthButton } from "@/components/google-auth-button"
+import Link from "next/link"
 
-interface SignupFormProps {
-  onSuccess?: () => void
-  redirectTo?: string
-}
+export function SignupForm() {
+  const router = useRouter()
+  const { signUp, signInWithGoogle, loading, configError, isConfigured } = useFirebaseAuthSafe()
 
-export function SignupForm({ onSuccess, redirectTo = "/dashboard" }: SignupFormProps) {
   const [formData, setFormData] = useState({
     email: "",
-    password: "",
-    confirmPassword: "",
     username: "",
     displayName: "",
+    password: "",
+    confirmPassword: "",
   })
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
+  const [errors, setErrors] = useState<Record<string, string>>({})
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
-  const router = useRouter()
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }))
-    // Clear error when user starts typing
-    if (error) setError("")
-  }
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const validateForm = () => {
-    if (!formData.email || !formData.password || !formData.username || !formData.displayName) {
-      setError("All fields are required")
-      return false
+    const newErrors: Record<string, string> = {}
+
+    if (!formData.email) {
+      newErrors.email = "Email is required"
+    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+      newErrors.email = "Please enter a valid email address"
     }
 
-    if (formData.password !== formData.confirmPassword) {
-      setError("Passwords do not match")
-      return false
+    if (!formData.username) {
+      newErrors.username = "Username is required"
+    } else if (formData.username.length < 3) {
+      newErrors.username = "Username must be at least 3 characters"
+    } else if (!/^[a-zA-Z0-9_-]+$/.test(formData.username)) {
+      newErrors.username = "Username can only contain letters, numbers, hyphens, and underscores"
     }
 
-    if (formData.password.length < 6) {
-      setError("Password must be at least 6 characters long")
-      return false
+    if (!formData.displayName) {
+      newErrors.displayName = "Display name is required"
     }
 
-    if (formData.username.length < 3) {
-      setError("Username must be at least 3 characters long")
-      return false
+    if (!formData.password) {
+      newErrors.password = "Password is required"
+    } else if (formData.password.length < 6) {
+      newErrors.password = "Password must be at least 6 characters"
     }
 
-    // Check for valid username format
-    if (!/^[a-zA-Z0-9_-]+$/.test(formData.username)) {
-      setError("Username can only contain letters, numbers, hyphens, and underscores")
-      return false
+    if (!formData.confirmPassword) {
+      newErrors.confirmPassword = "Please confirm your password"
+    } else if (formData.password !== formData.confirmPassword) {
+      newErrors.confirmPassword = "Passwords do not match"
     }
 
-    // Check for valid email format
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      setError("Please enter a valid email address")
-      return false
-    }
-
-    return true
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!validateForm()) return
-    if (!auth || !db) {
-      setError("Firebase is not properly configured")
+    if (!validateForm()) {
       return
     }
 
-    setLoading(true)
-    setError("")
+    setIsSubmitting(true)
+    setErrors({})
 
     try {
-      // Check if username is available
-      const usernameCheckResponse = await fetch("/api/check-username", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ username: formData.username }),
-      })
+      const result = await signUp(formData.email, formData.password, formData.username, formData.displayName)
 
-      const usernameResult = await usernameCheckResponse.json()
-
-      if (!usernameResult.available) {
-        setError("Username is already taken")
-        setLoading(false)
-        return
-      }
-
-      // Create user with Firebase Auth
-      const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password)
-
-      const user = userCredential.user
-
-      // Update the user's display name
-      await updateProfile(user, {
-        displayName: formData.displayName,
-      })
-
-      // Create user profile in Firestore
-      await setDoc(doc(db, "users", user.uid), {
-        uid: user.uid,
-        email: formData.email,
-        username: formData.username,
-        displayName: formData.displayName,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        plan: "free",
-        isActive: true,
-        profileComplete: true,
-      })
-
-      // Create user profile via API (this will also create the free user record)
-      const createUserResponse = await fetch("/api/auth/create-user", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          uid: user.uid,
-          email: formData.email,
-          username: formData.username,
-          displayName: formData.displayName,
-        }),
-      })
-
-      if (!createUserResponse.ok) {
-        console.warn("Failed to create user profile via API, but Firebase user was created")
-      }
-
-      toast.success("Account created successfully!")
-
-      if (onSuccess) {
-        onSuccess()
+      if (result.success) {
+        console.log("✅ Account created successfully")
+        router.push("/login-success")
       } else {
-        router.push(redirectTo)
+        if (result.demo) {
+          setErrors({ general: "Demo mode: Firebase not configured. Please check your environment variables." })
+        } else {
+          setErrors({ general: result.error || "Failed to create account" })
+        }
       }
     } catch (error: any) {
       console.error("Signup error:", error)
-
-      // Handle specific Firebase errors
-      if (error.code === "auth/email-already-in-use") {
-        setError("An account with this email already exists")
-      } else if (error.code === "auth/weak-password") {
-        setError("Password is too weak")
-      } else if (error.code === "auth/invalid-email") {
-        setError("Invalid email address")
-      } else {
-        setError(error.message || "Failed to create account. Please try again.")
-      }
+      setErrors({ general: error.message || "An unexpected error occurred" })
     } finally {
-      setLoading(false)
+      setIsSubmitting(false)
     }
   }
 
+  const handleGoogleSignup = async () => {
+    if (!formData.username || !formData.displayName) {
+      setErrors({
+        username: !formData.username ? "Username is required for Google signup" : "",
+        displayName: !formData.displayName ? "Display name is required for Google signup" : "",
+      })
+      return
+    }
+
+    setIsSubmitting(true)
+    setErrors({})
+
+    try {
+      const result = await signInWithGoogle(formData.username, formData.displayName)
+
+      if (result.success) {
+        if (result.redirect) {
+          console.log("🔄 Redirecting for Google authentication...")
+        } else {
+          console.log("✅ Google signup successful")
+          router.push("/login-success")
+        }
+      } else {
+        if (result.demo) {
+          setErrors({ general: "Demo mode: Firebase not configured. Please check your environment variables." })
+        } else {
+          setErrors({ general: result.error || "Failed to sign up with Google" })
+        }
+      }
+    } catch (error: any) {
+      console.error("Google signup error:", error)
+      setErrors({ general: error.message || "An unexpected error occurred" })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleInputChange = (field: string, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }))
+    if (errors[field]) {
+      setErrors((prev) => ({ ...prev, [field]: "" }))
+    }
+  }
+
+  // Show configuration error if Firebase is not configured
+  if (!isConfigured && configError) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md bg-gray-800 border-gray-700">
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl font-bold text-white">Configuration Error</CardTitle>
+            <CardDescription className="text-gray-300">Firebase is not properly configured</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Alert className="border-red-500 bg-red-500/10">
+              <AlertCircle className="h-4 w-4 text-red-500" />
+              <AlertDescription className="text-red-400">{configError}</AlertDescription>
+            </Alert>
+            <Button onClick={() => window.location.reload()} className="w-full bg-red-600 hover:bg-red-700 text-white">
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   return (
-    <Card className="w-full max-w-md mx-auto">
-      <CardHeader>
-        <CardTitle>Create Account</CardTitle>
-        <CardDescription>Sign up to start using our platform</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center p-4">
+      <Card className="w-full max-w-md bg-gray-800 border-gray-700">
+        <CardHeader className="text-center">
+          <CardTitle className="text-2xl font-bold text-white">Create Account</CardTitle>
+          <CardDescription className="text-gray-300">Sign up to start using our platform</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {errors.general && (
+            <Alert className="border-red-500 bg-red-500/10">
+              <AlertCircle className="h-4 w-4 text-red-500" />
+              <AlertDescription className="text-red-400">{errors.general}</AlertDescription>
             </Alert>
           )}
 
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              value={formData.email}
-              onChange={handleInputChange}
-              placeholder="Enter your email"
-              required
-              disabled={loading}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="username">Username</Label>
-            <Input
-              id="username"
-              name="username"
-              type="text"
-              value={formData.username}
-              onChange={handleInputChange}
-              placeholder="Choose a username"
-              required
-              disabled={loading}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="displayName">Display Name</Label>
-            <Input
-              id="displayName"
-              name="displayName"
-              type="text"
-              value={formData.displayName}
-              onChange={handleInputChange}
-              placeholder="Your display name"
-              required
-              disabled={loading}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <div className="relative">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-white">
+                Email
+              </Label>
               <Input
-                id="password"
-                name="password"
-                type={showPassword ? "text" : "password"}
-                value={formData.password}
-                onChange={handleInputChange}
-                placeholder="Create a password"
-                required
-                disabled={loading}
+                id="email"
+                type="email"
+                value={formData.email}
+                onChange={(e) => handleInputChange("email", e.target.value)}
+                className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-red-500 focus:ring-red-500"
+                placeholder="Enter your email"
+                disabled={isSubmitting || loading}
               />
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                onClick={() => setShowPassword(!showPassword)}
-                disabled={loading}
-              >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </Button>
+              {errors.email && <p className="text-sm text-red-400">{errors.email}</p>}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="username" className="text-white">
+                Username
+              </Label>
+              <Input
+                id="username"
+                type="text"
+                value={formData.username}
+                onChange={(e) => handleInputChange("username", e.target.value.toLowerCase())}
+                className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-red-500 focus:ring-red-500"
+                placeholder="Choose a username"
+                disabled={isSubmitting || loading}
+              />
+              {errors.username && <p className="text-sm text-red-400">{errors.username}</p>}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="displayName" className="text-white">
+                Display Name
+              </Label>
+              <Input
+                id="displayName"
+                type="text"
+                value={formData.displayName}
+                onChange={(e) => handleInputChange("displayName", e.target.value)}
+                className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-red-500 focus:ring-red-500"
+                placeholder="Your display name"
+                disabled={isSubmitting || loading}
+              />
+              {errors.displayName && <p className="text-sm text-red-400">{errors.displayName}</p>}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="password" className="text-white">
+                Password
+              </Label>
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  value={formData.password}
+                  onChange={(e) => handleInputChange("password", e.target.value)}
+                  className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-red-500 focus:ring-red-500 pr-10"
+                  placeholder="Create a password"
+                  disabled={isSubmitting || loading}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-gray-400 hover:text-white"
+                  onClick={() => setShowPassword(!showPassword)}
+                  disabled={isSubmitting || loading}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+              {errors.password && <p className="text-sm text-red-400">{errors.password}</p>}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword" className="text-white">
+                Confirm Password
+              </Label>
+              <div className="relative">
+                <Input
+                  id="confirmPassword"
+                  type={showConfirmPassword ? "text" : "password"}
+                  value={formData.confirmPassword}
+                  onChange={(e) => handleInputChange("confirmPassword", e.target.value)}
+                  className="bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-red-500 focus:ring-red-500 pr-10"
+                  placeholder="Confirm your password"
+                  disabled={isSubmitting || loading}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-gray-400 hover:text-white"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  disabled={isSubmitting || loading}
+                >
+                  {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+              {errors.confirmPassword && <p className="text-sm text-red-400">{errors.confirmPassword}</p>}
+            </div>
+
+            <Button
+              type="submit"
+              className="w-full bg-red-600 hover:bg-red-700 text-white font-medium"
+              disabled={isSubmitting || loading}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating Account...
+                </>
+              ) : (
+                "Create Account"
+              )}
+            </Button>
+          </form>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-gray-600" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-gray-800 px-2 text-gray-400">Or continue with</span>
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="confirmPassword">Confirm Password</Label>
-            <div className="relative">
-              <Input
-                id="confirmPassword"
-                name="confirmPassword"
-                type={showConfirmPassword ? "text" : "password"}
-                value={formData.confirmPassword}
-                onChange={handleInputChange}
-                placeholder="Confirm your password"
-                required
-                disabled={loading}
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                disabled={loading}
-              >
-                {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </Button>
-            </div>
-          </div>
-
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? (
+          <GoogleAuthButton
+            onClick={handleGoogleSignup}
+            disabled={isSubmitting || loading}
+            className="w-full bg-white hover:bg-gray-100 text-gray-900 border border-gray-300"
+          >
+            {isSubmitting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Creating Account...
+                Signing up...
               </>
             ) : (
-              "Create Account"
+              "Sign up with Google"
             )}
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+          </GoogleAuthButton>
+
+          <div className="text-center text-sm text-gray-400">
+            Already have an account?{" "}
+            <Link href="/login" className="text-red-400 hover:text-red-300 font-medium">
+              Sign in
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   )
 }
 

@@ -19,6 +19,7 @@ let auth: Auth | null = null
 let db: Firestore | null = null
 let storage: FirebaseStorage | null = null
 let firebaseError: string | null = null
+let isConfigured = false
 
 export function isFirebaseConfigured(): boolean {
   return !!(
@@ -37,12 +38,13 @@ export function initializeFirebaseSafe(): {
   db: Firestore | null
   storage: FirebaseStorage | null
   error: string | null
+  isConfigured: boolean
 } {
   try {
     if (!isFirebaseConfigured()) {
       firebaseError = "Firebase configuration is incomplete. Please check your environment variables."
       console.error("❌ Firebase configuration error:", firebaseError)
-      return { app: null, auth: null, db: null, storage: null, error: firebaseError }
+      return { app: null, auth: null, db: null, storage: null, error: firebaseError, isConfigured: false }
     }
 
     // Initialize Firebase only if it hasn't been initialized yet
@@ -59,15 +61,16 @@ export function initializeFirebaseSafe(): {
       auth = getAuth(app)
       db = getFirestore(app)
       storage = getStorage(app)
+      isConfigured = true
       console.log("✅ Firebase services initialized")
     }
 
     firebaseError = null
-    return { app, auth, db, storage, error: null }
+    return { app, auth, db, storage, error: null, isConfigured: true }
   } catch (error: any) {
     firebaseError = `Firebase initialization failed: ${error.message}`
     console.error("❌ Firebase initialization error:", error)
-    return { app: null, auth: null, db: null, storage: null, error: firebaseError }
+    return { app: null, auth: null, db: null, storage: null, error: firebaseError, isConfigured: false }
   }
 }
 
@@ -78,6 +81,7 @@ auth = firebaseInit.auth
 db = firebaseInit.db
 storage = firebaseInit.storage
 firebaseError = firebaseInit.error
+isConfigured = firebaseInit.isConfigured
 
 // Export the initialized instances
 export { app, auth, db, storage, firebaseError }
@@ -89,6 +93,7 @@ export default {
   db,
   storage,
   firebaseError,
+  isConfigured,
   isFirebaseConfigured,
   initializeFirebaseSafe,
 }
