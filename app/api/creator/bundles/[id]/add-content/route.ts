@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { cert, getApps, initializeApp } from "firebase-admin/app"
 import { getAuth } from "firebase-admin/auth"
 import { getFirestore, Timestamp } from "firebase-admin/firestore"
-import { getMembership, toTierInfo } from "@/lib/memberships-service"
+import { getMembership } from "@/lib/memberships-service"
 
 // Initialize Firebase Admin with only the required fields to avoid missing env crashes
 if (!getApps().length) {
@@ -60,38 +60,31 @@ function getContentType(mimeType: string): ContentType {
 
 async function getTierInfoSafe(uid: string): Promise<{ maxVideosPerBundle: number | null; maxBundles: number | null }> {
   try {
-    console.log("🔍 [Add Content] Looking up membership for UID:", uid)
     const membership = await getMembership(uid)
-    console.log("🔍 [Add Content] Membership lookup result:", {
-      found: !!membership,
-      plan: membership?.plan,
-      isActive: membership?.isActive,
-      features: membership?.features,
-      uid: membership?.uid,
-    })
 
-    if (membership) {
-      const tierInfo = toTierInfo(membership)
-      console.log("🔍 [Add Content] Using memberships collection:", {
+    if (membership && membership.isActive) {
+      // Creator Pro user - get limits from membership
+      const maxVideos = membership.features?.maxVideosPerBundle ?? null
+      const maxBundles = membership.features?.maxBundles ?? null
+
+      console.log("✅ [Bundle Limit] Creator Pro user detected:", {
+        uid,
         plan: membership.plan,
-        isActive: membership.isActive,
-        maxVideosPerBundle: tierInfo.maxVideosPerBundle,
-        maxBundles: tierInfo.bundlesLimit,
-        rawFeatures: membership.features,
+        maxVideosPerBundle: maxVideos,
+        maxBundles: maxBundles,
+        isUnlimited: maxVideos === null,
       })
+
       return {
-        maxVideosPerBundle: tierInfo.maxVideosPerBundle,
-        maxBundles: tierInfo.bundlesLimit,
+        maxVideosPerBundle: maxVideos,
+        maxBundles: maxBundles,
       }
-    } else {
-      console.warn("⚠️ [Add Content] No membership found for UID:", uid, "- defaulting to free tier")
     }
   } catch (e) {
-    console.error("❌ [Add Content] Memberships service failed:", e, "- defaulting to free tier")
+    console.error("❌ [Bundle Limit] Error checking membership:", e)
   }
 
-  // Default to free tier limits if no membership found
-  console.log("🔍 [Add Content] Using default free tier limits for UID:", uid)
+  console.log("📝 [Bundle Limit] Free user detected:", { uid, maxVideosPerBundle: 10, maxBundles: 2 })
   return { maxVideosPerBundle: 10, maxBundles: 2 }
 }
 
@@ -297,21 +290,20 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     const existingDetailed = Array.isArray(bundleData.detailedContentItems) ? bundleData.detailedContentItems : []
     const currentCount = existingDetailed.length
-    const maxPerBundle = tier.maxVideosPerBundle
 
-    const remaining = maxPerBundle === null ? Number.POSITIVE_INFINITY : Math.max(0, maxPerBundle - currentCount)
-
-    console.log("🔍 [Add Content] Bundle limit check:", {
-      uid,
-      currentCount,
-      maxPerBundle,
-      remaining,
-      tier: tier.maxVideosPerBundle,
-      detailedItemsCount: existingDetailed.length,
-      contentItemsCount: Array.isArray(bundleData.contentItems) ? bundleData.contentItems.length : 0,
-      isUnlimited: maxPerBundle === null,
-      willSkipDueToLimit: remaining < contentIds.length,
-    })
+    // Simple logic: null = unlimited, number = that limit
+    let remaining: number
+    if (tier.maxVideosPerBundle === null) {
+      remaining = Number.POSITIVE_INFINITY // Unlimited for Creator Pro
+      console.log("🚀 [Bundle Limit] UNLIMITED bundle content for Creator Pro user")
+    } else {
+      remaining = Math.max(0, tier.maxVideosPerBundle - currentCount)
+      console.log("📊 [Bundle Limit] Limited bundle content:", {
+        limit: tier.maxVideosPerBundle,
+        current: currentCount,
+        remaining: remaining,
+      })
+    }
 
     const existingIds = new Set(
       existingDetailed
@@ -444,11 +436,17 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       added: detailedToAdd.length,
       skipped,
       reason: duplicatesSelected && detailedToAdd.length === 0 ? "already-in-bundle" : "ok",
-      maxPerBundle,
+      maxPerBundle: tier.maxVideosPerBundle,
       remainingBefore: remaining,
       currentCountBefore: currentCount,
       finalCount: mergedDetailed.length,
       durationMs: Date.now() - startedAt,
+      debug: {
+        uid,
+        membershipFound: tier.maxVideosPerBundle !== 10, // If not 10, membership was found
+        isUnlimited: tier.maxVideosPerBundle === null,
+        tierInfo: tier,
+      },
     })
   } catch (error: any) {
     console.error("❌ [Add Content] Unhandled error:", error)
