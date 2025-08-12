@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createUserWithEmailAndPassword } from "firebase/auth"
 import { auth } from "@/lib/firebase"
 import { ProfileManager } from "@/lib/profile-manager"
-import { UserTrackingService } from "@/lib/user-tracking-service"
+import { createFreeUser } from "@/lib/free-users-service"
 
 export const runtime = "nodejs"
 
@@ -37,15 +37,13 @@ export async function POST(request: NextRequest) {
       // Don't fail the entire signup, just log the error
     }
 
-    // Ensure freeUsers tracking exists for all non-Creator Pro users
+    // Create free user record with limitations
     try {
-      const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || ""
-      await UserTrackingService.ensureFreeUserForNonPro(user.uid, user.email || "", {
-        ipAddress: ip || undefined,
-      })
-    } catch (e) {
-      // Don't block signup on tracking errors; just log
-      console.warn("⚠️ [UserTracking] Could not ensure free user record at signup:", e)
+      await createFreeUser(user.uid, email)
+      console.log(`✅ Created free user limitations for: ${user.uid}`)
+    } catch (error) {
+      console.error("❌ Failed to create free user record:", error)
+      // Don't fail signup, but log the error
     }
 
     console.log(`✅ User signup completed successfully for: ${username}`)

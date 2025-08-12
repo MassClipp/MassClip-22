@@ -196,3 +196,18 @@ export async function getTierInfo(uid: string) {
   const m = await ensureMembership(uid)
   return toTierInfo(m)
 }
+
+export async function cancelMembership(uid: string): Promise<void> {
+  const now = new Date()
+  await col().doc(uid).update({
+    status: "canceled",
+    isActive: false,
+    updatedAt: now,
+  })
+  console.log(`✅ Canceled membership for user: ${uid}`)
+}
+
+export async function deleteMembership(uid: string): Promise<void> {
+  await col().doc(uid).delete()
+  console.log(`✅ Deleted membership record for user: ${uid}`)
+}
