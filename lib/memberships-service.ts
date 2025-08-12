@@ -1,137 +1,238 @@
-import { doc, setDoc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore"
+import { doc, setDoc, getDoc, updateDoc, deleteDoc, serverTimestamp, increment } from "firebase/firestore"
 import { db } from "@/lib/firebase-safe"
 
-export interface MembershipData {
+export type MembershipPlan = "free" | "creator_pro"
+export type MembershipStatus = "active" | "inactive" | "canceled" | "past_due" | "trialing"
+
+export interface MembershipFeatures {
+  unlimitedDownloads: boolean
+  premiumContent: boolean
+  noWatermark: boolean
+  prioritySupport: boolean
+  platformFeePercentage: number
+  maxVideosPerBundle: number | null
+  maxBundles: number | null
+}
+
+export interface MembershipDoc {
   uid: string
-  email: string
-  plan: "free" | "creator_pro"
-  status: "active" | "canceled" | "past_due" | "incomplete"
+  email?: string
+  plan: MembershipPlan
+  status: MembershipStatus
+  isActive: boolean
+
+  // Stripe related
   stripeCustomerId?: string
   stripeSubscriptionId?: string
-  stripePriceId?: string
-  currentPeriodStart?: Date
-  currentPeriodEnd?: Date
-  cancelAtPeriodEnd?: boolean
-  createdAt: Date
-  updatedAt: Date
-}
+  currentPeriodEnd?: Date | null
+  priceId?: string
+  connectedAccountId?: string
 
-export interface TierInfo {
-  plan: "free" | "creator_pro"
-  status: "active" | "canceled" | "past_due" | "incomplete"
+  // Usage
   downloadsUsed: number
-  bundlesUsed: number
-  maxDownloads: number
-  maxBundles: number
-  canUpload: boolean
-  canCreateBundles: boolean
+  bundlesCreated: number
+
+  // Features/caps (single place to read app limits)
+  features: MembershipFeatures
+
+  // Metadata
+  createdAt: any
+  updatedAt: any
 }
 
-export async function setCreatorPro(
-  uid: string,
-  email: string,
-  stripeData?: {
-    customerId: string
-    subscriptionId: string
-    priceId: string
-    currentPeriodStart: Date
-    currentPeriodEnd: Date
-  },
-): Promise<void> {
+const FREE_FEATURES: MembershipFeatures = {
+  unlimitedDownloads: false,
+  premiumContent: false,
+  noWatermark: false,
+  prioritySupport: false,
+  platformFeePercentage: 20,
+  maxVideosPerBundle: 10,
+  maxBundles: 2,
+}
+
+const PRO_FEATURES: MembershipFeatures = {
+  unlimitedDownloads: true,
+  premiumContent: true,
+  noWatermark: true,
+  prioritySupport: true,
+  platformFeePercentage: 10,
+  maxVideosPerBundle: null,
+  maxBundles: null,
+}
+
+export async function getMembership(uid: string): Promise<MembershipDoc | null> {
   if (!db) {
     throw new Error("Firestore not initialized")
   }
 
-  const membershipData: MembershipData = {
-    uid,
-    email,
-    plan: "creator_pro",
-    status: "active",
-    stripeCustomerId: stripeData?.customerId,
-    stripeSubscriptionId: stripeData?.subscriptionId,
-    stripePriceId: stripeData?.priceId,
-    currentPeriodStart: stripeData?.currentPeriodStart,
-    currentPeriodEnd: stripeData?.currentPeriodEnd,
-    cancelAtPeriodEnd: false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  }
+  try {
+    const docRef = doc(db, "memberships", uid)
+    const docSnap = await getDoc(docRef)
 
-  await setDoc(doc(db, "memberships", uid), membershipData)
-  console.log("✅ Creator Pro membership set for user:", uid)
+    if (docSnap.exists()) {
+      return docSnap.data() as MembershipDoc
+    }
+
+    return null
+  } catch (error) {
+    console.error("❌ Error getting membership:", error)
+    throw error
+  }
 }
 
-export async function setFree(uid: string, email: string): Promise<void> {
-  if (!db) {
-    throw new Error("Firestore not initialized")
-  }
+export const getUserMembership = getMembership
 
-  const membershipData: MembershipData = {
+export async function ensureMembership(uid: string, email?: string): Promise<MembershipDoc> {
+  const existing = await getMembership(uid)
+  if (existing) return existing
+
+  const doc: MembershipDoc = {
     uid,
     email,
     plan: "free",
     status: "active",
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  }
-
-  await setDoc(doc(db, "memberships", uid), membershipData)
-  console.log("✅ Free membership set for user:", uid)
-}
-
-export async function setCreatorProStatus(
-  uid: string,
-  status: "active" | "canceled" | "past_due" | "incomplete",
-  cancelAtPeriodEnd?: boolean,
-): Promise<void> {
-  if (!db) {
-    throw new Error("Firestore not initialized")
-  }
-
-  const membershipRef = doc(db, "memberships", uid)
-  await updateDoc(membershipRef, {
-    status,
-    cancelAtPeriodEnd: cancelAtPeriodEnd ?? false,
+    isActive: true,
+    downloadsUsed: 0,
+    bundlesCreated: 0,
+    features: { ...FREE_FEATURES },
+    createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-  })
+  }
 
-  console.log("✅ Membership status updated for user:", uid, "to:", status)
-}
-
-export async function getMembership(uid: string): Promise<MembershipData | null> {
   if (!db) {
     throw new Error("Firestore not initialized")
   }
 
-  const membershipDoc = await getDoc(doc(db, "memberships", uid))
-
-  if (!membershipDoc.exists()) {
-    return null
-  }
-
-  const data = membershipDoc.data()
-  return {
-    ...data,
-    createdAt: data.createdAt?.toDate() || new Date(),
-    updatedAt: data.updatedAt?.toDate() || new Date(),
-    currentPeriodStart: data.currentPeriodStart?.toDate(),
-    currentPeriodEnd: data.currentPeriodEnd?.toDate(),
-  } as MembershipData
+  await setDoc(doc(db, "memberships", uid), doc, { merge: true })
+  return doc
 }
 
-export async function ensureMembership(uid: string, email: string): Promise<MembershipData> {
-  let membership = await getMembership(uid)
-
-  if (!membership) {
-    await setFree(uid, email)
-    membership = await getMembership(uid)
+export async function setFree(uid: string, opts?: { email?: string; overrides?: Partial<MembershipFeatures> }) {
+  if (!db) {
+    throw new Error("Firestore not initialized")
   }
 
-  if (!membership) {
-    throw new Error("Failed to create membership")
+  const features = { ...FREE_FEATURES, ...(opts?.overrides || {}) }
+  await setDoc(
+    doc(db, "memberships", uid),
+    {
+      uid,
+      email: opts?.email,
+      plan: "free",
+      status: "active",
+      isActive: true,
+      features,
+      updatedAt: serverTimestamp(),
+      createdAt: serverTimestamp(),
+    },
+    { merge: true },
+  )
+}
+
+export async function setCreatorPro(
+  uid: string,
+  params: {
+    email?: string
+    stripeCustomerId: string
+    stripeSubscriptionId: string
+    currentPeriodEnd?: Date | null
+    priceId?: string | null
+    connectedAccountId?: string
+    status?: Exclude<MembershipStatus, "inactive">
+  },
+) {
+  if (!db) {
+    throw new Error("Firestore not initialized")
   }
 
-  return membership
+  await setDoc(
+    doc(db, "memberships", uid),
+    {
+      uid,
+      email: params.email ?? null,
+      plan: "creator_pro",
+      status: params.status ?? "active",
+      isActive: (params.status ?? "active") === "active" || (params.status ?? "active") === "trialing",
+      stripeCustomerId: params.stripeCustomerId,
+      stripeSubscriptionId: params.stripeSubscriptionId,
+      currentPeriodEnd: params.currentPeriodEnd ?? null,
+      priceId: params.priceId ?? null,
+      connectedAccountId: params.connectedAccountId ?? null,
+      features: { ...PRO_FEATURES },
+      updatedAt: serverTimestamp(),
+      createdAt: serverTimestamp(),
+    },
+    { merge: true },
+  )
+}
+
+export async function setCreatorProStatus(uid: string, status: MembershipStatus, updates?: Partial<MembershipDoc>) {
+  if (!db) {
+    throw new Error("Firestore not initialized")
+  }
+
+  await setDoc(
+    doc(db, "memberships", uid),
+    {
+      status,
+      isActive: status === "active" || status === "trialing",
+      updatedAt: serverTimestamp(),
+      ...updates,
+    },
+    { merge: true },
+  )
+}
+
+export async function incrementDownloads(uid: string) {
+  if (!db) {
+    throw new Error("Firestore not initialized")
+  }
+
+  await setDoc(
+    doc(db, "memberships", uid),
+    {
+      downloadsUsed: increment(1),
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  )
+}
+
+export async function incrementBundles(uid: string) {
+  if (!db) {
+    throw new Error("Firestore not initialized")
+  }
+
+  await setDoc(
+    doc(db, "memberships", uid),
+    {
+      bundlesCreated: increment(1),
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  )
+}
+
+export function toTierInfo(m: MembershipDoc) {
+  const tier: "free" | "creator_pro" = m.plan === "creator_pro" && m.isActive ? "creator_pro" : "free"
+
+  return {
+    tier,
+    downloadsUsed: m.downloadsUsed ?? 0,
+    downloadsLimit: m.features.unlimitedDownloads ? null : 15,
+    bundlesCreated: m.bundlesCreated ?? 0,
+    bundlesLimit: m.features.maxBundles,
+    maxVideosPerBundle: m.features.maxVideosPerBundle,
+    platformFeePercentage: m.features.platformFeePercentage,
+    reachedDownloadLimit: m.features.unlimitedDownloads ? false : (m.downloadsUsed ?? 0) >= 15,
+    reachedBundleLimit:
+      m.features.maxBundles === null ? false : (m.bundlesCreated ?? 0) >= (m.features.maxBundles ?? 0),
+  }
+}
+
+export async function getTierInfo(uid: string) {
+  const m = await ensureMembership(uid)
+  return toTierInfo(m)
 }
 
 export async function cancelMembership(uid: string): Promise<void> {
@@ -139,60 +240,19 @@ export async function cancelMembership(uid: string): Promise<void> {
     throw new Error("Firestore not initialized")
   }
 
-  const membershipRef = doc(db, "memberships", uid)
-  await updateDoc(membershipRef, {
+  await updateDoc(doc(db, "memberships", uid), {
     status: "canceled",
-    cancelAtPeriodEnd: true,
+    isActive: false,
     updatedAt: serverTimestamp(),
   })
-
-  console.log("✅ Membership canceled for user:", uid)
+  console.log(`✅ Canceled membership for user: ${uid}`)
 }
 
-export async function getTierInfo(uid: string): Promise<TierInfo> {
-  const membership = await getMembership(uid)
-
-  if (!membership) {
-    // Return default free tier info
-    return {
-      plan: "free",
-      status: "active",
-      downloadsUsed: 0,
-      bundlesUsed: 0,
-      maxDownloads: 5,
-      maxBundles: 1,
-      canUpload: false,
-      canCreateBundles: false,
-    }
+export async function deleteMembership(uid: string): Promise<void> {
+  if (!db) {
+    throw new Error("Firestore not initialized")
   }
 
-  // Get usage data from freeUsers collection if free plan
-  let downloadsUsed = 0
-  let bundlesUsed = 0
-
-  if (membership.plan === "free" && db) {
-    try {
-      const freeUserDoc = await getDoc(doc(db, "freeUsers", uid))
-      if (freeUserDoc.exists()) {
-        const freeUserData = freeUserDoc.data()
-        downloadsUsed = freeUserData.downloadsUsed || 0
-        bundlesUsed = freeUserData.bundlesUsed || 0
-      }
-    } catch (error) {
-      console.error("Error fetching free user data:", error)
-    }
-  }
-
-  const isCreatorPro = membership.plan === "creator_pro" && membership.status === "active"
-
-  return {
-    plan: membership.plan,
-    status: membership.status,
-    downloadsUsed,
-    bundlesUsed,
-    maxDownloads: isCreatorPro ? -1 : 5, // -1 means unlimited
-    maxBundles: isCreatorPro ? -1 : 1,
-    canUpload: isCreatorPro,
-    canCreateBundles: isCreatorPro,
-  }
+  await deleteDoc(doc(db, "memberships", uid))
+  console.log(`✅ Deleted membership record for user: ${uid}`)
 }
