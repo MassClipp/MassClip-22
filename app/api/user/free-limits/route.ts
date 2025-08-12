@@ -20,12 +20,12 @@ export async function GET(request: NextRequest) {
       success: true,
       limits,
     })
-  } catch (error: any) {
+  } catch (error) {
     console.error("❌ Error getting free user limits:", error)
     return NextResponse.json(
       {
         error: "Failed to get free user limits",
-        details: error.message,
+        details: error instanceof Error ? error.message : String(error),
       },
       { status: 500 },
     )

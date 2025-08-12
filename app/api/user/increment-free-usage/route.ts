@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { incrementFreeUserDownloads, incrementFreeUserBundles } from "@/lib/free-users-service"
-import { type } from "os"
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,18 +21,18 @@ export async function POST(request: NextRequest) {
       await incrementFreeUserBundles(uid)
     }
 
-    console.log(`✅ Successfully incremented ${type} for freeUser`)
+    console.log(`✅ Successfully incremented ${type}`)
 
     return NextResponse.json({
       success: true,
       message: `${type} incremented successfully`,
     })
-  } catch (error: any) {
-    console.error(`❌ Error incrementing free user ${type}:`, error)
+  } catch (error) {
+    console.error("❌ Error incrementing free user usage:", error)
     return NextResponse.json(
       {
-        error: `Failed to increment ${type}`,
-        details: error.message,
+        error: "Failed to increment usage",
+        details: error instanceof Error ? error.message : String(error),
       },
       { status: 500 },
     )

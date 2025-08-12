@@ -1,5 +1,5 @@
-import { doc, setDoc, getDoc, updateDoc, increment, serverTimestamp } from "firebase/firestore"
-import { db } from "@/lib/firebase-safe"
+import { adminDb } from "@/lib/firebase-admin"
+import { FieldValue } from "firebase-admin/firestore"
 
 export interface FreeUserDoc {
   uid: string
@@ -11,17 +11,12 @@ export interface FreeUserDoc {
 }
 
 export async function getFreeUser(uid: string): Promise<FreeUserDoc | null> {
-  if (!db) {
-    console.error("❌ Firestore not initialized")
-    throw new Error("Firestore not initialized")
-  }
-
   try {
     console.log("🔄 Getting freeUser for uid:", uid.substring(0, 8) + "...")
-    const docRef = doc(db, "freeUsers", uid)
-    const docSnap = await getDoc(docRef)
+    const docRef = adminDb.collection("freeUsers").doc(uid)
+    const docSnap = await docRef.get()
 
-    if (docSnap.exists()) {
+    if (docSnap.exists) {
       const data = docSnap.data() as FreeUserDoc
       console.log("✅ Found existing freeUser:", {
         downloadsUsed: data.downloadsUsed,
@@ -39,11 +34,6 @@ export async function getFreeUser(uid: string): Promise<FreeUserDoc | null> {
 }
 
 export async function createFreeUser(uid: string, email: string): Promise<FreeUserDoc> {
-  if (!db) {
-    console.error("❌ Firestore not initialized")
-    throw new Error("Firestore not initialized")
-  }
-
   console.log("🔄 Creating freeUser for uid:", uid.substring(0, 8) + "...")
 
   // Check if already exists
@@ -58,13 +48,13 @@ export async function createFreeUser(uid: string, email: string): Promise<FreeUs
     email,
     downloadsUsed: 0,
     bundlesCreated: 0,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
   }
 
   try {
-    const docRef = doc(db, "freeUsers", uid)
-    await setDoc(docRef, freeUserDoc)
+    const docRef = adminDb.collection("freeUsers").doc(uid)
+    await docRef.set(freeUserDoc)
     console.log("✅ Created new freeUser successfully")
     return freeUserDoc
   } catch (error) {
@@ -82,17 +72,13 @@ export async function ensureFreeUser(uid: string, email: string): Promise<FreeUs
 }
 
 export async function incrementFreeUserDownloads(uid: string): Promise<void> {
-  if (!db) {
-    throw new Error("Firestore not initialized")
-  }
-
   console.log("🔄 Incrementing downloads for freeUser:", uid.substring(0, 8) + "...")
 
   try {
-    const docRef = doc(db, "freeUsers", uid)
-    await updateDoc(docRef, {
-      downloadsUsed: increment(1),
-      updatedAt: serverTimestamp(),
+    const docRef = adminDb.collection("freeUsers").doc(uid)
+    await docRef.update({
+      downloadsUsed: FieldValue.increment(1),
+      updatedAt: FieldValue.serverTimestamp(),
     })
     console.log("✅ Incremented freeUser downloads")
   } catch (error) {
@@ -102,17 +88,13 @@ export async function incrementFreeUserDownloads(uid: string): Promise<void> {
 }
 
 export async function incrementFreeUserBundles(uid: string): Promise<void> {
-  if (!db) {
-    throw new Error("Firestore not initialized")
-  }
-
   console.log("🔄 Incrementing bundles for freeUser:", uid.substring(0, 8) + "...")
 
   try {
-    const docRef = doc(db, "freeUsers", uid)
-    await updateDoc(docRef, {
-      bundlesCreated: increment(1),
-      updatedAt: serverTimestamp(),
+    const docRef = adminDb.collection("freeUsers").doc(uid)
+    await docRef.update({
+      bundlesCreated: FieldValue.increment(1),
+      updatedAt: FieldValue.serverTimestamp(),
     })
     console.log("✅ Incremented freeUser bundles")
   } catch (error) {
