@@ -1,6 +1,7 @@
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app"
-import { getAuth, type Auth, connectAuthEmulator } from "firebase/auth"
-import { getFirestore, type Firestore, connectFirestoreEmulator } from "firebase/firestore"
+import { getAuth, type Auth } from "firebase/auth"
+import { getFirestore, type Firestore } from "firebase/firestore"
+import { getStorage, type FirebaseStorage } from "firebase/storage"
 
 // Firebase configuration
 const firebaseConfig = {
@@ -16,9 +17,10 @@ const firebaseConfig = {
 let app: FirebaseApp | null = null
 let auth: Auth | null = null
 let db: Firestore | null = null
+let storage: FirebaseStorage | null = null
 let firebaseError: string | null = null
 
-function isFirebaseConfigured(): boolean {
+export function isFirebaseConfigured(): boolean {
   return !!(
     firebaseConfig.apiKey &&
     firebaseConfig.authDomain &&
@@ -29,17 +31,22 @@ function isFirebaseConfigured(): boolean {
   )
 }
 
-function initializeFirebaseSafe(): { success: boolean; error?: string } {
+export function initializeFirebaseSafe(): {
+  app: FirebaseApp | null
+  auth: Auth | null
+  db: Firestore | null
+  storage: FirebaseStorage | null
+  error: string | null
+} {
   try {
     if (!isFirebaseConfigured()) {
-      const error = "Firebase configuration is incomplete. Please check your environment variables."
-      firebaseError = error
-      console.error("❌ Firebase Config Error:", error)
-      return { success: false, error }
+      firebaseError = "Firebase configuration is incomplete. Please check your environment variables."
+      console.error("❌ Firebase configuration error:", firebaseError)
+      return { app: null, auth: null, db: null, storage: null, error: firebaseError }
     }
 
-    // Initialize Firebase app if not already initialized
-    if (getApps().length === 0) {
+    // Initialize Firebase only if it hasn't been initialized yet
+    if (!getApps().length) {
       app = initializeApp(firebaseConfig)
       console.log("✅ Firebase app initialized")
     } else {
@@ -47,51 +54,41 @@ function initializeFirebaseSafe(): { success: boolean; error?: string } {
       console.log("✅ Firebase app already initialized")
     }
 
-    // Initialize Auth
-    if (!auth) {
+    // Initialize services
+    if (app) {
       auth = getAuth(app)
-
-      // Connect to emulator in development
-      if (process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === "true") {
-        try {
-          connectAuthEmulator(auth, "http://localhost:9099")
-          console.log("🔧 Connected to Firebase Auth emulator")
-        } catch (error) {
-          console.warn("⚠️ Could not connect to Auth emulator:", error)
-        }
-      }
-    }
-
-    // Initialize Firestore
-    if (!db) {
       db = getFirestore(app)
-
-      // Connect to emulator in development
-      if (process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === "true") {
-        try {
-          connectFirestoreEmulator(db, "localhost", 8080)
-          console.log("🔧 Connected to Firestore emulator")
-        } catch (error) {
-          console.warn("⚠️ Could not connect to Firestore emulator:", error)
-        }
-      }
+      storage = getStorage(app)
+      console.log("✅ Firebase services initialized")
     }
 
     firebaseError = null
-    console.log("✅ Firebase initialized successfully")
-    return { success: true }
+    return { app, auth, db, storage, error: null }
   } catch (error: any) {
-    const errorMessage = `Firebase initialization failed: ${error.message}`
-    firebaseError = errorMessage
+    firebaseError = `Firebase initialization failed: ${error.message}`
     console.error("❌ Firebase initialization error:", error)
-    return { success: false, error: errorMessage }
+    return { app: null, auth: null, db: null, storage: null, error: firebaseError }
   }
 }
 
-// Initialize Firebase on module load
-const initResult = initializeFirebaseSafe()
-if (!initResult.success) {
-  console.error("❌ Failed to initialize Firebase:", initResult.error)
-}
+// Initialize Firebase
+const firebaseInit = initializeFirebaseSafe()
+app = firebaseInit.app
+auth = firebaseInit.auth
+db = firebaseInit.db
+storage = firebaseInit.storage
+firebaseError = firebaseInit.error
 
-export { auth, db, isFirebaseConfigured, firebaseError, initializeFirebaseSafe }
+// Export the initialized instances
+export { app, auth, db, storage, firebaseError }
+
+// Default export for compatibility
+export default {
+  app,
+  auth,
+  db,
+  storage,
+  firebaseError,
+  isFirebaseConfigured,
+  initializeFirebaseSafe,
+}
