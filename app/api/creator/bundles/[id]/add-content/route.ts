@@ -2,7 +2,6 @@ import { type NextRequest, NextResponse } from "next/server"
 import { cert, getApps, initializeApp } from "firebase-admin/app"
 import { getAuth } from "firebase-admin/auth"
 import { getFirestore, Timestamp } from "firebase-admin/firestore"
-import { UserTrackingService } from "@/lib/user-tracking-service"
 import { getMembership, toTierInfo } from "@/lib/memberships-service"
 
 // Initialize Firebase Admin with only the required fields to avoid missing env crashes
@@ -59,7 +58,6 @@ function getContentType(mimeType: string): ContentType {
   return "document"
 }
 
-// Safe tier lookup: try service first, then fallback to raw Firestore docs.
 async function getTierInfoSafe(uid: string): Promise<{ maxVideosPerBundle: number | null; maxBundles: number | null }> {
   try {
     console.log("🔍 [Add Content] Looking up membership for UID:", uid)
@@ -86,54 +84,14 @@ async function getTierInfoSafe(uid: string): Promise<{ maxVideosPerBundle: numbe
         maxBundles: tierInfo.bundlesLimit,
       }
     } else {
-      console.warn("⚠️ [Add Content] No membership found for UID:", uid)
+      console.warn("⚠️ [Add Content] No membership found for UID:", uid, "- defaulting to free tier")
     }
   } catch (e) {
-    console.error("❌ [Add Content] Memberships service failed:", e)
+    console.error("❌ [Add Content] Memberships service failed:", e, "- defaulting to free tier")
   }
 
-  // 1) Try existing service (may throw if it uses client SDK)
-  try {
-    const tier = await UserTrackingService.getUserTierInfo(uid)
-    // Expect shape to contain maxVideosPerBundle and maxBundles (null for unlimited)
-    if (tier && ("maxVideosPerBundle" in tier || "maxBundles" in tier)) {
-      return {
-        maxVideosPerBundle: tier.maxVideosPerBundle ?? 10,
-        maxBundles: tier.maxBundles ?? 2,
-      }
-    }
-  } catch (e) {
-    console.warn("⚠️ [Add Content] UserTrackingService.getUserTierInfo failed. Falling back to Firestore lookup.", e)
-  }
-
-  // 2) Fallback: look for a pro record, otherwise a free record
-  try {
-    const proDoc = await db.collection("creatorProUsers").doc(uid).get()
-    if (proDoc.exists) {
-      const active = proDoc.get("active")
-      // Treat any pro record as unlimited unless explicitly capped
-      const maxVideosPerBundle = proDoc.get("maxVideosPerBundle")
-      const maxBundles = proDoc.get("maxBundles")
-      return {
-        maxVideosPerBundle: typeof maxVideosPerBundle === "number" ? maxVideosPerBundle : null,
-        maxBundles: typeof maxBundles === "number" ? maxBundles : null,
-      }
-    }
-
-    const freeDoc = await db.collection("freeUsers").doc(uid).get()
-    if (freeDoc.exists) {
-      const mvb = freeDoc.get("maxVideosPerBundle")
-      const mb = freeDoc.get("bundlesLimit") ?? freeDoc.get("maxBundles")
-      return {
-        maxVideosPerBundle: typeof mvb === "number" ? mvb : 10,
-        maxBundles: typeof mb === "number" ? mb : 2,
-      }
-    }
-  } catch (e) {
-    console.warn("⚠️ [Add Content] Firestore tier lookup failed.", e)
-  }
-
-  // 3) Final defaults
+  // Default to free tier limits if no membership found
+  console.log("🔍 [Add Content] Using default free tier limits for UID:", uid)
   return { maxVideosPerBundle: 10, maxBundles: 2 }
 }
 
