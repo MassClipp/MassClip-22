@@ -6,6 +6,7 @@ import {
   processCheckoutSessionCompleted,
   processSubscriptionDeleted,
   processSubscriptionUpdated,
+  processInvoicePaymentSucceeded,
 } from "@/lib/stripe/webhook-processor"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -56,6 +57,9 @@ export async function POST(request: Request) {
         break
       case "customer.subscription.deleted":
         await processSubscriptionDeleted(event.data.object as Stripe.Subscription)
+        break
+      case "invoice.payment_succeeded":
+        await processInvoicePaymentSucceeded(event.data.object as Stripe.Invoice)
         break
       default:
         console.log(`Unhandled event type ${event.type}`)
