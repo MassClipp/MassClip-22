@@ -19,7 +19,9 @@ export interface MembershipDoc {
   email?: string
   plan: MembershipPlan
   status: MembershipStatus
-  isActive: boolean
+  // Active state - only one of freeUsers or memberships can be active
+  active: boolean
+  isActive: boolean // Keep for backward compatibility
 
   // Stripe related
   stripeCustomerId?: string
@@ -57,14 +59,21 @@ export async function getMembership(uid: string): Promise<MembershipDoc | null> 
   }
 
   try {
-    console.log("🔄 Getting membership for uid:", uid.substring(0, 8) + "...")
+    console.log("🔄 Getting active membership for uid:", uid.substring(0, 8) + "...")
     const docRef = doc(db, "memberships", uid)
     const docSnap = await getDoc(docRef)
 
     if (docSnap.exists()) {
       const data = docSnap.data() as MembershipDoc
-      console.log("✅ Found existing membership:", { plan: data.plan, status: data.status })
-      return data
+
+      // Only return if active
+      if (data.active && data.isActive) {
+        console.log("✅ Found active membership:", { plan: data.plan, status: data.status })
+        return data
+      } else {
+        console.log("ℹ️ Membership exists but is inactive")
+        return null
+      }
     }
 
     console.log("ℹ️ No membership found - user is free tier")
@@ -119,6 +128,15 @@ export async function setCreatorPro(
 
   console.log("🔄 Setting creator pro membership for:", uid.substring(0, 8) + "...")
 
+  // First, deactivate the freeUser document
+  const { deactivateFreeUser } = await import("./free-users-service")
+  try {
+    await deactivateFreeUser(uid)
+  } catch (error) {
+    console.warn("⚠️ Could not deactivate freeUser (may not exist):", error)
+  }
+
+  // Create/update the active membership
   await setDoc(
     doc(db, "memberships", uid),
     {
@@ -126,6 +144,7 @@ export async function setCreatorPro(
       email: params.email ?? null,
       plan: "creator_pro",
       status: params.status ?? "active",
+      active: true, // This membership is now active
       isActive: (params.status ?? "active") === "active" || (params.status ?? "active") === "trialing",
       stripeCustomerId: params.stripeCustomerId,
       stripeSubscriptionId: params.stripeSubscriptionId,
@@ -141,7 +160,7 @@ export async function setCreatorPro(
     { merge: true },
   )
 
-  console.log("✅ Creator pro membership set successfully")
+  console.log("✅ Creator pro membership set successfully and freeUser deactivated")
 }
 
 export async function setCreatorProStatus(uid: string, status: MembershipStatus, updates?: Partial<MembershipDoc>) {
@@ -151,16 +170,29 @@ export async function setCreatorProStatus(uid: string, status: MembershipStatus,
 
   console.log("🔄 Updating membership status to:", status, "for:", uid.substring(0, 8) + "...")
 
+  const isActiveStatus = status === "active" || status === "trialing"
+
   await setDoc(
     doc(db, "memberships", uid),
     {
       status,
-      isActive: status === "active" || status === "trialing",
+      active: isActiveStatus, // Only active if status is active/trialing
+      isActive: isActiveStatus,
       updatedAt: serverTimestamp(),
       ...updates,
     },
     { merge: true },
   )
+
+  // If membership becomes inactive, reactivate freeUser
+  if (!isActiveStatus) {
+    const { reactivateFreeUser } = await import("./free-users-service")
+    try {
+      await reactivateFreeUser(uid)
+    } catch (error) {
+      console.warn("⚠️ Could not reactivate freeUser:", error)
+    }
+  }
 
   console.log("✅ Membership status updated successfully")
 }
@@ -232,4 +264,31 @@ export async function deleteMembership(uid: string): Promise<void> {
 
   await deleteDoc(doc(db, "memberships", uid))
   console.log(`✅ Deleted membership record for user: ${uid}`)
+}
+
+export async function deactivateMembership(uid: string): Promise<void> {
+  if (!db) {
+    throw new Error("Firestore not initialized")
+  }
+
+  console.log("🔄 Deactivating membership (downgrading to free):", uid.substring(0, 8) + "...")
+
+  // Deactivate the membership
+  await updateDoc(doc(db, "memberships", uid), {
+    active: false,
+    isActive: false,
+    status: "canceled",
+    updatedAt: serverTimestamp(),
+  })
+
+  // Reactivate the freeUser document
+  const { reactivateFreeUser } = await import("./free-users-service")
+  try {
+    await reactivateFreeUser(uid)
+  } catch (error) {
+    console.error("❌ Could not reactivate freeUser:", error)
+    throw error
+  }
+
+  console.log("✅ Membership deactivated and freeUser reactivated")
 }

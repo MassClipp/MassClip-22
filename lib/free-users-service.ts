@@ -4,6 +4,8 @@ import { FieldValue } from "firebase-admin/firestore"
 export interface FreeUserDoc {
   uid: string
   email: string
+  // Active state - only one of freeUsers or memberships can be active
+  active: boolean
   // Usage tracking
   downloadsUsed: number
   bundlesCreated: number
@@ -42,28 +44,7 @@ const FREE_TIER_DEFAULTS = {
 }
 
 export async function getFreeUser(uid: string): Promise<FreeUserDoc | null> {
-  try {
-    console.log("🔄 Getting freeUser for uid:", uid.substring(0, 8) + "...")
-    const docRef = adminDb.collection("freeUsers").doc(uid)
-    const docSnap = await docRef.get()
-
-    if (docSnap.exists) {
-      const data = docSnap.data() as FreeUserDoc
-      console.log("✅ Found existing freeUser:", {
-        downloadsUsed: data.downloadsUsed,
-        bundlesCreated: data.bundlesCreated,
-        downloadsLimit: data.downloadsLimit,
-        bundlesLimit: data.bundlesLimit,
-      })
-      return data
-    }
-
-    console.log("ℹ️ No existing freeUser found")
-    return null
-  } catch (error) {
-    console.error("❌ Error getting freeUser:", error)
-    throw error
-  }
+  return await getActiveFreeUser(uid)
 }
 
 export async function createFreeUser(uid: string, email: string): Promise<FreeUserDoc> {
@@ -82,6 +63,8 @@ export async function createFreeUser(uid: string, email: string): Promise<FreeUs
   const freeUserDoc: FreeUserDoc = {
     uid,
     email,
+    // Active by default for new free users
+    active: true,
     // Usage tracking (starts at 0)
     downloadsUsed: 0,
     bundlesCreated: 0,
@@ -280,24 +263,70 @@ export async function getFreeUserLimits(uid: string): Promise<{
   }
 }
 
-export async function upgradeFreeUserToPro(uid: string): Promise<void> {
-  console.log("🔄 Upgrading free user to pro:", uid.substring(0, 8) + "...")
+export async function deactivateFreeUser(uid: string): Promise<void> {
+  console.log("🔄 Deactivating freeUser (upgraded to pro):", uid.substring(0, 8) + "...")
 
   try {
     const docRef = adminDb.collection("freeUsers").doc(uid)
-
-    // We'll keep the freeUsers record but mark it as inactive
-    // The memberships collection will handle the pro features
     await docRef.update({
-      updatedAt: FieldValue.serverTimestamp(),
-      // Add a flag to indicate this user has been upgraded
+      active: false,
       upgradedToPro: true,
       upgradeDate: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     })
 
-    console.log("✅ Free user marked as upgraded to pro")
+    console.log("✅ FreeUser deactivated successfully")
   } catch (error) {
-    console.error("❌ Error upgrading free user:", error)
+    console.error("❌ Error deactivating freeUser:", error)
+    throw error
+  }
+}
+
+export async function reactivateFreeUser(uid: string): Promise<void> {
+  console.log("🔄 Reactivating freeUser (downgraded from pro):", uid.substring(0, 8) + "...")
+
+  try {
+    const docRef = adminDb.collection("freeUsers").doc(uid)
+    await docRef.update({
+      active: true,
+      updatedAt: FieldValue.serverTimestamp(),
+    })
+
+    console.log("✅ FreeUser reactivated successfully")
+  } catch (error) {
+    console.error("❌ Error reactivating freeUser:", error)
+    throw error
+  }
+}
+
+export async function getActiveFreeUser(uid: string): Promise<FreeUserDoc | null> {
+  try {
+    console.log("🔄 Getting active freeUser for uid:", uid.substring(0, 8) + "...")
+    const docRef = adminDb.collection("freeUsers").doc(uid)
+    const docSnap = await docRef.get()
+
+    if (docSnap.exists) {
+      const data = docSnap.data() as FreeUserDoc
+
+      // Only return if active
+      if (data.active) {
+        console.log("✅ Found active freeUser:", {
+          downloadsUsed: data.downloadsUsed,
+          bundlesCreated: data.bundlesCreated,
+          downloadsLimit: data.downloadsLimit,
+          bundlesLimit: data.bundlesLimit,
+        })
+        return data
+      } else {
+        console.log("ℹ️ FreeUser exists but is inactive (upgraded to pro)")
+        return null
+      }
+    }
+
+    console.log("ℹ️ No freeUser document found")
+    return null
+  } catch (error) {
+    console.error("❌ Error getting active freeUser:", error)
     throw error
   }
 }

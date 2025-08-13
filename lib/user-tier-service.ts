@@ -18,35 +18,42 @@ export interface TierInfo {
 export async function getUserTier(uid: string): Promise<UserTier> {
   console.log("🔄 Getting user tier for:", uid.substring(0, 8) + "...")
 
-  // Check if user is pro first
+  // Check if user has active pro membership first
   const membership = await getMembership(uid)
-  if (membership && membership.isActive) {
-    console.log("✅ User is creator_pro")
+  if (membership) {
+    console.log("✅ User has active creator_pro membership")
     return "creator_pro"
   }
 
-  // User is free tier
-  console.log("✅ User is free tier")
+  // Check if user has active free user document
+  const freeUser = await getFreeUser(uid)
+  if (freeUser) {
+    console.log("✅ User has active free tier")
+    return "free"
+  }
+
+  // No active documents found - this shouldn't happen, but default to free
+  console.warn("⚠️ No active user documents found, defaulting to free")
   return "free"
 }
 
 export async function getUserTierInfo(uid: string): Promise<TierInfo> {
   console.log("🔄 Getting tier info for:", uid.substring(0, 8) + "...")
 
-  // Check if user is pro first
+  // Check if user has active pro membership first
   const membership = await getMembership(uid)
-  if (membership && membership.isActive) {
-    console.log("✅ Returning pro tier info")
+  if (membership) {
+    console.log("✅ Returning active pro tier info")
     return toTierInfo(membership)
   }
 
-  // User is free - get from freeUsers collection
-  console.log("🔄 Getting free user info...")
+  // User should have active free user document
+  console.log("🔄 Getting active free user info...")
   let freeUser = await getFreeUser(uid)
 
   if (!freeUser) {
-    console.log("🔄 Creating new free user...")
-    freeUser = await createFreeUser(uid)
+    console.log("🔄 No active free user found, creating new one...")
+    freeUser = await createFreeUser(uid, "")
   }
 
   const tierInfo: TierInfo = {
@@ -61,39 +68,39 @@ export async function getUserTierInfo(uid: string): Promise<TierInfo> {
     reachedBundleLimit: freeUser.bundlesCreated >= freeUser.bundlesLimit,
   }
 
-  console.log("✅ Returning free tier info:", tierInfo)
+  console.log("✅ Returning active free tier info:", tierInfo)
   return tierInfo
 }
 
 export async function incrementUserDownloads(uid: string): Promise<{ success: boolean; reason?: string }> {
   console.log("🔄 Incrementing downloads for:", uid.substring(0, 8) + "...")
 
-  // Check if user is pro first
+  // Check if user has active pro membership first
   const membership = await getMembership(uid)
-  if (membership && membership.isActive) {
-    console.log("✅ Pro user - unlimited downloads")
+  if (membership) {
+    console.log("✅ Active pro user - unlimited downloads")
     await incrementDownloads(uid)
     return { success: true }
   }
 
-  // User is free - check limits
-  console.log("🔄 Free user - checking limits...")
+  // User should have active free user document - check limits
+  console.log("🔄 Active free user - checking limits...")
   return await incrementFreeUserDownloads(uid)
 }
 
 export async function incrementUserBundles(uid: string): Promise<{ success: boolean; reason?: string }> {
   console.log("🔄 Incrementing bundles for:", uid.substring(0, 8) + "...")
 
-  // Check if user is pro first
+  // Check if user has active pro membership first
   const membership = await getMembership(uid)
-  if (membership && membership.isActive) {
-    console.log("✅ Pro user - unlimited bundles")
+  if (membership) {
+    console.log("✅ Active pro user - unlimited bundles")
     await incrementBundles(uid)
     return { success: true }
   }
 
-  // User is free - check limits
-  console.log("🔄 Free user - checking limits...")
+  // User should have active free user document - check limits
+  console.log("🔄 Active free user - checking limits...")
   return await incrementFreeUserBundles(uid)
 }
 
@@ -103,17 +110,17 @@ export async function canUserAddVideoToBundle(
 ): Promise<{ allowed: boolean; reason?: string }> {
   console.log("🔄 Checking video bundle limit for:", uid.substring(0, 8) + "...")
 
-  // Check if user is pro first
+  // Check if user has active pro membership first
   const membership = await getMembership(uid)
-  if (membership && membership.isActive) {
-    console.log("✅ Pro user - unlimited videos per bundle")
+  if (membership) {
+    console.log("✅ Active pro user - unlimited videos per bundle")
     return { allowed: true }
   }
 
-  // User is free - check video per bundle limit
+  // User should have active free user document - check video per bundle limit
   const freeUser = await getFreeUser(uid)
   if (!freeUser) {
-    console.log("❌ Free user not found")
+    console.log("❌ No active free user found")
     return { allowed: false, reason: "User not found" }
   }
 
