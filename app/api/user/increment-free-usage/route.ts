@@ -1,40 +1,49 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { incrementFreeUserDownloads, incrementFreeUserBundles } from "@/lib/free-users-service"
+import { incrementFreeUserDownloads, incrementFreeUserBundles, canUserAddVideoToBundle } from "@/lib/free-users-service"
+import { verifyIdToken } from "firebase-admin/auth"
 
 export async function POST(request: NextRequest) {
   try {
-    const { uid, type } = await request.json()
-
-    if (!uid || !type) {
-      return NextResponse.json({ error: "Missing uid or type" }, { status: 400 })
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    if (type !== "download" && type !== "bundle") {
-      return NextResponse.json({ error: "Type must be 'download' or 'bundle'" }, { status: 400 })
-    }
+    const idToken = authHeader.split("Bearer ")[1]
+    const decodedToken = await verifyIdToken(idToken)
+    const uid = decodedToken.uid
 
-    console.log(`🔄 Incrementing ${type} for freeUser:`, uid.substring(0, 8) + "...")
+    const { type, currentVideoCount } = await request.json()
 
     if (type === "download") {
-      await incrementFreeUserDownloads(uid)
+      const result = await incrementFreeUserDownloads(uid)
+      return NextResponse.json({
+        success: result.success,
+        message: result.success ? "Download count incremented" : result.reason,
+        reason: result.reason,
+      })
+    } else if (type === "bundle") {
+      const result = await incrementFreeUserBundles(uid)
+      return NextResponse.json({
+        success: result.success,
+        message: result.success ? "Bundle count incremented" : result.reason,
+        reason: result.reason,
+      })
+    } else if (type === "check-video-limit") {
+      const result = await canUserAddVideoToBundle(uid, currentVideoCount || 0)
+      return NextResponse.json({
+        success: result.allowed,
+        message: result.allowed ? "Video can be added" : result.reason,
+        reason: result.reason,
+      })
     } else {
-      await incrementFreeUserBundles(uid)
+      return NextResponse.json(
+        { error: "Invalid type. Use 'download', 'bundle', or 'check-video-limit'" },
+        { status: 400 },
+      )
     }
-
-    console.log(`✅ Successfully incremented ${type}`)
-
-    return NextResponse.json({
-      success: true,
-      message: `${type} incremented successfully`,
-    })
   } catch (error) {
     console.error("❌ Error incrementing free user usage:", error)
-    return NextResponse.json(
-      {
-        error: "Failed to increment usage",
-        details: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 },
-    )
+    return NextResponse.json({ error: "Failed to increment usage" }, { status: 500 })
   }
 }

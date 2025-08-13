@@ -14,7 +14,15 @@ export async function GET(request: NextRequest) {
 
     const limits = await getFreeUserLimits(uid)
 
-    console.log("✅ Retrieved free user limits:", limits)
+    console.log("✅ Retrieved free user limits:", {
+      tier: limits.tier,
+      downloadsUsed: limits.downloadsUsed,
+      downloadsLimit: limits.downloadsLimit,
+      bundlesCreated: limits.bundlesCreated,
+      bundlesLimit: limits.bundlesLimit,
+      reachedDownloadLimit: limits.reachedDownloadLimit,
+      reachedBundleLimit: limits.reachedBundleLimit,
+    })
 
     return NextResponse.json({
       success: true,
