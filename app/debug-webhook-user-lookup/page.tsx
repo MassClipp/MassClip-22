@@ -4,8 +4,9 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
-export default function WebhookUserLookupDebug() {
+export default function DebugWebhookUserLookupPage() {
   const [email, setEmail] = useState("johnisworthier103@gmail.com")
   const [sessionId, setSessionId] = useState("")
   const [result, setResult] = useState<any>(null)
@@ -13,26 +14,31 @@ export default function WebhookUserLookupDebug() {
 
   const testLookup = async () => {
     setLoading(true)
+    setResult(null)
+
     try {
       const response = await fetch("/api/debug/webhook-test", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ email, sessionId }),
       })
+
       const data = await response.json()
       setResult(data)
-    } catch (error) {
-      setResult({ error: error instanceof Error ? error.message : "Unknown error" })
+    } catch (error: any) {
+      setResult({ error: error.message })
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="container mx-auto p-6 max-w-4xl">
+    <div className="container mx-auto p-6">
       <Card>
         <CardHeader>
-          <CardTitle>Webhook User Lookup Debug</CardTitle>
+          <CardTitle>Debug Webhook User Lookup</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
@@ -50,10 +56,11 @@ export default function WebhookUserLookupDebug() {
           </Button>
 
           {result && (
-            <div className="mt-6">
-              <h3 className="text-lg font-semibold mb-2">Results:</h3>
-              <pre className="bg-gray-100 p-4 rounded-lg overflow-auto text-sm">{JSON.stringify(result, null, 2)}</pre>
-            </div>
+            <Alert className={result.error ? "border-red-500" : "border-green-500"}>
+              <AlertDescription>
+                <pre className="whitespace-pre-wrap text-sm">{JSON.stringify(result, null, 2)}</pre>
+              </AlertDescription>
+            </Alert>
           )}
         </CardContent>
       </Card>

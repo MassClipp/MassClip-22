@@ -1,70 +1,77 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { auth, adminDb, isFirebaseAdminInitialized } from "@/lib/firebase-admin"
-import { setCreatorPro } from "@/lib/memberships-service"
+import { adminDb, initializeFirebaseAdmin, isFirebaseAdminInitialized } from "@/lib/firebase-admin"
+import { FieldValue } from "firebase-admin/firestore"
+
+const PRO_FEATURES = {
+  unlimitedDownloads: true,
+  premiumContent: true,
+  noWatermark: true,
+  prioritySupport: true,
+  platformFeePercentage: 10,
+  maxVideosPerBundle: null,
+  maxBundles: null,
+}
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, stripeCustomerId, stripeSubscriptionId } = await request.json()
-
     if (!isFirebaseAdminInitialized()) {
-      return NextResponse.json(
-        {
-          error: "Firebase Admin not initialized",
-        },
-        { status: 500 },
-      )
+      initializeFirebaseAdmin()
     }
 
-    if (!email) {
-      return NextResponse.json(
-        {
-          error: "Email is required",
-        },
-        { status: 400 },
-      )
+    const { email, userId } = await request.json()
+
+    if (!email && !userId) {
+      return NextResponse.json({ error: "Email or userId required" }, { status: 400 })
     }
 
-    // Look up user by email
-    let userRecord
-    try {
-      userRecord = await auth.getUserByEmail(email)
-    } catch (error) {
-      return NextResponse.json(
-        {
-          error: `User not found with email: ${email}`,
-        },
-        { status: 404 },
-      )
+    let targetUserId = userId
+
+    // If no userId provided, try to find by email
+    if (!targetUserId && email) {
+      // Try users collection first
+      const usersSnapshot = await adminDb.collection("users").where("email", "==", email).limit(1).get()
+      if (!usersSnapshot.empty) {
+        targetUserId = usersSnapshot.docs[0].id
+      } else {
+        // Try freeUsers collection
+        const freeUsersSnapshot = await adminDb.collection("freeUsers").where("email", "==", email).limit(1).get()
+        if (!freeUsersSnapshot.empty) {
+          targetUserId = freeUsersSnapshot.docs[0].data().uid
+        }
+      }
     }
 
-    const uid = userRecord.uid
+    if (!targetUserId) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 })
+    }
 
-    // Create the membership using the service
-    await setCreatorPro(uid, {
-      email: email,
-      stripeCustomerId: stripeCustomerId || "manual_creation",
-      stripeSubscriptionId: stripeSubscriptionId || "manual_creation",
-      currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
+    // Create membership
+    const membershipData = {
+      uid: targetUserId,
+      plan: "creator_pro",
       status: "active",
-    })
+      isActive: true,
+      features: PRO_FEATURES,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+      // Add some default values
+      stripeCustomerId: null,
+      stripeSubscriptionId: null,
+      currentPeriodEnd: null,
+      priceId: null,
+      source: "manual_creation",
+    }
 
-    // Verify the membership was created
-    const membershipDoc = await adminDb.collection("memberships").doc(uid).get()
+    const docRef = adminDb.collection("memberships").doc(targetUserId)
+    await docRef.set(membershipData, { merge: true })
 
     return NextResponse.json({
       success: true,
-      uid: uid,
-      email: email,
-      membershipCreated: membershipDoc.exists,
-      membershipData: membershipDoc.exists ? membershipDoc.data() : null,
+      userId: targetUserId,
+      message: "Membership created successfully",
     })
-  } catch (error) {
-    console.error("Error creating manual membership:", error)
-    return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 },
-    )
+  } catch (error: any) {
+    console.error("Error creating membership:", error)
+    return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }

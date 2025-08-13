@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import Stripe from "stripe"
 import { headers } from "next/headers"
-import { adminDb } from "@/lib/firebase-admin"
+import { adminDb, initializeFirebaseAdmin, isFirebaseAdminInitialized } from "@/lib/firebase-admin"
 import {
   processCheckoutSessionCompleted,
   processSubscriptionDeleted,
@@ -15,11 +15,30 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
 
 export async function POST(request: Request) {
+  console.log("🔔 [Webhook] Received Stripe webhook event")
+
+  // Initialize Firebase Admin first thing
+  try {
+    if (!isFirebaseAdminInitialized()) {
+      initializeFirebaseAdmin()
+      console.log("✅ [Webhook] Firebase Admin initialized")
+    }
+  } catch (error: any) {
+    console.error("❌ [Webhook] Firebase initialization failed:", error)
+    return NextResponse.json(
+      {
+        error: "Firebase initialization failed",
+        details: error.message,
+      },
+      { status: 500 },
+    )
+  }
+
   const sig = headers().get("stripe-signature")
   const body = await request.text()
 
   if (!sig || !webhookSecret) {
-    console.error("Webhook Error: Missing signature or secret.")
+    console.error("❌ [Webhook] Missing signature or secret")
     return NextResponse.json({ error: "Webhook secret not configured" }, { status: 400 })
   }
 
@@ -27,8 +46,9 @@ export async function POST(request: Request) {
 
   try {
     event = stripe.webhooks.constructEvent(body, sig, webhookSecret)
+    console.log(`✅ [Webhook] Event verified: ${event.type} (${event.id})`)
   } catch (err: any) {
-    console.error(`❌ Webhook signature verification failed: ${err.message}`)
+    console.error(`❌ [Webhook] Signature verification failed: ${err.message}`)
     return new NextResponse(`Webhook Error: ${err.message}`, { status: 400 })
   }
 
@@ -41,29 +61,49 @@ export async function POST(request: Request) {
       api_version: event.api_version,
       data: event.data,
       created: new Date(event.created * 1000),
+      processedAt: new Date(),
     })
+    console.log(`📝 [Webhook] Event stored in stripeEvents collection`)
   } catch (error) {
-    console.error("Failed to store raw stripe event", error)
+    console.error("⚠️ [Webhook] Failed to store raw stripe event", error)
   }
 
   try {
+    console.log(`🔄 [Webhook] Processing event type: ${event.type}`)
+
     switch (event.type) {
       case "checkout.session.completed":
         await processCheckoutSessionCompleted(event.data.object as Stripe.Checkout.Session)
+        console.log(`✅ [Webhook] Successfully processed checkout.session.completed`)
         break
       case "customer.subscription.updated":
         await processSubscriptionUpdated(event.data.object as Stripe.Subscription)
+        console.log(`✅ [Webhook] Successfully processed customer.subscription.updated`)
         break
       case "customer.subscription.deleted":
         await processSubscriptionDeleted(event.data.object as Stripe.Subscription)
+        console.log(`✅ [Webhook] Successfully processed customer.subscription.deleted`)
+        break
+      case "invoice.payment_succeeded":
+        // Handle invoice payment succeeded for subscription renewals
+        console.log(`ℹ️ [Webhook] Ignoring invoice.payment_succeeded (handled by subscription events)`)
         break
       default:
-        console.log(`Unhandled event type ${event.type}`)
+        console.log(`ℹ️ [Webhook] Unhandled event type ${event.type}`)
     }
   } catch (error: any) {
-    console.error(`Webhook handler failed for event ${event.type}.`, error)
-    return NextResponse.json({ error: "Webhook handler failed", details: error.message }, { status: 500 })
+    console.error(`❌ [Webhook] Handler failed for event ${event.type}:`, error)
+    return NextResponse.json(
+      {
+        error: "Webhook handler failed",
+        details: error.message,
+        eventType: event.type,
+        eventId: event.id,
+      },
+      { status: 500 },
+    )
   }
 
-  return NextResponse.json({ received: true })
+  console.log(`✅ [Webhook] Event ${event.type} processed successfully`)
+  return NextResponse.json({ received: true, eventType: event.type, eventId: event.id })
 }

@@ -4,66 +4,51 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
-export default function CreateMembershipDebug() {
+export default function DebugCreateMembershipPage() {
   const [email, setEmail] = useState("johnisworthier103@gmail.com")
-  const [stripeCustomerId, setStripeCustomerId] = useState("")
-  const [stripeSubscriptionId, setStripeSubscriptionId] = useState("")
+  const [userId, setUserId] = useState("")
   const [result, setResult] = useState<any>(null)
   const [loading, setLoading] = useState(false)
 
   const createMembership = async () => {
     setLoading(true)
+    setResult(null)
+
     try {
       const response = await fetch("/api/debug/create-membership-manual", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email,
-          stripeCustomerId: stripeCustomerId || undefined,
-          stripeSubscriptionId: stripeSubscriptionId || undefined,
-        }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, userId }),
       })
+
       const data = await response.json()
       setResult(data)
-    } catch (error) {
-      setResult({ error: error instanceof Error ? error.message : "Unknown error" })
+    } catch (error: any) {
+      setResult({ error: error.message })
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="container mx-auto p-6 max-w-4xl">
+    <div className="container mx-auto p-6">
       <Card>
         <CardHeader>
           <CardTitle>Manual Membership Creation</CardTitle>
-          <p className="text-sm text-gray-600">
-            Create a membership for a user who upgraded but didn't get their membership created properly.
-          </p>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-2">Email *</label>
+            <label className="block text-sm font-medium mb-2">Email</label>
             <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="user@example.com" />
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2">Stripe Customer ID (optional)</label>
-            <Input
-              value={stripeCustomerId}
-              onChange={(e) => setStripeCustomerId(e.target.value)}
-              placeholder="cus_..."
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-2">Stripe Subscription ID (optional)</label>
-            <Input
-              value={stripeSubscriptionId}
-              onChange={(e) => setStripeSubscriptionId(e.target.value)}
-              placeholder="sub_..."
-            />
+            <label className="block text-sm font-medium mb-2">User ID (optional)</label>
+            <Input value={userId} onChange={(e) => setUserId(e.target.value)} placeholder="Firebase UID" />
           </div>
 
           <Button onClick={createMembership} disabled={loading}>
@@ -71,10 +56,11 @@ export default function CreateMembershipDebug() {
           </Button>
 
           {result && (
-            <div className="mt-6">
-              <h3 className="text-lg font-semibold mb-2">Results:</h3>
-              <pre className="bg-gray-100 p-4 rounded-lg overflow-auto text-sm">{JSON.stringify(result, null, 2)}</pre>
-            </div>
+            <Alert className={result.error ? "border-red-500" : "border-green-500"}>
+              <AlertDescription>
+                <pre className="whitespace-pre-wrap text-sm">{JSON.stringify(result, null, 2)}</pre>
+              </AlertDescription>
+            </Alert>
           )}
         </CardContent>
       </Card>
