@@ -11,6 +11,22 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
 
+function verifyFirebaseInitialization(): { isReady: boolean; error?: string } {
+  if (!isFirebaseAdminInitialized()) {
+    return { isReady: false, error: "Firebase Admin SDK is not initialized" }
+  }
+
+  if (!adminDb) {
+    return { isReady: false, error: "Firebase Admin Database (adminDb) is not available" }
+  }
+
+  if (!auth) {
+    return { isReady: false, error: "Firebase Admin Auth is not available" }
+  }
+
+  return { isReady: true }
+}
+
 // This is the main handler for Stripe webhooks
 export async function POST(req: NextRequest) {
   const buf = await req.text()
@@ -32,6 +48,18 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     )
   }
+
+  const firebaseCheck = verifyFirebaseInitialization()
+  if (!firebaseCheck.isReady) {
+    const firebaseError = `❌ Firebase not ready: ${firebaseCheck.error}`
+    console.error(firebaseError)
+    debugTrace.push(firebaseError)
+    return NextResponse.json(
+      { error: "Firestore not initialized", details: { debugTrace, firebaseError: firebaseCheck.error } },
+      { status: 500 },
+    )
+  }
+  debugTrace.push("✅ Firebase Admin SDK verified and ready.")
 
   // Handle the checkout.session.completed event
   if (event.type === "checkout.session.completed") {
@@ -65,20 +93,14 @@ export async function POST(req: NextRequest) {
       const email = session.customer_details.email
       debugTrace.push(`- [Method 3] Attempting to find user by email: ${email}`)
 
-      if (!isFirebaseAdminInitialized()) {
-        const firebaseError = "❌ [Method 3] Firebase Admin SDK is not initialized. Cannot look up user by email."
-        console.error(firebaseError)
-        debugTrace.push(firebaseError)
-      } else {
-        try {
-          const userRecord = await auth.getUserByEmail(email)
-          userId = userRecord.uid
-          debugTrace.push(`✅ [Method 3] Found user by email. User ID: ${userId}`)
-        } catch (error) {
-          const lookupError = `❌ [Method 3] Failed to find user by email: ${error instanceof Error ? error.message : "Unknown error"}`
-          console.error(lookupError)
-          debugTrace.push(lookupError)
-        }
+      try {
+        const userRecord = await auth.getUserByEmail(email)
+        userId = userRecord.uid
+        debugTrace.push(`✅ [Method 3] Found user by email. User ID: ${userId}`)
+      } catch (error) {
+        const lookupError = `❌ [Method 3] Failed to find user by email: ${error instanceof Error ? error.message : "Unknown error"}`
+        console.error(lookupError)
+        debugTrace.push(lookupError)
       }
     } else if (!userId) {
       debugTrace.push("⚠️ [Method 3] No email found in session to look up user.")
