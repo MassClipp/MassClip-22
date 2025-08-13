@@ -1,26 +1,31 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { incrementUserDownloads } from "@/lib/user-tier-service"
-import { verifyIdToken } from "firebase-admin/auth"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/auth"
 
 export async function POST(request: NextRequest) {
   try {
-    const authHeader = request.headers.get("authorization")
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    const session = await getServerSession(authOptions)
+
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const idToken = authHeader.split("Bearer ")[1]
-    const decodedToken = await verifyIdToken(idToken)
-    const uid = decodedToken.uid
+    const result = await incrementUserDownloads(session.user.id)
 
-    await incrementUserDownloads(uid)
+    if (!result.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          reason: result.reason,
+        },
+        { status: 403 },
+      )
+    }
 
-    return NextResponse.json({
-      success: true,
-      message: "Download count incremented",
-    })
+    return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("❌ Error incrementing download:", error)
-    return NextResponse.json({ error: "Failed to increment download" }, { status: 500 })
+    console.error("❌ Error incrementing downloads:", error)
+    return NextResponse.json({ error: "Failed to increment downloads" }, { status: 500 })
   }
 }

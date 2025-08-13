@@ -1,7 +1,7 @@
 import { doc, setDoc, getDoc, updateDoc, deleteDoc, serverTimestamp, increment } from "firebase/firestore"
 import { db } from "@/lib/firebase-safe"
 
-export type MembershipPlan = "free" | "creator_pro"
+export type MembershipPlan = "creator_pro"
 export type MembershipStatus = "active" | "inactive" | "canceled" | "past_due" | "trialing"
 
 export interface MembershipFeatures {
@@ -28,26 +28,16 @@ export interface MembershipDoc {
   priceId?: string
   connectedAccountId?: string
 
-  // Usage
+  // Usage (for analytics only - no limits for pro users)
   downloadsUsed: number
   bundlesCreated: number
 
-  // Features/caps (single place to read app limits)
+  // Features (pro features only)
   features: MembershipFeatures
 
   // Metadata
   createdAt: any
   updatedAt: any
-}
-
-const FREE_FEATURES: MembershipFeatures = {
-  unlimitedDownloads: false,
-  premiumContent: false,
-  noWatermark: false,
-  prioritySupport: false,
-  platformFeePercentage: 20,
-  maxVideosPerBundle: 10,
-  maxBundles: 2,
 }
 
 const PRO_FEATURES: MembershipFeatures = {
@@ -56,8 +46,8 @@ const PRO_FEATURES: MembershipFeatures = {
   noWatermark: true,
   prioritySupport: true,
   platformFeePercentage: 10,
-  maxVideosPerBundle: null,
-  maxBundles: null,
+  maxVideosPerBundle: null, // unlimited
+  maxBundles: null, // unlimited
 }
 
 export async function getMembership(uid: string): Promise<MembershipDoc | null> {
@@ -77,7 +67,7 @@ export async function getMembership(uid: string): Promise<MembershipDoc | null> 
       return data
     }
 
-    console.log("ℹ️ No existing membership found")
+    console.log("ℹ️ No membership found - user is free tier")
     return null
   } catch (error) {
     console.error("❌ Error getting membership:", error)
@@ -87,66 +77,28 @@ export async function getMembership(uid: string): Promise<MembershipDoc | null> 
 
 export const getUserMembership = getMembership
 
-export async function ensureMembership(uid: string, email?: string): Promise<MembershipDoc> {
-  console.log("🔄 Ensuring membership for uid:", uid.substring(0, 8) + "...")
-
-  const existing = await getMembership(uid)
-  if (existing) {
-    console.log("✅ Membership already exists, returning existing")
-    return existing
-  }
-
-  console.log("🔄 Creating new free membership...")
-
-  const membershipDoc: MembershipDoc = {
-    uid,
-    email,
-    plan: "free",
-    status: "active",
-    isActive: true,
-    downloadsUsed: 0,
-    bundlesCreated: 0,
-    features: { ...FREE_FEATURES },
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  }
-
-  if (!db) {
-    console.error("❌ Firestore not initialized")
-    throw new Error("Firestore not initialized")
-  }
-
-  try {
-    const docRef = doc(db, "memberships", uid)
-    await setDoc(docRef, membershipDoc, { merge: true })
-    console.log("✅ Created new free membership successfully")
-    return membershipDoc
-  } catch (error) {
-    console.error("❌ Error creating membership:", error)
-    throw error
-  }
+// Legacy exports for compatibility - these should not be used for new code
+// Free users should use free-users-service.ts instead
+export async function setFree(uid: string, opts?: { email?: string }) {
+  console.warn("⚠️ setFree called on memberships-service - this should use free-users-service instead")
+  // This is a no-op since free users should be in freeUsers collection
+  return
 }
 
-export async function setFree(uid: string, opts?: { email?: string; overrides?: Partial<MembershipFeatures> }) {
-  if (!db) {
-    throw new Error("Firestore not initialized")
-  }
+export async function ensureMembership(uid: string, email?: string): Promise<MembershipDoc | null> {
+  console.warn("⚠️ ensureMembership called on memberships-service - free users should use free-users-service")
+  // Only return existing pro memberships, don't create free ones
+  return await getMembership(uid)
+}
 
-  const features = { ...FREE_FEATURES, ...(opts?.overrides || {}) }
-  await setDoc(
-    doc(db, "memberships", uid),
-    {
-      uid,
-      email: opts?.email,
-      plan: "free",
-      status: "active",
-      isActive: true,
-      features,
-      updatedAt: serverTimestamp(),
-      createdAt: serverTimestamp(),
-    },
-    { merge: true },
-  )
+export async function getTierInfo(uid: string) {
+  console.warn("⚠️ getTierInfo called on memberships-service - use user-tier-service instead")
+  const membership = await getMembership(uid)
+  if (membership && membership.isActive) {
+    return toTierInfo(membership)
+  }
+  // Return null for free users - they should use free-users-service
+  return null
 }
 
 export async function setCreatorPro(
@@ -165,6 +117,8 @@ export async function setCreatorPro(
     throw new Error("Firestore not initialized")
   }
 
+  console.log("🔄 Setting creator pro membership for:", uid.substring(0, 8) + "...")
+
   await setDoc(
     doc(db, "memberships", uid),
     {
@@ -178,18 +132,24 @@ export async function setCreatorPro(
       currentPeriodEnd: params.currentPeriodEnd ?? null,
       priceId: params.priceId ?? null,
       connectedAccountId: params.connectedAccountId ?? null,
+      downloadsUsed: 0,
+      bundlesCreated: 0,
       features: { ...PRO_FEATURES },
       updatedAt: serverTimestamp(),
       createdAt: serverTimestamp(),
     },
     { merge: true },
   )
+
+  console.log("✅ Creator pro membership set successfully")
 }
 
 export async function setCreatorProStatus(uid: string, status: MembershipStatus, updates?: Partial<MembershipDoc>) {
   if (!db) {
     throw new Error("Firestore not initialized")
   }
+
+  console.log("🔄 Updating membership status to:", status, "for:", uid.substring(0, 8) + "...")
 
   await setDoc(
     doc(db, "memberships", uid),
@@ -201,6 +161,8 @@ export async function setCreatorProStatus(uid: string, status: MembershipStatus,
     },
     { merge: true },
   )
+
+  console.log("✅ Membership status updated successfully")
 }
 
 export async function incrementDownloads(uid: string) {
@@ -208,6 +170,7 @@ export async function incrementDownloads(uid: string) {
     throw new Error("Firestore not initialized")
   }
 
+  // Pro users - just increment for analytics, no limits
   await setDoc(
     doc(db, "memberships", uid),
     {
@@ -223,6 +186,7 @@ export async function incrementBundles(uid: string) {
     throw new Error("Firestore not initialized")
   }
 
+  // Pro users - just increment for analytics, no limits
   await setDoc(
     doc(db, "memberships", uid),
     {
@@ -234,25 +198,18 @@ export async function incrementBundles(uid: string) {
 }
 
 export function toTierInfo(m: MembershipDoc) {
-  const tier: "free" | "creator_pro" = m.plan === "creator_pro" && m.isActive ? "creator_pro" : "free"
-
+  // This should only be called for active pro users
   return {
-    tier,
+    tier: "creator_pro" as const,
     downloadsUsed: m.downloadsUsed ?? 0,
-    downloadsLimit: m.features.unlimitedDownloads ? null : 15,
+    downloadsLimit: null, // unlimited
     bundlesCreated: m.bundlesCreated ?? 0,
-    bundlesLimit: m.features.maxBundles,
-    maxVideosPerBundle: m.features.maxVideosPerBundle,
+    bundlesLimit: null, // unlimited
+    maxVideosPerBundle: null, // unlimited
     platformFeePercentage: m.features.platformFeePercentage,
-    reachedDownloadLimit: m.features.unlimitedDownloads ? false : (m.downloadsUsed ?? 0) >= 15,
-    reachedBundleLimit:
-      m.features.maxBundles === null ? false : (m.bundlesCreated ?? 0) >= (m.features.maxBundles ?? 0),
+    reachedDownloadLimit: false, // never reached for pro
+    reachedBundleLimit: false, // never reached for pro
   }
-}
-
-export async function getTierInfo(uid: string) {
-  const m = await ensureMembership(uid)
-  return toTierInfo(m)
 }
 
 export async function cancelMembership(uid: string): Promise<void> {

@@ -1,8 +1,12 @@
-import { useState, useEffect } from "react"
-import { useAuth } from "@/hooks/use-firebase-auth"
+"use client"
 
-interface UserTierInfo {
-  tier: "free" | "creator_pro"
+import { useState, useEffect } from "react"
+import { useFirebaseAuth } from "./use-firebase-auth"
+
+export type UserTier = "free" | "creator_pro"
+
+export interface TierInfo {
+  tier: UserTier
   downloadsUsed: number
   downloadsLimit: number | null
   bundlesCreated: number
@@ -14,75 +18,89 @@ interface UserTierInfo {
 }
 
 export function useUserTier() {
-  const { user } = useAuth()
-  const [tierInfo, setTierInfo] = useState<UserTierInfo | null>(null)
+  const { user } = useFirebaseAuth()
+  const [tierInfo, setTierInfo] = useState<TierInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const fetchTierInfo = async () => {
-    if (!user?.uid) {
+  useEffect(() => {
+    if (!user) {
+      setTierInfo(null)
       setLoading(false)
       return
     }
 
-    try {
-      setLoading(true)
-      const response = await fetch(`/api/user/tracking/get-tier-info?uid=${user.uid}`)
-      const result = await response.json()
-
-      if (result.success) {
-        setTierInfo(result.data)
+    const fetchTierInfo = async () => {
+      try {
+        setLoading(true)
         setError(null)
-      } else {
-        setError(result.error || "Failed to fetch tier info")
-      }
-    } catch (err) {
-      setError("Failed to fetch tier info")
-      console.error("Error fetching tier info:", err)
-    } finally {
-      setLoading(false)
-    }
-  }
 
-  useEffect(() => {
+        const response = await fetch("/api/user/tier-info")
+        const data = await response.json()
+
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to fetch tier info")
+        }
+
+        setTierInfo(data.tierInfo)
+      } catch (err) {
+        console.error("❌ Error fetching tier info:", err)
+        setError(err instanceof Error ? err.message : "Unknown error")
+      } finally {
+        setLoading(false)
+      }
+    }
+
     fetchTierInfo()
-  }, [user?.uid])
+  }, [user])
 
-  const incrementDownload = async () => {
-    if (!user?.uid) return
-
+  const incrementDownload = async (): Promise<{ success: boolean; reason?: string }> => {
     try {
-      const response = await fetch("/api/user/tracking/increment-download", {
+      const response = await fetch("/api/user/increment-download", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ uid: user.uid }),
       })
+      const data = await response.json()
 
-      const result = await response.json()
-      if (result.success) {
-        setTierInfo(result.data)
+      if (!response.ok) {
+        return { success: false, reason: data.reason || "Failed to increment download" }
       }
+
+      // Refresh tier info after successful increment
+      const tierResponse = await fetch("/api/user/tier-info")
+      const tierData = await tierResponse.json()
+      if (tierResponse.ok) {
+        setTierInfo(tierData.tierInfo)
+      }
+
+      return { success: true }
     } catch (err) {
-      console.error("Error incrementing download:", err)
+      console.error("❌ Error incrementing download:", err)
+      return { success: false, reason: "Network error" }
     }
   }
 
-  const incrementBundle = async () => {
-    if (!user?.uid) return
-
+  const incrementBundle = async (): Promise<{ success: boolean; reason?: string }> => {
     try {
-      const response = await fetch("/api/user/tracking/increment-bundle", {
+      const response = await fetch("/api/user/increment-bundle", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ uid: user.uid }),
       })
+      const data = await response.json()
 
-      const result = await response.json()
-      if (result.success) {
-        setTierInfo(result.data)
+      if (!response.ok) {
+        return { success: false, reason: data.reason || "Failed to increment bundle" }
       }
+
+      // Refresh tier info after successful increment
+      const tierResponse = await fetch("/api/user/tier-info")
+      const tierData = await tierResponse.json()
+      if (tierResponse.ok) {
+        setTierInfo(tierData.tierInfo)
+      }
+
+      return { success: true }
     } catch (err) {
-      console.error("Error incrementing bundle:", err)
+      console.error("❌ Error incrementing bundle:", err)
+      return { success: false, reason: "Network error" }
     }
   }
 
@@ -90,8 +108,9 @@ export function useUserTier() {
     tierInfo,
     loading,
     error,
-    refetch: fetchTierInfo,
     incrementDownload,
     incrementBundle,
+    isProUser: tierInfo?.tier === "creator_pro",
+    isFreeUser: tierInfo?.tier === "free",
   }
 }
