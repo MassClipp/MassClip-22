@@ -5,27 +5,39 @@ import { getAuth, type Auth, type DecodedIdToken } from "firebase-admin/auth"
 import { getStorage, type Storage } from "firebase-admin/storage"
 import admin from "firebase-admin"
 
+let adminApp: App | null = null
+let adminDb: Firestore | null = null
+let auth: Auth | null = null
+let storage: Storage | null = null
+
 /**
  * Initializes the Firebase Admin SDK, ensuring it only runs once.
  * This function is exported because other modules in your project depend on it.
  * @returns The initialized Firebase Admin App instance.
  */
 export function initializeFirebaseAdmin(): App {
-  if (getApps().length > 0 && getApps()[0]) {
-    return getApps()[0]!
+  if (adminApp && getApps().length > 0) {
+    console.log("✅ [Firebase Admin] Already initialized, returning existing app")
+    return adminApp
   }
 
   const { FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY } = process.env
 
   if (!FIREBASE_PROJECT_ID || !FIREBASE_CLIENT_EMAIL || !FIREBASE_PRIVATE_KEY) {
     console.error("❌ [Firebase Admin] CRITICAL: Missing Firebase Admin credentials.")
+    console.error("Missing:", {
+      FIREBASE_PROJECT_ID: !!FIREBASE_PROJECT_ID,
+      FIREBASE_CLIENT_EMAIL: !!FIREBASE_CLIENT_EMAIL,
+      FIREBASE_PRIVATE_KEY: !!FIREBASE_PRIVATE_KEY,
+    })
     throw new Error("Missing Firebase Admin credentials in environment variables.")
   }
 
   try {
     console.log("🔄 [Firebase Admin] Initializing Firebase Admin SDK...")
     const privateKey = FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n")
-    const app = admin.initializeApp({
+
+    adminApp = admin.initializeApp({
       credential: cert({
         projectId: FIREBASE_PROJECT_ID,
         clientEmail: FIREBASE_CLIENT_EMAIL,
@@ -33,32 +45,80 @@ export function initializeFirebaseAdmin(): App {
       }),
       projectId: FIREBASE_PROJECT_ID,
     })
+
+    // Initialize services
+    adminDb = getFirestore(adminApp)
+    auth = getAuth(adminApp)
+    storage = getStorage(adminApp)
+
     console.log("✅ [Firebase Admin] Firebase Admin SDK initialized successfully.")
-    return app
+    console.log(`📊 [Firebase Admin] Project ID: ${FIREBASE_PROJECT_ID}`)
+
+    return adminApp
   } catch (error) {
     console.error("❌ [Firebase Admin] CRITICAL: Firebase Admin SDK initialization failed.", error)
     throw new Error(`Failed to initialize Firebase Admin: ${error instanceof Error ? error.message : "Unknown error"}`)
   }
 }
 
-const adminApp = initializeFirebaseAdmin()
+// Initialize immediately
+try {
+  initializeFirebaseAdmin()
+} catch (error) {
+  console.error("❌ [Firebase Admin] Failed to initialize on module load:", error)
+}
 
 // Export a utility function to check the initialization status.
-export const isFirebaseAdminInitialized = () => !!adminApp && getApps().length > 0
+export const isFirebaseAdminInitialized = () => {
+  return !!adminApp && !!adminDb && getApps().length > 0
+}
 
-// Export Firestore, Auth, and Storage instances.
-export const adminDb: Firestore = getFirestore(adminApp)
-export const auth: Auth = getAuth(adminApp)
-export const storage: Storage = getStorage(adminApp)
+// Export Firestore, Auth, and Storage instances with getters that ensure initialization
+export const getAdminDb = (): Firestore => {
+  if (!adminDb) {
+    console.log("🔄 [Firebase Admin] adminDb not ready, initializing...")
+    initializeFirebaseAdmin()
+  }
+  if (!adminDb) {
+    throw new Error("Firebase Admin Firestore not initialized")
+  }
+  return adminDb
+}
 
-// Aliases for backward compatibility and consistent naming.
+export const getAdminAuth = (): Auth => {
+  if (!auth) {
+    console.log("🔄 [Firebase Admin] auth not ready, initializing...")
+    initializeFirebaseAdmin()
+  }
+  if (!auth) {
+    throw new Error("Firebase Admin Auth not initialized")
+  }
+  return auth
+}
+
+export const getAdminStorage = (): Storage => {
+  if (!storage) {
+    console.log("🔄 [Firebase Admin] storage not ready, initializing...")
+    initializeFirebaseAdmin()
+  }
+  if (!storage) {
+    throw new Error("Firebase Admin Storage not initialized")
+  }
+  return storage
+}
+
+// Direct exports (with fallback initialization)
+export { adminDb, auth, storage }
+
+// Aliases for backward compatibility
 export const adminAuth = auth
 export const firestore = adminDb
 export const db = adminDb
+
 export const firebaseAdmin = {
-  auth: () => auth,
-  firestore: () => adminDb,
-  storage: () => storage,
+  auth: () => getAdminAuth(),
+  firestore: () => getAdminDb(),
+  storage: () => getAdminStorage(),
   app: () => adminApp,
 }
 
@@ -89,11 +149,9 @@ export async function withRetry<T>(op: () => Promise<T>, maxRetries = 3, delay =
  * Verifies a Firebase ID token.
  */
 export async function verifyIdToken(idToken: string): Promise<DecodedIdToken> {
-  if (!isFirebaseAdminInitialized()) {
-    throw new Error("Firebase Admin SDK is not initialized. Cannot verify ID token.")
-  }
+  const authInstance = getAdminAuth()
   try {
-    return await auth.verifyIdToken(idToken)
+    return await authInstance.verifyIdToken(idToken)
   } catch (error: any) {
     console.error(`❌ [Auth] Token verification failed: ${error.message}`)
     throw error
@@ -122,10 +180,8 @@ export async function getAuthenticatedUser(
  * Creates or updates a user profile in Firestore.
  */
 export async function createOrUpdateUserProfile(userId: string, profileData: Record<string, unknown>) {
-  if (!isFirebaseAdminInitialized()) {
-    throw new Error("Firebase Admin SDK is not initialized. Cannot update profile.")
-  }
-  const ref = adminDb.collection("users").doc(userId)
+  const db = getAdminDb()
+  const ref = db.collection("users").doc(userId)
   const now = FieldValue.serverTimestamp()
 
   return withRetry(async () => {

@@ -1,5 +1,5 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { adminDb, initializeFirebaseAdmin, isFirebaseAdminInitialized } from "@/lib/firebase-admin"
+import { NextResponse } from "next/server"
+import { getAdminDb, initializeFirebaseAdmin, isFirebaseAdminInitialized } from "@/lib/firebase-admin"
 import { FieldValue } from "firebase-admin/firestore"
 
 const PRO_FEATURES = {
@@ -12,29 +12,31 @@ const PRO_FEATURES = {
   maxBundles: null,
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
+    const { email, userId } = await request.json()
+
+    if (!email && !userId) {
+      return NextResponse.json({ error: "Email or userId is required" }, { status: 400 })
+    }
+
+    // Initialize Firebase
     if (!isFirebaseAdminInitialized()) {
       initializeFirebaseAdmin()
     }
 
-    const { email, userId } = await request.json()
-
-    if (!email && !userId) {
-      return NextResponse.json({ error: "Email or userId required" }, { status: 400 })
-    }
-
+    const db = getAdminDb()
     let targetUserId = userId
 
-    // If no userId provided, try to find by email
+    // If no userId provided, look up by email
     if (!targetUserId && email) {
       // Try users collection first
-      const usersSnapshot = await adminDb.collection("users").where("email", "==", email).limit(1).get()
+      const usersSnapshot = await db.collection("users").where("email", "==", email).limit(1).get()
       if (!usersSnapshot.empty) {
         targetUserId = usersSnapshot.docs[0].id
       } else {
         // Try freeUsers collection
-        const freeUsersSnapshot = await adminDb.collection("freeUsers").where("email", "==", email).limit(1).get()
+        const freeUsersSnapshot = await db.collection("freeUsers").where("email", "==", email).limit(1).get()
         if (!freeUsersSnapshot.empty) {
           targetUserId = freeUsersSnapshot.docs[0].data().uid
         }
@@ -51,27 +53,34 @@ export async function POST(request: NextRequest) {
       plan: "creator_pro",
       status: "active",
       isActive: true,
+      stripeCustomerId: null, // Will be updated when they actually pay
+      stripeSubscriptionId: null, // Will be updated when they actually pay
+      currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
+      priceId: process.env.STRIPE_PRICE_ID || "price_1RuLpLDheyb0pkWF5v2Psykg",
       features: PRO_FEATURES,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
-      // Add some default values
-      stripeCustomerId: null,
-      stripeSubscriptionId: null,
-      currentPeriodEnd: null,
-      priceId: null,
-      source: "manual_creation",
+      manuallyCreated: true,
+      createdBy: "debug-endpoint",
     }
 
-    const docRef = adminDb.collection("memberships").doc(targetUserId)
+    const docRef = db.collection("memberships").doc(targetUserId)
     await docRef.set(membershipData, { merge: true })
 
     return NextResponse.json({
       success: true,
+      message: `Membership created for user ${targetUserId}`,
       userId: targetUserId,
-      message: "Membership created successfully",
+      membershipData,
     })
   } catch (error: any) {
-    console.error("Error creating membership:", error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error("Error creating manual membership:", error)
+    return NextResponse.json(
+      {
+        error: "Failed to create membership",
+        details: error.message,
+      },
+      { status: 500 },
+    )
   }
 }

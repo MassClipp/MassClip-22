@@ -1,5 +1,5 @@
 import Stripe from "stripe"
-import { adminDb, isFirebaseAdminInitialized } from "@/lib/firebase-admin"
+import { getAdminDb, isFirebaseAdminInitialized } from "@/lib/firebase-admin"
 import { FieldValue } from "firebase-admin/firestore"
 
 // --- Types ---
@@ -34,10 +34,11 @@ async function findUserByEmail(email: string): Promise<string | null> {
   }
 
   console.log(`🔍 [Webhook] Looking up user by email: ${email}`)
+  const db = getAdminDb()
 
   try {
     // Try users collection first
-    const usersSnapshot = await adminDb.collection("users").where("email", "==", email).limit(1).get()
+    const usersSnapshot = await db.collection("users").where("email", "==", email).limit(1).get()
     if (!usersSnapshot.empty) {
       const userId = usersSnapshot.docs[0].id
       console.log(`✅ [Webhook] Found user in users collection: ${userId}`)
@@ -45,7 +46,7 @@ async function findUserByEmail(email: string): Promise<string | null> {
     }
 
     // Try freeUsers collection as backup
-    const freeUsersSnapshot = await adminDb.collection("freeUsers").where("email", "==", email).limit(1).get()
+    const freeUsersSnapshot = await db.collection("freeUsers").where("email", "==", email).limit(1).get()
     if (!freeUsersSnapshot.empty) {
       const userId = freeUsersSnapshot.docs[0].data().uid
       console.log(`✅ [Webhook] Found user in freeUsers collection: ${userId}`)
@@ -66,9 +67,10 @@ async function findUserByCustomerId(customerId: string): Promise<string | null> 
   }
 
   console.log(`🔍 [Webhook] Looking up user by Stripe customer ID: ${customerId}`)
+  const db = getAdminDb()
 
   try {
-    const memberships = adminDb.collection("memberships")
+    const memberships = db.collection("memberships")
     const snapshot = await memberships.where("stripeCustomerId", "==", customerId).limit(1).get()
     if (snapshot.empty) {
       console.log(`❌ [Webhook] Could not find user with Stripe Customer ID: ${customerId}`)
@@ -92,7 +94,8 @@ async function setMembership(uid: string, data: object) {
   console.log(`📋 [Webhook] Membership data:`, data)
 
   try {
-    const docRef = adminDb.collection("memberships").doc(uid)
+    const db = getAdminDb()
+    const docRef = db.collection("memberships").doc(uid)
     await docRef.set({ ...data, updatedAt: FieldValue.serverTimestamp() }, { merge: true })
     console.log(`✅ [Webhook] Updated membership for user ${uid}`)
   } catch (error) {
@@ -242,7 +245,8 @@ export async function processPaymentIntentSucceeded(paymentIntent: Stripe.Paymen
     throw new Error("Missing required metadata in paymentIntent.succeeded event.")
   }
 
-  const purchaseRef = adminDb.collection("purchases").doc(paymentIntent.id)
+  const db = getAdminDb()
+  const purchaseRef = db.collection("purchases").doc(paymentIntent.id)
   const purchaseDoc = await purchaseRef.get()
 
   if (purchaseDoc.exists) {

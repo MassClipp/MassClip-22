@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import Stripe from "stripe"
 import { headers } from "next/headers"
-import { adminDb, initializeFirebaseAdmin, isFirebaseAdminInitialized } from "@/lib/firebase-admin"
+import { getAdminDb, initializeFirebaseAdmin, isFirebaseAdminInitialized } from "@/lib/firebase-admin"
 import {
   processCheckoutSessionCompleted,
   processSubscriptionDeleted,
@@ -17,14 +17,36 @@ const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
 export async function POST(request: Request) {
   console.log("🔔 [Webhook] Received Stripe webhook event")
 
-  // Initialize Firebase Admin first thing
+  // Force Firebase Admin initialization
   try {
+    console.log("🔄 [Webhook] Checking Firebase Admin initialization...")
+
     if (!isFirebaseAdminInitialized()) {
+      console.log("⚠️ [Webhook] Firebase Admin not initialized, initializing now...")
       initializeFirebaseAdmin()
-      console.log("✅ [Webhook] Firebase Admin initialized")
     }
+
+    // Test database connection
+    const db = getAdminDb()
+    console.log("✅ [Webhook] Firebase Admin initialized and database accessible")
+
+    // Test write to verify permissions
+    await db.collection("webhookTests").add({
+      timestamp: new Date(),
+      test: "webhook-initialization-test",
+    })
+    console.log("✅ [Webhook] Database write test successful")
   } catch (error: any) {
     console.error("❌ [Webhook] Firebase initialization failed:", error)
+    console.error("❌ [Webhook] Error details:", {
+      message: error.message,
+      stack: error.stack,
+      env: {
+        FIREBASE_PROJECT_ID: !!process.env.FIREBASE_PROJECT_ID,
+        FIREBASE_CLIENT_EMAIL: !!process.env.FIREBASE_CLIENT_EMAIL,
+        FIREBASE_PRIVATE_KEY: !!process.env.FIREBASE_PRIVATE_KEY,
+      },
+    })
     return NextResponse.json(
       {
         error: "Firebase initialization failed",
@@ -54,7 +76,8 @@ export async function POST(request: Request) {
 
   // Store raw event for diagnostics
   try {
-    await adminDb.collection("stripeEvents").add({
+    const db = getAdminDb()
+    await db.collection("stripeEvents").add({
       id: event.id,
       type: event.type,
       object: event.object,
