@@ -11,20 +11,72 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
 
-function verifyFirebaseInitialization(): { isReady: boolean; error?: string } {
+function verifyFirebaseInitialization(): { isReady: boolean; error?: string; diagnostics: any } {
+  const diagnostics = {
+    timestamp: new Date().toISOString(),
+    environment: {
+      NODE_ENV: process.env.NODE_ENV,
+      VERCEL: process.env.VERCEL,
+      FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID ? "SET" : "MISSING",
+      FIREBASE_CLIENT_EMAIL: process.env.FIREBASE_CLIENT_EMAIL ? "SET" : "MISSING",
+      FIREBASE_PRIVATE_KEY: process.env.FIREBASE_PRIVATE_KEY
+        ? "SET (length: " + (process.env.FIREBASE_PRIVATE_KEY?.length || 0) + ")"
+        : "MISSING",
+    },
+    firebaseAdmin: {
+      isFirebaseAdminInitialized: null as any,
+      adminDbAvailable: null as any,
+      authAvailable: null as any,
+      adminDbType: null as any,
+      authType: null as any,
+    },
+  }
+
+  try {
+    diagnostics.firebaseAdmin.isFirebaseAdminInitialized = isFirebaseAdminInitialized()
+  } catch (error) {
+    diagnostics.firebaseAdmin.isFirebaseAdminInitialized = `ERROR: ${error instanceof Error ? error.message : "Unknown error"}`
+  }
+
+  try {
+    diagnostics.firebaseAdmin.adminDbAvailable = !!adminDb
+    diagnostics.firebaseAdmin.adminDbType = typeof adminDb
+  } catch (error) {
+    diagnostics.firebaseAdmin.adminDbAvailable = `ERROR: ${error instanceof Error ? error.message : "Unknown error"}`
+  }
+
+  try {
+    diagnostics.firebaseAdmin.authAvailable = !!auth
+    diagnostics.firebaseAdmin.authType = typeof auth
+  } catch (error) {
+    diagnostics.firebaseAdmin.authAvailable = `ERROR: ${error instanceof Error ? error.message : "Unknown error"}`
+  }
+
   if (!isFirebaseAdminInitialized()) {
-    return { isReady: false, error: "Firebase Admin SDK is not initialized" }
+    return {
+      isReady: false,
+      error: "Firebase Admin SDK is not initialized",
+      diagnostics,
+    }
   }
 
   if (!adminDb) {
-    return { isReady: false, error: "Firebase Admin Database (adminDb) is not available" }
+    return {
+      isReady: false,
+      error: "Firebase Admin Database (adminDb) is not available",
+      diagnostics,
+    }
   }
 
   if (!auth) {
-    return { isReady: false, error: "Firebase Admin Auth is not available" }
+    return {
+      isReady: false,
+      error: "Firebase Admin Auth is not available",
+      diagnostics,
+    }
   }
 
-  return { isReady: true }
+  return { isReady: true, diagnostics }
 }
 
 // This is the main handler for Stripe webhooks
@@ -44,7 +96,13 @@ export async function POST(req: NextRequest) {
     console.error(errorMessage)
     debugTrace.push(errorMessage)
     return NextResponse.json(
-      { error: "Webhook signature verification failed.", details: { debugTrace } },
+      {
+        error: "Webhook signature verification failed.",
+        details: {
+          debugTrace,
+          errorStack: err instanceof Error ? err.stack : null,
+        },
+      },
       { status: 400 },
     )
   }
@@ -52,10 +110,19 @@ export async function POST(req: NextRequest) {
   const firebaseCheck = verifyFirebaseInitialization()
   if (!firebaseCheck.isReady) {
     const firebaseError = `❌ Firebase not ready: ${firebaseCheck.error}`
-    console.error(firebaseError)
+    console.error(firebaseError, firebaseCheck.diagnostics)
     debugTrace.push(firebaseError)
+    debugTrace.push(`Full diagnostics: ${JSON.stringify(firebaseCheck.diagnostics, null, 2)}`)
+
     return NextResponse.json(
-      { error: "Firestore not initialized", details: { debugTrace, firebaseError: firebaseCheck.error } },
+      {
+        error: "Firestore not initialized",
+        details: {
+          debugTrace,
+          firebaseError: firebaseCheck.error,
+          fullDiagnostics: firebaseCheck.diagnostics,
+        },
+      },
       { status: 500 },
     )
   }
@@ -101,6 +168,9 @@ export async function POST(req: NextRequest) {
         const lookupError = `❌ [Method 3] Failed to find user by email: ${error instanceof Error ? error.message : "Unknown error"}`
         console.error(lookupError)
         debugTrace.push(lookupError)
+        if (error instanceof Error && error.stack) {
+          debugTrace.push(`Error stack: ${error.stack}`)
+        }
       }
     } else if (!userId) {
       debugTrace.push("⚠️ [Method 3] No email found in session to look up user.")
@@ -144,7 +214,27 @@ export async function POST(req: NextRequest) {
       const dbError = `❌ Failed to update user data in Firestore: ${error instanceof Error ? error.message : "Unknown error"}`
       console.error(dbError, { userId })
       debugTrace.push(dbError)
-      return NextResponse.json({ error: "Failed to update user record.", details: { debugTrace } }, { status: 500 })
+      if (error instanceof Error) {
+        debugTrace.push(`Error name: ${error.name}`)
+        debugTrace.push(`Error message: ${error.message}`)
+        if (error.stack) {
+          debugTrace.push(`Error stack: ${error.stack}`)
+        }
+      }
+      return NextResponse.json(
+        {
+          error: "Failed to update user record.",
+          details: {
+            debugTrace,
+            errorDetails: {
+              name: error instanceof Error ? error.name : "Unknown",
+              message: error instanceof Error ? error.message : "Unknown error",
+              stack: error instanceof Error ? error.stack : null,
+            },
+          },
+        },
+        { status: 500 },
+      )
     }
   } else {
     debugTrace.push(`- Received unhandled event type: ${event.type}`)
