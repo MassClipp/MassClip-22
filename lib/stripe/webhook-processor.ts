@@ -158,15 +158,22 @@ export async function processPaymentIntentSucceeded(paymentIntent: Stripe.Paymen
 }
 
 export async function processInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
-  // Extract metadata from the invoice line items
   const lineItem = invoice.lines.data[0]
-  const metadata = lineItem?.metadata || {}
+  let metadata = lineItem?.metadata || {}
+
+  // Fallback to subscription metadata if line item metadata is empty
+  if (!metadata.userId && !metadata.buyerUid && invoice.parent?.type === "subscription_details") {
+    metadata = (invoice.parent as any).subscription_details?.metadata || {}
+  }
 
   const userId = metadata.userId || metadata.buyerUid
   const plan = metadata.plan
   const contentType = metadata.contentType
 
   if (!userId) {
+    console.error("Invoice metadata:", metadata)
+    console.error("Line item metadata:", lineItem?.metadata)
+    console.error("Subscription metadata:", (invoice.parent as any)?.subscription_details?.metadata)
     throw new Error(`Missing userId in invoice metadata. Invoice ID: ${invoice.id}`)
   }
 
