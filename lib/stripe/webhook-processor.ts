@@ -1,5 +1,5 @@
 import Stripe from "stripe"
-import { db } from "@/lib/firebase-admin"
+import { db } from "@/lib/firebase/admin"
 import { FieldValue } from "firebase-admin/firestore"
 
 // --- Types ---
@@ -155,64 +155,4 @@ export async function processPaymentIntentSucceeded(paymentIntent: Stripe.Paymen
 
   await purchaseRef.set(purchaseData)
   console.log(`Successfully created purchase record for paymentIntentId: ${paymentIntent.id}`)
-}
-
-export async function processInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
-  const lineItem = invoice.lines.data[0]
-  let metadata = lineItem?.metadata || {}
-
-  // Fallback to subscription metadata if line item metadata is empty
-  if (!metadata.userId && !metadata.buyerUid && invoice.parent?.type === "subscription_details") {
-    metadata = (invoice.parent as any).subscription_details?.metadata || {}
-  }
-
-  const userId = metadata.userId || metadata.buyerUid
-  const plan = metadata.plan
-  const contentType = metadata.contentType
-
-  if (!userId) {
-    console.error("Invoice metadata:", metadata)
-    console.error("Line item metadata:", lineItem?.metadata)
-    console.error("Subscription metadata:", (invoice.parent as any)?.subscription_details?.metadata)
-    throw new Error(`Missing userId in invoice metadata. Invoice ID: ${invoice.id}`)
-  }
-
-  if (contentType !== "membership") {
-    console.log(`Invoice ${invoice.id} is not for membership, skipping`)
-    return
-  }
-
-  const customerId = typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id
-
-  if (!customerId) {
-    throw new Error(`Missing customerId in invoice. Invoice ID: ${invoice.id}`)
-  }
-
-  // Get subscription details if available
-  let subscriptionId: string | null = null
-  let subscription: Stripe.Subscription | null = null
-
-  if (invoice.subscription) {
-    subscriptionId = typeof invoice.subscription === "string" ? invoice.subscription : invoice.subscription.id
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!)
-    subscription = await stripe.subscriptions.retrieve(subscriptionId)
-  }
-
-  // Determine plan and features
-  const membershipPlan: MembershipPlan = plan === "creator_pro" ? "creator_pro" : "free"
-  const features = membershipPlan === "creator_pro" ? PRO_FEATURES : FREE_FEATURES
-
-  await setMembership(userId, {
-    uid: userId,
-    plan: membershipPlan,
-    status: subscription?.status || "active",
-    isActive: subscription ? subscription.status === "active" || subscription.status === "trialing" : true,
-    stripeCustomerId: customerId,
-    stripeSubscriptionId: subscriptionId,
-    currentPeriodEnd: subscription ? new Date(subscription.current_period_end * 1000) : null,
-    priceId: lineItem?.pricing?.price_details?.price || null,
-    features,
-  })
-
-  console.log(`Successfully processed invoice payment for user ${userId} with plan ${membershipPlan}`)
 }

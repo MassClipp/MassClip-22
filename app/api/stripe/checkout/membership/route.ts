@@ -57,7 +57,6 @@ export async function POST(request: NextRequest) {
       plan: "creator_pro",
       contentType: "membership", // Differentiates from bundle purchases
       source: "dashboard_membership_upgrade",
-      userId: uid, // Backup field
     }
     console.log("📋 [Membership Checkout] Constructed metadata for Stripe:", metadata)
 
@@ -79,8 +78,6 @@ export async function POST(request: NextRequest) {
       ],
       // Use the authenticated user's email
       customer_email: email,
-      // Set the user ID as client reference for backup identification
-      client_reference_id: uid,
       // Set success and cancel URLs
       success_url: `${siteUrl}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${siteUrl}/dashboard`,
