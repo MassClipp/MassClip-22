@@ -2,7 +2,6 @@ import { type NextRequest, NextResponse } from "next/server"
 import { cert, getApps, initializeApp } from "firebase-admin/app"
 import { getAuth } from "firebase-admin/auth"
 import { getFirestore, Timestamp } from "firebase-admin/firestore"
-import { getMembership } from "@/lib/memberships-service"
 
 // Initialize Firebase Admin with only the required fields to avoid missing env crashes
 if (!getApps().length) {
@@ -60,23 +59,46 @@ function getContentType(mimeType: string): ContentType {
 
 async function getTierInfoSafe(uid: string): Promise<{ maxVideosPerBundle: number | null; maxBundles: number | null }> {
   try {
-    const membership = await getMembership(uid)
+    console.log("🔍 [Bundle Limit] Checking user tier for:", uid.substring(0, 8) + "...")
 
-    // Dead simple logic: If they have an active Creator Pro membership, unlimited everything
-    if (membership && membership.isActive && membership.plan === "creator_pro") {
-      console.log("🚀 [Bundle Limit] Creator Pro user - UNLIMITED EVERYTHING")
-      return {
-        maxVideosPerBundle: null, // Unlimited videos per bundle
-        maxBundles: null, // Unlimited bundles
+    // Check if user has active pro membership first
+    const membershipDoc = await db.collection("memberships").doc(uid).get()
+    if (membershipDoc.exists) {
+      const membershipData = membershipDoc.data()
+      if (membershipData?.active && membershipData?.isActive) {
+        console.log("🚀 [Bundle Limit] Found ACTIVE Creator Pro membership - UNLIMITED EVERYTHING")
+        return {
+          maxVideosPerBundle: null, // Unlimited videos per bundle
+          maxBundles: null, // Unlimited bundles
+        }
+      } else {
+        console.log("ℹ️ [Bundle Limit] Found inactive membership, checking free user...")
       }
     }
-  } catch (e) {
-    console.error("❌ [Bundle Limit] Error checking membership:", e)
-  }
 
-  // Everyone else gets free tier limits
-  console.log("📝 [Bundle Limit] Free user - 10 videos per bundle, 2 bundles max")
-  return { maxVideosPerBundle: 10, maxBundles: 2 }
+    // Check if user has active free user document
+    const freeUserDoc = await db.collection("freeUsers").doc(uid).get()
+    if (freeUserDoc.exists) {
+      const freeUserData = freeUserDoc.data()
+      if (freeUserData?.active) {
+        console.log("📝 [Bundle Limit] Found ACTIVE free user - applying limits")
+        return {
+          maxVideosPerBundle: freeUserData.maxVideosPerBundle || 10,
+          maxBundles: freeUserData.bundlesLimit || 2,
+        }
+      } else {
+        console.log("ℹ️ [Bundle Limit] Found inactive free user...")
+      }
+    }
+
+    // No active documents found - default to free limits but log warning
+    console.warn("⚠️ [Bundle Limit] No active user documents found, defaulting to free limits")
+    return { maxVideosPerBundle: 10, maxBundles: 2 }
+  } catch (e) {
+    console.error("❌ [Bundle Limit] Error checking user tier:", e)
+    // Default to free tier limits on error
+    return { maxVideosPerBundle: 10, maxBundles: 2 }
+  }
 }
 
 async function buildDetailedItemsForIds(idsToAdd: string[]) {
@@ -283,7 +305,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
     const bundleData = bundleSnap.data() || {}
 
-    // Enforce tier limits
+    // Enforce tier limits - FIXED: Now properly checks active membership
     const tier = await getTierInfoSafe(uid)
 
     const existingDetailed = Array.isArray(bundleData.detailedContentItems) ? bundleData.detailedContentItems : []
@@ -463,7 +485,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       durationMs: Date.now() - startedAt,
       debug: {
         uid,
-        membershipFound: tier.maxVideosPerBundle !== 10, // If not 10, membership was found
+        membershipFound: tier.maxVideosPerBundle === null, // If null, membership was found
         isUnlimited: tier.maxVideosPerBundle === null,
         tierInfo: tier,
         validationErrors: validationErrors.length > 0 ? validationErrors : undefined, // Include validation errors in debug
