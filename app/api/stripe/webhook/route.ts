@@ -43,6 +43,9 @@ export async function POST(req: NextRequest) {
 
     // --- User Identification Logic ---
     debugTrace.push("3. Starting user identification process...")
+    debugTrace.push(`- Session metadata: ${JSON.stringify(session.metadata)}`)
+    debugTrace.push(`- Session customer_details: ${JSON.stringify(session.customer_details)}`)
+    debugTrace.push(`- Session client_reference_id: ${session.client_reference_id}`)
 
     // Method 1: Check metadata for buyerUid (most reliable)
     if (session.metadata?.buyerUid) {
@@ -82,6 +85,24 @@ export async function POST(req: NextRequest) {
       }
     } else if (!userId) {
       debugTrace.push("⚠️ [Method 3] No email found in session to look up user.")
+    }
+
+    // NEW Method 4: Check subscription metadata if session metadata is empty
+    if (!userId && session.subscription) {
+      debugTrace.push("- [Method 4] Checking subscription metadata...")
+      try {
+        const subscription = await stripe.subscriptions.retrieve(session.subscription as string)
+        if (subscription.metadata?.buyerUid) {
+          userId = subscription.metadata.buyerUid
+          debugTrace.push(`✅ [Method 4] Found user ID in subscription metadata: ${userId}`)
+        } else {
+          debugTrace.push("⚠️ [Method 4] No buyerUid in subscription metadata")
+        }
+      } catch (error) {
+        debugTrace.push(
+          `❌ [Method 4] Failed to retrieve subscription: ${error instanceof Error ? error.message : "Unknown error"}`,
+        )
+      }
     }
 
     // --- Final Check and Database Update ---
