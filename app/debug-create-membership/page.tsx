@@ -3,99 +3,78 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
-export default function DebugCreateMembershipPage() {
+export default function CreateMembershipDebug() {
   const [email, setEmail] = useState("johnisworthier103@gmail.com")
-  const [userId, setUserId] = useState("")
-  const [loading, setLoading] = useState(false)
+  const [stripeCustomerId, setStripeCustomerId] = useState("")
+  const [stripeSubscriptionId, setStripeSubscriptionId] = useState("")
   const [result, setResult] = useState<any>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
 
-  const handleCreateMembership = async () => {
+  const createMembership = async () => {
     setLoading(true)
-    setError(null)
-    setResult(null)
-
     try {
       const response = await fetch("/api/debug/create-membership-manual", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email, userId }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          stripeCustomerId: stripeCustomerId || undefined,
+          stripeSubscriptionId: stripeSubscriptionId || undefined,
+        }),
       })
-
       const data = await response.json()
-
-      if (response.ok) {
-        setResult(data)
-      } else {
-        setError(data.error || "Failed to create membership")
-      }
-    } catch (err: any) {
-      setError(err.message || "Network error")
+      setResult(data)
+    } catch (error) {
+      setResult({ error: error instanceof Error ? error.message : "Unknown error" })
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="container mx-auto p-6 max-w-2xl">
+    <div className="container mx-auto p-6 max-w-4xl">
       <Card>
         <CardHeader>
-          <CardTitle>Debug: Create Membership Manually</CardTitle>
-          <CardDescription>
-            Create a membership document manually for testing purposes. This bypasses the Stripe webhook.
-          </CardDescription>
+          <CardTitle>Manual Membership Creation</CardTitle>
+          <p className="text-sm text-gray-600">
+            Create a membership for a user who upgraded but didn't get their membership created properly.
+          </p>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-2">Email</label>
+            <label className="block text-sm font-medium mb-2">Email *</label>
+            <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="user@example.com" />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">Stripe Customer ID (optional)</label>
             <Input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="user@example.com"
+              value={stripeCustomerId}
+              onChange={(e) => setStripeCustomerId(e.target.value)}
+              placeholder="cus_..."
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2">User ID (optional)</label>
+            <label className="block text-sm font-medium mb-2">Stripe Subscription ID (optional)</label>
             <Input
-              type="text"
-              value={userId}
-              onChange={(e) => setUserId(e.target.value)}
-              placeholder="Leave empty to lookup by email"
+              value={stripeSubscriptionId}
+              onChange={(e) => setStripeSubscriptionId(e.target.value)}
+              placeholder="sub_..."
             />
           </div>
 
-          <Button onClick={handleCreateMembership} disabled={loading || (!email && !userId)}>
+          <Button onClick={createMembership} disabled={loading}>
             {loading ? "Creating..." : "Create Membership"}
           </Button>
 
-          {error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-
           {result && (
-            <Alert>
-              <AlertDescription>
-                <div className="space-y-2">
-                  <p className="font-semibold text-green-600">✅ {result.message}</p>
-                  <p>User ID: {result.userId}</p>
-                  <details className="mt-2">
-                    <summary className="cursor-pointer font-medium">View Membership Data</summary>
-                    <pre className="mt-2 p-2 bg-gray-100 rounded text-xs overflow-auto">
-                      {JSON.stringify(result.membershipData, null, 2)}
-                    </pre>
-                  </details>
-                </div>
-              </AlertDescription>
-            </Alert>
+            <div className="mt-6">
+              <h3 className="text-lg font-semibold mb-2">Results:</h3>
+              <pre className="bg-gray-100 p-4 rounded-lg overflow-auto text-sm">{JSON.stringify(result, null, 2)}</pre>
+            </div>
           )}
         </CardContent>
       </Card>

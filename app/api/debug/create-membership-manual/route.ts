@@ -1,84 +1,68 @@
-import { NextResponse } from "next/server"
-import { getAdminDb, initializeFirebaseAdmin, isFirebaseAdminInitialized } from "@/lib/firebase-admin"
-import { FieldValue } from "firebase-admin/firestore"
+import { type NextRequest, NextResponse } from "next/server"
+import { auth, adminDb, isFirebaseAdminInitialized } from "@/lib/firebase-admin"
+import { setCreatorPro } from "@/lib/memberships-service"
 
-const PRO_FEATURES = {
-  unlimitedDownloads: true,
-  premiumContent: true,
-  noWatermark: true,
-  prioritySupport: true,
-  platformFeePercentage: 10,
-  maxVideosPerBundle: null,
-  maxBundles: null,
-}
-
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const { email, userId } = await request.json()
+    const { email, stripeCustomerId, stripeSubscriptionId } = await request.json()
 
-    if (!email && !userId) {
-      return NextResponse.json({ error: "Email or userId is required" }, { status: 400 })
-    }
-
-    // Initialize Firebase
     if (!isFirebaseAdminInitialized()) {
-      initializeFirebaseAdmin()
+      return NextResponse.json(
+        {
+          error: "Firebase Admin not initialized",
+        },
+        { status: 500 },
+      )
     }
 
-    const db = getAdminDb()
-    let targetUserId = userId
-
-    // If no userId provided, look up by email
-    if (!targetUserId && email) {
-      // Try users collection first
-      const usersSnapshot = await db.collection("users").where("email", "==", email).limit(1).get()
-      if (!usersSnapshot.empty) {
-        targetUserId = usersSnapshot.docs[0].id
-      } else {
-        // Try freeUsers collection
-        const freeUsersSnapshot = await db.collection("freeUsers").where("email", "==", email).limit(1).get()
-        if (!freeUsersSnapshot.empty) {
-          targetUserId = freeUsersSnapshot.docs[0].data().uid
-        }
-      }
+    if (!email) {
+      return NextResponse.json(
+        {
+          error: "Email is required",
+        },
+        { status: 400 },
+      )
     }
 
-    if (!targetUserId) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 })
+    // Look up user by email
+    let userRecord
+    try {
+      userRecord = await auth.getUserByEmail(email)
+    } catch (error) {
+      return NextResponse.json(
+        {
+          error: `User not found with email: ${email}`,
+        },
+        { status: 404 },
+      )
     }
 
-    // Create membership
-    const membershipData = {
-      uid: targetUserId,
-      plan: "creator_pro",
-      status: "active",
-      isActive: true,
-      stripeCustomerId: null, // Will be updated when they actually pay
-      stripeSubscriptionId: null, // Will be updated when they actually pay
+    const uid = userRecord.uid
+
+    // Create the membership using the service
+    await setCreatorPro(uid, {
+      email: email,
+      stripeCustomerId: stripeCustomerId || "manual_creation",
+      stripeSubscriptionId: stripeSubscriptionId || "manual_creation",
       currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
-      priceId: process.env.STRIPE_PRICE_ID || "price_1RuLpLDheyb0pkWF5v2Psykg",
-      features: PRO_FEATURES,
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-      manuallyCreated: true,
-      createdBy: "debug-endpoint",
-    }
+      status: "active",
+    })
 
-    const docRef = db.collection("memberships").doc(targetUserId)
-    await docRef.set(membershipData, { merge: true })
+    // Verify the membership was created
+    const membershipDoc = await adminDb.collection("memberships").doc(uid).get()
 
     return NextResponse.json({
       success: true,
-      message: `Membership created for user ${targetUserId}`,
-      userId: targetUserId,
-      membershipData,
+      uid: uid,
+      email: email,
+      membershipCreated: membershipDoc.exists,
+      membershipData: membershipDoc.exists ? membershipDoc.data() : null,
     })
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error creating manual membership:", error)
     return NextResponse.json(
       {
-        error: "Failed to create membership",
-        details: error.message,
+        error: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 },
     )
