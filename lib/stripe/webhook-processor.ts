@@ -1,5 +1,5 @@
 import Stripe from "stripe"
-import { db } from "@/lib/firebase/admin"
+import { adminDb as db } from "@/lib/firebase-admin"
 import { FieldValue } from "firebase-admin/firestore"
 
 // --- Types ---
