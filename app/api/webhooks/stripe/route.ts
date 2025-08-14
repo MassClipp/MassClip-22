@@ -40,17 +40,48 @@ async function processBundlePurchase(session: Stripe.Checkout.Session) {
 
   let bundleContents: any[] = []
 
-  // Strategy 1: Direct content fields from bundle
-  const contentFields = ["contents", "items", "videos", "files", "content", "bundleContent"]
-  for (const field of contentFields) {
-    if (bundleData[field] && Array.isArray(bundleData[field]) && bundleData[field].length > 0) {
-      bundleContents = bundleData[field]
-      console.log(`✅ [Bundle Webhook] Found ${bundleContents.length} content items in field: ${field}`)
-      break
+  if (
+    bundleData.detailedContentItems &&
+    Array.isArray(bundleData.detailedContentItems) &&
+    bundleData.detailedContentItems.length > 0
+  ) {
+    bundleContents = bundleData.detailedContentItems
+    console.log(`✅ [Bundle Webhook] Found ${bundleContents.length} content items in detailedContentItems`)
+  }
+
+  if (bundleContents.length === 0 && bundleData.contentItems && bundleData.contentUrls) {
+    const contentItems = bundleData.contentItems || []
+    const contentUrls = bundleData.contentUrls || []
+    const contentTitles = bundleData.contentTitles || []
+    const contentThumbnails = bundleData.contentThumbnails || []
+
+    bundleContents = contentItems.map((itemId: string, index: number) => ({
+      id: itemId,
+      title: contentTitles[index] || `Content ${index + 1}`,
+      fileUrl: contentUrls[index] || "",
+      downloadUrl: contentUrls[index] || "",
+      thumbnailUrl: contentThumbnails[index] || "",
+      contentType: "video",
+      mimeType: "video/mp4",
+      bundleId: itemId,
+      createdAt: new Date().toISOString(),
+    }))
+    console.log(`✅ [Bundle Webhook] Built ${bundleContents.length} content items from contentItems + contentUrls`)
+  }
+
+  // Strategy 3: Direct content fields from bundle (fallback)
+  if (bundleContents.length === 0) {
+    const contentFields = ["contents", "items", "videos", "files", "content", "bundleContent"]
+    for (const field of contentFields) {
+      if (bundleData[field] && Array.isArray(bundleData[field]) && bundleData[field].length > 0) {
+        bundleContents = bundleData[field]
+        console.log(`✅ [Bundle Webhook] Found ${bundleContents.length} content items in field: ${field}`)
+        break
+      }
     }
   }
 
-  // Strategy 2: If no content found, fetch from bundleContent collection
+  // Strategy 4: If no content found, fetch from bundleContent collection
   if (bundleContents.length === 0) {
     console.log(`🔍 [Bundle Webhook] No content in bundle document, checking bundleContent collection...`)
     const contentQuery = await adminDb.collection("bundleContent").where("bundleId", "==", itemId).get()
@@ -64,7 +95,7 @@ async function processBundlePurchase(session: Stripe.Checkout.Session) {
     }
   }
 
-  // Strategy 3: If still no content, fetch from productBoxContent collection
+  // Strategy 5: If still no content, fetch from productBoxContent collection
   if (bundleContents.length === 0) {
     console.log(`🔍 [Bundle Webhook] Checking productBoxContent collection...`)
     const contentQuery = await adminDb.collection("productBoxContent").where("productBoxId", "==", itemId).get()
