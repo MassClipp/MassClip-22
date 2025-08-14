@@ -36,6 +36,52 @@ async function processBundlePurchase(session: Stripe.Checkout.Session) {
   }
 
   const bundleData = bundleDoc.data()!
+  console.log(`📦 [Bundle Webhook] Bundle data keys:`, Object.keys(bundleData))
+
+  let bundleContents: any[] = []
+
+  // Strategy 1: Direct content fields from bundle
+  const contentFields = ["contents", "items", "videos", "files", "content", "bundleContent"]
+  for (const field of contentFields) {
+    if (bundleData[field] && Array.isArray(bundleData[field]) && bundleData[field].length > 0) {
+      bundleContents = bundleData[field]
+      console.log(`✅ [Bundle Webhook] Found ${bundleContents.length} content items in field: ${field}`)
+      break
+    }
+  }
+
+  // Strategy 2: If no content found, fetch from bundleContent collection
+  if (bundleContents.length === 0) {
+    console.log(`🔍 [Bundle Webhook] No content in bundle document, checking bundleContent collection...`)
+    const contentQuery = await adminDb.collection("bundleContent").where("bundleId", "==", itemId).get()
+
+    if (!contentQuery.empty) {
+      bundleContents = contentQuery.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }))
+      console.log(`✅ [Bundle Webhook] Found ${bundleContents.length} content items in bundleContent collection`)
+    }
+  }
+
+  // Strategy 3: If still no content, fetch from productBoxContent collection
+  if (bundleContents.length === 0) {
+    console.log(`🔍 [Bundle Webhook] Checking productBoxContent collection...`)
+    const contentQuery = await adminDb.collection("productBoxContent").where("productBoxId", "==", itemId).get()
+
+    if (!contentQuery.empty) {
+      bundleContents = contentQuery.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }))
+      console.log(`✅ [Bundle Webhook] Found ${bundleContents.length} content items in productBoxContent collection`)
+    }
+  }
+
+  console.log(`📊 [Bundle Webhook] Final content count: ${bundleContents.length}`)
+  if (bundleContents.length > 0) {
+    console.log(`📹 [Bundle Webhook] Sample content item:`, JSON.stringify(bundleContents[0], null, 2))
+  }
 
   // Get creator details
   let creatorData = { name: "Unknown Creator", username: "unknown" }
@@ -50,29 +96,31 @@ async function processBundlePurchase(session: Stripe.Checkout.Session) {
     }
   }
 
-  // Create bundle purchase record
   const purchaseData = {
     id: session.id,
     bundleId: itemId,
     productBoxId: itemId,
     bundleTitle: bundleData.title || "Untitled Bundle",
-    description: bundleData.description || "Premium content bundle",
-    thumbnailUrl: bundleData.customPreviewThumbnail || bundleData.thumbnailUrl || "/placeholder.svg",
+    bundleDescription: bundleData.description || "Premium content bundle",
+    bundleThumbnailUrl: bundleData.customPreviewThumbnail || bundleData.thumbnailUrl || "/placeholder.svg",
 
     // Creator info
     creatorId: creatorId || "unknown",
     creatorName: creatorData.name,
     creatorUsername: creatorData.username,
+    creatorDisplayName: creatorData.name,
 
     // Buyer info
     buyerUid: buyerUid,
     userId: buyerUid,
-    userEmail: buyerEmail || "",
-    userName: buyerName || "Anonymous User",
+    buyerEmail: buyerEmail || "",
+    buyerName: buyerName || "Anonymous User",
+    buyerDisplayName: buyerName || "Anonymous User",
     isAuthenticated: buyerUid !== "anonymous",
 
     // Purchase details
     amount: session.amount_total ? session.amount_total / 100 : 0,
+    purchaseAmount: session.amount_total ? session.amount_total / 100 : 0,
     currency: session.currency || "usd",
     status: "completed",
 
@@ -81,26 +129,42 @@ async function processBundlePurchase(session: Stripe.Checkout.Session) {
     paymentIntentId: session.payment_intent,
     stripeCustomerId: session.customer,
 
-    // Content info
-    contents: bundleData.contents || [],
-    items: bundleData.contents || [],
-    itemNames: (bundleData.contents || []).map((item: any) => item.title || item.name || "Untitled"),
-    contentCount: (bundleData.contents || []).length,
+    // Content info - store in multiple formats for compatibility
+    contents: bundleContents,
+    items: bundleContents,
+    content: bundleContents,
+    bundleContent: bundleContents,
+    bundleContents: bundleContents,
+    videos: bundleContents,
+    files: bundleContents,
+
+    // Content metadata
+    itemNames: bundleContents.map((item: any) => item.title || item.name || item.filename || "Untitled"),
+    contentCount: bundleContents.length,
+    bundleTotalItems: bundleContents.length,
+
+    // Calculate totals
+    bundleTotalSize: bundleContents.reduce((total: number, item: any) => total + (item.fileSize || 0), 0),
+    bundleTotalDuration: bundleContents.reduce((total: number, item: any) => total + (item.duration || 0), 0),
 
     // Timestamps
     createdAt: new Date().toISOString(),
     completedAt: new Date().toISOString(),
     purchasedAt: new Date().toISOString(),
+    timestamp: new Date(),
 
     // Access control
     accessToken: `access_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
     source: "stripe_webhook",
+    webhookProcessed: true,
   }
 
   // Store in bundlePurchases collection
   await adminDb.collection("bundlePurchases").doc(session.id).set(purchaseData)
 
-  console.log(`✅ [Bundle Webhook] Bundle purchase created: ${session.id} for user ${buyerUid}`)
+  console.log(
+    `✅ [Bundle Webhook] Bundle purchase created: ${session.id} for user ${buyerUid} with ${bundleContents.length} content items`,
+  )
 }
 
 export async function POST(request: Request) {
