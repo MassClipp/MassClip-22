@@ -14,6 +14,95 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
 
+async function processBundlePurchase(session: Stripe.Checkout.Session) {
+  console.log(`🛒 [Bundle Webhook] Processing bundle purchase: ${session.id}`)
+
+  const metadata = session.metadata || {}
+  const { bundleId, productBoxId, buyerUid, creatorId, buyerEmail, buyerName, buyerPlan } = metadata
+
+  const itemId = bundleId || productBoxId
+  if (!itemId) {
+    throw new Error("Missing bundle/productBox ID in session metadata")
+  }
+
+  if (!buyerUid) {
+    throw new Error("Missing buyer UID in session metadata")
+  }
+
+  // Get bundle details
+  const bundleDoc = await adminDb.collection("bundles").doc(itemId).get()
+  if (!bundleDoc.exists) {
+    throw new Error(`Bundle not found: ${itemId}`)
+  }
+
+  const bundleData = bundleDoc.data()!
+
+  // Get creator details
+  let creatorData = { name: "Unknown Creator", username: "unknown" }
+  if (creatorId) {
+    const creatorDoc = await adminDb.collection("users").doc(creatorId).get()
+    if (creatorDoc.exists) {
+      const creator = creatorDoc.data()!
+      creatorData = {
+        name: creator.displayName || creator.name || creator.username || "Unknown Creator",
+        username: creator.username || "unknown",
+      }
+    }
+  }
+
+  // Create bundle purchase record
+  const purchaseData = {
+    id: session.id,
+    bundleId: itemId,
+    productBoxId: itemId,
+    bundleTitle: bundleData.title || "Untitled Bundle",
+    description: bundleData.description || "Premium content bundle",
+    thumbnailUrl: bundleData.customPreviewThumbnail || bundleData.thumbnailUrl || "/placeholder.svg",
+
+    // Creator info
+    creatorId: creatorId || "unknown",
+    creatorName: creatorData.name,
+    creatorUsername: creatorData.username,
+
+    // Buyer info
+    buyerUid: buyerUid,
+    userId: buyerUid,
+    userEmail: buyerEmail || "",
+    userName: buyerName || "Anonymous User",
+    isAuthenticated: buyerUid !== "anonymous",
+
+    // Purchase details
+    amount: session.amount_total ? session.amount_total / 100 : 0,
+    currency: session.currency || "usd",
+    status: "completed",
+
+    // Stripe details
+    sessionId: session.id,
+    paymentIntentId: session.payment_intent,
+    stripeCustomerId: session.customer,
+
+    // Content info
+    contents: bundleData.contents || [],
+    items: bundleData.contents || [],
+    itemNames: (bundleData.contents || []).map((item: any) => item.title || item.name || "Untitled"),
+    contentCount: (bundleData.contents || []).length,
+
+    // Timestamps
+    createdAt: new Date().toISOString(),
+    completedAt: new Date().toISOString(),
+    purchasedAt: new Date().toISOString(),
+
+    // Access control
+    accessToken: `access_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    source: "stripe_webhook",
+  }
+
+  // Store in bundlePurchases collection
+  await adminDb.collection("bundlePurchases").doc(session.id).set(purchaseData)
+
+  console.log(`✅ [Bundle Webhook] Bundle purchase created: ${session.id} for user ${buyerUid}`)
+}
+
 export async function POST(request: Request) {
   const sig = headers().get("stripe-signature") || headers().get("Stripe-Signature")
   const body = await request.text()
@@ -58,8 +147,21 @@ export async function POST(request: Request) {
   try {
     switch (event.type) {
       case "checkout.session.completed":
-        await processCheckoutSessionCompleted(event.data.object as Stripe.Checkout.Session)
+        const session = event.data.object as Stripe.Checkout.Session
+
+        const metadata = session.metadata || {}
+        const contentType = metadata.contentType
+        const bundleId = metadata.bundleId || metadata.productBoxId
+
+        if (contentType === "bundle" || bundleId) {
+          // Handle bundle purchase
+          await processBundlePurchase(session)
+        } else {
+          // Handle subscription (Creator Pro upgrade)
+          await processCheckoutSessionCompleted(session)
+        }
         break
+
       case "customer.subscription.updated":
         await processSubscriptionUpdated(event.data.object as Stripe.Subscription)
         break
