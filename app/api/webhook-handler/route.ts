@@ -63,6 +63,28 @@ async function upsertMembership(opts: {
   }
 }
 
+async function moveToFreeUsers(uid: string, debugTrace: DebugTrace) {
+  try {
+    // Remove from memberships collection
+    await adminDb.collection("memberships").doc(uid).delete()
+    debugTrace.push(`Removed ${uid} from memberships collection`)
+
+    // Add to freeUsers collection
+    await adminDb.collection("freeUsers").doc(uid).set({
+      uid,
+      plan: "free",
+      downloadsUsed: 0,
+      bundlesCreated: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    })
+    debugTrace.push(`Added ${uid} to freeUsers collection`)
+  } catch (error: any) {
+    debugTrace.push(`Error moving user to freeUsers: ${error.message}`)
+    throw error
+  }
+}
+
 async function handleCheckoutCompleted(stripe: Stripe, event: Stripe.Event, debugTrace: DebugTrace) {
   const session = event.data.object as Stripe.Checkout.Session
   debugTrace.push(`Handling checkout.session.completed: ${session.id}`)
@@ -221,6 +243,59 @@ async function handleSubscriptionCreated(stripe: Stripe, event: Stripe.Event, de
   return NextResponse.json({ received: true, debugTrace })
 }
 
+async function handleSubscriptionUpdated(stripe: Stripe, event: Stripe.Event, debugTrace: DebugTrace) {
+  const sub = event.data.object as Stripe.Subscription
+  debugTrace.push(`Handling customer.subscription.updated: ${sub.id}`)
+
+  const md = sub.metadata || {}
+  const uid = firstNonEmpty((md as any)?.buyerUid, (md as any)?.firebaseUid, (md as any)?.userId)
+
+  if (!uid) {
+    debugTrace.push("No uid on subscription.metadata")
+    return NextResponse.json({ error: "Could not find user ID", debugTrace }, { status: 400 })
+  }
+
+  // Check if subscription is canceled (cancel_at_period_end = true)
+  if (sub.cancel_at_period_end) {
+    debugTrace.push(`Subscription ${sub.id} is set to cancel at period end`)
+
+    const currentPeriodEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000) : null
+    const customerId = (typeof sub.customer === "string" ? sub.customer : sub.customer?.id) || null
+    const priceId = sub.items?.data?.[0]?.price?.id ?? null
+
+    await upsertMembership({
+      uid,
+      stripeCustomerId: customerId,
+      stripeSubscriptionId: sub.id,
+      priceId,
+      currentPeriodEnd,
+      status: "canceled",
+      source: "customer.subscription.updated",
+      debugTrace,
+    })
+  }
+
+  return NextResponse.json({ received: true, debugTrace })
+}
+
+async function handleSubscriptionDeleted(stripe: Stripe, event: Stripe.Event, debugTrace: DebugTrace) {
+  const sub = event.data.object as Stripe.Subscription
+  debugTrace.push(`Handling customer.subscription.deleted: ${sub.id}`)
+
+  const md = sub.metadata || {}
+  const uid = firstNonEmpty((md as any)?.buyerUid, (md as any)?.firebaseUid, (md as any)?.userId)
+
+  if (!uid) {
+    debugTrace.push("No uid on subscription.metadata")
+    return NextResponse.json({ error: "Could not find user ID", debugTrace }, { status: 400 })
+  }
+
+  // Move user back to freeUsers collection
+  await moveToFreeUsers(uid, debugTrace)
+
+  return NextResponse.json({ received: true, debugTrace })
+}
+
 export async function POST(request: Request) {
   const debugTrace: DebugTrace = []
   try {
@@ -277,6 +352,10 @@ export async function POST(request: Request) {
         return await handleInvoicePaid(stripe, event, debugTrace)
       case "customer.subscription.created":
         return await handleSubscriptionCreated(stripe, event, debugTrace)
+      case "customer.subscription.updated":
+        return await handleSubscriptionUpdated(stripe, event, debugTrace)
+      case "customer.subscription.deleted":
+        return await handleSubscriptionDeleted(stripe, event, debugTrace)
       default:
         debugTrace.push(`No-op for event ${event.type}`)
         return NextResponse.json({ received: true, debugTrace })
