@@ -188,7 +188,7 @@ export default function MembershipPage() {
 
             {isProUser ? (
               <Button
-                onClick={() => router.push("/dashboard/user")}
+                onClick={() => router.push("/dashboard/profile?tab=membership")}
                 variant="outline"
                 className="w-full border-red-600 bg-black/30 text-white hover:bg-red-600/10"
               >
