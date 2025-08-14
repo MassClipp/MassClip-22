@@ -209,6 +209,28 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       })
     }
 
+    const uniqueContents = []
+    const seenIds = new Set()
+    const seenUrls = new Set()
+
+    for (const content of bundleContents) {
+      const contentId = content.id || content.contentId || content.videoId || content._id
+      const fileUrl = content.fileUrl || content.videoUrl || content.downloadUrl || content.url
+
+      // Skip if we've already seen this content ID or file URL
+      if ((contentId && seenIds.has(contentId)) || (fileUrl && seenUrls.has(fileUrl))) {
+        console.log(`🔄 [Bundle Content API] Skipping duplicate content: ${contentId || fileUrl}`)
+        continue
+      }
+
+      if (contentId) seenIds.add(contentId)
+      if (fileUrl) seenUrls.add(fileUrl)
+      uniqueContents.push(content)
+    }
+
+    bundleContents = uniqueContents
+    console.log(`🔍 [Bundle Content API] After deduplication: ${bundleContents.length} unique content items`)
+
     // Extract bundle info from purchase document
     const bundleInfo = {
       id: bundleId,

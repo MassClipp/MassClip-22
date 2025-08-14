@@ -159,7 +159,8 @@ async function processBundlePurchase(session: Stripe.Checkout.Session) {
 
     price: finalPrice,
     amount: finalPrice,
-    purchaseAmount: finalPrice,
+    purchaseAmount: finalPrice * 100, // Store in cents for Stripe compatibility
+    bundlePrice: finalPrice, // Store bundle price for unified purchases API
     currency: session.currency || bundleData.currency || "usd",
     status: "completed",
 
