@@ -12,14 +12,6 @@ function getStripe(): Stripe {
   return new Stripe(key, { apiVersion: "2023-10-16" })
 }
 
-function getFirestore() {
-  // This will trigger lazy initialization if needed
-  if (!adminDb) {
-    throw new Error("Firestore not initialized")
-  }
-  return adminDb
-}
-
 function firstNonEmpty(...vals: Array<string | null | undefined>): string | null {
   for (const v of vals) {
     if (typeof v === "string" && v.trim().length > 0) return v
@@ -72,7 +64,7 @@ async function upsertMembership(opts: {
   }
 
   try {
-    const userRef = getFirestore().collection("users").doc(uid)
+    const userRef = adminDb.collection("users").doc(uid)
     await userRef.set(
       {
         plan: "creator_pro",
@@ -257,7 +249,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Server configuration error", debugTrace }, { status: 500 })
     }
 
-    const db = getFirestore()
+    try {
+      await adminDb.collection("test").limit(1).get()
+      debugTrace.push("Firebase initialized successfully")
+    } catch (error: any) {
+      debugTrace.push(`Firebase initialization failed: ${error.message}`)
+      return NextResponse.json({ error: "Firestore not initialized", debugTrace }, { status: 500 })
+    }
+
     const stripe = getStripe()
 
     const payload = await request.text()
@@ -281,7 +280,7 @@ export async function POST(request: Request) {
 
     // Store raw event for diagnostics (best-effort)
     try {
-      await db.collection("stripeWebhookEvents").add({
+      await adminDb.collection("stripeWebhookEvents").add({
         eventType: event.type,
         eventId: event.id,
         receivedAt: new Date(),
