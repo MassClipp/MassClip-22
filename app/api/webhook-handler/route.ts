@@ -13,6 +13,7 @@ function getStripe(): Stripe {
 }
 
 function getFirestore() {
+  // This will trigger lazy initialization if needed
   if (!adminDb) {
     throw new Error("Firestore not initialized")
   }
@@ -303,6 +304,7 @@ export async function POST(request: Request) {
     }
   } catch (error: any) {
     console.error("Webhook error:", error)
-    return NextResponse.json({ error: error?.message || "Unknown error" }, { status: 500 })
+    debugTrace.push(`Webhook error: ${error.message}`)
+    return NextResponse.json({ error: error?.message || "Unknown error", debugTrace }, { status: 500 })
   }
 }
