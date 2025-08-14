@@ -1,5 +1,5 @@
-import { doc, setDoc, getDoc, updateDoc, deleteDoc, serverTimestamp, increment } from "firebase/firestore"
-import { db } from "@/lib/firebase-safe"
+import { adminDb } from "@/lib/firebase-admin"
+import { FieldValue } from "firebase-admin/firestore"
 
 export type MembershipPlan = "creator_pro"
 export type MembershipStatus = "active" | "inactive" | "canceled" | "past_due" | "trialing"
@@ -51,17 +51,12 @@ const PRO_FEATURES: MembershipFeatures = {
 }
 
 export async function getMembership(uid: string): Promise<MembershipDoc | null> {
-  if (!db) {
-    console.error("❌ Firestore not initialized")
-    throw new Error("Firestore not initialized")
-  }
-
   try {
     console.log("🔄 Getting membership for uid:", uid.substring(0, 8) + "...")
-    const docRef = doc(db, "memberships", uid)
-    const docSnap = await getDoc(docRef)
+    const docRef = adminDb.collection("memberships").doc(uid)
+    const docSnap = await docRef.get()
 
-    if (docSnap.exists()) {
+    if (docSnap.exists) {
       const data = docSnap.data() as MembershipDoc
       console.log("✅ Found existing membership:", { plan: data.plan, status: data.status })
       return data
@@ -113,10 +108,6 @@ export async function setCreatorPro(
     status?: Exclude<MembershipStatus, "inactive">
   },
 ) {
-  if (!db) {
-    throw new Error("Firestore not initialized")
-  }
-
   console.log("🔄 Creating Creator Pro membership for:", uid.substring(0, 8) + "...")
 
   const membershipData: Partial<MembershipDoc> = {
@@ -133,65 +124,59 @@ export async function setCreatorPro(
     downloadsUsed: 0,
     bundlesCreated: 0,
     features: { ...PRO_FEATURES },
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
   }
 
-  await setDoc(doc(db, "memberships", uid), membershipData)
+  await adminDb.collection("memberships").doc(uid).set(membershipData)
   console.log("✅ Creator Pro membership created successfully")
 }
 
 export async function setCreatorProStatus(uid: string, status: MembershipStatus, updates?: Partial<MembershipDoc>) {
-  if (!db) {
-    throw new Error("Firestore not initialized")
-  }
-
   console.log("🔄 Updating membership status to:", status, "for:", uid.substring(0, 8) + "...")
 
-  await setDoc(
-    doc(db, "memberships", uid),
-    {
-      status,
-      isActive: status === "active" || status === "trialing",
-      updatedAt: serverTimestamp(),
-      ...updates,
-    },
-    { merge: true },
-  )
+  await adminDb
+    .collection("memberships")
+    .doc(uid)
+    .set(
+      {
+        status,
+        isActive: status === "active" || status === "trialing",
+        updatedAt: FieldValue.serverTimestamp(),
+        ...updates,
+      },
+      { merge: true },
+    )
 
   console.log("✅ Membership status updated successfully")
 }
 
 export async function incrementDownloads(uid: string) {
-  if (!db) {
-    throw new Error("Firestore not initialized")
-  }
-
   // Pro users - just increment for analytics, no limits
-  await setDoc(
-    doc(db, "memberships", uid),
-    {
-      downloadsUsed: increment(1),
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true },
-  )
+  await adminDb
+    .collection("memberships")
+    .doc(uid)
+    .set(
+      {
+        downloadsUsed: FieldValue.increment(1),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    )
 }
 
 export async function incrementBundles(uid: string) {
-  if (!db) {
-    throw new Error("Firestore not initialized")
-  }
-
   // Pro users - just increment for analytics, no limits
-  await setDoc(
-    doc(db, "memberships", uid),
-    {
-      bundlesCreated: increment(1),
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true },
-  )
+  await adminDb
+    .collection("memberships")
+    .doc(uid)
+    .set(
+      {
+        bundlesCreated: FieldValue.increment(1),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    )
 }
 
 export function toTierInfo(m: MembershipDoc) {
@@ -210,23 +195,15 @@ export function toTierInfo(m: MembershipDoc) {
 }
 
 export async function cancelMembership(uid: string): Promise<void> {
-  if (!db) {
-    throw new Error("Firestore not initialized")
-  }
-
-  await updateDoc(doc(db, "memberships", uid), {
+  await adminDb.collection("memberships").doc(uid).update({
     status: "canceled",
     isActive: false,
-    updatedAt: serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
   })
   console.log(`✅ Canceled membership for user: ${uid}`)
 }
 
 export async function deleteMembership(uid: string): Promise<void> {
-  if (!db) {
-    throw new Error("Firestore not initialized")
-  }
-
-  await deleteDoc(doc(db, "memberships", uid))
+  await adminDb.collection("memberships").doc(uid).delete()
   console.log(`✅ Deleted membership record for user: ${uid}`)
 }
