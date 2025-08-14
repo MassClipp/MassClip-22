@@ -12,7 +12,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2023-10-16",
 })
 
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
+const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET_LIVE!
 
 async function processBundlePurchase(session: Stripe.Checkout.Session) {
   console.log(`🛒 [Bundle Webhook] Processing bundle purchase: ${session.id}`)
@@ -107,19 +107,31 @@ export async function POST(request: Request) {
   const sig = headers().get("stripe-signature") || headers().get("Stripe-Signature")
   const body = await request.text()
 
-  if (!sig || !webhookSecret) {
-    console.error("Webhook Error: Missing signature or secret.")
-    return NextResponse.json({ error: "Webhook secret not configured" }, { status: 400 })
+  if (!sig) {
+    console.error("Webhook Error: Missing signature.")
+    return NextResponse.json({ error: "Missing signature" }, { status: 400 })
   }
 
   let event: Stripe.Event
 
   try {
-    event = stripe.webhooks.constructEvent(body, sig, webhookSecret)
+    if (webhookSecret) {
+      event = stripe.webhooks.constructEvent(body, sig, webhookSecret)
+    } else {
+      throw new Error("No webhook secret configured")
+    }
   } catch (err: any) {
     console.error(`❌ Webhook signature verification failed: ${err.message}`)
+
+    console.error("Signature:", sig)
+    console.error("Body length:", body.length)
+    console.error("Webhook secret configured:", !!webhookSecret)
+
     return new NextResponse(`Webhook Error: ${err.message}`, { status: 400 })
   }
+
+  console.log(`✅ [Bundle Webhook] Received event: ${event.type} (${event.id})`)
+  console.log(`📋 [Bundle Webhook] Event metadata:`, event.data.object.metadata || {})
 
   try {
     // Test Firebase connection with a simple operation
