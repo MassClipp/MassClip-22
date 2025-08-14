@@ -15,7 +15,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
 
 export async function POST(request: Request) {
-  const sig = headers().get("stripe-signature")
+  const sig = headers().get("stripe-signature") || headers().get("Stripe-Signature")
   const body = await request.text()
 
   if (!sig || !webhookSecret) {
@@ -32,9 +32,18 @@ export async function POST(request: Request) {
     return new NextResponse(`Webhook Error: ${err.message}`, { status: 400 })
   }
 
-  // Store raw event for diagnostics
   try {
-    await adminDb.collection("stripeEvents").add({
+    // Test Firebase connection with a simple operation
+    await adminDb.collection("_test").limit(1).get()
+  } catch (error) {
+    console.error("❌ Firebase not accessible in webhook:", error)
+    return NextResponse.json({ error: "Database not initialized" }, { status: 500 })
+  }
+
+  // Store raw event for diagnostics (non-blocking)
+  adminDb
+    .collection("stripeEvents")
+    .add({
       id: event.id,
       type: event.type,
       object: event.object,
@@ -42,9 +51,9 @@ export async function POST(request: Request) {
       data: event.data,
       created: new Date(event.created * 1000),
     })
-  } catch (error) {
-    console.error("Failed to store raw stripe event", error)
-  }
+    .catch((error) => {
+      console.error("Failed to store raw stripe event", error)
+    })
 
   try {
     switch (event.type) {
