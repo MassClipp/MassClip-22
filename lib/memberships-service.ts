@@ -104,7 +104,7 @@ export async function getTierInfo(uid: string) {
 export async function setCreatorPro(
   uid: string,
   params: {
-    email?: string
+    email?: string | null
     stripeCustomerId: string
     stripeSubscriptionId: string
     currentPeriodEnd?: Date | null
@@ -117,31 +117,28 @@ export async function setCreatorPro(
     throw new Error("Firestore not initialized")
   }
 
-  console.log("🔄 Setting creator pro membership for:", uid.substring(0, 8) + "...")
+  console.log("🔄 Creating Creator Pro membership for:", uid.substring(0, 8) + "...")
 
-  await setDoc(
-    doc(db, "memberships", uid),
-    {
-      uid,
-      email: params.email ?? null,
-      plan: "creator_pro",
-      status: params.status ?? "active",
-      isActive: (params.status ?? "active") === "active" || (params.status ?? "active") === "trialing",
-      stripeCustomerId: params.stripeCustomerId,
-      stripeSubscriptionId: params.stripeSubscriptionId,
-      currentPeriodEnd: params.currentPeriodEnd ?? null,
-      priceId: params.priceId ?? null,
-      connectedAccountId: params.connectedAccountId ?? null,
-      downloadsUsed: 0,
-      bundlesCreated: 0,
-      features: { ...PRO_FEATURES },
-      updatedAt: serverTimestamp(),
-      createdAt: serverTimestamp(),
-    },
-    { merge: true },
-  )
+  const membershipData: Partial<MembershipDoc> = {
+    uid,
+    email: params.email || null,
+    plan: "creator_pro",
+    status: params.status || "active",
+    isActive: true,
+    stripeCustomerId: params.stripeCustomerId,
+    stripeSubscriptionId: params.stripeSubscriptionId,
+    currentPeriodEnd: params.currentPeriodEnd || null,
+    priceId: params.priceId || null,
+    connectedAccountId: params.connectedAccountId || null,
+    downloadsUsed: 0,
+    bundlesCreated: 0,
+    features: { ...PRO_FEATURES },
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  }
 
-  console.log("✅ Creator pro membership set successfully")
+  await setDoc(doc(db, "memberships", uid), membershipData)
+  console.log("✅ Creator Pro membership created successfully")
 }
 
 export async function setCreatorProStatus(uid: string, status: MembershipStatus, updates?: Partial<MembershipDoc>) {
