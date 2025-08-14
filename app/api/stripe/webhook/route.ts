@@ -11,72 +11,87 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
 
-function verifyFirebaseInitialization(): { isReady: boolean; error?: string; diagnostics: any } {
-  const diagnostics = {
-    timestamp: new Date().toISOString(),
-    environment: {
-      NODE_ENV: process.env.NODE_ENV,
-      VERCEL: process.env.VERCEL,
-      FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID ? "SET" : "MISSING",
-      FIREBASE_CLIENT_EMAIL: process.env.FIREBASE_CLIENT_EMAIL ? "SET" : "MISSING",
-      FIREBASE_PRIVATE_KEY: process.env.FIREBASE_PRIVATE_KEY
-        ? "SET (length: " + (process.env.FIREBASE_PRIVATE_KEY?.length || 0) + ")"
-        : "MISSING",
-    },
-    firebaseAdmin: {
-      isFirebaseAdminInitialized: null as any,
-      adminDbAvailable: null as any,
-      authAvailable: null as any,
-      adminDbType: null as any,
-      authType: null as any,
-    },
-  }
+async function verifyFirebaseInitializationWithRetry(
+  maxRetries = 3,
+): Promise<{ isReady: boolean; error?: string; diagnostics: any }> {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const diagnostics = {
+      timestamp: new Date().toISOString(),
+      attempt,
+      maxRetries,
+      environment: {
+        NODE_ENV: process.env.NODE_ENV,
+        VERCEL: process.env.VERCEL,
+        FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID ? "SET" : "MISSING",
+        FIREBASE_CLIENT_EMAIL: process.env.FIREBASE_CLIENT_EMAIL ? "SET" : "MISSING",
+        FIREBASE_PRIVATE_KEY: process.env.FIREBASE_PRIVATE_KEY
+          ? "SET (length: " + (process.env.FIREBASE_PRIVATE_KEY?.length || 0) + ")"
+          : "MISSING",
+      },
+      firebaseAdmin: {
+        isFirebaseAdminInitialized: null as any,
+        adminDbAvailable: null as any,
+        authAvailable: null as any,
+        adminDbType: null as any,
+        authType: null as any,
+      },
+    }
 
-  try {
-    diagnostics.firebaseAdmin.isFirebaseAdminInitialized = isFirebaseAdminInitialized()
-  } catch (error) {
-    diagnostics.firebaseAdmin.isFirebaseAdminInitialized = `ERROR: ${error instanceof Error ? error.message : "Unknown error"}`
-  }
+    try {
+      diagnostics.firebaseAdmin.isFirebaseAdminInitialized = isFirebaseAdminInitialized()
+    } catch (error) {
+      diagnostics.firebaseAdmin.isFirebaseAdminInitialized = `ERROR: ${error instanceof Error ? error.message : "Unknown error"}`
+    }
 
-  try {
-    diagnostics.firebaseAdmin.adminDbAvailable = !!adminDb
-    diagnostics.firebaseAdmin.adminDbType = typeof adminDb
-  } catch (error) {
-    diagnostics.firebaseAdmin.adminDbAvailable = `ERROR: ${error instanceof Error ? error.message : "Unknown error"}`
-  }
+    try {
+      diagnostics.firebaseAdmin.adminDbAvailable = !!adminDb
+      diagnostics.firebaseAdmin.adminDbType = typeof adminDb
+    } catch (error) {
+      diagnostics.firebaseAdmin.adminDbAvailable = `ERROR: ${error instanceof Error ? error.message : "Unknown error"}`
+    }
 
-  try {
-    diagnostics.firebaseAdmin.authAvailable = !!auth
-    diagnostics.firebaseAdmin.authType = typeof auth
-  } catch (error) {
-    diagnostics.firebaseAdmin.authAvailable = `ERROR: ${error instanceof Error ? error.message : "Unknown error"}`
-  }
+    try {
+      diagnostics.firebaseAdmin.authAvailable = !!auth
+      diagnostics.firebaseAdmin.authType = typeof auth
+    } catch (error) {
+      diagnostics.firebaseAdmin.authAvailable = `ERROR: ${error instanceof Error ? error.message : "Unknown error"}`
+    }
 
-  if (!isFirebaseAdminInitialized()) {
+    // Check if Firebase is ready
+    if (isFirebaseAdminInitialized() && adminDb && auth) {
+      return { isReady: true, diagnostics }
+    }
+
+    // If not ready and we have more attempts, wait and retry
+    if (attempt < maxRetries) {
+      const waitTime = attempt * 100 // Progressive delay: 100ms, 200ms, 300ms
+      console.log(`Firebase not ready on attempt ${attempt}/${maxRetries}, retrying in ${waitTime}ms...`)
+      await new Promise((resolve) => setTimeout(resolve, waitTime))
+      continue
+    }
+
+    // Final attempt failed
+    let error = "Firebase Admin SDK initialization failed"
+    if (!isFirebaseAdminInitialized()) {
+      error = "Firebase Admin SDK is not initialized"
+    } else if (!adminDb) {
+      error = "Firebase Admin Database (adminDb) is not available"
+    } else if (!auth) {
+      error = "Firebase Admin Auth is not available"
+    }
+
     return {
       isReady: false,
-      error: "Firebase Admin SDK is not initialized",
+      error,
       diagnostics,
     }
   }
 
-  if (!adminDb) {
-    return {
-      isReady: false,
-      error: "Firebase Admin Database (adminDb) is not available",
-      diagnostics,
-    }
+  return {
+    isReady: false,
+    error: "Max retries exceeded",
+    diagnostics: { maxRetries, finalAttempt: maxRetries },
   }
-
-  if (!auth) {
-    return {
-      isReady: false,
-      error: "Firebase Admin Auth is not available",
-      diagnostics,
-    }
-  }
-
-  return { isReady: true, diagnostics }
 }
 
 // This is the main handler for Stripe webhooks
@@ -107,9 +122,10 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const firebaseCheck = verifyFirebaseInitialization()
+  debugTrace.push("2. Verifying Firebase initialization with retry logic...")
+  const firebaseCheck = await verifyFirebaseInitializationWithRetry(3)
   if (!firebaseCheck.isReady) {
-    const firebaseError = `❌ Firebase not ready: ${firebaseCheck.error}`
+    const firebaseError = `❌ Firebase not ready after retries: ${firebaseCheck.error}`
     console.error(firebaseError, firebaseCheck.diagnostics)
     debugTrace.push(firebaseError)
     debugTrace.push(`Full diagnostics: ${JSON.stringify(firebaseCheck.diagnostics, null, 2)}`)
@@ -126,18 +142,18 @@ export async function POST(req: NextRequest) {
       { status: 500 },
     )
   }
-  debugTrace.push("✅ Firebase Admin SDK verified and ready.")
+  debugTrace.push("✅ Firebase Admin SDK verified and ready after retry logic.")
 
   // Handle the checkout.session.completed event
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session
-    debugTrace.push("2. Received checkout.session.completed event.")
+    debugTrace.push("3. Received checkout.session.completed event.")
     debugTrace.push(`- Session ID: ${session.id}`)
 
     let userId: string | null = null
 
     // --- User Identification Logic ---
-    debugTrace.push("3. Starting user identification process...")
+    debugTrace.push("4. Starting user identification process...")
 
     // Method 1: Check metadata for buyerUid (most reliable)
     if (session.metadata?.buyerUid) {
@@ -184,12 +200,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Could not find user ID", details: { debugTrace } }, { status: 400 })
     }
 
-    debugTrace.push(`4. User identified successfully: ${userId}.`)
-    debugTrace.push("5. Updating user data in Firestore...")
+    debugTrace.push(`5. User identified successfully: ${userId}.`)
+    debugTrace.push("6. Updating user data in Firestore...")
 
     try {
       // --- NEW: Update the 'memberships' collection using the new processor ---
-      debugTrace.push("5a. Calling new membership processor...")
+      debugTrace.push("6a. Calling new membership processor...")
       // Ensure metadata has the correct key for the processor
       const sessionForProcessor = {
         ...session,
@@ -199,7 +215,7 @@ export async function POST(req: NextRequest) {
       debugTrace.push("✅ New membership processor completed successfully.")
 
       // --- LEGACY: Update the 'users' collection (for backward compatibility) ---
-      debugTrace.push("5b. Updating legacy 'users' collection...")
+      debugTrace.push("6b. Updating legacy 'users' collection...")
       const userRef = adminDb.collection("users").doc(userId)
       await userRef.update({
         plan: "creator_pro",
