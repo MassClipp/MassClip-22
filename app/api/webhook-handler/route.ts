@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
 import Stripe from "stripe"
 import { adminDb } from "@/lib/firebase-admin"
-import { FieldValue } from "firebase-admin/firestore"
 import { setCreatorPro } from "@/lib/memberships-service"
 
 type DebugTrace = string[]
@@ -61,25 +60,6 @@ async function upsertMembership(opts: {
       `Skipping Creator Pro setup - missing Stripe IDs (customer: ${stripeCustomerId}, sub: ${stripeSubscriptionId})`,
     )
     return
-  }
-
-  try {
-    const userRef = adminDb.collection("users").doc(uid)
-    await userRef.set(
-      {
-        plan: "creator_pro",
-        permissions: {
-          download: true,
-          premium: true,
-        },
-        updatedAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    )
-    debugTrace.push(`users/${uid} also updated to creator_pro`)
-  } catch (e: any) {
-    debugTrace.push(`Failed to update users/${uid}: ${e.message}`)
-    console.error(`Failed to update user doc ${uid}`, e)
   }
 }
 
