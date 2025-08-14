@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server"
 import Stripe from "stripe"
-import { initializeFirebaseAdmin } from "@/lib/firebase-admin"
-import { getFirestore, FieldValue } from "firebase-admin/firestore"
-import { ensureMembership, setCreatorPro } from "@/lib/memberships-service"
+import { adminDb } from "@/lib/firebase-admin"
+import { FieldValue } from "firebase-admin/firestore"
+import { setCreatorPro } from "@/lib/memberships-service"
 
 type DebugTrace = string[]
 
@@ -12,14 +12,11 @@ function getStripe(): Stripe {
   return new Stripe(key, { apiVersion: "2023-10-16" })
 }
 
-let initialized = false
-function initFirestore() {
-  if (!initialized) {
-    initializeFirebaseAdmin()
-    initialized = true
-    console.log("🔥 Firebase initialized in webhook handler")
+function getFirestore() {
+  if (!adminDb) {
+    throw new Error("Firestore not initialized")
   }
-  return getFirestore()
+  return adminDb
 }
 
 function firstNonEmpty(...vals: Array<string | null | undefined>): string | null {
@@ -56,9 +53,6 @@ async function upsertMembership(opts: {
     `upsertMembership(uid=${uid}, status=${status}, customer=${stripeCustomerId ?? "null"}, sub=${stripeSubscriptionId ?? "null"}, price=${priceId ?? "null"}) [${source}]`,
   )
 
-  // Ensure the doc exists, then set creator_pro fields
-  await ensureMembership(uid, email ?? undefined)
-
   if (stripeCustomerId && stripeSubscriptionId) {
     await setCreatorPro(uid, {
       email: email ?? undefined,
@@ -68,16 +62,16 @@ async function upsertMembership(opts: {
       priceId: priceId ?? undefined,
       status,
     })
-    debugTrace.push(`memberships/${uid} upserted to creator_pro with Stripe IDs`)
+    debugTrace.push(`memberships/${uid} set to creator_pro with Stripe IDs`)
   } else {
     debugTrace.push(
-      `Skipping setCreatorPro - missing Stripe IDs (customer: ${stripeCustomerId}, sub: ${stripeSubscriptionId})`,
+      `Skipping Creator Pro setup - missing Stripe IDs (customer: ${stripeCustomerId}, sub: ${stripeSubscriptionId})`,
     )
+    return
   }
 
-  // Also update the `users` collection for consistency
   try {
-    const userRef = initFirestore().collection("users").doc(uid)
+    const userRef = getFirestore().collection("users").doc(uid)
     await userRef.set(
       {
         plan: "creator_pro",
@@ -262,7 +256,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Server configuration error", debugTrace }, { status: 500 })
     }
 
-    const db = initFirestore()
+    const db = getFirestore()
     const stripe = getStripe()
 
     const payload = await request.text()
