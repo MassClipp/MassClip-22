@@ -21,6 +21,10 @@ export async function getUserTier(uid: string): Promise<UserTier> {
   // Check if user is pro first
   const membership = await getMembership(uid)
   if (membership && membership.isActive) {
+    if (membership.currentPeriodEnd && new Date() > membership.currentPeriodEnd) {
+      console.log("⚠️ Membership expired, treating as free user")
+      return "free"
+    }
     console.log("✅ User is creator_pro")
     return "creator_pro"
   }
@@ -36,8 +40,13 @@ export async function getUserTierInfo(uid: string): Promise<TierInfo> {
   // Check if user is pro first
   const membership = await getMembership(uid)
   if (membership && membership.isActive) {
-    console.log("✅ Returning pro tier info")
-    return toTierInfo(membership)
+    if (membership.currentPeriodEnd && new Date() > membership.currentPeriodEnd) {
+      console.log("⚠️ Membership expired, returning free tier info")
+      // Fall through to free user logic below
+    } else {
+      console.log("✅ Returning pro tier info")
+      return toTierInfo(membership)
+    }
   }
 
   // User is free - get from freeUsers collection
@@ -71,9 +80,14 @@ export async function incrementUserDownloads(uid: string): Promise<{ success: bo
   // Check if user is pro first
   const membership = await getMembership(uid)
   if (membership && membership.isActive) {
-    console.log("✅ Pro user - unlimited downloads")
-    await incrementDownloads(uid)
-    return { success: true }
+    if (membership.currentPeriodEnd && new Date() > membership.currentPeriodEnd) {
+      console.log("⚠️ Membership expired, treating as free user")
+      // Fall through to free user logic below
+    } else {
+      console.log("✅ Pro user - unlimited downloads")
+      await incrementDownloads(uid)
+      return { success: true }
+    }
   }
 
   // User is free - check limits
@@ -87,9 +101,14 @@ export async function incrementUserBundles(uid: string): Promise<{ success: bool
   // Check if user is pro first
   const membership = await getMembership(uid)
   if (membership && membership.isActive) {
-    console.log("✅ Pro user - unlimited bundles")
-    await incrementBundles(uid)
-    return { success: true }
+    if (membership.currentPeriodEnd && new Date() > membership.currentPeriodEnd) {
+      console.log("⚠️ Membership expired, treating as free user")
+      // Fall through to free user logic below
+    } else {
+      console.log("✅ Pro user - unlimited bundles")
+      await incrementBundles(uid)
+      return { success: true }
+    }
   }
 
   // User is free - check limits
@@ -106,8 +125,13 @@ export async function canUserAddVideoToBundle(
   // Check if user is pro first
   const membership = await getMembership(uid)
   if (membership && membership.isActive) {
-    console.log("✅ Pro user - unlimited videos per bundle")
-    return { allowed: true }
+    if (membership.currentPeriodEnd && new Date() > membership.currentPeriodEnd) {
+      console.log("⚠️ Membership expired, treating as free user")
+      // Fall through to free user logic below
+    } else {
+      console.log("✅ Pro user - unlimited videos per bundle")
+      return { allowed: true }
+    }
   }
 
   // User is free - check video per bundle limit
