@@ -127,6 +127,14 @@ async function processBundlePurchase(session: Stripe.Checkout.Session) {
     }
   }
 
+  const bundlePrice = bundleData.price || bundleData.amount || 0
+  const stripePrice = session.amount_total ? session.amount_total / 100 : 0
+  const finalPrice = bundlePrice > 0 ? bundlePrice : stripePrice
+
+  console.log(
+    `💰 [Bundle Webhook] Price sources - Bundle: $${bundlePrice}, Stripe: $${stripePrice}, Final: $${finalPrice}`,
+  )
+
   const purchaseData = {
     id: session.id,
     bundleId: itemId,
@@ -149,10 +157,10 @@ async function processBundlePurchase(session: Stripe.Checkout.Session) {
     buyerDisplayName: buyerName || "Anonymous User",
     isAuthenticated: buyerUid !== "anonymous",
 
-    // Purchase details
-    amount: session.amount_total ? session.amount_total / 100 : 0,
-    purchaseAmount: session.amount_total ? session.amount_total / 100 : 0,
-    currency: session.currency || "usd",
+    price: finalPrice,
+    amount: finalPrice,
+    purchaseAmount: finalPrice,
+    currency: session.currency || bundleData.currency || "usd",
     status: "completed",
 
     // Stripe details
@@ -160,14 +168,8 @@ async function processBundlePurchase(session: Stripe.Checkout.Session) {
     paymentIntentId: session.payment_intent,
     stripeCustomerId: session.customer,
 
-    // Content info - store in multiple formats for compatibility
-    contents: bundleContents,
-    items: bundleContents,
-    content: bundleContents,
     bundleContent: bundleContents,
-    bundleContents: bundleContents,
-    videos: bundleContents,
-    files: bundleContents,
+    contents: bundleContents,
 
     // Content metadata
     itemNames: bundleContents.map((item: any) => item.title || item.name || item.filename || "Untitled"),
@@ -194,7 +196,7 @@ async function processBundlePurchase(session: Stripe.Checkout.Session) {
   await adminDb.collection("bundlePurchases").doc(session.id).set(purchaseData)
 
   console.log(
-    `✅ [Bundle Webhook] Bundle purchase created: ${session.id} for user ${buyerUid} with ${bundleContents.length} content items`,
+    `✅ [Bundle Webhook] Bundle purchase created: ${session.id} for user ${buyerUid} with ${bundleContents.length} content items at $${finalPrice}`,
   )
 }
 
