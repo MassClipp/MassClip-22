@@ -778,21 +778,12 @@ export default function ProfilePage() {
                       </Badge>
                     </div>
 
-                    <div className="space-y-3">
+                    {subscriptionData?.isActive && subscriptionData?.currentPeriodEnd && (
                       <div className="flex justify-between">
-                        <span className="text-zinc-400">Plan Type:</span>
-                        <span className="capitalize">
-                          {subscriptionData?.plan === "creator_pro" ? "Creator Pro" : subscriptionData?.plan || "Free"}
-                        </span>
+                        <span className="text-zinc-400">Next Billing:</span>
+                        <span>{new Date(subscriptionData.currentPeriodEnd).toLocaleDateString()}</span>
                       </div>
-
-                      {subscriptionData?.isActive && subscriptionData?.currentPeriodEnd && (
-                        <div className="flex justify-between">
-                          <span className="text-zinc-400">Next Billing:</span>
-                          <span>{new Date(subscriptionData.currentPeriodEnd).toLocaleDateString()}</span>
-                        </div>
-                      )}
-                    </div>
+                    )}
                   </div>
 
                   {/* Plan Features */}
@@ -800,7 +791,7 @@ export default function ProfilePage() {
                     <h3 className="text-lg font-medium mb-4">Plan Features</h3>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="flex items-center gap-2">
-                        {subscriptionData?.features?.unlimitedDownloads ? (
+                        {subscriptionData?.plan === "creator_pro" ? (
                           <CheckCircle className="h-4 w-4 text-green-500" />
                         ) : (
                           <XCircle className="h-4 w-4 text-red-500" />
@@ -809,16 +800,34 @@ export default function ProfilePage() {
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {subscriptionData?.features?.premiumContent ? (
+                        {subscriptionData?.plan === "creator_pro" ? (
                           <CheckCircle className="h-4 w-4 text-green-500" />
                         ) : (
                           <XCircle className="h-4 w-4 text-red-500" />
                         )}
-                        <span className="text-sm">Premium Content</span>
+                        <span className="text-sm">Unlimited Bundles</span>
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {subscriptionData?.features?.noWatermark ? (
+                        {subscriptionData?.plan === "creator_pro" ? (
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                        ) : (
+                          <XCircle className="h-4 w-4 text-red-500" />
+                        )}
+                        <span className="text-sm">Unlimited Videos per Bundle</span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {subscriptionData?.plan === "creator_pro" ? (
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                        ) : (
+                          <XCircle className="h-4 w-4 text-red-500" />
+                        )}
+                        <span className="text-sm">Access to All Clips</span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {subscriptionData?.plan === "creator_pro" ? (
                           <CheckCircle className="h-4 w-4 text-green-500" />
                         ) : (
                           <XCircle className="h-4 w-4 text-red-500" />
@@ -827,12 +836,12 @@ export default function ProfilePage() {
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {subscriptionData?.features?.prioritySupport ? (
+                        {subscriptionData?.plan === "creator_pro" ? (
                           <CheckCircle className="h-4 w-4 text-green-500" />
                         ) : (
                           <XCircle className="h-4 w-4 text-red-500" />
                         )}
-                        <span className="text-sm">Priority Support</span>
+                        <span className="text-sm">Only 10% Platform Fee</span>
                       </div>
                     </div>
                   </div>
@@ -870,12 +879,29 @@ export default function ProfilePage() {
                       </p>
                       <Button
                         variant="outline"
-                        onClick={() => {
-                          // This would need a customer portal API endpoint
-                          toast({
-                            title: "Coming Soon",
-                            description: "Customer portal access will be available soon.",
-                          })
+                        onClick={async () => {
+                          try {
+                            const response = await fetch("/api/create-portal-session", {
+                              method: "POST",
+                              headers: {
+                                "Content-Type": "application/json",
+                              },
+                              body: JSON.stringify({ userId: user?.uid }),
+                            })
+
+                            if (response.ok) {
+                              const { url } = await response.json()
+                              window.open(url, "_blank")
+                            } else {
+                              throw new Error("Failed to create portal session")
+                            }
+                          } catch (error) {
+                            toast({
+                              title: "Error",
+                              description: "Unable to access billing portal. Please try again.",
+                              variant: "destructive",
+                            })
+                          }
                         }}
                         className="border-zinc-700 hover:bg-zinc-800"
                       >
