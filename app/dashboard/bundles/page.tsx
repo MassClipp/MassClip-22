@@ -19,6 +19,7 @@ import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, onSnapsho
 import { db } from "@/lib/firebase"
 import { useAuth } from "@/contexts/auth-context"
 import { useUserPlan } from "@/hooks/use-user-plan"
+import { useRouter } from "next/navigation"
 
 interface ContentItem {
   id: string
@@ -47,6 +48,7 @@ interface ProductBox {
   updatedAt?: any
   productId?: string
   priceId?: string
+  detailedContentItems?: ContentItem[]
 }
 
 interface CreateBundleForm {
@@ -81,7 +83,8 @@ export default function BundlesPage() {
     billingType: "one_time",
     thumbnail: null,
   })
-  const { toast } = useToast()
+  const { toast, toast: customToast } = useToast()
+  const router = useRouter()
 
   // Bundle limit logic for free users
   const { planData, isProUser } = useUserPlan()
@@ -440,8 +443,78 @@ export default function BundlesPage() {
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.message || "Failed to create bundle")
+        let errorData
+        try {
+          errorData = await response.json()
+        } catch {
+          // If we can't parse the response, assume it's a Stripe connection issue for 400 errors
+          if (response.status === 400) {
+            customToast({
+              variant: "gradient",
+              title: "Stripe Account Required",
+              description: "You need to connect your Stripe account to sell bundles and receive payments.",
+              action: (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-white/20 text-white hover:bg-white/10 bg-transparent"
+                  onClick={() => router.push("/dashboard/earnings")}
+                >
+                  Connect Stripe
+                </Button>
+              ),
+            })
+            return
+          }
+          throw new Error("Failed to create bundle")
+        }
+
+        // Handle specific Stripe-related errors with gradient toast
+        if (errorData.code === "NO_STRIPE_ACCOUNT" || response.status === 400) {
+          customToast({
+            variant: "gradient",
+            title: "Stripe Account Required",
+            description: "You need to connect your Stripe account to sell bundles and receive payments.",
+            action: (
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-white/20 text-white hover:bg-white/10 bg-transparent"
+                onClick={() => router.push("/dashboard/earnings")}
+              >
+                Connect Stripe
+              </Button>
+            ),
+          })
+          return
+        }
+
+        if (errorData.code === "STRIPE_ACCOUNT_INCOMPLETE") {
+          customToast({
+            variant: "gradient",
+            title: "Complete Stripe Setup",
+            description: "Your Stripe account setup is incomplete. Please finish the setup process to start selling.",
+            action: (
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-white/20 text-white hover:bg-white/10 bg-transparent"
+                onClick={() => router.push("/dashboard/earnings")}
+              >
+                Complete Setup
+              </Button>
+            ),
+          })
+          return
+        }
+
+        // For other errors, use gradient toast as well
+        customToast({
+          variant: "gradient",
+          title: "Bundle Creation Failed",
+          description: errorData.error || errorData.message || "Unable to create bundle. Please try again.",
+        })
+        return
       }
 
       const data = await response.json()
@@ -492,10 +565,10 @@ export default function BundlesPage() {
       await fetchProductBoxes()
     } catch (error) {
       console.error("Error creating bundle:", error)
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create bundle",
-        variant: "destructive",
+      customToast({
+        variant: "gradient",
+        title: "Connection Error",
+        description: "Unable to connect to the server. Please check your connection and try again.",
       })
     } finally {
       setCreateLoading(false)
@@ -1692,9 +1765,12 @@ export default function BundlesPage() {
                   Cancel
                 </Button>
                 {(() => {
-                  const targetBox = productBoxes.find((b) => b.id === showAddContentModal)
+                  const targetBox = productBoxes.find((box) => box.id === showAddContentModal)
                   const existingCount = targetBox
-                    ? (contentItems[targetBox.id]?.length ?? targetBox.contentItems.length ?? 0)
+                    ? (targetBox.detailedContentItems?.length ??
+                      targetBox.contentItems?.length ??
+                      contentItems[targetBox.id]?.length ??
+                      0)
                     : 0
                   const maxPerBundle = isProUser ? Number.POSITIVE_INFINITY : CONTENT_LIMIT_FREE
                   const remaining = Math.max(0, (maxPerBundle as number) - existingCount)
@@ -1703,7 +1779,7 @@ export default function BundlesPage() {
                   return (
                     <Button
                       onClick={() => showAddContentModal && handleAddContentToBundle(showAddContentModal)}
-                      disabled={selectedContentIds.length === 0 || addContentLoading || remaining === 0}
+                      disabled={selectedContentIds.length === 0 || addContentLoading || (remaining <= 0 && !isProUser)}
                       className="bg-red-600 hover:bg-red-700"
                     >
                       {addContentLoading ? (
@@ -1714,7 +1790,7 @@ export default function BundlesPage() {
                       ) : remaining === Number.POSITIVE_INFINITY ? (
                         `Add ${selectedContentIds.length} Item${selectedContentIds.length !== 1 ? "s" : ""}`
                       ) : (
-                        `Add ${Math.min(selectedContentIds.length, remaining)} Item${Math.min(selectedContentIds.length, remaining) !== 1 ? "s" : ""} (remaining ${remaining})`
+                        `Add ${Math.min(selectedContentIds.length, remaining)} Item${Math.min(selectedContentIds.length, remaining) !== 1 ? "s" : ""} (${remaining} remaining)`
                       )}
                     </Button>
                   )

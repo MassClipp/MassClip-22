@@ -1,5 +1,7 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -9,8 +11,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/contexts/auth-context"
 import { useUserPlan } from "@/hooks/use-user-plan"
-import { AlertCircle, Crown, Plus, X } from 'lucide-react'
+import { AlertCircle, Crown } from "lucide-react"
 import { toast } from "sonner"
+import { useToast } from "@/hooks/use-toast" // Added custom toast hook for gradient styling
 
 interface BundleCreationFormProps {
   onSuccess?: () => void
@@ -20,10 +23,11 @@ interface BundleCreationFormProps {
 export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormProps) {
   const { user } = useAuth()
   const { isProUser, loading: planLoading } = useUserPlan()
+  const { toast: customToast } = useToast() // Added custom toast for gradient styling
   const [loading, setLoading] = useState(false)
   const [canCreateBundle, setCanCreateBundle] = useState(true)
   const [bundleLimitInfo, setBundleLimitInfo] = useState<any>(null)
-  
+
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -39,7 +43,7 @@ export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormPr
       try {
         const response = await fetch(`/api/user/check-bundle-limits?type=create`)
         const data = await response.json()
-        
+
         setCanCreateBundle(data.canCreate)
         setBundleLimitInfo(data)
       } catch (error) {
@@ -52,47 +56,142 @@ export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormPr
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!canCreateBundle) {
-      toast.error("Bundle limit reached. Upgrade to Creator Pro for unlimited bundles.")
+      customToast({
+        variant: "gradient",
+        title: "Bundle Limit Reached",
+        description: "Upgrade to Creator Pro for unlimited bundles and more features.",
+        action: (
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-white/20 text-white hover:bg-white/10 bg-transparent"
+            onClick={() => window.open("https://buy.stripe.com/14A6oHeWEeJngFv4SzeIw04", "_blank")}
+          >
+            Upgrade Now
+          </Button>
+        ),
+      })
       return
     }
 
     if (!user?.uid) {
-      toast.error("You must be logged in to create a bundle")
+      customToast({
+        variant: "gradient",
+        title: "Authentication Required",
+        description: "You must be logged in to create a bundle.",
+      })
       return
     }
 
     if (!formData.title.trim() || !formData.description.trim() || !formData.price) {
-      toast.error("Please fill in all required fields")
+      customToast({
+        variant: "gradient",
+        title: "Missing Information",
+        description: "Please fill in all required fields to create your bundle.",
+      })
       return
     }
 
     setLoading(true)
 
     try {
+      const idToken = await user.getIdToken()
+
       const response = await fetch("/api/creator/bundles", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
         },
         body: JSON.stringify({
           title: formData.title.trim(),
           description: formData.description.trim(),
-          price: parseFloat(formData.price),
+          price: Number.parseFloat(formData.price),
           thumbnailUrl: formData.thumbnailUrl.trim() || null,
-          creatorId: user.uid,
+          contentItems: [],
         }),
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Failed to create bundle")
+        let errorData
+        try {
+          errorData = await response.json()
+        } catch {
+          // If we can't parse the response, assume it's a Stripe connection issue for 400 errors
+          if (response.status === 400) {
+            customToast({
+              variant: "gradient",
+              title: "Stripe Account Required",
+              description: "You need to connect your Stripe account to sell bundles and receive payments.",
+              action: (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-white/20 text-white hover:bg-white/10 bg-transparent"
+                  onClick={() => window.open("/dashboard/earnings", "_blank")}
+                >
+                  Connect Stripe
+                </Button>
+              ),
+            })
+            return
+          }
+          throw new Error("Failed to create bundle")
+        }
+
+        // Handle specific Stripe-related errors
+        if (errorData.code === "NO_STRIPE_ACCOUNT" || response.status === 400) {
+          customToast({
+            variant: "gradient",
+            title: "Stripe Account Required",
+            description: "You need to connect your Stripe account to sell bundles and receive payments.",
+            action: (
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-white/20 text-white hover:bg-white/10 bg-transparent"
+                onClick={() => window.open("/dashboard/earnings", "_blank")}
+              >
+                Connect Stripe
+              </Button>
+            ),
+          })
+          return
+        }
+
+        if (errorData.code === "STRIPE_ACCOUNT_INCOMPLETE") {
+          customToast({
+            variant: "gradient",
+            title: "Complete Stripe Setup",
+            description: "Your Stripe account setup is incomplete. Please finish the setup process to start selling.",
+            action: (
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-white/20 text-white hover:bg-white/10 bg-transparent"
+                onClick={() => window.open("/dashboard/earnings", "_blank")}
+              >
+                Complete Setup
+              </Button>
+            ),
+          })
+          return
+        }
+
+        // Handle other errors with gradient toast
+        customToast({
+          variant: "gradient",
+          title: "Bundle Creation Failed",
+          description: errorData.error || "Unable to create bundle. Please try again.",
+        })
+        return
       }
 
       const result = await response.json()
       toast.success("Bundle created successfully!")
-      
+
       // Reset form
       setFormData({
         title: "",
@@ -104,7 +203,11 @@ export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormPr
       onSuccess?.()
     } catch (error) {
       console.error("Error creating bundle:", error)
-      toast.error(error instanceof Error ? error.message : "Failed to create bundle")
+      customToast({
+        variant: "gradient",
+        title: "Connection Error",
+        description: "Unable to connect to the server. Please check your connection and try again.",
+      })
     } finally {
       setLoading(false)
     }
@@ -214,20 +317,11 @@ export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormPr
           </div>
 
           <div className="flex gap-3 pt-4">
-            <Button
-              type="submit"
-              disabled={loading || !canCreateBundle}
-              className="flex-1"
-            >
+            <Button type="submit" disabled={loading || !canCreateBundle} className="flex-1">
               {loading ? "Creating..." : "Create Bundle"}
             </Button>
             {onCancel && (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={onCancel}
-                disabled={loading}
-              >
+              <Button type="button" variant="outline" onClick={onCancel} disabled={loading}>
                 Cancel
               </Button>
             )}

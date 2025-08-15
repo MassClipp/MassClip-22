@@ -1,5 +1,8 @@
 import { db } from "@/lib/firebase"
 import { doc, getDoc } from "firebase/firestore"
+import { getMembership } from "@/lib/memberships-service"
+
+export type SubscriptionStatus = "active" | "inactive" | "canceled" | "past_due" | "trialing"
 
 export interface SubscriptionData {
   isActive: boolean
@@ -40,38 +43,26 @@ export async function checkSubscription(userId?: string): Promise<SubscriptionDa
       }
     }
 
-    // 1) Check creatorProUsers first
-    const proSnap = await getDoc(doc(db, "creatorProUsers", userId))
-    if (proSnap.exists()) {
-      const data = proSnap.data() as any
-      const isActive = (data.subscriptionStatus ?? "inactive") === "active"
-
-      // Use Creator Pro features only if subscription is active
-      if (isActive) {
-        const renewal = data.renewalDate
-        const currentPeriodEnd = renewal?.toDate?.() ?? (typeof renewal === "number" ? new Date(renewal) : renewal)
-
-        return {
-          isActive: true,
-          plan: "creator_pro",
-          stripeCustomerId: data.stripeCustomerId,
-          stripeSubscriptionId: data.subscriptionId,
-          currentPeriodEnd: currentPeriodEnd,
-          features: {
-            unlimitedDownloads: true,
-            premiumContent: true,
-            noWatermark: true,
-            prioritySupport: true,
-            platformFeePercentage: 10,
-            maxVideosPerBundle: null, // unlimited
-            maxBundles: null, // unlimited
-          },
-        }
+    const membership = await getMembership(userId)
+    if (membership && membership.isActive) {
+      return {
+        isActive: true,
+        plan: "creator_pro",
+        stripeCustomerId: membership.stripeCustomerId,
+        stripeSubscriptionId: membership.stripeSubscriptionId,
+        currentPeriodEnd: membership.currentPeriodEnd,
+        features: {
+          unlimitedDownloads: true,
+          premiumContent: true,
+          noWatermark: true,
+          prioritySupport: true,
+          platformFeePercentage: 10,
+          maxVideosPerBundle: null, // unlimited
+          maxBundles: null, // unlimited
+        },
       }
-      // If creatorProUsers doc exists but is not active, fall through to free behavior
     }
 
-    // 2) Check freeUsers
     const freeSnap = await getDoc(doc(db, "freeUsers", userId))
     if (freeSnap.exists()) {
       const data = freeSnap.data() as any
@@ -102,7 +93,6 @@ export async function checkSubscription(userId?: string): Promise<SubscriptionDa
       }
     }
 
-    // 3) No record found in creatorProUsers or freeUsers -> treat as free defaults
     return {
       isActive: false,
       plan: "free",

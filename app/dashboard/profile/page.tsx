@@ -14,7 +14,19 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/components/ui/use-toast"
-import { Loader2, User, Camera, Instagram, Twitter, Globe, Save, CheckCircle, ExternalLink, XCircle, Crown, RefreshCw } from 'lucide-react'
+import {
+  Loader2,
+  User,
+  Camera,
+  Instagram,
+  Twitter,
+  Globe,
+  Save,
+  CheckCircle,
+  ExternalLink,
+  Crown,
+  RefreshCw,
+} from "lucide-react"
 import ReactCrop, { type Crop, centerCrop, makeAspectCrop } from "react-image-crop"
 import "react-image-crop/dist/ReactCrop.css"
 import CancelSubscriptionButton from "@/components/cancel-subscription-button"
@@ -449,17 +461,17 @@ export default function ProfilePage() {
 
   const fetchSubscriptionData = async () => {
     if (!user) return
-    
+
     setLoadingSubscription(true)
     try {
-      const response = await fetch("/api/verify-subscription", {
+      const response = await fetch("/api/membership-status", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ userId: user.uid }),
       })
-      
+
       if (response.ok) {
         const data = await response.json()
         setSubscriptionData(data)
@@ -744,7 +756,7 @@ export default function ProfilePage() {
               <CardTitle>Membership & Billing</CardTitle>
               <CardDescription>Manage your subscription and billing information</CardDescription>
             </CardHeader>
-            
+
             <CardContent className="space-y-6">
               {loadingSubscription ? (
                 <div className="flex items-center justify-center p-8">
@@ -757,85 +769,107 @@ export default function ProfilePage() {
                   <div className="p-4 rounded-lg border border-zinc-700/50 bg-zinc-800/30">
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="text-lg font-medium">Current Plan</h3>
-                      <Badge 
+                      <Badge
                         variant={subscriptionData?.isActive ? "default" : "secondary"}
                         className={subscriptionData?.isActive ? "bg-green-600" : "bg-zinc-600"}
                       >
-                        {subscriptionData?.isActive ? "Active" : "Free"}
+                        {subscriptionData?.plan === "creator_pro" ? "Creator Pro" : "Free"}
                       </Badge>
                     </div>
-                    
-                    <div className="space-y-3">
+
+                    {subscriptionData?.isActive && subscriptionData?.currentPeriodEnd && (
                       <div className="flex justify-between">
-                        <span className="text-zinc-400">Plan Type:</span>
-                        <span className="capitalize">
-                          {subscriptionData?.plan === "creator_pro" ? "Creator Pro" : subscriptionData?.plan || "Free"}
+                        <span className="text-zinc-400">
+                          {subscriptionData?.status === "canceled" ? "Subscription Ends:" : "Next Billing:"}
+                        </span>
+                        <span className={subscriptionData?.status === "canceled" ? "text-orange-400" : ""}>
+                          {new Date(
+                            subscriptionData.currentPeriodEnd.seconds
+                              ? subscriptionData.currentPeriodEnd.seconds * 1000
+                              : subscriptionData.currentPeriodEnd,
+                          ).toLocaleDateString()}
                         </span>
                       </div>
-                      
-                      {subscriptionData?.isActive && subscriptionData?.currentPeriodEnd && (
-                        <div className="flex justify-between">
-                          <span className="text-zinc-400">Next Billing:</span>
-                          <span>{new Date(subscriptionData.currentPeriodEnd).toLocaleDateString()}</span>
-                        </div>
-                      )}
-                      
-                      {subscriptionData?.stripeCustomerId && (
-                        <div className="flex justify-between">
-                          <span className="text-zinc-400">Customer ID:</span>
-                          <span className="font-mono text-sm">{subscriptionData.stripeCustomerId}</span>
-                        </div>
-                      )}
-                    </div>
+                    )}
                   </div>
 
                   {/* Plan Features */}
                   <div className="p-4 rounded-lg border border-zinc-700/50 bg-zinc-800/30">
                     <h3 className="text-lg font-medium mb-4">Plan Features</h3>
                     <div className="grid grid-cols-2 gap-4">
-                      <div className="flex items-center gap-2">
-                        {subscriptionData?.features?.unlimitedDownloads ? (
-                          <CheckCircle className="h-4 w-4 text-green-500" />
-                        ) : (
-                          <XCircle className="h-4 w-4 text-red-500" />
-                        )}
-                        <span className="text-sm">Unlimited Downloads</span>
-                      </div>
-                      
-                      <div className="flex items-center gap-2">
-                        {subscriptionData?.features?.premiumContent ? (
-                          <CheckCircle className="h-4 w-4 text-green-500" />
-                        ) : (
-                          <XCircle className="h-4 w-4 text-red-500" />
-                        )}
-                        <span className="text-sm">Premium Content</span>
-                      </div>
-                      
-                      <div className="flex items-center gap-2">
-                        {subscriptionData?.features?.noWatermark ? (
-                          <CheckCircle className="h-4 w-4 text-green-500" />
-                        ) : (
-                          <XCircle className="h-4 w-4 text-red-500" />
-                        )}
-                        <span className="text-sm">No Watermark</span>
-                      </div>
-                      
-                      <div className="flex items-center gap-2">
-                        {subscriptionData?.features?.prioritySupport ? (
-                          <CheckCircle className="h-4 w-4 text-green-500" />
-                        ) : (
-                          <XCircle className="h-4 w-4 text-red-500" />
-                        )}
-                        <span className="text-sm">Priority Support</span>
-                      </div>
+                      {subscriptionData?.plan === "creator_pro" ? (
+                        <>
+                          <div className="flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                            <span className="text-sm">Unlimited Downloads</span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                            <span className="text-sm">Unlimited Bundles</span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                            <span className="text-sm">Unlimited Videos per Bundle</span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                            <span className="text-sm">Access to All Clips</span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                            <span className="text-sm">No Watermark</span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                            <span className="text-sm">Only 10% Platform Fee</span>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                            <span className="text-sm">5 Downloads per Month</span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                            <span className="text-sm">3 Bundles Maximum</span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                            <span className="text-sm">5 Videos per Bundle</span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                            <span className="text-sm">Access to Free Content</span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                            <span className="text-sm">MassClip Watermark</span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                            <span className="text-sm">20% Platform Fee</span>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
 
                   {/* Actions */}
                   <div className="flex gap-4">
-                    {!subscriptionData?.isActive ? (
-                      <Button 
-                        onClick={() => window.open("/pricing", "_blank")}
+                    {subscriptionData?.plan !== "creator_pro" || !subscriptionData?.isActive ? (
+                      <Button
+                        onClick={() => router.push("/dashboard/membership")}
                         className="bg-red-600 hover:bg-red-700"
                       >
                         <Crown className="h-4 w-4 mr-2" />
@@ -843,44 +877,20 @@ export default function ProfilePage() {
                       </Button>
                     ) : (
                       <div className="flex gap-4">
-                        <Button 
+                        <Button
                           variant="outline"
                           onClick={fetchSubscriptionData}
                           disabled={loadingSubscription}
-                          className="border-zinc-700 hover:bg-zinc-800"
+                          className="border-zinc-700 hover:bg-zinc-800 bg-transparent"
                         >
                           <RefreshCw className={`h-4 w-4 mr-2 ${loadingSubscription ? "animate-spin" : ""}`} />
                           Refresh Status
                         </Button>
-                        
+
                         <CancelSubscriptionButton />
                       </div>
                     )}
                   </div>
-
-                  {/* Billing History */}
-                  {subscriptionData?.isActive && (
-                    <div className="p-4 rounded-lg border border-zinc-700/50 bg-zinc-800/30">
-                      <h3 className="text-lg font-medium mb-4">Billing Information</h3>
-                      <p className="text-sm text-zinc-400 mb-2">
-                        For detailed billing history and invoices, please visit your Stripe customer portal.
-                      </p>
-                      <Button 
-                        variant="outline"
-                        onClick={() => {
-                          // This would need a customer portal API endpoint
-                          toast({
-                            title: "Coming Soon",
-                            description: "Customer portal access will be available soon.",
-                          })
-                        }}
-                        className="border-zinc-700 hover:bg-zinc-800"
-                      >
-                        <ExternalLink className="h-4 w-4 mr-2" />
-                        View Billing Portal
-                      </Button>
-                    </div>
-                  )}
                 </div>
               )}
             </CardContent>

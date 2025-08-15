@@ -1,76 +1,77 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createUserWithEmailAndPassword } from "firebase/auth"
-import { auth } from "@/lib/firebase"
-import { ProfileManager } from "@/lib/profile-manager"
-import { UserTrackingService } from "@/lib/user-tracking-service"
-
-export const runtime = "nodejs"
+import { ensureMembership } from "@/lib/memberships-service"
+import { createFreeUser } from "@/lib/free-users-service"
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("🔐 User creation request received")
+    console.log("🔄 Server-side user creation API called")
 
-    const { email, password, username, displayName } = await request.json()
+    const { uid, email, username, displayName } = await request.json()
 
-    if (!email || !password || !username || !displayName) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
+    if (!uid || !email) {
+      console.error("❌ Missing required fields:", { uid: !!uid, email: !!email })
+      return NextResponse.json({ error: "Missing required fields: uid and email" }, { status: 400 })
     }
 
-    console.log(`🔐 Creating user account for: ${email}`)
-
-    // Create Firebase user
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password)
-    const user = userCredential.user
-
-    console.log(`✅ Firebase user created: ${user.uid}`)
-
-    // Create complete profile using ProfileManager
-    const profileResult = await ProfileManager.setupCompleteProfile(
-      user.uid,
+    console.log("🔄 Creating user records for:", {
+      uid: uid.substring(0, 8) + "...",
       email,
+      username,
       displayName,
-      user.photoURL || undefined,
-    )
+    })
 
-    if (!profileResult.success) {
-      console.error("❌ Failed to create user profile:", profileResult.error)
-      // Don't fail the entire signup, just log the error
-    }
-
-    // Ensure freeUsers tracking exists for all non-Creator Pro users
+    // Create freeUsers record first (this is what tracks free tier limitations)
     try {
-      const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || ""
-      await UserTrackingService.ensureFreeUserForNonPro(user.uid, user.email || "", {
-        ipAddress: ip || undefined,
+      console.log("🔄 Creating freeUsers record...")
+      const freeUser = await createFreeUser(uid, email)
+      console.log("✅ FreeUsers record created successfully:", {
+        uid: freeUser.uid,
+        email: freeUser.email,
+        downloadsUsed: freeUser.downloadsUsed,
+        bundlesCreated: freeUser.bundlesCreated,
       })
-    } catch (e) {
-      // Don't block signup on tracking errors; just log
-      console.warn("⚠️ [UserTracking] Could not ensure free user record at signup:", e)
+    } catch (error) {
+      console.error("❌ Failed to create freeUsers record:", error)
+      return NextResponse.json(
+        {
+          error: "Failed to create freeUsers record",
+          details: error instanceof Error ? error.message : String(error),
+        },
+        { status: 500 },
+      )
     }
 
-    console.log(`✅ User signup completed successfully for: ${username}`)
+    // Also create membership record for consistency
+    try {
+      console.log("🔄 Creating membership record...")
+      const membership = await ensureMembership(uid, email)
+      console.log("✅ Membership record created/ensured:", {
+        uid: membership.uid,
+        plan: membership.plan,
+        status: membership.status,
+      })
+    } catch (error) {
+      console.error("❌ Failed to create membership record:", error)
+      // Don't fail the entire request if membership fails, since freeUsers is the primary tracker
+      console.warn("⚠️ Continuing despite membership error since freeUsers was created successfully")
+    }
+
+    console.log("✅ Server-side user creation completed successfully")
 
     return NextResponse.json({
       success: true,
-      user: {
-        uid: user.uid,
-        email: user.email,
-        username: profileResult.username || username,
-      },
+      message: "User records created successfully",
+      uid,
+      email,
     })
   } catch (error: any) {
-    console.error("❌ Error creating user:", error)
-
-    let errorMessage = "Failed to create account"
-
-    if (error.code === "auth/email-already-in-use") {
-      errorMessage = "An account with this email already exists"
-    } else if (error.code === "auth/weak-password") {
-      errorMessage = "Password is too weak"
-    } else if (error.code === "auth/invalid-email") {
-      errorMessage = "Invalid email address"
-    }
-
-    return NextResponse.json({ error: errorMessage }, { status: 400 })
+    console.error("❌ Server-side user creation error:", error)
+    return NextResponse.json(
+      {
+        error: "Failed to create user records",
+        details: error.message,
+      },
+      { status: 500 },
+    )
   }
 }

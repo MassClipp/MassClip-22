@@ -1,24 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { headers } from "next/headers"
-import { db } from "@/lib/db"
+import { adminDb, auth } from "@/lib/firebase-admin"
 import { collection, getDocs, limit, query, where } from "firebase/firestore"
-import { getAuth } from "firebase-admin/auth"
-import { initializeApp, getApps, cert } from "firebase-admin/app"
-
-// Initialize Firebase Admin if not already initialized
-if (!getApps().length) {
-  try {
-    initializeApp({
-      credential: cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-      }),
-    })
-  } catch (error) {
-    console.error("❌ Firebase Admin initialization error:", error)
-  }
-}
 
 export async function GET(request: NextRequest) {
   try {
@@ -32,8 +15,6 @@ export async function GET(request: NextRequest) {
 
     const token = authorization.split("Bearer ")[1]
 
-    // Verify the Firebase token
-    const auth = getAuth()
     const decodedToken = await auth.verifyIdToken(token)
     const userId = decodedToken.uid
 
@@ -66,8 +47,7 @@ export async function GET(request: NextRequest) {
       try {
         console.log(`🔍 [Debug] Checking collection: ${collectionName}`)
 
-        // Get total count
-        const allDocsQuery = query(collection(db, collectionName), limit(100))
+        const allDocsQuery = query(collection(adminDb, collectionName), limit(100))
         const allDocsSnapshot = await getDocs(allDocsQuery)
 
         const collectionData: any = {
@@ -99,7 +79,7 @@ export async function GET(request: NextRequest) {
         const userFields = ["uid", "userId", "creatorId"]
         for (const field of userFields) {
           try {
-            const userQuery = query(collection(db, collectionName), where(field, "==", userId), limit(10))
+            const userQuery = query(collection(adminDb, collectionName), where(field, "==", userId), limit(10))
             const userSnapshot = await getDocs(userQuery)
 
             if (!userSnapshot.empty) {
@@ -125,7 +105,6 @@ export async function GET(request: NextRequest) {
               })
             }
           } catch (queryError) {
-            // Ignore errors for non-indexed fields
             console.log(`⚠️ [Debug] Could not query ${collectionName}.${field}:`, queryError.message)
           }
         }

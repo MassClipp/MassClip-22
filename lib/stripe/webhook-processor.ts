@@ -1,5 +1,5 @@
 import Stripe from "stripe"
-import { db } from "@/lib/firebase/admin"
+import { adminDb as db } from "@/lib/firebase-admin"
 import { FieldValue } from "firebase-admin/firestore"
 
 // --- Types ---
@@ -49,12 +49,12 @@ async function setMembership(uid: string, data: object) {
 // --- Exported Processing Functions ---
 
 export async function processCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
-  const userId = session.metadata?.userId
+  const userId = session.metadata?.buyerUid
   const customerId = typeof session.customer === "string" ? session.customer : session.customer?.id
   const subscriptionId = typeof session.subscription === "string" ? session.subscription : session.subscription?.id
 
   if (!userId) {
-    throw new Error(`Missing userId in checkout session metadata. Session ID: ${session.id}`)
+    throw new Error(`Missing buyerUid in checkout session metadata. Session ID: ${session.id}`)
   }
   if (!customerId) {
     throw new Error(`Missing customerId in checkout session. Session ID: ${session.id}`)
@@ -117,4 +117,42 @@ export async function processSubscriptionDeleted(subscription: Stripe.Subscripti
     currentPeriodEnd: null,
     priceId: null,
   })
+}
+
+export async function processPaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent) {
+  const { buyerUid, productType, productId, creatorId } = paymentIntent.metadata
+
+  if (!buyerUid || !productType || !productId || !creatorId) {
+    console.error("Webhook Error: Missing required metadata in paymentIntent.succeeded event.", {
+      paymentIntentId: paymentIntent.id,
+      metadata: paymentIntent.metadata,
+    })
+    throw new Error("Missing required metadata in paymentIntent.succeeded event.")
+  }
+
+  const purchaseRef = db.collection("purchases").doc(paymentIntent.id)
+  const purchaseDoc = await purchaseRef.get()
+
+  if (purchaseDoc.exists) {
+    console.log(`Webhook Info: Purchase with paymentIntentId ${paymentIntent.id} already processed.`)
+    return
+  }
+
+  const purchaseData = {
+    userId: buyerUid,
+    creatorId,
+    productType,
+    productId,
+    paymentIntentId: paymentIntent.id,
+    amount: paymentIntent.amount,
+    currency: paymentIntent.currency,
+    status: "completed",
+    purchaseDate: new Date(paymentIntent.created * 1000),
+    stripeCustomerId: typeof paymentIntent.customer === "string" ? paymentIntent.customer : paymentIntent.customer?.id,
+    updatedAt: FieldValue.serverTimestamp(),
+    createdAt: FieldValue.serverTimestamp(),
+  }
+
+  await purchaseRef.set(purchaseData)
+  console.log(`Successfully created purchase record for paymentIntentId: ${paymentIntent.id}`)
 }
