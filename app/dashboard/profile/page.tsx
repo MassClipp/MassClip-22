@@ -784,7 +784,11 @@ export default function ProfilePage() {
                           {subscriptionData?.status === "canceled" ? "Subscription Ends:" : "Next Billing:"}
                         </span>
                         <span className={subscriptionData?.status === "canceled" ? "text-orange-400" : ""}>
-                          {new Date(subscriptionData.currentPeriodEnd).toLocaleDateString()}
+                          {new Date(
+                            subscriptionData.currentPeriodEnd.seconds
+                              ? subscriptionData.currentPeriodEnd.seconds * 1000
+                              : subscriptionData.currentPeriodEnd,
+                          ).toLocaleDateString()}
                         </span>
                       </div>
                     )}
@@ -873,47 +877,6 @@ export default function ProfilePage() {
                       </div>
                     )}
                   </div>
-
-                  {/* Billing History */}
-                  {subscriptionData?.plan === "creator_pro" && subscriptionData?.isActive && (
-                    <div className="p-4 rounded-lg border border-zinc-700/50 bg-zinc-800/30">
-                      <h3 className="text-lg font-medium mb-4">Billing Information</h3>
-                      <p className="text-sm text-zinc-400 mb-2">
-                        For detailed billing history and invoices, please visit your Stripe customer portal.
-                      </p>
-                      <Button
-                        variant="outline"
-                        onClick={async () => {
-                          try {
-                            const response = await fetch("/api/create-portal-session", {
-                              method: "POST",
-                              headers: {
-                                "Content-Type": "application/json",
-                              },
-                              body: JSON.stringify({ userId: user?.uid }),
-                            })
-
-                            if (response.ok) {
-                              const { url } = await response.json()
-                              window.open(url, "_blank")
-                            } else {
-                              throw new Error("Failed to create portal session")
-                            }
-                          } catch (error) {
-                            toast({
-                              title: "Error",
-                              description: "Unable to access billing portal. Please try again.",
-                              variant: "destructive",
-                            })
-                          }
-                        }}
-                        className="border-zinc-700 hover:bg-zinc-800"
-                      >
-                        <ExternalLink className="h-4 w-4 mr-2" />
-                        View Billing Portal
-                      </Button>
-                    </div>
-                  )}
                 </div>
               )}
             </CardContent>
