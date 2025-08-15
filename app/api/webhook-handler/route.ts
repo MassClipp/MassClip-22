@@ -247,6 +247,13 @@ async function handleSubscriptionUpdated(stripe: Stripe, event: Stripe.Event, de
   const sub = event.data.object as Stripe.Subscription
   debugTrace.push(`Handling customer.subscription.updated: ${sub.id}`)
 
+  debugTrace.push(`Subscription status: ${sub.status}`)
+  debugTrace.push(`Cancel at period end: ${sub.cancel_at_period_end}`)
+  debugTrace.push(`Current period end timestamp: ${sub.current_period_end}`)
+  debugTrace.push(
+    `Current period end date: ${sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : "null"}`,
+  )
+
   const md = sub.metadata || {}
   const uid = firstNonEmpty((md as any)?.buyerUid, (md as any)?.firebaseUid, (md as any)?.userId)
 
@@ -262,6 +269,10 @@ async function handleSubscriptionUpdated(stripe: Stripe, event: Stripe.Event, de
     const currentPeriodEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000) : null
     const customerId = (typeof sub.customer === "string" ? sub.customer : sub.customer?.id) || null
     const priceId = sub.items?.data?.[0]?.price?.id ?? null
+
+    debugTrace.push(`Extracted currentPeriodEnd: ${currentPeriodEnd ? currentPeriodEnd.toISOString() : "null"}`)
+    debugTrace.push(`Extracted customerId: ${customerId}`)
+    debugTrace.push(`Extracted priceId: ${priceId}`)
 
     await upsertMembership({
       uid,
