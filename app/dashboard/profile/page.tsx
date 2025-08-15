@@ -24,7 +24,6 @@ import {
   Save,
   CheckCircle,
   ExternalLink,
-  XCircle,
   Crown,
   RefreshCw,
 } from "lucide-react"
@@ -798,66 +797,81 @@ export default function ProfilePage() {
                   <div className="p-4 rounded-lg border border-zinc-700/50 bg-zinc-800/30">
                     <h3 className="text-lg font-medium mb-4">Plan Features</h3>
                     <div className="grid grid-cols-2 gap-4">
-                      <div className="flex items-center gap-2">
-                        {subscriptionData?.plan === "creator_pro" ? (
-                          <CheckCircle className="h-4 w-4 text-green-500" />
-                        ) : (
-                          <XCircle className="h-4 w-4 text-red-500" />
-                        )}
-                        <span className="text-sm">Unlimited Downloads</span>
-                      </div>
+                      {subscriptionData?.plan === "creator_pro" ? (
+                        <>
+                          <div className="flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                            <span className="text-sm">Unlimited Downloads</span>
+                          </div>
 
-                      <div className="flex items-center gap-2">
-                        {subscriptionData?.plan === "creator_pro" ? (
-                          <CheckCircle className="h-4 w-4 text-green-500" />
-                        ) : (
-                          <XCircle className="h-4 w-4 text-red-500" />
-                        )}
-                        <span className="text-sm">Unlimited Bundles</span>
-                      </div>
+                          <div className="flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                            <span className="text-sm">Unlimited Bundles</span>
+                          </div>
 
-                      <div className="flex items-center gap-2">
-                        {subscriptionData?.plan === "creator_pro" ? (
-                          <CheckCircle className="h-4 w-4 text-green-500" />
-                        ) : (
-                          <XCircle className="h-4 w-4 text-red-500" />
-                        )}
-                        <span className="text-sm">Unlimited Videos per Bundle</span>
-                      </div>
+                          <div className="flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                            <span className="text-sm">Unlimited Videos per Bundle</span>
+                          </div>
 
-                      <div className="flex items-center gap-2">
-                        {subscriptionData?.plan === "creator_pro" ? (
-                          <CheckCircle className="h-4 w-4 text-green-500" />
-                        ) : (
-                          <XCircle className="h-4 w-4 text-red-500" />
-                        )}
-                        <span className="text-sm">Access to All Clips</span>
-                      </div>
+                          <div className="flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                            <span className="text-sm">Access to All Clips</span>
+                          </div>
 
-                      <div className="flex items-center gap-2">
-                        {subscriptionData?.plan === "creator_pro" ? (
-                          <CheckCircle className="h-4 w-4 text-green-500" />
-                        ) : (
-                          <XCircle className="h-4 w-4 text-red-500" />
-                        )}
-                        <span className="text-sm">No Watermark</span>
-                      </div>
+                          <div className="flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                            <span className="text-sm">No Watermark</span>
+                          </div>
 
-                      <div className="flex items-center gap-2">
-                        {subscriptionData?.plan === "creator_pro" ? (
-                          <CheckCircle className="h-4 w-4 text-green-500" />
-                        ) : (
-                          <XCircle className="h-4 w-4 text-red-500" />
-                        )}
-                        <span className="text-sm">Only 10% Platform Fee</span>
-                      </div>
+                          <div className="flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                            <span className="text-sm">Only 10% Platform Fee</span>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                            <span className="text-sm">5 Downloads per Month</span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                            <span className="text-sm">3 Bundles Maximum</span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                            <span className="text-sm">5 Videos per Bundle</span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                            <span className="text-sm">Access to Free Content</span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                            <span className="text-sm">MassClip Watermark</span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                            <span className="text-sm">20% Platform Fee</span>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
 
                   {/* Actions */}
                   <div className="flex gap-4">
                     {subscriptionData?.plan !== "creator_pro" || !subscriptionData?.isActive ? (
-                      <Button onClick={() => window.open("/pricing", "_blank")} className="bg-red-600 hover:bg-red-700">
+                      <Button
+                        onClick={() => router.push("/dashboard/membership")}
+                        className="bg-red-600 hover:bg-red-700"
+                      >
                         <Crown className="h-4 w-4 mr-2" />
                         Upgrade to Pro
                       </Button>
