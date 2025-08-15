@@ -247,9 +247,19 @@ async function handleSubscriptionUpdated(stripe: Stripe, event: Stripe.Event, de
   const sub = event.data.object as Stripe.Subscription
   debugTrace.push(`Handling customer.subscription.updated: ${sub.id}`)
 
+  debugTrace.push(`Full subscription object keys: ${Object.keys(sub).join(", ")}`)
   debugTrace.push(`Subscription status: ${sub.status}`)
   debugTrace.push(`Cancel at period end: ${sub.cancel_at_period_end}`)
   debugTrace.push(`Current period end timestamp: ${sub.current_period_end}`)
+  debugTrace.push(`Current period start timestamp: ${(sub as any).current_period_start}`)
+  debugTrace.push(`Canceled at: ${(sub as any).canceled_at}`)
+  debugTrace.push(`Cancel at: ${(sub as any).cancel_at}`)
+  debugTrace.push(`Period end from items: ${sub.items?.data?.[0]?.period?.end}`)
+
+  // Log the entire subscription object (truncated for safety)
+  const subString = JSON.stringify(sub, null, 2)
+  debugTrace.push(`Full subscription object (first 1000 chars): ${subString.substring(0, 1000)}`)
+
   debugTrace.push(
     `Current period end date: ${sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : "null"}`,
   )
@@ -266,7 +276,21 @@ async function handleSubscriptionUpdated(stripe: Stripe, event: Stripe.Event, de
   if (sub.cancel_at_period_end) {
     debugTrace.push(`Subscription ${sub.id} is set to cancel at period end`)
 
-    const currentPeriodEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000) : null
+    let currentPeriodEnd: Date | null = null
+
+    if (sub.current_period_end) {
+      currentPeriodEnd = new Date(sub.current_period_end * 1000)
+      debugTrace.push(`Using current_period_end: ${currentPeriodEnd.toISOString()}`)
+    } else if ((sub as any).cancel_at) {
+      currentPeriodEnd = new Date((sub as any).cancel_at * 1000)
+      debugTrace.push(`Using cancel_at: ${currentPeriodEnd.toISOString()}`)
+    } else if (sub.items?.data?.[0]?.period?.end) {
+      currentPeriodEnd = new Date(sub.items.data[0].period.end * 1000)
+      debugTrace.push(`Using items[0].period.end: ${currentPeriodEnd.toISOString()}`)
+    } else {
+      debugTrace.push("No period end date found in subscription object")
+    }
+
     const customerId = (typeof sub.customer === "string" ? sub.customer : sub.customer?.id) || null
     const priceId = sub.items?.data?.[0]?.price?.id ?? null
 
