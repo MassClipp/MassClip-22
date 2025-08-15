@@ -780,8 +780,12 @@ export default function ProfilePage() {
 
                     {subscriptionData?.isActive && subscriptionData?.currentPeriodEnd && (
                       <div className="flex justify-between">
-                        <span className="text-zinc-400">Next Billing:</span>
-                        <span>{new Date(subscriptionData.currentPeriodEnd).toLocaleDateString()}</span>
+                        <span className="text-zinc-400">
+                          {subscriptionData?.status === "canceled" ? "Subscription Ends:" : "Next Billing:"}
+                        </span>
+                        <span className={subscriptionData?.status === "canceled" ? "text-orange-400" : ""}>
+                          {new Date(subscriptionData.currentPeriodEnd).toLocaleDateString()}
+                        </span>
                       </div>
                     )}
                   </div>
