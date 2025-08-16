@@ -68,8 +68,41 @@ async function getConnectedStripeAccount(userId: string) {
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await getAuthenticatedUser(request.headers)
+    console.log(`🚀 [Earnings] API called - starting authentication check`)
+
+    let user
+    try {
+      user = await getAuthenticatedUser(request.headers)
+      console.log(`✅ [Earnings] Authentication successful for user: ${user.uid}`)
+    } catch (authError) {
+      console.error(`❌ [Earnings] Authentication failed:`, authError)
+      return NextResponse.json(
+        {
+          error: "Authentication failed",
+          details: authError instanceof Error ? authError.message : "Unknown auth error",
+        },
+        { status: 401 },
+      )
+    }
+
     const userId = user.uid
+
+    try {
+      console.log(`🔧 [Earnings] Checking Stripe configuration...`)
+      if (!process.env.STRIPE_SECRET_KEY) {
+        throw new Error("STRIPE_SECRET_KEY environment variable is not set")
+      }
+      console.log(`✅ [Earnings] Stripe configuration OK`)
+    } catch (stripeError) {
+      console.error(`❌ [Earnings] Stripe configuration error:`, stripeError)
+      return NextResponse.json(
+        {
+          error: "Stripe configuration error",
+          details: stripeError instanceof Error ? stripeError.message : "Unknown Stripe error",
+        },
+        { status: 500 },
+      )
+    }
 
     console.log(`🔍 [Earnings] Fetching earnings data for user: ${userId}`)
 
@@ -268,11 +301,12 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(earningsData)
   } catch (error) {
-    console.error("❌ [Earnings] Error:", error)
+    console.error("❌ [Earnings] Unexpected error:", error)
     return NextResponse.json(
       {
         error: "Failed to fetch earnings data",
         details: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : undefined,
       },
       { status: 500 },
     )
