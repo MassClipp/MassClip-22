@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { RefreshCw, CheckCircle, XCircle, AlertCircle } from "lucide-react"
+import { useAuth } from "@/contexts/auth-context"
 
 interface ApiTestResult {
   endpoint: string
@@ -16,6 +17,8 @@ interface ApiTestResult {
 }
 
 export default function ApiTestPage() {
+  const { user } = useAuth()
+
   const [results, setResults] = useState<ApiTestResult[]>([
     { endpoint: "/api/dashboard/enhanced-stats", status: "idle" },
     { endpoint: "/api/dashboard/sales-forecast", status: "idle" },
@@ -31,8 +34,11 @@ export default function ApiTestPage() {
     updateResult(endpoint, { status: "loading" })
 
     try {
-      // Get auth token from localStorage (assuming it's stored there)
-      const token = localStorage.getItem("authToken")
+      if (!user) {
+        throw new Error("User not authenticated")
+      }
+
+      const token = await user.getIdToken()
 
       const response = await fetch(endpoint, {
         headers: {
@@ -69,7 +75,6 @@ export default function ApiTestPage() {
   const testAllApis = async () => {
     for (const result of results) {
       await testApi(result.endpoint)
-      // Small delay between requests
       await new Promise((resolve) => setTimeout(resolve, 500))
     }
   }
@@ -181,7 +186,6 @@ export default function ApiTestPage() {
                 <div className="space-y-4">
                   <h4 className="font-semibold text-green-800">Response Data</h4>
 
-                  {/* Enhanced Stats Data */}
                   {result.endpoint === "/api/dashboard/enhanced-stats" && result.data.data && (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div className="p-3 bg-blue-50 rounded-lg">
@@ -209,7 +213,6 @@ export default function ApiTestPage() {
                     </div>
                   )}
 
-                  {/* Sales Forecast Data */}
                   {result.endpoint === "/api/dashboard/sales-forecast" && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="p-3 bg-orange-50 rounded-lg">
@@ -234,7 +237,6 @@ export default function ApiTestPage() {
                     </div>
                   )}
 
-                  {/* Earnings Data */}
                   {result.endpoint === "/api/dashboard/earnings" && (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div className="p-3 bg-emerald-50 rounded-lg">
@@ -282,7 +284,7 @@ export default function ApiTestPage() {
       <div className="mt-8 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
         <h3 className="font-semibold text-yellow-800 mb-2">Notes</h3>
         <ul className="text-sm text-yellow-700 space-y-1">
-          <li>• Make sure you're logged in and have a valid auth token</li>
+          <li>• {user ? "✅ Authenticated as Firebase user" : "❌ Not authenticated - please log in first"}</li>
           <li>• Some APIs require a connected Stripe account to return meaningful data</li>
           <li>• The sales forecast API needs historical sales data to generate predictions</li>
           <li>• Response times may vary based on data complexity and Stripe API calls</li>
