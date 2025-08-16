@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
 import { toast } from "@/hooks/use-toast"
 import { Loader2 } from "lucide-react"
+import { useRouter } from "next/navigation"
 
 interface UnlockButtonProps {
   bundleId?: string
@@ -31,6 +32,7 @@ export function UnlockButton({
 }: UnlockButtonProps) {
   const [isLoading, setIsLoading] = useState(false)
   const { user: authUser } = useAuth()
+  const router = useRouter()
 
   // Use the passed user or fall back to auth context user
   const currentUser = user || authUser
@@ -39,23 +41,42 @@ export function UnlockButton({
     try {
       setIsLoading(true)
 
+      if (!currentUser) {
+        console.log("⚠️ [Unlock Button] User not authenticated, showing login toast")
+
+        // Show custom toast with gradient background and login button
+        toast({
+          title: "Login Required",
+          description: "You need to login or create an account to purchase bundles.",
+          variant: "default",
+          className: "bg-gradient-to-br from-black via-black to-zinc-800/30 border-zinc-700/50 text-white",
+          action: (
+            <Button
+              onClick={() => router.push("/login")}
+              variant="outline"
+              size="sm"
+              className="border-white/20 text-white hover:bg-white/10 hover:text-white"
+            >
+              Login
+            </Button>
+          ),
+        })
+        return
+      }
+
       // Get the Firebase ID token for authentication
       let idToken = ""
-      if (currentUser) {
-        try {
-          idToken = await currentUser.getIdToken()
-          console.log("🔑 [Unlock Button] Got auth token for user:", currentUser.uid)
-        } catch (error) {
-          console.error("❌ [Unlock Button] Failed to get auth token:", error)
-          toast({
-            title: "Authentication Error",
-            description: "Please try signing in again",
-            variant: "destructive",
-          })
-          return
-        }
-      } else {
-        console.log("⚠️ [Unlock Button] No user authenticated, proceeding as anonymous")
+      try {
+        idToken = await currentUser.getIdToken()
+        console.log("🔑 [Unlock Button] Got auth token for user:", currentUser.uid)
+      } catch (error) {
+        console.error("❌ [Unlock Button] Failed to get auth token:", error)
+        toast({
+          title: "Authentication Error",
+          description: "Please try signing in again",
+          variant: "destructive",
+        })
+        return
       }
 
       const itemId = bundleId || productBoxId
