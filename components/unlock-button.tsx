@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
 import { toast } from "@/hooks/use-toast"
-import { Loader2, Unlock } from "lucide-react"
+import { Loader2 } from "lucide-react"
 
 interface UnlockButtonProps {
   bundleId?: string
@@ -13,6 +13,9 @@ interface UnlockButtonProps {
   title: string
   className?: string
   variant?: "default" | "outline" | "secondary" | "ghost" | "link" | "destructive"
+  stripePriceId?: string
+  user?: any
+  creatorId?: string
 }
 
 export function UnlockButton({
@@ -22,9 +25,15 @@ export function UnlockButton({
   title,
   className = "",
   variant = "default",
+  stripePriceId,
+  user,
+  creatorId,
 }: UnlockButtonProps) {
   const [isLoading, setIsLoading] = useState(false)
-  const { user } = useAuth()
+  const { user: authUser } = useAuth()
+
+  // Use the passed user or fall back to auth context user
+  const currentUser = user || authUser
 
   const handleUnlock = async () => {
     try {
@@ -32,10 +41,10 @@ export function UnlockButton({
 
       // Get the Firebase ID token for authentication
       let idToken = ""
-      if (user) {
+      if (currentUser) {
         try {
-          idToken = await user.getIdToken()
-          console.log("🔑 [Unlock Button] Got auth token for user:", user.uid)
+          idToken = await currentUser.getIdToken()
+          console.log("🔑 [Unlock Button] Got auth token for user:", currentUser.uid)
         } catch (error) {
           console.error("❌ [Unlock Button] Failed to get auth token:", error)
           toast({
@@ -56,7 +65,7 @@ export function UnlockButton({
 
       console.log("🔓 [Unlock Button] Starting checkout:", {
         itemId,
-        userUid: user?.uid || "anonymous",
+        userUid: currentUser?.uid || "anonymous",
         hasToken: !!idToken,
       })
 
@@ -113,10 +122,7 @@ export function UnlockButton({
           Processing...
         </>
       ) : (
-        <>
-          <Unlock className="mr-2 h-4 w-4" />
-          Unlock ${price}
-        </>
+        <>Buy Now</>
       )}
     </Button>
   )

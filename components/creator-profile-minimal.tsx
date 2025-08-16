@@ -5,23 +5,11 @@ import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Share2, Play, Calendar, Users, Heart, Check, Package, Download, Pause, Lock } from 'lucide-react'
+import { Share2, Play, Calendar, Users, Heart, Check, Package, Download, Pause, Lock } from "lucide-react"
 import { useAuthState } from "react-firebase-hooks/auth"
 import { auth, db } from "@/lib/firebase"
 import { UnlockButton } from "@/components/unlock-button"
-import { trackFirestoreWrite } from "@/lib/firestore-optimizer"
-import {
-  collection,
-  addDoc,
-  serverTimestamp,
-  doc,
-  updateDoc,
-  increment,
-  deleteDoc,
-  query,
-  where,
-  getDocs,
-} from "firebase/firestore"
+import { doc, updateDoc, increment } from "firebase/firestore"
 import { useToast } from "@/hooks/use-toast"
 import { useDownloadLimit } from "@/contexts/download-limit-context"
 
@@ -432,11 +420,11 @@ function ContentCard({ item }: { item: ContentItem }) {
       const objectUrl = URL.createObjectURL(blob)
 
       // Create anchor element for download
-      const link = document.createElement('a')
+      const link = document.createElement("a")
       link.href = objectUrl
       link.download = filename
-      link.style.display = 'none'
-      
+      link.style.display = "none"
+
       // Append to body, click, and remove
       document.body.appendChild(link)
       link.click()
@@ -610,12 +598,12 @@ function ContentCard({ item }: { item: ContentItem }) {
 
       if (!success) {
         // Fallback to traditional method if direct download fails
-        const link = document.createElement('a')
+        const link = document.createElement("a")
         link.href = proxiedVideoUrl
         link.download = filename
-        link.target = '_blank'
-        link.style.display = 'none'
-        
+        link.target = "_blank"
+        link.style.display = "none"
+
         document.body.appendChild(link)
         link.click()
         document.body.removeChild(link)
@@ -734,25 +722,17 @@ function ContentCard({ item }: { item: ContentItem }) {
             onClick={handleDownload}
             disabled={isDownloading || (hasReachedLimit && !isProUser)}
             className={`absolute bottom-2 right-2 backdrop-blur-sm p-1.5 rounded-full transition-all duration-200 hover:scale-110 ${
-              hasReachedLimit && !isProUser 
-                ? "bg-zinc-800/90 cursor-not-allowed" 
-                : "bg-black/60 hover:bg-black/80"
+              hasReachedLimit && !isProUser ? "bg-zinc-800/90 cursor-not-allowed" : "bg-black/60 hover:bg-black/80"
             } ${isHovered ? "opacity-100" : "opacity-70"}`}
             aria-label={
-              hasReachedLimit && !isProUser 
-                ? "Upgrade to Creator Pro for unlimited downloads" 
-                : "Download video"
+              hasReachedLimit && !isProUser ? "Upgrade to Creator Pro for unlimited downloads" : "Download video"
             }
-            title={
-              hasReachedLimit && !isProUser 
-                ? "Upgrade to Creator Pro for unlimited downloads" 
-                : "Download video"
-            }
+            title={hasReachedLimit && !isProUser ? "Upgrade to Creator Pro for unlimited downloads" : "Download video"}
           >
             {hasReachedLimit && !isProUser ? (
               <Lock className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-zinc-400" />
             ) : (
-              <Download className={`h-3 w-3 sm:h-3.5 sm:w-3.5 text-white ${isDownloading ? 'animate-pulse' : ''}`} />
+              <Download className={`h-3 w-3 sm:h-3.5 sm:w-3.5 text-white ${isDownloading ? "animate-pulse" : ""}`} />
             )}
           </button>
         )}
@@ -835,8 +815,7 @@ function BundleCard({ item, user, creatorId }: { item: ContentItem; user: any; c
         </div>
       </div>
 
-      {/* Content Section */}
-      <div className="p-4 sm:p-5 space-y-3 bg-black relative">
+      <div className="p-3 sm:p-4 space-y-2 bg-gradient-to-br from-black via-black to-zinc-800/30 relative">
         {/* Title and Description */}
         <div className="space-y-1">
           <h3 className="text-white text-base sm:text-lg font-bold line-clamp-1" title={item.title}>
@@ -846,10 +825,19 @@ function BundleCard({ item, user, creatorId }: { item: ContentItem; user: any; c
         </div>
 
         {/* Price and Button Row */}
-        <div className="flex items-center justify-between pt-2">
+        <div className="flex items-center justify-between pt-1">
           <span className="text-white text-xl sm:text-2xl font-light">${formattedPrice}</span>
 
-          <UnlockButton stripePriceId={item.stripePriceId} bundleId={item.id} user={user} creatorId={creatorId} />
+          <UnlockButton
+            stripePriceId={item.stripePriceId}
+            bundleId={item.id}
+            user={user}
+            creatorId={creatorId}
+            price={item.price || 0}
+            title={item.title}
+            variant="outline"
+            className="border-white/20 text-white hover:bg-white/5 rounded-md font-light text-sm px-4 py-2"
+          />
         </div>
       </div>
     </div>
