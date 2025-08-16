@@ -13,7 +13,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, onSnapshot } from "firebase/firestore"
 import { db } from "@/lib/firebase"
@@ -76,12 +75,12 @@ export default function BundlesPage() {
   const [error, setError] = useState<string | null>(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [createLoading, setCreateLoading] = useState(false)
-  const [createForm, setCreateForm] = useState<CreateBundleForm>({
+  const [createForm, setCreateForm] = useState({
     title: "",
     description: "",
     price: "",
-    billingType: "one_time",
-    thumbnail: null,
+    billingType: "one_time" as "one_time" | "subscription",
+    thumbnail: null as File | null,
   })
   const { toast, toast: customToast } = useToast()
   const router = useRouter()
@@ -1114,38 +1113,18 @@ export default function BundlesPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="price">Price (USD) *</Label>
-                  <Input
-                    id="price"
-                    type="number"
-                    step="0.01"
-                    min="0.50"
-                    value={createForm.price}
-                    onChange={(e) => setCreateForm((prev) => ({ ...prev, price: e.target.value }))}
-                    placeholder="9.99"
-                    className="bg-zinc-800 border-zinc-700"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="billing">Billing Type</Label>
-                  <Select
-                    value={createForm.billingType}
-                    onValueChange={(value: "one_time" | "subscription") =>
-                      setCreateForm((prev) => ({ ...prev, billingType: value }))
-                    }
-                  >
-                    <SelectTrigger className="bg-zinc-800 border-zinc-700">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-zinc-800 border-zinc-700">
-                      <SelectItem value="one_time">One-time Payment</SelectItem>
-                      <SelectItem value="subscription">Monthly Subscription</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div>
+                <Label htmlFor="price">Price (USD) *</Label>
+                <Input
+                  id="price"
+                  type="number"
+                  step="0.01"
+                  min="0.50"
+                  value={createForm.price}
+                  onChange={(e) => setCreateForm((prev) => ({ ...prev, price: e.target.value }))}
+                  placeholder="9.99"
+                  className="bg-zinc-800 border-zinc-700"
+                />
               </div>
 
               {/* Enhanced Thumbnail Section */}
