@@ -16,7 +16,6 @@ import {
   Music,
   ImageIcon,
   File,
-  Bug,
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/use-toast"
@@ -247,29 +246,13 @@ export default function FreeContentPage() {
             <PlusCircle className="h-4 w-4 mr-2" />
             Add Content
           </Button>
-          <Button variant="outline" onClick={fetchFreeContent} className="border-zinc-700 hover:bg-zinc-800">
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Refresh
-          </Button>
           <Button
             variant="outline"
-            onClick={async () => {
-              if (!user) return
-              const token = await user.getIdToken()
-              const response = await fetch("/api/debug/check-free-content", {
-                headers: { Authorization: `Bearer ${token}` },
-              })
-              const data = await response.json()
-              console.log("🔍 Debug free content:", data)
-              toast({
-                title: "Debug Info",
-                description: `Found ${data.totalItems || 0} items in database. Check console for details.`,
-              })
-            }}
-            className="border-zinc-700 hover:bg-zinc-800"
+            onClick={fetchFreeContent}
+            className="border-zinc-700 hover:bg-zinc-800 bg-transparent"
           >
-            <Bug className="h-4 w-4 mr-2" />
-            Debug
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
           </Button>
         </div>
       </div>
@@ -452,7 +435,7 @@ export default function FreeContentPage() {
                             <Button
                               size="sm"
                               variant="outline"
-                              className="w-full"
+                              className="w-full bg-transparent"
                               onClick={(e) => {
                                 e.stopPropagation()
                                 copyToClipboard(item.fileUrl)
@@ -465,7 +448,7 @@ export default function FreeContentPage() {
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  className="px-2"
+                                  className="px-2 bg-transparent"
                                   onClick={(e) => e.stopPropagation()}
                                 >
                                   <MoreVertical className="h-4 w-4" />

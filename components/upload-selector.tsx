@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Badge } from "@/components/ui/badge"
 import { Loader2, Search, Video, Music, ImageIcon, File, AlertCircle, RefreshCw } from "lucide-react"
 import { motion } from "framer-motion"
 import { safelyConvertToDate } from "@/lib/date-utils"
@@ -366,31 +365,6 @@ export default function UploadSelector({ excludeIds = [], onSelect, onCancel, lo
         </div>
       </div>
 
-      {/* Debug Info */}
-      {showDiagnostic && diagnosticData && (
-        <div className="p-4 bg-zinc-800 rounded-lg text-sm">
-          <h4 className="font-semibold mb-2">Database Structure:</h4>
-          <div className="space-y-2">
-            <p>Total Collections: {diagnosticData.collections?.length || 0}</p>
-            <p>Collections with Your Data: {diagnosticData.summary?.collectionsWithUserData || 0}</p>
-
-            {Object.entries(diagnosticData.collectionData || {})
-              .filter(([_, data]) => data.userDocuments > 0)
-              .map(([collection, data]) => (
-                <div key={collection} className="mt-2 p-2 bg-zinc-700/30 rounded">
-                  <p className="text-green-400">
-                    ✅ Found your data in: <span className="font-mono">{collection}</span>
-                  </p>
-                  <p className="text-xs text-zinc-400">Documents: {data.userDocuments}</p>
-                </div>
-              ))}
-          </div>
-          <Button variant="link" size="sm" onClick={() => setShowDiagnostic(false)} className="mt-2 text-zinc-400">
-            Hide Details
-          </Button>
-        </div>
-      )}
-
       {/* Upload Grid */}
       {filteredUploads.length === 0 ? (
         <div className="text-center py-12">
@@ -421,15 +395,15 @@ export default function UploadSelector({ excludeIds = [], onSelect, onCancel, lo
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 max-h-96 overflow-y-auto">
           {filteredUploads.map((upload, index) => (
             <motion.div
               key={upload.id}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.2, delay: index * 0.05 }}
-              className={`relative bg-zinc-800 rounded-lg border transition-all duration-200 cursor-pointer hover:border-zinc-600 ${
-                selectedIds.includes(upload.id) ? "border-red-500 bg-red-900/20" : "border-zinc-700"
+              className={`relative cursor-pointer transition-all duration-200 ${
+                selectedIds.includes(upload.id) ? "ring-2 ring-red-500" : ""
               }`}
               onClick={() => handleToggleSelection(upload.id)}
             >
@@ -438,15 +412,45 @@ export default function UploadSelector({ excludeIds = [], onSelect, onCancel, lo
                 <Checkbox
                   checked={selectedIds.includes(upload.id)}
                   onChange={() => handleToggleSelection(upload.id)}
-                  className="bg-zinc-900 border-zinc-600"
+                  className="bg-zinc-900/80 border-zinc-600 backdrop-blur-sm"
                 />
               </div>
 
-              {/* Thumbnail */}
-              <div className="aspect-[9/16] bg-zinc-700 rounded-t-lg overflow-hidden relative">
-                {upload.thumbnailUrl ? (
+              {/* Video Thumbnail */}
+              <div className="aspect-[9/16] bg-zinc-800 rounded-lg overflow-hidden relative">
+                {upload.contentType === "video" && (upload.thumbnailUrl || upload.fileUrl) ? (
+                  <>
+                    {upload.thumbnailUrl ? (
+                      <img
+                        src={upload.thumbnailUrl || "/placeholder.svg"}
+                        alt={upload.title}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement
+                          target.style.display = "none"
+                          target.nextElementSibling?.classList.remove("hidden")
+                        }}
+                      />
+                    ) : (
+                      <video
+                        src={upload.fileUrl}
+                        className="w-full h-full object-cover"
+                        muted
+                        preload="metadata"
+                        onError={(e) => {
+                          const target = e.target as HTMLVideoElement
+                          target.style.display = "none"
+                          target.nextElementSibling?.classList.remove("hidden")
+                        }}
+                      />
+                    )}
+                    <div className="hidden absolute inset-0 flex items-center justify-center bg-zinc-800">
+                      <Video className="h-8 w-8 text-zinc-400" />
+                    </div>
+                  </>
+                ) : upload.contentType === "image" && upload.fileUrl ? (
                   <img
-                    src={upload.thumbnailUrl || "/placeholder.svg"}
+                    src={upload.fileUrl || "/placeholder.svg"}
                     alt={upload.title}
                     className="w-full h-full object-cover"
                     onError={(e) => {
@@ -455,25 +459,18 @@ export default function UploadSelector({ excludeIds = [], onSelect, onCancel, lo
                       target.nextElementSibling?.classList.remove("hidden")
                     }}
                   />
-                ) : null}
-                <div
-                  className={`${upload.thumbnailUrl ? "hidden" : ""} absolute inset-0 flex items-center justify-center text-zinc-400`}
-                >
-                  {getContentIcon(upload.contentType)}
-                </div>
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center bg-zinc-800">
+                    {getContentIcon(upload.contentType)}
+                  </div>
+                )}
               </div>
 
-              {/* Content Info */}
-              <div className="p-3">
-                <h4 className="text-sm font-medium text-white truncate mb-1" title={upload.title}>
+              {/* Title underneath */}
+              <div className="mt-2 px-1">
+                <h4 className="text-sm font-medium text-white truncate" title={upload.title}>
                   {upload.title}
                 </h4>
-                <div className="flex items-center justify-between text-xs text-zinc-400">
-                  <Badge variant="outline" className="text-xs border-zinc-600 text-zinc-300">
-                    {upload.contentType}
-                  </Badge>
-                  <span>{formatFileSize(upload.fileSize || 0)}</span>
-                </div>
               </div>
             </motion.div>
           ))}
