@@ -333,9 +333,21 @@ export default function UploadSelector({ excludeIds = [], onSelect, onCancel, lo
 
                 {/* Thumbnail - Clean 9:16 aspect ratio */}
                 <div className="aspect-[9/16] bg-zinc-700 rounded-lg overflow-hidden relative">
-                  {upload.thumbnailUrl || upload.fileUrl ? (
+                  {upload.contentType === "video" && upload.fileUrl ? (
+                    <video
+                      src={upload.fileUrl || "/placeholder.svg"}
+                      className="w-full h-full object-cover"
+                      muted
+                      preload="metadata"
+                      onError={(e) => {
+                        const target = e.target as HTMLVideoElement
+                        target.style.display = "none"
+                        target.nextElementSibling?.classList.remove("hidden")
+                      }}
+                    />
+                  ) : upload.thumbnailUrl ? (
                     <img
-                      src={upload.thumbnailUrl || upload.fileUrl}
+                      src={upload.thumbnailUrl || "/placeholder.svg"}
                       alt={upload.title}
                       className="w-full h-full object-cover"
                       onError={(e) => {
@@ -346,7 +358,7 @@ export default function UploadSelector({ excludeIds = [], onSelect, onCancel, lo
                     />
                   ) : null}
                   <div
-                    className={`${upload.thumbnailUrl || upload.fileUrl ? "hidden" : ""} absolute inset-0 flex items-center justify-center text-zinc-400`}
+                    className={`${(upload.contentType === "video" && upload.fileUrl) || upload.thumbnailUrl ? "hidden" : ""} absolute inset-0 flex items-center justify-center text-zinc-400`}
                   >
                     {getContentIcon(upload.contentType)}
                   </div>
