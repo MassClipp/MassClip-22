@@ -451,9 +451,35 @@ export default function UploadSelector({
 
               {/* Thumbnail */}
               <div
-                className={`${aspectRatio === "portrait" ? "aspect-[9/16]" : "aspect-video"} bg-zinc-700 rounded-t-lg overflow-hidden relative`}
+                className={`${aspectRatio === "portrait" ? "aspect-[9/16]" : "aspect-video"} bg-zinc-900 rounded-t-lg overflow-hidden relative`}
               >
-                {upload.thumbnailUrl ? (
+                {upload.contentType === "video" ? (
+                  upload.thumbnailUrl ? (
+                    <img
+                      src={upload.thumbnailUrl || "/placeholder.svg"}
+                      alt={upload.title}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement
+                        target.style.display = "none"
+                        target.nextElementSibling?.classList.remove("hidden")
+                      }}
+                    />
+                  ) : (
+                    <video
+                      src={upload.fileUrl}
+                      className="w-full h-full object-cover"
+                      muted
+                      playsInline
+                      preload="metadata"
+                      onError={(e) => {
+                        const target = e.target as HTMLVideoElement
+                        target.style.display = "none"
+                        target.nextElementSibling?.classList.remove("hidden")
+                      }}
+                    />
+                  )
+                ) : upload.thumbnailUrl ? (
                   <img
                     src={upload.thumbnailUrl || "/placeholder.svg"}
                     alt={upload.title}
@@ -466,28 +492,23 @@ export default function UploadSelector({
                   />
                 ) : null}
                 <div
-                  className={`${upload.thumbnailUrl ? "hidden" : ""} absolute inset-0 flex items-center justify-center text-zinc-400`}
+                  className={`${(upload.contentType === "video" && !upload.thumbnailUrl) || upload.thumbnailUrl ? "hidden" : ""} absolute inset-0 flex items-center justify-center text-zinc-400 bg-zinc-800`}
                 >
                   {getContentIcon(upload.contentType)}
                 </div>
               </div>
 
               {/* Content Info */}
-              <div className="p-3">
+              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
                 <h4 className="text-sm font-medium text-white truncate mb-1" title={upload.title}>
                   {upload.title}
                 </h4>
-                <div className="flex items-center justify-between text-xs text-zinc-400 mb-2">
-                  <Badge variant="outline" className="text-xs border-zinc-600 text-zinc-300">
+                <div className="flex items-center justify-between text-xs">
+                  <Badge variant="outline" className="text-xs border-zinc-600 text-zinc-300 bg-black/50">
                     {upload.contentType}
                   </Badge>
-                  <span>{formatFileSize(upload.fileSize || 0)}</span>
+                  <span className="text-zinc-300">{formatFileSize(upload.fileSize || 0)}</span>
                 </div>
-                {upload.contentType === "video" && (
-                  <div className="text-xs text-blue-400 truncate" title={upload.fileUrl}>
-                    {upload.fileUrl}
-                  </div>
-                )}
               </div>
             </motion.div>
           ))}
