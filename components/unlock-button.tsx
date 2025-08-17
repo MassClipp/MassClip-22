@@ -4,7 +4,8 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
 import { toast } from "@/hooks/use-toast"
-import { Loader2, Unlock } from "lucide-react"
+import { Loader2 } from "lucide-react"
+import { useRouter } from "next/navigation"
 
 interface UnlockButtonProps {
   bundleId?: string
@@ -13,6 +14,9 @@ interface UnlockButtonProps {
   title: string
   className?: string
   variant?: "default" | "outline" | "secondary" | "ghost" | "link" | "destructive"
+  stripePriceId?: string
+  user?: any
+  creatorId?: string
 }
 
 export function UnlockButton({
@@ -22,31 +26,57 @@ export function UnlockButton({
   title,
   className = "",
   variant = "default",
+  stripePriceId,
+  user,
+  creatorId,
 }: UnlockButtonProps) {
   const [isLoading, setIsLoading] = useState(false)
-  const { user } = useAuth()
+  const { user: authUser } = useAuth()
+  const router = useRouter()
+
+  // Use the passed user or fall back to auth context user
+  const currentUser = user || authUser
 
   const handleUnlock = async () => {
     try {
       setIsLoading(true)
 
+      if (!currentUser) {
+        console.log("⚠️ [Unlock Button] User not authenticated, showing login toast")
+
+        // Show custom toast with gradient background and login button
+        toast({
+          title: "Login Required",
+          description: "You need to login or create an account to purchase bundles.",
+          variant: "default",
+          className: "bg-gradient-to-br from-black via-black to-zinc-800/30 border-zinc-700/50 text-white",
+          action: (
+            <Button
+              onClick={() => router.push("/login")}
+              variant="outline"
+              size="sm"
+              className="border-white/20 text-white hover:bg-white/10 hover:text-white"
+            >
+              Login
+            </Button>
+          ),
+        })
+        return
+      }
+
       // Get the Firebase ID token for authentication
       let idToken = ""
-      if (user) {
-        try {
-          idToken = await user.getIdToken()
-          console.log("🔑 [Unlock Button] Got auth token for user:", user.uid)
-        } catch (error) {
-          console.error("❌ [Unlock Button] Failed to get auth token:", error)
-          toast({
-            title: "Authentication Error",
-            description: "Please try signing in again",
-            variant: "destructive",
-          })
-          return
-        }
-      } else {
-        console.log("⚠️ [Unlock Button] No user authenticated, proceeding as anonymous")
+      try {
+        idToken = await currentUser.getIdToken()
+        console.log("🔑 [Unlock Button] Got auth token for user:", currentUser.uid)
+      } catch (error) {
+        console.error("❌ [Unlock Button] Failed to get auth token:", error)
+        toast({
+          title: "Authentication Error",
+          description: "Please try signing in again",
+          variant: "destructive",
+        })
+        return
       }
 
       const itemId = bundleId || productBoxId
@@ -56,7 +86,7 @@ export function UnlockButton({
 
       console.log("🔓 [Unlock Button] Starting checkout:", {
         itemId,
-        userUid: user?.uid || "anonymous",
+        userUid: currentUser?.uid || "anonymous",
         hasToken: !!idToken,
       })
 
@@ -113,10 +143,7 @@ export function UnlockButton({
           Processing...
         </>
       ) : (
-        <>
-          <Unlock className="mr-2 h-4 w-4" />
-          Unlock ${price}
-        </>
+        <>Buy Now</>
       )}
     </Button>
   )

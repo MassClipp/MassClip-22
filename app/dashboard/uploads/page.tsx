@@ -82,6 +82,17 @@ const FILE_TYPE_COLORS = {
 }
 
 const UploadsPage = () => {
+  // Add this effect to hide the Debug R2 button using CSS
+  useEffect(() => {
+    // This will find any button containing the text "Debug R2" and hide it
+    const debugButtons = document.querySelectorAll("button")
+    debugButtons.forEach((button) => {
+      if (button.textContent && button.textContent.includes("Debug R2")) {
+        button.style.display = "none"
+      }
+    })
+  }, [])
+
   const { toast } = useToast()
   const [open, setOpen] = useState(false)
   const [name, setName] = useState("")
@@ -672,11 +683,7 @@ const UploadsPage = () => {
                   ) : upload.type === "audio" ? (
                     <AudioCard fileUrl={upload.fileUrl} />
                   ) : upload.type === "image" ? (
-                    <img
-                      src={upload.fileUrl || "/placeholder.svg"}
-                      alt={upload.title}
-                      className="w-full h-32 object-cover rounded-md"
-                    />
+                    <img src={upload.fileUrl} alt={upload.title} className="w-full h-32 object-cover rounded-md" />
                   ) : (
                     <div className="w-full h-32 flex items-center justify-center bg-gray-100 rounded-md">
                       <File className="h-12 w-12 text-gray-500" />

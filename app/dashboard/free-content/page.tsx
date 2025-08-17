@@ -348,9 +348,11 @@ export default function FreeContentPage() {
                     <CardContent className="p-3">
                       <div className="mb-2 relative">
                         {item.type === "video" ? (
-                          <VideoPreviewPlayer videoUrl={item.fileUrl} title={item.title} />
+                          <div className="aspect-[9/16]">
+                            <VideoPreviewPlayer videoUrl={item.fileUrl} title={item.title} />
+                          </div>
                         ) : item.type === "image" ? (
-                          <div className="aspect-square bg-zinc-800 rounded-lg flex items-center justify-center relative overflow-hidden">
+                          <div className="aspect-[9/16] bg-zinc-800 rounded-lg flex items-center justify-center relative overflow-hidden">
                             <img
                               src={item.fileUrl || "/placeholder.svg"}
                               alt={item.title}
@@ -366,7 +368,7 @@ export default function FreeContentPage() {
                             </div>
                           </div>
                         ) : (
-                          <div className="aspect-square bg-zinc-800 rounded-lg flex items-center justify-center">
+                          <div className="aspect-[9/16] bg-zinc-800 rounded-lg flex items-center justify-center">
                             <IconComponent className={`h-8 w-8 ${colorClass}`} />
                           </div>
                         )}
@@ -427,6 +429,11 @@ export default function FreeContentPage() {
                         <div className="text-xs text-zinc-400 space-y-1">
                           <div>{formatFileSize(item.size)}</div>
                           <div>{safelyFormatRelativeTime(item.addedAt)}</div>
+                          {item.type === "video" && (
+                            <div className="text-xs text-blue-400 truncate" title={item.fileUrl}>
+                              {item.fileUrl}
+                            </div>
+                          )}
                         </div>
 
                         {/* Action buttons for videos - show below the video */}
@@ -495,6 +502,7 @@ export default function FreeContentPage() {
               onSelect={handleAddSelectedContent}
               onCancel={() => setShowAddContentDialog(false)}
               loading={false}
+              aspectRatio="portrait"
             />
           </div>
         </DialogContent>

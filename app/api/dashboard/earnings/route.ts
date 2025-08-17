@@ -1,31 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getAuth } from "firebase-admin/auth"
-import { getFirestore } from "firebase-admin/firestore"
-import { initializeApp, getApps, cert } from "firebase-admin/app"
+import { getAuthenticatedUser, db } from "@/lib/firebase-admin"
 import Stripe from "stripe"
-
-// Initialize Firebase Admin
-if (!getApps().length) {
-  const serviceAccount = {
-    type: "service_account",
-    project_id: process.env.FIREBASE_PROJECT_ID,
-    private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
-    private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-    client_email: process.env.FIREBASE_CLIENT_EMAIL,
-    client_id: process.env.FIREBASE_CLIENT_ID,
-    auth_uri: "https://accounts.google.com/o/oauth2/auth",
-    token_uri: "https://oauth2.googleapis.com/token",
-    auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
-    client_x509_cert_url: `https://www.googleapis.com/robot/v1/metadata/x509/${process.env.FIREBASE_CLIENT_EMAIL}`,
-  }
-
-  initializeApp({
-    credential: cert(serviceAccount as any),
-  })
-}
-
-const db = getFirestore()
-const auth = getAuth()
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
@@ -93,14 +68,41 @@ async function getConnectedStripeAccount(userId: string) {
 
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get("authorization")
-    if (!authHeader?.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    console.log(`🚀 [Earnings] API called - starting authentication check`)
+
+    let user
+    try {
+      user = await getAuthenticatedUser(request.headers)
+      console.log(`✅ [Earnings] Authentication successful for user: ${user.uid}`)
+    } catch (authError) {
+      console.error(`❌ [Earnings] Authentication failed:`, authError)
+      return NextResponse.json(
+        {
+          error: "Authentication failed",
+          details: authError instanceof Error ? authError.message : "Unknown auth error",
+        },
+        { status: 401 },
+      )
     }
 
-    const idToken = authHeader.split("Bearer ")[1]
-    const decodedToken = await auth.verifyIdToken(idToken)
-    const userId = decodedToken.uid
+    const userId = user.uid
+
+    try {
+      console.log(`🔧 [Earnings] Checking Stripe configuration...`)
+      if (!process.env.STRIPE_SECRET_KEY) {
+        throw new Error("STRIPE_SECRET_KEY environment variable is not set")
+      }
+      console.log(`✅ [Earnings] Stripe configuration OK`)
+    } catch (stripeError) {
+      console.error(`❌ [Earnings] Stripe configuration error:`, stripeError)
+      return NextResponse.json(
+        {
+          error: "Stripe configuration error",
+          details: stripeError instanceof Error ? stripeError.message : "Unknown Stripe error",
+        },
+        { status: 500 },
+      )
+    }
 
     console.log(`🔍 [Earnings] Fetching earnings data for user: ${userId}`)
 
@@ -299,11 +301,12 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(earningsData)
   } catch (error) {
-    console.error("❌ [Earnings] Error:", error)
+    console.error("❌ [Earnings] Unexpected error:", error)
     return NextResponse.json(
       {
         error: "Failed to fetch earnings data",
         details: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : undefined,
       },
       { status: 500 },
     )

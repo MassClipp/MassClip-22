@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Loader2, Search, Video, Music, ImageIcon, File, AlertCircle, RefreshCw } from "lucide-react"
 import { motion } from "framer-motion"
 import { safelyConvertToDate } from "@/lib/date-utils"
-import { useToast } from "@/components/ui/use-toast"
+import { useToast } from "@/components/ui/use-toast" // Import useToast
 
 interface Upload {
   id: string
@@ -30,11 +30,18 @@ interface UploadSelectorProps {
   onSelect: (uploadIds: string[]) => void
   onCancel: () => void
   loading?: boolean
+  aspectRatio?: "landscape" | "portrait"
 }
 
-export default function UploadSelector({ excludeIds = [], onSelect, onCancel, loading = false }: UploadSelectorProps) {
+export default function UploadSelector({
+  excludeIds = [],
+  onSelect,
+  onCancel,
+  loading = false,
+  aspectRatio = "landscape",
+}: UploadSelectorProps) {
   const { user } = useAuth()
-  const { toast } = useToast()
+  const { toast } = useToast() // Declare useToast
   const [uploads, setUploads] = useState<Upload[]>([])
   const [filteredUploads, setFilteredUploads] = useState<Upload[]>([])
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -42,6 +49,35 @@ export default function UploadSelector({ excludeIds = [], onSelect, onCancel, lo
   const [typeFilter, setTypeFilter] = useState("all")
   const [fetchLoading, setFetchLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [diagnosticData, setDiagnosticData] = useState<any>(null)
+  const [showDiagnostic, setShowDiagnostic] = useState(false)
+  const [runningDiagnostic, setRunningDiagnostic] = useState(false)
+
+  // Fetch diagnostic data
+  const fetchDiagnostic = async () => {
+    if (!user) return
+
+    try {
+      setRunningDiagnostic(true)
+      const token = await user.getIdToken()
+      const response = await fetch("/api/debug/firestore-structure", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setDiagnosticData(data)
+        console.log("🔍 [Upload Selector] Database structure diagnostic:", data)
+      }
+    } catch (err) {
+      console.error("❌ [Upload Selector] Diagnostic fetch failed:", err)
+    } finally {
+      setRunningDiagnostic(false)
+    }
+  }
 
   // Fetch uploads
   const fetchUploads = async () => {
@@ -114,13 +150,18 @@ export default function UploadSelector({ excludeIds = [], onSelect, onCancel, lo
           title: upload.title || upload.filename || upload.name || "Untitled",
           filename: upload.filename || upload.title || upload.name || "Unknown",
           contentType: getContentType(upload.mimeType || upload.type || ""),
-          createdAt: safelyConvertToDate(upload.createdAt || upload.addedAt || upload.timestamp),
-          thumbnailUrl: upload.thumbnailUrl || (upload.contentType === "video" ? upload.fileUrl : undefined),
+          createdAt: safelyConvertToDate(upload.createdAt || upload.addedAt || upload.timestamp), // Safe date conversion
         }))
 
       setUploads(availableUploads)
       setFilteredUploads(availableUploads)
       console.log(`✅ [Upload Selector] Loaded ${availableUploads.length} available uploads`)
+
+      // If no uploads found, fetch diagnostic data
+      if (availableUploads.length === 0) {
+        console.log("⚠️ [Upload Selector] No uploads found, running diagnostic")
+        await fetchDiagnostic()
+      }
     } catch (err) {
       console.error("❌ [Upload Selector] Error fetching uploads:", err)
 
@@ -135,6 +176,9 @@ export default function UploadSelector({ excludeIds = [], onSelect, onCancel, lo
         description: errorMessage,
         variant: "destructive",
       })
+
+      // Fetch diagnostic data on error
+      await fetchDiagnostic()
     } finally {
       setFetchLoading(false)
     }
@@ -202,13 +246,13 @@ export default function UploadSelector({ excludeIds = [], onSelect, onCancel, lo
   const getContentIcon = (contentType: string) => {
     switch (contentType) {
       case "video":
-        return <Video className="h-8 w-8" />
+        return <Video className="h-4 w-4" />
       case "audio":
-        return <Music className="h-8 w-8" />
+        return <Music className="h-4 w-4" />
       case "image":
-        return <ImageIcon className="h-8 w-8" />
+        return <ImageIcon className="h-4 w-4" />
       default:
-        return <File className="h-8 w-8" />
+        return <File className="h-4 w-4" />
     }
   }
 
@@ -241,10 +285,48 @@ export default function UploadSelector({ excludeIds = [], onSelect, onCancel, lo
       <div className="text-center py-12">
         <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
         <p className="text-red-400 mb-4">{error}</p>
-        <Button variant="outline" onClick={fetchUploads} className="bg-transparent">
-          <RefreshCw className="h-4 w-4 mr-2" />
-          Retry
-        </Button>
+        <div className="flex gap-2 justify-center">
+          <Button variant="outline" onClick={fetchUploads}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Retry
+          </Button>
+          <Button variant="outline" onClick={fetchDiagnostic} disabled={runningDiagnostic}>
+            {runningDiagnostic ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4 mr-2" />
+            )}
+            Refresh
+          </Button>
+        </div>
+
+        {diagnosticData && (
+          <div className="mt-4 p-4 bg-zinc-800 rounded-lg text-left text-sm">
+            <h4 className="font-semibold mb-2">Database Diagnostic:</h4>
+            <div className="space-y-1">
+              <p>Collections: {diagnosticData.collections?.length || 0}</p>
+              <p>Collections with your data: {diagnosticData.summary?.collectionsWithUserData || 0}</p>
+
+              {diagnosticData.collections?.length > 0 && (
+                <div>
+                  <p className="font-medium mt-2">Available Collections:</p>
+                  <p className="text-xs text-zinc-400">{diagnosticData.collections.join(", ")}</p>
+                </div>
+              )}
+
+              {Object.entries(diagnosticData.collectionData || {})
+                .filter(([_, data]) => data.userDocuments > 0)
+                .map(([collection, data]) => (
+                  <div key={collection} className="mt-2 p-2 bg-zinc-700/30 rounded">
+                    <p className="text-green-400">
+                      ✅ Found your data in: <span className="font-mono">{collection}</span>
+                    </p>
+                    <p className="text-xs text-zinc-400">Documents: {data.userDocuments}</p>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
       </div>
     )
   }
@@ -291,6 +373,31 @@ export default function UploadSelector({ excludeIds = [], onSelect, onCancel, lo
         </div>
       </div>
 
+      {/* Debug Info */}
+      {showDiagnostic && diagnosticData && (
+        <div className="p-4 bg-zinc-800 rounded-lg text-sm">
+          <h4 className="font-semibold mb-2">Database Structure:</h4>
+          <div className="space-y-2">
+            <p>Total Collections: {diagnosticData.collections?.length || 0}</p>
+            <p>Collections with Your Data: {diagnosticData.summary?.collectionsWithUserData || 0}</p>
+
+            {Object.entries(diagnosticData.collectionData || {})
+              .filter(([_, data]) => data.userDocuments > 0)
+              .map(([collection, data]) => (
+                <div key={collection} className="mt-2 p-2 bg-zinc-700/30 rounded">
+                  <p className="text-green-400">
+                    ✅ Found your data in: <span className="font-mono">{collection}</span>
+                  </p>
+                  <p className="text-xs text-zinc-400">Documents: {data.userDocuments}</p>
+                </div>
+              ))}
+          </div>
+          <Button variant="link" size="sm" onClick={() => setShowDiagnostic(false)} className="mt-2 text-zinc-400">
+            Hide Details
+          </Button>
+        </div>
+      )}
+
       {/* Upload Grid */}
       {filteredUploads.length === 0 ? (
         <div className="text-center py-12">
@@ -303,6 +410,20 @@ export default function UploadSelector({ excludeIds = [], onSelect, onCancel, lo
             <div className="space-y-2 text-sm text-zinc-500">
               <p>To add content to this bundle, you need to upload files first.</p>
               <p>Go to Dashboard → Uploads to add your content.</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={fetchDiagnostic}
+                disabled={runningDiagnostic}
+                className="mt-2 bg-transparent"
+              >
+                {runningDiagnostic ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                )}
+                Refresh
+              </Button>
             </div>
           )}
         </div>
@@ -314,67 +435,59 @@ export default function UploadSelector({ excludeIds = [], onSelect, onCancel, lo
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.2, delay: index * 0.05 }}
-              className="space-y-2"
+              className={`relative bg-zinc-800 rounded-lg border transition-all duration-200 cursor-pointer hover:border-zinc-600 ${
+                selectedIds.includes(upload.id) ? "border-red-500 bg-red-900/20" : "border-zinc-700"
+              }`}
+              onClick={() => handleToggleSelection(upload.id)}
             >
-              <div
-                className={`relative bg-zinc-800 rounded-lg border transition-all duration-200 cursor-pointer hover:border-zinc-600 ${
-                  selectedIds.includes(upload.id) ? "border-red-500 bg-red-900/20" : "border-zinc-700"
-                }`}
-                onClick={() => handleToggleSelection(upload.id)}
-              >
-                {/* Checkbox */}
-                <div className="absolute top-2 left-2 z-10">
-                  <Checkbox
-                    checked={selectedIds.includes(upload.id)}
-                    onChange={() => handleToggleSelection(upload.id)}
-                    className="bg-zinc-900 border-zinc-600"
-                  />
-                </div>
+              {/* Checkbox */}
+              <div className="absolute top-2 left-2 z-10">
+                <Checkbox
+                  checked={selectedIds.includes(upload.id)}
+                  onChange={() => handleToggleSelection(upload.id)}
+                  className="bg-zinc-900 border-zinc-600"
+                />
+              </div>
 
-                {/* Thumbnail - Clean 9:16 aspect ratio */}
-                <div className="aspect-[9/16] bg-zinc-700 rounded-lg overflow-hidden relative">
-                  {upload.contentType === "video" && upload.fileUrl ? (
-                    <video
-                      src={upload.fileUrl || "/placeholder.svg"}
-                      className="w-full h-full object-cover"
-                      muted
-                      preload="metadata"
-                      onError={(e) => {
-                        const target = e.target as HTMLVideoElement
-                        target.style.display = "none"
-                        target.nextElementSibling?.classList.remove("hidden")
-                      }}
-                    />
-                  ) : upload.thumbnailUrl ? (
-                    <img
-                      src={upload.thumbnailUrl || "/placeholder.svg"}
-                      alt={upload.title}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement
-                        target.style.display = "none"
-                        target.nextElementSibling?.classList.remove("hidden")
-                      }}
-                    />
-                  ) : null}
-                  <div
-                    className={`${(upload.contentType === "video" && upload.fileUrl) || upload.thumbnailUrl ? "hidden" : ""} absolute inset-0 flex items-center justify-center text-zinc-400`}
-                  >
-                    {getContentIcon(upload.contentType)}
-                  </div>
+              {/* Thumbnail */}
+              <div
+                className={`${aspectRatio === "portrait" ? "aspect-[9/16]" : "aspect-video"} bg-zinc-700 rounded-t-lg overflow-hidden relative`}
+              >
+                {upload.thumbnailUrl ? (
+                  <img
+                    src={upload.thumbnailUrl || "/placeholder.svg"}
+                    alt={upload.title}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement
+                      target.style.display = "none"
+                      target.nextElementSibling?.classList.remove("hidden")
+                    }}
+                  />
+                ) : null}
+                <div
+                  className={`${upload.thumbnailUrl ? "hidden" : ""} absolute inset-0 flex items-center justify-center text-zinc-400`}
+                >
+                  {getContentIcon(upload.contentType)}
                 </div>
               </div>
 
-              <div className="px-1">
+              {/* Content Info */}
+              <div className="p-3">
                 <h4 className="text-sm font-medium text-white truncate mb-1" title={upload.title}>
                   {upload.title}
                 </h4>
-                <div className="flex items-center justify-between text-xs text-zinc-400">
+                <div className="flex items-center justify-between text-xs text-zinc-400 mb-2">
                   <Badge variant="outline" className="text-xs border-zinc-600 text-zinc-300">
                     {upload.contentType}
                   </Badge>
                   <span>{formatFileSize(upload.fileSize || 0)}</span>
                 </div>
+                {upload.contentType === "video" && (
+                  <div className="text-xs text-blue-400 truncate" title={upload.fileUrl}>
+                    {upload.fileUrl}
+                  </div>
+                )}
               </div>
             </motion.div>
           ))}
