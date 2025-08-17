@@ -7,10 +7,10 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
-import { useToast } from "@/hooks/use-toast"
-import { Loader2, Search, Video, Music, ImageIcon, File, AlertCircle, RefreshCw, Bug, Database } from "lucide-react"
+import { Loader2, Search, Video, Music, ImageIcon, File, AlertCircle, RefreshCw } from "lucide-react"
 import { motion } from "framer-motion"
 import { safelyConvertToDate } from "@/lib/date-utils"
+import { useToast } from "@/components/ui/use-toast" // Import useToast
 
 interface Upload {
   id: string
@@ -34,7 +34,7 @@ interface UploadSelectorProps {
 
 export default function UploadSelector({ excludeIds = [], onSelect, onCancel, loading = false }: UploadSelectorProps) {
   const { user } = useAuth()
-  const { toast } = useToast()
+  const { toast } = useToast() // Declare useToast
   const [uploads, setUploads] = useState<Upload[]>([])
   const [filteredUploads, setFilteredUploads] = useState<Upload[]>([])
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -287,9 +287,9 @@ export default function UploadSelector({ excludeIds = [], onSelect, onCancel, lo
             {runningDiagnostic ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
             ) : (
-              <Database className="h-4 w-4 mr-2" />
+              <RefreshCw className="h-4 w-4 mr-2" />
             )}
-            Database Diagnostic
+            Refresh
           </Button>
         </div>
 
@@ -357,21 +357,11 @@ export default function UploadSelector({ excludeIds = [], onSelect, onCancel, lo
           {selectedIds.length} of {filteredUploads.length} selected
         </span>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={handleSelectAll} className="border-zinc-700">
+          <Button variant="outline" size="sm" onClick={handleSelectAll} className="border-zinc-700 bg-transparent">
             Select All
           </Button>
-          <Button variant="outline" size="sm" onClick={handleDeselectAll} className="border-zinc-700">
+          <Button variant="outline" size="sm" onClick={handleDeselectAll} className="border-zinc-700 bg-transparent">
             Deselect All
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={fetchDiagnostic}
-            disabled={runningDiagnostic}
-            className="border-zinc-700"
-          >
-            {runningDiagnostic ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Bug className="h-4 w-4 mr-2" />}
-            Debug
           </Button>
         </div>
       </div>
@@ -416,19 +406,16 @@ export default function UploadSelector({ excludeIds = [], onSelect, onCancel, lo
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  setShowDiagnostic(true)
-                  fetchDiagnostic()
-                }}
-                className="mt-2"
+                onClick={fetchDiagnostic}
                 disabled={runningDiagnostic}
+                className="mt-2 bg-transparent"
               >
                 {runningDiagnostic ? (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 ) : (
-                  <Database className="h-4 w-4 mr-2" />
+                  <RefreshCw className="h-4 w-4 mr-2" />
                 )}
-                Run Database Diagnostic
+                Refresh
               </Button>
             </div>
           )}
@@ -456,7 +443,7 @@ export default function UploadSelector({ excludeIds = [], onSelect, onCancel, lo
               </div>
 
               {/* Thumbnail */}
-              <div className="aspect-video bg-zinc-700 rounded-t-lg overflow-hidden relative">
+              <div className="aspect-[9/16] bg-zinc-700 rounded-t-lg overflow-hidden relative">
                 {upload.thumbnailUrl ? (
                   <img
                     src={upload.thumbnailUrl || "/placeholder.svg"}
@@ -495,7 +482,7 @@ export default function UploadSelector({ excludeIds = [], onSelect, onCancel, lo
 
       {/* Action Buttons */}
       <div className="flex justify-end gap-3 pt-4 border-t border-zinc-800">
-        <Button variant="outline" onClick={onCancel} className="border-zinc-700">
+        <Button variant="outline" onClick={onCancel} className="border-zinc-700 bg-transparent">
           Cancel
         </Button>
         <Button
