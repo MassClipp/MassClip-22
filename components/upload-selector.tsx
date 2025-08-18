@@ -7,10 +7,10 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
-import { useToast } from "@/hooks/use-toast"
-import { Loader2, Search, Video, Music, ImageIcon, File, AlertCircle, RefreshCw, Bug, Database } from "lucide-react"
+import { Loader2, Search, Video, Music, ImageIcon, File, AlertCircle, RefreshCw } from "lucide-react"
 import { motion } from "framer-motion"
 import { safelyConvertToDate } from "@/lib/date-utils"
+import { useToast } from "@/components/ui/use-toast" // Import useToast
 
 interface Upload {
   id: string
@@ -30,11 +30,18 @@ interface UploadSelectorProps {
   onSelect: (uploadIds: string[]) => void
   onCancel: () => void
   loading?: boolean
+  aspectRatio?: "landscape" | "portrait"
 }
 
-export default function UploadSelector({ excludeIds = [], onSelect, onCancel, loading = false }: UploadSelectorProps) {
+export default function UploadSelector({
+  excludeIds = [],
+  onSelect,
+  onCancel,
+  loading = false,
+  aspectRatio = "landscape",
+}: UploadSelectorProps) {
   const { user } = useAuth()
-  const { toast } = useToast()
+  const { toast } = useToast() // Declare useToast
   const [uploads, setUploads] = useState<Upload[]>([])
   const [filteredUploads, setFilteredUploads] = useState<Upload[]>([])
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -287,9 +294,9 @@ export default function UploadSelector({ excludeIds = [], onSelect, onCancel, lo
             {runningDiagnostic ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
             ) : (
-              <Database className="h-4 w-4 mr-2" />
+              <RefreshCw className="h-4 w-4 mr-2" />
             )}
-            Database Diagnostic
+            Refresh
           </Button>
         </div>
 
@@ -357,21 +364,11 @@ export default function UploadSelector({ excludeIds = [], onSelect, onCancel, lo
           {selectedIds.length} of {filteredUploads.length} selected
         </span>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={handleSelectAll} className="border-zinc-700">
+          <Button variant="outline" size="sm" onClick={handleSelectAll} className="border-zinc-700 bg-transparent">
             Select All
           </Button>
-          <Button variant="outline" size="sm" onClick={handleDeselectAll} className="border-zinc-700">
+          <Button variant="outline" size="sm" onClick={handleDeselectAll} className="border-zinc-700 bg-transparent">
             Deselect All
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={fetchDiagnostic}
-            disabled={runningDiagnostic}
-            className="border-zinc-700"
-          >
-            {runningDiagnostic ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Bug className="h-4 w-4 mr-2" />}
-            Debug
           </Button>
         </div>
       </div>
@@ -416,19 +413,16 @@ export default function UploadSelector({ excludeIds = [], onSelect, onCancel, lo
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  setShowDiagnostic(true)
-                  fetchDiagnostic()
-                }}
-                className="mt-2"
+                onClick={fetchDiagnostic}
                 disabled={runningDiagnostic}
+                className="mt-2 bg-transparent"
               >
                 {runningDiagnostic ? (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 ) : (
-                  <Database className="h-4 w-4 mr-2" />
+                  <RefreshCw className="h-4 w-4 mr-2" />
                 )}
-                Run Database Diagnostic
+                Refresh
               </Button>
             </div>
           )}
@@ -456,8 +450,36 @@ export default function UploadSelector({ excludeIds = [], onSelect, onCancel, lo
               </div>
 
               {/* Thumbnail */}
-              <div className="aspect-video bg-zinc-700 rounded-t-lg overflow-hidden relative">
-                {upload.thumbnailUrl ? (
+              <div
+                className={`${aspectRatio === "portrait" ? "aspect-[9/16]" : "aspect-video"} bg-zinc-900 rounded-t-lg overflow-hidden relative`}
+              >
+                {upload.contentType === "video" ? (
+                  upload.thumbnailUrl ? (
+                    <img
+                      src={upload.thumbnailUrl || "/placeholder.svg"}
+                      alt={upload.title}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement
+                        target.style.display = "none"
+                        target.nextElementSibling?.classList.remove("hidden")
+                      }}
+                    />
+                  ) : (
+                    <video
+                      src={upload.fileUrl}
+                      className="w-full h-full object-cover"
+                      muted
+                      playsInline
+                      preload="metadata"
+                      onError={(e) => {
+                        const target = e.target as HTMLVideoElement
+                        target.style.display = "none"
+                        target.nextElementSibling?.classList.remove("hidden")
+                      }}
+                    />
+                  )
+                ) : upload.thumbnailUrl ? (
                   <img
                     src={upload.thumbnailUrl || "/placeholder.svg"}
                     alt={upload.title}
@@ -470,22 +492,22 @@ export default function UploadSelector({ excludeIds = [], onSelect, onCancel, lo
                   />
                 ) : null}
                 <div
-                  className={`${upload.thumbnailUrl ? "hidden" : ""} absolute inset-0 flex items-center justify-center text-zinc-400`}
+                  className={`${(upload.contentType === "video" && !upload.thumbnailUrl) || upload.thumbnailUrl ? "hidden" : ""} absolute inset-0 flex items-center justify-center text-zinc-400 bg-zinc-800`}
                 >
                   {getContentIcon(upload.contentType)}
                 </div>
               </div>
 
               {/* Content Info */}
-              <div className="p-3">
+              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
                 <h4 className="text-sm font-medium text-white truncate mb-1" title={upload.title}>
                   {upload.title}
                 </h4>
-                <div className="flex items-center justify-between text-xs text-zinc-400">
-                  <Badge variant="outline" className="text-xs border-zinc-600 text-zinc-300">
+                <div className="flex items-center justify-between text-xs">
+                  <Badge variant="outline" className="text-xs border-zinc-600 text-zinc-300 bg-black/50">
                     {upload.contentType}
                   </Badge>
-                  <span>{formatFileSize(upload.fileSize || 0)}</span>
+                  <span className="text-zinc-300">{formatFileSize(upload.fileSize || 0)}</span>
                 </div>
               </div>
             </motion.div>
@@ -495,7 +517,7 @@ export default function UploadSelector({ excludeIds = [], onSelect, onCancel, lo
 
       {/* Action Buttons */}
       <div className="flex justify-end gap-3 pt-4 border-t border-zinc-800">
-        <Button variant="outline" onClick={onCancel} className="border-zinc-700">
+        <Button variant="outline" onClick={onCancel} className="border-zinc-700 bg-transparent">
           Cancel
         </Button>
         <Button
