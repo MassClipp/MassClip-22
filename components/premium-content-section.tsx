@@ -225,7 +225,7 @@ export default function PremiumContentSection({
   }
 
   const shouldTruncateDescription = (description: string) => {
-    return description && description.length > 100
+    return description && description.length > 40
   }
 
   useEffect(() => {
