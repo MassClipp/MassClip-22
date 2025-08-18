@@ -45,9 +45,9 @@ export default function PremiumContentSection({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [purchaseLoading, setPurchaseLoading] = useState<string | null>(null)
+  const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(new Set())
   const router = useRouter()
 
-  // Fetch creator's bundles
   const fetchCreatorBundles = async () => {
     try {
       setLoading(true)
@@ -73,7 +73,6 @@ export default function PremiumContentSection({
       const data = await response.json()
       const creatorBundles = data.productBoxes || data.bundles || []
 
-      // Filter only active bundles and convert to Bundle format
       const activeBundles = creatorBundles
         .filter((bundle: any) => bundle.active !== false)
         .map((bundle: any) => ({
@@ -103,7 +102,6 @@ export default function PremiumContentSection({
     }
   }
 
-  // Handle bundle purchase
   const handlePurchase = async (bundle: Bundle) => {
     if (!user) {
       toast({
@@ -139,7 +137,6 @@ export default function PremiumContentSection({
         const errorData = await response.json()
         console.error(`❌ [Premium Content] Checkout failed:`, errorData)
 
-        // Provide more specific error messages
         let errorMessage = errorData.error || "Failed to create checkout session"
 
         if (errorData.code === "NO_STRIPE_ACCOUNT") {
@@ -195,7 +192,6 @@ export default function PremiumContentSection({
     }
   }
 
-  // Get the best available thumbnail with priority order and validation
   const getBundleThumbnail = (bundle: Bundle): string => {
     console.log(`🖼️ [Premium Content] Getting thumbnail for bundle ${bundle.id}:`, {
       customPreviewThumbnail: bundle.customPreviewThumbnail,
@@ -203,8 +199,7 @@ export default function PremiumContentSection({
       coverImageUrl: bundle.coverImageUrl,
     })
 
-    // Priority: customPreviewThumbnail > coverImage > coverImageUrl > placeholder
-    const possibleUrls = [bundle.customPreviewThumbnail, bundle.coverImage, bundle.coverImageUrl].filter(Boolean) // Remove null/undefined values
+    const possibleUrls = [bundle.customPreviewThumbnail, bundle.coverImage, bundle.coverImageUrl].filter(Boolean)
 
     for (const url of possibleUrls) {
       if (url && typeof url === "string" && url.startsWith("http")) {
@@ -215,6 +210,22 @@ export default function PremiumContentSection({
 
     console.log(`⚠️ [Premium Content] No valid thumbnail found for bundle ${bundle.id}, using placeholder`)
     return "/placeholder.svg?height=400&width=400&text=Bundle"
+  }
+
+  const toggleDescription = (bundleId: string) => {
+    setExpandedDescriptions((prev) => {
+      const newSet = new Set(prev)
+      if (newSet.has(bundleId)) {
+        newSet.delete(bundleId)
+      } else {
+        newSet.add(bundleId)
+      }
+      return newSet
+    })
+  }
+
+  const shouldTruncateDescription = (description: string) => {
+    return description && description.length > 100
   }
 
   useEffect(() => {
@@ -271,7 +282,6 @@ export default function PremiumContentSection({
           >
             <Card className="bg-zinc-900/50 border-zinc-800 overflow-hidden hover:border-zinc-700 transition-all duration-300 group">
               <div className="relative">
-                {/* Bundle Thumbnail - Changed to square aspect ratio */}
                 <div className="aspect-square bg-zinc-800 overflow-hidden">
                   <img
                     src={getBundleThumbnail(bundle) || "/placeholder.svg"}
@@ -279,7 +289,6 @@ export default function PremiumContentSection({
                     className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-300"
                     style={{ objectFit: "cover" }}
                     onError={(e) => {
-                      // Fallback to package icon if image fails to load
                       const target = e.target as HTMLImageElement
                       target.style.display = "none"
                       const parent = target.parentElement
@@ -303,7 +312,6 @@ export default function PremiumContentSection({
                   />
                 </div>
 
-                {/* Content Count Badge */}
                 <div className="absolute top-3 right-3">
                   <Badge variant="secondary" className="bg-black/70 text-white border-0">
                     {bundle.contentItems.length} items
@@ -313,17 +321,31 @@ export default function PremiumContentSection({
 
               <CardContent className="p-4 bg-gradient-to-br from-zinc-900/90 via-zinc-900/95 to-black/90 border-t border-zinc-800/50 backdrop-blur-sm">
                 <div className="space-y-3">
-                  {/* Title and Description */}
                   <div className="space-y-1">
                     <h3 className="font-semibold text-white text-base mb-1 line-clamp-1 tracking-tight">
                       {bundle.title}
                     </h3>
                     {bundle.description && (
-                      <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed">{bundle.description}</p>
+                      <div className="text-xs text-zinc-400 leading-relaxed">
+                        {shouldTruncateDescription(bundle.description) ? (
+                          <div>
+                            <p className={expandedDescriptions.has(bundle.id) ? "" : "line-clamp-2"}>
+                              {bundle.description}
+                            </p>
+                            <button
+                              onClick={() => toggleDescription(bundle.id)}
+                              className="text-zinc-300 hover:text-white transition-colors mt-1 text-xs font-medium"
+                            >
+                              {expandedDescriptions.has(bundle.id) ? "Show less" : "Show more"}
+                            </button>
+                          </div>
+                        ) : (
+                          <p>{bundle.description}</p>
+                        )}
+                      </div>
                     )}
                   </div>
 
-                  {/* Price and Purchase */}
                   <div className="flex items-center justify-between pt-1">
                     <div className="flex items-center gap-1">
                       <span className="text-2xl font-light text-white tracking-tight">${bundle.price.toFixed(2)}</span>
