@@ -12,6 +12,8 @@ import { UnlockButton } from "@/components/unlock-button"
 import { doc, updateDoc, increment } from "firebase/firestore"
 import { useToast } from "@/hooks/use-toast"
 import { useDownloadLimit } from "@/contexts/download-limit-context"
+import ImageCard from "@/components/image-card"
+import AudioCard from "@/components/audio-card"
 
 interface CreatorData {
   uid: string
@@ -350,7 +352,72 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
   )
 }
 
+const detectContentType = (fileUrl: string, mimeType?: string): "video" | "audio" | "image" => {
+  // First check MIME type if available
+  if (mimeType) {
+    if (mimeType.startsWith("video/")) return "video"
+    if (mimeType.startsWith("audio/")) return "audio"
+    if (mimeType.startsWith("image/")) return "image"
+  }
+
+  // Fallback to file extension detection
+  const extension = fileUrl.split(".").pop()?.toLowerCase()
+
+  // Video extensions
+  if (["mp4", "mov", "avi", "mkv", "webm", "m4v"].includes(extension || "")) {
+    return "video"
+  }
+
+  // Audio extensions
+  if (["mp3", "wav", "flac", "aac", "m4a", "ogg", "wma"].includes(extension || "")) {
+    return "audio"
+  }
+
+  // Image extensions
+  if (["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp"].includes(extension || "")) {
+    return "image"
+  }
+
+  // Default to video for unknown types
+  return "video"
+}
+
 function ContentCard({ item }: { item: ContentItem }) {
+  const contentType = detectContentType(item.fileUrl, item.type as string)
+
+  const transformedItem = {
+    id: item.id,
+    title: item.title,
+    fileUrl: item.fileUrl,
+    thumbnailUrl: item.thumbnailUrl,
+    creatorName: "", // Not available in current data structure
+    uid: "", // Not available in current data structure
+    duration: item.duration ? Number.parseInt(item.duration) : undefined,
+    size: 0, // Not available in current data structure
+  }
+
+  switch (contentType) {
+    case "image":
+      return (
+        <div className="w-full max-w-[180px] sm:max-w-[200px]">
+          <ImageCard image={transformedItem} className="w-full" />
+        </div>
+      )
+
+    case "audio":
+      return (
+        <div className="w-full max-w-[180px] sm:max-w-[200px]">
+          <AudioCard audio={transformedItem} className="w-full" />
+        </div>
+      )
+
+    case "video":
+    default:
+      return <VideoContentCard item={item} />
+  }
+}
+
+function VideoContentCard({ item }: { item: ContentItem }) {
   const [user] = useAuthState(auth)
   const [isHovered, setIsHovered] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -362,7 +429,6 @@ function ContentCard({ item }: { item: ContentItem }) {
   const { toast } = useToast()
   const { hasReachedLimit, isProUser, forceRefresh } = useDownloadLimit()
 
-  // Create proxied video URL to bypass CORS
   const getProxiedVideoUrl = (originalUrl: string) => {
     if (!originalUrl) return ""
     return `/api/proxy-video?url=${encodeURIComponent(originalUrl)}`
@@ -378,22 +444,18 @@ function ContentCard({ item }: { item: ContentItem }) {
     thumbnailUrl: item.thumbnailUrl,
   })
 
-  // Record a download in Firestore (same logic as VimeoCard)
   const recordDownload = async () => {
     if (!user) return { success: false, message: "User not authenticated" }
 
-    // Creator Pro users don't need to track downloads but we still record for analytics
     if (isProUser) return { success: true }
 
     try {
       const userDocRef = doc(db, "users", user.uid)
 
-      // Increment download count
       await updateDoc(userDocRef, {
         downloads: increment(1),
       })
 
-      // Force refresh the global limit status
       forceRefresh()
 
       return { success: true }
@@ -406,31 +468,24 @@ function ContentCard({ item }: { item: ContentItem }) {
     }
   }
 
-  // Direct download function for desktop
   const startDirectDownload = async (url: string, filename: string) => {
     try {
-      // Fetch the file
       const response = await fetch(url)
       if (!response.ok) throw new Error("Network response was not ok")
 
-      // Get the blob
       const blob = await response.blob()
 
-      // Create object URL
       const objectUrl = URL.createObjectURL(blob)
 
-      // Create anchor element for download
       const link = document.createElement("a")
       link.href = objectUrl
       link.download = filename
       link.style.display = "none"
 
-      // Append to body, click, and remove
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
 
-      // Clean up
       setTimeout(() => {
         URL.revokeObjectURL(objectUrl)
       }, 100)
@@ -442,7 +497,6 @@ function ContentCard({ item }: { item: ContentItem }) {
     }
   }
 
-  // Load video metadata and show first frame
   useEffect(() => {
     const videoElement = videoRef.current
     if (!videoElement || !proxiedVideoUrl) return
@@ -451,7 +505,6 @@ function ContentCard({ item }: { item: ContentItem }) {
       console.log("✅ Video metadata loaded for:", item.title)
       setVideoLoaded(true)
       setVideoError(false)
-      // Seek to first frame to show video immediately
       videoElement.currentTime = 0.1
     }
 
@@ -476,7 +529,6 @@ function ContentCard({ item }: { item: ContentItem }) {
     videoElement.addEventListener("error", handleError)
     videoElement.addEventListener("canplay", handleCanPlay)
 
-    // Start loading the video
     videoElement.load()
 
     return () => {
@@ -503,7 +555,6 @@ function ContentCard({ item }: { item: ContentItem }) {
       videoRef.current.currentTime = 0.1
       setIsPlaying(false)
     } else {
-      // Pause all other videos first
       document.querySelectorAll("video").forEach((v) => {
         if (v !== videoRef.current) {
           v.pause()
@@ -542,13 +593,11 @@ function ContentCard({ item }: { item: ContentItem }) {
     e.preventDefault()
     e.stopPropagation()
 
-    // Prevent multiple clicks
     if (isDownloading) return
 
     setIsDownloading(true)
 
     try {
-      // 1. Basic authentication check
       if (!user) {
         toast({
           title: "Authentication Required",
@@ -558,7 +607,6 @@ function ContentCard({ item }: { item: ContentItem }) {
         return
       }
 
-      // 2. Check if download link exists
       if (!item.fileUrl) {
         toast({
           title: "Download Error",
@@ -568,7 +616,6 @@ function ContentCard({ item }: { item: ContentItem }) {
         return
       }
 
-      // 3. CRITICAL: Check if user has reached download limit BEFORE downloading
       if (hasReachedLimit && !isProUser) {
         toast({
           title: "Download Limit Reached",
@@ -579,7 +626,6 @@ function ContentCard({ item }: { item: ContentItem }) {
         return
       }
 
-      // 4. Record the download for tracking purposes
       const result = await recordDownload()
       if (!result.success && !isProUser) {
         toast({
@@ -590,14 +636,11 @@ function ContentCard({ item }: { item: ContentItem }) {
         return
       }
 
-      // 5. Trigger the actual download
       const filename = `${item.title?.replace(/[^\w\s]/gi, "") || "video"}.mp4`
 
-      // Try direct download first
       const success = await startDirectDownload(proxiedVideoUrl, filename)
 
       if (!success) {
-        // Fallback to traditional method if direct download fails
         const link = document.createElement("a")
         link.href = proxiedVideoUrl
         link.download = filename
@@ -609,7 +652,6 @@ function ContentCard({ item }: { item: ContentItem }) {
         document.body.removeChild(link)
       }
 
-      // Show success toast
       toast({
         title: "Download Started",
         description: "Your video is downloading",
@@ -631,7 +673,6 @@ function ContentCard({ item }: { item: ContentItem }) {
     setThumbnailError(true)
   }
 
-  // Update state when video plays/pauses
   useEffect(() => {
     const videoElement = videoRef.current
     if (!videoElement) return
@@ -656,13 +697,11 @@ function ContentCard({ item }: { item: ContentItem }) {
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {/* 9:16 aspect ratio video container - larger on mobile */}
       <div
         className={`relative aspect-[9/16] bg-zinc-900 rounded-lg overflow-hidden mb-2 transition-all duration-300 ${
           isHovered ? "border border-white/50" : "border border-transparent"
         }`}
       >
-        {/* Video element */}
         {proxiedVideoUrl && !videoError ? (
           <video
             ref={videoRef}
@@ -679,7 +718,6 @@ function ContentCard({ item }: { item: ContentItem }) {
           </video>
         ) : null}
 
-        {/* Loading state or fallback */}
         {(!videoLoaded || videoError) && (
           <div className="absolute inset-0 bg-zinc-800 flex items-center justify-center">
             {!videoError ? (
@@ -696,7 +734,6 @@ function ContentCard({ item }: { item: ContentItem }) {
           </div>
         )}
 
-        {/* Play/Pause overlay */}
         <div
           className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-200 ${
             isHovered || !isPlaying ? "opacity-100" : "opacity-0"
@@ -716,7 +753,6 @@ function ContentCard({ item }: { item: ContentItem }) {
           </button>
         </div>
 
-        {/* Download button - bottom right corner, shows lock if limit reached */}
         {proxiedVideoUrl && !videoError && videoLoaded && (
           <button
             onClick={handleDownload}
@@ -738,7 +774,6 @@ function ContentCard({ item }: { item: ContentItem }) {
         )}
       </div>
 
-      {/* Video info - only title, no view count */}
       <div className="space-y-1">
         <h3 className="text-white text-xs sm:text-sm font-medium line-clamp-2 leading-tight" title={item.title}>
           {item.title}
@@ -774,7 +809,6 @@ function BundleCard({ item, user, creatorId }: { item: ContentItem; user: any; c
     setImageError(false)
   }
 
-  // Safe price formatting with fallback - moved inside component
   const formatPrice = (price: number | undefined | null): string => {
     console.log("🔢 Formatting price:", price, typeof price)
     if (typeof price === "number" && !isNaN(price) && isFinite(price)) {
@@ -783,13 +817,11 @@ function BundleCard({ item, user, creatorId }: { item: ContentItem; user: any; c
     return "0.00"
   }
 
-  // Get the formatted price
   const formattedPrice = formatPrice(item.price)
   console.log("💰 Final formatted price:", formattedPrice)
 
   return (
     <div className="bg-zinc-900 rounded-lg overflow-hidden border border-zinc-700/30 hover:border-zinc-600/40 transition-all duration-300 w-full max-w-[340px] sm:max-w-[320px] relative">
-      {/* Thumbnail Section - Always square aspect ratio */}
       <div
         className="relative aspect-square bg-zinc-800 overflow-hidden"
         onMouseEnter={() => setIsThumbnailHovered(true)}
@@ -809,14 +841,12 @@ function BundleCard({ item, user, creatorId }: { item: ContentItem; user: any; c
           </div>
         )}
 
-        {/* Content count badge */}
         <div className="absolute top-2 right-2 sm:top-4 sm:right-4 bg-black/80 backdrop-blur-sm px-2 py-1 sm:px-3 sm:py-1.5 rounded-full text-xs text-white font-semibold">
           {item.contentCount || 0} items
         </div>
       </div>
 
       <div className="p-3 sm:p-4 space-y-2 bg-gradient-to-br from-black via-black to-zinc-800/30 relative">
-        {/* Title and Description */}
         <div className="space-y-1">
           <h3 className="text-white text-base sm:text-lg font-bold line-clamp-1" title={item.title}>
             {item.title}
@@ -824,7 +854,6 @@ function BundleCard({ item, user, creatorId }: { item: ContentItem; user: any; c
           <p className="text-zinc-400 text-sm line-clamp-1">{item.description || "Premium content bundle"}</p>
         </div>
 
-        {/* Price and Button Row */}
         <div className="flex items-center justify-between pt-1">
           <span className="text-white text-xl sm:text-2xl font-light">${formattedPrice}</span>
 
