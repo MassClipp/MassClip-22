@@ -396,6 +396,16 @@ function ContentCard({ item }: { item: ContentItem }) {
     size: 0, // Not available in current data structure
   }
 
+  if (contentType === "image") {
+    console.log("[v0] ImageCard data:", {
+      id: transformedItem.id,
+      title: transformedItem.title,
+      fileUrl: transformedItem.fileUrl,
+      thumbnailUrl: transformedItem.thumbnailUrl,
+      contentType,
+    })
+  }
+
   switch (contentType) {
     case "image":
       return (
