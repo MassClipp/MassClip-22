@@ -47,6 +47,12 @@ export default function ImageCard({ image, className }: ImageCardProps) {
   const { toast } = useToast()
   const { hasReachedLimit, isProUser, forceRefresh } = useDownloadLimit()
 
+  const getProxiedImageUrl = (url: string) => {
+    if (!url) return ""
+    // Use image proxy to ensure proper MIME type headers
+    return `/api/proxy-image?url=${encodeURIComponent(url)}`
+  }
+
   useEffect(() => {
     const checkIfFavorite = async () => {
       if (!user || !image.id) {
@@ -186,7 +192,7 @@ export default function ImageCard({ image, className }: ImageCardProps) {
 
       const filename = `${image.title?.replace(/[^\w\s]/gi, "") || "image"}.jpg`
       const downloadLink = document.createElement("a")
-      downloadLink.href = image.fileUrl
+      downloadLink.href = getProxiedImageUrl(image.fileUrl)
       downloadLink.download = filename
       downloadLink.style.display = "none"
       document.body.appendChild(downloadLink)
@@ -224,7 +230,7 @@ export default function ImageCard({ image, className }: ImageCardProps) {
         {/* Image or fallback */}
         {!imageError && (image.thumbnailUrl || image.fileUrl) ? (
           <img
-            src={image.thumbnailUrl || image.fileUrl}
+            src={getProxiedImageUrl(image.thumbnailUrl || image.fileUrl)}
             alt={image.title || "Image"}
             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
             onError={() => setImageError(true)}
