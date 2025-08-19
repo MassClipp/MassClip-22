@@ -385,6 +385,15 @@ const detectContentType = (fileUrl: string, mimeType?: string): "video" | "audio
 function ContentCard({ item }: { item: ContentItem }) {
   const contentType = detectContentType(item.fileUrl, item.type as string)
 
+  console.log("[v0] ContentCard - Raw item data:", {
+    id: item.id,
+    title: item.title,
+    fileUrl: item.fileUrl,
+    thumbnailUrl: item.thumbnailUrl,
+    type: item.type,
+    contentType,
+  })
+
   const transformedItem = {
     id: item.id,
     title: item.title,
@@ -404,6 +413,11 @@ function ContentCard({ item }: { item: ContentItem }) {
       thumbnailUrl: transformedItem.thumbnailUrl,
       contentType,
     })
+    console.log("[v0] ImageCard - Is fileUrl a placeholder?", transformedItem.fileUrl?.includes("placeholder"))
+    console.log(
+      "[v0] ImageCard - Is thumbnailUrl a placeholder?",
+      transformedItem.thumbnailUrl?.includes("placeholder"),
+    )
   }
 
   switch (contentType) {
