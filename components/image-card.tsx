@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState, useEffect } from "react"
-import { Download, Heart, Lock } from "lucide-react"
+import { Download, Heart, Lock, ImageIcon } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
 import { trackFirestoreWrite } from "@/lib/firestore-optimizer"
@@ -42,22 +42,12 @@ export default function ImageCard({ image, className }: ImageCardProps) {
   const [isFavorite, setIsFavorite] = useState(false)
   const [isCheckingFavorite, setIsCheckingFavorite] = useState(true)
   const [hasTrackedView, setHasTrackedView] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
 
   const { user } = useAuth()
   const { toast } = useToast()
   const { hasReachedLimit, isProUser, forceRefresh } = useDownloadLimit()
 
   useEffect(() => {
-    console.log("[v0] ImageCard props:", {
-      id: image.id,
-      title: image.title,
-      fileUrl: image.fileUrl,
-      thumbnailUrl: image.thumbnailUrl,
-      hasFileUrl: !!image.fileUrl,
-      hasThumbnailUrl: !!image.thumbnailUrl,
-    })
-
     const checkIfFavorite = async () => {
       if (!user || !image.id) {
         setIsCheckingFavorite(false)
@@ -68,7 +58,6 @@ export default function ImageCard({ image, className }: ImageCardProps) {
         const favoritesRef = collection(db, `users/${user.uid}/favorites`)
         const q = query(favoritesRef, where("videoId", "==", image.id))
         const querySnapshot = await getDocs(q)
-
         setIsFavorite(!querySnapshot.empty)
       } catch (err) {
         console.error("Error checking favorite status:", err)
@@ -89,7 +78,6 @@ export default function ImageCard({ image, className }: ImageCardProps) {
         video: image,
         viewedAt: serverTimestamp(),
       })
-
       trackFirestoreWrite("ImageCard-trackView", 1)
       setHasTrackedView(true)
     } catch (err) {
@@ -99,23 +87,16 @@ export default function ImageCard({ image, className }: ImageCardProps) {
 
   const recordDownload = async () => {
     if (!user) return { success: false, message: "User not authenticated" }
-
     if (isProUser) return { success: true }
 
     try {
       const userDocRef = doc(db, "users", user.uid)
-      await updateDoc(userDocRef, {
-        downloads: increment(1),
-      })
-
+      await updateDoc(userDocRef, { downloads: increment(1) })
       forceRefresh()
       return { success: true }
     } catch (err) {
       console.error("Error recording download:", err)
-      return {
-        success: false,
-        message: "Failed to record download. Please try again.",
-      }
+      return { success: false, message: "Failed to record download. Please try again." }
     }
   }
 
@@ -137,36 +118,22 @@ export default function ImageCard({ image, className }: ImageCardProps) {
         const favoritesRef = collection(db, `users/${user.uid}/favorites`)
         const q = query(favoritesRef, where("videoId", "==", image.id))
         const querySnapshot = await getDocs(q)
-
         querySnapshot.forEach(async (document) => {
           await deleteDoc(doc(db, `users/${user.uid}/favorites`, document.id))
         })
-
-        toast({
-          title: "Removed from favorites",
-          description: "Image removed from your favorites",
-        })
+        toast({ title: "Removed from favorites", description: "Image removed from your favorites" })
       } else {
         await addDoc(collection(db, `users/${user.uid}/favorites`), {
           videoId: image.id,
           video: image,
           createdAt: serverTimestamp(),
         })
-
-        toast({
-          title: "Added to favorites",
-          description: "Image saved to your favorites",
-        })
+        toast({ title: "Added to favorites", description: "Image saved to your favorites" })
       }
-
       setIsFavorite(!isFavorite)
     } catch (err) {
       console.error("Error toggling favorite:", err)
-      toast({
-        title: "Error",
-        description: "Failed to update favorites",
-        variant: "destructive",
-      })
+      toast({ title: "Error", description: "Failed to update favorites", variant: "destructive" })
     }
   }
 
@@ -226,10 +193,7 @@ export default function ImageCard({ image, className }: ImageCardProps) {
       downloadLink.click()
       document.body.removeChild(downloadLink)
 
-      toast({
-        title: "Download Started",
-        description: "Your image is downloading",
-      })
+      toast({ title: "Download Started", description: "Your image is downloading" })
     } catch (error) {
       console.error("Download failed:", error)
       toast({
@@ -246,16 +210,6 @@ export default function ImageCard({ image, className }: ImageCardProps) {
     trackImageView()
   }
 
-  const getImageSrc = () => {
-    if (imageError) {
-      console.log("[v0] Using placeholder due to image error")
-      return `/placeholder.svg?height=640&width=360&query=${encodeURIComponent(image.title || "Image")}`
-    }
-    const src = image.thumbnailUrl || image.fileUrl
-    console.log("[v0] Using image source:", src)
-    return src
-  }
-
   return (
     <div
       className={cn("flex-shrink-0 w-[280px]", className)}
@@ -264,48 +218,25 @@ export default function ImageCard({ image, className }: ImageCardProps) {
       onClick={handleImageClick}
     >
       <div className="relative aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900 group cursor-pointer">
+        {/* White border on hover */}
         <div className="absolute inset-0 border border-white/0 group-hover:border-white/40 rounded-lg transition-all duration-200 z-20"></div>
 
-        {isLoading && !imageError && (
-          <div className="absolute inset-0 flex items-center justify-center bg-zinc-800">
-            <div className="animate-pulse text-zinc-400 text-sm">Loading...</div>
+        {/* Image or fallback */}
+        {!imageError && (image.thumbnailUrl || image.fileUrl) ? (
+          <img
+            src={image.thumbnailUrl || image.fileUrl}
+            alt={image.title || "Image"}
+            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+            onError={() => setImageError(true)}
+            onLoad={() => setImageError(false)}
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center bg-zinc-800">
+            <ImageIcon className="h-12 w-12 text-zinc-600" />
           </div>
         )}
 
-        <img
-          src={getImageSrc() || "/placeholder.svg"}
-          alt={image.title || "Image"}
-          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-          crossOrigin="anonymous"
-          onError={(e) => {
-            console.error("[v0] Image failed to load:", {
-              src: getImageSrc(),
-              fileUrl: image.fileUrl,
-              thumbnailUrl: image.thumbnailUrl,
-              error: e,
-              naturalWidth: (e.target as HTMLImageElement).naturalWidth,
-              naturalHeight: (e.target as HTMLImageElement).naturalHeight,
-            })
-            setImageError(true)
-            setIsLoading(false)
-          }}
-          onLoad={(e) => {
-            const img = e.target as HTMLImageElement
-            console.log("[v0] Image loaded successfully:", {
-              src: getImageSrc(),
-              naturalWidth: img.naturalWidth,
-              naturalHeight: img.naturalHeight,
-              complete: img.complete,
-            })
-            setImageError(false)
-            setIsLoading(false)
-          }}
-          style={{
-            objectFit: "cover",
-            objectPosition: "center",
-          }}
-        />
-
+        {/* Hover controls */}
         <div
           className={cn(
             "absolute bottom-2 left-2 right-2 flex items-center justify-between transition-opacity duration-300 z-30",
@@ -338,6 +269,7 @@ export default function ImageCard({ image, className }: ImageCardProps) {
         </div>
       </div>
 
+      {/* Title and creator */}
       <div className="mt-2 space-y-1">
         <h3 className="font-medium text-white text-sm line-clamp-2 leading-tight" title={image.title}>
           {image.title || "Untitled Image"}
