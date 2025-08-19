@@ -243,6 +243,13 @@ export default function ImageCard({ image, className }: ImageCardProps) {
     trackImageView()
   }
 
+  const getImageSrc = () => {
+    if (imageError) {
+      return `/placeholder.svg?height=640&width=360&query=${encodeURIComponent(image.title || "Image")}`
+    }
+    return image.thumbnailUrl || image.fileUrl
+  }
+
   return (
     <div
       className={cn("flex-shrink-0 w-[280px]", className)}
@@ -251,19 +258,22 @@ export default function ImageCard({ image, className }: ImageCardProps) {
       onClick={handleImageClick}
     >
       {/* Image Card */}
-      <div className="relative aspect-square overflow-hidden rounded-lg bg-zinc-900 group cursor-pointer">
+      <div className="relative aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900 group cursor-pointer">
         <div className="absolute inset-0 border border-white/0 group-hover:border-white/40 rounded-lg transition-all duration-200 z-20"></div>
 
         {/* Image */}
         <img
-          src={
-            imageError
-              ? `/placeholder.svg?height=400&width=400&query=${encodeURIComponent(image.title)}`
-              : image.thumbnailUrl || image.fileUrl || "/placeholder.svg?height=400&width=400"
-          }
-          alt={image.title}
+          src={getImageSrc() || "/placeholder.svg"}
+          alt={image.title || "Image"}
           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-          onError={() => setImageError(true)}
+          onError={() => {
+            console.log("[v0] Image failed to load:", image.fileUrl)
+            setImageError(true)
+          }}
+          onLoad={() => {
+            console.log("[v0] Image loaded successfully:", image.fileUrl)
+            setImageError(false)
+          }}
         />
 
         {/* Dark overlay on hover */}
