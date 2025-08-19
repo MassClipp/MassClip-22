@@ -50,7 +50,10 @@ export default function ImageCard({ image, className }: ImageCardProps) {
   const getProxiedImageUrl = (url: string) => {
     if (!url) return ""
     // Use image proxy to ensure proper MIME type headers
-    return `/api/proxy-image?url=${encodeURIComponent(url)}`
+    const proxiedUrl = `/api/proxy-image?url=${encodeURIComponent(url)}`
+    console.log("[v0] ImageCard - Original URL:", url)
+    console.log("[v0] ImageCard - Proxied URL:", proxiedUrl)
+    return proxiedUrl
   }
 
   useEffect(() => {
@@ -233,8 +236,14 @@ export default function ImageCard({ image, className }: ImageCardProps) {
             src={getProxiedImageUrl(image.thumbnailUrl || image.fileUrl)}
             alt={image.title || "Image"}
             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-            onError={() => setImageError(true)}
-            onLoad={() => setImageError(false)}
+            onError={() => {
+              console.log("[v0] ImageCard - Image failed to load:", image.thumbnailUrl || image.fileUrl)
+              setImageError(true)
+            }}
+            onLoad={() => {
+              console.log("[v0] ImageCard - Image loaded successfully:", image.thumbnailUrl || image.fileUrl)
+              setImageError(false)
+            }}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-zinc-800">
