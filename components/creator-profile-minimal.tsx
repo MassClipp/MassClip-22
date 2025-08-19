@@ -180,6 +180,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
       const contentType = detectContentType(item.fileUrl, item.type as string)
       types.add(contentType)
     })
+    console.log("[v0] Available content types:", Array.from(types)) // Added debug logging for content types
     return Array.from(types)
   }
 
@@ -198,6 +199,15 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
   const filteredContent = getFilteredContent()
   const availableTypes = activeTab === "free" ? getAvailableContentTypes(freeContent) : []
   const showContentTypeFilter = activeTab === "free" && availableTypes.length > 1
+
+  console.log("[v0] Content filter state:", {
+    // Added debug logging for filter state
+    activeTab,
+    availableTypes,
+    showContentTypeFilter,
+    freeContentLength: freeContent.length,
+    contentTypeFilter,
+  })
 
   useEffect(() => {
     if (activeTab === "premium") {
@@ -334,14 +344,15 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
                   <select
                     value={contentTypeFilter}
                     onChange={(e) => setContentTypeFilter(e.target.value as "all" | "video" | "audio" | "image")}
-                    className="appearance-none bg-zinc-800/50 border border-zinc-600/50 text-white text-xs px-2 py-1 pr-6 rounded focus:outline-none focus:border-zinc-400 hover:border-zinc-500 transition-colors"
+                    className="appearance-none bg-zinc-700 border border-zinc-500 text-white text-xs px-3 py-2 pr-8 rounded-md focus:outline-none focus:border-white focus:bg-zinc-600 hover:border-zinc-400 hover:bg-zinc-600 transition-all duration-200 min-w-[80px]" // Improved styling for better visibility
                   >
                     <option value="all">All</option>
                     {availableTypes.includes("video") && <option value="video">Videos</option>}
                     {availableTypes.includes("audio") && <option value="audio">Audio</option>}
                     {availableTypes.includes("image") && <option value="image">Images</option>}
                   </select>
-                  <ChevronDown className="absolute right-1 top-1/2 transform -translate-y-1/2 w-3 h-3 text-zinc-400 pointer-events-none" />
+                  <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-zinc-300 pointer-events-none" />{" "}
+                  {/* Improved chevron positioning and color */}
                 </div>
               )}
             </div>
