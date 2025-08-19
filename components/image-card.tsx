@@ -49,6 +49,15 @@ export default function ImageCard({ image, className }: ImageCardProps) {
   const { hasReachedLimit, isProUser, forceRefresh } = useDownloadLimit()
 
   useEffect(() => {
+    console.log("[v0] ImageCard props:", {
+      id: image.id,
+      title: image.title,
+      fileUrl: image.fileUrl,
+      thumbnailUrl: image.thumbnailUrl,
+      hasFileUrl: !!image.fileUrl,
+      hasThumbnailUrl: !!image.thumbnailUrl,
+    })
+
     const checkIfFavorite = async () => {
       if (!user || !image.id) {
         setIsCheckingFavorite(false)
@@ -239,9 +248,12 @@ export default function ImageCard({ image, className }: ImageCardProps) {
 
   const getImageSrc = () => {
     if (imageError) {
+      console.log("[v0] Using placeholder due to image error")
       return `/placeholder.svg?height=640&width=360&query=${encodeURIComponent(image.title || "Image")}`
     }
-    return image.thumbnailUrl || image.fileUrl
+    const src = image.thumbnailUrl || image.fileUrl
+    console.log("[v0] Using image source:", src)
+    return src
   }
 
   return (
@@ -266,12 +278,25 @@ export default function ImageCard({ image, className }: ImageCardProps) {
           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
           crossOrigin="anonymous"
           onError={(e) => {
-            console.log("[v0] Image failed to load:", image.fileUrl)
+            console.error("[v0] Image failed to load:", {
+              src: getImageSrc(),
+              fileUrl: image.fileUrl,
+              thumbnailUrl: image.thumbnailUrl,
+              error: e,
+              naturalWidth: (e.target as HTMLImageElement).naturalWidth,
+              naturalHeight: (e.target as HTMLImageElement).naturalHeight,
+            })
             setImageError(true)
             setIsLoading(false)
           }}
-          onLoad={() => {
-            console.log("[v0] Image loaded successfully:", getImageSrc())
+          onLoad={(e) => {
+            const img = e.target as HTMLImageElement
+            console.log("[v0] Image loaded successfully:", {
+              src: getImageSrc(),
+              naturalWidth: img.naturalWidth,
+              naturalHeight: img.naturalHeight,
+              complete: img.complete,
+            })
             setImageError(false)
             setIsLoading(false)
           }}
