@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -328,6 +327,22 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
         {/* Tabs with underline style and content type filter */}
         <div className="mb-6 sm:mb-8">
           <div className="flex items-center justify-center sm:justify-start gap-6 sm:gap-8 border-b border-zinc-800/50">
+            {showContentTypeFilter && (
+              <div className="relative">
+                <select
+                  value={contentTypeFilter}
+                  onChange={(e) => setContentTypeFilter(e.target.value as "all" | "video" | "audio" | "image")}
+                  className="appearance-none bg-zinc-700 border border-zinc-500 text-white text-xs px-2 py-2 pr-6 rounded-md focus:outline-none focus:border-white focus:bg-zinc-600 hover:border-zinc-400 hover:bg-zinc-600 transition-all duration-200 w-8 h-8 flex items-center justify-center"
+                >
+                  <option value="all">🎯</option>
+                  {availableTypes.includes("video") && <option value="video">▶️</option>}
+                  {availableTypes.includes("audio") && <option value="audio">🎵</option>}
+                  {availableTypes.includes("image") && <option value="image">🖼️</option>}
+                </select>
+                <ChevronDown className="absolute right-1 top-1/2 transform -translate-y-1/2 w-3 h-3 text-zinc-300 pointer-events-none" />
+              </div>
+            )}
+
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setActiveTab("free")}
@@ -338,23 +353,6 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
                 Free Content
                 {activeTab === "free" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
               </button>
-
-              {showContentTypeFilter && (
-                <div className="relative">
-                  <select
-                    value={contentTypeFilter}
-                    onChange={(e) => setContentTypeFilter(e.target.value as "all" | "video" | "audio" | "image")}
-                    className="appearance-none bg-zinc-700 border border-zinc-500 text-white text-xs px-3 py-2 pr-8 rounded-md focus:outline-none focus:border-white focus:bg-zinc-600 hover:border-zinc-400 hover:bg-zinc-600 transition-all duration-200 min-w-[80px]" // Improved styling for better visibility
-                  >
-                    <option value="all">All</option>
-                    {availableTypes.includes("video") && <option value="video">Videos</option>}
-                    {availableTypes.includes("audio") && <option value="audio">Audio</option>}
-                    {availableTypes.includes("image") && <option value="image">Images</option>}
-                  </select>
-                  <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-zinc-300 pointer-events-none" />{" "}
-                  {/* Improved chevron positioning and color */}
-                </div>
-              )}
             </div>
 
             <button
