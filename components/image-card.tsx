@@ -42,12 +42,12 @@ export default function ImageCard({ image, className }: ImageCardProps) {
   const [isFavorite, setIsFavorite] = useState(false)
   const [isCheckingFavorite, setIsCheckingFavorite] = useState(true)
   const [hasTrackedView, setHasTrackedView] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
 
   const { user } = useAuth()
   const { toast } = useToast()
   const { hasReachedLimit, isProUser, forceRefresh } = useDownloadLimit()
 
-  // Check if image is in favorites
   useEffect(() => {
     const checkIfFavorite = async () => {
       if (!user || !image.id) {
@@ -71,7 +71,6 @@ export default function ImageCard({ image, className }: ImageCardProps) {
     checkIfFavorite()
   }, [user, image.id])
 
-  // Track image view
   const trackImageView = async () => {
     if (!user || hasTrackedView || !image.id) return
 
@@ -89,7 +88,6 @@ export default function ImageCard({ image, className }: ImageCardProps) {
     }
   }
 
-  // Record download
   const recordDownload = async () => {
     if (!user) return { success: false, message: "User not authenticated" }
 
@@ -112,7 +110,6 @@ export default function ImageCard({ image, className }: ImageCardProps) {
     }
   }
 
-  // Toggle favorite
   const toggleFavorite = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
@@ -164,7 +161,6 @@ export default function ImageCard({ image, className }: ImageCardProps) {
     }
   }
 
-  // Handle download
   const handleDownload = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
@@ -200,7 +196,6 @@ export default function ImageCard({ image, className }: ImageCardProps) {
         return
       }
 
-      // Record download for non-pro users
       if (!isProUser) {
         const result = await recordDownload()
         if (!result.success) {
@@ -213,7 +208,6 @@ export default function ImageCard({ image, className }: ImageCardProps) {
         }
       }
 
-      // Download the file
       const filename = `${image.title?.replace(/[^\w\s]/gi, "") || "image"}.jpg`
       const downloadLink = document.createElement("a")
       downloadLink.href = image.fileUrl
@@ -247,7 +241,12 @@ export default function ImageCard({ image, className }: ImageCardProps) {
     if (imageError) {
       return `/placeholder.svg?height=640&width=360&query=${encodeURIComponent(image.title || "Image")}`
     }
-    return image.thumbnailUrl || image.fileUrl
+    const baseUrl = image.thumbnailUrl || image.fileUrl
+    if (baseUrl && baseUrl.includes("r2.dev")) {
+      const separator = baseUrl.includes("?") ? "&" : "?"
+      return `${baseUrl}${separator}response-content-type=image%2Fpng`
+    }
+    return baseUrl
   }
 
   return (
@@ -257,36 +256,50 @@ export default function ImageCard({ image, className }: ImageCardProps) {
       onMouseLeave={() => setIsHovered(false)}
       onClick={handleImageClick}
     >
-      {/* Image Card */}
       <div className="relative aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900 group cursor-pointer">
         <div className="absolute inset-0 border border-white/0 group-hover:border-white/40 rounded-lg transition-all duration-200 z-20"></div>
 
-        {/* Image */}
+        {isLoading && !imageError && (
+          <div className="absolute inset-0 flex items-center justify-center bg-zinc-800">
+            <div className="animate-pulse text-zinc-400 text-sm">Loading...</div>
+          </div>
+        )}
+
         <img
           src={getImageSrc() || "/placeholder.svg"}
           alt={image.title || "Image"}
           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-          onError={() => {
+          crossOrigin="anonymous"
+          onError={(e) => {
             console.log("[v0] Image failed to load:", image.fileUrl)
             setImageError(true)
+            setIsLoading(false)
+            const img = e.target as HTMLImageElement
+            if (!img.src.includes("response-content-type") && (image.thumbnailUrl || image.fileUrl)) {
+              const baseUrl = image.thumbnailUrl || image.fileUrl
+              if (baseUrl.includes("r2.dev")) {
+                const separator = baseUrl.includes("?") ? "&" : "?"
+                img.src = `${baseUrl}${separator}response-content-disposition=inline&response-content-type=image%2Fpng`
+              }
+            }
           }}
           onLoad={() => {
-            console.log("[v0] Image loaded successfully:", image.fileUrl)
+            console.log("[v0] Image loaded successfully:", getImageSrc())
             setImageError(false)
+            setIsLoading(false)
+          }}
+          style={{
+            objectFit: "cover",
+            objectPosition: "center",
           }}
         />
 
-        {/* Dark overlay on hover */}
-        <div className={cn("absolute inset-0 bg-black/0 transition-all duration-300", isHovered && "bg-black/20")} />
-
-        {/* Action buttons - only visible on hover */}
         <div
           className={cn(
             "absolute bottom-2 left-2 right-2 flex items-center justify-between transition-opacity duration-300 z-30",
             isHovered ? "opacity-100" : "opacity-0",
           )}
         >
-          {/* Favorite button */}
           <button
             onClick={toggleFavorite}
             className="bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300"
@@ -313,7 +326,6 @@ export default function ImageCard({ image, className }: ImageCardProps) {
         </div>
       </div>
 
-      {/* Image info */}
       <div className="mt-2 space-y-1">
         <h3 className="font-medium text-white text-sm line-clamp-2 leading-tight" title={image.title}>
           {image.title || "Untitled Image"}
