@@ -161,6 +161,29 @@ export default function ImageCard({ image, className }: ImageCardProps) {
     }
   }
 
+  const isPlaceholderUrl = (url: string | undefined): boolean => {
+    if (!url) return true
+    return url.includes("placeholder.svg") || url.includes("placeholder") || url.startsWith("/placeholder")
+  }
+
+  const getBestImageUrl = (): string => {
+    // Prioritize non-placeholder URLs
+    if (!isPlaceholderUrl(image.fileUrl)) {
+      console.log("[v0] Using fileUrl (non-placeholder):", image.fileUrl)
+      return image.fileUrl
+    }
+
+    if (!isPlaceholderUrl(image.thumbnailUrl)) {
+      console.log("[v0] Using thumbnailUrl (non-placeholder):", image.thumbnailUrl)
+      return image.thumbnailUrl || ""
+    }
+
+    // Fallback to any available URL if both are placeholders
+    const fallbackUrl = image.fileUrl || image.thumbnailUrl || ""
+    console.log("[v0] Using fallback URL:", fallbackUrl)
+    return fallbackUrl
+  }
+
   const handleDownload = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
@@ -178,7 +201,8 @@ export default function ImageCard({ image, className }: ImageCardProps) {
         return
       }
 
-      if (!image.fileUrl) {
+      const downloadUrl = getBestImageUrl()
+      if (!downloadUrl || isPlaceholderUrl(downloadUrl)) {
         toast({
           title: "Download Error",
           description: "No download link available for this image.",
@@ -210,7 +234,7 @@ export default function ImageCard({ image, className }: ImageCardProps) {
 
       const filename = `${image.title?.replace(/[^\w\s]/gi, "") || "image"}.jpg`
       const downloadLink = document.createElement("a")
-      downloadLink.href = image.fileUrl
+      downloadLink.href = downloadUrl
       downloadLink.download = filename
       downloadLink.style.display = "none"
       document.body.appendChild(downloadLink)
@@ -241,7 +265,8 @@ export default function ImageCard({ image, className }: ImageCardProps) {
     if (imageError) {
       return `/placeholder.svg?height=640&width=360&query=${encodeURIComponent(image.title || "Image")}`
     }
-    return image.thumbnailUrl || image.fileUrl
+
+    return getBestImageUrl()
   }
 
   return (
