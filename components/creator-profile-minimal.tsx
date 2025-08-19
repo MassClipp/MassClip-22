@@ -318,31 +318,34 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
         {/* Tabs with underline style and content type filter */}
         <div className="mb-6 sm:mb-8">
           <div className="flex items-center justify-center sm:justify-start gap-6 sm:gap-8 border-b border-zinc-800/50">
-            {showContentTypeFilter && (
-              <div className="relative">
-                <select
-                  value={contentTypeFilter}
-                  onChange={(e) => setContentTypeFilter(e.target.value as "all" | "video" | "audio" | "image")}
-                  className="appearance-none bg-zinc-900 border border-zinc-700 text-white text-xs sm:text-sm px-3 py-2 pr-8 rounded-md focus:outline-none focus:border-zinc-500 hover:border-zinc-600 transition-colors"
-                >
-                  <option value="all">All Content</option>
-                  {availableTypes.includes("video") && <option value="video">Videos</option>}
-                  {availableTypes.includes("audio") && <option value="audio">Audio</option>}
-                  {availableTypes.includes("image") && <option value="image">Images</option>}
-                </select>
-                <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-zinc-400 pointer-events-none" />
-              </div>
-            )}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setActiveTab("free")}
+                className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
+                  activeTab === "free" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
+                }`}
+              >
+                Free Content
+                {activeTab === "free" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
+              </button>
 
-            <button
-              onClick={() => setActiveTab("free")}
-              className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
-                activeTab === "free" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
-              }`}
-            >
-              Free Content
-              {activeTab === "free" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
-            </button>
+              {showContentTypeFilter && (
+                <div className="relative">
+                  <select
+                    value={contentTypeFilter}
+                    onChange={(e) => setContentTypeFilter(e.target.value as "all" | "video" | "audio" | "image")}
+                    className="appearance-none bg-zinc-800/50 border border-zinc-600/50 text-white text-xs px-2 py-1 pr-6 rounded focus:outline-none focus:border-zinc-400 hover:border-zinc-500 transition-colors"
+                  >
+                    <option value="all">All</option>
+                    {availableTypes.includes("video") && <option value="video">Videos</option>}
+                    {availableTypes.includes("audio") && <option value="audio">Audio</option>}
+                    {availableTypes.includes("image") && <option value="image">Images</option>}
+                  </select>
+                  <ChevronDown className="absolute right-1 top-1/2 transform -translate-y-1/2 w-3 h-3 text-zinc-400 pointer-events-none" />
+                </div>
+              )}
+            </div>
+
             <button
               onClick={() => setActiveTab("premium")}
               className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
