@@ -47,6 +47,35 @@ export default function ImageCard({ image, className }: ImageCardProps) {
   const { toast } = useToast()
   const { hasReachedLimit, isProUser, forceRefresh } = useDownloadLimit()
 
+  const isPlaceholderUrl = (url: string) => {
+    if (!url) return true
+    return url.includes("/placeholder.svg") || url.includes("placeholder")
+  }
+
+  const getBestImageUrl = () => {
+    const thumbnailIsPlaceholder = isPlaceholderUrl(image.thumbnailUrl || "")
+    const fileIsPlaceholder = isPlaceholderUrl(image.fileUrl || "")
+
+    console.log("[v0] ImageCard data:", {
+      id: image.id,
+      title: image.title,
+      fileUrl: image.fileUrl,
+      thumbnailUrl: image.thumbnailUrl,
+    })
+    console.log("[v0] ImageCard - Is fileUrl a placeholder?", fileIsPlaceholder)
+    console.log("[v0] ImageCard - Is thumbnailUrl a placeholder?", thumbnailIsPlaceholder)
+
+    // Prioritize non-placeholder URLs
+    if (!thumbnailIsPlaceholder && image.thumbnailUrl) {
+      return image.thumbnailUrl
+    }
+    if (!fileIsPlaceholder && image.fileUrl) {
+      return image.fileUrl
+    }
+    // Fallback to any available URL
+    return image.thumbnailUrl || image.fileUrl || ""
+  }
+
   const getProxiedImageUrl = (url: string) => {
     if (!url) return ""
     // Use image proxy to ensure proper MIME type headers
@@ -195,7 +224,7 @@ export default function ImageCard({ image, className }: ImageCardProps) {
 
       const filename = `${image.title?.replace(/[^\w\s]/gi, "") || "image"}.jpg`
       const downloadLink = document.createElement("a")
-      downloadLink.href = getProxiedImageUrl(image.fileUrl)
+      downloadLink.href = getProxiedImageUrl(getBestImageUrl())
       downloadLink.download = filename
       downloadLink.style.display = "none"
       document.body.appendChild(downloadLink)
@@ -233,15 +262,15 @@ export default function ImageCard({ image, className }: ImageCardProps) {
         {/* Image or fallback */}
         {!imageError && (image.thumbnailUrl || image.fileUrl) ? (
           <img
-            src={getProxiedImageUrl(image.thumbnailUrl || image.fileUrl)}
+            src={getProxiedImageUrl(getBestImageUrl()) || "/placeholder.svg"}
             alt={image.title || "Image"}
             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
             onError={() => {
-              console.log("[v0] ImageCard - Image failed to load:", image.thumbnailUrl || image.fileUrl)
+              console.log("[v0] ImageCard - Image failed to load:", getBestImageUrl())
               setImageError(true)
             }}
             onLoad={() => {
-              console.log("[v0] ImageCard - Image loaded successfully:", image.thumbnailUrl || image.fileUrl)
+              console.log("[v0] ImageCard - Image loaded successfully:", getBestImageUrl())
               setImageError(false)
             }}
           />
