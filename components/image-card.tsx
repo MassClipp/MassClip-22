@@ -241,12 +241,7 @@ export default function ImageCard({ image, className }: ImageCardProps) {
     if (imageError) {
       return `/placeholder.svg?height=640&width=360&query=${encodeURIComponent(image.title || "Image")}`
     }
-    const baseUrl = image.thumbnailUrl || image.fileUrl
-    if (baseUrl && baseUrl.includes("r2.dev")) {
-      const separator = baseUrl.includes("?") ? "&" : "?"
-      return `${baseUrl}${separator}response-content-type=image%2Fpng`
-    }
-    return baseUrl
+    return image.thumbnailUrl || image.fileUrl
   }
 
   return (
@@ -274,14 +269,6 @@ export default function ImageCard({ image, className }: ImageCardProps) {
             console.log("[v0] Image failed to load:", image.fileUrl)
             setImageError(true)
             setIsLoading(false)
-            const img = e.target as HTMLImageElement
-            if (!img.src.includes("response-content-type") && (image.thumbnailUrl || image.fileUrl)) {
-              const baseUrl = image.thumbnailUrl || image.fileUrl
-              if (baseUrl.includes("r2.dev")) {
-                const separator = baseUrl.includes("?") ? "&" : "?"
-                img.src = `${baseUrl}${separator}response-content-disposition=inline&response-content-type=image%2Fpng`
-              }
-            }
           }}
           onLoad={() => {
             console.log("[v0] Image loaded successfully:", getImageSrc())
