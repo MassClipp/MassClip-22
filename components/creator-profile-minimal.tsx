@@ -5,7 +5,7 @@ import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Share2, Play, Calendar, Users, Heart, Check, Package, Download, Pause, Lock } from "lucide-react"
+import { Share2, Play, Calendar, Users, Heart, Check, Package, Download, Pause, Lock, ChevronDown } from "lucide-react"
 import { useAuthState } from "react-firebase-hooks/auth"
 import { auth, db } from "@/lib/firebase"
 import { UnlockButton } from "@/components/unlock-button"
@@ -48,6 +48,7 @@ interface ContentItem {
 export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimalProps) {
   const [user] = useAuthState(auth)
   const [activeTab, setActiveTab] = useState<"free" | "premium">("free")
+  const [contentTypeFilter, setContentTypeFilter] = useState<"all" | "video" | "audio" | "image">("all")
   const [freeContent, setFreeContent] = useState<ContentItem[]>([])
   const [premiumContent, setPremiumContent] = useState<ContentItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -173,7 +174,36 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
     }
   }, [creator.uid])
 
+  const getAvailableContentTypes = (content: ContentItem[]) => {
+    const types = new Set<string>()
+    content.forEach((item) => {
+      const contentType = detectContentType(item.fileUrl, item.type as string)
+      types.add(contentType)
+    })
+    return Array.from(types)
+  }
+
+  const getFilteredContent = () => {
+    if (activeTab !== "free" || contentTypeFilter === "all") {
+      return currentContent
+    }
+
+    return freeContent.filter((item) => {
+      const contentType = detectContentType(item.fileUrl, item.type as string)
+      return contentType === contentTypeFilter
+    })
+  }
+
   const currentContent = activeTab === "free" ? freeContent : premiumContent
+  const filteredContent = getFilteredContent()
+  const availableTypes = activeTab === "free" ? getAvailableContentTypes(freeContent) : []
+  const showContentTypeFilter = activeTab === "free" && availableTypes.length > 1
+
+  useEffect(() => {
+    if (activeTab === "premium") {
+      setContentTypeFilter("all")
+    }
+  }, [activeTab])
 
   return (
     <div className="min-h-screen bg-black relative">
@@ -285,9 +315,25 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
           </div>
         </div>
 
-        {/* Tabs with underline style */}
+        {/* Tabs with underline style and content type filter */}
         <div className="mb-6 sm:mb-8">
           <div className="flex items-center justify-center sm:justify-start gap-6 sm:gap-8 border-b border-zinc-800/50">
+            {showContentTypeFilter && (
+              <div className="relative">
+                <select
+                  value={contentTypeFilter}
+                  onChange={(e) => setContentTypeFilter(e.target.value as "all" | "video" | "audio" | "image")}
+                  className="appearance-none bg-zinc-900 border border-zinc-700 text-white text-xs sm:text-sm px-3 py-2 pr-8 rounded-md focus:outline-none focus:border-zinc-500 hover:border-zinc-600 transition-colors"
+                >
+                  <option value="all">All Content</option>
+                  {availableTypes.includes("video") && <option value="video">Videos</option>}
+                  {availableTypes.includes("audio") && <option value="audio">Audio</option>}
+                  {availableTypes.includes("image") && <option value="image">Images</option>}
+                </select>
+                <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-zinc-400 pointer-events-none" />
+              </div>
+            )}
+
             <button
               onClick={() => setActiveTab("free")}
               className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
@@ -315,7 +361,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
             <div className="flex items-center justify-center py-16 sm:py-24">
               <div className="w-6 h-6 border border-zinc-800 border-t-white rounded-full animate-spin"></div>
             </div>
-          ) : currentContent.length > 0 ? (
+          ) : filteredContent.length > 0 ? (
             <div
               className={
                 activeTab === "premium"
@@ -323,7 +369,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
                   : "grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 sm:gap-6 justify-items-center"
               }
             >
-              {currentContent.map((item) =>
+              {filteredContent.map((item) =>
                 activeTab === "premium" ? (
                   <BundleCard key={item.id} item={item} user={user} creatorId={creator.uid} />
                 ) : (
@@ -340,9 +386,13 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
                   <Play className="w-4 h-4 sm:w-5 sm:h-5 text-zinc-600" />
                 )}
               </div>
-              <h3 className="text-base sm:text-lg font-medium text-white mb-2">No {activeTab} content available</h3>
+              <h3 className="text-base sm:text-lg font-medium text-white mb-2">
+                No {contentTypeFilter !== "all" ? contentTypeFilter : activeTab} content available
+              </h3>
               <p className="text-zinc-500 text-xs sm:text-sm">
-                This creator hasn't uploaded any {activeTab} content yet.
+                {contentTypeFilter !== "all"
+                  ? `This creator hasn't uploaded any ${contentTypeFilter} content yet.`
+                  : `This creator hasn't uploaded any ${activeTab} content yet.`}
               </p>
             </div>
           )}
@@ -385,15 +435,6 @@ const detectContentType = (fileUrl: string, mimeType?: string): "video" | "audio
 function ContentCard({ item }: { item: ContentItem }) {
   const contentType = detectContentType(item.fileUrl, item.type as string)
 
-  console.log("[v0] ContentCard - Raw item data:", {
-    id: item.id,
-    title: item.title,
-    fileUrl: item.fileUrl,
-    thumbnailUrl: item.thumbnailUrl,
-    type: item.type,
-    contentType,
-  })
-
   const transformedItem = {
     id: item.id,
     title: item.title,
@@ -413,11 +454,6 @@ function ContentCard({ item }: { item: ContentItem }) {
       thumbnailUrl: transformedItem.thumbnailUrl,
       contentType,
     })
-    console.log("[v0] ImageCard - Is fileUrl a placeholder?", transformedItem.fileUrl?.includes("placeholder"))
-    console.log(
-      "[v0] ImageCard - Is thumbnailUrl a placeholder?",
-      transformedItem.thumbnailUrl?.includes("placeholder"),
-    )
   }
 
   switch (contentType) {
