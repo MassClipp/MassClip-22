@@ -1032,9 +1032,23 @@ function InlineVideoRow({
       let filteredVideos = videos
 
       if (isCreatorUploads) {
+        console.log(
+          `[v0] Creator uploads before filtering:`,
+          videos.map((v) => ({
+            name: v.name || v.title,
+            mimeType: v.mimeType,
+            fileUrl: v.link || v.fileUrl,
+            detectedType: detectCreatorUploadContentType(v),
+          })),
+        )
+
         filteredVideos = videos.filter((video) => {
           const contentType = detectCreatorUploadContentType(video)
-          return contentType === "video"
+          const isVideo = contentType === "video"
+
+          console.log(`[v0] Filtering "${video.name || video.title}": type=${contentType}, isVideo=${isVideo}`)
+
+          return isVideo
         })
         console.log(`[v0] Filtered creator uploads: ${videos.length} -> ${filteredVideos.length} (videos only)`)
       }
