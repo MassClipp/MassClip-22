@@ -1,11 +1,13 @@
 "use client"
 
+import type React from "react"
+
 import { useEffect, useState, useRef } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { ArrowLeft, AlertCircle, Play, Package, Volume2, VolumeX, Pause, Download, Lock } from 'lucide-react'
+import { ArrowLeft, AlertCircle, Play, Package, Volume2, VolumeX, Pause, Download, Lock } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { toast } from "@/hooks/use-toast"
 import { useDownloadLimit } from "@/contexts/download-limit-context"
@@ -167,11 +169,11 @@ const VideoPlayer = ({ content }: { content: BundleContent }) => {
       const objectUrl = URL.createObjectURL(blob)
 
       // Create anchor element for download
-      const link = document.createElement('a')
+      const link = document.createElement("a")
       link.href = objectUrl
       link.download = filename
-      link.style.display = 'none'
-      
+      link.style.display = "none"
+
       // Append to body, click, and remove
       document.body.appendChild(link)
       link.click()
@@ -191,7 +193,7 @@ const VideoPlayer = ({ content }: { content: BundleContent }) => {
 
   const handleDownload = async (e: React.MouseEvent) => {
     e.stopPropagation()
-    
+
     // Prevent multiple clicks
     if (isDownloading) return
 
@@ -222,7 +224,8 @@ const VideoPlayer = ({ content }: { content: BundleContent }) => {
       if (hasReachedLimit && !isProUser) {
         toast({
           title: "Download Limit Reached",
-          description: "You've reached your monthly download limit of 15. Upgrade to Creator Pro for unlimited downloads.",
+          description:
+            "You've reached your monthly download limit of 15. Upgrade to Creator Pro for unlimited downloads.",
           variant: "destructive",
         })
         return
@@ -240,19 +243,19 @@ const VideoPlayer = ({ content }: { content: BundleContent }) => {
       }
 
       // 5. Trigger the actual download
-      const filename = `${content.title?.replace(/[^\w\s]/gi, "") || "video"}.${content.fileType || 'mp4'}`
+      const filename = `${content.title?.replace(/[^\w\s]/gi, "") || "video"}.${content.fileType || "mp4"}`
 
       // Try direct download first
       const success = await startDirectDownload(downloadUrl, filename)
 
       if (!success) {
         // Fallback to traditional method if direct download fails
-        const link = document.createElement('a')
+        const link = document.createElement("a")
         link.href = downloadUrl
         link.download = filename
-        link.target = '_blank'
-        link.style.display = 'none'
-        
+        link.target = "_blank"
+        link.style.display = "none"
+
         document.body.appendChild(link)
         link.click()
         document.body.removeChild(link)
@@ -263,7 +266,6 @@ const VideoPlayer = ({ content }: { content: BundleContent }) => {
         title: "Download Started",
         description: `Downloading ${content.title}`,
       })
-
     } catch (error) {
       console.error("Download failed:", error)
       toast({
@@ -343,24 +345,488 @@ const VideoPlayer = ({ content }: { content: BundleContent }) => {
         onClick={handleDownload}
         disabled={isDownloading || !downloadUrl || (hasReachedLimit && !isProUser)}
         className={`absolute bottom-3 right-3 w-8 h-8 backdrop-blur-sm rounded-full flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-          hasReachedLimit && !isProUser 
-            ? "bg-zinc-800/90 cursor-not-allowed" 
-            : "bg-black/70 hover:bg-black/90"
+          hasReachedLimit && !isProUser ? "bg-zinc-800/90 cursor-not-allowed" : "bg-black/70 hover:bg-black/90"
         }`}
         title={
-          hasReachedLimit && !isProUser 
-            ? "Upgrade to Creator Pro for unlimited downloads" 
-            : `Download ${content.title}`
+          hasReachedLimit && !isProUser ? "Upgrade to Creator Pro for unlimited downloads" : `Download ${content.title}`
         }
       >
         {hasReachedLimit && !isProUser ? (
           <Lock className="w-4 h-4 text-zinc-400" />
         ) : (
-          <Download className={`w-4 h-4 text-white ${isDownloading ? 'animate-pulse' : ''}`} />
+          <Download className={`w-4 h-4 text-white ${isDownloading ? "animate-pulse" : ""}`} />
         )}
       </button>
     </div>
   )
+}
+
+// Audio player component with hover effects and download tracking
+const AudioCard = ({ content }: { content: BundleContent }) => {
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [isHovered, setIsHovered] = useState(false)
+  const [isDownloading, setIsDownloading] = useState(false)
+  const audioRef = useRef<HTMLAudioElement>(null)
+  const { user } = useFirebaseAuth()
+  const { hasReachedLimit, isProUser, forceRefresh } = useDownloadLimit()
+
+  const audioUrl = content.fileUrl || content.downloadUrl || ""
+  const downloadUrl = content.downloadUrl || content.fileUrl || ""
+
+  const handlePlay = () => {
+    if (!audioRef.current || !audioUrl) return
+
+    // Pause all other audio/video elements
+    document.querySelectorAll("audio, video").forEach((element) => {
+      if (element !== audioRef.current) {
+        element.pause()
+        if ("currentTime" in element) element.currentTime = 0
+      }
+    })
+
+    if (isPlaying) {
+      audioRef.current.pause()
+      setIsPlaying(false)
+    } else {
+      audioRef.current
+        .play()
+        .then(() => setIsPlaying(true))
+        .catch((error) => {
+          console.error(`❌ [AudioCard] Play error for ${content.title}:`, error)
+          toast({
+            title: "Audio Error",
+            description: `Failed to play: ${content.title}`,
+            variant: "destructive",
+          })
+        })
+    }
+  }
+
+  const handleAudioEnd = () => {
+    setIsPlaying(false)
+    if (audioRef.current) {
+      audioRef.current.currentTime = 0
+    }
+  }
+
+  // Record download (same logic as VideoPlayer)
+  const recordDownload = async () => {
+    if (!user) return { success: false, message: "User not authenticated" }
+    if (isProUser) return { success: true }
+
+    try {
+      const userDocRef = doc(db, "users", user.uid)
+      await updateDoc(userDocRef, {
+        downloads: increment(1),
+      })
+      forceRefresh()
+      return { success: true }
+    } catch (err) {
+      console.error("Error recording download:", err)
+      return { success: false, message: "Failed to record download. Please try again." }
+    }
+  }
+
+  const startDirectDownload = async (url: string, filename: string) => {
+    try {
+      const response = await fetch(url)
+      if (!response.ok) throw new Error("Network response was not ok")
+      const blob = await response.blob()
+      const objectUrl = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = objectUrl
+      link.download = filename
+      link.style.display = "none"
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 100)
+      return true
+    } catch (error) {
+      console.error("Direct download failed:", error)
+      return false
+    }
+  }
+
+  const handleDownload = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (isDownloading) return
+    setIsDownloading(true)
+
+    try {
+      if (!user) {
+        toast({
+          title: "Authentication Required",
+          description: "Please log in to download audio",
+          variant: "destructive",
+        })
+        return
+      }
+      if (!downloadUrl) {
+        toast({
+          title: "Download Error",
+          description: "No download links available for this audio.",
+          variant: "destructive",
+        })
+        return
+      }
+      if (hasReachedLimit && !isProUser) {
+        toast({
+          title: "Download Limit Reached",
+          description:
+            "You've reached your monthly download limit of 15. Upgrade to Creator Pro for unlimited downloads.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      const result = await recordDownload()
+      if (!result.success && !isProUser) {
+        toast({
+          title: "Download Error",
+          description: result.message || "Failed to record download.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      const filename = `${content.title?.replace(/[^\w\s]/gi, "") || "audio"}.${content.fileType || "mp3"}`
+      const success = await startDirectDownload(downloadUrl, filename)
+
+      if (!success) {
+        const link = document.createElement("a")
+        link.href = downloadUrl
+        link.download = filename
+        link.target = "_blank"
+        link.style.display = "none"
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+      }
+
+      toast({ title: "Download Started", description: `Downloading ${content.title}` })
+    } catch (error) {
+      console.error("Download failed:", error)
+      toast({
+        title: "Download Error",
+        description: "There was an issue starting your download. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsDownloading(false)
+    }
+  }
+
+  if (!audioUrl) {
+    return (
+      <div className="relative w-full aspect-[9/16] bg-black border border-white/20 overflow-hidden rounded-lg">
+        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-900">
+          <div className="text-center">
+            <AlertCircle className="w-8 h-8 text-red-500 mx-auto mb-2" />
+            <p className="text-red-400 text-xs">No audio URL</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div
+      className={`relative w-full aspect-[9/16] bg-gradient-to-br from-purple-900/20 to-blue-900/20 overflow-hidden cursor-pointer group rounded-lg transition-all duration-300 ${
+        isHovered ? "border border-white/60" : "border border-white/20"
+      }`}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <audio
+        ref={audioRef}
+        src={audioUrl}
+        onEnded={handleAudioEnd}
+        onError={() => {
+          console.error(`❌ [AudioCard] Audio error for: ${content.title}`)
+          toast({ title: "Audio Error", description: `Failed to load: ${content.title}`, variant: "destructive" })
+        }}
+        preload="metadata"
+      />
+
+      {/* Waveform visualization background */}
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div className="flex items-end space-x-1 opacity-30">
+          {[...Array(20)].map((_, i) => (
+            <div
+              key={i}
+              className={`bg-blue-400 transition-all duration-300 ${isPlaying ? "animate-pulse" : ""}`}
+              style={{
+                width: "3px",
+                height: `${Math.random() * 60 + 20}px`,
+                animationDelay: `${i * 0.1}s`,
+              }}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Play/Pause button */}
+      {isHovered && (
+        <div
+          className="absolute inset-0 bg-black/30 flex items-center justify-center transition-opacity duration-200"
+          onClick={handlePlay}
+        >
+          <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white/30 transition-colors">
+            {isPlaying ? <Pause className="w-5 h-5 text-white" /> : <Play className="w-5 h-5 text-white ml-0.5" />}
+          </div>
+        </div>
+      )}
+
+      {/* Download button */}
+      <button
+        onClick={handleDownload}
+        disabled={isDownloading || !downloadUrl || (hasReachedLimit && !isProUser)}
+        className={`absolute bottom-3 right-3 w-8 h-8 backdrop-blur-sm rounded-full flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+          hasReachedLimit && !isProUser ? "bg-zinc-800/90 cursor-not-allowed" : "bg-black/70 hover:bg-black/90"
+        }`}
+        title={
+          hasReachedLimit && !isProUser ? "Upgrade to Creator Pro for unlimited downloads" : `Download ${content.title}`
+        }
+      >
+        {hasReachedLimit && !isProUser ? (
+          <Lock className="w-4 h-4 text-zinc-400" />
+        ) : (
+          <Download className={`w-4 h-4 text-white ${isDownloading ? "animate-pulse" : ""}`} />
+        )}
+      </button>
+    </div>
+  )
+}
+
+// Image component with download tracking
+const ImageCard = ({ content }: { content: BundleContent }) => {
+  const [isHovered, setIsHovered] = useState(false)
+  const [isDownloading, setIsDownloading] = useState(false)
+  const [imageError, setImageError] = useState(false)
+  const { user } = useFirebaseAuth()
+  const { hasReachedLimit, isProUser, forceRefresh } = useDownloadLimit()
+
+  const imageUrl = content.fileUrl || content.downloadUrl || ""
+  const downloadUrl = content.downloadUrl || content.fileUrl || ""
+
+  // Record download (same logic as VideoPlayer)
+  const recordDownload = async () => {
+    if (!user) return { success: false, message: "User not authenticated" }
+    if (isProUser) return { success: true }
+
+    try {
+      const userDocRef = doc(db, "users", user.uid)
+      await updateDoc(userDocRef, {
+        downloads: increment(1),
+      })
+      forceRefresh()
+      return { success: true }
+    } catch (err) {
+      console.error("Error recording download:", err)
+      return { success: false, message: "Failed to record download. Please try again." }
+    }
+  }
+
+  const startDirectDownload = async (url: string, filename: string) => {
+    try {
+      const response = await fetch(url)
+      if (!response.ok) throw new Error("Network response was not ok")
+      const blob = await response.blob()
+      const objectUrl = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = objectUrl
+      link.download = filename
+      link.style.display = "none"
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 100)
+      return true
+    } catch (error) {
+      console.error("Direct download failed:", error)
+      return false
+    }
+  }
+
+  const handleDownload = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (isDownloading) return
+    setIsDownloading(true)
+
+    try {
+      if (!user) {
+        toast({
+          title: "Authentication Required",
+          description: "Please log in to download images",
+          variant: "destructive",
+        })
+        return
+      }
+      if (!downloadUrl) {
+        toast({
+          title: "Download Error",
+          description: "No download links available for this image.",
+          variant: "destructive",
+        })
+        return
+      }
+      if (hasReachedLimit && !isProUser) {
+        toast({
+          title: "Download Limit Reached",
+          description:
+            "You've reached your monthly download limit of 15. Upgrade to Creator Pro for unlimited downloads.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      const result = await recordDownload()
+      if (!result.success && !isProUser) {
+        toast({
+          title: "Download Error",
+          description: result.message || "Failed to record download.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      const filename = `${content.title?.replace(/[^\w\s]/gi, "") || "image"}.${content.fileType || "jpg"}`
+      const success = await startDirectDownload(downloadUrl, filename)
+
+      if (!success) {
+        const link = document.createElement("a")
+        link.href = downloadUrl
+        link.download = filename
+        link.target = "_blank"
+        link.style.display = "none"
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+      }
+
+      toast({ title: "Download Started", description: `Downloading ${content.title}` })
+    } catch (error) {
+      console.error("Download failed:", error)
+      toast({
+        title: "Download Error",
+        description: "There was an issue starting your download. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsDownloading(false)
+    }
+  }
+
+  if (!imageUrl) {
+    return (
+      <div className="relative w-full aspect-[9/16] bg-black border border-white/20 overflow-hidden rounded-lg">
+        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-900">
+          <div className="text-center">
+            <AlertCircle className="w-8 h-8 text-red-500 mx-auto mb-2" />
+            <p className="text-red-400 text-xs">No image URL</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div
+      className={`relative w-full aspect-[9/16] bg-black overflow-hidden cursor-pointer group rounded-lg transition-all duration-300 ${
+        isHovered ? "border border-white/60" : "border border-white/20"
+      }`}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      {!imageError ? (
+        <img
+          src={imageUrl || "/placeholder.svg"}
+          alt={content.title}
+          className="w-full h-full object-cover"
+          onError={() => setImageError(true)}
+          crossOrigin="anonymous"
+        />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-900">
+          <div className="text-center">
+            <AlertCircle className="w-8 h-8 text-red-500 mx-auto mb-2" />
+            <p className="text-red-400 text-xs">Failed to load image</p>
+          </div>
+        </div>
+      )}
+
+      {/* Download button */}
+      <button
+        onClick={handleDownload}
+        disabled={isDownloading || !downloadUrl || (hasReachedLimit && !isProUser)}
+        className={`absolute bottom-3 right-3 w-8 h-8 backdrop-blur-sm rounded-full flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+          hasReachedLimit && !isProUser ? "bg-zinc-800/90 cursor-not-allowed" : "bg-black/70 hover:bg-black/90"
+        }`}
+        title={
+          hasReachedLimit && !isProUser ? "Upgrade to Creator Pro for unlimited downloads" : `Download ${content.title}`
+        }
+      >
+        {hasReachedLimit && !isProUser ? (
+          <Lock className="w-4 h-4 text-zinc-400" />
+        ) : (
+          <Download className={`w-4 h-4 text-white ${isDownloading ? "animate-pulse" : ""}`} />
+        )}
+      </button>
+    </div>
+  )
+}
+
+// Content renderer component to handle different content types
+const ContentRenderer = ({ content }: { content: BundleContent }) => {
+  // Determine content type from fileType or mimeType
+  const getContentType = (): "video" | "audio" | "image" => {
+    if (content.type) {
+      if (content.type.includes("video")) return "video"
+      if (content.type.includes("audio")) return "audio"
+      if (content.type.includes("image")) return "image"
+    }
+
+    if (content.fileType) {
+      const fileType = content.fileType.toLowerCase()
+      if (["mp4", "mov", "avi", "mkv", "webm", "m4v"].includes(fileType)) return "video"
+      if (["mp3", "wav", "m4a", "aac", "ogg"].includes(fileType)) return "audio"
+      if (["jpg", "jpeg", "png", "gif", "webp", "bmp"].includes(fileType)) return "image"
+    }
+
+    const url = (content.fileUrl || "").toLowerCase()
+    if (
+      url.includes(".mp4") ||
+      url.includes(".mov") ||
+      url.includes(".avi") ||
+      url.includes(".mkv") ||
+      url.includes(".webm")
+    )
+      return "video"
+    if (url.includes(".mp3") || url.includes(".wav") || url.includes(".m4a") || url.includes(".aac")) return "audio"
+    if (
+      url.includes(".jpg") ||
+      url.includes(".jpeg") ||
+      url.includes(".png") ||
+      url.includes(".gif") ||
+      url.includes(".webp")
+    )
+      return "image"
+
+    return "video" // Default fallback
+  }
+
+  const contentType = getContentType()
+
+  switch (contentType) {
+    case "audio":
+      return <AudioCard content={content} />
+    case "image":
+      return <ImageCard content={content} />
+    case "video":
+    default:
+      return <VideoPlayer content={content} />
+  }
 }
 
 export default function BundleContentPage() {
@@ -565,7 +1031,7 @@ export default function BundleContentPage() {
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
             {contents.map((content) => (
               <div key={content.id} className="space-y-2">
-                <VideoPlayer content={content} />
+                <ContentRenderer content={content} />
                 <div className="px-1">
                   <h3 className="text-sm font-medium text-white truncate tracking-tight">{content.title}</h3>
                 </div>
