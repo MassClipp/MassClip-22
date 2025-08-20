@@ -5,24 +5,45 @@ import { getAuth } from "firebase-admin/auth"
 export async function GET(request: NextRequest) {
   try {
     console.log(`🔍 [Unified Purchases API] Starting request`)
+    console.log(`🔍 [Unified Purchases API] Request URL:`, request.url)
+    console.log(`🔍 [Unified Purchases API] Request method:`, request.method)
 
     const authHeader = request.headers.get("authorization")
+    console.log(`🔍 [Unified Purchases API] Auth header present:`, !!authHeader)
+    console.log(`🔍 [Unified Purchases API] Auth header starts with Bearer:`, authHeader?.startsWith("Bearer "))
+
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       console.log(`❌ [Unified Purchases API] Missing or invalid auth header`)
+      console.log(`❌ [Unified Purchases API] Auth header value:`, authHeader)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const token = authHeader.split("Bearer ")[1]
+    console.log(`🔍 [Unified Purchases API] Token extracted, length:`, token?.length || 0)
+    console.log(`🔍 [Unified Purchases API] Token preview:`, token?.substring(0, 20) + "...")
 
     let decodedToken
     let userId
     try {
+      console.log(`🔍 [Unified Purchases API] Attempting to verify token...`)
       decodedToken = await getAuth().verifyIdToken(token)
       userId = decodedToken.uid
       console.log(`✅ [Unified Purchases API] Token verified for user: ${userId}`)
+      console.log(`✅ [Unified Purchases API] Token exp:`, new Date(decodedToken.exp * 1000))
+      console.log(`✅ [Unified Purchases API] Token iat:`, new Date(decodedToken.iat * 1000))
     } catch (tokenError) {
       console.error(`❌ [Unified Purchases API] Token verification failed:`, tokenError)
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 })
+      console.error(`❌ [Unified Purchases API] Token error name:`, tokenError.name)
+      console.error(`❌ [Unified Purchases API] Token error message:`, tokenError.message)
+      console.error(`❌ [Unified Purchases API] Token error code:`, tokenError.code)
+      return NextResponse.json(
+        {
+          error: "Invalid token",
+          details: tokenError.message,
+          code: tokenError.code,
+        },
+        { status: 401 },
+      )
     }
 
     console.log(`🔍 [Unified Purchases API] Fetching purchases for user: ${userId}`)

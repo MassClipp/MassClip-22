@@ -54,14 +54,29 @@ export default function PurchasesPage() {
       setLoading(true)
       setError(null)
 
+      console.log("[v0] Fetching purchases - user exists:", !!user)
+
+      if (!user) {
+        throw new Error("User not authenticated")
+      }
+
+      console.log("[v0] Getting ID token...")
       const token = await user.getIdToken()
+      console.log("[v0] ID token obtained, length:", token?.length || 0)
+
+      console.log("[v0] Making API request to /api/user/unified-purchases")
       const response = await fetch("/api/user/unified-purchases", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       })
 
+      console.log("[v0] API response status:", response.status)
+      console.log("[v0] API response ok:", response.ok)
+
       if (!response.ok) {
+        const errorText = await response.text()
+        console.error("[v0] API error response:", errorText)
         throw new Error(`Failed to fetch purchases: ${response.status}`)
       }
 
