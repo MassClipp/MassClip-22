@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/firebase-admin"
-import { getAuth } from "firebase-admin/auth"
+import { db, auth } from "@/lib/firebase-admin"
 
 export async function GET(request: NextRequest) {
   try {
@@ -26,7 +25,7 @@ export async function GET(request: NextRequest) {
     let userId
     try {
       console.log(`🔍 [Unified Purchases API] Attempting to verify token...`)
-      decodedToken = await getAuth().verifyIdToken(token)
+      decodedToken = await auth.verifyIdToken(token)
       userId = decodedToken.uid
       console.log(`✅ [Unified Purchases API] Token verified for user: ${userId}`)
       console.log(`✅ [Unified Purchases API] Token exp:`, new Date(decodedToken.exp * 1000))
