@@ -167,21 +167,27 @@ export default function ImageCard({ image, className }: ImageCardProps) {
   }
 
   const getBestImageUrl = (): string => {
+    const getProxiedUrl = (url: string) => {
+      if (!url || isPlaceholderUrl(url)) return url
+      // Use image proxy to handle CORS and Safari compatibility issues
+      return `/api/proxy-image?url=${encodeURIComponent(url)}`
+    }
+
     // Prioritize non-placeholder URLs
     if (!isPlaceholderUrl(image.fileUrl)) {
       console.log("[v0] Using fileUrl (non-placeholder):", image.fileUrl)
-      return image.fileUrl
+      return getProxiedUrl(image.fileUrl)
     }
 
     if (!isPlaceholderUrl(image.thumbnailUrl)) {
       console.log("[v0] Using thumbnailUrl (non-placeholder):", image.thumbnailUrl)
-      return image.thumbnailUrl || ""
+      return getProxiedUrl(image.thumbnailUrl || "")
     }
 
     // Fallback to any available URL if both are placeholders
     const fallbackUrl = image.fileUrl || image.thumbnailUrl || ""
     console.log("[v0] Using fallback URL:", fallbackUrl)
-    return fallbackUrl
+    return getProxiedUrl(fallbackUrl)
   }
 
   const handleDownload = async (e: React.MouseEvent) => {
@@ -201,8 +207,8 @@ export default function ImageCard({ image, className }: ImageCardProps) {
         return
       }
 
-      const downloadUrl = getBestImageUrl()
-      if (!downloadUrl || isPlaceholderUrl(downloadUrl)) {
+      const originalUrl = !isPlaceholderUrl(image.fileUrl) ? image.fileUrl : image.thumbnailUrl
+      if (!originalUrl || isPlaceholderUrl(originalUrl)) {
         toast({
           title: "Download Error",
           description: "No download link available for this image.",
@@ -233,6 +239,7 @@ export default function ImageCard({ image, className }: ImageCardProps) {
       }
 
       const filename = `${image.title?.replace(/[^\w\s]/gi, "") || "image"}.jpg`
+      const downloadUrl = `/api/proxy-image?url=${encodeURIComponent(originalUrl)}&download=true`
       const downloadLink = document.createElement("a")
       downloadLink.href = downloadUrl
       downloadLink.download = filename
@@ -291,7 +298,7 @@ export default function ImageCard({ image, className }: ImageCardProps) {
           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
           crossOrigin="anonymous"
           onError={(e) => {
-            console.log("[v0] Image failed to load:", image.fileUrl)
+            console.log("[v0] Image failed to load:", getImageSrc())
             setImageError(true)
             setIsLoading(false)
           }}
