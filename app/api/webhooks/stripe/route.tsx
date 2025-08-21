@@ -18,15 +18,56 @@ async function processBundlePurchase(session: Stripe.Checkout.Session) {
   console.log(`🛒 [Bundle Webhook] Processing bundle purchase: ${session.id}`)
 
   const metadata = session.metadata || {}
-  const { bundleId, productBoxId, buyerUid, creatorId, buyerEmail, buyerName, buyerPlan } = metadata
+  const { bundleId, productBoxId, buyer_user_id, creatorId, is_guest_checkout } = metadata
 
   const itemId = bundleId || productBoxId
   if (!itemId) {
     throw new Error("Missing bundle/productBox ID in session metadata")
   }
 
+  let buyerUid = buyer_user_id
+  let isGuestPurchase = is_guest_checkout === "true"
+
+  if (isGuestPurchase && !buyerUid) {
+    console.log(`👤 [Bundle Webhook] Processing guest purchase, creating account...`)
+
+    // Get customer email from Stripe session
+    const customerEmail = session.customer_details?.email || session.customer_email
+    const customerName = session.customer_details?.name
+
+    if (!customerEmail) {
+      throw new Error("No customer email found for guest purchase")
+    }
+
+    try {
+      // Check if user already exists with this email
+      const { getAuth } = await import("firebase-admin/auth")
+      const auth = getAuth()
+
+      try {
+        const existingUser = await auth.getUserByEmail(customerEmail)
+        console.log(`✅ [Bundle Webhook] Found existing user for email: ${customerEmail}`)
+        buyerUid = existingUser.uid
+        isGuestPurchase = false // Treat as existing user
+      } catch (error: any) {
+        if (error.code === "auth/user-not-found") {
+          // Create new guest account
+          const guestAccount = await createGuestAccount(customerEmail, customerName)
+          buyerUid = guestAccount.uid
+          console.log(`✅ [Bundle Webhook] Created guest account: ${buyerUid}`)
+        } else {
+          throw error
+        }
+      }
+    } catch (error) {
+      console.error(`❌ [Bundle Webhook] Failed to handle guest account:`, error)
+      // Continue with purchase but mark as guest
+      buyerUid = `guest_${Date.now()}`
+    }
+  }
+
   if (!buyerUid) {
-    throw new Error("Missing buyer UID in session metadata")
+    throw new Error("Missing buyer UID and not a guest purchase")
   }
 
   // Get bundle details
@@ -152,10 +193,11 @@ async function processBundlePurchase(session: Stripe.Checkout.Session) {
     // Buyer info
     buyerUid: buyerUid,
     userId: buyerUid,
-    buyerEmail: buyerEmail || "",
-    buyerName: buyerName || "Anonymous User",
-    buyerDisplayName: buyerName || "Anonymous User",
-    isAuthenticated: buyerUid !== "anonymous",
+    buyerEmail: session.customer_details?.email || session.customer_email || "",
+    buyerName: session.customer_details?.name || "Anonymous User",
+    buyerDisplayName: session.customer_details?.name || "Anonymous User",
+    isAuthenticated: !isGuestPurchase,
+    isGuestPurchase: isGuestPurchase,
 
     price: finalPrice,
     amount: finalPrice,
@@ -197,7 +239,7 @@ async function processBundlePurchase(session: Stripe.Checkout.Session) {
   await adminDb.collection("bundlePurchases").doc(session.id).set(purchaseData)
 
   console.log(
-    `✅ [Bundle Webhook] Bundle purchase created: ${session.id} for user ${buyerUid} with ${bundleContents.length} content items at $${finalPrice}`,
+    `✅ [Bundle Webhook] Bundle purchase created: ${session.id} for ${isGuestPurchase ? "guest" : "user"} ${buyerUid} with ${bundleContents.length} content items at $${finalPrice}`,
   )
 }
 
@@ -287,4 +329,103 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ received: true })
+}
+
+async function createGuestAccount(email: string, name?: string) {
+  console.log(`👤 [Guest Account] Creating account for email: ${email}`)
+
+  try {
+    // Generate secure password
+    const password = generateSecurePassword()
+
+    // Create Firebase Auth user
+    const { getAuth } = await import("firebase-admin/auth")
+    const auth = getAuth()
+
+    const userRecord = await auth.createUser({
+      email: email,
+      password: password,
+      displayName: name || email.split("@")[0],
+      emailVerified: false,
+    })
+
+    console.log(`✅ [Guest Account] Created Firebase user: ${userRecord.uid}`)
+
+    // Create user document in Firestore
+    const userData = {
+      uid: userRecord.uid,
+      email: email,
+      displayName: name || email.split("@")[0],
+      username: `user_${Date.now()}`, // Generate unique username
+      createdAt: new Date().toISOString(),
+      isGuestCreated: true,
+      emailVerified: false,
+      plan: "free",
+    }
+
+    await adminDb.collection("users").doc(userRecord.uid).set(userData)
+    console.log(`✅ [Guest Account] Created user document for: ${userRecord.uid}`)
+
+    // Send welcome email with credentials
+    await sendWelcomeEmail(email, password, name || email.split("@")[0])
+
+    return {
+      uid: userRecord.uid,
+      email: email,
+      password: password,
+      displayName: userData.displayName,
+    }
+  } catch (error) {
+    console.error(`❌ [Guest Account] Failed to create account for ${email}:`, error)
+    throw error
+  }
+}
+
+function generateSecurePassword(): string {
+  const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%^&*"
+  let password = ""
+  for (let i = 0; i < 12; i++) {
+    password += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  return password
+}
+
+async function sendWelcomeEmail(email: string, password: string, name: string) {
+  console.log(`📧 [Guest Account] Sending welcome email to: ${email}`)
+
+  try {
+    const { Resend } = await import("resend")
+    const resend = new Resend(process.env.RESEND_API_KEY)
+
+    await resend.emails.send({
+      from: "MassClip <noreply@massclip.pro>",
+      to: email,
+      subject: "Welcome to MassClip - Your Account & Purchase Details",
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2>Welcome to MassClip, ${name}!</h2>
+          <p>Thank you for your purchase! We've created an account for you to access your content.</p>
+          
+          <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h3>Your Login Credentials:</h3>
+            <p><strong>Email:</strong> ${email}</p>
+            <p><strong>Password:</strong> ${password}</p>
+          </div>
+          
+          <p>You can now log in to access your purchased content at: <a href="https://massclip.pro/dashboard/purchases">https://massclip.pro/dashboard/purchases</a></p>
+          
+          <p><strong>Important:</strong> Please save these credentials in a secure location. For security reasons, we recommend changing your password after your first login.</p>
+          
+          <p>If you have any questions, please don't hesitate to contact our support team.</p>
+          
+          <p>Welcome to the MassClip community!</p>
+        </div>
+      `,
+    })
+
+    console.log(`✅ [Guest Account] Welcome email sent to: ${email}`)
+  } catch (error) {
+    console.error(`❌ [Guest Account] Failed to send welcome email to ${email}:`, error)
+    // Don't throw - account creation should succeed even if email fails
+  }
 }
