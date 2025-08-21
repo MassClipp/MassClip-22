@@ -1292,8 +1292,9 @@ export default function BundlesPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: index * 0.1 }}
               >
-                <Card className="bg-zinc-900/50 border-zinc-800 overflow-hidden">
-                  <CardHeader>
+                <Card className="bg-black border-zinc-800 overflow-hidden relative">
+                  <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none" />
+                  <CardHeader className="relative z-10">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
