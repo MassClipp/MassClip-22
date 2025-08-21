@@ -1051,23 +1051,21 @@ export default function BundlesPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
-          <div className="flex items-center gap-3 mb-2">
-            <h1 className="text-2xl font-bold text-white">Bundles</h1>
-            {!isProUser && (
-              <div className="text-sm text-zinc-400 bg-zinc-800 px-2 py-1 rounded">
-                {productBoxes.length}/{bundleLimit}
-              </div>
-            )}
-          </div>
-          <p className="text-zinc-400">Create and manage premium content packages for your audience</p>
+          <h1 className="text-2xl sm:text-3xl font-light text-white mb-2">
+            Bundles <span className="text-zinc-500 text-lg font-normal">{productBoxes.length}/2</span>
+          </h1>
+          <p className="text-zinc-400 text-sm">Create and manage premium content packages for your audience</p>
         </div>
 
         <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
           <DialogTrigger asChild>
             <Button
-              className="bg-red-600 hover:bg-red-700"
+              variant="outline"
+              className={`border-white/20 text-white hover:bg-white/5 hover:border-white/40 transition-all duration-200 ${
+                isAtBundleLimit ? "opacity-60 cursor-not-allowed" : ""
+              }`}
               disabled={isAtBundleLimit}
               onClick={() => {
                 if (isAtBundleLimit) {
@@ -1235,7 +1233,11 @@ export default function BundlesPage() {
                 <Button variant="outline" onClick={() => setShowCreateModal(false)} className="border-zinc-700">
                   Cancel
                 </Button>
-                <Button onClick={handleCreateBundle} disabled={createLoading} className="bg-red-600 hover:bg-red-700">
+                <Button
+                  onClick={handleCreateBundle}
+                  disabled={createLoading}
+                  className="bg-white text-black hover:bg-zinc-200"
+                >
                   {createLoading ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -1296,13 +1298,20 @@ export default function BundlesPage() {
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
                           <CardTitle className="text-xl text-white">{productBox.title}</CardTitle>
-                          <Badge variant={productBox.active ? "default" : "secondary"}>
+                          <Badge
+                            variant={productBox.active ? "default" : "secondary"}
+                            className={
+                              productBox.active
+                                ? "bg-white text-black hover:bg-zinc-200"
+                                : "bg-zinc-700 text-zinc-300 hover:bg-zinc-600"
+                            }
+                          >
                             {productBox.active ? "Active" : "Inactive"}
                           </Badge>
                         </div>
                         <p className="text-zinc-400 mb-3">{productBox.description}</p>
                         <div className="flex items-center gap-4">
-                          <span className="text-2xl font-bold text-green-400">${productBox.price.toFixed(2)}</span>
+                          <span className="text-2xl font-light text-white">${productBox.price.toFixed(2)}</span>
                         </div>
                       </div>
                     </div>
@@ -1352,13 +1361,12 @@ export default function BundlesPage() {
                               {boxContent.map((item) => (
                                 <div key={item.id} className="group relative">
                                   <div className="relative aspect-[9/16] bg-zinc-900 rounded-lg overflow-hidden shadow-md border border-transparent hover:border-white/20 transition-all duration-300">
-                                    {/* Delete button */}
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation()
                                         handleRemoveContentFromBundle(productBox.id, item.id)
                                       }}
-                                      className="absolute top-2 right-2 z-30 w-6 h-6 bg-red-600/90 hover:bg-red-600 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 shadow-lg"
+                                      className="absolute top-2 right-2 z-30 w-6 h-6 bg-black/80 hover:bg-black rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 shadow-lg"
                                       title="Remove from bundle"
                                     >
                                       <X className="w-3 h-3 text-white" />
@@ -1452,7 +1460,7 @@ export default function BundlesPage() {
                           <Switch
                             checked={productBox.active}
                             onCheckedChange={() => handleToggleActive(productBox.id)}
-                            className="data-[state=checked]:bg-red-600"
+                            className="data-[state=checked]:bg-white data-[state=unchecked]:bg-zinc-700"
                           />
                           <span className="text-sm text-zinc-400">{productBox.active ? "Active" : "Inactive"}</span>
                         </div>
@@ -1470,7 +1478,7 @@ export default function BundlesPage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="hover:bg-red-900/50 text-red-400 hover:text-red-300"
+                            className="hover:bg-zinc-800 text-zinc-400 hover:text-white"
                             onClick={() => handleDelete(productBox.id)}
                           >
                             <Trash2 className="h-4 w-4" />
