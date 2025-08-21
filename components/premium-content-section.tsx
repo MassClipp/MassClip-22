@@ -103,26 +103,28 @@ export default function PremiumContentSection({
   }
 
   const handlePurchase = async (bundle: Bundle) => {
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to purchase this bundle",
+        variant: "destructive",
+      })
+      return
+    }
+
     try {
       setPurchaseLoading(bundle.id)
       console.log(`🛒 [Premium Content] Starting purchase for bundle: ${bundle.id}`)
 
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      }
-
-      // Add auth header only if user is logged in
-      if (user) {
-        const idToken = await user.getIdToken()
-        headers.Authorization = `Bearer ${idToken}`
-        console.log(`🔑 [Premium Content] Got ID token for user: ${user.uid}`)
-      } else {
-        console.log(`👤 [Premium Content] Proceeding with guest checkout`)
-      }
+      const idToken = await user.getIdToken()
+      console.log(`🔑 [Premium Content] Got ID token for user: ${user.uid}`)
 
       const response = await fetch(`/api/creator/product-boxes/${bundle.id}/checkout`, {
         method: "POST",
-        headers,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
         body: JSON.stringify({
           successUrl: `${window.location.origin}/purchase/success?session_id={CHECKOUT_SESSION_ID}`,
           cancelUrl: window.location.href,
@@ -374,7 +376,7 @@ export default function PremiumContentSection({
                         ) : (
                           <>
                             <ShoppingCart className="h-3 w-3 mr-1.5" />
-                            {user ? "Unlock Now" : "Buy Now"}
+                            Unlock Now
                           </>
                         )}
                       </Button>

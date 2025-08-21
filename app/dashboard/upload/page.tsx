@@ -8,7 +8,31 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/components/ui/use-toast"
-import { Upload, Search, Grid3X3, List, Trash2, Edit2, Film, Music, ImageIcon, File, Filter, RefreshCw, MoreVertical, Eye, Copy, Loader2, PlusCircle, Pause, Play, X, CheckCircle, AlertCircle, Clock } from 'lucide-react'
+import {
+  Upload,
+  Search,
+  Grid3X3,
+  List,
+  Trash2,
+  Edit2,
+  Film,
+  Music,
+  ImageIcon,
+  File,
+  Filter,
+  RefreshCw,
+  MoreVertical,
+  Eye,
+  Copy,
+  Loader2,
+  PlusCircle,
+  Pause,
+  Play,
+  X,
+  CheckCircle,
+  AlertCircle,
+  Clock,
+} from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
@@ -59,11 +83,11 @@ const STATUS_ICONS = {
 }
 
 const STATUS_COLORS = {
-  queued: "text-yellow-500",
-  uploading: "text-blue-500",
-  completed: "text-green-500",
-  error: "text-red-500",
-  paused: "text-orange-500",
+  queued: "text-zinc-400",
+  uploading: "text-white",
+  completed: "text-zinc-300",
+  error: "text-zinc-500",
+  paused: "text-zinc-400",
 }
 
 export default function UploadPage() {
@@ -92,14 +116,14 @@ export default function UploadPage() {
     uploading: 0,
     completed: 0,
     error: 0,
-    paused: 0
+    paused: 0,
   })
 
   // Initialize upload services
   useEffect(() => {
     if (user) {
       // Set auth token for chunked upload service
-      user.getIdToken().then(token => {
+      user.getIdToken().then((token) => {
         chunkedUploadService.setAuthToken(token)
       })
 
@@ -224,17 +248,17 @@ export default function UploadPage() {
     Array.from(files).forEach((file, index) => {
       const priority = file.size < 50 * 1024 * 1024 ? 1 : 0 // Prioritize smaller files
       const queueId = uploadQueueManager.addToQueue(file, priority)
-      
+
       // Set up individual progress callback
       uploadQueueManager.setProgressCallback(queueId, (queuedUpload) => {
-        if (queuedUpload.status === 'completed') {
+        if (queuedUpload.status === "completed") {
           toast({
             title: "Upload Complete!",
             description: `${queuedUpload.file.name} has been uploaded successfully.`,
           })
           // Refresh uploads list
           setTimeout(() => fetchUploads(), 1000)
-        } else if (queuedUpload.status === 'error') {
+        } else if (queuedUpload.status === "error") {
           toast({
             title: "Upload Failed",
             description: queuedUpload.error || `Failed to upload ${queuedUpload.file.name}`,
@@ -547,7 +571,7 @@ export default function UploadPage() {
                   variant="outline"
                   size="sm"
                   onClick={clearCompletedUploads}
-                  className="border-zinc-700"
+                  className="border-zinc-700 bg-transparent"
                 >
                   Clear Completed
                 </Button>
@@ -565,72 +589,63 @@ export default function UploadPage() {
                   <div key={queuedUpload.id} className="space-y-2 p-3 bg-zinc-800/30 rounded-lg">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <StatusIcon className={`h-4 w-4 ${statusColor} ${queuedUpload.status === 'uploading' ? 'animate-spin' : ''}`} />
+                        <StatusIcon
+                          className={`h-4 w-4 ${statusColor} ${queuedUpload.status === "uploading" ? "animate-spin" : ""}`}
+                        />
                         <div>
                           <span className="text-sm font-medium text-white">{queuedUpload.file.name}</span>
                           <div className="text-xs text-zinc-400">
                             {formatFileSize(queuedUpload.file.size)}
                             {progress && progress.speed > 0 && (
-                              <span> • {formatSpeed(progress.speed)} • ETA: {formatTime(progress.eta)}</span>
+                              <span>
+                                {" "}
+                                • {formatSpeed(progress.speed)} • ETA: {formatTime(progress.eta)}
+                              </span>
                             )}
                           </div>
                         </div>
                       </div>
-                      
+
                       <div className="flex items-center gap-2">
-                        {queuedUpload.status === 'uploading' && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => pauseUpload(queuedUpload.id)}
-                          >
+                        {queuedUpload.status === "uploading" && (
+                          <Button size="sm" variant="ghost" onClick={() => pauseUpload(queuedUpload.id)}>
                             <Pause className="h-4 w-4" />
                           </Button>
                         )}
-                        {queuedUpload.status === 'paused' && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => resumeUpload(queuedUpload.id)}
-                          >
+                        {queuedUpload.status === "paused" && (
+                          <Button size="sm" variant="ghost" onClick={() => resumeUpload(queuedUpload.id)}>
                             <Play className="h-4 w-4" />
                           </Button>
                         )}
-                        {queuedUpload.status === 'error' && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => retryUpload(queuedUpload.id)}
-                          >
+                        {queuedUpload.status === "error" && (
+                          <Button size="sm" variant="ghost" onClick={() => retryUpload(queuedUpload.id)}>
                             <RefreshCw className="h-4 w-4" />
                           </Button>
                         )}
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => removeFromQueue(queuedUpload.id)}
-                        >
+                        <Button size="sm" variant="ghost" onClick={() => removeFromQueue(queuedUpload.id)}>
                           <X className="h-4 w-4" />
                         </Button>
                       </div>
                     </div>
-                    
+
                     {progress && (
-                      <div className="space-y-1">
-                        <Progress 
-                          value={(progress.uploadedBytes / progress.fileSize) * 100} 
-                          className="h-2" 
+                      <div className="space-y-2">
+                        <Progress
+                          value={(progress.uploadedBytes / progress.fileSize) * 100}
+                          className="h-1.5 bg-zinc-800/60 border-zinc-700/50"
                         />
                         <div className="flex justify-between text-xs text-zinc-400">
-                          <span>{Math.round((progress.uploadedBytes / progress.fileSize) * 100)}%</span>
-                          <span>{progress.completedChunks}/{progress.totalChunks} chunks</span>
+                          <span className="font-medium">
+                            {Math.round((progress.uploadedBytes / progress.fileSize) * 100)}%
+                          </span>
+                          <span>
+                            {progress.completedChunks}/{progress.totalChunks} chunks
+                          </span>
                         </div>
                       </div>
                     )}
-                    
-                    {queuedUpload.error && (
-                      <p className="text-sm text-red-400">{queuedUpload.error}</p>
-                    )}
+
+                    {queuedUpload.error && <p className="text-sm text-red-400">{queuedUpload.error}</p>}
                   </div>
                 )
               })}
@@ -652,7 +667,9 @@ export default function UploadPage() {
           <p className="text-zinc-400 text-center">
             Advanced chunked uploads with parallel processing
             <br />
-            <span className="text-sm text-zinc-500">Supports large files, resume capability, and real-time progress</span>
+            <span className="text-sm text-zinc-500">
+              Supports large files, resume capability, and real-time progress
+            </span>
           </p>
         </CardContent>
       </Card>
@@ -664,13 +681,18 @@ export default function UploadPage() {
             <span className="font-medium">{selectedUploads.length}</span> item(s) selected
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" className="border-zinc-700" onClick={() => setSelectedUploads([])}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-zinc-700 bg-transparent"
+              onClick={() => setSelectedUploads([])}
+            >
               Clear Selection
             </Button>
             <Button
               variant="outline"
               size="sm"
-              className="border-zinc-700"
+              className="border-zinc-700 bg-transparent"
               onClick={() => setShowAddToFreeContentDialog(true)}
             >
               <PlusCircle className="h-4 w-4 mr-2" />
@@ -776,7 +798,8 @@ export default function UploadPage() {
             <Upload className="h-12 w-12 text-zinc-600 mb-4" />
             <h3 className="text-xl font-medium text-white mb-2">No uploads yet</h3>
             <p className="text-zinc-400 text-center mb-6 max-w-md">
-              Upload your first file to start building your content library. Advanced chunked uploads ensure fast and reliable transfers.
+              Upload your first file to start building your content library. Advanced chunked uploads ensure fast and
+              reliable transfers.
             </p>
             <Button
               onClick={() => fileInputRef.current?.click()}
@@ -929,7 +952,7 @@ export default function UploadPage() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="w-full"
+                                className="w-full bg-transparent"
                                 onClick={(e) => {
                                   e.stopPropagation()
                                   copyToClipboard(upload.fileUrl)
@@ -942,7 +965,7 @@ export default function UploadPage() {
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    className="px-2"
+                                    className="px-2 bg-transparent"
                                     onClick={(e) => e.stopPropagation()}
                                   >
                                     <MoreVertical className="h-4 w-4" />

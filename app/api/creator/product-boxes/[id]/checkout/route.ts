@@ -7,18 +7,15 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   try {
     console.log(`🛒 [Checkout] Starting checkout for product box: ${params.id}`)
 
+    // Verify authentication
     const decodedToken = await verifyIdToken(request)
-    let userId = null
-    let isGuestCheckout = false
-
-    if (decodedToken) {
-      userId = decodedToken.uid
-      console.log(`✅ [Checkout] User authenticated: ${userId}`)
-    } else {
-      // Allow guest checkout
-      isGuestCheckout = true
-      console.log(`👤 [Checkout] Guest checkout initiated`)
+    if (!decodedToken) {
+      console.error("❌ [Checkout] Authentication failed")
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
     }
+
+    const userId = decodedToken.uid
+    console.log(`✅ [Checkout] User authenticated: ${userId}`)
 
     // Get bundle details - use bundles collection
     const bundleDoc = await db.collection("bundles").doc(params.id).get()
@@ -83,30 +80,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         ? `https://${process.env.VERCEL_URL}`
         : "https://massclip.pro"
 
-    let successUrl: string
-    let cancelUrl: string
-
-    if (isGuestCheckout) {
-      // For guest checkout, redirect to a guest success page
-      successUrl = `${baseUrl}/purchase-success-guest?product_box_id=${params.id}&creator_id=${bundleData.creatorId}&session_id={CHECKOUT_SESSION_ID}`
-      cancelUrl = `${baseUrl}/creator/${creatorData.username || bundleData.creatorId}`
-    } else {
-      // Existing authenticated user flow
-      successUrl = `${baseUrl}/purchase-success?product_box_id=${params.id}&user_id=${userId}&creator_id=${bundleData.creatorId}`
-      cancelUrl = `${baseUrl}/creator/${creatorData.username || bundleData.creatorId}`
-    }
+    // SIMPLE SUCCESS URL - no complex verification, just landing page verification
+    const successUrl = `${baseUrl}/purchase-success?product_box_id=${params.id}&user_id=${userId}&creator_id=${bundleData.creatorId}`
+    const cancelUrl = `${baseUrl}/creator/${creatorData.username || bundleData.creatorId}`
 
     console.log(`🔗 [Checkout] Success URL: ${successUrl}`)
     console.log(`🔗 [Checkout] Cancel URL: ${cancelUrl}`)
-
-    const metadata = {
-      bundle_id: params.id,
-      product_box_id: params.id,
-      creator_id: bundleData.creatorId,
-      verification_method: "landing_page",
-      contentType: "bundle",
-      ...(userId ? { buyer_user_id: userId } : { is_guest_checkout: "true" }),
-    }
 
     const sessionParams = {
       payment_method_types: ["card"],
@@ -127,17 +106,23 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       mode: "payment" as const,
       success_url: successUrl,
       cancel_url: cancelUrl,
-      client_reference_id: userId || "guest",
-      metadata,
-      ...(isGuestCheckout
-        ? {
-            customer_email: undefined, // Let Stripe collect email
-            billing_address_collection: "required",
-          }
-        : {}),
+      client_reference_id: userId,
+      metadata: {
+        bundle_id: params.id,
+        product_box_id: params.id, // Keep for compatibility
+        buyer_user_id: userId,
+        creator_id: bundleData.creatorId,
+        verification_method: "landing_page", // No Stripe verification needed!
+      },
       payment_intent_data: {
         application_fee_amount: Math.round(price * 100 * 0.1), // 10% platform fee
-        metadata,
+        metadata: {
+          bundle_id: params.id,
+          product_box_id: params.id, // Keep for compatibility
+          buyer_user_id: userId,
+          creator_id: bundleData.creatorId,
+          verification_method: "landing_page",
+        },
       },
     }
 
@@ -177,7 +162,11 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   try {
     console.log(`🔍 [Checkout] GET request for product box: ${params.id}`)
 
-    // This allows guests to view bundle details before purchase
+    // Verify authentication
+    const decodedToken = await verifyIdToken(request)
+    if (!decodedToken) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
+    }
 
     // Get product box data
     let productBoxDoc = await db.collection("productBoxes").doc(params.id).get()
