@@ -183,7 +183,7 @@ export default function DashboardPage() {
 
       {/* Stats Grid */}
       <div className="grid gap-4 md:grid-cols-3">
-        <Card className="bg-zinc-800/80 border-zinc-700/60">
+        <Card className="bg-zinc-900/50 border-zinc-800/50">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-zinc-200">Sales (30 Days)</CardTitle>
             <Calendar className="h-4 w-4 text-zinc-400" />
@@ -198,7 +198,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-zinc-800/80 border-zinc-700/60">
+        <Card className="bg-zinc-900/50 border-zinc-800/50">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-zinc-200">Free Videos</CardTitle>
             <Video className="h-4 w-4 text-zinc-400" />
@@ -217,7 +217,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <div className="bg-zinc-800/80 border-zinc-700/60 rounded-lg">
+        <div className="bg-zinc-900/50 border-zinc-800/50 rounded-lg">
           <ProfileViewStats userId={username || user?.uid || ""} />
         </div>
       </div>
