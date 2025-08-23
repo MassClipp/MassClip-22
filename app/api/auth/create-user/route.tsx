@@ -79,6 +79,52 @@ export async function POST(request: NextRequest) {
           name: contactName,
           contactId: result.data?.id,
         })
+
+        // Send welcome email after successful contact creation
+        try {
+          console.log("📧 Sending welcome email...")
+
+          const welcomeEmailResult = await resend.emails.send({
+            from: "MassClip <contact@massclip.pro>",
+            to: email,
+            subject: "Welcome to MassClip 💸",
+            html: `
+              <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #f4f4f4;">
+                <div style="max-width: 600px; margin: auto; background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+                  <h2 style="font-size: 24px; color: #222;">Welcome to MassClip 💸</h2>
+
+                  <p style="font-size: 16px; color: #444; margin-top: 20px;">
+                    We're glad to have you on board. Ready to take selling your content seriously?
+                  </p>
+
+                  <p style="font-size: 16px; color: #444;">
+                    MassClip is a platform that allows creators like you to sell and monetize your creative content in a branded, tailored, professional way. 
+                    No janky files, just a clean interface to showcase your content in a <strong>SERIOUS</strong> way.
+                  </p>
+
+                  <div style="text-align: center; margin: 30px 0;">
+                    <a href="https://massclip.pro/" style="display: inline-block; padding: 14px 28px; background-color: #7A5AF8; color: #ffffff; text-decoration: none; font-weight: bold; border-radius: 6px;">
+                      Set up your storefront now →
+                    </a>
+                  </div>
+
+                  <p style="font-size: 14px; color: #999; margin-top: 40px;">
+                    Let's get to it. The game just changed.
+                  </p>
+                </div>
+              </div>
+            `,
+          })
+
+          console.log("✅ Welcome email sent successfully:", {
+            email,
+            emailId: welcomeEmailResult.data?.id,
+          })
+        } catch (emailError) {
+          console.error("❌ Failed to send welcome email:", emailError)
+          // Don't fail the entire request if welcome email fails
+          console.warn("⚠️ Continuing despite welcome email error since user creation was successful")
+        }
       }
     } catch (error) {
       console.error("❌ Failed to add user to Resend contacts:", error)
