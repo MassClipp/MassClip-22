@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { headers } from "next/headers"
 import { adminDb } from "@/lib/firebase-admin"
-import crypto from "crypto"
+import { createHmac, timingSafeEqual } from "node:crypto"
 
 export async function POST(request: Request) {
   try {
@@ -21,11 +21,11 @@ export async function POST(request: Request) {
     }
 
     // Verify webhook signature
-    const expectedSignature = crypto.createHmac("sha256", webhookSecret).update(body).digest("hex")
+    const expectedSignature = createHmac("sha256", webhookSecret).update(body).digest("hex")
 
     const providedSignature = signature.replace("sha256=", "")
 
-    if (!crypto.timingSafeEqual(Buffer.from(expectedSignature), Buffer.from(providedSignature))) {
+    if (!timingSafeEqual(Buffer.from(expectedSignature), Buffer.from(providedSignature))) {
       console.error("Invalid Resend webhook signature")
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 })
     }
