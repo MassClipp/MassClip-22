@@ -1,6 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { ensureMembership } from "@/lib/memberships-service"
 import { createFreeUser } from "@/lib/free-users-service"
+import { Resend } from "resend"
+
+const resend = new Resend(process.env.RESEND_API_KEY)
 
 export async function POST(request: NextRequest) {
   try {
@@ -54,6 +57,33 @@ export async function POST(request: NextRequest) {
       console.error("❌ Failed to create membership record:", error)
       // Don't fail the entire request if membership fails, since freeUsers is the primary tracker
       console.warn("⚠️ Continuing despite membership error since freeUsers was created successfully")
+    }
+
+    try {
+      console.log("📧 Adding user to Resend contacts...")
+
+      if (!process.env.RESEND_AUDIENCE_ID) {
+        console.warn("⚠️ RESEND_AUDIENCE_ID not configured, skipping contact creation")
+      } else {
+        const contactName = displayName || username || email.split("@")[0]
+
+        const result = await resend.contacts.create({
+          email: email,
+          firstName: contactName,
+          audienceId: process.env.RESEND_AUDIENCE_ID,
+          unsubscribed: false,
+        })
+
+        console.log("✅ User added to Resend contacts:", {
+          email,
+          name: contactName,
+          contactId: result.data?.id,
+        })
+      }
+    } catch (error) {
+      console.error("❌ Failed to add user to Resend contacts:", error)
+      // Don't fail the entire request if Resend fails
+      console.warn("⚠️ Continuing despite Resend error since core user creation was successful")
     }
 
     console.log("✅ Server-side user creation completed successfully")

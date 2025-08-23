@@ -920,6 +920,42 @@ function InlineCreatorUploadCard({ video }: { video: any }) {
   )
 }
 
+const detectCreatorUploadContentType = (upload: any): "video" | "audio" | "image" => {
+  // Check MIME type first
+  if (upload.mimeType) {
+    if (upload.mimeType.startsWith("video/")) return "video"
+    if (upload.mimeType.startsWith("audio/")) return "audio"
+    if (upload.mimeType.startsWith("image/")) return "image"
+  }
+
+  // Fallback to file extension
+  const url = (upload.fileUrl || "").toLowerCase()
+  if (
+    url.includes(".mp4") ||
+    url.includes(".mov") ||
+    url.includes(".avi") ||
+    url.includes(".mkv") ||
+    url.includes(".webm")
+  ) {
+    return "video"
+  }
+  if (url.includes(".mp3") || url.includes(".wav") || url.includes(".m4a") || url.includes(".aac")) {
+    return "audio"
+  }
+  if (
+    url.includes(".jpg") ||
+    url.includes(".jpeg") ||
+    url.includes(".png") ||
+    url.includes(".gif") ||
+    url.includes(".webp")
+  ) {
+    return "image"
+  }
+
+  // Default to video for backwards compatibility
+  return "video"
+}
+
 // Inline VideoRow component
 function InlineVideoRow({
   title,
@@ -993,11 +1029,35 @@ function InlineVideoRow({
   // Load videos when row becomes visible
   useEffect(() => {
     if (isIntersecting && videos) {
+      let filteredVideos = videos
+
+      if (isCreatorUploads) {
+        console.log(
+          `[v0] Creator uploads before filtering:`,
+          videos.map((v) => ({
+            name: v.name || v.title,
+            mimeType: v.mimeType,
+            fileUrl: v.link || v.fileUrl,
+            detectedType: detectCreatorUploadContentType(v),
+          })),
+        )
+
+        filteredVideos = videos.filter((video) => {
+          const contentType = detectCreatorUploadContentType(video)
+          const isVideo = contentType === "video"
+
+          console.log(`[v0] Filtering "${video.name || video.title}": type=${contentType}, isVideo=${isVideo}`)
+
+          return isVideo
+        })
+        console.log(`[v0] Filtered creator uploads: ${videos.length} -> ${filteredVideos.length} (videos only)`)
+      }
+
       // All users get shuffled videos for dynamic experience
-      const shuffledVideos = shuffleArray([...videos], Math.random()).slice(0, limit)
+      const shuffledVideos = shuffleArray([...filteredVideos], Math.random()).slice(0, limit)
       setVisibleVideos(shuffledVideos)
     }
-  }, [isIntersecting, videos, limit])
+  }, [isIntersecting, videos, limit, isCreatorUploads])
 
   // Calculate max scroll position
   useEffect(() => {

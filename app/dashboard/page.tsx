@@ -6,7 +6,21 @@ import { useProfileInitialization } from "@/hooks/use-profile-initialization"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { DollarSign, Package, TrendingUp, Video, RefreshCw, Activity, Calendar } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
+import {
+  DollarSign,
+  Package,
+  TrendingUp,
+  Video,
+  RefreshCw,
+  Activity,
+  Calendar,
+  CheckCircle2,
+  CreditCard,
+  Upload,
+  Gift,
+  ShoppingBag,
+} from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
 import { useVideoStatsAPI } from "@/hooks/use-video-stats-api"
@@ -21,6 +35,13 @@ export default function DashboardPage() {
   const { toast } = useToast()
 
   const [refreshing, setRefreshing] = useState(false)
+
+  const [checkedTasks, setCheckedTasks] = useState({
+    stripe: false,
+    upload: false,
+    freeContent: false,
+    bundle: false,
+  })
 
   // Use API-based video statistics (avoids Firestore index issues)
   const videoStats = useVideoStatsAPI()
@@ -46,6 +67,17 @@ export default function DashboardPage() {
       setRefreshing(false)
     }
   }
+
+  const handleTaskCheck = (taskKey: keyof typeof checkedTasks) => {
+    setCheckedTasks((prev) => ({
+      ...prev,
+      [taskKey]: !prev[taskKey],
+    }))
+  }
+
+  const completedTasks = Object.values(checkedTasks).filter(Boolean).length
+  const totalTasks = Object.keys(checkedTasks).length
+  const completionPercentage = (completedTasks / totalTasks) * 100
 
   // Show loading state while profile is being initialized or stats are loading
   if (isInitializing || videoStats.loading || salesData.loading) {
@@ -186,7 +218,7 @@ export default function DashboardPage() {
         </Card>
 
         <div className="bg-zinc-900/50 border-zinc-800/50 rounded-lg">
-          <ProfileViewStats userId={user?.uid || ""} />
+          <ProfileViewStats userId={username || user?.uid || ""} />
         </div>
       </div>
 
@@ -197,9 +229,121 @@ export default function DashboardPage() {
           <SalesForecastCard />
         </div>
 
-        {/* Quick Actions & Video Stats */}
         <div className="space-y-6">
-          {/* Quick Actions */}
+          {/* Creator Checklist - Replaces Content Library */}
+          <Card className="bg-gradient-to-br from-zinc-900/50 to-zinc-800/30 border-zinc-700/50">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <CheckCircle2 className="h-5 w-5 text-white" />
+                    Creator Setup
+                  </CardTitle>
+                  <CardDescription>Complete these steps to get started</CardDescription>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm font-medium text-white">
+                    {completedTasks}/{totalTasks}
+                  </div>
+                  <div className="text-xs text-zinc-400">{completionPercentage.toFixed(0)}% complete</div>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Progress bar */}
+              <div className="w-full bg-zinc-800 rounded-full h-2">
+                <div
+                  className="bg-gradient-to-r from-white to-gray-300 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${completionPercentage}%` }}
+                />
+              </div>
+
+              {/* Task list */}
+              <div className="space-y-3">
+                <div className="flex items-center space-x-3">
+                  <Checkbox
+                    id="stripe"
+                    checked={checkedTasks.stripe}
+                    onCheckedChange={() => handleTaskCheck("stripe")}
+                    className="border-zinc-600 data-[state=checked]:bg-white data-[state=checked]:border-white"
+                  />
+                  <div className="flex items-center gap-2 flex-1">
+                    <CreditCard className="h-4 w-4 text-zinc-400" />
+                    <label
+                      htmlFor="stripe"
+                      className={`text-sm cursor-pointer ${checkedTasks.stripe ? "line-through text-zinc-500" : "text-zinc-200"}`}
+                    >
+                      Connect your Stripe account
+                    </label>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-3">
+                  <Checkbox
+                    id="upload"
+                    checked={checkedTasks.upload}
+                    onCheckedChange={() => handleTaskCheck("upload")}
+                    className="border-zinc-600 data-[state=checked]:bg-white data-[state=checked]:border-white"
+                  />
+                  <div className="flex items-center gap-2 flex-1">
+                    <Upload className="h-4 w-4 text-zinc-400" />
+                    <label
+                      htmlFor="upload"
+                      className={`text-sm cursor-pointer ${checkedTasks.upload ? "line-through text-zinc-500" : "text-zinc-200"}`}
+                    >
+                      Upload content
+                    </label>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-3">
+                  <Checkbox
+                    id="freeContent"
+                    checked={checkedTasks.freeContent}
+                    onCheckedChange={() => handleTaskCheck("freeContent")}
+                    className="border-zinc-600 data-[state=checked]:bg-white data-[state=checked]:border-white"
+                  />
+                  <div className="flex items-center gap-2 flex-1">
+                    <Gift className="h-4 w-4 text-zinc-400" />
+                    <label
+                      htmlFor="freeContent"
+                      className={`text-sm cursor-pointer ${checkedTasks.freeContent ? "line-through text-zinc-500" : "text-zinc-200"}`}
+                    >
+                      Add free content
+                    </label>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-3">
+                  <Checkbox
+                    id="bundle"
+                    checked={checkedTasks.bundle}
+                    onCheckedChange={() => handleTaskCheck("bundle")}
+                    className="border-zinc-600 data-[state=checked]:bg-white data-[state=checked]:border-white"
+                  />
+                  <div className="flex items-center gap-2 flex-1">
+                    <ShoppingBag className="h-4 w-4 text-zinc-400" />
+                    <label
+                      htmlFor="bundle"
+                      className={`text-sm cursor-pointer ${checkedTasks.bundle ? "line-through text-zinc-500" : "text-zinc-200"}`}
+                    >
+                      Create a bundle
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {completionPercentage === 100 && (
+                <div className="mt-4 p-3 bg-green-900/20 border border-green-800/50 rounded-lg">
+                  <p className="text-sm text-green-400 font-medium">
+                    🎉 Great job! You're all set up and ready to start selling.
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Quick Actions - Moved below checklist */}
           <Card className="bg-zinc-900/50 border-zinc-800/50">
             <CardHeader>
               <CardTitle>Quick Actions</CardTitle>
@@ -231,50 +375,6 @@ export default function DashboardPage() {
                 <TrendingUp className="h-4 w-4 mr-2" />
                 Edit Profile
               </Button>
-            </CardContent>
-          </Card>
-
-          {/* Video Statistics - Enhanced with API-based data */}
-          <Card className="bg-gradient-to-br from-zinc-900/50 to-zinc-800/30 border-zinc-700/50">
-            <CardContent className="pt-6">
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-600 to-blue-700 flex items-center justify-center flex-shrink-0">
-                  <Video className="h-4 w-4 text-white" />
-                </div>
-                <div className="flex-1">
-                  <div className="text-sm font-medium text-zinc-200 mb-1">Content Library</div>
-                  <div className="text-2xl font-bold text-white">{videoStats.totalUploads}</div>
-                  <div className="text-xs text-zinc-500 mt-1">total uploads</div>
-
-                  {/* Enhanced breakdown */}
-                  <div className="mt-2 space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-green-400">Free videos:</span>
-                      <span className="text-white font-medium">{videoStats.totalFreeVideos}</span>
-                    </div>
-                    {videoStats.totalUploads > videoStats.totalFreeVideos && (
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-yellow-400">Premium videos:</span>
-                        <span className="text-white font-medium">
-                          {videoStats.totalUploads - videoStats.totalFreeVideos}
-                        </span>
-                      </div>
-                    )}
-                    {videoStats.totalUploads > 0 && (
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-blue-400">Free ratio:</span>
-                        <span className="text-white font-medium">{videoStats.freeVideoPercentage.toFixed(1)}%</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Auto-refresh indicator */}
-                  <div className="flex items-center gap-1 mt-2">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                    <span className="text-xs text-blue-500">Auto-refresh (60s)</span>
-                  </div>
-                </div>
-              </div>
             </CardContent>
           </Card>
         </div>
