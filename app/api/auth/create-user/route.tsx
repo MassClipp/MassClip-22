@@ -79,6 +79,49 @@ export async function POST(request: NextRequest) {
           name: contactName,
           contactId: result.data?.id,
         })
+
+        // Send welcome email after successful contact creation
+        try {
+          console.log("📧 Sending welcome email...")
+
+          const welcomeEmailResult = await resend.emails.send({
+            from: "MassClip <contact@massclip.pro>",
+            to: email,
+            subject: "Welcome to MassClip 💸",
+            html: `
+              <!DOCTYPE html>
+              <html lang="en">
+                <head>
+                  <meta charset="UTF-8" />
+                  <title>Welcome to MassClip!</title>
+                </head>
+                <body style="font-family: Arial, sans-serif; font-size: 16px; line-height: 1.5; color: #000;">
+                  <p>Hey there, we're hyped to have you on board.</p>
+                  <p>
+                    Let's be honest, you work hard to make your creative content, which is exactly why we built MassClip to give creators like you a platform to turn your content into a digital monetization asset in a <strong>SERIOUS</strong> manner. A clean, branded, professional storefront to showcase your creative content without janky drive files.
+                  </p>
+                  <p>
+                    <a href="https://www.massclip.pro/dashboard" style="color: #007BFF; text-decoration: underline;">
+                      Get started setting up your storefront here
+                    </a>
+                  </p>
+                  <p>
+                    We're curious. Let us know why you signed up. What got you interested? Hit us with a reply, we'd love to hear your feedback.
+                  </p>
+                </body>
+              </html>
+            `,
+          })
+
+          console.log("✅ Welcome email sent successfully:", {
+            email,
+            emailId: welcomeEmailResult.data?.id,
+          })
+        } catch (emailError) {
+          console.error("❌ Failed to send welcome email:", emailError)
+          // Don't fail the entire request if welcome email fails
+          console.warn("⚠️ Continuing despite welcome email error since user creation was successful")
+        }
       }
     } catch (error) {
       console.error("❌ Failed to add user to Resend contacts:", error)
