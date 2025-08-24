@@ -8,11 +8,17 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const email = searchParams.get("email")
 
+    console.log("[v0] Unsubscribe request URL:", request.url)
+    console.log("[v0] Email parameter received:", email)
+    console.log("[v0] All search params:", Object.fromEntries(searchParams.entries()))
+
     if (!email) {
       return new NextResponse(
         `<html><body style="font-family: Arial, sans-serif; padding: 40px; text-align: center;">
           <h2>Invalid Request</h2>
           <p>No email address provided.</p>
+          <p><strong>URL received:</strong> ${request.url}</p>
+          <p><strong>Expected format:</strong> /api/unsubscribe?email=your@email.com</p>
         </body></html>`,
         { status: 400, headers: { "Content-Type": "text/html" } },
       )
