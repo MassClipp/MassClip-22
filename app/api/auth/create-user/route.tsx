@@ -108,6 +108,12 @@ export async function POST(request: NextRequest) {
                   <p>
                     We're curious. Let us know why you signed up. What got you interested? Hit us with a reply, we'd love to hear your feedback.
                   </p>
+                  
+                  <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;" />
+                  <p style="font-size: 12px; color: #999; text-align: center;">
+                    If you no longer want to receive emails from MassClip, you can 
+                    <a href="${process.env.NEXT_PUBLIC_SITE_URL || "https://www.massclip.pro"}/api/unsubscribe?email=${encodeURIComponent(email)}" style="color: #999;">unsubscribe here</a>.
+                  </p>
                 </body>
               </html>
             `,
