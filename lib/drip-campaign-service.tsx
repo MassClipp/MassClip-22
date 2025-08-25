@@ -24,64 +24,63 @@ export interface EmailTemplate {
 const EMAIL_TEMPLATES: EmailTemplate[] = [
   {
     day: 1,
-    subject: "Welcome to the platform built for serious creators",
+    subject: "Welcome to MassClip",
     delayDays: 0, // Sent immediately (already handled in create-user)
     html: `
       <!DOCTYPE html>
       <html lang="en">
         <head>
           <meta charset="UTF-8" />
-          <title>Welcome to MassClip!</title>
+          <title>Welcome to MassClip</title>
         </head>
         <body style="font-family: Arial, sans-serif; font-size: 16px; line-height: 1.5; color: #000;">
           <p>Hi there,</p>
-          <p>Welcome to MassClip! We believe selling content should be taken more seriously and treated as a true business. Too often, creators are left with platforms that undervalue their work or make it hard to earn consistently.</p>
-          <p>That's why we built MassClip — to give creators a professional, streamlined way to monetize their content. Our goal is to help you build a sustainable income while showcasing your work the way it deserves.</p>
-          <p>Over the next few days, we'll walk you through everything you need to get started and set yourself up for success.</p>
-          <p>We're glad you're here. Let's make this the beginning of something big.</p>
-          <p><a href="https://www.massclip.pro/dashboard" style="color: #007BFF; text-decoration: underline;">Take a moment to explore the platform here.</a></p>
-          <p>Cheers,<br>MassClip</p>
+          <p>Welcome to MassClip. We built this platform because we believe selling content should be taken more seriously and treated as a real business. Many creators are left with tools that don't feel professional or make it difficult to earn consistently.</p>
+          <p>MassClip is designed to give you a simple and structured way to share your work and build steady income.</p>
+          <p>Over the next few days, we'll guide you step by step so you can get everything set up.</p>
+          <p><a href="https://www.massclip.pro/dashboard" style="color: #007BFF; text-decoration: underline;">You can take a look around the platform here.</a></p>
+          <p>Best,<br>MassClip</p>
         </body>
       </html>
     `,
   },
   {
     day: 2,
-    subject: "Get set up to start earning",
+    subject: "Set up payments with Stripe",
     delayDays: 1,
     html: `
       <!DOCTYPE html>
       <html lang="en">
         <head>
           <meta charset="UTF-8" />
-          <title>Connect Your Stripe Account</title>
+          <title>Set up payments with Stripe</title>
         </head>
         <body style="font-family: Arial, sans-serif; font-size: 16px; line-height: 1.5; color: #000;">
           <p>Hi there,</p>
-          <p>You're almost ready to start earning. The next step is connecting your Stripe account so you can get paid directly for your sales.</p>
-          <p>It's quick and easy to set up. <a href="https://www.massclip.pro/dashboard/earnings" style="color: #007BFF; text-decoration: underline;">Just click here to connect your Stripe account</a> and you'll be good to go.</p>
-          <p>Once that's done, you'll be all set to start receiving payouts.</p>
-          <p>Cheers,<br>MassClip</p>
+          <p>The next step to getting started is connecting your Stripe account. This allows MassClip to send payouts directly to you.</p>
+          <p><a href="https://www.massclip.pro/dashboard/earnings" style="color: #007BFF; text-decoration: underline;">You can connect your Stripe account here.</a> It only takes a few minutes.</p>
+          <p>Once connected, you'll be ready to receive payments whenever someone buys your content.</p>
+          <p>Best,<br>MassClip</p>
         </body>
       </html>
     `,
   },
   {
     day: 3,
-    subject: "Time to create your first bundle",
+    subject: "Create your first bundle",
     delayDays: 2,
     html: `
       <!DOCTYPE html>
       <html lang="en">
         <head>
           <meta charset="UTF-8" />
-          <title>Create Your First Bundle</title>
+          <title>Create your first bundle</title>
         </head>
         <body style="font-family: Arial, sans-serif; font-size: 16px; line-height: 1.5; color: #000;">
           <p>Hi there,</p>
-          <p>Now that you're set up to get paid, it's time to create your first bundle. Bundles let you group content together so buyers know exactly what they're getting.</p>
-          <p>Pro tip: Make each bundle focused on a specific topic or category. This helps your audience find what they're looking for and increases the chances they'll buy.</p>
-          <p><a href="https://www.massclip.pro/dashboard/bundles" style="color: #007BFF; text-decoration: underline;">Go ahead and create your first bundle here.</a> You'll be surprised how quickly it comes together.</p>
+          <p>With payments ready, the next step is creating your first bundle. Bundles let you organize your content so people can see exactly what they'll get.</p>
+          <p>Keeping each bundle focused on a topic makes it easier for your audience to decide what they want.</p>
+          <p><a href="https://www.massclip.pro/dashboard/bundles" style="color: #007BFF; text-decoration: underline;">You can create your first bundle here.</a></p>
           <p>Best,<br>MassClip</p>
         </body>
       </html>
@@ -89,42 +88,42 @@ const EMAIL_TEMPLATES: EmailTemplate[] = [
   },
   {
     day: 4,
-    subject: "Build trust with free content",
+    subject: "Add some free content",
     delayDays: 3,
     html: `
       <!DOCTYPE html>
       <html lang="en">
         <head>
           <meta charset="UTF-8" />
-          <title>Upload Free Content</title>
+          <title>Add some free content</title>
         </head>
         <body style="font-family: Arial, sans-serif; font-size: 16px; line-height: 1.5; color: #000;">
           <p>Hi there,</p>
-          <p>Here's a little secret: free content is more powerful than most people realize. When you upload free content, it gives potential buyers a taste of your work and builds trust in the quality of your bundles.</p>
-          <p>Think of it as your highlight reel. The better the preview, the more likely people are to purchase.</p>
-          <p><a href="https://www.massclip.pro/dashboard/free-content" style="color: #007BFF; text-decoration: underline;">Upload your first free content here</a> and let your audience see what you can do.</p>
-          <p>Cheers,<br>MassClip</p>
+          <p>Adding free content is a simple way to show your audience the quality of your work. It helps people get familiar with what you offer before they purchase a bundle.</p>
+          <p>Think of it as a preview. Even one free upload can make a difference.</p>
+          <p><a href="https://www.massclip.pro/dashboard/free-content" style="color: #007BFF; text-decoration: underline;">You can upload free content here.</a></p>
+          <p>Best,<br>MassClip</p>
         </body>
       </html>
     `,
   },
   {
     day: 5,
-    subject: "Make your storefront live today",
+    subject: "Share your storefront link",
     delayDays: 4,
     html: `
       <!DOCTYPE html>
       <html lang="en">
         <head>
           <meta charset="UTF-8" />
-          <title>Go Live With Your Storefront</title>
+          <title>Share your storefront link</title>
         </head>
         <body style="font-family: Arial, sans-serif; font-size: 16px; line-height: 1.5; color: #000;">
           <p>Hi there,</p>
-          <p>Your storefront is ready to shine. Once you've got bundles and content uploaded, the next step is adding your store link to your social bio. That way, traffic can start flowing in and sales can start rolling.</p>
-          <p>It's simple, but it makes all the difference. The easier it is for people to find your storefront, the faster you'll see results.</p>
-          <p><a href="https://www.massclip.pro/dashboard" style="color: #007BFF; text-decoration: underline;">Visit your dashboard here to view your profile and copy your storefront link.</a></p>
-          <p>All the best,<br>MassClip</p>
+          <p>Your storefront is ready. Once you've uploaded your bundles and content, the next step is sharing your link so others can find it.</p>
+          <p>A good place to start is adding your storefront link to your social bio.</p>
+          <p><a href="https://www.massclip.pro/dashboard" style="color: #007BFF; text-decoration: underline;">You can view your profile here and copy your storefront link.</a></p>
+          <p>Best,<br>MassClip</p>
         </body>
       </html>
     `,
