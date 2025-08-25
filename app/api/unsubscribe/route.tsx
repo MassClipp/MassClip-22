@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { Resend } from "resend"
+import { DripCampaignService } from "@/lib/drip-campaign-service"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -35,6 +36,14 @@ export async function GET(request: NextRequest) {
         console.error(`[v0] Failed to remove ${email} from Resend:`, resendError)
         // Continue anyway - show success to user even if Resend fails
       }
+    }
+
+    try {
+      await DripCampaignService.unsubscribeUser(email)
+      console.log(`[v0] Successfully unsubscribed ${email} from drip campaign`)
+    } catch (dripError) {
+      console.error(`[v0] Failed to unsubscribe ${email} from drip campaign:`, dripError)
+      // Continue anyway - show success to user even if drip campaign fails
     }
 
     return new NextResponse(

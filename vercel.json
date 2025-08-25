@@ -4,5 +4,11 @@
       "NODE_ENV": "production"
     }
   },
-  "installCommand": "pnpm install"
+  "installCommand": "pnpm install",
+  "crons": [
+    {
+      "path": "/api/drip-campaign/send-daily",
+      "schedule": "0 12 * * *"
+    }
+  ]
 }

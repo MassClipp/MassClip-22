@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { ensureMembership } from "@/lib/memberships-service"
 import { createFreeUser } from "@/lib/free-users-service"
 import { Resend } from "resend"
+import { DripCampaignService } from "@/lib/drip-campaign-service"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -133,6 +134,16 @@ export async function POST(request: NextRequest) {
       console.error("❌ Failed to add user to Resend contacts:", error)
       // Don't fail the entire request if Resend fails
       console.warn("⚠️ Continuing despite Resend error since core user creation was successful")
+    }
+
+    try {
+      console.log("🔄 Initializing drip campaign...")
+      await DripCampaignService.initializeCampaign(uid, email, displayName)
+      console.log("✅ Drip campaign initialized successfully")
+    } catch (error) {
+      console.error("❌ Failed to initialize drip campaign:", error)
+      // Don't fail the entire request if drip campaign fails
+      console.warn("⚠️ Continuing despite drip campaign error since user creation was successful")
     }
 
     console.log("✅ Server-side user creation completed successfully")
