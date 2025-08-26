@@ -218,54 +218,34 @@ export default function PurchasesFullScreen({ className = "" }: PurchasesFullScr
   }
 
   const getThumbnailUrl = (purchase: Purchase) => {
-    const contentType = detectContentType(purchase)
+    // Prioritize direct thumbnail URLs from purchase data, avoid API-dependent generation
+    const directThumbnailUrl = purchase.thumbnailUrl || purchase.metadata?.thumbnailUrl
 
-    // For video content, prioritize actual thumbnail URLs over file URLs
-    if (contentType === "video") {
-      const thumbnailUrl =
-        purchase.thumbnailUrl ||
-        purchase.metadata?.thumbnailUrl ||
-        (purchase.type === "bundle" ? `/api/bundles/${purchase.bundleId}/thumbnail` : null) ||
-        (purchase.productBoxId ? `/api/product-box/${purchase.productBoxId}/thumbnail` : null)
-
-      if (thumbnailUrl) {
-        // Always use proxy for external URLs
-        if (thumbnailUrl.startsWith("http://") || thumbnailUrl.startsWith("https://")) {
-          return `/api/proxy-image?url=${encodeURIComponent(thumbnailUrl)}`
-        }
-        // For API endpoints, also use proxy
-        if (thumbnailUrl.startsWith("/api/") && !thumbnailUrl.includes("placeholder.svg")) {
-          const fullUrl = `${window.location.origin}${thumbnailUrl}`
-          return `/api/proxy-image?url=${encodeURIComponent(fullUrl)}`
-        }
-        return thumbnailUrl
+    // If we have a direct thumbnail URL, use it
+    if (directThumbnailUrl) {
+      // Only use proxy for external URLs (not internal API endpoints)
+      if (directThumbnailUrl.startsWith("http://") || directThumbnailUrl.startsWith("https://")) {
+        return `/api/proxy-image?url=${encodeURIComponent(directThumbnailUrl)}`
       }
-
-      // If no thumbnail available for video, return null to show video icon
-      return null
+      // For internal URLs, use directly without proxy to avoid Safari CORS issues
+      return directThumbnailUrl
     }
 
-    // For other content types, use the standard logic
-    const rawUrl =
-      purchase.thumbnailUrl ||
-      purchase.metadata?.thumbnailUrl ||
-      purchase.metadata?.fileUrl ||
-      (purchase.type === "bundle" ? `/api/bundles/${purchase.bundleId}/thumbnail` : null) ||
-      (purchase.productBoxId ? `/api/product-box/${purchase.productBoxId}/thumbnail` : null)
+    // If no direct thumbnail available, return null to show content type icon fallback
+    return null
+  }
 
-    if (rawUrl) {
-      // Always use proxy for external URLs
-      if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
-        return `/api/proxy-image?url=${encodeURIComponent(rawUrl)}`
-      }
-      // For API endpoints that might have CORS issues, also use proxy
-      if (rawUrl.startsWith("/api/") && !rawUrl.includes("placeholder.svg")) {
-        const fullUrl = `${window.location.origin}${rawUrl}`
-        return `/api/proxy-image?url=${encodeURIComponent(fullUrl)}`
-      }
+  const getContentIconSvg = (contentType: string) => {
+    switch (contentType) {
+      case "video":
+        return `<svg class="h-6 w-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`
+      case "audio":
+        return `<svg class="h-6 w-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path></svg>`
+      case "bundle":
+        return `<svg class="h-6 w-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>`
+      default:
+        return `<svg class="h-6 w-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>`
     }
-
-    return rawUrl
   }
 
   if (authLoading || loading) {
@@ -416,31 +396,25 @@ export default function PurchasesFullScreen({ className = "" }: PurchasesFullScr
                             crossOrigin="anonymous"
                             referrerPolicy="no-referrer"
                             loading="lazy"
-                            onLoad={() => {
-                              console.log("[v0] Image loaded successfully:", getThumbnailUrl(purchase))
-                            }}
                             onError={(e) => {
                               const target = e.target as HTMLImageElement
-                              console.log("[v0] Image failed to load:", target.src)
                               target.style.display = "none"
                               const parent = target.parentElement
                               if (parent) {
                                 const contentType = detectContentType(purchase)
-                                const iconSvg =
-                                  contentType === "video"
-                                    ? `<svg class="h-6 w-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`
-                                    : contentType === "audio"
-                                      ? `<svg class="h-6 w-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path></svg>`
-                                      : `<svg class="h-6 w-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>`
-
-                                parent.innerHTML = `
-                                  <div class="w-full h-full flex items-center justify-center bg-gray-800 rounded-lg">
+                                const iconElement = parent.querySelector(".content-type-icon")
+                                if (!iconElement) {
+                                  const iconDiv = document.createElement("div")
+                                  iconDiv.className =
+                                    "content-type-icon w-full h-full flex items-center justify-center bg-gray-800 rounded-lg"
+                                  iconDiv.innerHTML = `
                                     <div class="text-center">
-                                      ${iconSvg}
+                                      ${getContentIconSvg(contentType)}
                                       <div class="text-xs text-gray-400 mt-1">${contentType}</div>
                                     </div>
-                                  </div>
-                                `
+                                  `
+                                  parent.appendChild(iconDiv)
+                                }
                               }
                             }}
                           />
