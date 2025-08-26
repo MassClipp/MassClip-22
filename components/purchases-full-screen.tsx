@@ -175,12 +175,17 @@ export default function PurchasesFullScreen({ className = "" }: PurchasesFullScr
 
   const getThumbnailUrl = (purchase: Purchase) => {
     // Priority order for thumbnail sources
-    return (
+    const rawUrl =
       purchase.thumbnailUrl ||
       purchase.metadata?.thumbnailUrl ||
       (purchase.type === "bundle" ? `/api/bundles/${purchase.bundleId}/thumbnail` : null) ||
       (purchase.productBoxId ? `/api/product-box/${purchase.productBoxId}/thumbnail` : null)
-    )
+
+    if (rawUrl && !rawUrl.startsWith("/api/") && !rawUrl.includes("placeholder.svg")) {
+      return `/api/proxy-image?url=${encodeURIComponent(rawUrl)}`
+    }
+
+    return rawUrl
   }
 
   if (authLoading || loading) {
@@ -328,6 +333,7 @@ export default function PurchasesFullScreen({ className = "" }: PurchasesFullScr
                             src={getThumbnailUrl(purchase) || "/placeholder.svg"}
                             alt={purchase.title}
                             className="w-full h-full object-cover rounded-lg"
+                            crossOrigin="anonymous"
                             onError={(e) => {
                               const target = e.target as HTMLImageElement
                               target.style.display = "none"
