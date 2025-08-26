@@ -181,8 +181,16 @@ export default function PurchasesFullScreen({ className = "" }: PurchasesFullScr
       (purchase.type === "bundle" ? `/api/bundles/${purchase.bundleId}/thumbnail` : null) ||
       (purchase.productBoxId ? `/api/product-box/${purchase.productBoxId}/thumbnail` : null)
 
-    if (rawUrl && !rawUrl.startsWith("/api/") && !rawUrl.includes("placeholder.svg")) {
-      return `/api/proxy-image?url=${encodeURIComponent(rawUrl)}`
+    if (rawUrl) {
+      // Always use proxy for external URLs (non-relative URLs)
+      if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
+        return `/api/proxy-image?url=${encodeURIComponent(rawUrl)}`
+      }
+      // For API endpoints that might have CORS issues, also use proxy
+      if (rawUrl.startsWith("/api/") && !rawUrl.includes("placeholder.svg")) {
+        const fullUrl = `${window.location.origin}${rawUrl}`
+        return `/api/proxy-image?url=${encodeURIComponent(fullUrl)}`
+      }
     }
 
     return rawUrl
@@ -334,16 +342,25 @@ export default function PurchasesFullScreen({ className = "" }: PurchasesFullScr
                             alt={purchase.title}
                             className="w-full h-full object-cover rounded-lg"
                             crossOrigin="anonymous"
+                            referrerPolicy="no-referrer"
+                            loading="lazy"
+                            onLoad={() => {
+                              console.log("[v0] Image loaded successfully:", getThumbnailUrl(purchase))
+                            }}
                             onError={(e) => {
                               const target = e.target as HTMLImageElement
+                              console.log("[v0] Image failed to load:", target.src)
                               target.style.display = "none"
                               const parent = target.parentElement
                               if (parent) {
                                 parent.innerHTML = `
                                   <div class="w-full h-full flex items-center justify-center bg-gray-800 rounded-lg">
-                                    <svg class="h-6 w-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
-                                    </svg>
+                                    <div class="text-center">
+                                      <svg class="h-6 w-6 text-red-400 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                                      </svg>
+                                      <div class="text-xs text-red-400">Failed to load image</div>
+                                    </div>
                                   </div>
                                 `
                               }
