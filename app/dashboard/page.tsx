@@ -20,6 +20,7 @@ import {
   Upload,
   Gift,
   ShoppingBag,
+  Link,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
@@ -41,6 +42,7 @@ export default function DashboardPage() {
     upload: false,
     freeContent: false,
     bundle: false,
+    socialBio: false, // Added social bio task to state
   })
 
   // Use API-based video statistics (avoids Firestore index issues)
@@ -328,6 +330,24 @@ export default function DashboardPage() {
                       className={`text-sm cursor-pointer ${checkedTasks.bundle ? "line-through text-zinc-500" : "text-zinc-200"}`}
                     >
                       Create a bundle
+                    </label>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-3">
+                  <Checkbox
+                    id="socialBio"
+                    checked={checkedTasks.socialBio}
+                    onCheckedChange={() => handleTaskCheck("socialBio")}
+                    className="border-zinc-600 data-[state=checked]:bg-white data-[state=checked]:border-white"
+                  />
+                  <div className="flex items-center gap-2 flex-1">
+                    <Link className="h-4 w-4 text-zinc-400" />
+                    <label
+                      htmlFor="socialBio"
+                      className={`text-sm cursor-pointer ${checkedTasks.socialBio ? "line-through text-zinc-500" : "text-zinc-200"}`}
+                    >
+                      Put storefront link in social bio
                     </label>
                   </div>
                 </div>
