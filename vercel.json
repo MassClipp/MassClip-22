@@ -9,6 +9,10 @@
     {
       "path": "/api/drip-campaign/send-daily",
       "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/behavioral-emails/check-and-send",
+      "schedule": "0 14 * * *"
     }
   ]
 }

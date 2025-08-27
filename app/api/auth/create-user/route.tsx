@@ -3,6 +3,7 @@ import { ensureMembership } from "@/lib/memberships-service"
 import { createFreeUser } from "@/lib/free-users-service"
 import { Resend } from "resend"
 import { DripCampaignService } from "@/lib/drip-campaign-service"
+import { BehavioralEmailService } from "@/lib/behavioral-email-service"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -138,6 +139,16 @@ export async function POST(request: NextRequest) {
       console.error("❌ Failed to initialize drip campaign:", error)
       // Don't fail the entire request if drip campaign fails
       console.warn("⚠️ Continuing despite drip campaign error since user creation was successful")
+    }
+
+    try {
+      console.log("🔄 Initializing behavioral emails...")
+      await BehavioralEmailService.initializeBehavioralEmails(uid, email, displayName)
+      console.log("✅ Behavioral emails initialized successfully")
+    } catch (error) {
+      console.error("❌ Failed to initialize behavioral emails:", error)
+      // Don't fail the entire request if behavioral emails fail
+      console.warn("⚠️ Continuing despite behavioral email error since user creation was successful")
     }
 
     console.log("✅ Server-side user creation completed successfully")
