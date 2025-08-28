@@ -260,15 +260,6 @@ export default function AudioCard({ audio, className }: AudioCardProps) {
     setIsDownloading(true)
 
     try {
-      if (!user) {
-        toast({
-          title: "Authentication Required",
-          description: "Please log in to download audio",
-          variant: "destructive",
-        })
-        return
-      }
-
       if (!audio.fileUrl) {
         setDownloadError(true)
         toast({
@@ -279,7 +270,7 @@ export default function AudioCard({ audio, className }: AudioCardProps) {
         return
       }
 
-      if (!isProUser && hasReachedLimit) {
+      if (user && !isProUser && hasReachedLimit) {
         toast({
           title: "Download Limit Reached",
           description: "You've reached your monthly download limit. Upgrade to Creator Pro for unlimited downloads.",
@@ -288,8 +279,7 @@ export default function AudioCard({ audio, className }: AudioCardProps) {
         return
       }
 
-      // Record download for non-pro users
-      if (!isProUser) {
+      if (user && !isProUser) {
         const userDocRef = doc(db, "users", user.uid)
         await updateDoc(userDocRef, {
           downloads: increment(1),
@@ -297,7 +287,6 @@ export default function AudioCard({ audio, className }: AudioCardProps) {
         forceRefresh()
       }
 
-      // Download the file
       const filename = `${audio.title?.replace(/[^\w\s]/gi, "") || "audio"}.mp3`
       const downloadLink = document.createElement("a")
       downloadLink.href = audio.fileUrl
@@ -385,9 +374,11 @@ export default function AudioCard({ audio, className }: AudioCardProps) {
             <button
               onClick={handleDownload}
               className="p-1.5 rounded-full bg-black/50 backdrop-blur-sm hover:bg-black/70 transition-colors"
-              disabled={isDownloading || hasReachedLimit}
+              disabled={isDownloading || (user && hasReachedLimit && !isProUser)}
             >
-              <Download className={cn("h-3.5 w-3.5", hasReachedLimit ? "text-zinc-400" : "text-white")} />
+              <Download
+                className={cn("h-3.5 w-3.5", user && hasReachedLimit && !isProUser ? "text-zinc-400" : "text-white")}
+              />
             </button>
           </div>
         </div>
