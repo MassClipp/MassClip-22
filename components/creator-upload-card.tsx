@@ -467,6 +467,16 @@ function CreatorUploadCard({ video }: CreatorUploadCardProps) {
             </div>
           )}
 
+          {!isLoadingCreatorData && creatorDisplayName && (
+            <button
+              onClick={handleCreatorClick}
+              className="absolute top-2 right-2 bg-black/80 backdrop-blur-sm text-white text-xs px-2 py-1 rounded-full hover:bg-black/90 transition-all duration-200 z-10"
+              title={`Visit ${creatorDisplayName}'s storefront`}
+            >
+              @{creatorUsername}
+            </button>
+          )}
+
           {/* Overlay */}
           <div
             className={`absolute inset-0 bg-black/60 flex items-center justify-center transition-opacity duration-200 ${

@@ -517,7 +517,7 @@ function VideoContentCard({ item }: { item: ContentItem }) {
   })
 
   const recordDownload = async () => {
-    if (!user) return { success: false, message: "User not authenticated" }
+    if (!user) return { success: true } // Allow guest downloads without recording
 
     if (isProUser) return { success: true }
 
@@ -670,15 +670,6 @@ function VideoContentCard({ item }: { item: ContentItem }) {
     setIsDownloading(true)
 
     try {
-      if (!user) {
-        toast({
-          title: "Authentication Required",
-          description: "Please log in to download videos",
-          variant: "destructive",
-        })
-        return
-      }
-
       if (!item.fileUrl) {
         toast({
           title: "Download Error",
@@ -688,7 +679,7 @@ function VideoContentCard({ item }: { item: ContentItem }) {
         return
       }
 
-      if (hasReachedLimit && !isProUser) {
+      if (user && !isProUser && hasReachedLimit) {
         toast({
           title: "Download Limit Reached",
           description:
@@ -698,14 +689,16 @@ function VideoContentCard({ item }: { item: ContentItem }) {
         return
       }
 
-      const result = await recordDownload()
-      if (!result.success && !isProUser) {
-        toast({
-          title: "Download Error",
-          description: result.message || "Failed to record download.",
-          variant: "destructive",
-        })
-        return
+      if (user) {
+        const result = await recordDownload()
+        if (!result.success && !isProUser) {
+          toast({
+            title: "Download Error",
+            description: result.message || "Failed to record download.",
+            variant: "destructive",
+          })
+          return
+        }
       }
 
       const filename = `${item.title?.replace(/[^\w\s]/gi, "") || "video"}.mp4`
@@ -828,16 +821,24 @@ function VideoContentCard({ item }: { item: ContentItem }) {
         {proxiedVideoUrl && !videoError && videoLoaded && (
           <button
             onClick={handleDownload}
-            disabled={isDownloading || (hasReachedLimit && !isProUser)}
+            disabled={isDownloading || (user && hasReachedLimit && !isProUser)}
             className={`absolute bottom-2 right-2 backdrop-blur-sm p-1.5 rounded-full transition-all duration-200 hover:scale-110 ${
-              hasReachedLimit && !isProUser ? "bg-zinc-800/90 cursor-not-allowed" : "bg-black/60 hover:bg-black/80"
+              user && hasReachedLimit && !isProUser
+                ? "bg-zinc-800/90 cursor-not-allowed"
+                : "bg-black/60 hover:bg-black/80"
             } ${isHovered ? "opacity-100" : "opacity-70"}`}
             aria-label={
-              hasReachedLimit && !isProUser ? "Upgrade to Creator Pro for unlimited downloads" : "Download video"
+              user && hasReachedLimit && !isProUser
+                ? "Upgrade to Creator Pro for unlimited downloads"
+                : "Download video"
             }
-            title={hasReachedLimit && !isProUser ? "Upgrade to Creator Pro for unlimited downloads" : "Download video"}
+            title={
+              user && hasReachedLimit && !isProUser
+                ? "Upgrade to Creator Pro for unlimited downloads"
+                : "Download video"
+            }
           >
-            {hasReachedLimit && !isProUser ? (
+            {user && hasReachedLimit && !isProUser ? (
               <Lock className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-zinc-400" />
             ) : (
               <Download className={`h-3 w-3 sm:h-3.5 sm:w-3.5 text-white ${isDownloading ? "animate-pulse" : ""}`} />

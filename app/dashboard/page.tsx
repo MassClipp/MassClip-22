@@ -20,6 +20,7 @@ import {
   Upload,
   Gift,
   ShoppingBag,
+  Link,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
@@ -41,6 +42,7 @@ export default function DashboardPage() {
     upload: false,
     freeContent: false,
     bundle: false,
+    socialBio: false, // Added social bio task to state
   })
 
   // Use API-based video statistics (avoids Firestore index issues)
@@ -73,6 +75,21 @@ export default function DashboardPage() {
       ...prev,
       [taskKey]: !prev[taskKey],
     }))
+  }
+
+  const handleTaskClick = (taskKey: string) => {
+    const taskRoutes = {
+      stripe: "/dashboard/earnings",
+      upload: "/dashboard/upload",
+      freeContent: "/dashboard/free-content",
+      bundle: "/dashboard/bundles",
+      socialBio: "/dashboard/profile",
+    }
+
+    const route = taskRoutes[taskKey as keyof typeof taskRoutes]
+    if (route) {
+      router.push(route)
+    }
   }
 
   const completedTasks = Object.values(checkedTasks).filter(Boolean).length
@@ -271,7 +288,8 @@ export default function DashboardPage() {
                     <CreditCard className="h-4 w-4 text-zinc-400" />
                     <label
                       htmlFor="stripe"
-                      className={`text-sm cursor-pointer ${checkedTasks.stripe ? "line-through text-zinc-500" : "text-zinc-200"}`}
+                      onClick={() => handleTaskClick("stripe")}
+                      className={`text-sm cursor-pointer hover:text-white transition-colors ${checkedTasks.stripe ? "line-through text-zinc-500" : "text-zinc-200"}`}
                     >
                       Connect your Stripe account
                     </label>
@@ -289,7 +307,8 @@ export default function DashboardPage() {
                     <Upload className="h-4 w-4 text-zinc-400" />
                     <label
                       htmlFor="upload"
-                      className={`text-sm cursor-pointer ${checkedTasks.upload ? "line-through text-zinc-500" : "text-zinc-200"}`}
+                      onClick={() => handleTaskClick("upload")}
+                      className={`text-sm cursor-pointer hover:text-white transition-colors ${checkedTasks.upload ? "line-through text-zinc-500" : "text-zinc-200"}`}
                     >
                       Upload content
                     </label>
@@ -307,7 +326,8 @@ export default function DashboardPage() {
                     <Gift className="h-4 w-4 text-zinc-400" />
                     <label
                       htmlFor="freeContent"
-                      className={`text-sm cursor-pointer ${checkedTasks.freeContent ? "line-through text-zinc-500" : "text-zinc-200"}`}
+                      onClick={() => handleTaskClick("freeContent")}
+                      className={`text-sm cursor-pointer hover:text-white transition-colors ${checkedTasks.freeContent ? "line-through text-zinc-500" : "text-zinc-200"}`}
                     >
                       Add free content
                     </label>
@@ -325,9 +345,29 @@ export default function DashboardPage() {
                     <ShoppingBag className="h-4 w-4 text-zinc-400" />
                     <label
                       htmlFor="bundle"
-                      className={`text-sm cursor-pointer ${checkedTasks.bundle ? "line-through text-zinc-500" : "text-zinc-200"}`}
+                      onClick={() => handleTaskClick("bundle")}
+                      className={`text-sm cursor-pointer hover:text-white transition-colors ${checkedTasks.bundle ? "line-through text-zinc-500" : "text-zinc-200"}`}
                     >
                       Create a bundle
+                    </label>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-3">
+                  <Checkbox
+                    id="socialBio"
+                    checked={checkedTasks.socialBio}
+                    onCheckedChange={() => handleTaskCheck("socialBio")}
+                    className="border-zinc-600 data-[state=checked]:bg-white data-[state=checked]:border-white"
+                  />
+                  <div className="flex items-center gap-2 flex-1">
+                    <Link className="h-4 w-4 text-zinc-400" />
+                    <label
+                      htmlFor="socialBio"
+                      onClick={() => handleTaskClick("socialBio")}
+                      className={`text-sm cursor-pointer hover:text-white transition-colors ${checkedTasks.socialBio ? "line-through text-zinc-500" : "text-zinc-200"}`}
+                    >
+                      Put storefront link in social bio
                     </label>
                   </div>
                 </div>

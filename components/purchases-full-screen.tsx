@@ -33,6 +33,8 @@ interface Purchase {
     description?: string
     contentCount?: number
     thumbnailUrl?: string
+    contentType?: string
+    fileUrl?: string
     [key: string]: any
   }
 }
@@ -162,25 +164,88 @@ export default function PurchasesFullScreen({ className = "" }: PurchasesFullScr
     return matchesSearch && matchesTab
   })
 
-  const getContentIcon = (type: string) => {
-    switch (type) {
+  const detectContentType = (purchase: Purchase): "video" | "image" | "audio" | "bundle" => {
+    // If it's a bundle type, return bundle
+    if (purchase.type === "bundle") {
+      return "bundle"
+    }
+
+    // Check metadata for content type
+    if (purchase.metadata?.contentType) {
+      if (purchase.metadata.contentType.startsWith("video/")) return "video"
+      if (purchase.metadata.contentType.startsWith("image/")) return "image"
+      if (purchase.metadata.contentType.startsWith("audio/")) return "audio"
+    }
+
+    // Check file URLs for extensions
+    const fileUrl = purchase.metadata?.fileUrl || purchase.downloadUrl || purchase.thumbnailUrl || ""
+    const extension = fileUrl.split(".").pop()?.toLowerCase()
+
+    // Video extensions
+    if (["mp4", "mov", "avi", "mkv", "webm", "m4v"].includes(extension || "")) {
+      return "video"
+    }
+
+    // Audio extensions
+    if (["mp3", "wav", "flac", "aac", "m4a", "ogg", "wma"].includes(extension || "")) {
+      return "audio"
+    }
+
+    // Image extensions
+    if (["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp"].includes(extension || "")) {
+      return "image"
+    }
+
+    // Default to video for unknown types (since most content appears to be video)
+    return "video"
+  }
+
+  const getContentIcon = (purchase: Purchase) => {
+    const contentType = detectContentType(purchase)
+
+    switch (contentType) {
       case "bundle":
         return <Package className="h-6 w-6 text-white" />
-      case "subscription":
+      case "video":
+        return <Play className="h-6 w-6 text-white" />
+      case "audio":
         return <Calendar className="h-6 w-6 text-white" />
+      case "image":
+        return <Eye className="h-6 w-6 text-white" />
       default:
         return <Play className="h-6 w-6 text-white" />
     }
   }
 
   const getThumbnailUrl = (purchase: Purchase) => {
-    // Priority order for thumbnail sources
-    return (
-      purchase.thumbnailUrl ||
-      purchase.metadata?.thumbnailUrl ||
-      (purchase.type === "bundle" ? `/api/bundles/${purchase.bundleId}/thumbnail` : null) ||
-      (purchase.productBoxId ? `/api/product-box/${purchase.productBoxId}/thumbnail` : null)
-    )
+    // Prioritize direct thumbnail URLs from purchase data, avoid API-dependent generation
+    const directThumbnailUrl = purchase.thumbnailUrl || purchase.metadata?.thumbnailUrl
+
+    // If we have a direct thumbnail URL, use it
+    if (directThumbnailUrl) {
+      // Only use proxy for external URLs (not internal API endpoints)
+      if (directThumbnailUrl.startsWith("http://") || directThumbnailUrl.startsWith("https://")) {
+        return `/api/proxy-image?url=${encodeURIComponent(directThumbnailUrl)}`
+      }
+      // For internal URLs, use directly without proxy to avoid Safari CORS issues
+      return directThumbnailUrl
+    }
+
+    // If no direct thumbnail available, return null to show content type icon fallback
+    return null
+  }
+
+  const getContentIconSvg = (contentType: string) => {
+    switch (contentType) {
+      case "video":
+        return `<svg class="h-6 w-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`
+      case "audio":
+        return `<svg class="h-6 w-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path></svg>`
+      case "bundle":
+        return `<svg class="h-6 w-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>`
+      default:
+        return `<svg class="h-6 w-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>`
+    }
   }
 
   if (authLoading || loading) {
@@ -328,24 +393,34 @@ export default function PurchasesFullScreen({ className = "" }: PurchasesFullScr
                             src={getThumbnailUrl(purchase) || "/placeholder.svg"}
                             alt={purchase.title}
                             className="w-full h-full object-cover rounded-lg"
+                            crossOrigin="anonymous"
+                            referrerPolicy="no-referrer"
+                            loading="lazy"
                             onError={(e) => {
                               const target = e.target as HTMLImageElement
                               target.style.display = "none"
                               const parent = target.parentElement
                               if (parent) {
-                                parent.innerHTML = `
-                                  <div class="w-full h-full flex items-center justify-center bg-gray-800 rounded-lg">
-                                    <svg class="h-6 w-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
-                                    </svg>
-                                  </div>
-                                `
+                                const contentType = detectContentType(purchase)
+                                const iconElement = parent.querySelector(".content-type-icon")
+                                if (!iconElement) {
+                                  const iconDiv = document.createElement("div")
+                                  iconDiv.className =
+                                    "content-type-icon w-full h-full flex items-center justify-center bg-gray-800 rounded-lg"
+                                  iconDiv.innerHTML = `
+                                    <div class="text-center">
+                                      ${getContentIconSvg(contentType)}
+                                      <div class="text-xs text-gray-400 mt-1">${contentType}</div>
+                                    </div>
+                                  `
+                                  parent.appendChild(iconDiv)
+                                }
                               }
                             }}
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center bg-gray-800 rounded-lg">
-                            {getContentIcon(purchase.type || "product_box")}
+                            {getContentIcon(purchase)}
                           </div>
                         )}
                       </div>

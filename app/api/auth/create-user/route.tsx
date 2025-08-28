@@ -2,6 +2,8 @@ import { type NextRequest, NextResponse } from "next/server"
 import { ensureMembership } from "@/lib/memberships-service"
 import { createFreeUser } from "@/lib/free-users-service"
 import { Resend } from "resend"
+import { DripCampaignService } from "@/lib/drip-campaign-service"
+import { BehavioralEmailService } from "@/lib/behavioral-email-service"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -87,32 +89,29 @@ export async function POST(request: NextRequest) {
           const welcomeEmailResult = await resend.emails.send({
             from: "MassClip <contact@massclip.pro>",
             to: email,
-            subject: "Welcome to MassClip 💸",
+            subject: "Welcome to MassClip",
             html: `
-              <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #f4f4f4;">
-                <div style="max-width: 600px; margin: auto; background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
-                  <h2 style="font-size: 24px; color: #222;">Welcome to MassClip 💸</h2>
-
-                  <p style="font-size: 16px; color: #444; margin-top: 20px;">
-                    We're glad to have you on board. Ready to take selling your content seriously?
+              <!DOCTYPE html>
+              <html lang="en">
+                <head>
+                  <meta charset="UTF-8" />
+                  <title>Welcome to MassClip</title>
+                </head>
+                <body style="font-family: Arial, sans-serif; font-size: 16px; line-height: 1.5; color: #000;">
+                  <p>Hi there,</p>
+                  <p>Welcome to MassClip. We built this platform because we believe selling content should be taken more seriously and treated as a real business. Many creators are left with tools that don't feel professional or make it difficult to earn consistently.</p>
+                  <p>MassClip is designed to give you a simple and structured way to share your work and build steady income.</p>
+                  <p>Over the next few days, we'll guide you step by step so you can get everything set up.</p>
+                  <p><a href="https://www.massclip.pro/dashboard" style="color: #007BFF; text-decoration: underline;">You can take a look around the platform here.</a></p>
+                  <p>Best,<br>MassClip</p>
+                  
+                  <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;" />
+                  <p style="font-size: 12px; color: #999; text-align: center;">
+                    If you no longer want to receive emails from MassClip, you can 
+                    <a href="${process.env.NEXT_PUBLIC_SITE_URL || "https://www.massclip.pro"}/api/unsubscribe?email=${encodeURIComponent(email)}" style="color: #999;">unsubscribe here</a>.
                   </p>
-
-                  <p style="font-size: 16px; color: #444;">
-                    MassClip is a platform that allows creators like you to sell and monetize your creative content in a branded, tailored, professional way. 
-                    No janky files, just a clean interface to showcase your content in a <strong>SERIOUS</strong> way.
-                  </p>
-
-                  <div style="text-align: center; margin: 30px 0;">
-                    <a href="https://massclip.pro/" style="display: inline-block; padding: 14px 28px; background-color: #7A5AF8; color: #ffffff; text-decoration: none; font-weight: bold; border-radius: 6px;">
-                      Set up your storefront now →
-                    </a>
-                  </div>
-
-                  <p style="font-size: 14px; color: #999; margin-top: 40px;">
-                    Let's get to it. The game just changed.
-                  </p>
-                </div>
-              </div>
+                </body>
+              </html>
             `,
           })
 
@@ -130,6 +129,26 @@ export async function POST(request: NextRequest) {
       console.error("❌ Failed to add user to Resend contacts:", error)
       // Don't fail the entire request if Resend fails
       console.warn("⚠️ Continuing despite Resend error since core user creation was successful")
+    }
+
+    try {
+      console.log("🔄 Initializing drip campaign...")
+      await DripCampaignService.initializeCampaign(uid, email, displayName)
+      console.log("✅ Drip campaign initialized successfully")
+    } catch (error) {
+      console.error("❌ Failed to initialize drip campaign:", error)
+      // Don't fail the entire request if drip campaign fails
+      console.warn("⚠️ Continuing despite drip campaign error since user creation was successful")
+    }
+
+    try {
+      console.log("🔄 Initializing behavioral emails...")
+      await BehavioralEmailService.initializeBehavioralEmails(uid, email, displayName)
+      console.log("✅ Behavioral emails initialized successfully")
+    } catch (error) {
+      console.error("❌ Failed to initialize behavioral emails:", error)
+      // Don't fail the entire request if behavioral emails fail
+      console.warn("⚠️ Continuing despite behavioral email error since user creation was successful")
     }
 
     console.log("✅ Server-side user creation completed successfully")

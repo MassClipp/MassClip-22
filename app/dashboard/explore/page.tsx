@@ -44,6 +44,7 @@ import {
   query,
   where,
   getDocs,
+  getDoc,
 } from "firebase/firestore"
 import { useToast } from "@/hooks/use-toast"
 import { useDownloadLimit } from "@/contexts/download-limit-context"
@@ -557,12 +558,68 @@ function InlineCreatorUploadCard({ video }: { video: any }) {
   const [isCheckingFavorite, setIsCheckingFavorite] = useState(true)
   const [isPlaying, setIsPlaying] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
+  const [creatorUsername, setCreatorUsername] = useState<string | null>(null)
+  const [creatorDisplayName, setCreatorDisplayName] = useState<string | null>(null)
+  const [isLoadingCreatorData, setIsLoadingCreatorData] = useState(true)
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const { user } = useAuth()
   const { toast } = useToast()
   const { hasReachedLimit, isProUser, forceRefresh } = useDownloadLimit()
   const router = useRouter()
+
+  useEffect(() => {
+    const fetchCreatorData = async () => {
+      setIsLoadingCreatorData(true)
+
+      if (!video.uid) {
+        // Fallback to existing data if no UID
+        setCreatorUsername(video.username || video.creatorName?.toLowerCase().replace(/\s+/g, "") || "unknown")
+        setCreatorDisplayName(video.userDisplayName || video.creatorName || "Creator")
+        setIsLoadingCreatorData(false)
+        return
+      }
+
+      try {
+        // Get the user document directly by UID for most current data
+        const userDocRef = doc(db, "users", video.uid)
+        const userDoc = await getDoc(userDocRef)
+
+        if (userDoc.exists()) {
+          const userData = userDoc.data()
+
+          // Use the current data from Firestore - prioritize username, fallback to displayName
+          const currentUsername =
+            userData.username || userData.displayName?.toLowerCase().replace(/\s+/g, "") || "unknown"
+          const currentDisplayName = userData.displayName || userData.username || "Creator"
+
+          setCreatorUsername(currentUsername)
+          setCreatorDisplayName(currentDisplayName)
+        } else {
+          // Fallback to existing data
+          setCreatorUsername(video.username || video.creatorName?.toLowerCase().replace(/\s+/g, "") || "unknown")
+          setCreatorDisplayName(video.userDisplayName || video.creatorName || "Creator")
+        }
+      } catch (error) {
+        console.error("Error fetching creator data:", error)
+        // Fallback to existing data
+        setCreatorUsername(video.username || video.creatorName?.toLowerCase().replace(/\s+/g, "") || "unknown")
+        setCreatorDisplayName(video.userDisplayName || video.creatorName || "Creator")
+      } finally {
+        setIsLoadingCreatorData(false)
+      }
+    }
+
+    fetchCreatorData()
+  }, [video.uid, video.username, video.creatorName, video.userDisplayName, video.id])
+
+  const handleCreatorClick = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    const username = creatorUsername || "unknown"
+    router.push(`/creator/${username}`)
+  }
 
   // Check if video is in favorites
   useEffect(() => {
@@ -866,6 +923,16 @@ function InlineCreatorUploadCard({ video }: { video: any }) {
             <source src={video.fileUrl} type="video/mp4" />
             Your browser does not support the video tag.
           </video>
+
+          {!isLoadingCreatorData && creatorDisplayName && (
+            <button
+              onClick={handleCreatorClick}
+              className="absolute top-2 right-2 bg-black/80 backdrop-blur-sm text-white text-xs px-2 py-1 rounded-full hover:bg-black/90 transition-all duration-200 z-30"
+              title={`Visit ${creatorDisplayName}'s storefront`}
+            >
+              @{creatorUsername}
+            </button>
+          )}
 
           <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20">
             <button
