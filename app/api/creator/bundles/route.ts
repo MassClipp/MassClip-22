@@ -208,20 +208,23 @@ export async function POST(request: NextRequest) {
 
     // Create Stripe product
     console.log("🏪 [Bundle Creation] Creating Stripe product...")
-    const product = await stripe.products.create(
-      {
-        name: title,
-        description: description || "",
-        metadata: {
-          bundleType: "content_bundle",
-          creatorId: userId,
-          contentCount: (contentItems?.length || 0).toString(),
-        },
+    const productData: any = {
+      name: title,
+      metadata: {
+        bundleType: "content_bundle",
+        creatorId: userId,
+        contentCount: (contentItems?.length || 0).toString(),
       },
-      {
-        stripeAccount: stripeAccountId,
-      },
-    )
+    }
+
+    // Only add description if it's not empty and not just placeholder text
+    if (description && description.trim() && description !== "Describe your bundle") {
+      productData.description = description.trim()
+    }
+
+    const product = await stripe.products.create(productData, {
+      stripeAccount: stripeAccountId,
+    })
 
     console.log("✅ [Bundle Creation] Stripe product created:", product.id)
 
