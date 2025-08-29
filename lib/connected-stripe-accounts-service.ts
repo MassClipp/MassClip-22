@@ -127,26 +127,3 @@ export class ConnectedStripeAccountsService {
     return account.charges_enabled && account.details_submitted
   }
 }
-
-// Export the function that the webhook processor needs
-export async function getConnectedStripeAccount(userId: string): Promise<ConnectedStripeAccount | null> {
-  try {
-    const doc = await db.collection("connectedStripeAccounts").doc(userId).get()
-    if (!doc.exists) {
-      console.log(`No connected Stripe account found for user: ${userId}`)
-      return null
-    }
-
-    const accountData = doc.data() as ConnectedStripeAccount
-    console.log(`Found connected Stripe account for user ${userId}:`, {
-      stripeAccountId: accountData.stripeAccountId || accountData.stripe_user_id,
-      charges_enabled: accountData.charges_enabled,
-      details_submitted: accountData.details_submitted,
-    })
-
-    return accountData
-  } catch (error) {
-    console.error(`Error fetching connected account for user ${userId}:`, error)
-    return null
-  }
-}

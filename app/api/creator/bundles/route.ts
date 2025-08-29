@@ -3,7 +3,7 @@ import { getAuth } from "firebase-admin/auth"
 import { getFirestore } from "firebase-admin/firestore"
 import { initializeApp, getApps, cert } from "firebase-admin/app"
 import Stripe from "stripe"
-import { getConnectedStripeAccount } from "@/lib/connected-stripe-accounts-service"
+import { ConnectedStripeAccountsService } from "@/lib/connected-stripe-accounts-service"
 
 // Initialize Firebase Admin
 if (!getApps().length) {
@@ -148,8 +148,7 @@ export async function POST(request: NextRequest) {
     const userId = decodedToken.uid
     console.log("✅ [Bundle Creation] User authenticated:", userId)
 
-    // Check if user has connected Stripe account
-    const connectedAccount = await getConnectedStripeAccount(userId)
+    const connectedAccount = await ConnectedStripeAccountsService.getAccount(userId)
     console.log("🔍 [Bundle Creation] Stripe account lookup result:", {
       userId,
       accountFound: !!connectedAccount,
@@ -175,8 +174,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Verify account is properly set up
-    if (!connectedAccount.charges_enabled || !connectedAccount.details_submitted) {
+    if (!ConnectedStripeAccountsService.isAccountFullySetup(connectedAccount)) {
       console.error("❌ [Bundle Creation] Stripe account setup incomplete:", {
         charges_enabled: connectedAccount.charges_enabled,
         details_submitted: connectedAccount.details_submitted,
