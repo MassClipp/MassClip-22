@@ -14,7 +14,8 @@ interface NotificationPreferences {
 }
 
 export default function SettingsPage() {
-  const { user } = useAuth()
+  const authResult = useAuth()
+  const user = authResult?.user
   const [preferences, setPreferences] = useState<NotificationPreferences>({
     purchaseNotifications: true,
     downloadNotifications: true,
@@ -22,12 +23,21 @@ export default function SettingsPage() {
   })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [authLoading, setAuthLoading] = useState(true)
 
   useEffect(() => {
-    if (user?.email) {
-      loadPreferences()
+    if (authResult !== undefined) {
+      setAuthLoading(false)
     }
-  }, [user])
+  }, [authResult])
+
+  useEffect(() => {
+    if (!authLoading && user?.email) {
+      loadPreferences()
+    } else if (!authLoading && !user) {
+      setLoading(false)
+    }
+  }, [user, authLoading])
 
   const loadPreferences = async () => {
     try {
@@ -76,7 +86,7 @@ export default function SettingsPage() {
     }))
   }
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <div className="container mx-auto py-8">
         <div className="max-w-2xl mx-auto">
@@ -85,6 +95,21 @@ export default function SettingsPage() {
             <div className="h-32 bg-gray-200 rounded-lg mb-4"></div>
             <div className="h-32 bg-gray-200 rounded-lg"></div>
           </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return (
+      <div className="container mx-auto py-8">
+        <div className="max-w-2xl mx-auto">
+          <h1 className="text-3xl font-bold mb-8">Settings</h1>
+          <Card>
+            <CardContent className="pt-6">
+              <p className="text-center text-muted-foreground">Please log in to access your notification settings.</p>
+            </CardContent>
+          </Card>
         </div>
       </div>
     )
