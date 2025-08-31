@@ -156,19 +156,27 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
 
   const generateRevenueData = () => {
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    const hasRealData = data && (data.grossSales > 0 || data.totalEarnings > 0)
+
     return months.map((month, index) => ({
       month,
-      revenue: Math.max(0, ((data?.grossSales || 0) * (0.3 + Math.random() * 0.7) * (index + 1)) / 12),
-      profit: Math.max(0, ((data?.totalEarnings || 0) * (0.3 + Math.random() * 0.7) * (index + 1)) / 12),
+      revenue: hasRealData
+        ? Math.max(0, ((data?.grossSales || 0) * (0.3 + Math.random() * 0.7) * (index + 1)) / 12)
+        : 0,
+      profit: hasRealData
+        ? Math.max(0, ((data?.totalEarnings || 0) * (0.3 + Math.random() * 0.7) * (index + 1)) / 12)
+        : 0,
     }))
   }
 
   const generateSalesData = () => {
     const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    const hasRealData = data && data.totalSales > 0
+
     return days.map((day) => ({
       day,
-      sales: Math.floor(Math.random() * 50) + 10,
-      revenue: Math.floor(Math.random() * 500) + 100,
+      sales: hasRealData ? Math.floor(Math.random() * 50) + 10 : 0,
+      revenue: hasRealData ? Math.floor(Math.random() * 500) + 100 : 0,
     }))
   }
 
