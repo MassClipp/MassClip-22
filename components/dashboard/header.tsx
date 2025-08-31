@@ -20,15 +20,17 @@ import { doc, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import Logo from "@/components/logo"
 import NavDropdown from "@/components/dashboard/nav-dropdown"
-import { useNotifications } from "@/hooks/use-notifications"
+import type { Notification } from "@/lib/types"
 
 export default function DashboardHeader() {
   const router = useRouter()
   const { user, signOut } = useAuth()
   const [searchQuery, setSearchQuery] = useState("")
   const [userData, setUserData] = useState<any>(null)
-  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications()
+  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [unreadCount, setUnreadCount] = useState(0)
 
+  // Fetch user data
   useEffect(() => {
     const fetchUserData = async () => {
       if (!user) return
@@ -46,6 +48,80 @@ export default function DashboardHeader() {
     fetchUserData()
   }, [user])
 
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      if (!user) return
+
+      try {
+        const token = await user.getIdToken()
+        const response = await fetch("/api/notifications", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          setNotifications(data.notifications || [])
+          setUnreadCount(data.unreadCount || 0)
+        }
+      } catch (error) {
+        console.error("Error fetching notifications:", error)
+      }
+    }
+
+    fetchNotifications()
+
+    // Poll for new notifications every 30 seconds
+    const interval = setInterval(fetchNotifications, 30000)
+    return () => clearInterval(interval)
+  }, [user])
+
+  const markNotificationAsRead = async (notificationId: string) => {
+    if (!user) return
+
+    try {
+      const token = await user.getIdToken()
+      await fetch("/api/notifications", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ notificationId }),
+      })
+
+      // Update local state
+      setNotifications((prev) => prev.map((n) => (n.id === notificationId ? { ...n, read: true } : n)))
+      setUnreadCount((prev) => Math.max(0, prev - 1))
+    } catch (error) {
+      console.error("Error marking notification as read:", error)
+    }
+  }
+
+  const markAllAsRead = async () => {
+    if (!user) return
+
+    try {
+      const token = await user.getIdToken()
+      await fetch("/api/notifications", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ markAllAsRead: true }),
+      })
+
+      // Update local state
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+      setUnreadCount(0)
+    } catch (error) {
+      console.error("Error marking all notifications as read:", error)
+    }
+  }
+
+  // Handle search
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
     if (searchQuery.trim()) {
@@ -53,6 +129,7 @@ export default function DashboardHeader() {
     }
   }
 
+  // Handle sign out
   const handleSignOut = async () => {
     try {
       await signOut()
@@ -60,22 +137,6 @@ export default function DashboardHeader() {
     } catch (error) {
       console.error("Error signing out:", error)
     }
-  }
-
-  const handleNotificationClick = async (notificationId: string) => {
-    await markAsRead(notificationId)
-  }
-
-  const formatNotificationTime = (timestamp: any) => {
-    if (!timestamp) return ""
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp)
-    const now = new Date()
-    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60))
-
-    if (diffInMinutes < 1) return "Just now"
-    if (diffInMinutes < 60) return `${diffInMinutes}m ago`
-    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`
-    return `${Math.floor(diffInMinutes / 1440)}d ago`
   }
 
   return (
@@ -126,21 +187,21 @@ export default function DashboardHeader() {
               <Button variant="ghost" size="icon" className="relative">
                 <Bell className="h-5 w-5 text-zinc-400" />
                 {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center font-medium">
+                  <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-500 text-xs text-white flex items-center justify-center">
                     {unreadCount > 9 ? "9+" : unreadCount}
                   </span>
                 )}
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-96 bg-zinc-900 border-zinc-800 max-h-96 overflow-y-auto">
-              <div className="flex items-center justify-between p-3">
-                <DropdownMenuLabel className="text-base font-semibold">Notifications</DropdownMenuLabel>
+            <DropdownMenuContent align="end" className="w-80 bg-zinc-900 border-zinc-800">
+              <div className="flex items-center justify-between px-3 py-2">
+                <DropdownMenuLabel>Notifications</DropdownMenuLabel>
                 {unreadCount > 0 && (
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={markAllAsRead}
-                    className="text-xs text-zinc-400 hover:text-white h-auto p-1"
+                    className="text-xs text-zinc-400 hover:text-white"
                   >
                     Mark all read
                   </Button>
@@ -148,34 +209,28 @@ export default function DashboardHeader() {
               </div>
               <DropdownMenuSeparator className="bg-zinc-800" />
               {notifications.length > 0 ? (
-                <div className="max-h-80 overflow-y-auto">
-                  {notifications.map((notification) => (
+                <div className="max-h-96 overflow-y-auto">
+                  {notifications.slice(0, 10).map((notification) => (
                     <DropdownMenuItem
                       key={notification.id}
-                      className={`p-4 cursor-pointer hover:bg-zinc-800 focus:bg-zinc-800 ${
+                      className={`flex flex-col items-start p-3 cursor-pointer ${
                         !notification.read ? "bg-zinc-800/50" : ""
                       }`}
-                      onClick={() => handleNotificationClick(notification.id)}
+                      onClick={() => !notification.read && markNotificationAsRead(notification.id)}
                     >
-                      <div className="flex flex-col gap-1 w-full">
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="text-sm font-medium text-white leading-tight">{notification.title}</p>
-                          {!notification.read && (
-                            <div className="h-2 w-2 rounded-full bg-red-500 flex-shrink-0 mt-1"></div>
-                          )}
-                        </div>
-                        <p className="text-xs text-zinc-400 leading-relaxed">{notification.message}</p>
-                        <p className="text-xs text-zinc-500 mt-1">{formatNotificationTime(notification.createdAt)}</p>
+                      <div className="flex items-center justify-between w-full">
+                        <span className="font-medium text-sm">{notification.title}</span>
+                        {!notification.read && <span className="h-2 w-2 rounded-full bg-red-500 flex-shrink-0"></span>}
                       </div>
+                      <span className="text-xs text-zinc-400 mt-1">{notification.message}</span>
+                      <span className="text-xs text-zinc-500 mt-1">
+                        {new Date(notification.createdAt).toLocaleDateString()}
+                      </span>
                     </DropdownMenuItem>
                   ))}
                 </div>
               ) : (
-                <div className="py-8 text-center">
-                  <Bell className="h-8 w-8 text-zinc-600 mx-auto mb-2" />
-                  <p className="text-sm text-zinc-500">No notifications yet</p>
-                  <p className="text-xs text-zinc-600 mt-1">You'll see updates about your content here</p>
-                </div>
+                <div className="py-4 text-center text-sm text-zinc-500">No new notifications</div>
               )}
             </DropdownMenuContent>
           </DropdownMenu>

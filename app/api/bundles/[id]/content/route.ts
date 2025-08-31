@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { initializeApp, getApps, cert } from "firebase-admin/app"
 import { getAuth } from "firebase-admin/auth"
 import { getFirestore } from "firebase-admin/firestore"
+import { NotificationService } from "@/lib/notification-service"
 
 // Initialize Firebase Admin if not already initialized
 if (!getApps().length) {
@@ -278,6 +279,32 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
       return processedContent
     })
+
+    if (purchaseData.creatorId && bundleContents.length > 0) {
+      try {
+        // Get creator details for notification
+        const creatorDoc = await db.collection("users").doc(purchaseData.creatorId).get()
+        if (creatorDoc.exists) {
+          const creatorData = creatorDoc.data()!
+          const creatorEmail = creatorData.email
+          const creatorName = creatorData.displayName || creatorData.name || creatorData.username || "Creator"
+
+          if (creatorEmail) {
+            await NotificationService.notifyDownload(
+              purchaseData.creatorId,
+              creatorEmail,
+              creatorName,
+              bundleId,
+              bundleInfo.title,
+            )
+            console.log(`✅ [Bundle Content API] Download notifications sent to creator: ${creatorEmail}`)
+          }
+        }
+      } catch (notificationError) {
+        console.error(`❌ [Bundle Content API] Failed to send download notifications:`, notificationError)
+        // Don't fail the content request if notifications fail
+      }
+    }
 
     const response = {
       hasAccess: true,

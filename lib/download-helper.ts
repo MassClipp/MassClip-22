@@ -3,6 +3,7 @@
  */
 export async function downloadFile(url: string, filename: string): Promise<boolean> {
   try {
+    // For direct file URLs, we can use the download attribute
     const link = document.createElement("a")
     link.style.display = "none"
     document.body.appendChild(link)
@@ -17,42 +18,30 @@ export async function downloadFile(url: string, filename: string): Promise<boole
 
       link.href = objectUrl
       link.download = filename
-      link.setAttribute("download", filename)
-      link.target = "_blank"
+      link.click()
 
-      setTimeout(() => {
-        link.click()
-      }, 100)
-
-      // Clean up after a longer delay to ensure download starts
+      // Clean up
       setTimeout(() => {
         URL.revokeObjectURL(objectUrl)
         if (link.parentNode) {
           link.parentNode.removeChild(link)
         }
-      }, 1000) // Increased cleanup delay
+      }, 100)
 
       return true
     } catch (error) {
       console.error("Blob download failed, trying direct approach:", error)
 
+      // Fallback to direct approach
       link.href = url
       link.download = filename
-      link.setAttribute("download", filename)
-      link.target = "_blank"
-
-      try {
-        link.click()
-      } catch (clickError) {
-        // Fallback: open in new window with download intent
-        window.open(url, "_blank")
-      }
+      link.click()
 
       setTimeout(() => {
         if (link.parentNode) {
           link.parentNode.removeChild(link)
         }
-      }, 1000)
+      }, 100)
 
       return true
     }

@@ -2,7 +2,6 @@ import { type NextRequest, NextResponse } from "next/server"
 import { Resend } from "resend"
 import { DripCampaignService } from "@/lib/drip-campaign-service"
 import { BehavioralEmailService } from "@/lib/behavioral-email-service"
-import { NotificationService } from "@/lib/notification-service"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -54,14 +53,6 @@ export async function GET(request: NextRequest) {
     } catch (behavioralError) {
       console.error(`[v0] Failed to unsubscribe ${email} from behavioral emails:`, behavioralError)
       // Continue anyway - show success to user even if behavioral email fails
-    }
-
-    try {
-      await NotificationService.unsubscribeFromNotifications(email)
-      console.log(`[v0] Successfully unsubscribed ${email} from notification emails`)
-    } catch (notificationError) {
-      console.error(`[v0] Failed to unsubscribe ${email} from notification emails:`, notificationError)
-      // Continue anyway - show success to user even if notification unsubscribe fails
     }
 
     return new NextResponse(

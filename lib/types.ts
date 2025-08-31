@@ -428,3 +428,40 @@ export interface Profile {
   totalEarnings?: number
   isVerified?: boolean
 }
+
+export interface Notification {
+  id: string
+  userId: string
+  type: NotificationType
+  title: string
+  message: string
+  data?: NotificationData
+  read: boolean
+  createdAt: Date
+  updatedAt: Date
+}
+
+export enum NotificationType {
+  BUNDLE_PURCHASED = "bundle_purchased",
+  BUNDLE_DOWNLOADED = "bundle_downloaded",
+  PAYMENT_RECEIVED = "payment_received",
+  CONTENT_DOWNLOADED = "content_downloaded",
+}
+
+export interface NotificationData {
+  bundleId?: string
+  bundleTitle?: string
+  buyerName?: string
+  amount?: number
+  currency?: string
+  downloadCount?: number
+  [key: string]: any
+}
+
+export interface CreateNotificationRequest {
+  userId: string
+  type: NotificationType
+  title: string
+  message: string
+  data?: NotificationData
+}

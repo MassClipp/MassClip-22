@@ -5,13 +5,13 @@ import { NotificationService } from "@/lib/notification-service"
 export async function GET(request: NextRequest) {
   try {
     // Get authenticated user
-    const authHeader = request.headers.get("authorization")
+    const authHeader = request.headers.get("Authorization")
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return NextResponse.json({ error: "Authorization token is required" }, { status: 401 })
     }
 
-    const idToken = authHeader.split("Bearer ")[1]
-    const decodedToken = await auth.verifyIdToken(idToken)
+    const token = authHeader.split("Bearer ")[1]
+    const decodedToken = await auth.verifyIdToken(token)
     const userId = decodedToken.uid
 
     // Get query parameters
@@ -20,46 +20,56 @@ export async function GET(request: NextRequest) {
 
     // Fetch notifications
     const notifications = await NotificationService.getUserNotifications(userId, limit)
-    const unreadCount = await NotificationService.getUnreadCount(userId)
 
     return NextResponse.json({
       success: true,
       notifications,
-      unreadCount,
+      unreadCount: notifications.filter((n) => !n.read).length,
     })
   } catch (error: any) {
     console.error("❌ [Notifications API] Error fetching notifications:", error)
-    return NextResponse.json({ error: "Failed to fetch notifications", details: error.message }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: "Failed to fetch notifications",
+        details: error.message,
+      },
+      { status: 500 },
+    )
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function PATCH(request: NextRequest) {
   try {
     // Get authenticated user
-    const authHeader = request.headers.get("authorization")
+    const authHeader = request.headers.get("Authorization")
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return NextResponse.json({ error: "Authorization token is required" }, { status: 401 })
     }
 
-    const idToken = authHeader.split("Bearer ")[1]
-    const decodedToken = await auth.verifyIdToken(idToken)
+    const token = authHeader.split("Bearer ")[1]
+    const decodedToken = await auth.verifyIdToken(token)
     const userId = decodedToken.uid
 
-    const { action, notificationId } = await request.json()
+    const body = await request.json()
+    const { notificationId, markAllAsRead } = body
 
-    if (action === "mark_read" && notificationId) {
-      await NotificationService.markAsRead(notificationId)
-      return NextResponse.json({ success: true, message: "Notification marked as read" })
-    }
-
-    if (action === "mark_all_read") {
+    if (markAllAsRead) {
       await NotificationService.markAllAsRead(userId)
-      return NextResponse.json({ success: true, message: "All notifications marked as read" })
+    } else if (notificationId) {
+      await NotificationService.markAsRead(notificationId)
+    } else {
+      return NextResponse.json({ error: "notificationId or markAllAsRead is required" }, { status: 400 })
     }
 
-    return NextResponse.json({ error: "Invalid action" }, { status: 400 })
+    return NextResponse.json({ success: true })
   } catch (error: any) {
-    console.error("❌ [Notifications API] Error processing request:", error)
-    return NextResponse.json({ error: "Failed to process request", details: error.message }, { status: 500 })
+    console.error("❌ [Notifications API] Error updating notifications:", error)
+    return NextResponse.json(
+      {
+        error: "Failed to update notifications",
+        details: error.message,
+      },
+      { status: 500 },
+    )
   }
 }

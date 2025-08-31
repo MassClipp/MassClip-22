@@ -198,35 +198,22 @@ async function processBundlePurchase(session: Stripe.Checkout.Session) {
   // Store in bundlePurchases collection
   await adminDb.collection("bundlePurchases").doc(session.id).set(purchaseData)
 
-  try {
-    if (creatorId && creatorId !== "unknown") {
-      // Create in-app notification
-      await NotificationService.createPurchaseNotification({
-        creatorId: creatorId,
-        bundleTitle: bundleData.title || "Untitled Bundle",
-        buyerName: buyerName || "Anonymous User",
-        amount: finalPrice,
-        currency: session.currency || "usd",
-        bundleId: itemId,
-      })
-
-      // Send email notification if creator email is available
-      if (creatorData.email) {
-        await NotificationService.sendPurchaseEmail({
-          creatorEmail: creatorData.email,
-          creatorName: creatorData.name,
-          bundleTitle: bundleData.title || "Untitled Bundle",
-          buyerName: buyerName || "Anonymous User",
-          amount: finalPrice,
-          currency: session.currency || "usd",
-        })
-      }
-
-      console.log(`🔔 [Bundle Webhook] Purchase notifications sent for creator: ${creatorId}`)
+  if (creatorId && creatorData.email && finalPrice > 0) {
+    try {
+      await NotificationService.notifyPurchase(
+        creatorId,
+        creatorData.email,
+        creatorData.name,
+        itemId,
+        bundleData.title || "Untitled Bundle",
+        finalPrice,
+        session.currency || "usd",
+      )
+      console.log(`✅ [Bundle Webhook] Purchase notifications sent to creator: ${creatorData.email}`)
+    } catch (notificationError) {
+      console.error(`❌ [Bundle Webhook] Failed to send purchase notifications:`, notificationError)
+      // Don't fail the entire webhook if notifications fail
     }
-  } catch (notificationError) {
-    console.error(`⚠️ [Bundle Webhook] Failed to send purchase notifications:`, notificationError)
-    // Don't throw error - notifications are non-critical
   }
 
   console.log(
