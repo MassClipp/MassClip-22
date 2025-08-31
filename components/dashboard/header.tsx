@@ -20,15 +20,15 @@ import { doc, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import Logo from "@/components/logo"
 import NavDropdown from "@/components/dashboard/nav-dropdown"
+import { useNotifications } from "@/hooks/use-notifications"
 
 export default function DashboardHeader() {
   const router = useRouter()
   const { user, signOut } = useAuth()
   const [searchQuery, setSearchQuery] = useState("")
   const [userData, setUserData] = useState<any>(null)
-  const [notifications, setNotifications] = useState<any[]>([])
+  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications()
 
-  // Fetch user data
   useEffect(() => {
     const fetchUserData = async () => {
       if (!user) return
@@ -46,7 +46,6 @@ export default function DashboardHeader() {
     fetchUserData()
   }, [user])
 
-  // Handle search
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
     if (searchQuery.trim()) {
@@ -54,7 +53,6 @@ export default function DashboardHeader() {
     }
   }
 
-  // Handle sign out
   const handleSignOut = async () => {
     try {
       await signOut()
@@ -62,6 +60,22 @@ export default function DashboardHeader() {
     } catch (error) {
       console.error("Error signing out:", error)
     }
+  }
+
+  const handleNotificationClick = async (notificationId: string) => {
+    await markAsRead(notificationId)
+  }
+
+  const formatNotificationTime = (timestamp: any) => {
+    if (!timestamp) return ""
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp)
+    const now = new Date()
+    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60))
+
+    if (diffInMinutes < 1) return "Just now"
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`
+    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`
+    return `${Math.floor(diffInMinutes / 1440)}d ago`
   }
 
   return (
@@ -111,20 +125,57 @@ export default function DashboardHeader() {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="relative">
                 <Bell className="h-5 w-5 text-zinc-400" />
-                {notifications.length > 0 && (
-                  <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500"></span>
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center font-medium">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
                 )}
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80 bg-zinc-900 border-zinc-800">
-              <DropdownMenuLabel>Notifications</DropdownMenuLabel>
+            <DropdownMenuContent align="end" className="w-96 bg-zinc-900 border-zinc-800 max-h-96 overflow-y-auto">
+              <div className="flex items-center justify-between p-3">
+                <DropdownMenuLabel className="text-base font-semibold">Notifications</DropdownMenuLabel>
+                {unreadCount > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={markAllAsRead}
+                    className="text-xs text-zinc-400 hover:text-white h-auto p-1"
+                  >
+                    Mark all read
+                  </Button>
+                )}
+              </div>
               <DropdownMenuSeparator className="bg-zinc-800" />
               {notifications.length > 0 ? (
-                notifications.map((notification, index) => (
-                  <DropdownMenuItem key={index}>{notification.message}</DropdownMenuItem>
-                ))
+                <div className="max-h-80 overflow-y-auto">
+                  {notifications.map((notification) => (
+                    <DropdownMenuItem
+                      key={notification.id}
+                      className={`p-4 cursor-pointer hover:bg-zinc-800 focus:bg-zinc-800 ${
+                        !notification.read ? "bg-zinc-800/50" : ""
+                      }`}
+                      onClick={() => handleNotificationClick(notification.id)}
+                    >
+                      <div className="flex flex-col gap-1 w-full">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-sm font-medium text-white leading-tight">{notification.title}</p>
+                          {!notification.read && (
+                            <div className="h-2 w-2 rounded-full bg-red-500 flex-shrink-0 mt-1"></div>
+                          )}
+                        </div>
+                        <p className="text-xs text-zinc-400 leading-relaxed">{notification.message}</p>
+                        <p className="text-xs text-zinc-500 mt-1">{formatNotificationTime(notification.createdAt)}</p>
+                      </div>
+                    </DropdownMenuItem>
+                  ))}
+                </div>
               ) : (
-                <div className="py-4 text-center text-sm text-zinc-500">No new notifications</div>
+                <div className="py-8 text-center">
+                  <Bell className="h-8 w-8 text-zinc-600 mx-auto mb-2" />
+                  <p className="text-sm text-zinc-500">No notifications yet</p>
+                  <p className="text-xs text-zinc-600 mt-1">You'll see updates about your content here</p>
+                </div>
               )}
             </DropdownMenuContent>
           </DropdownMenu>

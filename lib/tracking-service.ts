@@ -19,6 +19,18 @@ export class TrackingService {
     try {
       console.log(`📥 Tracking download: video=${videoId}, creator=${creatorId}, downloader=${downloaderId}`)
 
+      // Get video details for notification
+      let contentTitle = "Untitled Content"
+      try {
+        const videoDoc = await getDoc(doc(clientDb, "uploads", videoId))
+        if (videoDoc.exists()) {
+          const videoData = videoDoc.data()
+          contentTitle = videoData.title || videoData.name || videoData.filename || "Untitled Content"
+        }
+      } catch (error) {
+        console.warn("Could not fetch video details for notification:", error)
+      }
+
       // Update video download count
       const videoRef = doc(clientDb, "uploads", videoId)
       await updateDoc(videoRef, {
@@ -52,6 +64,25 @@ export class TrackingService {
 
       // Update daily stats
       await this.updateDailyStats(creatorId, "downloads", 1)
+
+      try {
+        await fetch("/api/notifications/download", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            videoId,
+            creatorId,
+            downloaderId,
+            contentTitle,
+          }),
+        })
+        console.log(`🔔 Download notification triggered for creator: ${creatorId}`)
+      } catch (notificationError) {
+        console.warn("Failed to trigger download notification:", notificationError)
+        // Don't throw error - notifications are non-critical
+      }
 
       console.log(`✅ Download tracked successfully`)
     } catch (error) {

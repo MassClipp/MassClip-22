@@ -13,7 +13,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { useUserPlan } from "@/hooks/use-user-plan"
 import { AlertCircle, Crown } from "lucide-react"
 import { toast } from "sonner"
-import { useToast } from "@/hooks/use-toast" // Added custom toast hook for gradient styling
+import { useToast } from "@/hooks/use-toast"
 
 interface BundleCreationFormProps {
   onSuccess?: () => void
@@ -23,10 +23,15 @@ interface BundleCreationFormProps {
 export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormProps) {
   const { user } = useAuth()
   const { isProUser, loading: planLoading } = useUserPlan()
-  const { toast: customToast } = useToast() // Added custom toast for gradient styling
+  const { toast: customToast } = useToast()
   const [loading, setLoading] = useState(false)
   const [canCreateBundle, setCanCreateBundle] = useState(true)
   const [bundleLimitInfo, setBundleLimitInfo] = useState<any>(null)
+  const [stripeStatus, setStripeStatus] = useState<{
+    connected: boolean
+    fullySetup: boolean
+    loading: boolean
+  }>({ connected: false, fullySetup: false, loading: true })
 
   const [formData, setFormData] = useState({
     title: "",
@@ -35,7 +40,31 @@ export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormPr
     thumbnailUrl: "",
   })
 
-  // Check bundle creation limits
+  useEffect(() => {
+    const checkStripeStatus = async () => {
+      if (!user?.uid) return
+
+      try {
+        setStripeStatus((prev) => ({ ...prev, loading: true }))
+        const response = await fetch(`/api/stripe/connect/status-check?userId=${user.uid}&refresh=true`)
+        const data = await response.json()
+
+        console.log("[v0] Stripe status check result:", data)
+
+        setStripeStatus({
+          connected: data.connected || false,
+          fullySetup: data.fullySetup || false,
+          loading: false,
+        })
+      } catch (error) {
+        console.error("[v0] Error checking Stripe status:", error)
+        setStripeStatus({ connected: false, fullySetup: false, loading: false })
+      }
+    }
+
+    checkStripeStatus()
+  }, [user?.uid])
+
   useEffect(() => {
     const checkLimits = async () => {
       if (!user?.uid || planLoading) return
@@ -56,6 +85,27 @@ export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormPr
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (!stripeStatus.connected || !stripeStatus.fullySetup) {
+      customToast({
+        variant: "gradient",
+        title: "Stripe Account Required",
+        description: stripeStatus.connected
+          ? "Please complete your Stripe account setup to start selling bundles."
+          : "You need to connect your Stripe account to sell bundles and receive payments.",
+        action: (
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-white/20 text-white hover:bg-white/10 bg-transparent"
+            onClick={() => window.open("/dashboard/earnings", "_blank")}
+          >
+            {stripeStatus.connected ? "Complete Setup" : "Connect Stripe"}
+          </Button>
+        ),
+      })
+      return
+    }
 
     if (!canCreateBundle) {
       customToast({
@@ -119,7 +169,6 @@ export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormPr
         try {
           errorData = await response.json()
         } catch {
-          // If we can't parse the response, assume it's a Stripe connection issue for 400 errors
           if (response.status === 400) {
             customToast({
               variant: "gradient",
@@ -141,7 +190,6 @@ export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormPr
           throw new Error("Failed to create bundle")
         }
 
-        // Handle specific Stripe-related errors
         if (errorData.code === "NO_STRIPE_ACCOUNT" || response.status === 400) {
           customToast({
             variant: "gradient",
@@ -180,7 +228,6 @@ export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormPr
           return
         }
 
-        // Handle other errors with gradient toast
         customToast({
           variant: "gradient",
           title: "Bundle Creation Failed",
@@ -192,7 +239,6 @@ export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormPr
       const result = await response.json()
       toast.success("Bundle created successfully!")
 
-      // Reset form
       setFormData({
         title: "",
         description: "",
@@ -213,7 +259,7 @@ export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormPr
     }
   }
 
-  if (planLoading) {
+  if (planLoading || stripeStatus.loading) {
     return (
       <Card>
         <CardContent className="p-6">
@@ -223,19 +269,46 @@ export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormPr
     )
   }
 
+  const canActuallyCreateBundle = canCreateBundle && stripeStatus.connected && stripeStatus.fullySetup
+
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
           Create New Bundle
-          {bundleLimitInfo && (
-            <Badge variant={canCreateBundle ? "default" : "destructive"}>
-              {bundleLimitInfo.currentCount}/{bundleLimitInfo.maxAllowed || "∞"} bundles
+          <div className="flex gap-2">
+            {bundleLimitInfo && (
+              <Badge variant={canCreateBundle ? "default" : "destructive"}>
+                {bundleLimitInfo.currentCount}/{bundleLimitInfo.maxAllowed || "∞"} bundles
+              </Badge>
+            )}
+            <Badge variant={stripeStatus.connected && stripeStatus.fullySetup ? "default" : "destructive"}>
+              {stripeStatus.connected && stripeStatus.fullySetup ? "Stripe Ready" : "Stripe Required"}
             </Badge>
-          )}
+          </div>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
+        {(!stripeStatus.connected || !stripeStatus.fullySetup) && (
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription className="flex items-center justify-between">
+              <span>
+                {!stripeStatus.connected
+                  ? "Connect your Stripe account to start selling bundles and receiving payments."
+                  : "Complete your Stripe account setup to start selling bundles."}
+              </span>
+              <Button
+                size="sm"
+                className="ml-4 bg-blue-600 hover:bg-blue-700"
+                onClick={() => window.open("/dashboard/earnings", "_blank")}
+              >
+                {stripeStatus.connected ? "Complete Setup" : "Connect Stripe"}
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+
         {!canCreateBundle && (
           <Alert>
             <AlertCircle className="h-4 w-4" />
@@ -265,7 +338,7 @@ export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormPr
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
               placeholder="Enter bundle title"
-              disabled={loading || !canCreateBundle}
+              disabled={loading || !canActuallyCreateBundle}
               required
             />
           </div>
@@ -280,7 +353,7 @@ export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormPr
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               placeholder="Describe what's included in this bundle"
               rows={3}
-              disabled={loading || !canCreateBundle}
+              disabled={loading || !canActuallyCreateBundle}
               required
             />
           </div>
@@ -297,7 +370,7 @@ export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormPr
               value={formData.price}
               onChange={(e) => setFormData({ ...formData, price: e.target.value })}
               placeholder="9.99"
-              disabled={loading || !canCreateBundle}
+              disabled={loading || !canActuallyCreateBundle}
               required
             />
           </div>
@@ -312,12 +385,12 @@ export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormPr
               value={formData.thumbnailUrl}
               onChange={(e) => setFormData({ ...formData, thumbnailUrl: e.target.value })}
               placeholder="https://example.com/thumbnail.jpg"
-              disabled={loading || !canCreateBundle}
+              disabled={loading || !canActuallyCreateBundle}
             />
           </div>
 
           <div className="flex gap-3 pt-4">
-            <Button type="submit" disabled={loading || !canCreateBundle} className="flex-1">
+            <Button type="submit" disabled={loading || !canActuallyCreateBundle} className="flex-1">
               {loading ? "Creating..." : "Create Bundle"}
             </Button>
             {onCancel && (

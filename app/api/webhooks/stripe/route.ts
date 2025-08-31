@@ -7,6 +7,7 @@ import {
   processSubscriptionDeleted,
   processSubscriptionUpdated,
 } from "@/lib/stripe/webhook-processor"
+import { NotificationService } from "@/lib/notification-service"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2023-10-16",
@@ -115,7 +116,7 @@ async function processBundlePurchase(session: Stripe.Checkout.Session) {
   }
 
   // Get creator details
-  let creatorData = { name: "Unknown Creator", username: "unknown" }
+  let creatorData = { name: "Unknown Creator", username: "unknown", email: "" }
   if (creatorId) {
     const creatorDoc = await adminDb.collection("users").doc(creatorId).get()
     if (creatorDoc.exists) {
@@ -123,6 +124,7 @@ async function processBundlePurchase(session: Stripe.Checkout.Session) {
       creatorData = {
         name: creator.displayName || creator.name || creator.username || "Unknown Creator",
         username: creator.username || "unknown",
+        email: creator.email || "",
       }
     }
   }
@@ -195,6 +197,37 @@ async function processBundlePurchase(session: Stripe.Checkout.Session) {
 
   // Store in bundlePurchases collection
   await adminDb.collection("bundlePurchases").doc(session.id).set(purchaseData)
+
+  try {
+    if (creatorId && creatorId !== "unknown") {
+      // Create in-app notification
+      await NotificationService.createPurchaseNotification({
+        creatorId: creatorId,
+        bundleTitle: bundleData.title || "Untitled Bundle",
+        buyerName: buyerName || "Anonymous User",
+        amount: finalPrice,
+        currency: session.currency || "usd",
+        bundleId: itemId,
+      })
+
+      // Send email notification if creator email is available
+      if (creatorData.email) {
+        await NotificationService.sendPurchaseEmail({
+          creatorEmail: creatorData.email,
+          creatorName: creatorData.name,
+          bundleTitle: bundleData.title || "Untitled Bundle",
+          buyerName: buyerName || "Anonymous User",
+          amount: finalPrice,
+          currency: session.currency || "usd",
+        })
+      }
+
+      console.log(`🔔 [Bundle Webhook] Purchase notifications sent for creator: ${creatorId}`)
+    }
+  } catch (notificationError) {
+    console.error(`⚠️ [Bundle Webhook] Failed to send purchase notifications:`, notificationError)
+    // Don't throw error - notifications are non-critical
+  }
 
   console.log(
     `✅ [Bundle Webhook] Bundle purchase created: ${session.id} for user ${buyerUid} with ${bundleContents.length} content items at $${finalPrice}`,

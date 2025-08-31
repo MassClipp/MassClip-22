@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { db, auth } from "@/lib/firebase-admin"
+import { NotificationService } from "@/lib/notification-service"
 
 export async function POST(request: NextRequest) {
   try {
@@ -65,7 +66,7 @@ export async function POST(request: NextRequest) {
     })
 
     // Get creator details
-    let creatorData: any = { name: "Unknown Creator", username: "unknown" }
+    let creatorData: any = { name: "Unknown Creator", username: "unknown", email: "" }
     const creatorIdToUse = creatorId || bundleData.creatorId
 
     if (creatorIdToUse) {
@@ -76,6 +77,7 @@ export async function POST(request: NextRequest) {
           creatorData = {
             name: creator.displayName || creator.name || creator.username || "Unknown Creator",
             username: creator.username || "unknown",
+            email: creator.email || "",
           }
           console.log(`✅ [Verify & Grant] Creator found:`, creatorData)
         }
@@ -255,6 +257,37 @@ export async function POST(request: NextRequest) {
       } catch (error) {
         console.warn(`⚠️ [Verify & Grant] Error creating anonymous purchase (non-critical):`, error)
       }
+    }
+
+    try {
+      if (creatorIdToUse && creatorIdToUse !== "unknown" && bundlePurchaseData.amount > 0) {
+        // Create in-app notification
+        await NotificationService.createPurchaseNotification({
+          creatorId: creatorIdToUse,
+          bundleTitle: bundleData.title || "Untitled Bundle",
+          buyerName: userName,
+          amount: bundlePurchaseData.amount,
+          currency: bundlePurchaseData.currency,
+          bundleId: productBoxId,
+        })
+
+        // Send email notification if creator email is available
+        if (creatorData.email) {
+          await NotificationService.sendPurchaseEmail({
+            creatorEmail: creatorData.email,
+            creatorName: creatorData.name,
+            bundleTitle: bundleData.title || "Untitled Bundle",
+            buyerName: userName,
+            amount: bundlePurchaseData.amount,
+            currency: bundlePurchaseData.currency,
+          })
+        }
+
+        console.log(`🔔 [Verify & Grant] Purchase notifications sent for creator: ${creatorIdToUse}`)
+      }
+    } catch (notificationError) {
+      console.error(`⚠️ [Verify & Grant] Failed to send purchase notifications:`, notificationError)
+      // Don't throw error - notifications are non-critical
     }
 
     // Set access token cookie

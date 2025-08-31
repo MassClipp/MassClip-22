@@ -1,106 +1,66 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { ConnectedStripeAccountsService } from '@/lib/connected-stripe-accounts-service'
+import { type NextRequest, NextResponse } from "next/server"
+import { ConnectedStripeAccountsService } from "@/lib/connected-stripe-accounts-service"
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const userId = searchParams.get('userId')
-    const refresh = searchParams.get('refresh') === 'true'
+    const userId = searchParams.get("userId")
+    const refresh = searchParams.get("refresh") === "true"
+
+    console.log("[v0] Status check for userId:", userId, "refresh:", refresh)
 
     if (!userId) {
-      return NextResponse.json({ error: 'User ID is required' }, { status: 400 })
+      return NextResponse.json({ error: "User ID is required" }, { status: 400 })
     }
 
-    let account = await ConnectedStripeAccountsService.getAccount(userId)
+    let account
+
+    if (refresh) {
+      console.log("[v0] Refreshing account status from Stripe API...")
+      try {
+        account = await ConnectedStripeAccountsService.refreshAccountFromStripe(userId)
+      } catch (error) {
+        console.error("[v0] Failed to refresh from Stripe, falling back to cached data:", error)
+        account = await ConnectedStripeAccountsService.getAccount(userId)
+      }
+    } else {
+      account = await ConnectedStripeAccountsService.getAccount(userId)
+    }
 
     if (!account) {
+      console.log("[v0] No account found")
       return NextResponse.json({
         connected: false,
         fullySetup: false,
       })
     }
 
-    // Refresh from Stripe if requested
-    if (refresh) {
-      const refreshedAccount = await ConnectedStripeAccountsService.refreshAccountFromStripe(userId)
-      if (refreshedAccount) {
-        account = refreshedAccount
-      }
-    }
-
     const fullySetup = ConnectedStripeAccountsService.isAccountFullySetup(account)
+
+    console.log(
+      "[v0] Account found, fully setup:",
+      fullySetup,
+      "charges_enabled:",
+      account.charges_enabled,
+      "details_submitted:",
+      account.details_submitted,
+    )
 
     return NextResponse.json({
       connected: true,
       fullySetup,
       account: {
         stripe_user_id: account.stripe_user_id,
+        stripeAccountId: account.stripeAccountId,
         charges_enabled: account.charges_enabled,
-        payouts_enabled: account.payouts_enabled,
         details_submitted: account.details_submitted,
-        country: account.country,
+        payouts_enabled: account.payouts_enabled,
         email: account.email,
-        business_type: account.business_type,
-        livemode: account.livemode,
-        connectedAt: account.connectedAt,
-        lastUpdated: account.lastUpdated,
-        requirements: account.requirements,
+        country: account.country,
       },
     })
-
   } catch (error) {
-    console.error('Error checking connection status:', error)
-    return NextResponse.json({ error: 'Failed to check connection status' }, { status: 500 })
-  }
-}
-
-export async function POST(request: NextRequest) {
-  try {
-    const { userId, refresh } = await request.json()
-
-    if (!userId) {
-      return NextResponse.json({ error: 'User ID is required' }, { status: 400 })
-    }
-
-    let account = await ConnectedStripeAccountsService.getAccount(userId)
-
-    if (!account) {
-      return NextResponse.json({
-        connected: false,
-        fullySetup: false,
-      })
-    }
-
-    // Refresh from Stripe if requested
-    if (refresh) {
-      const refreshedAccount = await ConnectedStripeAccountsService.refreshAccountFromStripe(userId)
-      if (refreshedAccount) {
-        account = refreshedAccount
-      }
-    }
-
-    const fullySetup = ConnectedStripeAccountsService.isAccountFullySetup(account)
-
-    return NextResponse.json({
-      connected: true,
-      fullySetup,
-      account: {
-        stripe_user_id: account.stripe_user_id,
-        charges_enabled: account.charges_enabled,
-        payouts_enabled: account.payouts_enabled,
-        details_submitted: account.details_submitted,
-        country: account.country,
-        email: account.email,
-        business_type: account.business_type,
-        livemode: account.livemode,
-        connectedAt: account.connectedAt,
-        lastUpdated: account.lastUpdated,
-        requirements: account.requirements,
-      },
-    })
-
-  } catch (error) {
-    console.error('Error checking connection status:', error)
-    return NextResponse.json({ error: 'Failed to check connection status' }, { status: 500 })
+    console.error("[v0] Status check error:", error)
+    return NextResponse.json({ error: "Failed to check connection status" }, { status: 500 })
   }
 }

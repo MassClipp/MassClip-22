@@ -336,3 +336,5 @@ export function useFirebaseAuthSafe() {
     isConfigured,
   }
 }
+
+export const useAuth = useFirebaseAuthSafe

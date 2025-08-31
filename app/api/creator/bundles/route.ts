@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { getAuth } from "firebase-admin/auth"
 import { getFirestore } from "firebase-admin/firestore"
 import { initializeApp, getApps, cert } from "firebase-admin/app"
 import Stripe from "stripe"
-import { getConnectedStripeAccount } from "@/lib/connected-stripe-accounts-service"
+import { ConnectedStripeAccountsService } from "@/lib/connected-stripe-accounts-service"
 
 // Initialize Firebase Admin
 if (!getApps().length) {
@@ -106,7 +106,7 @@ export async function GET(request: NextRequest) {
         error: "Failed to fetch bundles",
         details: error.message,
       },
-      { status: 500 }
+      { status: 500 },
     )
   }
 }
@@ -148,8 +148,21 @@ export async function POST(request: NextRequest) {
     const userId = decodedToken.uid
     console.log("✅ [Bundle Creation] User authenticated:", userId)
 
-    // Check if user has connected Stripe account
-    const connectedAccount = await getConnectedStripeAccount(userId)
+    const connectedAccount = await ConnectedStripeAccountsService.getAccount(userId)
+    console.log("🔍 [Bundle Creation] Stripe account lookup result:", {
+      userId,
+      accountFound: !!connectedAccount,
+      accountData: connectedAccount
+        ? {
+            stripeAccountId: connectedAccount.stripeAccountId,
+            stripe_user_id: connectedAccount.stripe_user_id,
+            charges_enabled: connectedAccount.charges_enabled,
+            details_submitted: connectedAccount.details_submitted,
+            email: connectedAccount.email,
+          }
+        : null,
+    })
+
     if (!connectedAccount) {
       console.error("❌ [Bundle Creation] No connected Stripe account found for user:", userId)
       return NextResponse.json(
@@ -157,12 +170,11 @@ export async function POST(request: NextRequest) {
           error: "Please connect your Stripe account before creating bundles",
           code: "NO_STRIPE_ACCOUNT",
         },
-        { status: 400 }
+        { status: 400 },
       )
     }
 
-    // Verify account is properly set up
-    if (!connectedAccount.charges_enabled || !connectedAccount.details_submitted) {
+    if (!ConnectedStripeAccountsService.isAccountFullySetup(connectedAccount)) {
       console.error("❌ [Bundle Creation] Stripe account setup incomplete:", {
         charges_enabled: connectedAccount.charges_enabled,
         details_submitted: connectedAccount.details_submitted,
@@ -172,7 +184,7 @@ export async function POST(request: NextRequest) {
           error: "Please complete your Stripe account setup before creating bundles",
           code: "STRIPE_ACCOUNT_INCOMPLETE",
         },
-        { status: 400 }
+        { status: 400 },
       )
     }
 
@@ -190,26 +202,29 @@ export async function POST(request: NextRequest) {
         {
           error: "Missing required fields: title and price are required",
         },
-        { status: 400 }
+        { status: 400 },
       )
     }
 
     // Create Stripe product
     console.log("🏪 [Bundle Creation] Creating Stripe product...")
-    const product = await stripe.products.create(
-      {
-        name: title,
-        description: description || "",
-        metadata: {
-          bundleType: "content_bundle",
-          creatorId: userId,
-          contentCount: (contentItems?.length || 0).toString(),
-        },
+    const productData: any = {
+      name: title,
+      metadata: {
+        bundleType: "content_bundle",
+        creatorId: userId,
+        contentCount: (contentItems?.length || 0).toString(),
       },
-      {
-        stripeAccount: stripeAccountId,
-      }
-    )
+    }
+
+    // Only add description if it's not empty and not just placeholder text
+    if (description && description.trim() && description !== "Describe your bundle") {
+      productData.description = description.trim()
+    }
+
+    const product = await stripe.products.create(productData, {
+      stripeAccount: stripeAccountId,
+    })
 
     console.log("✅ [Bundle Creation] Stripe product created:", product.id)
 
@@ -227,7 +242,7 @@ export async function POST(request: NextRequest) {
       },
       {
         stripeAccount: stripeAccountId,
-      }
+      },
     )
 
     console.log("✅ [Bundle Creation] Stripe price created:", stripePrice.id)
@@ -264,13 +279,13 @@ export async function POST(request: NextRequest) {
       totalSizeFormatted: formatFileSize(totalSize),
       totalDuration: totalDuration,
       totalDurationFormatted: formatDuration(totalDuration),
-      formats: [...new Set(processedContentItems.map(item => item.format))],
-      qualities: [...new Set(processedContentItems.map(item => item.quality))],
+      formats: [...new Set(processedContentItems.map((item) => item.format))],
+      qualities: [...new Set(processedContentItems.map((item) => item.quality))],
       contentBreakdown: {
-        videos: processedContentItems.filter(item => item.contentType === "video").length,
-        audios: processedContentItems.filter(item => item.contentType === "audio").length,
-        images: processedContentItems.filter(item => item.contentType === "image").length,
-        documents: processedContentItems.filter(item => item.contentType === "document").length,
+        videos: processedContentItems.filter((item) => item.contentType === "video").length,
+        audios: processedContentItems.filter((item) => item.contentType === "audio").length,
+        images: processedContentItems.filter((item) => item.contentType === "image").length,
+        documents: processedContentItems.filter((item) => item.contentType === "document").length,
       },
     }
 
@@ -297,15 +312,15 @@ export async function POST(request: NextRequest) {
 
       // Content
       detailedContentItems: processedContentItems,
-      contentItems: processedContentItems.map(item => item.id), // Array of IDs for compatibility
+      contentItems: processedContentItems.map((item) => item.id), // Array of IDs for compatibility
       contentMetadata,
 
       // Quick access arrays
-      contentTitles: processedContentItems.map(item => item.title),
-      contentDescriptions: processedContentItems.map(item => item.description),
-      contentTags: processedContentItems.flatMap(item => item.tags || []),
-      contentThumbnails: processedContentItems.map(item => item.thumbnailUrl).filter(Boolean),
-      contentUrls: processedContentItems.map(item => item.fileUrl).filter(Boolean),
+      contentTitles: processedContentItems.map((item) => item.title),
+      contentDescriptions: processedContentItems.map((item) => item.description),
+      contentTags: processedContentItems.flatMap((item) => item.tags || []),
+      contentThumbnails: processedContentItems.map((item) => item.thumbnailUrl).filter(Boolean),
+      contentUrls: processedContentItems.map((item) => item.fileUrl).filter(Boolean),
 
       // Visual
       thumbnailUrl: thumbnailUrl || processedContentItems[0]?.thumbnailUrl || "",
@@ -363,7 +378,7 @@ export async function POST(request: NextRequest) {
           details: error.message,
           code: error.code,
         },
-        { status: 400 }
+        { status: 400 },
       )
     }
 
@@ -372,7 +387,7 @@ export async function POST(request: NextRequest) {
         error: "Failed to create bundle",
         details: error.message,
       },
-      { status: 500 }
+      { status: 500 },
     )
   }
 }
