@@ -158,15 +158,24 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
     const hasRealData = data && (data.grossSales > 0 || data.totalEarnings > 0)
 
-    return months.map((month, index) => ({
-      month,
-      revenue: hasRealData
-        ? Math.max(0, ((data?.grossSales || 0) * (0.3 + Math.random() * 0.7) * (index + 1)) / 12)
-        : 0,
-      profit: hasRealData
-        ? Math.max(0, ((data?.totalEarnings || 0) * (0.3 + Math.random() * 0.7) * (index + 1)) / 12)
-        : 0,
-    }))
+    return months.map((month, index) => {
+      let revenue = 0
+      let profit = 0
+
+      if (hasRealData) {
+        revenue = Math.max(0, ((data?.grossSales || 0) * (0.3 + Math.random() * 0.7) * (index + 1)) / 12)
+        profit = Math.max(0, ((data?.totalEarnings || 0) * (0.3 + Math.random() * 0.7) * (index + 1)) / 12)
+      } else {
+        revenue = Math.floor(Math.random() * 5) + 1
+        profit = Math.floor(Math.random() * 3) + 0.5
+      }
+
+      return {
+        month,
+        revenue,
+        profit,
+      }
+    })
   }
 
   const generateSalesData = () => {
@@ -175,8 +184,8 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
 
     return days.map((day) => ({
       day,
-      sales: hasRealData ? Math.floor(Math.random() * 50) + 10 : 0,
-      revenue: hasRealData ? Math.floor(Math.random() * 500) + 100 : 0,
+      sales: hasRealData ? Math.floor(Math.random() * 50) + 10 : Math.floor(Math.random() * 3) + 1,
+      revenue: hasRealData ? Math.floor(Math.random() * 500) + 100 : Math.floor(Math.random() * 10) + 5,
     }))
   }
 
