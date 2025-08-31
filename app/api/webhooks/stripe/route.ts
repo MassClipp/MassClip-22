@@ -200,14 +200,11 @@ async function processBundlePurchase(session: Stripe.Checkout.Session) {
 
   if (creatorId && creatorData.email && finalPrice > 0) {
     try {
-      await NotificationService.notifyPurchase(
+      await NotificationService.createPurchaseNotification(
         creatorId,
-        creatorData.email,
-        creatorData.name,
-        itemId,
         bundleData.title || "Untitled Bundle",
         finalPrice,
-        session.currency || "usd",
+        buyerUid,
       )
       console.log(`✅ [Bundle Webhook] Purchase notifications sent to creator: ${creatorData.email}`)
     } catch (notificationError) {

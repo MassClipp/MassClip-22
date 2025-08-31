@@ -1,221 +1,194 @@
 import { adminDb } from "@/lib/firebase-admin"
 import { Resend } from "resend"
-import type { Notification } from "@/lib/types"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
+export interface NotificationData {
+  id?: string
+  type: "purchase" | "download"
+  title: string
+  message: string
+  creatorId: string
+  amount?: number
+  bundleName?: string
+  isRead: boolean
+  createdAt: Date
+}
+
 export class NotificationService {
-  static async createNotification(
-    userId: string,
-    type: "purchase" | "download",
-    title: string,
-    message: string,
-    metadata?: any,
-  ): Promise<void> {
+  static async createDownloadNotification(creatorId: string, bundleName: string, downloaderId?: string): Promise<void> {
     try {
-      console.log(`[v0] Creating notification for user ${userId}: ${title}`)
+      console.log(`[v0] Creating download notification for creator: ${creatorId}, bundle: ${bundleName}`)
 
-      const notification: Omit<Notification, "id"> = {
-        userId,
-        type,
-        title,
-        message,
-        read: false,
-        createdAt: new Date().toISOString(),
-        metadata: metadata || {},
+      // Create notification document
+      const notification: NotificationData = {
+        type: "download",
+        title: "Video Downloaded!",
+        message: `Someone downloaded your video "${bundleName}"`,
+        creatorId,
+        bundleName,
+        isRead: false,
+        createdAt: new Date(),
       }
 
-      const docRef = await adminDb.collection("notifications").add(notification)
-      console.log(`[v0] Notification created with ID: ${docRef.id}`)
+      // Save to Firestore
+      await adminDb.collection("notifications").add({
+        ...notification,
+        createdAt: adminDb.FieldValue.serverTimestamp(),
+      })
 
-      const createdDoc = await docRef.get()
-      if (createdDoc.exists) {
-        console.log(`[v0] Notification verified in database:`, createdDoc.data())
-      } else {
-        console.error(`[v0] Notification creation failed - document not found`)
-      }
+      console.log(`[v0] Download notification created successfully`)
+
+      // Send email notification
+      await this.sendDownloadEmail(creatorId, bundleName)
     } catch (error) {
-      console.error(`[v0] Error creating notification:`, error)
-      throw error
+      console.error("[v0] Error creating download notification:", error)
     }
   }
 
-  static async getUserNotifications(userId: string, limit = 20): Promise<Notification[]> {
+  static async createPurchaseNotification(
+    creatorId: string,
+    bundleName: string,
+    amount: number,
+    buyerId?: string,
+  ): Promise<void> {
     try {
-      console.log(`[v0] Fetching notifications for user ${userId}`)
+      console.log(
+        `[v0] Creating purchase notification for creator: ${creatorId}, bundle: ${bundleName}, amount: $${amount}`,
+      )
 
+      // Create notification document
+      const notification: NotificationData = {
+        type: "purchase",
+        title: "Bundle Sold!",
+        message: `Congrats! You earned $${amount} from "${bundleName}"`,
+        creatorId,
+        amount,
+        bundleName,
+        isRead: false,
+        createdAt: new Date(),
+      }
+
+      // Save to Firestore
+      await adminDb.collection("notifications").add({
+        ...notification,
+        createdAt: adminDb.FieldValue.serverTimestamp(),
+      })
+
+      console.log(`[v0] Purchase notification created successfully`)
+
+      // Send email notification
+      await this.sendPurchaseEmail(creatorId, bundleName, amount)
+    } catch (error) {
+      console.error("[v0] Error creating purchase notification:", error)
+    }
+  }
+
+  private static async sendDownloadEmail(creatorId: string, bundleName: string): Promise<void> {
+    try {
+      // Get creator email
+      const creatorDoc = await adminDb.collection("users").doc(creatorId).get()
+      if (!creatorDoc.exists) {
+        console.log(`[v0] Creator not found: ${creatorId}`)
+        return
+      }
+
+      const creatorData = creatorDoc.data()
+      const creatorEmail = creatorData?.email
+
+      if (!creatorEmail) {
+        console.log(`[v0] No email found for creator: ${creatorId}`)
+        return
+      }
+
+      console.log(`[v0] Sending download email to: ${creatorEmail}`)
+
+      await resend.emails.send({
+        from: "MassClip <notifications@massclip.app>",
+        to: creatorEmail,
+        subject: "🎉 Someone downloaded your video!",
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #333;">Great news!</h2>
+            <p>Someone just downloaded your video <strong>"${bundleName}"</strong>!</p>
+            <p>Keep creating amazing content to get more downloads.</p>
+            <p>Best regards,<br>The MassClip Team</p>
+          </div>
+        `,
+      })
+
+      console.log(`[v0] Download email sent successfully`)
+    } catch (error) {
+      console.error("[v0] Error sending download email:", error)
+    }
+  }
+
+  private static async sendPurchaseEmail(creatorId: string, bundleName: string, amount: number): Promise<void> {
+    try {
+      // Get creator email
+      const creatorDoc = await adminDb.collection("users").doc(creatorId).get()
+      if (!creatorDoc.exists) {
+        console.log(`[v0] Creator not found: ${creatorId}`)
+        return
+      }
+
+      const creatorData = creatorDoc.data()
+      const creatorEmail = creatorData?.email
+
+      if (!creatorEmail) {
+        console.log(`[v0] No email found for creator: ${creatorId}`)
+        return
+      }
+
+      console.log(`[v0] Sending purchase email to: ${creatorEmail}`)
+
+      await resend.emails.send({
+        from: "MassClip <notifications@massclip.app>",
+        to: creatorEmail,
+        subject: "💰 Congratulations! You made a sale!",
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #333;">Congratulations! 🎉</h2>
+            <p>You just earned <strong>$${amount}</strong> from the sale of <strong>"${bundleName}"</strong>!</p>
+            <p>Keep up the great work creating amazing content.</p>
+            <p>Best regards,<br>The MassClip Team</p>
+          </div>
+        `,
+      })
+
+      console.log(`[v0] Purchase email sent successfully`)
+    } catch (error) {
+      console.error("[v0] Error sending purchase email:", error)
+    }
+  }
+
+  static async getNotifications(creatorId: string, limit = 20): Promise<NotificationData[]> {
+    try {
       const snapshot = await adminDb
         .collection("notifications")
-        .where("userId", "==", userId)
+        .where("creatorId", "==", creatorId)
         .orderBy("createdAt", "desc")
         .limit(limit)
         .get()
 
-      const notifications: Notification[] = []
-      snapshot.forEach((doc) => {
-        notifications.push({
-          id: doc.id,
-          ...doc.data(),
-        } as Notification)
-      })
-
-      console.log(`[v0] Found ${notifications.length} notifications for user ${userId}`)
-      return notifications
+      return snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate() || new Date(),
+      })) as NotificationData[]
     } catch (error) {
-      console.error(`[v0] Error fetching notifications:`, error)
+      console.error("[v0] Error getting notifications:", error)
       return []
     }
   }
 
   static async markAsRead(notificationId: string): Promise<void> {
     try {
-      console.log(`[v0] Marking notification ${notificationId} as read`)
-
       await adminDb.collection("notifications").doc(notificationId).update({
-        read: true,
-        readAt: new Date().toISOString(),
+        isRead: true,
       })
     } catch (error) {
-      console.error(`[v0] Error marking notification as read:`, error)
-      throw error
-    }
-  }
-
-  static async markAllAsRead(userId: string): Promise<void> {
-    try {
-      console.log(`[v0] Marking all notifications as read for user ${userId}`)
-
-      const snapshot = await adminDb
-        .collection("notifications")
-        .where("userId", "==", userId)
-        .where("read", "==", false)
-        .get()
-
-      const batch = adminDb.batch()
-      snapshot.forEach((doc) => {
-        batch.update(doc.ref, {
-          read: true,
-          readAt: new Date().toISOString(),
-        })
-      })
-
-      await batch.commit()
-      console.log(`[v0] Marked ${snapshot.size} notifications as read`)
-    } catch (error) {
-      console.error(`[v0] Error marking all notifications as read:`, error)
-      throw error
-    }
-  }
-
-  static async notifyPurchase(
-    creatorId: string,
-    creatorEmail: string,
-    creatorName: string,
-    bundleId: string,
-    bundleTitle: string,
-    amount: number,
-    currency = "USD",
-  ): Promise<void> {
-    try {
-      console.log(`[v0] Sending purchase notification to creator ${creatorId}`)
-
-      const earnings = (amount * 0.8).toFixed(2) // Assuming 80% creator share
-
-      // Create in-app notification
-      await this.createNotification(
-        creatorId,
-        "purchase",
-        "🎉 Bundle Purchased!",
-        `Congratulations! Someone just bought your "${bundleTitle}" bundle. You earned $${earnings}!`,
-        {
-          bundleId,
-          bundleTitle,
-          amount,
-          earnings: Number.parseFloat(earnings),
-          currency,
-        },
-      )
-
-      // Send email notification
-      if (creatorEmail) {
-        await resend.emails.send({
-          from: "MassClip <notifications@massclip.app>",
-          to: creatorEmail,
-          subject: "🎉 Your bundle was purchased!",
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: #dc2626;">Congratulations, ${creatorName}!</h2>
-              <p>Great news! Someone just purchased your bundle:</p>
-              <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                <h3 style="margin: 0 0 10px 0;">${bundleTitle}</h3>
-                <p style="margin: 0; color: #059669; font-size: 18px; font-weight: bold;">You earned: $${earnings} ${currency}</p>
-              </div>
-              <p>Keep creating amazing content! Your fans love what you do.</p>
-              <p>Best regards,<br>The MassClip Team</p>
-            </div>
-          `,
-        })
-        console.log(`[v0] Purchase email sent to ${creatorEmail}`)
-      }
-    } catch (error) {
-      console.error(`[v0] Error sending purchase notification:`, error)
-      // Don't throw - we don't want to fail the purchase if notifications fail
-    }
-  }
-
-  static async notifyDownload(
-    creatorId: string,
-    creatorEmail: string,
-    creatorName: string,
-    bundleId: string,
-    bundleTitle: string,
-  ): Promise<void> {
-    try {
-      console.log(`[v0] Sending download notification to creator ${creatorId}`)
-
-      console.log(`[v0] Download notification details:`, {
-        creatorId,
-        creatorEmail,
-        bundleId,
-        bundleTitle,
-      })
-
-      // Create in-app notification
-      await this.createNotification(
-        creatorId,
-        "download",
-        "📥 Bundle Downloaded!",
-        `Someone just downloaded your "${bundleTitle}" bundle!`,
-        {
-          bundleId,
-          bundleTitle,
-        },
-      )
-
-      // Send email notification
-      if (creatorEmail) {
-        await resend.emails.send({
-          from: "MassClip <notifications@massclip.app>",
-          to: creatorEmail,
-          subject: "📥 Your bundle was downloaded!",
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: #dc2626;">Your content is being enjoyed!</h2>
-              <p>Hi ${creatorName},</p>
-              <p>Someone just downloaded your bundle:</p>
-              <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                <h3 style="margin: 0;">${bundleTitle}</h3>
-              </div>
-              <p>Your content is making an impact! Keep up the great work.</p>
-              <p>Best regards,<br>The MassClip Team</p>
-            </div>
-          `,
-        })
-        console.log(`[v0] Download email sent to ${creatorEmail}`)
-      }
-    } catch (error) {
-      console.error(`[v0] Error sending download notification:`, error)
-      // Don't throw - we don't want to fail the download if notifications fail
+      console.error("[v0] Error marking notification as read:", error)
     }
   }
 }
