@@ -282,12 +282,20 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     if (purchaseData.creatorId && bundleContents.length > 0) {
       try {
+        console.log(`[v0] Attempting to send download notification for creator: ${purchaseData.creatorId}`)
+
         // Get creator details for notification
         const creatorDoc = await db.collection("users").doc(purchaseData.creatorId).get()
         if (creatorDoc.exists) {
           const creatorData = creatorDoc.data()!
           const creatorEmail = creatorData.email
           const creatorName = creatorData.displayName || creatorData.name || creatorData.username || "Creator"
+
+          console.log(`[v0] Creator found:`, {
+            id: purchaseData.creatorId,
+            email: creatorEmail,
+            name: creatorName,
+          })
 
           if (creatorEmail) {
             await NotificationService.notifyDownload(
@@ -298,12 +306,20 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
               bundleInfo.title,
             )
             console.log(`✅ [Bundle Content API] Download notifications sent to creator: ${creatorEmail}`)
+          } else {
+            console.log(`⚠️ [Bundle Content API] Creator has no email address for notifications`)
           }
+        } else {
+          console.log(`⚠️ [Bundle Content API] Creator document not found: ${purchaseData.creatorId}`)
         }
       } catch (notificationError) {
         console.error(`❌ [Bundle Content API] Failed to send download notifications:`, notificationError)
         // Don't fail the content request if notifications fail
       }
+    } else {
+      console.log(
+        `[v0] Skipping download notification - creatorId: ${purchaseData.creatorId}, contentCount: ${bundleContents.length}`,
+      )
     }
 
     const response = {

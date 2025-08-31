@@ -53,6 +53,8 @@ export default function DashboardHeader() {
       if (!user) return
 
       try {
+        console.log(`[v0] Fetching notifications for user: ${user.uid}`)
+
         const token = await user.getIdToken()
         const response = await fetch("/api/notifications", {
           headers: {
@@ -62,18 +64,23 @@ export default function DashboardHeader() {
 
         if (response.ok) {
           const data = await response.json()
+          console.log(`[v0] Notifications response:`, data)
+
           setNotifications(data.notifications || [])
           setUnreadCount(data.unreadCount || 0)
+
+          console.log(`[v0] Set ${data.notifications?.length || 0} notifications, ${data.unreadCount || 0} unread`)
+        } else {
+          console.error(`[v0] Failed to fetch notifications:`, response.status, response.statusText)
         }
       } catch (error) {
-        console.error("Error fetching notifications:", error)
+        console.error("[v0] Error fetching notifications:", error)
       }
     }
 
     fetchNotifications()
 
-    // Poll for new notifications every 30 seconds
-    const interval = setInterval(fetchNotifications, 30000)
+    const interval = setInterval(fetchNotifications, 10000)
     return () => clearInterval(interval)
   }, [user])
 
