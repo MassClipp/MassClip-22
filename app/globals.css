@@ -2,75 +2,98 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Import Inter font */
+/* Import premium fonts */
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@200;300;400;500;600;700;800&display=swap");
 
 @layer base {
   :root {
-    --background: 0 0% 3%;
-    --foreground: 0 0% 98%;
+    /* Updated design tokens for premium dashboard aesthetic */
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
 
-    --card: 0 0% 5%;
-    --card-foreground: 0 0% 98%;
+    --card: 222.2 84% 8%;
+    --card-foreground: 210 40% 98%;
 
-    --popover: 0 0% 3%;
-    --popover-foreground: 0 0% 98%;
+    --popover: 222.2 84% 8%;
+    --popover-foreground: 210 40% 98%;
 
-    --primary: 348 83% 47%;
-    --primary-foreground: 0 0% 98%;
+    --primary: 262.1 83.3% 57.8%;
+    --primary-foreground: 210 40% 98%;
 
-    --secondary: 0 0% 9%;
-    --secondary-foreground: 0 0% 98%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
 
-    --muted: 0 0% 12%;
-    --muted-foreground: 0 0% 63.9%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
 
-    --accent: 348 83% 47%;
-    --accent-foreground: 0 0% 98%;
+    --accent: 262.1 83.3% 57.8%;
+    --accent-foreground: 210 40% 98%;
 
     --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive-foreground: 210 40% 98%;
 
-    --border: 0 0% 12%;
-    --input: 0 0% 12%;
-    --ring: 348 83% 47%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 262.1 83.3% 57.8%;
 
-    --radius: 0.5rem;
+    --chart-1: 262.1 83.3% 57.8%;
+    --chart-2: 43.3 96.4% 56.3%;
+    --chart-3: 142.1 76.2% 36.3%;
+    --chart-4: 0 62.8% 30.6%;
+    --chart-5: 38.4 92% 50%;
 
-    /* Custom colors */
-    --crimson: 348 83% 47%;
-    --crimson-dark: 348 83% 37%;
-    --crimson-light: 348 83% 67%;
+    --radius: 0.75rem;
+
+    /* Premium dashboard specific tokens */
+    --sidebar: 222.2 84% 4.9%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 262.1 83.3% 57.8%;
+    --sidebar-primary-foreground: 210 40% 98%;
+    --sidebar-accent: 43.3 96.4% 56.3%;
+    --sidebar-accent-foreground: 222.2 84% 4.9%;
+    --sidebar-border: 217.2 32.6% 17.5%;
+    --sidebar-ring: 262.1 83.3% 57.8%;
+
+    /* Success and warning colors */
+    --success: 142.1 76.2% 36.3%;
+    --success-foreground: 210 40% 98%;
+    --warning: 43.3 96.4% 56.3%;
+    --warning-foreground: 222.2 84% 4.9%;
+
+    /* Glass effect variables */
+    --glass-bg: rgba(15, 23, 42, 0.8);
+    --glass-border: rgba(148, 163, 184, 0.1);
   }
 
   .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
 
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
+    --card: 222.2 84% 8%;
+    --card-foreground: 210 40% 98%;
 
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
+    --popover: 222.2 84% 8%;
+    --popover-foreground: 210 40% 98%;
 
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 84% 4.9%;
 
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
 
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
 
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
 
     --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive-foreground: 210 40% 98%;
 
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
   }
 }
 
@@ -80,7 +103,7 @@
   }
 
   html {
-    font-family: "Inter", sans-serif;
+    font-family: "Inter", "Manrope", sans-serif;
     scroll-behavior: smooth;
   }
 
@@ -97,10 +120,224 @@
   h4,
   h5,
   h6 {
-    @apply font-light tracking-tight;
+    font-family: "Inter", sans-serif;
+    @apply font-semibold tracking-tight text-balance;
+  }
+
+  p,
+  span,
+  div {
+    font-family: "Manrope", sans-serif;
   }
 }
 
+/* Premium dashboard styling */
+.premium-dashboard-card {
+  @apply bg-card/50 backdrop-blur-xl border border-border/50 rounded-xl;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.premium-dashboard-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+  border-color: hsl(var(--primary) / 0.3);
+}
+
+.premium-metric-card {
+  @apply premium-dashboard-card p-6;
+  position: relative;
+  overflow: hidden;
+}
+
+.premium-metric-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, hsl(var(--primary)), hsl(var(--chart-2)));
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.premium-metric-card:hover::before {
+  opacity: 1;
+}
+
+.metric-value {
+  @apply text-3xl font-bold text-foreground;
+  font-family: "Inter", sans-serif;
+  background: linear-gradient(135deg, hsl(var(--foreground)), hsl(var(--primary)));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer 3s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.metric-label {
+  @apply text-sm font-medium text-muted-foreground mb-2;
+  font-family: "Manrope", sans-serif;
+}
+
+.metric-description {
+  @apply text-xs text-muted-foreground mt-1;
+  font-family: "Manrope", sans-serif;
+}
+
+/* Premium button styling */
+.premium-button {
+  @apply relative overflow-hidden rounded-lg font-medium transition-all duration-300;
+  background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary) / 0.8));
+  box-shadow: 0 4px 15px hsl(var(--primary) / 0.3);
+}
+
+.premium-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px hsl(var(--primary) / 0.4);
+}
+
+.premium-button::after {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  transform: rotate(45deg);
+  transition: all 0.6s;
+  opacity: 0;
+}
+
+.premium-button:hover::after {
+  animation: shine 1.5s ease-out;
+}
+
+@keyframes shine {
+  0% {
+    opacity: 0;
+    transform: rotate(45deg) translate(-100%, -100%);
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(45deg) translate(100%, 100%);
+  }
+}
+
+/* Premium progress indicators */
+.premium-progress {
+  @apply w-full bg-muted rounded-full h-2 overflow-hidden;
+  background: linear-gradient(90deg, hsl(var(--muted)), hsl(var(--muted) / 0.5));
+}
+
+.premium-progress-bar {
+  @apply h-full rounded-full transition-all duration-700 ease-out;
+  background: linear-gradient(90deg, hsl(var(--primary)), hsl(var(--chart-2)));
+  box-shadow: 0 0 10px hsl(var(--primary) / 0.5);
+}
+
+/* Premium chart styling */
+.premium-chart-container {
+  @apply premium-dashboard-card p-6;
+}
+
+.chart-tooltip {
+  @apply bg-card border border-border rounded-lg p-3 shadow-lg;
+  backdrop-filter: blur(12px);
+}
+
+/* Premium checklist styling */
+.premium-checklist-item {
+  @apply flex items-center space-x-3 p-3 rounded-lg transition-all duration-200;
+  background: linear-gradient(135deg, transparent, hsl(var(--muted) / 0.1));
+}
+
+.premium-checklist-item:hover {
+  background: linear-gradient(135deg, hsl(var(--primary) / 0.05), hsl(var(--chart-2) / 0.05));
+  transform: translateX(4px);
+}
+
+.premium-checklist-item.completed {
+  @apply opacity-60;
+  background: linear-gradient(135deg, hsl(var(--success) / 0.1), transparent);
+}
+
+/* Premium animations */
+@keyframes countUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-count-up {
+  animation: countUp 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Premium glass morphism effects */
+.glass-card {
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+}
+
+/* Premium notification styling */
+.premium-notification {
+  @apply glass-card rounded-lg p-4 border-l-4;
+  border-left-color: hsl(var(--primary));
+  animation: slideInRight 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Import Inter font */
 /* Custom colors */
 .text-crimson {
   color: hsl(348, 83%, 47%);
@@ -125,54 +362,6 @@
 
 .accent-gradient {
   background: linear-gradient(135deg, hsl(348, 83%, 47%) 0%, hsl(348, 83%, 37%) 100%);
-}
-
-/* Premium Button Styles */
-.premium-button {
-  position: relative;
-  overflow: hidden;
-  transition: all 0.3s ease;
-  transform: translateY(0);
-}
-
-.premium-button:hover {
-  transform: translateY(-2px);
-}
-
-.premium-button::after {
-  content: "";
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: linear-gradient(
-    to bottom right,
-    rgba(255, 255, 255, 0) 0%,
-    rgba(255, 255, 255, 0.1) 50%,
-    rgba(255, 255, 255, 0) 100%
-  );
-  transform: rotate(45deg);
-  transition: all 0.3s ease;
-  opacity: 0;
-}
-
-.premium-button:hover::after {
-  animation: shine 1.5s ease-out;
-}
-
-@keyframes shine {
-  0% {
-    opacity: 0;
-    transform: rotate(45deg) translate(-100%, -100%);
-  }
-  50% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    transform: rotate(45deg) translate(100%, 100%);
-  }
 }
 
 /* Section Styles */
@@ -452,15 +641,6 @@
 }
 
 /* Skeleton loader shimmer effect */
-@keyframes shimmer {
-  0% {
-    transform: translateX(-100%);
-  }
-  100% {
-    transform: translateX(100%);
-  }
-}
-
 .shimmer {
   animation: shimmer 2s infinite;
   background: linear-gradient(

@@ -3,7 +3,6 @@
 import { useState } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { useProfileInitialization } from "@/hooks/use-profile-initialization"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -15,12 +14,15 @@ import {
   RefreshCw,
   Activity,
   Calendar,
-  CheckCircle2,
   CreditCard,
   Upload,
   Gift,
   ShoppingBag,
   Link,
+  Eye,
+  Sparkles,
+  Target,
+  Zap,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
@@ -42,12 +44,11 @@ export default function DashboardPage() {
     upload: false,
     freeContent: false,
     bundle: false,
-    socialBio: false, // Added social bio task to state
+    socialBio: false,
   })
 
-  // Use API-based video statistics (avoids Firestore index issues)
+  // Use API-based video statistics
   const videoStats = useVideoStatsAPI()
-
   // Use live dashboard sales data
   const salesData = useStripeDashboardSales()
 
@@ -56,7 +57,6 @@ export default function DashboardPage() {
     setRefreshing(true)
     try {
       await videoStats.refetch()
-      // Force refresh sales data by reloading the page
       window.location.reload()
     } catch (error) {
       console.error("Error refreshing data:", error)
@@ -96,327 +96,256 @@ export default function DashboardPage() {
   const totalTasks = Object.keys(checkedTasks).length
   const completionPercentage = (completedTasks / totalTasks) * 100
 
-  // Show loading state while profile is being initialized or stats are loading
+  // Show loading state
   if (isInitializing || videoStats.loading || salesData.loading) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-8 animate-fade-in-up">
         <div className="flex items-center justify-between">
-          <div>
-            <Skeleton className="h-8 w-48 mb-2" />
-            <Skeleton className="h-4 w-32" />
+          <div className="space-y-2">
+            <Skeleton className="h-10 w-80 bg-muted/50" />
+            <Skeleton className="h-5 w-48 bg-muted/30" />
           </div>
-          <div className="flex gap-3">
-            <Skeleton className="h-10 w-32" />
-            <Skeleton className="h-10 w-32" />
-          </div>
+          <Skeleton className="h-11 w-32 bg-muted/50" />
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-6 md:grid-cols-3">
           {Array.from({ length: 3 }).map((_, i) => (
-            <Card key={i} className="bg-zinc-900/50 border-zinc-800/50">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <Skeleton className="h-4 w-24" />
-                <Skeleton className="h-4 w-4" />
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="h-8 w-16 mb-1" />
-                <Skeleton className="h-3 w-20" />
-              </CardContent>
-            </Card>
+            <div key={i} className="premium-dashboard-card p-6 space-y-3">
+              <Skeleton className="h-5 w-32 bg-muted/50" />
+              <Skeleton className="h-8 w-20 bg-muted/30" />
+              <Skeleton className="h-4 w-40 bg-muted/20" />
+            </div>
           ))}
         </div>
       </div>
     )
   }
 
-  // Show error state if profile initialization failed
+  // Show error state
   if (error && !videoStats.loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Card className="w-full max-w-md bg-zinc-900/50 border-zinc-800/50">
-          <CardHeader>
-            <CardTitle className="text-red-400">Dashboard Error</CardTitle>
-            <CardDescription>There was an issue loading your dashboard</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-zinc-400 mb-4">{error}</p>
-            <div className="space-y-2">
-              <Button onClick={() => window.location.reload()} className="w-full">
-                Try Again
-              </Button>
-              <Button
-                onClick={() => router.push("/dashboard/upload")}
-                variant="outline"
-                className="w-full border-zinc-700 hover:bg-zinc-800"
-              >
-                Go to Upload
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="flex items-center justify-center min-h-[500px]">
+        <div className="premium-dashboard-card w-full max-w-md p-8 text-center space-y-6">
+          <div className="w-16 h-16 mx-auto bg-destructive/10 rounded-full flex items-center justify-center">
+            <Activity className="h-8 w-8 text-destructive" />
+          </div>
+          <div className="space-y-2">
+            <h3 className="text-xl font-semibold">Dashboard Unavailable</h3>
+            <p className="text-muted-foreground">{error}</p>
+          </div>
+          <div className="flex gap-3">
+            <Button onClick={() => window.location.reload()} className="premium-button flex-1">
+              Try Again
+            </Button>
+            <Button onClick={() => router.push("/dashboard/upload")} variant="outline" className="flex-1">
+              Go to Upload
+            </Button>
+          </div>
+        </div>
       </div>
     )
   }
 
-  // Show dashboard with fallback data if there are API errors but we have some data
-  if (videoStats.error && !videoStats.loading) {
-    console.warn("Video stats API error:", videoStats.error)
-    // Continue rendering with fallback data
-  }
-
   return (
-    <div className="space-y-6">
-      {/* Header */}
+    <div className="space-y-8">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Creator Dashboard</h1>
-          <p className="text-zinc-400">Welcome back, {user?.displayName || username || "Creator"}</p>
-          <div className="flex items-center gap-2 mt-1">
-            <Activity className="h-3 w-3 text-green-500" />
-            <span className="text-xs text-green-500">Live Data</span>
+        <div className="space-y-2">
+          <div className="flex items-center gap-3">
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-foreground to-primary bg-clip-text text-transparent">
+              Creator Dashboard
+            </h1>
+            <Sparkles className="h-6 w-6 text-primary animate-pulse" />
+          </div>
+          <p className="text-lg text-muted-foreground">
+            Welcome back,{" "}
+            <span className="font-medium text-foreground">{user?.displayName || username || "Creator"}</span>
+          </p>
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 bg-success rounded-full animate-pulse" />
+            <span className="text-sm text-success font-medium">Live Data</span>
           </div>
         </div>
-        <div className="flex gap-3">
-          <Button
-            onClick={handleRefresh}
-            variant="outline"
-            disabled={refreshing}
-            className="border-zinc-700 hover:bg-zinc-800 bg-transparent"
-          >
-            {refreshing ? (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                Refreshing...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Refresh
-              </>
-            )}
-          </Button>
-        </div>
+        <Button onClick={handleRefresh} disabled={refreshing} className="premium-button">
+          {refreshing ? (
+            <>
+              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+              Refreshing...
+            </>
+          ) : (
+            <>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Refresh Data
+            </>
+          )}
+        </Button>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card className="bg-zinc-900/50 border-zinc-800/50">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-zinc-200">Sales (30 Days)</CardTitle>
-            <Calendar className="h-4 w-4 text-zinc-400" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">${salesData.totalRevenueLast30Days.toFixed(2)}</div>
-            <p className="text-xs text-zinc-500">{salesData.totalSalesLast30Days} sales in last 30 days</p>
-            {salesData.averageOrderValue > 0 && (
-              <p className="text-xs text-zinc-400 mt-1">Avg: ${salesData.averageOrderValue.toFixed(2)} per sale</p>
-            )}
-            {salesData.error && <p className="text-xs text-red-400 mt-1">Data may be outdated</p>}
-          </CardContent>
-        </Card>
+      <div className="grid gap-6 md:grid-cols-3">
+        <div className="premium-metric-card group">
+          <div className="flex items-center justify-between mb-4">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <DollarSign className="h-5 w-5 text-primary" />
+            </div>
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+          </div>
+          <div className="metric-label">Revenue (30 Days)</div>
+          <div className="metric-value animate-count-up">${salesData.totalRevenueLast30Days.toFixed(2)}</div>
+          <div className="metric-description">
+            {salesData.totalSalesLast30Days} sales • Avg ${salesData.averageOrderValue.toFixed(2)}
+          </div>
+          {salesData.totalRevenueLast30Days === 0 && (
+            <div className="mt-3 p-2 bg-warning/10 rounded-lg">
+              <p className="text-xs text-warning font-medium">Let's make your first sale this week! 👇</p>
+            </div>
+          )}
+        </div>
 
-        <Card className="bg-zinc-900/50 border-zinc-800/50">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-zinc-200">Free Videos</CardTitle>
-            <Video className="h-4 w-4 text-zinc-400" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{videoStats.totalFreeVideos}</div>
-            <p className="text-xs text-zinc-500">Free content available</p>
-            {videoStats.totalUploads > 0 && (
-              <p className="text-xs text-zinc-400 mt-1">
-                {videoStats.freeVideoPercentage.toFixed(1)}% of {videoStats.totalUploads} total uploads
-              </p>
-            )}
-            {videoStats.totalFreeVideos === 0 && videoStats.totalUploads > 0 && (
-              <p className="text-xs text-yellow-500 mt-1">Consider adding free content</p>
-            )}
-          </CardContent>
-        </Card>
+        <div className="premium-metric-card group">
+          <div className="flex items-center justify-between mb-4">
+            <div className="p-2 bg-chart-2/10 rounded-lg">
+              <Video className="h-5 w-5 text-chart-2" />
+            </div>
+            <Gift className="h-4 w-4 text-muted-foreground" />
+          </div>
+          <div className="metric-label">Free Content</div>
+          <div className="metric-value animate-count-up">{videoStats.totalFreeVideos}</div>
+          <div className="metric-description">
+            {videoStats.freeVideoPercentage.toFixed(1)}% of {videoStats.totalUploads} uploads
+          </div>
+          <div className="mt-3">
+            <div className="premium-progress">
+              <div
+                className="premium-progress-bar"
+                style={{ width: `${Math.min(100, videoStats.freeVideoPercentage)}%` }}
+              />
+            </div>
+          </div>
+        </div>
 
-        <div className="bg-zinc-900/50 border-zinc-800/50 rounded-lg">
+        <div className="premium-metric-card group">
+          <div className="flex items-center justify-between mb-4">
+            <div className="p-2 bg-chart-3/10 rounded-lg">
+              <Eye className="h-5 w-5 text-chart-3" />
+            </div>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </div>
           <ProfileViewStats userId={username || user?.uid || ""} />
         </div>
       </div>
 
-      {/* Main Content Grid */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Financial Forecast - Replaces Sales Performance */}
+      <div className="grid gap-8 lg:grid-cols-3">
+        {/* Enhanced Sales Forecast */}
         <div className="lg:col-span-2">
           <SalesForecastCard />
         </div>
 
-        <div className="space-y-6">
-          {/* Creator Checklist - Replaces Content Library */}
-          <Card className="bg-gradient-to-br from-zinc-900/50 to-zinc-800/30 border-zinc-700/50">
-            <CardHeader>
-              <div className="flex items-center justify-between">
+        <div className="space-y-8">
+          <div className="premium-dashboard-card p-6">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-primary/10 rounded-lg">
+                  <Target className="h-5 w-5 text-primary" />
+                </div>
                 <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <CheckCircle2 className="h-5 w-5 text-white" />
-                    Creator Setup
-                  </CardTitle>
-                  <CardDescription>Complete these steps to get started</CardDescription>
-                </div>
-                <div className="text-right">
-                  <div className="text-sm font-medium text-white">
-                    {completedTasks}/{totalTasks}
-                  </div>
-                  <div className="text-xs text-zinc-400">{completionPercentage.toFixed(0)}% complete</div>
+                  <h3 className="text-lg font-semibold">Creator Setup</h3>
+                  <p className="text-sm text-muted-foreground">Complete your journey to success</p>
                 </div>
               </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Progress bar */}
-              <div className="w-full bg-zinc-800 rounded-full h-2">
+              <div className="text-right">
+                <div className="text-lg font-bold text-primary">
+                  {completedTasks}/{totalTasks}
+                </div>
+                <div className="text-xs text-muted-foreground">{completionPercentage.toFixed(0)}% complete</div>
+              </div>
+            </div>
+
+            {/* Premium progress indicator */}
+            <div className="mb-6">
+              <div className="premium-progress">
+                <div className="premium-progress-bar" style={{ width: `${completionPercentage}%` }} />
+              </div>
+            </div>
+
+            {/* Enhanced task list */}
+            <div className="space-y-3">
+              {[
+                { key: "stripe", icon: CreditCard, label: "Connect Stripe account", color: "text-primary" },
+                { key: "upload", icon: Upload, label: "Upload your first content", color: "text-chart-2" },
+                { key: "freeContent", icon: Gift, label: "Add free content samples", color: "text-chart-3" },
+                { key: "bundle", icon: ShoppingBag, label: "Create your first bundle", color: "text-chart-4" },
+                { key: "socialBio", icon: Link, label: "Add link to social profiles", color: "text-chart-5" },
+              ].map(({ key, icon: Icon, label, color }) => (
                 <div
-                  className="bg-gradient-to-r from-white to-gray-300 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${completionPercentage}%` }}
-                />
-              </div>
-
-              {/* Task list */}
-              <div className="space-y-3">
-                <div className="flex items-center space-x-3">
+                  key={key}
+                  className={`premium-checklist-item ${checkedTasks[key as keyof typeof checkedTasks] ? "completed" : ""}`}
+                >
                   <Checkbox
-                    id="stripe"
-                    checked={checkedTasks.stripe}
-                    onCheckedChange={() => handleTaskCheck("stripe")}
-                    className="border-zinc-600 data-[state=checked]:bg-white data-[state=checked]:border-white"
+                    id={key}
+                    checked={checkedTasks[key as keyof typeof checkedTasks]}
+                    onCheckedChange={() => handleTaskCheck(key as keyof typeof checkedTasks)}
+                    className="border-border data-[state=checked]:bg-primary data-[state=checked]:border-primary"
                   />
-                  <div className="flex items-center gap-2 flex-1">
-                    <CreditCard className="h-4 w-4 text-zinc-400" />
-                    <label
-                      htmlFor="stripe"
-                      onClick={() => handleTaskClick("stripe")}
-                      className={`text-sm cursor-pointer hover:text-white transition-colors ${checkedTasks.stripe ? "line-through text-zinc-500" : "text-zinc-200"}`}
-                    >
-                      Connect your Stripe account
-                    </label>
+                  <div className="p-2 bg-muted/20 rounded-lg">
+                    <Icon className={`h-4 w-4 ${color}`} />
                   </div>
+                  <label
+                    htmlFor={key}
+                    onClick={() => handleTaskClick(key)}
+                    className={`text-sm cursor-pointer hover:text-primary transition-colors flex-1 ${
+                      checkedTasks[key as keyof typeof checkedTasks] ? "line-through text-muted-foreground" : ""
+                    }`}
+                  >
+                    {label}
+                  </label>
                 </div>
+              ))}
+            </div>
 
-                <div className="flex items-center space-x-3">
-                  <Checkbox
-                    id="upload"
-                    checked={checkedTasks.upload}
-                    onCheckedChange={() => handleTaskCheck("upload")}
-                    className="border-zinc-600 data-[state=checked]:bg-white data-[state=checked]:border-white"
-                  />
-                  <div className="flex items-center gap-2 flex-1">
-                    <Upload className="h-4 w-4 text-zinc-400" />
-                    <label
-                      htmlFor="upload"
-                      onClick={() => handleTaskClick("upload")}
-                      className={`text-sm cursor-pointer hover:text-white transition-colors ${checkedTasks.upload ? "line-through text-zinc-500" : "text-zinc-200"}`}
-                    >
-                      Upload content
-                    </label>
-                  </div>
-                </div>
-
-                <div className="flex items-center space-x-3">
-                  <Checkbox
-                    id="freeContent"
-                    checked={checkedTasks.freeContent}
-                    onCheckedChange={() => handleTaskCheck("freeContent")}
-                    className="border-zinc-600 data-[state=checked]:bg-white data-[state=checked]:border-white"
-                  />
-                  <div className="flex items-center gap-2 flex-1">
-                    <Gift className="h-4 w-4 text-zinc-400" />
-                    <label
-                      htmlFor="freeContent"
-                      onClick={() => handleTaskClick("freeContent")}
-                      className={`text-sm cursor-pointer hover:text-white transition-colors ${checkedTasks.freeContent ? "line-through text-zinc-500" : "text-zinc-200"}`}
-                    >
-                      Add free content
-                    </label>
-                  </div>
-                </div>
-
-                <div className="flex items-center space-x-3">
-                  <Checkbox
-                    id="bundle"
-                    checked={checkedTasks.bundle}
-                    onCheckedChange={() => handleTaskCheck("bundle")}
-                    className="border-zinc-600 data-[state=checked]:bg-white data-[state=checked]:border-white"
-                  />
-                  <div className="flex items-center gap-2 flex-1">
-                    <ShoppingBag className="h-4 w-4 text-zinc-400" />
-                    <label
-                      htmlFor="bundle"
-                      onClick={() => handleTaskClick("bundle")}
-                      className={`text-sm cursor-pointer hover:text-white transition-colors ${checkedTasks.bundle ? "line-through text-zinc-500" : "text-zinc-200"}`}
-                    >
-                      Create a bundle
-                    </label>
-                  </div>
-                </div>
-
-                <div className="flex items-center space-x-3">
-                  <Checkbox
-                    id="socialBio"
-                    checked={checkedTasks.socialBio}
-                    onCheckedChange={() => handleTaskCheck("socialBio")}
-                    className="border-zinc-600 data-[state=checked]:bg-white data-[state=checked]:border-white"
-                  />
-                  <div className="flex items-center gap-2 flex-1">
-                    <Link className="h-4 w-4 text-zinc-400" />
-                    <label
-                      htmlFor="socialBio"
-                      onClick={() => handleTaskClick("socialBio")}
-                      className={`text-sm cursor-pointer hover:text-white transition-colors ${checkedTasks.socialBio ? "line-through text-zinc-500" : "text-zinc-200"}`}
-                    >
-                      Put storefront link in social bio
-                    </label>
-                  </div>
+            {completionPercentage === 100 && (
+              <div className="mt-6 p-4 bg-success/10 border border-success/20 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <Zap className="h-5 w-5 text-success" />
+                  <p className="text-sm text-success font-medium">🎉 Congratulations! You're ready to start earning.</p>
                 </div>
               </div>
+            )}
+          </div>
 
-              {completionPercentage === 100 && (
-                <div className="mt-4 p-3 bg-green-900/20 border border-green-800/50 rounded-lg">
-                  <p className="text-sm text-green-400 font-medium">
-                    🎉 Great job! You're all set up and ready to start selling.
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Quick Actions - Moved below checklist */}
-          <Card className="bg-zinc-900/50 border-zinc-800/50">
-            <CardHeader>
-              <CardTitle>Quick Actions</CardTitle>
-              <CardDescription>Common tasks and shortcuts</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Button
-                onClick={() => router.push("/dashboard/bundles")}
-                className="w-full justify-start bg-zinc-900 hover:bg-zinc-800 border border-zinc-700"
-              >
-                <Package className="h-4 w-4 mr-2" />
-                Make a Bundle
+          <div className="premium-dashboard-card p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 bg-chart-2/10 rounded-lg">
+                <Zap className="h-5 w-5 text-chart-2" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold">Quick Actions</h3>
+                <p className="text-sm text-muted-foreground">Your creator command center</p>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <Button onClick={() => router.push("/dashboard/bundles")} className="w-full justify-start premium-button">
+                <Package className="h-4 w-4 mr-3" />
+                Create Bundle
               </Button>
 
               <Button
                 onClick={() => router.push("/dashboard/earnings")}
                 variant="outline"
-                className="w-full justify-start border-zinc-700 hover:bg-zinc-800"
+                className="w-full justify-start border-border hover:bg-muted/50"
               >
-                <DollarSign className="h-4 w-4 mr-2" />
+                <DollarSign className="h-4 w-4 mr-3" />
                 View Earnings
               </Button>
 
               <Button
                 onClick={() => router.push("/dashboard/profile")}
                 variant="outline"
-                className="w-full justify-start border-zinc-700 hover:bg-zinc-800"
+                className="w-full justify-start border-border hover:bg-muted/50"
               >
-                <TrendingUp className="h-4 w-4 mr-2" />
+                <TrendingUp className="h-4 w-4 mr-3" />
                 Edit Profile
               </Button>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
       </div>
     </div>
