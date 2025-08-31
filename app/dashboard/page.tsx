@@ -173,7 +173,7 @@ export default function DashboardPage() {
       <div className="grid gap-4 lg:grid-cols-3">
         {/* Large Revenue Card - Left Side */}
         <div className="lg:col-span-2">
-          <div className="bg-slate-900/80 border border-slate-800/50 rounded-xl p-6 h-[320px]">
+          <div className="bg-slate-800/90 border border-slate-700/50 rounded-xl p-6 h-[320px]">
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h3 className="text-lg font-medium text-white mb-1">Revenue (30 Days)</h3>
@@ -188,24 +188,24 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Line Graph */}
             <div className="h-32 mb-6 relative">
               <svg className="w-full h-full" viewBox="0 0 400 120">
                 <defs>
                   <linearGradient id="lineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.8" />
-                    <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0.8" />
+                    <stop offset="0%" stopColor="#64748b" stopOpacity="1" />
+                    <stop offset="50%" stopColor="#94a3b8" stopOpacity="1" />
+                    <stop offset="100%" stopColor="#cbd5e1" stopOpacity="1" />
                   </linearGradient>
                 </defs>
                 <path
-                  d="M 20 80 Q 60 70 100 75 T 180 65 T 260 55 T 340 45 T 380 35"
+                  d="M 20 90 Q 50 85 80 80 Q 110 75 140 70 Q 170 65 200 60 Q 230 55 260 50 Q 290 45 320 40 Q 350 35 380 30"
                   stroke="url(#lineGradient)"
-                  strokeWidth="2"
+                  strokeWidth="3"
                   fill="none"
                   className="drop-shadow-sm"
                 />
                 {/* Data points */}
-                <circle cx="380" cy="35" r="3" fill="#3b82f6" className="drop-shadow-sm" />
+                <circle cx="380" cy="30" r="4" fill="#cbd5e1" className="drop-shadow-sm" />
               </svg>
             </div>
 
@@ -225,10 +225,9 @@ export default function DashboardPage() {
 
         {/* Compact Metrics - Right Side */}
         <div className="space-y-4">
-          {/* Orders */}
-          <div className="bg-slate-900/80 border border-slate-800/50 rounded-xl p-4">
+          <div className="bg-slate-800/90 border border-slate-700/50 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-slate-400">Orders</span>
+              <span className="text-sm text-slate-400">Total Sales (30 days)</span>
               <span className="text-xs text-slate-500">1</span>
             </div>
             <div className="flex items-center justify-between">
@@ -240,8 +239,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Profile Views */}
-          <div className="bg-slate-900/80 border border-slate-800/50 rounded-xl p-4">
+          <div className="bg-slate-800/90 border border-slate-700/50 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-slate-400">Profile Views</span>
               <span className="text-xs text-slate-500">0</span>
@@ -254,8 +252,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Free Clips Uploaded */}
-          <div className="bg-slate-900/80 border border-slate-800/50 rounded-xl p-4">
+          <div className="bg-slate-800/90 border border-slate-700/50 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-slate-400">Free Clips Uploaded</span>
               <span className="text-xs text-slate-500">5</span>
@@ -271,7 +268,7 @@ export default function DashboardPage() {
       <div className="grid gap-4 lg:grid-cols-3">
         {/* Weekly Forecast - Bottom Left */}
         <div className="lg:col-span-2">
-          <div className="bg-slate-900/80 border border-slate-800/50 rounded-xl p-6">
+          <div className="bg-slate-800/90 border border-slate-700/50 rounded-xl p-6">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-lg font-medium text-white">Weekly Forecast</h3>
@@ -288,7 +285,7 @@ export default function DashboardPage() {
               <div className="text-sm text-slate-400">goal</div>
             </div>
 
-            <div className="w-full bg-slate-800 rounded-full h-2 mb-3">
+            <div className="w-full bg-slate-700 rounded-full h-2 mb-3">
               <div
                 className="bg-gradient-to-r from-emerald-500 to-emerald-400 h-2 rounded-full"
                 style={{ width: "28%" }}
@@ -309,7 +306,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Creator Setup - Bottom Right */}
-        <div className="bg-slate-900/80 border border-slate-800/50 rounded-xl p-6">
+        <div className="bg-slate-800/90 border border-slate-700/50 rounded-xl p-6">
           <div className="flex items-center gap-3 mb-6">
             <div className="p-2 bg-blue-500/10 rounded-lg">
               <Target className="h-5 w-5 text-blue-400" />
@@ -319,21 +316,41 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-slate-800/30 border border-slate-700/50">
+          <div className="space-y-3">
+            {/* Connect Stripe Account */}
+            <div
+              className="flex items-center gap-3 p-3 rounded-lg bg-slate-700/30 border border-slate-600/50 cursor-pointer hover:bg-slate-700/50 transition-colors"
+              onClick={() => handleTaskClick("stripe")}
+            >
               <div className="p-1.5 bg-blue-500/10 rounded">
                 <CreditCard className="h-4 w-4 text-blue-400" />
               </div>
               <span className="text-sm text-slate-300 flex-1">Connect Stripe account</span>
+              <div className="w-4 h-4 rounded-full border-2 border-slate-600" />
             </div>
 
-            <div className="space-y-2">
-              <div className="w-full bg-slate-800 rounded-full h-1">
-                <div className="bg-slate-600 h-1 rounded-full" style={{ width: "0%" }} />
+            {/* Upload First Content */}
+            <div
+              className="flex items-center gap-3 p-3 rounded-lg bg-slate-700/30 border border-slate-600/50 cursor-pointer hover:bg-slate-700/50 transition-colors"
+              onClick={() => handleTaskClick("upload")}
+            >
+              <div className="p-1.5 bg-purple-500/10 rounded">
+                <Activity className="h-4 w-4 text-purple-400" />
               </div>
-              <div className="w-full bg-slate-800 rounded-full h-1">
-                <div className="bg-slate-600 h-1 rounded-full" style={{ width: "0%" }} />
+              <span className="text-sm text-slate-300 flex-1">Upload your first content</span>
+              <div className="w-4 h-4 rounded-full border-2 border-slate-600" />
+            </div>
+
+            {/* Create Bundle */}
+            <div
+              className="flex items-center gap-3 p-3 rounded-lg bg-slate-700/30 border border-slate-600/50 cursor-pointer hover:bg-slate-700/50 transition-colors"
+              onClick={() => handleTaskClick("bundle")}
+            >
+              <div className="p-1.5 bg-emerald-500/10 rounded">
+                <Target className="h-4 w-4 text-emerald-400" />
               </div>
+              <span className="text-sm text-slate-300 flex-1">Create your first bundle</span>
+              <div className="w-4 h-4 rounded-full border-2 border-slate-600" />
             </div>
           </div>
 
