@@ -5,32 +5,11 @@ import { useAuth } from "@/contexts/auth-context"
 import { useProfileInitialization } from "@/hooks/use-profile-initialization"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Checkbox } from "@/components/ui/checkbox"
-import {
-  DollarSign,
-  TrendingUp,
-  Video,
-  RefreshCw,
-  Activity,
-  CreditCard,
-  Upload,
-  Gift,
-  ShoppingBag,
-  Link,
-  Eye,
-  Target,
-  Zap,
-  ArrowUpRight,
-  BarChart3,
-  Bell,
-  Users,
-  Download,
-} from "lucide-react"
+import { TrendingUp, RefreshCw, Activity, CreditCard, Target, Zap, BarChart3, Bell, Flame } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
 import { useVideoStatsAPI } from "@/hooks/use-video-stats-api"
 import { useStripeDashboardSales } from "@/hooks/use-stripe-dashboard-sales"
-import ProfileViewStats from "@/components/profile-view-stats"
 
 export default function DashboardPage() {
   const { user } = useAuth()
@@ -40,7 +19,6 @@ export default function DashboardPage() {
 
   const [refreshing, setRefreshing] = useState(false)
   const [animatedRevenue, setAnimatedRevenue] = useState(0)
-  const [animatedViews, setAnimatedViews] = useState(0)
 
   const [checkedTasks, setCheckedTasks] = useState({
     stripe: false,
@@ -123,7 +101,7 @@ export default function DashboardPage() {
   // Show loading state
   if (isInitializing || videoStats.loading || salesData.loading) {
     return (
-      <div className="space-y-6 animate-fade-in-up">
+      <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div className="space-y-2">
             <Skeleton className="h-8 w-64 bg-slate-800/50" />
@@ -171,256 +149,197 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-6 animate-fade-in-up">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div className="space-y-2">
+        <div className="space-y-1">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-white">Creator Dashboard</h1>
-            <div className="flex items-center gap-2 px-2 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full">
-              <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
-              <span className="text-xs font-medium text-emerald-400">Live</span>
+            <h1 className="text-3xl font-bold text-white">Creator Dashboard</h1>
+            <div className="px-2 py-1 bg-blue-500/10 border border-blue-500/20 rounded text-xs font-medium text-blue-400">
+              PRO
             </div>
           </div>
-          <div className="flex items-center gap-4 text-sm text-slate-400">
-            <span>Welcome back, {user?.displayName || username || "Creator"}</span>
-            <div className="w-1 h-1 bg-slate-600 rounded-full" />
-            <span>Last updated 2 min ago</span>
-          </div>
+          <p className="text-slate-400">Last updated just now</p>
         </div>
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" className="relative text-slate-400 hover:text-white">
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" className="text-slate-400 hover:text-white">
             <Bell className="h-4 w-4" />
-            <div className="absolute -top-1 -right-1 w-2 h-2 bg-blue-500 rounded-full" />
           </Button>
           <Button onClick={handleRefresh} disabled={refreshing} size="sm" variant="outline">
-            {refreshing ? (
-              <>
-                <RefreshCw className="h-3 w-3 mr-2 animate-spin" />
-                Refreshing
-              </>
-            ) : (
-              <>
-                <RefreshCw className="h-3 w-3 mr-2" />
-                Refresh
-              </>
-            )}
+            {refreshing ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
           </Button>
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Revenue Graph - Centerpiece */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        {/* Large Revenue Card - Left Side */}
         <div className="lg:col-span-2">
-          <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-6">
+          <div className="bg-slate-900/80 border border-slate-800/50 rounded-xl p-6 h-[320px]">
             <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-500/10 rounded-lg">
-                  <DollarSign className="h-5 w-5 text-blue-400" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-white">Revenue</h3>
-                  <p className="text-sm text-slate-400">Last 30 days</p>
-                </div>
+              <div>
+                <h3 className="text-lg font-medium text-white mb-1">Revenue (30 Days)</h3>
               </div>
               <div className="text-right">
-                <div className="text-2xl font-bold text-white">
+                <div className="text-3xl font-bold text-white mb-1">
                   ${salesData.totalRevenueLast30Days > 0 ? animatedRevenue.toFixed(2) : "0.00"}
                 </div>
-                <div className="flex items-center gap-1 text-emerald-400 text-sm">
-                  <TrendingUp className="h-3 w-3" />
-                  <span>+16%</span>
+                <div className="text-sm text-slate-400">
+                  {salesData.totalSalesLast30Days} sale • 1 Aug ${salesData.averageOrderValue.toFixed(2)}
                 </div>
               </div>
             </div>
 
-            {/* Simplified revenue visualization */}
-            <div className="h-32 bg-slate-800/30 rounded-lg flex items-end justify-center p-4">
-              <div className="flex items-end gap-1 h-full w-full max-w-md">
-                {Array.from({ length: 30 }).map((_, i) => (
-                  <div
-                    key={i}
-                    className="bg-gradient-to-t from-blue-500/60 to-blue-400/40 rounded-sm flex-1"
-                    style={{
-                      height: `${Math.random() * 60 + 20}%`,
-                      opacity: i > 25 ? 1 : 0.3,
-                    }}
-                  />
-                ))}
-              </div>
+            {/* Line Graph */}
+            <div className="h-32 mb-6 relative">
+              <svg className="w-full h-full" viewBox="0 0 400 120">
+                <defs>
+                  <linearGradient id="lineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.8" />
+                    <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0.8" />
+                  </linearGradient>
+                </defs>
+                <path
+                  d="M 20 80 Q 60 70 100 75 T 180 65 T 260 55 T 340 45 T 380 35"
+                  stroke="url(#lineGradient)"
+                  strokeWidth="2"
+                  fill="none"
+                  className="drop-shadow-sm"
+                />
+                {/* Data points */}
+                <circle cx="380" cy="35" r="3" fill="#3b82f6" className="drop-shadow-sm" />
+              </svg>
             </div>
 
-            <div className="flex items-center justify-between mt-4 text-sm">
-              <span className="text-slate-400">{salesData.totalSalesLast30Days} orders</span>
-              <span className="text-slate-400">Avg ${salesData.averageOrderValue.toFixed(2)}</span>
+            <div className="flex items-center justify-between text-sm text-slate-400">
+              <span>1 wek</span>
+              <span>Email</span>
+              <span>Profile</span>
+            </div>
+
+            {/* Downloads notification */}
+            <div className="mt-4 flex items-center gap-2 text-sm">
+              <Flame className="h-4 w-4 text-orange-400" />
+              <span className="text-slate-300">3 new downloads today</span>
             </div>
           </div>
         </div>
 
-        {/* Compact Metrics Column */}
+        {/* Compact Metrics - Right Side */}
         <div className="space-y-4">
-          <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="p-2 bg-purple-500/10 rounded-lg">
-                <Video className="h-4 w-4 text-purple-400" />
-              </div>
-              <div className="flex-1">
-                <div className="text-sm text-slate-400">Free Content</div>
-                <div className="text-xl font-bold text-white">{videoStats.totalFreeVideos}</div>
-              </div>
-              <div className="text-xs text-emerald-400 font-medium">+30%</div>
+          {/* Orders */}
+          <div className="bg-slate-900/80 border border-slate-800/50 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm text-slate-400">Orders</span>
+              <span className="text-xs text-slate-500">1</span>
             </div>
-            <div className="w-full bg-slate-800 rounded-full h-1.5">
-              <div
-                className="bg-gradient-to-r from-purple-500 to-purple-400 h-1.5 rounded-full transition-all duration-1000"
-                style={{ width: `${Math.min(100, videoStats.freeVideoPercentage)}%` }}
-              />
+            <div className="flex items-center justify-between">
+              <span className="text-2xl font-bold text-white">1</span>
+              <div className="flex items-center gap-1 text-emerald-400 text-xs">
+                <TrendingUp className="h-3 w-3" />
+                <span>+100%</span>
+              </div>
             </div>
           </div>
 
-          <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="p-2 bg-emerald-500/10 rounded-lg">
-                <Eye className="h-4 w-4 text-emerald-400" />
+          {/* Profile Views */}
+          <div className="bg-slate-900/80 border border-slate-800/50 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm text-slate-400">Profile Views</span>
+              <span className="text-xs text-slate-500">0</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-2xl font-bold text-white">0</span>
+              <div className="flex items-center gap-1 text-slate-500 text-xs">
+                <BarChart3 className="h-3 w-3" />
               </div>
-              <div className="flex-1">
-                <div className="text-sm text-slate-400">Profile Views</div>
-                <ProfileViewStats userId={username || user?.uid || ""} compact />
-              </div>
-              <div className="text-xs text-emerald-400 font-medium">+23%</div>
             </div>
           </div>
 
-          <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-orange-500/10 rounded-lg">
-                <Download className="h-4 w-4 text-orange-400" />
-              </div>
-              <div className="flex-1">
-                <div className="text-sm text-slate-400">Downloads</div>
-                <div className="text-xl font-bold text-white">1,247</div>
-              </div>
-              <div className="text-xs text-emerald-400 font-medium">+12%</div>
+          {/* Free Clips Uploaded */}
+          <div className="bg-slate-900/80 border border-slate-800/50 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm text-slate-400">Free Clips Uploaded</span>
+              <span className="text-xs text-slate-500">5</span>
             </div>
-          </div>
-
-          <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-cyan-500/10 rounded-lg">
-                <Users className="h-4 w-4 text-cyan-400" />
-              </div>
-              <div className="flex-1">
-                <div className="text-sm text-slate-400">Total Clips</div>
-                <div className="text-xl font-bold text-white">{videoStats.totalUploads}</div>
-              </div>
+            <div className="flex items-center justify-between">
+              <span className="text-2xl font-bold text-white">{videoStats.totalFreeVideos}</span>
+              <span className="text-xs text-slate-400">of 18</span>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Compact Weekly Forecast */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        {/* Weekly Forecast - Bottom Left */}
         <div className="lg:col-span-2">
-          <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-6">
+          <div className="bg-slate-900/80 border border-slate-800/50 rounded-xl p-6">
             <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-yellow-500/10 rounded-lg">
-                  <BarChart3 className="h-5 w-5 text-yellow-400" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-white">Weekly Forecast</h3>
-                  <p className="text-sm text-slate-400">Next 7 days projection</p>
-                </div>
+              <div>
+                <h3 className="text-lg font-medium text-white">Weekly Forecast</h3>
+                <p className="text-sm text-slate-400">7-days projection</p>
               </div>
-              <div className="px-2 py-1 bg-yellow-500/10 border border-yellow-500/20 rounded-full">
-                <span className="text-xs font-medium text-yellow-400">STABLE</span>
+              <div className="flex items-center gap-1 text-emerald-400 text-sm">
+                <TrendingUp className="h-3 w-3" />
+                <span>28%</span>
               </div>
             </div>
 
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-2xl font-bold text-white">$0.00</span>
-                <span className="text-sm text-slate-400">low confidence</span>
-              </div>
+            <div className="mb-4">
+              <div className="text-3xl font-bold text-white mb-1">$50.00</div>
+              <div className="text-sm text-slate-400">goal</div>
+            </div>
 
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-400">Weekly Goal</span>
-                  <span className="text-white font-medium">$50.00</span>
-                </div>
-                <div className="w-full bg-slate-800 rounded-full h-2">
-                  <div
-                    className="bg-gradient-to-r from-yellow-500 to-yellow-400 h-2 rounded-full"
-                    style={{ width: "3%" }}
-                  />
-                </div>
-                <div className="text-xs text-slate-400">3% of weekly goal achieved</div>
+            <div className="w-full bg-slate-800 rounded-full h-2 mb-3">
+              <div
+                className="bg-gradient-to-r from-emerald-500 to-emerald-400 h-2 rounded-full"
+                style={{ width: "28%" }}
+              />
+            </div>
+
+            <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2">
+                <Zap className="h-4 w-4 text-yellow-400" />
+                <span className="text-slate-300">New-goal</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Target className="h-4 w-4 text-emerald-400" />
+                <span className="text-slate-300">success</span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Vertical Creator Setup Progress */}
-        <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-6">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-500/10 rounded-lg">
-                <Target className="h-5 w-5 text-blue-400" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-white">Creator Setup</h3>
-                <p className="text-sm text-slate-400">{completedTasks}/5 complete</p>
-              </div>
+        {/* Creator Setup - Bottom Right */}
+        <div className="bg-slate-900/80 border border-slate-800/50 rounded-xl p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 bg-blue-500/10 rounded-lg">
+              <Target className="h-5 w-5 text-blue-400" />
             </div>
-            <div className="text-right">
-              <div className="text-lg font-bold text-blue-400">{completionPercentage.toFixed(0)}%</div>
+            <div>
+              <h3 className="text-lg font-medium text-white">Creator setup</h3>
             </div>
           </div>
 
-          <div className="space-y-3">
-            {[
-              { key: "stripe", icon: CreditCard, label: "Connect Stripe", color: "text-blue-400" },
-              { key: "upload", icon: Upload, label: "Upload content", color: "text-purple-400" },
-              { key: "freeContent", icon: Gift, label: "Add free samples", color: "text-emerald-400" },
-              { key: "bundle", icon: ShoppingBag, label: "Create bundle", color: "text-orange-400" },
-              { key: "socialBio", icon: Link, label: "Add social links", color: "text-cyan-400" },
-            ].map(({ key, icon: Icon, label, color }) => (
-              <div
-                key={key}
-                className={`flex items-center gap-3 p-3 rounded-lg border transition-all cursor-pointer ${
-                  checkedTasks[key as keyof typeof checkedTasks]
-                    ? "bg-slate-800/50 border-slate-700"
-                    : "bg-slate-800/20 border-slate-800 hover:bg-slate-800/30"
-                }`}
-                onClick={() => handleTaskClick(key)}
-              >
-                <Checkbox
-                  checked={checkedTasks[key as keyof typeof checkedTasks]}
-                  onCheckedChange={() => handleTaskCheck(key as keyof typeof checkedTasks)}
-                  className="border-slate-600 data-[state=checked]:bg-blue-500 data-[state=checked]:border-blue-500"
-                />
-                <div className="p-1.5 bg-slate-700/50 rounded">
-                  <Icon className={`h-3 w-3 ${color}`} />
-                </div>
-                <span
-                  className={`text-sm flex-1 ${
-                    checkedTasks[key as keyof typeof checkedTasks] ? "line-through text-slate-500" : "text-slate-300"
-                  }`}
-                >
-                  {label}
-                </span>
-                <ArrowUpRight className="h-3 w-3 text-slate-500" />
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-slate-800/30 border border-slate-700/50">
+              <div className="p-1.5 bg-blue-500/10 rounded">
+                <CreditCard className="h-4 w-4 text-blue-400" />
               </div>
-            ))}
-          </div>
+              <span className="text-sm text-slate-300 flex-1">Connect Stripe account</span>
+            </div>
 
-          {completionPercentage === 100 && (
-            <div className="mt-4 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
-              <div className="flex items-center gap-2">
-                <Zap className="h-4 w-4 text-emerald-400" />
-                <span className="text-sm text-emerald-400 font-medium">Ready to earn!</span>
+            <div className="space-y-2">
+              <div className="w-full bg-slate-800 rounded-full h-1">
+                <div className="bg-slate-600 h-1 rounded-full" style={{ width: "0%" }} />
+              </div>
+              <div className="w-full bg-slate-800 rounded-full h-1">
+                <div className="bg-slate-600 h-1 rounded-full" style={{ width: "0%" }} />
               </div>
             </div>
-          )}
+          </div>
+
+          <div className="mt-6 text-right">
+            <span className="text-lg font-bold text-blue-400">0%</span>
+          </div>
         </div>
       </div>
     </div>
