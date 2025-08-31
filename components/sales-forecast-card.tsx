@@ -79,6 +79,8 @@ export function SalesForecastCard() {
   const weeklySalesData = generateWeeklySalesData(pastWeekAverage)
   const totalProjectedWeek = weeklySalesData.reduce((sum, day) => sum + day.revenue, 0)
 
+  console.log("[v0] Sales forecast chart data:", weeklySalesData)
+
   return (
     <Card className="bg-zinc-900/50 border-zinc-800/50">
       <CardHeader>
@@ -103,18 +105,32 @@ export function SalesForecastCard() {
           <p className="text-sm text-zinc-400">Based on last week's {formatCurrency(pastWeekAverage)} performance</p>
         </div>
 
-        <div className="h-32 w-full">
+        <div className="h-40 w-full bg-zinc-800/30 rounded-lg p-3 border border-zinc-700/50">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={weeklySalesData} margin={{ top: 5, right: 5, left: 5, bottom: 20 }}>
+            <LineChart data={weeklySalesData} margin={{ top: 10, right: 10, left: 10, bottom: 25 }}>
               <XAxis
                 dataKey="day"
-                axisLine={false}
-                tickLine={false}
-                tick={{ fontSize: 11, fill: "#71717a" }}
-                className="text-zinc-400"
+                axisLine={true}
+                tickLine={true}
+                tick={{ fontSize: 12, fill: "#a1a1aa" }}
+                stroke="#52525b"
               />
-              <YAxis hide />
-              <Line type="linear" dataKey="revenue" stroke="#6366f1" strokeWidth={2} dot={false} activeDot={false} />
+              <YAxis
+                axisLine={true}
+                tickLine={true}
+                tick={{ fontSize: 11, fill: "#a1a1aa" }}
+                stroke="#52525b"
+                tickFormatter={(value) => `$${value.toFixed(0)}`}
+              />
+              <Line
+                type="linear"
+                dataKey="revenue"
+                stroke="#3b82f6"
+                strokeWidth={3}
+                dot={{ fill: "#3b82f6", strokeWidth: 2, r: 4 }}
+                activeDot={{ r: 6, fill: "#60a5fa" }}
+                connectNulls={false}
+              />
             </LineChart>
           </ResponsiveContainer>
         </div>
