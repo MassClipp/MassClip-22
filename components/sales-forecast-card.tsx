@@ -36,13 +36,11 @@ function generateWeeklySalesData(pastWeekRevenue: number) {
 
   // Generate this week's projected data based on last week
   const baseDaily = pastWeekRevenue / 7
-  const variation = baseDaily * 0.3 // 30% variation
 
   for (let i = 0; i < 7; i++) {
-    // Create zig-zag pattern with some randomness
-    const zigzagMultiplier = i % 2 === 0 ? 1.2 : 0.8
-    const randomFactor = 0.8 + Math.random() * 0.4 // 0.8 to 1.2
-    const projectedValue = Math.max(0, baseDaily * zigzagMultiplier * randomFactor)
+    const zigzagMultiplier = i % 2 === 0 ? 1.4 : 0.6 // More dramatic zig-zag
+    const trendFactor = 1 + i * 0.05 // Slight upward trend over the week
+    const projectedValue = Math.max(0, baseDaily * zigzagMultiplier * trendFactor)
 
     thisWeekData.push({
       day: days[i],
@@ -59,7 +57,7 @@ export function SalesForecastCard() {
 
   if (loading) {
     return (
-      <Card className="bg-zinc-950/80 border-zinc-800/50">
+      <Card className="bg-zinc-900/50 border-zinc-800/50">
         <CardHeader>
           <div className="flex items-center gap-2">
             <DollarSign className="h-5 w-5 text-zinc-400" />
@@ -78,7 +76,7 @@ export function SalesForecastCard() {
 
   if (error || !forecast) {
     return (
-      <Card className="bg-zinc-950/80 border-zinc-800/50">
+      <Card className="bg-zinc-900/50 border-zinc-800/50">
         <CardHeader>
           <div className="flex items-center gap-2">
             <DollarSign className="h-5 w-5 text-zinc-400" />
@@ -136,7 +134,7 @@ export function SalesForecastCard() {
   }
 
   return (
-    <Card className="bg-zinc-950/80 border-zinc-800/50">
+    <Card className="bg-zinc-900/50 border-zinc-800/50">
       <CardHeader>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -163,9 +161,9 @@ export function SalesForecastCard() {
         </div>
 
         <div className="space-y-3">
-          <div className="h-32 w-full">
+          <div className="h-40 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={weeklySalesData} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
+              <LineChart data={weeklySalesData} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
                 <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#71717a" }} />
                 <YAxis hide />
                 <Tooltip
@@ -181,9 +179,9 @@ export function SalesForecastCard() {
                   type="linear"
                   dataKey="revenue"
                   stroke="#3b82f6"
-                  strokeWidth={3}
-                  dot={{ fill: "#3b82f6", strokeWidth: 2, r: 4 }}
-                  activeDot={{ r: 6, fill: "#60a5fa" }}
+                  strokeWidth={2}
+                  dot={{ fill: "#3b82f6", strokeWidth: 2, r: 3 }}
+                  activeDot={{ r: 5, fill: "#60a5fa" }}
                 />
               </LineChart>
             </ResponsiveContainer>
