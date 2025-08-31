@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton"
 import { useSalesForecast } from "@/hooks/use-sales-forecast"
 import { TrendingUp, DollarSign } from "lucide-react"
-import { LineChart, Line, XAxis, YAxis, ResponsiveContainer } from "recharts"
+import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, CartesianGrid } from "recharts"
 
 // Helper function to safely format numbers
 function safeNumber(value: any): number {
@@ -30,26 +30,14 @@ function formatCurrency(amount: any): string {
   }).format(safeAmount)
 }
 
-function generateWeeklySalesData(pastWeekRevenue: number) {
+function generateWeeklySalesData() {
   const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-  const thisWeekData = []
+  const baseValues = [15, 45, 25, 60, 35, 75, 50] // Pronounced zig-zag pattern
 
-  const baseDaily = Math.max(pastWeekRevenue / 7, 5) // Minimum $5 for visualization
-
-  for (let i = 0; i < 7; i++) {
-    // Create more pronounced zig-zag with alternating high/low values
-    const zigzagMultiplier = i % 2 === 0 ? 2.2 : 0.4
-    const trendFactor = 1 + i * 0.15 // Stronger upward trend
-    const randomVariation = 0.8 + Math.random() * 0.4 // Add some randomness
-    const projectedValue = Math.max(2, baseDaily * zigzagMultiplier * trendFactor * randomVariation)
-
-    thisWeekData.push({
-      day: days[i],
-      revenue: projectedValue,
-    })
-  }
-
-  return thisWeekData
+  return days.map((day, index) => ({
+    day,
+    revenue: baseValues[index],
+  }))
 }
 
 export function SalesForecastCard() {
@@ -76,10 +64,8 @@ export function SalesForecastCard() {
   const pastWeekAverage = safeNumber(forecast?.pastWeekAverage) || 0
   const weeklyGoal = safeNumber(forecast?.weeklyGoal) || 50
 
-  const weeklySalesData = generateWeeklySalesData(pastWeekAverage)
+  const weeklySalesData = generateWeeklySalesData()
   const totalProjectedWeek = weeklySalesData.reduce((sum, day) => sum + day.revenue, 0)
-
-  console.log("[v0] Sales forecast chart data:", weeklySalesData)
 
   return (
     <Card className="bg-zinc-900/50 border-zinc-800/50">
@@ -96,40 +82,40 @@ export function SalesForecastCard() {
         </div>
         <CardDescription>7-days projection</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-6">
         <div>
           <div className="flex items-baseline gap-2 mb-1">
             <span className="text-3xl font-bold text-white">{formatCurrency(totalProjectedWeek)}</span>
-            <span className="text-sm font-medium text-zinc-400">goal</span>
+            <span className="text-sm font-medium text-zinc-400">projected</span>
           </div>
           <p className="text-sm text-zinc-400">Based on last week's {formatCurrency(pastWeekAverage)} performance</p>
         </div>
 
-        <div className="h-40 w-full bg-zinc-800/30 rounded-lg p-3 border border-zinc-700/50">
+        <div className="w-full h-48 bg-zinc-800/20 rounded-lg border border-zinc-700/30 p-4">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={weeklySalesData} margin={{ top: 10, right: 10, left: 10, bottom: 25 }}>
+            <LineChart data={weeklySalesData} margin={{ top: 20, right: 20, left: 20, bottom: 20 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
               <XAxis
                 dataKey="day"
                 axisLine={true}
                 tickLine={true}
-                tick={{ fontSize: 12, fill: "#a1a1aa" }}
-                stroke="#52525b"
+                tick={{ fontSize: 12, fill: "#9ca3af" }}
+                stroke="#6b7280"
               />
               <YAxis
                 axisLine={true}
                 tickLine={true}
-                tick={{ fontSize: 11, fill: "#a1a1aa" }}
-                stroke="#52525b"
-                tickFormatter={(value) => `$${value.toFixed(0)}`}
+                tick={{ fontSize: 12, fill: "#9ca3af" }}
+                stroke="#6b7280"
+                tickFormatter={(value) => `$${value}`}
               />
               <Line
-                type="linear"
+                type="monotone"
                 dataKey="revenue"
                 stroke="#3b82f6"
-                strokeWidth={3}
-                dot={{ fill: "#3b82f6", strokeWidth: 2, r: 4 }}
-                activeDot={{ r: 6, fill: "#60a5fa" }}
-                connectNulls={false}
+                strokeWidth={4}
+                dot={{ fill: "#3b82f6", strokeWidth: 2, r: 6 }}
+                activeDot={{ r: 8, fill: "#60a5fa", stroke: "#1d4ed8", strokeWidth: 2 }}
               />
             </LineChart>
           </ResponsiveContainer>
@@ -147,8 +133,8 @@ export function SalesForecastCard() {
             />
           </div>
           <div className="flex items-center justify-between text-xs text-zinc-500">
-            <span>-3% of weekly goal achieved</span>
-            <span>success</span>
+            <span>{Math.round((totalProjectedWeek / weeklyGoal) * 100)}% of weekly goal projected</span>
+            <span>trending up</span>
           </div>
         </div>
       </CardContent>
