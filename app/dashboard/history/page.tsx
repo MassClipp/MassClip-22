@@ -7,7 +7,7 @@ import { doc, deleteDoc, type Timestamp } from "firebase/firestore"
 import DashboardHeader from "@/components/dashboard-header"
 import VimeoCard from "@/components/vimeo-card"
 import { Button } from "@/components/ui/button"
-import { Trash2, RefreshCw, Clock } from "lucide-react"
+import { Trash2, Clock } from "lucide-react"
 import type { VimeoVideo } from "@/lib/types"
 import { trackFirestoreWrite } from "@/lib/firestore-optimizer"
 import VideoSkeletonCard from "@/components/video-skeleton-card"
@@ -128,16 +128,6 @@ export default function HistoryPage() {
             <h1 className="text-4xl font-bold text-white tracking-tight">Watch History</h1>
             <p className="text-gray-400 mt-2 text-lg">Videos you've recently viewed</p>
           </div>
-
-          <Button
-            variant="outline"
-            onClick={refreshData}
-            disabled={isLoading}
-            className="border-gray-800 bg-black/50 text-white hover:bg-gray-900 hover:text-red-500 transition-all duration-300"
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
         </motion.div>
 
         {/* Red accent line */}

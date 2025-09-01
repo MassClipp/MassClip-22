@@ -22,7 +22,6 @@ import {
   Music,
   ImageIcon,
   File,
-  RefreshCw,
   MoreVertical,
   Eye,
   Copy,
@@ -564,10 +563,6 @@ const UploadsPage = () => {
               <SelectItem value="other">Other</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" onClick={() => fetchUploads()}>
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Refresh
-          </Button>
           <Button onClick={triggerFileInput}>
             <Upload className="mr-2 h-4 w-4" />
             Upload
@@ -683,7 +678,11 @@ const UploadsPage = () => {
                   ) : upload.type === "audio" ? (
                     <AudioCard fileUrl={upload.fileUrl} />
                   ) : upload.type === "image" ? (
-                    <img src={upload.fileUrl} alt={upload.title} className="w-full h-32 object-cover rounded-md" />
+                    <img
+                      src={upload.fileUrl || "/placeholder.svg"}
+                      alt={upload.title}
+                      className="w-full h-32 object-cover rounded-md"
+                    />
                   ) : (
                     <div className="w-full h-32 flex items-center justify-center bg-gray-100 rounded-md">
                       <File className="h-12 w-12 text-gray-500" />
