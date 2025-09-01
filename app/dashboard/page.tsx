@@ -166,14 +166,13 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Creator Dashboard</h1>
-          <p className="text-zinc-400">Welcome back, {user?.displayName || username || "Creator"}</p>
-          <div className="flex items-center gap-2 mt-1">
-            <Activity className="h-3 w-3 text-green-500" />
-            <span className="text-xs text-green-500">Live Data</span>
+          <h1 className="text-3xl font-bold tracking-tight text-white">Business Dashboard</h1>
+          <p className="text-white/80 font-medium">Welcome back, {user?.displayName || username || "Creator"}</p>
+          <div className="flex items-center gap-2 mt-2">
+            <Activity className="h-3 w-3 text-emerald-400" />
+            <span className="text-xs text-emerald-400 font-medium">LIVE DATA</span>
           </div>
         </div>
         <div className="flex gap-3">
@@ -181,7 +180,7 @@ export default function DashboardPage() {
             onClick={handleRefresh}
             variant="outline"
             disabled={refreshing}
-            className="border-zinc-700 hover:bg-zinc-800 bg-transparent"
+            className="bg-white text-black border-white hover:bg-white/90 font-medium"
           >
             {refreshing ? (
               <>
@@ -198,79 +197,79 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Stats Grid */}
       <div className="grid gap-4 md:grid-cols-3">
-        <Card className="bg-zinc-900/50 border-zinc-800/50">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-zinc-200">Sales (30 Days)</CardTitle>
-            <Calendar className="h-4 w-4 text-zinc-400" />
+        <Card className="bg-zinc-900/80 border-zinc-800/60 backdrop-blur-sm">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <CardTitle className="text-sm font-semibold text-white">Revenue (30 Days)</CardTitle>
+            <Calendar className="h-4 w-4 text-white/60" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${salesData.totalRevenueLast30Days.toFixed(2)}</div>
-            <p className="text-xs text-zinc-500">{salesData.totalSalesLast30Days} sales in last 30 days</p>
+            <div className="text-2xl font-bold text-white">${salesData.totalRevenueLast30Days.toFixed(2)}</div>
+            <p className="text-xs text-white/60 font-medium">{salesData.totalSalesLast30Days} sales in last 30 days</p>
             {salesData.averageOrderValue > 0 && (
-              <p className="text-xs text-zinc-400 mt-1">Avg: ${salesData.averageOrderValue.toFixed(2)} per sale</p>
+              <p className="text-xs text-white/50 mt-1">Average: ${salesData.averageOrderValue.toFixed(2)} per sale</p>
             )}
             {salesData.error && <p className="text-xs text-red-400 mt-1">Data may be outdated</p>}
           </CardContent>
         </Card>
 
-        <Card className="bg-zinc-900/50 border-zinc-800/50">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-zinc-200">Free Videos</CardTitle>
-            <Video className="h-4 w-4 text-zinc-400" />
+        <Card className="bg-zinc-900/80 border-zinc-800/60 backdrop-blur-sm">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <CardTitle className="text-sm font-semibold text-white">Content Library</CardTitle>
+            <Video className="h-4 w-4 text-white/60" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{videoStats.totalFreeVideos}</div>
-            <p className="text-xs text-zinc-500">Free content available</p>
+            <div className="text-2xl font-bold text-white">{videoStats.totalFreeVideos}</div>
+            <p className="text-xs text-white/60 font-medium">Free content available</p>
             {videoStats.totalUploads > 0 && (
-              <p className="text-xs text-zinc-400 mt-1">
+              <p className="text-xs text-white/50 mt-1">
                 {videoStats.freeVideoPercentage.toFixed(1)}% of {videoStats.totalUploads} total uploads
               </p>
             )}
             {videoStats.totalFreeVideos === 0 && videoStats.totalUploads > 0 && (
-              <p className="text-xs text-yellow-500 mt-1">Consider adding free content</p>
+              <p className="text-xs text-amber-400 mt-1">Consider adding free content</p>
             )}
           </CardContent>
         </Card>
 
-        <div className="bg-zinc-900/50 border-zinc-800/50 rounded-lg">
+        <div className="bg-zinc-900/80 border-zinc-800/60 backdrop-blur-sm rounded-lg">
           <ProfileViewStats userId={username || user?.uid || ""} />
         </div>
       </div>
 
       {/* Main Content Grid */}
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Financial Forecast - Replaces Sales Performance */}
+        {/* Financial Forecast */}
         <div className="lg:col-span-2">
           <SalesForecastCard />
         </div>
 
         <div className="space-y-6">
-          {/* Creator Checklist - Replaces Content Library */}
-          <Card className="bg-gradient-to-br from-zinc-900/50 to-zinc-800/30 border-zinc-700/50">
+          <Card className="bg-zinc-900/80 border-zinc-800/60 backdrop-blur-sm">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="flex items-center gap-2">
+                  <CardTitle className="flex items-center gap-2 text-white">
                     <CheckCircle2 className="h-5 w-5 text-white" />
-                    Creator Setup
+                    Setup Progress
                   </CardTitle>
-                  <CardDescription>Complete these steps to get started</CardDescription>
+                  <CardDescription className="text-white/60 font-medium">
+                    Complete these steps to get started
+                  </CardDescription>
                 </div>
                 <div className="text-right">
-                  <div className="text-sm font-medium text-white">
+                  <div className="text-sm font-bold text-white">
                     {completedTasks}/{totalTasks}
                   </div>
-                  <div className="text-xs text-zinc-400">{completionPercentage.toFixed(0)}% complete</div>
+                  <div className="text-xs text-white/60 font-medium">{completionPercentage.toFixed(0)}% complete</div>
                 </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Progress bar */}
-              <div className="w-full bg-zinc-800 rounded-full h-2">
+              <div className="w-full bg-zinc-800/60 rounded-full h-2">
                 <div
-                  className="bg-gradient-to-r from-white to-gray-300 h-2 rounded-full transition-all duration-300"
+                  className="bg-white h-2 rounded-full transition-all duration-300"
                   style={{ width: `${completionPercentage}%` }}
                 />
               </div>
@@ -285,13 +284,13 @@ export default function DashboardPage() {
                     className="border-zinc-600 data-[state=checked]:bg-white data-[state=checked]:border-white"
                   />
                   <div className="flex items-center gap-2 flex-1">
-                    <CreditCard className="h-4 w-4 text-zinc-400" />
+                    <CreditCard className="h-4 w-4 text-white/60" />
                     <label
                       htmlFor="stripe"
                       onClick={() => handleTaskClick("stripe")}
-                      className={`text-sm cursor-pointer hover:text-white transition-colors ${checkedTasks.stripe ? "line-through text-zinc-500" : "text-zinc-200"}`}
+                      className={`text-sm cursor-pointer hover:text-white transition-colors font-medium ${checkedTasks.stripe ? "line-through text-white/40" : "text-white"}`}
                     >
-                      Connect your Stripe account
+                      Connect Stripe account
                     </label>
                   </div>
                 </div>
@@ -304,11 +303,11 @@ export default function DashboardPage() {
                     className="border-zinc-600 data-[state=checked]:bg-white data-[state=checked]:border-white"
                   />
                   <div className="flex items-center gap-2 flex-1">
-                    <Upload className="h-4 w-4 text-zinc-400" />
+                    <Upload className="h-4 w-4 text-white/60" />
                     <label
                       htmlFor="upload"
                       onClick={() => handleTaskClick("upload")}
-                      className={`text-sm cursor-pointer hover:text-white transition-colors ${checkedTasks.upload ? "line-through text-zinc-500" : "text-zinc-200"}`}
+                      className={`text-sm cursor-pointer hover:text-white transition-colors font-medium ${checkedTasks.upload ? "line-through text-white/40" : "text-white"}`}
                     >
                       Upload content
                     </label>
@@ -323,11 +322,11 @@ export default function DashboardPage() {
                     className="border-zinc-600 data-[state=checked]:bg-white data-[state=checked]:border-white"
                   />
                   <div className="flex items-center gap-2 flex-1">
-                    <Gift className="h-4 w-4 text-zinc-400" />
+                    <Gift className="h-4 w-4 text-white/60" />
                     <label
                       htmlFor="freeContent"
                       onClick={() => handleTaskClick("freeContent")}
-                      className={`text-sm cursor-pointer hover:text-white transition-colors ${checkedTasks.freeContent ? "line-through text-zinc-500" : "text-zinc-200"}`}
+                      className={`text-sm cursor-pointer hover:text-white transition-colors font-medium ${checkedTasks.freeContent ? "line-through text-white/40" : "text-white"}`}
                     >
                       Add free content
                     </label>
@@ -342,11 +341,11 @@ export default function DashboardPage() {
                     className="border-zinc-600 data-[state=checked]:bg-white data-[state=checked]:border-white"
                   />
                   <div className="flex items-center gap-2 flex-1">
-                    <ShoppingBag className="h-4 w-4 text-zinc-400" />
+                    <ShoppingBag className="h-4 w-4 text-white/60" />
                     <label
                       htmlFor="bundle"
                       onClick={() => handleTaskClick("bundle")}
-                      className={`text-sm cursor-pointer hover:text-white transition-colors ${checkedTasks.bundle ? "line-through text-zinc-500" : "text-zinc-200"}`}
+                      className={`text-sm cursor-pointer hover:text-white transition-colors font-medium ${checkedTasks.bundle ? "line-through text-white/40" : "text-white"}`}
                     >
                       Create a bundle
                     </label>
@@ -361,59 +360,58 @@ export default function DashboardPage() {
                     className="border-zinc-600 data-[state=checked]:bg-white data-[state=checked]:border-white"
                   />
                   <div className="flex items-center gap-2 flex-1">
-                    <Link className="h-4 w-4 text-zinc-400" />
+                    <Link className="h-4 w-4 text-white/60" />
                     <label
                       htmlFor="socialBio"
                       onClick={() => handleTaskClick("socialBio")}
-                      className={`text-sm cursor-pointer hover:text-white transition-colors ${checkedTasks.socialBio ? "line-through text-zinc-500" : "text-zinc-200"}`}
+                      className={`text-sm cursor-pointer hover:text-white transition-colors font-medium ${checkedTasks.socialBio ? "line-through text-white/40" : "text-white"}`}
                     >
-                      Put storefront link in social bio
+                      Add storefront link to social bio
                     </label>
                   </div>
                 </div>
               </div>
 
               {completionPercentage === 100 && (
-                <div className="mt-4 p-3 bg-green-900/20 border border-green-800/50 rounded-lg">
-                  <p className="text-sm text-green-400 font-medium">
-                    🎉 Great job! You're all set up and ready to start selling.
+                <div className="mt-4 p-3 bg-emerald-900/20 border border-emerald-800/50 rounded-lg">
+                  <p className="text-sm text-emerald-400 font-semibold">
+                    Setup complete. Your business is ready to start generating revenue.
                   </p>
                 </div>
               )}
             </CardContent>
           </Card>
 
-          {/* Quick Actions - Moved below checklist */}
-          <Card className="bg-zinc-900/50 border-zinc-800/50">
+          <Card className="bg-zinc-900/80 border-zinc-800/60 backdrop-blur-sm">
             <CardHeader>
-              <CardTitle>Quick Actions</CardTitle>
-              <CardDescription>Common tasks and shortcuts</CardDescription>
+              <CardTitle className="text-white">Quick Actions</CardTitle>
+              <CardDescription className="text-white/60 font-medium">Essential business operations</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <Button
                 onClick={() => router.push("/dashboard/bundles")}
-                className="w-full justify-start bg-zinc-900 hover:bg-zinc-800 border border-zinc-700"
+                className="w-full justify-start bg-white text-black hover:bg-white/90 font-semibold"
               >
                 <Package className="h-4 w-4 mr-2" />
-                Make a Bundle
+                Create Bundle
               </Button>
 
               <Button
                 onClick={() => router.push("/dashboard/earnings")}
                 variant="outline"
-                className="w-full justify-start border-zinc-700 hover:bg-zinc-800"
+                className="w-full justify-start border-white/20 hover:bg-white/10 text-white font-medium"
               >
                 <DollarSign className="h-4 w-4 mr-2" />
-                View Earnings
+                View Analytics
               </Button>
 
               <Button
                 onClick={() => router.push("/dashboard/profile")}
                 variant="outline"
-                className="w-full justify-start border-zinc-700 hover:bg-zinc-800"
+                className="w-full justify-start border-white/20 hover:bg-white/10 text-white font-medium"
               >
                 <TrendingUp className="h-4 w-4 mr-2" />
-                Edit Profile
+                Manage Profile
               </Button>
             </CardContent>
           </Card>
