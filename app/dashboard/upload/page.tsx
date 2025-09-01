@@ -689,18 +689,16 @@ export default function UploadPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: "Total Files", value: stats.total, color: "text-white" },
-          { label: "Videos", value: stats.video, color: "text-blue-400" },
-          { label: "Audio", value: stats.audio, color: "text-green-400" },
-          { label: "Images", value: stats.image, color: "text-purple-400" },
-          { label: "Documents", value: stats.document, color: "text-orange-400" },
-          { label: "Other", value: stats.other, color: "text-zinc-400" },
+          { label: "Videos", value: stats.video, color: "text-white" },
+          { label: "Audio", value: stats.audio, color: "text-white" },
+          { label: "Images", value: stats.image, color: "text-white" },
         ].map((stat, index) => (
           <div key={index} className="bg-zinc-900/30 border border-zinc-800/30 rounded-lg p-4">
             <div className={`text-2xl font-semibold ${stat.color} mb-1`}>{stat.value}</div>
-            <div className="text-xs text-zinc-500 uppercase tracking-wide">{stat.label}</div>
+            <div className="text-xs text-white uppercase tracking-wide">{stat.label}</div>
           </div>
         ))}
       </div>
