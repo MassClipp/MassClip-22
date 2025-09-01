@@ -6,20 +6,28 @@ import { useProfileInitialization } from "@/hooks/use-profile-initialization"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { DollarSign, Package, TrendingUp, Eye, RefreshCw, ShoppingBag } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
+import {
+  DollarSign,
+  Package,
+  TrendingUp,
+  Video,
+  RefreshCw,
+  Activity,
+  Calendar,
+  CheckCircle2,
+  CreditCard,
+  Upload,
+  Gift,
+  ShoppingBag,
+  Link,
+} from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
 import { useVideoStatsAPI } from "@/hooks/use-video-stats-api"
 import { useStripeDashboardSales } from "@/hooks/use-stripe-dashboard-sales"
-import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts"
-
-const generateRevenueData = (currentRevenue: number) => {
-  const months = ["Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-  return months.map((month, index) => ({
-    month,
-    revenue: Math.max(0, currentRevenue * (0.3 + index * 0.15) + (Math.random() - 0.5) * currentRevenue * 0.2),
-  }))
-}
+import { SalesForecastCard } from "@/components/sales-forecast-card"
+import ProfileViewStats from "@/components/profile-view-stats"
 
 export default function DashboardPage() {
   const { user } = useAuth()
@@ -28,6 +36,14 @@ export default function DashboardPage() {
   const { toast } = useToast()
 
   const [refreshing, setRefreshing] = useState(false)
+
+  const [checkedTasks, setCheckedTasks] = useState({
+    stripe: false,
+    upload: false,
+    freeContent: false,
+    bundle: false,
+    socialBio: false, // Added social bio task to state
+  })
 
   // Use API-based video statistics (avoids Firestore index issues)
   const videoStats = useVideoStatsAPI()
@@ -54,37 +70,61 @@ export default function DashboardPage() {
     }
   }
 
-  const chartData = generateRevenueData(salesData.totalRevenueLast30Days)
+  const handleTaskCheck = (taskKey: keyof typeof checkedTasks) => {
+    setCheckedTasks((prev) => ({
+      ...prev,
+      [taskKey]: !prev[taskKey],
+    }))
+  }
+
+  const handleTaskClick = (taskKey: string) => {
+    const taskRoutes = {
+      stripe: "/dashboard/earnings",
+      upload: "/dashboard/upload",
+      freeContent: "/dashboard/free-content",
+      bundle: "/dashboard/bundles",
+      socialBio: "/dashboard/profile",
+    }
+
+    const route = taskRoutes[taskKey as keyof typeof taskRoutes]
+    if (route) {
+      router.push(route)
+    }
+  }
+
+  const completedTasks = Object.values(checkedTasks).filter(Boolean).length
+  const totalTasks = Object.keys(checkedTasks).length
+  const completionPercentage = (completedTasks / totalTasks) * 100
 
   // Show loading state while profile is being initialized or stats are loading
   if (isInitializing || videoStats.loading || salesData.loading) {
     return (
-      <div className="space-y-8">
+      <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <Skeleton className="h-8 w-48 mb-2" />
             <Skeleton className="h-4 w-32" />
           </div>
-          <Skeleton className="h-10 w-32" />
+          <div className="flex gap-3">
+            <Skeleton className="h-10 w-32" />
+            <Skeleton className="h-10 w-32" />
+          </div>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-3">
           {Array.from({ length: 3 }).map((_, i) => (
-            <Card key={i} className="bg-white border border-gray-200">
-              <CardHeader className="pb-3">
+            <Card key={i} className="bg-zinc-900/50 border-zinc-800/50">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-4 w-4" />
               </CardHeader>
               <CardContent>
-                <Skeleton className="h-8 w-20 mb-2" />
-                <Skeleton className="h-3 w-16" />
+                <Skeleton className="h-8 w-16 mb-1" />
+                <Skeleton className="h-3 w-20" />
               </CardContent>
             </Card>
           ))}
         </div>
-
-        <Card className="bg-white border border-gray-200">
-          <Skeleton className="h-80 w-full" />
-        </Card>
       </div>
     )
   }
@@ -93,18 +133,22 @@ export default function DashboardPage() {
   if (error && !videoStats.loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <Card className="w-full max-w-md bg-white border border-gray-200">
+        <Card className="w-full max-w-md bg-zinc-900/50 border-zinc-800/50">
           <CardHeader>
-            <CardTitle className="text-red-600">Dashboard Error</CardTitle>
+            <CardTitle className="text-red-400">Dashboard Error</CardTitle>
             <CardDescription>There was an issue loading your dashboard</CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-gray-600 mb-4">{error}</p>
+            <p className="text-sm text-zinc-400 mb-4">{error}</p>
             <div className="space-y-2">
               <Button onClick={() => window.location.reload()} className="w-full">
                 Try Again
               </Button>
-              <Button onClick={() => router.push("/dashboard/upload")} variant="outline" className="w-full">
+              <Button
+                onClick={() => router.push("/dashboard/upload")}
+                variant="outline"
+                className="w-full border-zinc-700 hover:bg-zinc-800"
+              >
                 Go to Upload
               </Button>
             </div>
@@ -121,149 +165,260 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
-          <p className="text-gray-600">Welcome back, {user?.displayName || username || "Creator"}</p>
+          <h1 className="text-3xl font-bold tracking-tight">Creator Dashboard</h1>
+          <p className="text-zinc-400">Welcome back, {user?.displayName || username || "Creator"}</p>
+          <div className="flex items-center gap-2 mt-1">
+            <Activity className="h-3 w-3 text-green-500" />
+            <span className="text-xs text-green-500">Live Data</span>
+          </div>
         </div>
-        <Button
-          onClick={handleRefresh}
-          variant="outline"
-          disabled={refreshing}
-          className="border-gray-300 hover:bg-gray-50 bg-transparent"
-        >
-          {refreshing ? (
-            <>
-              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-              Refreshing...
-            </>
-          ) : (
-            <>
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Refresh
-            </>
-          )}
-        </Button>
+        <div className="flex gap-3">
+          <Button
+            onClick={handleRefresh}
+            variant="outline"
+            disabled={refreshing}
+            className="border-zinc-700 hover:bg-zinc-800 bg-transparent"
+          >
+            {refreshing ? (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                Refreshing...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Refresh
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-3">
-        <Card className="bg-white border border-gray-200 hover:shadow-sm transition-shadow">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
-              <DollarSign className="h-4 w-4" />
-              Revenue in Last 30 Days
-            </CardTitle>
+      {/* Stats Grid */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card className="bg-zinc-900/50 border-zinc-800/50">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-zinc-200">Sales (30 Days)</CardTitle>
+            <Calendar className="h-4 w-4 text-zinc-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-semibold text-gray-900 mb-1">
-              ${salesData.totalRevenueLast30Days.toFixed(2)}
-            </div>
-            <p className="text-sm text-gray-500">{salesData.totalSalesLast30Days} sales</p>
+            <div className="text-2xl font-bold">${salesData.totalRevenueLast30Days.toFixed(2)}</div>
+            <p className="text-xs text-zinc-500">{salesData.totalSalesLast30Days} sales in last 30 days</p>
+            {salesData.averageOrderValue > 0 && (
+              <p className="text-xs text-zinc-400 mt-1">Avg: ${salesData.averageOrderValue.toFixed(2)} per sale</p>
+            )}
+            {salesData.error && <p className="text-xs text-red-400 mt-1">Data may be outdated</p>}
           </CardContent>
         </Card>
 
-        <Card className="bg-white border border-gray-200 hover:shadow-sm transition-shadow">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
-              <Eye className="h-4 w-4" />
-              Profile Views
-            </CardTitle>
+        <Card className="bg-zinc-900/50 border-zinc-800/50">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-zinc-200">Free Videos</CardTitle>
+            <Video className="h-4 w-4 text-zinc-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-semibold text-gray-900 mb-1">0</div>
-            <p className="text-sm text-gray-500">All time</p>
+            <div className="text-2xl font-bold">{videoStats.totalFreeVideos}</div>
+            <p className="text-xs text-zinc-500">Free content available</p>
+            {videoStats.totalUploads > 0 && (
+              <p className="text-xs text-zinc-400 mt-1">
+                {videoStats.freeVideoPercentage.toFixed(1)}% of {videoStats.totalUploads} total uploads
+              </p>
+            )}
+            {videoStats.totalFreeVideos === 0 && videoStats.totalUploads > 0 && (
+              <p className="text-xs text-yellow-500 mt-1">Consider adding free content</p>
+            )}
           </CardContent>
         </Card>
 
-        <Card className="bg-white border border-gray-200 hover:shadow-sm transition-shadow">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
-              <ShoppingBag className="h-4 w-4" />
-              Bundles Bought
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-semibold text-gray-900 mb-1">{salesData.totalSalesLast30Days}</div>
-            <p className="text-sm text-gray-500">Last 30 days</p>
-          </CardContent>
-        </Card>
+        <div className="bg-zinc-900/50 border-zinc-800/50 rounded-lg">
+          <ProfileViewStats userId={username || user?.uid || ""} />
+        </div>
       </div>
 
-      <Card className="bg-white border border-gray-200">
-        <CardHeader>
-          <CardTitle className="text-lg font-medium text-gray-900">Revenue Trend</CardTitle>
-          <CardDescription className="text-gray-600">Revenue over the past 6 months</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="h-80 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#6b7280" }} />
-                <YAxis
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fontSize: 12, fill: "#6b7280" }}
-                  tickFormatter={(value) => `$${value.toFixed(0)}`}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "white",
-                    border: "1px solid #e5e7eb",
-                    borderRadius: "6px",
-                    boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
-                  }}
-                  formatter={(value: any) => [`$${value.toFixed(2)}`, "Revenue"]}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="revenue"
-                  stroke="#3b82f6"
-                  strokeWidth={2}
-                  dot={{ fill: "#3b82f6", strokeWidth: 0, r: 4 }}
-                  activeDot={{ r: 6, stroke: "#3b82f6", strokeWidth: 2, fill: "white" }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Main Content Grid */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Financial Forecast - Replaces Sales Performance */}
+        <div className="lg:col-span-2">
+          <SalesForecastCard />
+        </div>
 
-      <Card className="bg-white border border-gray-200">
-        <CardHeader>
-          <CardTitle className="text-lg font-medium text-gray-900">Quick Actions</CardTitle>
-          <CardDescription className="text-gray-600">Common tasks and shortcuts</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-3 md:grid-cols-3">
-            <Button
-              onClick={() => router.push("/dashboard/bundles")}
-              className="justify-start h-12 bg-gray-900 hover:bg-gray-800"
-            >
-              <Package className="h-4 w-4 mr-2" />
-              Make a Bundle
-            </Button>
+        <div className="space-y-6">
+          {/* Creator Checklist - Replaces Content Library */}
+          <Card className="bg-gradient-to-br from-zinc-900/50 to-zinc-800/30 border-zinc-700/50">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <CheckCircle2 className="h-5 w-5 text-white" />
+                    Creator Setup
+                  </CardTitle>
+                  <CardDescription>Complete these steps to get started</CardDescription>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm font-medium text-white">
+                    {completedTasks}/{totalTasks}
+                  </div>
+                  <div className="text-xs text-zinc-400">{completionPercentage.toFixed(0)}% complete</div>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Progress bar */}
+              <div className="w-full bg-zinc-800 rounded-full h-2">
+                <div
+                  className="bg-gradient-to-r from-white to-gray-300 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${completionPercentage}%` }}
+                />
+              </div>
 
-            <Button
-              onClick={() => router.push("/dashboard/earnings")}
-              variant="outline"
-              className="justify-start h-12 border-gray-300 hover:bg-gray-50"
-            >
-              <DollarSign className="h-4 w-4 mr-2" />
-              View Earnings
-            </Button>
+              {/* Task list */}
+              <div className="space-y-3">
+                <div className="flex items-center space-x-3">
+                  <Checkbox
+                    id="stripe"
+                    checked={checkedTasks.stripe}
+                    onCheckedChange={() => handleTaskCheck("stripe")}
+                    className="border-zinc-600 data-[state=checked]:bg-white data-[state=checked]:border-white"
+                  />
+                  <div className="flex items-center gap-2 flex-1">
+                    <CreditCard className="h-4 w-4 text-zinc-400" />
+                    <label
+                      htmlFor="stripe"
+                      onClick={() => handleTaskClick("stripe")}
+                      className={`text-sm cursor-pointer hover:text-white transition-colors ${checkedTasks.stripe ? "line-through text-zinc-500" : "text-zinc-200"}`}
+                    >
+                      Connect your Stripe account
+                    </label>
+                  </div>
+                </div>
 
-            <Button
-              onClick={() => router.push("/dashboard/profile")}
-              variant="outline"
-              className="justify-start h-12 border-gray-300 hover:bg-gray-50"
-            >
-              <TrendingUp className="h-4 w-4 mr-2" />
-              Edit Profile
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+                <div className="flex items-center space-x-3">
+                  <Checkbox
+                    id="upload"
+                    checked={checkedTasks.upload}
+                    onCheckedChange={() => handleTaskCheck("upload")}
+                    className="border-zinc-600 data-[state=checked]:bg-white data-[state=checked]:border-white"
+                  />
+                  <div className="flex items-center gap-2 flex-1">
+                    <Upload className="h-4 w-4 text-zinc-400" />
+                    <label
+                      htmlFor="upload"
+                      onClick={() => handleTaskClick("upload")}
+                      className={`text-sm cursor-pointer hover:text-white transition-colors ${checkedTasks.upload ? "line-through text-zinc-500" : "text-zinc-200"}`}
+                    >
+                      Upload content
+                    </label>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-3">
+                  <Checkbox
+                    id="freeContent"
+                    checked={checkedTasks.freeContent}
+                    onCheckedChange={() => handleTaskCheck("freeContent")}
+                    className="border-zinc-600 data-[state=checked]:bg-white data-[state=checked]:border-white"
+                  />
+                  <div className="flex items-center gap-2 flex-1">
+                    <Gift className="h-4 w-4 text-zinc-400" />
+                    <label
+                      htmlFor="freeContent"
+                      onClick={() => handleTaskClick("freeContent")}
+                      className={`text-sm cursor-pointer hover:text-white transition-colors ${checkedTasks.freeContent ? "line-through text-zinc-500" : "text-zinc-200"}`}
+                    >
+                      Add free content
+                    </label>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-3">
+                  <Checkbox
+                    id="bundle"
+                    checked={checkedTasks.bundle}
+                    onCheckedChange={() => handleTaskCheck("bundle")}
+                    className="border-zinc-600 data-[state=checked]:bg-white data-[state=checked]:border-white"
+                  />
+                  <div className="flex items-center gap-2 flex-1">
+                    <ShoppingBag className="h-4 w-4 text-zinc-400" />
+                    <label
+                      htmlFor="bundle"
+                      onClick={() => handleTaskClick("bundle")}
+                      className={`text-sm cursor-pointer hover:text-white transition-colors ${checkedTasks.bundle ? "line-through text-zinc-500" : "text-zinc-200"}`}
+                    >
+                      Create a bundle
+                    </label>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-3">
+                  <Checkbox
+                    id="socialBio"
+                    checked={checkedTasks.socialBio}
+                    onCheckedChange={() => handleTaskCheck("socialBio")}
+                    className="border-zinc-600 data-[state=checked]:bg-white data-[state=checked]:border-white"
+                  />
+                  <div className="flex items-center gap-2 flex-1">
+                    <Link className="h-4 w-4 text-zinc-400" />
+                    <label
+                      htmlFor="socialBio"
+                      onClick={() => handleTaskClick("socialBio")}
+                      className={`text-sm cursor-pointer hover:text-white transition-colors ${checkedTasks.socialBio ? "line-through text-zinc-500" : "text-zinc-200"}`}
+                    >
+                      Put storefront link in social bio
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {completionPercentage === 100 && (
+                <div className="mt-4 p-3 bg-green-900/20 border border-green-800/50 rounded-lg">
+                  <p className="text-sm text-green-400 font-medium">
+                    🎉 Great job! You're all set up and ready to start selling.
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Quick Actions - Moved below checklist */}
+          <Card className="bg-zinc-900/50 border-zinc-800/50">
+            <CardHeader>
+              <CardTitle>Quick Actions</CardTitle>
+              <CardDescription>Common tasks and shortcuts</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Button
+                onClick={() => router.push("/dashboard/bundles")}
+                className="w-full justify-start bg-zinc-900 hover:bg-zinc-800 border border-zinc-700"
+              >
+                <Package className="h-4 w-4 mr-2" />
+                Make a Bundle
+              </Button>
+
+              <Button
+                onClick={() => router.push("/dashboard/earnings")}
+                variant="outline"
+                className="w-full justify-start border-zinc-700 hover:bg-zinc-800"
+              >
+                <DollarSign className="h-4 w-4 mr-2" />
+                View Earnings
+              </Button>
+
+              <Button
+                onClick={() => router.push("/dashboard/profile")}
+                variant="outline"
+                className="w-full justify-start border-zinc-700 hover:bg-zinc-800"
+              >
+                <TrendingUp className="h-4 w-4 mr-2" />
+                Edit Profile
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   )
 }
