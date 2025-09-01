@@ -112,6 +112,7 @@ export function NavDropdown() {
                   {section.items.map((item) => {
                     const Icon = item.icon
                     const isActive = pathname === item.href
+                    const isMembership = item.title === "Membership"
 
                     return (
                       <Link
@@ -121,10 +122,12 @@ export function NavDropdown() {
                         className={`flex items-center gap-3 px-2 py-2 text-sm rounded-lg transition-all duration-200 hover:bg-zinc-800/50 hover:text-white ${
                           isActive
                             ? "bg-zinc-800/80 text-white font-medium shadow-sm"
-                            : "text-zinc-300 hover:text-white"
+                            : isMembership
+                              ? "text-yellow-400 hover:text-yellow-300 bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/20"
+                              : "text-zinc-300 hover:text-white"
                         }`}
                       >
-                        <Icon className="h-4 w-4" />
+                        <Icon className={`h-4 w-4 ${isMembership ? "text-yellow-400" : ""}`} />
                         {item.title}
                       </Link>
                     )
