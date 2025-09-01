@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton"
 import { useSalesForecast } from "@/hooks/use-sales-forecast"
 import { TrendingUp, TrendingDown, Minus, Target, Zap, Activity } from "lucide-react"
-import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, ReferenceLine } from "recharts"
+import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, ReferenceLine, Tooltip } from "recharts"
 
 // Helper function to safely format numbers
 function safeNumber(value: any): number {
@@ -102,6 +102,28 @@ export function SalesForecastCard() {
     }
   }
 
+  const getTrendLineColor = () => {
+    switch (forecast.trendDirection) {
+      case "up":
+        return "#10b981" // Green for upward trend
+      case "down":
+        return "#ef4444" // Red for downward trend
+      default:
+        return "#6b7280" // Gray for stable
+    }
+  }
+
+  const getTrendGradient = () => {
+    switch (forecast.trendDirection) {
+      case "up":
+        return "from-green-500/20 to-transparent"
+      case "down":
+        return "from-red-500/20 to-transparent"
+      default:
+        return "from-gray-500/20 to-transparent"
+    }
+  }
+
   // Safely get values with fallbacks
   const projectedNextWeek = safeNumber(forecast.projectedNextWeek)
   const pastWeekAverage = safeNumber(forecast.pastWeekAverage)
@@ -142,6 +164,83 @@ export function SalesForecastCard() {
           <p className="text-sm text-zinc-400">Based on {formatCurrency(dailyAverageRevenue)}/day average</p>
         </div>
 
+        {chartData.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between text-sm text-zinc-300">
+              <span className="font-medium">Performance Trend</span>
+              <div className="flex items-center gap-4 text-xs text-zinc-500">
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-0.5 bg-current opacity-80"></div>
+                  <span>Historical</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-0.5 border-t-2 border-dashed border-current opacity-60"></div>
+                  <span>Forecast</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="relative h-32 w-full bg-zinc-800/20 rounded-lg border border-zinc-700/30 p-3">
+              <div className={`absolute inset-0 bg-gradient-to-t ${getTrendGradient()} rounded-lg`}></div>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
+                  <XAxis
+                    dataKey="date"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 10, fill: "#71717a" }}
+                    tickFormatter={(value) => {
+                      const date = new Date(value)
+                      return date.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                    }}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 10, fill: "#71717a" }}
+                    tickFormatter={(value) => `$${value}`}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#18181b",
+                      border: "1px solid #3f3f46",
+                      borderRadius: "6px",
+                      fontSize: "12px",
+                    }}
+                    labelFormatter={(value) => {
+                      const date = new Date(value)
+                      return date.toLocaleDateString("en-US", {
+                        weekday: "short",
+                        month: "short",
+                        day: "numeric",
+                      })
+                    }}
+                    formatter={(value: any, name: string) => [
+                      formatCurrency(value),
+                      name === "revenue" ? "Revenue" : name,
+                    ]}
+                  />
+                  <ReferenceLine
+                    x={chartData[Math.floor(chartData.length / 2)]?.date}
+                    stroke="#71717a"
+                    strokeDasharray="2 2"
+                    opacity={0.3}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="revenue"
+                    stroke={getTrendLineColor()}
+                    strokeWidth={2.5}
+                    dot={{ fill: getTrendLineColor(), strokeWidth: 0, r: 3 }}
+                    activeDot={{ r: 4, fill: getTrendLineColor(), strokeWidth: 2, stroke: "#fff" }}
+                    strokeDasharray={(entry: any) => (entry?.isProjected ? "4 4" : "0")}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
+
         {/* Weekly Goal Progress */}
         {weeklyGoal > 0 && (
           <div className="p-3 bg-zinc-800/30 rounded-lg border border-zinc-700/50">
@@ -159,64 +258,6 @@ export function SalesForecastCard() {
           </div>
         )}
 
-        {/* Motivational Message */}
-        <div className="p-3 bg-zinc-800/30 rounded-lg border border-zinc-700/50">
-          <div className="flex items-start gap-2">
-            <Zap className="h-4 w-4 text-yellow-400 mt-0.5 flex-shrink-0" />
-            <p className="text-sm text-zinc-200 leading-relaxed">
-              {forecast.motivationalMessage || "Keep creating great content!"}
-            </p>
-          </div>
-        </div>
-
-        {/* Mini Chart */}
-        {chartData.length > 0 && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs text-zinc-400">
-              <span>Past Week</span>
-              <span>Projected</span>
-            </div>
-            <div className="h-16 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData}>
-                  <XAxis dataKey="date" hide />
-                  <YAxis hide />
-                  <ReferenceLine
-                    x={chartData[Math.floor(chartData.length / 2)]?.date}
-                    stroke="#71717a"
-                    strokeDasharray="2 2"
-                    opacity={0.5}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="revenue"
-                    stroke="#10b981"
-                    strokeWidth={2}
-                    dot={false}
-                    strokeDasharray={(entry: any) => (entry?.isProjected ? "3 3" : "0")}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="flex items-center justify-center gap-4 text-xs text-zinc-500">
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-0.5 bg-green-500"></div>
-                <span>Historical</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div
-                  className="w-3 h-0.5 bg-green-500 opacity-60"
-                  style={{
-                    backgroundImage:
-                      "repeating-linear-gradient(to right, transparent, transparent 2px, #10b981 2px, #10b981 4px)",
-                  }}
-                ></div>
-                <span>Forecast</span>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Performance Metrics */}
         <div className="grid grid-cols-2 gap-3 pt-2 border-t border-zinc-800/50">
           <div className="text-center">
@@ -226,6 +267,16 @@ export function SalesForecastCard() {
           <div className="text-center">
             <p className="text-lg font-semibold text-zinc-200">{formatCurrency(projectedDailyRevenue)}</p>
             <p className="text-xs text-zinc-400">Projected Daily</p>
+          </div>
+        </div>
+
+        {/* Motivational Message */}
+        <div className="p-3 bg-zinc-800/30 rounded-lg border border-zinc-700/50">
+          <div className="flex items-start gap-2">
+            <Zap className="h-4 w-4 text-yellow-400 mt-0.5 flex-shrink-0" />
+            <p className="text-sm text-zinc-200 leading-relaxed">
+              {forecast.motivationalMessage || "Keep creating great content!"}
+            </p>
           </div>
         </div>
 
