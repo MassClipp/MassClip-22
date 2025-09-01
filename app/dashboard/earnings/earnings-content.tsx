@@ -166,8 +166,8 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
         revenue = Math.max(0, ((data?.grossSales || 0) * (0.3 + Math.random() * 0.7) * (index + 1)) / 12)
         profit = Math.max(0, ((data?.totalEarnings || 0) * (0.3 + Math.random() * 0.7) * (index + 1)) / 12)
       } else {
-        revenue = Math.floor(Math.random() * 5) + 1
-        profit = Math.floor(Math.random() * 3) + 0.5
+        revenue = Math.floor(Math.random() * 50) + 20
+        profit = Math.floor(Math.random() * 30) + 10
       }
 
       return {
@@ -184,8 +184,8 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
 
     return days.map((day) => ({
       day,
-      sales: hasRealData ? Math.floor(Math.random() * 50) + 10 : Math.floor(Math.random() * 3) + 1,
-      revenue: hasRealData ? Math.floor(Math.random() * 500) + 100 : Math.floor(Math.random() * 10) + 5,
+      sales: hasRealData ? Math.floor(Math.random() * 50) + 10 : Math.floor(Math.random() * 20) + 5,
+      revenue: hasRealData ? Math.floor(Math.random() * 500) + 100 : Math.floor(Math.random() * 100) + 25,
     }))
   }
 
@@ -289,9 +289,9 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
           </CardHeader>
           <CardContent>
             {console.log("[v0] Revenue data:", revenueData)}
-            <div className="h-80 bg-zinc-800/20 rounded-lg p-4">
+            <div className="h-80 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={revenueData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                <AreaChart data={revenueData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
                   <defs>
                     <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
@@ -354,9 +354,9 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
           </CardHeader>
           <CardContent>
             {console.log("[v0] Sales data:", salesData)}
-            <div className="h-64 bg-zinc-800/20 rounded-lg p-4">
+            <div className="h-64 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={salesData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                <BarChart data={salesData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#4b5563" opacity={0.3} />
                   <XAxis
                     dataKey="day"
