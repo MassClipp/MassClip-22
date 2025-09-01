@@ -59,7 +59,7 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
       if (showRefreshToast) setRefreshing(true)
       else setLoading(true)
 
-      console.log("🔍 [Earnings] Fetching earnings data...")
+      console.log("[v0] 🔍 Fetching earnings data...")
 
       const idToken = await user.getIdToken()
       const response = await fetch("/api/dashboard/earnings", {
@@ -73,7 +73,15 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
       }
 
       const result = await response.json()
-      console.log("📊 [Earnings] Data received:", result)
+      console.log("[v0] 📊 Raw earnings data received:", result)
+
+      console.log("[v0] 💰 Total Revenue (grossSales):", result.grossSales)
+      console.log("[v0] 💸 Platform Fees:", result.totalPlatformFees)
+      console.log("[v0] 📈 Net Earnings (totalEarnings):", result.totalEarnings)
+      console.log("[v0] 📊 Available Balance:", result.availableBalance)
+      console.log("[v0] 📅 This Month:", result.thisMonth)
+      console.log("[v0] 📅 Last 30 Days:", result.last30Days)
+      console.log("[v0] 📈 Monthly Growth:", result.monthlyGrowth)
 
       setData(result)
 
@@ -84,7 +92,7 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
         })
       }
     } catch (error) {
-      console.error("❌ [Earnings] Error:", error)
+      console.error("[v0] ❌ Earnings fetch error:", error)
       toast({
         title: "Error",
         description: "Failed to load earnings data",
@@ -194,11 +202,60 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
 
   const revenueData = generateRevenueData()
   const salesData = generateSalesData()
-  const growthRate = data?.monthlyGrowth || 0
 
-  console.log("[v0] Revenue data generated:", revenueData)
-  console.log("[v0] Sales data generated:", salesData)
-  console.log("[v0] Using real earnings data:", data)
+  const calculateNetProfit = () => {
+    const grossSales = data.grossSales || 0
+    const platformFees = data.totalPlatformFees || 0
+    const netProfit = grossSales - platformFees
+
+    console.log("[v0] 🧮 Net Profit Calculation:")
+    console.log("[v0] - Gross Sales:", grossSales)
+    console.log("[v0] - Platform Fees:", platformFees)
+    console.log("[v0] - Calculated Net Profit:", netProfit)
+    console.log("[v0] - API Net Profit (totalEarnings):", data.totalEarnings)
+
+    return Math.max(0, netProfit)
+  }
+
+  const calculateProfitMargin = () => {
+    const grossSales = data.grossSales || 0
+    const netProfit = calculateNetProfit()
+    const margin = grossSales > 0 ? (netProfit / grossSales) * 100 : 0
+
+    console.log("[v0] 📊 Profit Margin Calculation:")
+    console.log("[v0] - Net Profit:", netProfit)
+    console.log("[v0] - Gross Sales:", grossSales)
+    console.log("[v0] - Calculated Margin:", margin.toFixed(2) + "%")
+
+    return margin
+  }
+
+  const calculateMonthlyGrowth = () => {
+    const thisMonth = data.thisMonth || 0
+    const last30Days = data.last30Days || 0
+
+    // Calculate previous month (assuming last30Days includes some of this month)
+    const previousMonth = last30Days - thisMonth
+    const growth = previousMonth > 0 ? ((thisMonth - previousMonth) / previousMonth) * 100 : 0
+
+    console.log("[v0] 📈 Monthly Growth Calculation:")
+    console.log("[v0] - This Month:", thisMonth)
+    console.log("[v0] - Last 30 Days:", last30Days)
+    console.log("[v0] - Previous Month (estimated):", previousMonth)
+    console.log("[v0] - Calculated Growth:", growth.toFixed(2) + "%")
+    console.log("[v0] - API Growth (monthlyGrowth):", data.monthlyGrowth)
+
+    return isFinite(growth) ? growth : data.monthlyGrowth || 0
+  }
+
+  const netProfit = calculateNetProfit()
+  const profitMargin = calculateProfitMargin()
+  const monthlyGrowth = calculateMonthlyGrowth()
+
+  console.log("[v0] 🎯 Final Calculated Values:")
+  console.log("[v0] - Net Profit:", netProfit)
+  console.log("[v0] - Profit Margin:", profitMargin.toFixed(1) + "%")
+  console.log("[v0] - Monthly Growth:", monthlyGrowth.toFixed(1) + "%")
 
   if (loading) {
     return (
@@ -252,12 +309,14 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
           <CardContent>
             <div className="text-3xl font-bold text-white mb-1">${data.grossSales.toFixed(2)}</div>
             <div className="flex items-center text-sm">
-              {growthRate >= 0 ? (
-                <ArrowUpRight className="h-4 w-4 text-white mr-1" />
+              {monthlyGrowth >= 0 ? (
+                <ArrowUpRight className="h-4 w-4 text-green-400 mr-1" />
               ) : (
-                <ArrowDownRight className="h-4 w-4 text-white mr-1" />
+                <ArrowDownRight className="h-4 w-4 text-red-400 mr-1" />
               )}
-              <span className="text-white/70">{Math.abs(growthRate).toFixed(1)}% from last month</span>
+              <span className={`${monthlyGrowth >= 0 ? "text-green-400" : "text-red-400"}`}>
+                {Math.abs(monthlyGrowth).toFixed(1)}% from last month
+              </span>
             </div>
           </CardContent>
         </Card>
@@ -268,9 +327,9 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
             <TrendingUp className="h-5 w-5 text-white" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-white mb-1">${data.totalEarnings.toFixed(2)}</div>
-            <div className="text-sm text-white/70">
-              {((data.totalEarnings / Math.max(data.grossSales, 1)) * 100).toFixed(1)}% profit margin
+            <div className="text-3xl font-bold text-white mb-1">${netProfit.toFixed(2)}</div>
+            <div className={`text-sm ${profitMargin > 0 ? "text-green-400" : "text-white/70"}`}>
+              {profitMargin.toFixed(1)}% profit margin
             </div>
           </CardContent>
         </Card>
