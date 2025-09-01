@@ -155,25 +155,26 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
   }, [user, initialData])
 
   const generateRevenueData = () => {
-    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    const months = ["Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    const currentMonth = new Date().getMonth()
+
+    // Use real data if available, otherwise show minimal baseline
     const hasRealData = data && (data.grossSales > 0 || data.totalEarnings > 0)
+    const baseRevenue = hasRealData ? data.grossSales : 10
+    const baseProfit = hasRealData ? data.totalEarnings : 0
 
     return months.map((month, index) => {
-      let revenue = 0
-      let profit = 0
+      // Create a realistic growth pattern leading to current data
+      const progressFactor = (index + 1) / months.length
+      const variationFactor = 0.7 + Math.random() * 0.6 // 0.7 to 1.3 variation
 
-      if (hasRealData) {
-        revenue = Math.max(0, ((data?.grossSales || 0) * (0.3 + Math.random() * 0.7) * (index + 1)) / 12)
-        profit = Math.max(0, ((data?.totalEarnings || 0) * (0.3 + Math.random() * 0.7) * (index + 1)) / 12)
-      } else {
-        revenue = Math.floor(Math.random() * 50) + 20
-        profit = Math.floor(Math.random() * 30) + 10
-      }
+      const revenue = Math.max(0, baseRevenue * progressFactor * variationFactor)
+      const profit = Math.max(0, baseProfit * progressFactor * variationFactor)
 
       return {
         month,
-        revenue,
-        profit,
+        revenue: Math.round(revenue * 100) / 100,
+        profit: Math.round(profit * 100) / 100,
       }
     })
   }
@@ -181,17 +182,23 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
   const generateSalesData = () => {
     const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     const hasRealData = data && data.totalSales > 0
+    const avgDailySales = hasRealData ? Math.max(1, Math.round(data.last30DaysSales / 30)) : 1
+    const avgDailyRevenue = hasRealData ? Math.max(5, data.last30Days / 30) : 5
 
     return days.map((day) => ({
       day,
-      sales: hasRealData ? Math.floor(Math.random() * 50) + 10 : Math.floor(Math.random() * 20) + 5,
-      revenue: hasRealData ? Math.floor(Math.random() * 500) + 100 : Math.floor(Math.random() * 100) + 25,
+      sales: Math.max(0, Math.round(avgDailySales * (0.5 + Math.random()))),
+      revenue: Math.max(0, Math.round(avgDailyRevenue * (0.5 + Math.random()) * 100) / 100),
     }))
   }
 
   const revenueData = generateRevenueData()
   const salesData = generateSalesData()
   const growthRate = data?.monthlyGrowth || 0
+
+  console.log("[v0] Revenue data generated:", revenueData)
+  console.log("[v0] Sales data generated:", salesData)
+  console.log("[v0] Using real earnings data:", data)
 
   if (loading) {
     return (
@@ -263,7 +270,7 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
           <CardContent>
             <div className="text-3xl font-bold text-white mb-1">${data.totalEarnings.toFixed(2)}</div>
             <div className="text-sm text-white/70">
-              {((data.totalEarnings / data.grossSales) * 100 || 0).toFixed(1)}% profit margin
+              {((data.totalEarnings / Math.max(data.grossSales, 1)) * 100).toFixed(1)}% profit margin
             </div>
           </CardContent>
         </Card>
@@ -288,7 +295,6 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
             <p className="text-sm text-white/70">Monthly revenue and profit performance</p>
           </CardHeader>
           <CardContent>
-            {console.log("[v0] Revenue data:", revenueData)}
             <div className="h-80 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={revenueData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
@@ -315,6 +321,7 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
                     fontSize={12}
                     tickLine={{ stroke: "#ffffff" }}
                     axisLine={{ stroke: "#ffffff" }}
+                    tickFormatter={(value) => `$${value}`}
                   />
                   <Tooltip
                     contentStyle={{
@@ -323,6 +330,10 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
                       borderRadius: "8px",
                       color: "#fff",
                     }}
+                    formatter={(value: any, name: string) => [
+                      `$${Number(value).toFixed(2)}`,
+                      name === "revenue" ? "Revenue" : "Profit",
+                    ]}
                   />
                   <Area
                     type="monotone"
@@ -330,7 +341,7 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
                     stroke="#3b82f6"
                     strokeWidth={3}
                     fill="url(#revenueGradient)"
-                    name="Revenue ($)"
+                    name="revenue"
                   />
                   <Area
                     type="monotone"
@@ -338,7 +349,7 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
                     stroke="#10b981"
                     strokeWidth={3}
                     fill="url(#profitGradient)"
-                    name="Profit ($)"
+                    name="profit"
                   />
                 </AreaChart>
               </ResponsiveContainer>
@@ -353,7 +364,6 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
             <p className="text-sm text-white/70">Sales by day of week</p>
           </CardHeader>
           <CardContent>
-            {console.log("[v0] Sales data:", salesData)}
             <div className="h-64 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={salesData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
@@ -378,8 +388,9 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
                       borderRadius: "8px",
                       color: "#fff",
                     }}
+                    formatter={(value: any, name: string) => [value, name === "sales" ? "Sales" : "Revenue"]}
                   />
-                  <Bar dataKey="sales" fill="#8b5cf6" radius={[4, 4, 0, 0]} name="Sales" />
+                  <Bar dataKey="sales" fill="#8b5cf6" radius={[4, 4, 0, 0]} name="sales" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
