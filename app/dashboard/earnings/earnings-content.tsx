@@ -204,6 +204,11 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
   const salesData = generateSalesData()
 
   const calculateNetProfit = () => {
+    if (!data) {
+      console.log("[v0] ⚠️ No data available for net profit calculation")
+      return 0
+    }
+
     const grossSales = data.grossSales || 0
     const platformFees = data.totalPlatformFees || 0
     const netProfit = grossSales - platformFees
@@ -218,6 +223,11 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
   }
 
   const calculateProfitMargin = () => {
+    if (!data) {
+      console.log("[v0] ⚠️ No data available for profit margin calculation")
+      return 0
+    }
+
     const grossSales = data.grossSales || 0
     const netProfit = calculateNetProfit()
     const margin = grossSales > 0 ? (netProfit / grossSales) * 100 : 0
@@ -231,6 +241,11 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
   }
 
   const calculateMonthlyGrowth = () => {
+    if (!data) {
+      console.log("[v0] ⚠️ No data available for monthly growth calculation")
+      return 0
+    }
+
     const thisMonth = data.thisMonth || 0
     const last30Days = data.last30Days || 0
 
@@ -248,14 +263,16 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
     return isFinite(growth) ? growth : data.monthlyGrowth || 0
   }
 
-  const netProfit = calculateNetProfit()
-  const profitMargin = calculateProfitMargin()
-  const monthlyGrowth = calculateMonthlyGrowth()
+  const netProfit = data ? calculateNetProfit() : 0
+  const profitMargin = data ? calculateProfitMargin() : 0
+  const monthlyGrowth = data ? calculateMonthlyGrowth() : 0
 
-  console.log("[v0] 🎯 Final Calculated Values:")
-  console.log("[v0] - Net Profit:", netProfit)
-  console.log("[v0] - Profit Margin:", profitMargin.toFixed(1) + "%")
-  console.log("[v0] - Monthly Growth:", monthlyGrowth.toFixed(1) + "%")
+  if (data) {
+    console.log("[v0] 🎯 Final Calculated Values:")
+    console.log("[v0] - Net Profit:", netProfit)
+    console.log("[v0] - Profit Margin:", profitMargin.toFixed(1) + "%")
+    console.log("[v0] - Monthly Growth:", monthlyGrowth.toFixed(1) + "%")
+  }
 
   if (loading) {
     return (
