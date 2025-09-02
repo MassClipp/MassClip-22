@@ -14,7 +14,7 @@ import {
   ArrowUpRight,
   ArrowDownRight,
 } from "lucide-react"
-import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Area, AreaChart } from "recharts"
+import { XAxis, YAxis, CartesianGrid, Tooltip, AreaChart, Area, BarChart, Bar } from "recharts"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -406,68 +406,66 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
           </CardHeader>
           <CardContent>
             <div className="h-80 w-full">
-              <ResponsiveContainer
-                width="100%"
-                height="100%"
-                onClick={() => console.log("[v0] Revenue chart clicked - stabilizing render")}
-                onMouseEnter={() => console.log("[v0] Revenue chart mouse enter")}
+              <AreaChart
+                width={600}
+                height={320}
+                data={revenueData}
+                margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
               >
-                <AreaChart data={revenueData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-                  <defs>
-                    <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="profitGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#4b5563" opacity={0.3} />
-                  <XAxis
-                    dataKey="month"
-                    stroke="#ffffff"
-                    fontSize={12}
-                    tickLine={{ stroke: "#ffffff" }}
-                    axisLine={{ stroke: "#ffffff" }}
-                  />
-                  <YAxis
-                    stroke="#ffffff"
-                    fontSize={12}
-                    tickLine={{ stroke: "#ffffff" }}
-                    axisLine={{ stroke: "#ffffff" }}
-                    tickFormatter={(value) => `$${value}`}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#1f2937",
-                      border: "1px solid #374151",
-                      borderRadius: "8px",
-                      color: "#fff",
-                    }}
-                    formatter={(value: any, name: string) => [
-                      `$${Number(value).toFixed(2)}`,
-                      name === "revenue" ? "Revenue" : "Profit",
-                    ]}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="revenue"
-                    stroke="#3b82f6"
-                    strokeWidth={3}
-                    fill="url(#revenueGradient)"
-                    name="revenue"
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="profit"
-                    stroke="#10b981"
-                    strokeWidth={3}
-                    fill="url(#profitGradient)"
-                    name="profit"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+                <defs>
+                  <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="profitGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#4b5563" opacity={0.3} />
+                <XAxis
+                  dataKey="month"
+                  stroke="#ffffff"
+                  fontSize={12}
+                  tickLine={{ stroke: "#ffffff" }}
+                  axisLine={{ stroke: "#ffffff" }}
+                />
+                <YAxis
+                  stroke="#ffffff"
+                  fontSize={12}
+                  tickLine={{ stroke: "#ffffff" }}
+                  axisLine={{ stroke: "#ffffff" }}
+                  tickFormatter={(value) => `$${value}`}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "#1f2937",
+                    border: "1px solid #374151",
+                    borderRadius: "8px",
+                    color: "#fff",
+                  }}
+                  formatter={(value: any, name: string) => [
+                    `$${Number(value).toFixed(2)}`,
+                    name === "revenue" ? "Revenue" : "Profit",
+                  ]}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="revenue"
+                  stroke="#3b82f6"
+                  strokeWidth={3}
+                  fill="url(#revenueGradient)"
+                  name="revenue"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="profit"
+                  stroke="#10b981"
+                  strokeWidth={3}
+                  fill="url(#profitGradient)"
+                  name="profit"
+                />
+              </AreaChart>
             </div>
           </CardContent>
         </Card>
@@ -480,39 +478,32 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
           </CardHeader>
           <CardContent>
             <div className="h-64 w-full">
-              <ResponsiveContainer
-                width="100%"
-                height="100%"
-                onClick={() => console.log("[v0] Weekly chart clicked - stabilizing render")}
-                onMouseEnter={() => console.log("[v0] Weekly chart mouse enter")}
-              >
-                <BarChart data={salesData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#4b5563" opacity={0.3} />
-                  <XAxis
-                    dataKey="day"
-                    stroke="#ffffff"
-                    fontSize={12}
-                    tickLine={{ stroke: "#ffffff" }}
-                    axisLine={{ stroke: "#ffffff" }}
-                  />
-                  <YAxis
-                    stroke="#ffffff"
-                    fontSize={12}
-                    tickLine={{ stroke: "#ffffff" }}
-                    axisLine={{ stroke: "#ffffff" }}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#1f2937",
-                      border: "1px solid #374151",
-                      borderRadius: "8px",
-                      color: "#fff",
-                    }}
-                    formatter={(value: any, name: string) => [value, name === "sales" ? "Sales" : "Revenue"]}
-                  />
-                  <Bar dataKey="sales" fill="#8b5cf6" radius={[4, 4, 0, 0]} name="sales" />
-                </BarChart>
-              </ResponsiveContainer>
+              <BarChart width={500} height={256} data={salesData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#4b5563" opacity={0.3} />
+                <XAxis
+                  dataKey="day"
+                  stroke="#ffffff"
+                  fontSize={12}
+                  tickLine={{ stroke: "#ffffff" }}
+                  axisLine={{ stroke: "#ffffff" }}
+                />
+                <YAxis
+                  stroke="#ffffff"
+                  fontSize={12}
+                  tickLine={{ stroke: "#ffffff" }}
+                  axisLine={{ stroke: "#ffffff" }}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "#1f2937",
+                    border: "1px solid #374151",
+                    borderRadius: "8px",
+                    color: "#fff",
+                  }}
+                  formatter={(value: any, name: string) => [value, name === "sales" ? "Sales" : "Revenue"]}
+                />
+                <Bar dataKey="sales" fill="#8b5cf6" radius={[4, 4, 0, 0]} name="sales" />
+              </BarChart>
             </div>
           </CardContent>
         </Card>
