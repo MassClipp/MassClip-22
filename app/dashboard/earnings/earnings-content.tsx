@@ -406,7 +406,12 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
           </CardHeader>
           <CardContent>
             <div className="h-80 w-full">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
+                onClick={() => console.log("[v0] Revenue chart clicked - stabilizing render")}
+                onMouseEnter={() => console.log("[v0] Revenue chart mouse enter")}
+              >
                 <AreaChart data={revenueData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
                   <defs>
                     <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
@@ -475,7 +480,12 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
           </CardHeader>
           <CardContent>
             <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
+                onClick={() => console.log("[v0] Weekly chart clicked - stabilizing render")}
+                onMouseEnter={() => console.log("[v0] Weekly chart mouse enter")}
+              >
                 <BarChart data={salesData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#4b5563" opacity={0.3} />
                   <XAxis
