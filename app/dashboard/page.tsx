@@ -27,6 +27,7 @@ import { useToast } from "@/components/ui/use-toast"
 import { useVideoStatsAPI } from "@/hooks/use-video-stats-api"
 import { useStripeDashboardSales } from "@/hooks/use-stripe-dashboard-sales"
 import { SalesForecastCard } from "@/components/sales-forecast-card"
+import { MonthlyDownloadsCard } from "@/components/monthly-downloads-card"
 import ProfileViewStats from "@/components/profile-view-stats"
 
 export default function DashboardPage() {
@@ -244,6 +245,9 @@ export default function DashboardPage() {
         {/* Financial Forecast - Replaces Sales Performance */}
         <div className="lg:col-span-2">
           <SalesForecastCard />
+          <div className="mt-4">
+            <MonthlyDownloadsCard />
+          </div>
         </div>
 
         <div className="space-y-6">
