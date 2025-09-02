@@ -83,9 +83,8 @@ export function useStripeDashboardSales(): StripeDashboardSalesData {
 
     fetchSalesData()
 
-    // Refresh every 60 seconds (less frequent to avoid rate limits)
-    const interval = setInterval(fetchSalesData, 60000)
-    return () => clearInterval(interval)
+    // const interval = setInterval(fetchSalesData, 60000)
+    // return () => clearInterval(interval)
   }, [user?.uid])
 
   return data

@@ -68,10 +68,6 @@ export function useDashboardSales(): DashboardSalesData {
     }
 
     fetchSalesData()
-
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchSalesData, 30000)
-    return () => clearInterval(interval)
   }, [user?.uid])
 
   return data
