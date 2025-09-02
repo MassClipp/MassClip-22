@@ -213,14 +213,41 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
 
   const generateSalesData = () => {
     const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-    const hasRealData = data && data.totalSales > 0
-    const avgDailySales = hasRealData ? Math.max(1, Math.round(data.last30DaysSales / 30)) : 1
-    const avgDailyRevenue = hasRealData ? Math.max(5, data.last30Days / 30) : 5
+
+    if (!data || data.totalSales === 0) {
+      // No sales - show empty data
+      return days.map((day) => ({
+        day,
+        sales: 0,
+        revenue: 0,
+      }))
+    }
+
+    // If we have sales, show them realistically distributed
+    const totalSales = data.totalSales
+    const totalRevenue = data.grossSales
+
+    // For small numbers of sales, show them on specific days rather than spreading across all days
+    if (totalSales <= 3) {
+      const activeDays = Math.min(totalSales, 3) // Show sales on 1-3 days max
+      const salesPerActiveDay = Math.ceil(totalSales / activeDays)
+      const revenuePerActiveDay = totalRevenue / activeDays
+
+      return days.map((day, index) => ({
+        day,
+        sales: index < activeDays ? salesPerActiveDay : 0,
+        revenue: index < activeDays ? Math.round(revenuePerActiveDay * 100) / 100 : 0,
+      }))
+    }
+
+    // For larger numbers, distribute more naturally
+    const avgDailySales = totalSales / 7
+    const avgDailyRevenue = totalRevenue / 7
 
     return days.map((day) => ({
       day,
-      sales: Math.max(0, Math.round(avgDailySales * (0.5 + Math.random()))),
-      revenue: Math.max(0, Math.round(avgDailyRevenue * (0.5 + Math.random()) * 100) / 100),
+      sales: Math.max(0, Math.round(avgDailySales * (0.7 + Math.random() * 0.6))),
+      revenue: Math.max(0, Math.round(avgDailyRevenue * (0.7 + Math.random() * 0.6) * 100) / 100),
     }))
   }
 
@@ -405,12 +432,13 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
             <p className="text-sm text-white/70">Monthly revenue and profit performance</p>
           </CardHeader>
           <CardContent>
-            <div className="h-80 w-full">
+            <div className="h-80 w-full overflow-hidden">
               <AreaChart
-                width={600}
+                width={800}
                 height={320}
                 data={revenueData}
                 margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+                style={{ width: "100%" }}
               >
                 <defs>
                   <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
@@ -477,8 +505,20 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
             <p className="text-sm text-white/70">Sales by day of week</p>
           </CardHeader>
           <CardContent>
-            <div className="h-64 w-full">
-              <BarChart width={500} height={256} data={salesData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+            <div className="h-64 w-full overflow-hidden">
+              <BarChart
+                width={450}
+                height={256}
+                data={salesData}
+                margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+                style={{ width: "100%" }}
+              >
+                <defs>
+                  <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#a855f7" stopOpacity={1} />
+                    <stop offset="100%" stopColor="#7c3aed" stopOpacity={0.8} />
+                  </linearGradient>
+                </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#4b5563" opacity={0.3} />
                 <XAxis
                   dataKey="day"
@@ -492,6 +532,7 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
                   fontSize={12}
                   tickLine={{ stroke: "#ffffff" }}
                   axisLine={{ stroke: "#ffffff" }}
+                  domain={[0, "dataMax + 1"]}
                 />
                 <Tooltip
                   contentStyle={{
@@ -499,10 +540,21 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
                     border: "1px solid #374151",
                     borderRadius: "8px",
                     color: "#fff",
+                    boxShadow: "0 10px 25px rgba(0, 0, 0, 0.5)",
                   }}
-                  formatter={(value: any, name: string) => [value, name === "sales" ? "Sales" : "Revenue"]}
+                  formatter={(value: any, name: string) => [
+                    name === "sales" ? `${value} sale${value !== 1 ? "s" : ""}` : `$${Number(value).toFixed(2)}`,
+                    name === "sales" ? "Sales" : "Revenue",
+                  ]}
                 />
-                <Bar dataKey="sales" fill="#8b5cf6" radius={[4, 4, 0, 0]} name="sales" />
+                <Bar
+                  dataKey="sales"
+                  fill="url(#barGradient)"
+                  radius={[6, 6, 0, 0]}
+                  name="sales"
+                  stroke="#a855f7"
+                  strokeWidth={1}
+                />
               </BarChart>
             </div>
           </CardContent>
