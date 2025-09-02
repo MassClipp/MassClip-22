@@ -35,8 +35,8 @@ class ChartErrorBoundary extends React.Component<{ children: React.ReactNode }, 
 
 export default function ChartsDebugPage() {
   const [showLogs, setShowLogs] = useState(false)
+  const [useFixedCharts, setUseFixedCharts] = useState(false)
 
-  // Simple test data
   const testRevenueData = [
     { month: "Jul", revenue: 100, profit: 80 },
     { month: "Aug", revenue: 150, profit: 120 },
@@ -63,6 +63,8 @@ export default function ChartsDebugPage() {
     console.log("ResponsiveContainer available:", !!ResponsiveContainer)
     console.log("AreaChart available:", !!AreaChart)
     console.log("BarChart available:", !!BarChart)
+    console.log("Window dimensions:", { width: window.innerWidth, height: window.innerHeight })
+    console.log("Document ready state:", document.readyState)
     setShowLogs(true)
   }
 
@@ -74,9 +76,18 @@ export default function ChartsDebugPage() {
             <h1 className="text-3xl font-bold text-white">Charts Debug Page</h1>
             <p className="text-white/70 mt-1">Testing chart rendering components</p>
           </div>
-          <Button onClick={logChartData} variant="outline" className="border-zinc-700 text-white bg-transparent">
-            Log Chart Data
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={logChartData} variant="outline" className="border-zinc-700 text-white bg-transparent">
+              Log Chart Data
+            </Button>
+            <Button
+              onClick={() => setUseFixedCharts(!useFixedCharts)}
+              variant={useFixedCharts ? "default" : "outline"}
+              className="border-zinc-700 text-white bg-transparent"
+            >
+              {useFixedCharts ? "Using Fixed" : "Using Responsive"}
+            </Button>
+          </div>
         </div>
 
         {showLogs && (
@@ -106,49 +117,100 @@ export default function ChartsDebugPage() {
           <CardContent>
             <ChartErrorBoundary>
               <div className="h-80 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={testRevenueData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-                    <defs>
-                      <linearGradient id="testRevenueGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                      </linearGradient>
-                      <linearGradient id="testProfitGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#4b5563" opacity={0.3} />
-                    <XAxis dataKey="month" stroke="#ffffff" fontSize={12} />
-                    <YAxis stroke="#ffffff" fontSize={12} tickFormatter={(value) => `$${value}`} />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "#1f2937",
-                        border: "1px solid #374151",
-                        borderRadius: "8px",
-                        color: "#fff",
-                      }}
-                      formatter={(value: any, name: string) => [
-                        `$${Number(value).toFixed(2)}`,
-                        name === "revenue" ? "Revenue" : "Profit",
-                      ]}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="revenue"
-                      stroke="#3b82f6"
-                      strokeWidth={3}
-                      fill="url(#testRevenueGradient)"
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="profit"
-                      stroke="#10b981"
-                      strokeWidth={3}
-                      fill="url(#testProfitGradient)"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
+                {useFixedCharts ? (
+                  <div className="overflow-x-auto">
+                    <AreaChart
+                      width={700}
+                      height={320}
+                      data={testRevenueData}
+                      margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+                    >
+                      <defs>
+                        <linearGradient id="testRevenueGradient2" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                        </linearGradient>
+                        <linearGradient id="testProfitGradient2" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#4b5563" opacity={0.3} />
+                      <XAxis dataKey="month" stroke="#ffffff" fontSize={12} />
+                      <YAxis stroke="#ffffff" fontSize={12} tickFormatter={(value) => `$${value}`} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "#1f2937",
+                          border: "1px solid #374151",
+                          borderRadius: "8px",
+                          color: "#fff",
+                        }}
+                        formatter={(value: any, name: string) => [
+                          `$${Number(value).toFixed(2)}`,
+                          name === "revenue" ? "Revenue" : "Profit",
+                        ]}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="revenue"
+                        stroke="#3b82f6"
+                        strokeWidth={3}
+                        fill="url(#testRevenueGradient2)"
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="profit"
+                        stroke="#10b981"
+                        strokeWidth={3}
+                        fill="url(#testProfitGradient2)"
+                      />
+                    </AreaChart>
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={testRevenueData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                      <defs>
+                        <linearGradient id="testRevenueGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                        </linearGradient>
+                        <linearGradient id="testProfitGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#4b5563" opacity={0.3} />
+                      <XAxis dataKey="month" stroke="#ffffff" fontSize={12} />
+                      <YAxis stroke="#ffffff" fontSize={12} tickFormatter={(value) => `$${value}`} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "#1f2937",
+                          border: "1px solid #374151",
+                          borderRadius: "8px",
+                          color: "#fff",
+                        }}
+                        formatter={(value: any, name: string) => [
+                          `$${Number(value).toFixed(2)}`,
+                          name === "revenue" ? "Revenue" : "Profit",
+                        ]}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="revenue"
+                        stroke="#3b82f6"
+                        strokeWidth={3}
+                        fill="url(#testRevenueGradient)"
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="profit"
+                        stroke="#10b981"
+                        strokeWidth={3}
+                        fill="url(#testProfitGradient)"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                )}
               </div>
             </ChartErrorBoundary>
           </CardContent>
@@ -162,22 +224,46 @@ export default function ChartsDebugPage() {
           <CardContent>
             <ChartErrorBoundary>
               <div className="h-64 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={testSalesData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#4b5563" opacity={0.3} />
-                    <XAxis dataKey="day" stroke="#ffffff" fontSize={12} />
-                    <YAxis stroke="#ffffff" fontSize={12} />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "#1f2937",
-                        border: "1px solid #374151",
-                        borderRadius: "8px",
-                        color: "#fff",
-                      }}
-                    />
-                    <Bar dataKey="sales" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                {useFixedCharts ? (
+                  <div className="overflow-x-auto">
+                    <BarChart
+                      width={600}
+                      height={300}
+                      data={testSalesData}
+                      margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#4b5563" opacity={0.3} />
+                      <XAxis dataKey="day" stroke="#ffffff" fontSize={12} />
+                      <YAxis stroke="#ffffff" fontSize={12} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "#1f2937",
+                          border: "1px solid #374151",
+                          borderRadius: "8px",
+                          color: "#fff",
+                        }}
+                      />
+                      <Bar dataKey="sales" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={testSalesData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#4b5563" opacity={0.3} />
+                      <XAxis dataKey="day" stroke="#ffffff" fontSize={12} />
+                      <YAxis stroke="#ffffff" fontSize={12} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "#1f2937",
+                          border: "1px solid #374151",
+                          borderRadius: "8px",
+                          color: "#fff",
+                        }}
+                      />
+                      <Bar dataKey="sales" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
               </div>
             </ChartErrorBoundary>
           </CardContent>
@@ -191,13 +277,94 @@ export default function ChartsDebugPage() {
           <CardContent>
             <ChartErrorBoundary>
               <div className="h-48 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={testSalesData}>
-                    <XAxis dataKey="day" stroke="#ffffff" />
-                    <YAxis stroke="#ffffff" />
-                    <Bar dataKey="sales" fill="#3b82f6" />
-                  </BarChart>
-                </ResponsiveContainer>
+                {useFixedCharts ? (
+                  <div className="overflow-x-auto">
+                    <BarChart width={500} height={200} data={testSalesData}>
+                      <XAxis dataKey="day" stroke="#ffffff" />
+                      <YAxis stroke="#ffffff" />
+                      <Bar dataKey="sales" fill="#3b82f6" />
+                    </BarChart>
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={testSalesData}>
+                      <XAxis dataKey="day" stroke="#ffffff" />
+                      <YAxis stroke="#ffffff" />
+                      <Bar dataKey="sales" fill="#3b82f6" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </ChartErrorBoundary>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-zinc-900/50 border-zinc-800">
+          <CardHeader>
+            <CardTitle className="text-white">Fixed Dimension Test (No ResponsiveContainer)</CardTitle>
+            <p className="text-white/70">Testing charts with fixed 600x300 dimensions</p>
+          </CardHeader>
+          <CardContent>
+            <ChartErrorBoundary>
+              <div className="overflow-x-auto">
+                <AreaChart
+                  width={600}
+                  height={300}
+                  data={testRevenueData}
+                  margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+                >
+                  <defs>
+                    <linearGradient id="fixedRevenueGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#4b5563" opacity={0.3} />
+                  <XAxis dataKey="month" stroke="#ffffff" fontSize={12} />
+                  <YAxis stroke="#ffffff" fontSize={12} tickFormatter={(value) => `$${value}`} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#1f2937",
+                      border: "1px solid #374151",
+                      borderRadius: "8px",
+                      color: "#fff",
+                    }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="revenue"
+                    stroke="#3b82f6"
+                    strokeWidth={3}
+                    fill="url(#fixedRevenueGradient)"
+                  />
+                </AreaChart>
+              </div>
+            </ChartErrorBoundary>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-zinc-900/50 border-zinc-800">
+          <CardHeader>
+            <CardTitle className="text-white">Fixed Bar Chart Test</CardTitle>
+            <p className="text-white/70">Simple bar chart with 500x200 fixed dimensions</p>
+          </CardHeader>
+          <CardContent>
+            <ChartErrorBoundary>
+              <div className="overflow-x-auto">
+                <BarChart width={500} height={200} data={testSalesData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#4b5563" opacity={0.3} />
+                  <XAxis dataKey="day" stroke="#ffffff" fontSize={12} />
+                  <YAxis stroke="#ffffff" fontSize={12} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#1f2937",
+                      border: "1px solid #374151",
+                      borderRadius: "8px",
+                      color: "#fff",
+                    }}
+                  />
+                  <Bar dataKey="sales" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                </BarChart>
               </div>
             </ChartErrorBoundary>
           </CardContent>
