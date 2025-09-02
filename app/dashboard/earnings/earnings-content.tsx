@@ -431,26 +431,25 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
             <CardTitle className="text-xl text-white">Revenue Trend</CardTitle>
             <p className="text-sm text-white/70">Monthly revenue and profit performance</p>
           </CardHeader>
-          <CardContent>
-            <div className="h-80 w-full overflow-hidden">
+          <CardContent className="p-0">
+            <div className="h-80 w-full">
               <AreaChart
-                width={800}
+                width={1200}
                 height={320}
                 data={revenueData}
-                margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
-                style={{ width: "100%" }}
+                margin={{ top: 20, right: 20, left: 20, bottom: 20 }}
+                style={{ width: "100%", height: "100%" }}
               >
                 <defs>
                   <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                    <stop offset="5%" stopColor="#ffffff" stopOpacity={0.1} />
+                    <stop offset="95%" stopColor="#ffffff" stopOpacity={0} />
                   </linearGradient>
-                  <linearGradient id="profitGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                  </linearGradient>
+                  <filter id="lineShadow" x="-50%" y="-50%" width="200%" height="200%">
+                    <feDropShadow dx="0" dy="0" stdDeviation="3" floodColor="#ffffff" floodOpacity="0.3" />
+                  </filter>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#4b5563" opacity={0.3} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#4b5563" opacity={0.2} />
                 <XAxis
                   dataKey="month"
                   stroke="#ffffff"
@@ -471,27 +470,21 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
                     border: "1px solid #374151",
                     borderRadius: "8px",
                     color: "#fff",
+                    boxShadow: "0 10px 25px rgba(0, 0, 0, 0.5)",
                   }}
-                  formatter={(value: any, name: string) => [
-                    `$${Number(value).toFixed(2)}`,
-                    name === "revenue" ? "Revenue" : "Profit",
-                  ]}
+                  formatter={(value: any, name: string) => [`$${Number(value).toFixed(2)}`, "Revenue"]}
+                  coordinate={{ x: 0, y: 0 }}
                 />
                 <Area
                   type="monotone"
                   dataKey="revenue"
-                  stroke="#3b82f6"
+                  stroke="#ffffff"
                   strokeWidth={3}
                   fill="url(#revenueGradient)"
                   name="revenue"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="profit"
-                  stroke="#10b981"
-                  strokeWidth={3}
-                  fill="url(#profitGradient)"
-                  name="profit"
+                  filter="url(#lineShadow)"
+                  dot={{ fill: "#ffffff", strokeWidth: 2, r: 4 }}
+                  activeDot={{ r: 6, fill: "#ffffff", stroke: "#ffffff", strokeWidth: 2 }}
                 />
               </AreaChart>
             </div>
@@ -504,22 +497,26 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
             <CardTitle className="text-lg text-white">Weekly Performance</CardTitle>
             <p className="text-sm text-white/70">Sales by day of week</p>
           </CardHeader>
-          <CardContent>
-            <div className="h-64 w-full overflow-hidden">
+          <CardContent className="p-0">
+            <div className="h-64 w-full">
               <BarChart
-                width={450}
+                width={600}
                 height={256}
                 data={salesData}
-                margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
-                style={{ width: "100%" }}
+                margin={{ top: 20, right: 20, left: 20, bottom: 20 }}
+                style={{ width: "100%", height: "100%" }}
               >
                 <defs>
                   <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#a855f7" stopOpacity={1} />
+                    <stop offset="50%" stopColor="#8b5cf6" stopOpacity={0.9} />
                     <stop offset="100%" stopColor="#7c3aed" stopOpacity={0.8} />
                   </linearGradient>
+                  <filter id="barShadow" x="-50%" y="-50%" width="200%" height="200%">
+                    <feDropShadow dx="0" dy="2" stdDeviation="4" floodColor="#000000" floodOpacity="0.3" />
+                  </filter>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#4b5563" opacity={0.3} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#4b5563" opacity={0.2} />
                 <XAxis
                   dataKey="day"
                   stroke="#ffffff"
@@ -546,14 +543,16 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
                     name === "sales" ? `${value} sale${value !== 1 ? "s" : ""}` : `$${Number(value).toFixed(2)}`,
                     name === "sales" ? "Sales" : "Revenue",
                   ]}
+                  coordinate={{ x: 0, y: 0 }}
                 />
                 <Bar
                   dataKey="sales"
                   fill="url(#barGradient)"
-                  radius={[6, 6, 0, 0]}
+                  radius={[8, 8, 0, 0]}
                   name="sales"
                   stroke="#a855f7"
                   strokeWidth={1}
+                  filter="url(#barShadow)"
                 />
               </BarChart>
             </div>
@@ -564,7 +563,7 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
         <Card className="bg-zinc-900/50 border-zinc-800">
           <CardHeader>
             <CardTitle className="text-lg text-white">Business Metrics</CardTitle>
-            <p className="text-sm text-white/70">Key performance indicators</p>
+            <p className="text-sm text-white/70 mt-1">Key performance indicators</p>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between py-2">
