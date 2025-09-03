@@ -236,7 +236,7 @@ export default function DashboardPage() {
         </Card>
 
         <div className="bg-zinc-900/50 border-zinc-800/50 rounded-lg">
-          <ProfileViewStats userId={username || user?.uid || ""} />
+          <ProfileViewStats userId={user?.uid || username || ""} />
         </div>
       </div>
 

@@ -58,15 +58,16 @@ export function useStripeDashboardSales(): StripeDashboardSalesData {
         const earningsData = await response.json()
 
         console.log(`📊 Dashboard sales data received:`, {
-          last30DaysRevenue: earningsData.last30DaysRevenue,
+          last30Days: earningsData.last30Days,
           last30DaysSales: earningsData.last30DaysSales,
+          avgOrderValue: earningsData.avgOrderValue,
           source: earningsData.source,
         })
 
         setData({
-          totalRevenueLast30Days: earningsData.last30DaysRevenue || 0,
+          totalRevenueLast30Days: earningsData.last30Days || 0,
           totalSalesLast30Days: earningsData.last30DaysSales || 0,
-          averageOrderValue: earningsData.averageTransactionValue || 0,
+          averageOrderValue: earningsData.avgOrderValue || 0,
           loading: false,
           error: null,
           source: earningsData.source || null,
