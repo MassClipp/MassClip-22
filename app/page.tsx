@@ -17,11 +17,14 @@ export default function LandingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-black">
+    <div className="min-h-screen bg-black relative overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-to-tl from-white/20 via-white/5 to-transparent opacity-60" />
+      <div className="absolute bottom-0 right-0 w-1/2 h-1/2 bg-gradient-radial from-white/15 via-white/8 to-transparent opacity-80" />
+
       {/* Header */}
       <header className="relative z-10 px-6 py-6">
         <nav className="flex items-center justify-between max-w-7xl mx-auto">
-          <div></div>
+          <div className="text-white font-light text-xl">MassClip</div>
 
           {/* Center Navigation */}
           <div className="hidden md:flex items-center space-x-8">
@@ -43,7 +46,7 @@ export default function LandingPage() {
       {/* Hero Section */}
       <main className="relative z-10 flex items-end justify-start min-h-[calc(100vh-120px)] px-6 pb-16">
         <div className="max-w-7xl mx-auto w-full">
-          <div className="max-w-3xl">
+          <div className="max-w-3xl -ml-4">
             <motion.div
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
@@ -54,7 +57,7 @@ export default function LandingPage() {
                 Monetize Your Faceless Content
               </h1>
 
-              <p className="text-xl lg:text-2xl text-white/70 leading-relaxed font-light">
+              <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
                 Welcome to a simple way to monetize, sell, and get paid for your faceless content.
               </p>
 
