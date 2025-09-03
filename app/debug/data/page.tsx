@@ -33,7 +33,7 @@ export default function DataDebugPage() {
       const idToken = await user.getIdToken()
       addLog("Got user ID token for authentication")
 
-      const response = await fetch("/api/profile-view-stats", {
+      const response = await fetch(`/api/profile-view-stats?userId=${user.uid}`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
