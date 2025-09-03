@@ -23,11 +23,21 @@ export default function DataDebugPage() {
     addLog(`User ID: ${user?.uid}`)
     addLog(`User Email: ${user?.email}`)
 
+    if (!user) {
+      addLog("Error: User not authenticated")
+      return
+    }
+
     try {
+      // Get the user's ID token for authentication
+      const idToken = await user.getIdToken()
+      addLog("Got user ID token for authentication")
+
       const response = await fetch("/api/profile-view-stats", {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
         },
       })
 
@@ -49,11 +59,21 @@ export default function DataDebugPage() {
   const testSalesData = async () => {
     addLog("Testing Sales Data API...")
 
+    if (!user) {
+      addLog("Error: User not authenticated")
+      return
+    }
+
     try {
+      // Get the user's ID token for authentication
+      const idToken = await user.getIdToken()
+      addLog("Got user ID token for authentication")
+
       const response = await fetch("/api/dashboard/earnings", {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
         },
       })
 
@@ -75,11 +95,21 @@ export default function DataDebugPage() {
   const testEarningsData = async () => {
     addLog("Testing Enhanced Stats API...")
 
+    if (!user) {
+      addLog("Error: User not authenticated")
+      return
+    }
+
     try {
+      // Get the user's ID token for authentication
+      const idToken = await user.getIdToken()
+      addLog("Got user ID token for authentication")
+
       const response = await fetch("/api/dashboard/enhanced-stats", {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
         },
       })
 
