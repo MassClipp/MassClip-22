@@ -135,7 +135,7 @@ export default function LandingPage() {
               >
                 <div className="mb-6">
                   <img
-                    src="/placeholder.svg?height=200&width=300"
+                    src="/b-roll-content.svg?height=200&width=300"
                     alt="B-Roll Content"
                     className="w-full h-40 object-cover rounded-lg"
                   />
@@ -155,7 +155,7 @@ export default function LandingPage() {
               >
                 <div className="mb-6">
                   <img
-                    src="/placeholder.svg?height=200&width=300"
+                    src="/background-videos.svg?height=200&width=300"
                     alt="Background Videos"
                     className="w-full h-40 object-cover rounded-lg"
                   />
@@ -175,7 +175,7 @@ export default function LandingPage() {
               >
                 <div className="mb-6">
                   <img
-                    src="/placeholder.svg?height=200&width=300"
+                    src="/audio-tracks.svg?height=200&width=300"
                     alt="Audio Tracks"
                     className="w-full h-40 object-cover rounded-lg"
                   />
@@ -195,7 +195,7 @@ export default function LandingPage() {
               >
                 <div className="mb-6">
                   <img
-                    src="/placeholder.svg?height=200&width=300"
+                    src="/carousels.svg?height=200&width=300"
                     alt="Carousels"
                     className="w-full h-40 object-cover rounded-lg"
                   />
