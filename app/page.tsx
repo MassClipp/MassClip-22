@@ -135,9 +135,9 @@ export default function LandingPage() {
               >
                 <div className="mb-6">
                   <img
-                    src="/b-roll-content.svg?height=200&width=300"
+                    src="/placeholder.svg?height=200&width=300&text=B-Roll+Content"
                     alt="B-Roll Content"
-                    className="w-full h-40 object-cover rounded-lg"
+                    className="w-full h-40 object-cover rounded-lg bg-gray-100"
                   />
                 </div>
                 <h3 className="text-xl font-light text-black mb-4">B-Roll Content</h3>
@@ -155,9 +155,9 @@ export default function LandingPage() {
               >
                 <div className="mb-6">
                   <img
-                    src="/background-videos.svg?height=200&width=300"
+                    src="/placeholder.svg?height=200&width=300&text=Background+Videos"
                     alt="Background Videos"
-                    className="w-full h-40 object-cover rounded-lg"
+                    className="w-full h-40 object-cover rounded-lg bg-gray-100"
                   />
                 </div>
                 <h3 className="text-xl font-light text-black mb-4">Background Videos</h3>
@@ -175,9 +175,9 @@ export default function LandingPage() {
               >
                 <div className="mb-6">
                   <img
-                    src="/audio-tracks.svg?height=200&width=300"
+                    src="/placeholder.svg?height=200&width=300&text=Audio+Tracks"
                     alt="Audio Tracks"
-                    className="w-full h-40 object-cover rounded-lg"
+                    className="w-full h-40 object-cover rounded-lg bg-gray-100"
                   />
                 </div>
                 <h3 className="text-xl font-light text-black mb-4">Audio Tracks</h3>
@@ -195,9 +195,9 @@ export default function LandingPage() {
               >
                 <div className="mb-6">
                   <img
-                    src="/carousels.svg?height=200&width=300"
+                    src="/placeholder.svg?height=200&width=300&text=Carousels"
                     alt="Carousels"
-                    className="w-full h-40 object-cover rounded-lg"
+                    className="w-full h-40 object-cover rounded-lg bg-gray-100"
                   />
                 </div>
                 <h3 className="text-xl font-light text-black mb-4">Carousels</h3>
