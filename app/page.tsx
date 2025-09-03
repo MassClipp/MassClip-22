@@ -114,7 +114,7 @@ export default function LandingPage() {
       </section>
 
       {/* What You Can Sell Section */}
-      <section className="relative z-10 bg-gray-50 py-20 px-6">
+      <section className="relative z-10 bg-black py-20 px-6">
         <div className="max-w-7xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
@@ -123,7 +123,7 @@ export default function LandingPage() {
             viewport={{ once: true }}
             className="space-y-12"
           >
-            <h2 className="text-4xl lg:text-5xl font-thin text-black">What You Can Sell</h2>
+            <h2 className="text-4xl lg:text-5xl font-thin text-white">What You Can Sell</h2>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
               <motion.div
@@ -133,6 +133,13 @@ export default function LandingPage() {
                 viewport={{ once: true }}
                 className="bg-white p-8 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
               >
+                <div className="mb-6">
+                  <img
+                    src="/placeholder.svg?height=200&width=300"
+                    alt="B-Roll Content"
+                    className="w-full h-40 object-cover rounded-lg"
+                  />
+                </div>
                 <h3 className="text-xl font-light text-black mb-4">B-Roll Content</h3>
                 <p className="text-gray-600 font-light leading-relaxed">
                   High-quality background footage that creators can use to enhance their videos and storytelling.
@@ -146,6 +153,13 @@ export default function LandingPage() {
                 viewport={{ once: true }}
                 className="bg-white p-8 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
               >
+                <div className="mb-6">
+                  <img
+                    src="/placeholder.svg?height=200&width=300"
+                    alt="Background Videos"
+                    className="w-full h-40 object-cover rounded-lg"
+                  />
+                </div>
                 <h3 className="text-xl font-light text-black mb-4">Background Videos</h3>
                 <p className="text-gray-600 font-light leading-relaxed">
                   Looping video backgrounds perfect for social media posts, presentations, and content creation.
@@ -159,6 +173,13 @@ export default function LandingPage() {
                 viewport={{ once: true }}
                 className="bg-white p-8 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
               >
+                <div className="mb-6">
+                  <img
+                    src="/placeholder.svg?height=200&width=300"
+                    alt="Audio Tracks"
+                    className="w-full h-40 object-cover rounded-lg"
+                  />
+                </div>
                 <h3 className="text-xl font-light text-black mb-4">Audio Tracks</h3>
                 <p className="text-gray-600 font-light leading-relaxed">
                   Music, sound effects, and audio clips that creators can use to enhance their content.
@@ -172,6 +193,13 @@ export default function LandingPage() {
                 viewport={{ once: true }}
                 className="bg-white p-8 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
               >
+                <div className="mb-6">
+                  <img
+                    src="/placeholder.svg?height=200&width=300"
+                    alt="Carousels"
+                    className="w-full h-40 object-cover rounded-lg"
+                  />
+                </div>
                 <h3 className="text-xl font-light text-black mb-4">Carousels</h3>
                 <p className="text-gray-600 font-light leading-relaxed">
                   Ready-made carousel posts and slide templates for Instagram, LinkedIn, and other platforms.
