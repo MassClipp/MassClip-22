@@ -16,8 +16,63 @@ import { Providers } from "@/components/providers"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "MassClip: Sell Your Content Seriously",
-  description: "The #1 clip vault for faceless creators",
+  title: {
+    default: "MassClip: Sell Your Content Seriously",
+    template: "%s | MassClip - Faceless Creator Platform",
+  },
+  description:
+    "The #1 clip vault for faceless creators. Monetize your anonymous content, build your audience, and sell digital products without showing your face. Join thousands of successful faceless creators.",
+  keywords: [
+    "faceless creators",
+    "anonymous content",
+    "digital products",
+    "content monetization",
+    "clip vault",
+    "faceless YouTube",
+    "anonymous creator platform",
+  ],
+  authors: [{ name: "MassClip" }],
+  creator: "MassClip",
+  publisher: "MassClip",
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: "https://massclip.com",
+    siteName: "MassClip",
+    title: "MassClip: The #1 Platform for Faceless Creators",
+    description:
+      "Monetize your anonymous content and build your audience without showing your face. Join thousands of successful faceless creators.",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "MassClip - Faceless Creator Platform",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "MassClip: The #1 Platform for Faceless Creators",
+    description: "Monetize your anonymous content and build your audience without showing your face.",
+    images: ["/og-image.png"],
+    creator: "@massclip",
+    site: "@massclip",
+  },
+  alternates: {
+    canonical: "https://massclip.com",
+  },
   viewport: "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no",
   generator: "v0.dev",
   icons: {
@@ -35,6 +90,26 @@ export default function RootLayout({
   return (
     <html lang="en" className="prevent-zoom">
       <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "Organization",
+              name: "MassClip",
+              description: "The #1 platform for faceless creators to monetize anonymous content",
+              url: "https://massclip.com",
+              logo: "https://massclip.com/favicon.png",
+              sameAs: ["https://twitter.com/massclip"],
+              contactPoint: {
+                "@type": "ContactPoint",
+                contactType: "customer service",
+                email: "support@massclip.com",
+              },
+            }),
+          }}
+        />
+
         {/* Add Vimeo Player API */}
         <script src="https://player.vimeo.com/api/player.js" async></script>
 
