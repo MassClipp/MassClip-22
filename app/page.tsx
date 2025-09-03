@@ -6,7 +6,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { motion } from "framer-motion"
-import { Upload, Share2, DollarSign, StoreIcon as Storefront, Download, EyeOff } from "lucide-react"
+import { Upload, DollarSign, StoreIcon as Storefront, EyeOff, Shield, TrendingUp } from "lucide-react"
 import LandingHeader from "@/components/landing-header"
 import { Button } from "@/components/ui/button"
 
@@ -24,15 +24,11 @@ export default function LandingPage() {
     }
   }
 
-  const handleStartSelling = () => {
-    router.push("/dashboard/earnings")
-  }
-
-  const handleExploreFreeClips = () => {
+  const handleExploreClips = () => {
     router.push("/dashboard/explore")
   }
 
-  const scrollToContent = () => {
+  const handleHowItWorks = () => {
     const contentSection = document.getElementById("content-section")
     if (contentSection) {
       contentSection.scrollIntoView({ behavior: "smooth" })
@@ -40,11 +36,56 @@ export default function LandingPage() {
   }
 
   return (
-    <div className="relative min-h-screen">
+    <div className="relative min-h-screen bg-black overflow-hidden">
       {/* Background */}
-      <div className="fixed inset-0 z-0 premium-gradient"></div>
-      <div className="fixed inset-0 z-0 bg-[url('/noise.png')] opacity-[0.03]"></div>
-      <div className="fixed inset-0 z-0 bg-gradient-to-b from-transparent to-black/50"></div>
+      <div className="fixed inset-0 z-0">
+        {/* Animated abstract shapes */}
+        <div className="absolute inset-0">
+          <motion.div
+            className="absolute top-1/4 left-1/4 w-96 h-96 bg-gradient-to-br from-gray-800/30 to-gray-900/20 rounded-full blur-3xl"
+            animate={{
+              x: [0, 100, 0],
+              y: [0, -50, 0],
+              scale: [1, 1.1, 1],
+            }}
+            transition={{
+              duration: 20,
+              repeat: Number.POSITIVE_INFINITY,
+              ease: "easeInOut",
+            }}
+          />
+          <motion.div
+            className="absolute top-3/4 right-1/4 w-80 h-80 bg-gradient-to-br from-gray-700/20 to-gray-800/30 rounded-full blur-3xl"
+            animate={{
+              x: [0, -80, 0],
+              y: [0, 60, 0],
+              scale: [1, 0.9, 1],
+            }}
+            transition={{
+              duration: 25,
+              repeat: Number.POSITIVE_INFINITY,
+              ease: "easeInOut",
+            }}
+          />
+          <motion.div
+            className="absolute top-1/2 right-1/3 w-64 h-64 bg-gradient-to-br from-red-900/10 to-gray-800/20 rounded-full blur-2xl"
+            animate={{
+              x: [0, 60, 0],
+              y: [0, -40, 0],
+              scale: [1, 1.2, 1],
+            }}
+            transition={{
+              duration: 30,
+              repeat: Number.POSITIVE_INFINITY,
+              ease: "easeInOut",
+            }}
+          />
+        </div>
+        {/* Subtle noise texture */}
+        <div className="absolute inset-0 bg-[url('/noise.png')] opacity-[0.02]"></div>
+        {/* Gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/80"></div>
+      </div>
 
       {/* Header */}
       <LandingHeader />
@@ -57,159 +98,204 @@ export default function LandingPage() {
           className="relative min-h-screen flex flex-col justify-center items-center px-4 pt-20 pb-16"
         >
           <div className="container mx-auto max-w-6xl">
-            <div className="flex flex-col items-center text-center mb-12">
-              <motion.h1
-                className="text-4xl md:text-7xl lg:text-8xl font-light text-white mb-6 max-w-5xl leading-tight"
+            <div className="flex flex-col items-center text-center">
+              <motion.div
+                className="mb-8"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.8, delay: 0.2 }}
+                transition={{ duration: 0.8, delay: 0.1 }}
               >
-                Create. Sell. <span className="text-gradient-accent">Monetize.</span>
+                <span className="inline-flex items-center px-4 py-2 rounded-full bg-red-600/10 border border-red-600/20 text-red-400 text-sm font-medium tracking-wide">
+                  ✨ New Faceless Creator Platform
+                </span>
+              </motion.div>
+
+              <motion.h1
+                className="text-5xl md:text-7xl lg:text-8xl font-light text-white mb-8 max-w-6xl leading-[0.9] tracking-tight"
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 1, delay: 0.2 }}
+              >
+                Beautiful <span className="italic font-light">Clip</span>
+                <br />
+                <span className="text-red-600">Experiences</span>
               </motion.h1>
 
               <motion.p
-                className="text-lg md:text-2xl font-light text-white/70 mb-8 md:mb-12 max-w-3xl"
+                className="text-xl md:text-2xl font-light text-gray-300 mb-12 max-w-4xl leading-relaxed"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8, delay: 0.4 }}
               >
-                We take selling content seriously. You should too.
+                The first platform designed for faceless creator monetization. Build your anonymous content empire with
+                premium tools that respect your privacy.
               </motion.p>
 
-              {/* CTA Buttons */}
               <motion.div
-                className="flex flex-col sm:flex-row gap-4 w-full max-w-lg mb-12"
+                className="flex flex-col sm:flex-row gap-6 mb-16"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8, delay: 0.6 }}
               >
                 <Button
-                  onClick={handleStartSelling}
-                  className="flex-1 py-3 sm:py-6 bg-crimson hover:bg-crimson-dark text-white text-sm sm:text-lg premium-button"
+                  onClick={handleExploreClips}
+                  className="px-8 py-4 bg-red-600 hover:bg-red-700 text-white text-lg font-medium rounded-full transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-red-600/25"
                 >
-                  START SELLING
+                  Explore Clips
                 </Button>
                 <Button
-                  onClick={handleExploreFreeClips}
-                  className="flex-1 py-3 sm:py-6 bg-white/5 hover:bg-white/10 text-white text-sm sm:text-lg border border-white/10 premium-button"
+                  onClick={handleHowItWorks}
+                  className="px-8 py-4 bg-transparent hover:bg-red-600/10 text-red-400 text-lg font-medium rounded-full border-2 border-red-600 hover:border-red-500 transition-all duration-300"
                 >
-                  EXPLORE FREE CLIPS
+                  How It Works
                 </Button>
               </motion.div>
 
-              {/* Benefits Icons */}
               <motion.div
-                className="flex flex-wrap justify-center gap-8 text-white/60 text-xs uppercase tracking-widest"
+                className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl text-gray-400"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8, delay: 0.8 }}
               >
-                <div className="flex items-center gap-2">
-                  <EyeOff className="h-4 w-4" />
-                  <span>Effortless Discoverability</span>
+                <div className="flex flex-col items-center gap-3">
+                  <div className="p-3 rounded-full bg-gray-800/50">
+                    <EyeOff className="h-6 w-6 text-red-400" />
+                  </div>
+                  <span className="text-sm font-medium">Anonymous Monetization</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Storefront className="h-4 w-4" />
-                  <span>Built-in Storefront</span>
+                <div className="flex flex-col items-center gap-3">
+                  <div className="p-3 rounded-full bg-gray-800/50">
+                    <Shield className="h-6 w-6 text-red-400" />
+                  </div>
+                  <span className="text-sm font-medium">Privacy-First Platform</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Download className="h-4 w-4" />
-                  <span>Direct Downloads</span>
+                <div className="flex flex-col items-center gap-3">
+                  <div className="p-3 rounded-full bg-gray-800/50">
+                    <TrendingUp className="h-6 w-6 text-red-400" />
+                  </div>
+                  <span className="text-sm font-medium">Instant Revenue Streams</span>
                 </div>
               </motion.div>
             </div>
           </div>
-
-          {/* Scroll Indicator */}
-          <motion.div
-            className="scroll-indicator cursor-pointer"
-            onClick={scrollToContent}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.8, delay: 1.2 }}
-          >
-            <span className="text-xs uppercase tracking-widest text-white/50">How it works</span>
-            <div className="scroll-indicator-line"></div>
-          </motion.div>
         </section>
 
         {/* How It Works Section */}
-        <section id="content-section" className="py-20 md:py-32">
+        <section id="content-section" className="py-20 md:py-32 relative">
           <div className="container mx-auto max-w-6xl px-4">
-            {/* How It Works */}
-            <div className="mb-32">
+            <motion.div
+              className="text-center mb-20"
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6 }}
+              viewport={{ once: true, margin: "-100px" }}
+            >
+              <h2 className="text-4xl md:text-5xl font-light text-white mb-6">
+                Faceless Creator <span className="text-red-600">Monetization</span>
+              </h2>
+              <p className="text-xl text-gray-300 max-w-3xl mx-auto leading-relaxed">
+                Turn your anonymous content into sustainable income streams without revealing your identity.
+              </p>
+            </motion.div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-20">
               <motion.div
-                className="text-center mb-16"
-                initial={{ opacity: 0, y: 20 }}
+                className="group p-8 rounded-2xl bg-gradient-to-br from-gray-900/50 to-gray-800/30 border border-gray-800/50 hover:border-red-600/30 transition-all duration-500"
+                initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6 }}
                 viewport={{ once: true, margin: "-100px" }}
               >
-                <h2 className="text-3xl md:text-4xl font-light text-white mb-4">Three Steps to Digital Income</h2>
-                <p className="text-white/70 max-w-2xl mx-auto">
-                  Build your anonymous creator business in minutes, not months.
+                <div className="mb-6 p-4 bg-red-600/10 inline-block rounded-xl group-hover:bg-red-600/20 transition-colors">
+                  <Upload className="h-8 w-8 text-red-400" />
+                </div>
+                <h3 className="text-2xl font-light text-white mb-4">Anonymous Upload</h3>
+                <p className="text-gray-400 leading-relaxed">
+                  Upload your content completely anonymously. No face reveals, no personal information required. Build
+                  your faceless creator brand with confidence.
                 </p>
               </motion.div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
-                <motion.div
-                  className="premium-card p-8 text-center"
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6 }}
-                  viewport={{ once: true, margin: "-100px" }}
-                >
-                  <div className="mb-6 p-4 bg-crimson/10 inline-block rounded-full">
-                    <Upload className="h-8 w-8 text-crimson" />
-                  </div>
-                  <h3 className="text-xl font-light text-white mb-4">1. Upload Your Content</h3>
-                  <p className="text-white/70 text-sm">
-                    Upload free clips to build your audience, or premium content to start earning immediately. No face
-                    required.
-                  </p>
-                </motion.div>
+              <motion.div
+                className="group p-8 rounded-2xl bg-gradient-to-br from-gray-900/50 to-gray-800/30 border border-gray-800/50 hover:border-red-600/30 transition-all duration-500"
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.2 }}
+                viewport={{ once: true, margin: "-100px" }}
+              >
+                <div className="mb-6 p-4 bg-red-600/10 inline-block rounded-xl group-hover:bg-red-600/20 transition-colors">
+                  <Storefront className="h-8 w-8 text-red-400" />
+                </div>
+                <h3 className="text-2xl font-light text-white mb-4">Instant Storefront</h3>
+                <p className="text-gray-400 leading-relaxed">
+                  Get your personalized anonymous storefront instantly. Share your link anywhere your audience gathers -
+                  Discord, Twitter, Reddit, or any platform.
+                </p>
+              </motion.div>
 
-                <motion.div
-                  className="premium-card p-8 text-center"
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6, delay: 0.2 }}
-                  viewport={{ once: true, margin: "-100px" }}
-                >
-                  <div className="mb-6 p-4 bg-crimson/10 inline-block rounded-full">
-                    <Share2 className="h-8 w-8 text-crimson" />
-                  </div>
-                  <h3 className="text-xl font-light text-white mb-4">2. Share Your Store Link</h3>
-                  <p className="text-white/70 text-sm">
-                    Get your personalized storefront link. Share it anywhere — bio links, Discord, Twitter, wherever
-                    your audience is.
-                  </p>
-                </motion.div>
-
-                <motion.div
-                  className="premium-card p-8 text-center"
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6, delay: 0.4 }}
-                  viewport={{ once: true, margin: "-100px" }}
-                >
-                  <div className="mb-6 p-4 bg-crimson/10 inline-block rounded-full">
-                    <DollarSign className="h-8 w-8 text-crimson" />
-                  </div>
-                  <h3 className="text-xl font-light text-white mb-4">3. Create Content Bundles</h3>
-                  <p className="text-white/70 text-sm">
-                    Package your best content into bundles and sell them to your audience who already enjoy your
-                    content. Turn your existing fans into paying customers.
-                  </p>
-                </motion.div>
-              </div>
+              <motion.div
+                className="group p-8 rounded-2xl bg-gradient-to-br from-gray-900/50 to-gray-800/30 border border-gray-800/50 hover:border-red-600/30 transition-all duration-500"
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.4 }}
+                viewport={{ once: true, margin: "-100px" }}
+              >
+                <div className="mb-6 p-4 bg-red-600/10 inline-block rounded-xl group-hover:bg-red-600/20 transition-colors">
+                  <DollarSign className="h-8 w-8 text-red-400" />
+                </div>
+                <h3 className="text-2xl font-light text-white mb-4">Monetize Everything</h3>
+                <p className="text-gray-400 leading-relaxed">
+                  Bundle your best content, create premium tiers, and turn your existing audience into paying customers.
+                  All while staying completely anonymous.
+                </p>
+              </motion.div>
             </div>
+
+            <motion.div
+              className="text-center py-16 px-8 rounded-3xl bg-gradient-to-br from-red-600/5 to-gray-900/30 border border-red-600/10"
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8 }}
+              viewport={{ once: true, margin: "-100px" }}
+            >
+              <h3 className="text-3xl md:text-4xl font-light text-white mb-6">Why Faceless Creators Choose MassClip</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto text-left">
+                <div className="space-y-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-2 h-2 bg-red-600 rounded-full mt-2 flex-shrink-0"></div>
+                    <p className="text-gray-300">Complete privacy protection - no personal data required</p>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <div className="w-2 h-2 bg-red-600 rounded-full mt-2 flex-shrink-0"></div>
+                    <p className="text-gray-300">Built-in audience discovery without showing your face</p>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <div className="w-2 h-2 bg-red-600 rounded-full mt-2 flex-shrink-0"></div>
+                    <p className="text-gray-300">Anonymous payment processing and withdrawals</p>
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-2 h-2 bg-red-600 rounded-full mt-2 flex-shrink-0"></div>
+                    <p className="text-gray-300">Premium content bundling and pricing tools</p>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <div className="w-2 h-2 bg-red-600 rounded-full mt-2 flex-shrink-0"></div>
+                    <p className="text-gray-300">Direct fan-to-creator monetization channels</p>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <div className="w-2 h-2 bg-red-600 rounded-full mt-2 flex-shrink-0"></div>
+                    <p className="text-gray-300">Analytics dashboard to track anonymous performance</p>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
           </div>
         </section>
       </main>
 
       {/* Footer */}
-      <footer className="relative z-10 py-12 border-t border-white/10">
+      <footer className="relative z-10 py-16 border-t border-gray-800/50">
         <div className="container mx-auto px-4">
           <div className="flex flex-col md:flex-row justify-between items-center">
             <div className="mb-6 md:mb-0">
