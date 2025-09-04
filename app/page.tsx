@@ -168,30 +168,51 @@ export default function LandingPage() {
                 }}
                 className="relative"
               >
-                <motion.div
-                  animate={{
-                    x: [0, 10, 0],
-                    y: [20, 35, 20],
-                    scale: [0.8, 0.9, 0.8],
-                    opacity: [0.3, 0.2, 0.3],
-                  }}
-                  transition={{
-                    duration: 4,
-                    repeat: Number.POSITIVE_INFINITY,
-                    ease: "easeInOut",
-                    repeatType: "reverse",
-                  }}
-                  className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 w-48 h-12 bg-black/20 rounded-full blur-xl"
-                />
+                {/* Phone Body */}
+                <div className="absolute inset-0 bg-gradient-to-br from-gray-800 via-gray-900 to-black rounded-[3rem] shadow-2xl border border-gray-700">
+                  {/* Phone Depth/Side */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-gray-700 to-gray-800 rounded-[3rem] transform translate-x-1 translate-y-1 -z-10" />
 
-                <img
-                  src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/63677835-9A97-4A84-918B-DD1AF62F8019-removebg-preview%202-UefE8mOiDpVV6bRFizvvTreMqRPCuQ.png"
-                  alt="MassClip Phone"
-                  className="w-full max-w-sm h-auto drop-shadow-2xl"
-                  style={{
-                    filter: "drop-shadow(0 25px 50px rgba(0, 0, 0, 0.4))",
-                  }}
-                />
+                  {/* Screen */}
+                  <div className="absolute top-6 left-4 right-4 bottom-6 bg-black rounded-[2.5rem] overflow-hidden border border-gray-600">
+                    {/* Screen Content */}
+                    <div className="h-full bg-gradient-to-br from-gray-900 to-black flex flex-col items-center justify-center text-white p-8">
+                      <div className="text-center space-y-4">
+                        <div className="text-2xl font-thin tracking-wider">SELL</div>
+                        <div className="text-2xl font-thin tracking-wider">MONETIZE</div>
+                        <div className="text-2xl font-thin tracking-wider opacity-70">CAPITALIZE</div>
+                      </div>
+                    </div>
+
+                    {/* Screen Reflection */}
+                    <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none" />
+                  </div>
+
+                  {/* Camera */}
+                  <div className="absolute top-8 left-1/2 transform -translate-x-1/2 w-3 h-3 bg-gray-800 rounded-full border border-gray-600">
+                    <div className="absolute inset-0.5 bg-gray-900 rounded-full">
+                      <div className="absolute inset-0.5 bg-black rounded-full" />
+                    </div>
+                  </div>
+
+                  {/* Speaker */}
+                  <div className="absolute top-6 left-1/2 transform -translate-x-1/2 w-12 h-1 bg-gray-700 rounded-full" />
+
+                  {/* Home Indicator */}
+                  <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 w-32 h-1 bg-white/30 rounded-full" />
+
+                  {/* Side Buttons */}
+                  <div className="absolute left-0 top-20 w-1 h-8 bg-gray-700 rounded-r-sm transform -translate-x-0.5" />
+                  <div className="absolute left-0 top-32 w-1 h-12 bg-gray-700 rounded-r-sm transform -translate-x-0.5" />
+                  <div className="absolute left-0 top-48 w-1 h-12 bg-gray-700 rounded-r-sm transform -translate-x-0.5" />
+
+                  {/* Power Button */}
+                  <div className="absolute right-0 top-24 w-1 h-16 bg-gray-700 rounded-l-sm transform translate-x-0.5" />
+
+                  {/* Phone Highlights */}
+                  <div className="absolute top-0 left-4 right-4 h-32 bg-gradient-to-b from-white/5 to-transparent rounded-t-[2.5rem] pointer-events-none" />
+                  <div className="absolute top-4 left-8 w-16 h-16 bg-white/3 rounded-full blur-xl pointer-events-none" />
+                </div>
               </motion.div>
             </div>
           </div>
