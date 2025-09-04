@@ -87,39 +87,56 @@ export default function LandingPage() {
       {/* Hero Section */}
       <main className="relative z-10 flex items-end justify-start min-h-[calc(100vh-120px)] px-6 pb-16">
         <div className="max-w-7xl mx-auto w-full">
-          <div className="max-w-3xl -ml-4">
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8 }}
-              className="space-y-6"
-            >
-              <h1 className="text-5xl lg:text-7xl font-thin text-white/80 leading-tight">
-                Monetize Your Faceless Content
-              </h1>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-end">
+            <div className="max-w-3xl -ml-4">
+              <motion.div
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8 }}
+                className="space-y-6"
+              >
+                <h1 className="text-5xl lg:text-7xl font-thin text-white/80 leading-tight">
+                  Monetize Your Faceless Content
+                </h1>
 
-              <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
-                Welcome to a simple way to monetize, sell, and get paid for your faceless content.
-              </p>
+                <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
+                  Welcome to a simple way to monetize, sell, and get paid for your faceless content.
+                </p>
 
-              {/* Buttons */}
-              <div className="flex flex-col sm:flex-row gap-4 pt-4">
-                <Button
-                  onClick={handleGetStarted}
-                  className="px-8 py-4 bg-white text-black hover:bg-white/90 font-light rounded-full text-lg transition-all duration-200 hover:scale-105"
-                >
-                  Get Started
-                </Button>
+                {/* Buttons */}
+                <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                  <Button
+                    onClick={handleGetStarted}
+                    className="px-8 py-4 bg-white text-black hover:bg-white/90 font-light rounded-full text-lg transition-all duration-200 hover:scale-105"
+                  >
+                    Get Started
+                  </Button>
 
-                <Button
-                  onClick={handleExplore}
-                  variant="outline"
-                  className="px-8 py-4 border-2 border-white/30 text-white hover:bg-white/10 font-light rounded-full text-lg transition-all duration-200 hover:scale-105 bg-transparent"
-                >
-                  Explore
-                </Button>
-              </div>
-            </motion.div>
+                  <Button
+                    onClick={handleExplore}
+                    variant="outline"
+                    className="px-8 py-4 border-2 border-white/30 text-white hover:bg-white/10 font-light rounded-full text-lg transition-all duration-200 hover:scale-105 bg-transparent"
+                  >
+                    Explore
+                  </Button>
+                </div>
+              </motion.div>
+            </div>
+
+            <div className="hidden lg:flex justify-center items-end">
+              <motion.div
+                initial={{ opacity: 0, x: 30 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.8, delay: 0.2 }}
+                className="relative"
+              >
+                <img
+                  src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/63677835-9A97-4A84-918B-DD1AF62F8019-removebg-preview%202-UefE8mOiDpVV6bRFizvvTreMqRPCuQ.png"
+                  alt="Phone showing SELL MONETIZE CAPITALIZE"
+                  className="w-80 h-auto object-contain"
+                />
+              </motion.div>
+            </div>
           </div>
         </div>
       </main>
