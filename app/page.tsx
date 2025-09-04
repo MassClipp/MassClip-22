@@ -50,24 +50,24 @@ export default function LandingPage() {
                 <ChevronDown className={`w-4 h-4 transition-transform ${isResourcesOpen ? "rotate-180" : ""}`} />
               </button>
               {isResourcesOpen && (
-                <div className="absolute top-full left-0 mt-2 py-2 z-[100] min-w-[200px]">
+                <div className="absolute top-full left-0 mt-2 py-3 px-4 z-[100] min-w-[220px] bg-white/95 backdrop-blur-sm rounded-lg border border-white/20 shadow-lg">
                   <Link
                     href="/resources/free-content"
-                    className="block py-2 px-1 text-white/80 hover:text-white font-light text-sm transition-colors"
+                    className="block py-2 px-2 text-gray-800 hover:text-black font-light text-sm transition-colors hover:bg-gray-100/50 rounded"
                     onClick={() => setIsResourcesOpen(false)}
                   >
                     How to use free content
                   </Link>
                   <Link
                     href="/resources/optimize-storefront"
-                    className="block py-2 px-1 text-white/80 hover:text-white font-light text-sm transition-colors"
+                    className="block py-2 px-2 text-gray-800 hover:text-black font-light text-sm transition-colors hover:bg-gray-100/50 rounded"
                     onClick={() => setIsResourcesOpen(false)}
                   >
                     How to optimize your storefront
                   </Link>
                   <Link
                     href="/resources/organize-bundles"
-                    className="block py-2 px-1 text-white/80 hover:text-white font-light text-sm transition-colors"
+                    className="block py-2 px-2 text-gray-800 hover:text-black font-light text-sm transition-colors hover:bg-gray-100/50 rounded"
                     onClick={() => setIsResourcesOpen(false)}
                   >
                     How to organize your bundles
@@ -87,56 +87,39 @@ export default function LandingPage() {
       {/* Hero Section */}
       <main className="relative z-10 flex items-end justify-start min-h-[calc(100vh-120px)] px-6 pb-16">
         <div className="max-w-7xl mx-auto w-full">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-end">
-            <div className="max-w-3xl -ml-4">
-              <motion.div
-                initial={{ opacity: 0, y: 30 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.8 }}
-                className="space-y-6"
-              >
-                <h1 className="text-5xl lg:text-7xl font-thin text-white/80 leading-tight">
-                  Monetize Your Faceless Content
-                </h1>
+          <div className="max-w-3xl -ml-4">
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8 }}
+              className="space-y-6"
+            >
+              <h1 className="text-5xl lg:text-7xl font-thin text-white/80 leading-tight">
+                Monetize Your Faceless Content
+              </h1>
 
-                <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
-                  Welcome to a simple way to monetize, sell, and get paid for your faceless content.
-                </p>
+              <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
+                Welcome to a simple way to monetize, sell, and get paid for your faceless content.
+              </p>
 
-                {/* Buttons */}
-                <div className="flex flex-col sm:flex-row gap-4 pt-4">
-                  <Button
-                    onClick={handleGetStarted}
-                    className="px-8 py-4 bg-white text-black hover:bg-white/90 font-light rounded-full text-lg transition-all duration-200 hover:scale-105"
-                  >
-                    Get Started
-                  </Button>
+              {/* Buttons */}
+              <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                <Button
+                  onClick={handleGetStarted}
+                  className="px-8 py-4 bg-white text-black hover:bg-white/90 font-light rounded-full text-lg transition-all duration-200 hover:scale-105"
+                >
+                  Get Started
+                </Button>
 
-                  <Button
-                    onClick={handleExplore}
-                    variant="outline"
-                    className="px-8 py-4 border-2 border-white/30 text-white hover:bg-white/10 font-light rounded-full text-lg transition-all duration-200 hover:scale-105 bg-transparent"
-                  >
-                    Explore
-                  </Button>
-                </div>
-              </motion.div>
-            </div>
-
-            <div className="hidden lg:flex justify-center items-end w-full">
-              <motion.div
-                initial={{ opacity: 0, x: 30 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.8, delay: 0.2 }}
-                className="relative w-full h-full flex items-center justify-center"
-              >
-                <img
-                  src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/63677835-9A97-4A84-918B-DD1AF62F8019-removebg-preview%202-UefE8mOiDpVV6bRFizvvTreMqRPCuQ.png"
-                  alt="Phone showing SELL MONETIZE CAPITALIZE"
-                  className="w-full h-auto object-contain max-h-[70vh]"
-                />
-              </motion.div>
-            </div>
+                <Button
+                  onClick={handleExplore}
+                  variant="outline"
+                  className="px-8 py-4 border-2 border-white/30 text-white hover:bg-white/10 font-light rounded-full text-lg transition-all duration-200 hover:scale-105 bg-transparent"
+                >
+                  Explore
+                </Button>
+              </div>
+            </motion.div>
           </div>
         </div>
       </main>
