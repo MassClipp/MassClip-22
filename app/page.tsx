@@ -51,24 +51,24 @@ export default function LandingPage() {
               </button>
               {isResourcesOpen && (
                 <div className="absolute top-full left-0 mt-2 z-50">
-                  <div className="flex flex-col space-y-2">
+                  <div className="flex flex-col py-2 min-w-[200px]">
                     <a
                       href="/resources/free-content"
-                      className="text-white/90 hover:text-white font-light text-sm transition-colors whitespace-nowrap"
+                      className="text-white/90 hover:text-white font-light text-sm transition-colors whitespace-nowrap px-2 py-2 block"
                       onClick={() => setIsResourcesOpen(false)}
                     >
                       How to use free content
                     </a>
                     <a
                       href="/resources/optimize-storefront"
-                      className="text-white/90 hover:text-white font-light text-sm transition-colors whitespace-nowrap"
+                      className="text-white/90 hover:text-white font-light text-sm transition-colors whitespace-nowrap px-2 py-2 block"
                       onClick={() => setIsResourcesOpen(false)}
                     >
                       How to optimize your storefront
                     </a>
                     <a
                       href="/resources/organize-bundles"
-                      className="text-white/90 hover:text-white font-light text-sm transition-colors whitespace-nowrap"
+                      className="text-white/90 hover:text-white font-light text-sm transition-colors whitespace-nowrap px-2 py-2 block"
                       onClick={() => setIsResourcesOpen(false)}
                     >
                       How to organize your bundles
