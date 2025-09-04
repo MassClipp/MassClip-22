@@ -88,26 +88,48 @@ export default function LandingPage() {
             </div>
 
             {/* Right side - larger stylized text with stainless steel gradients */}
-            <div className="hidden lg:flex flex-col items-center justify-center space-y-6 h-full">
+            <div className="hidden lg:flex flex-col items-center justify-center space-y-8 h-full">
               <motion.div
                 initial={{ opacity: 0, x: 50 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 1, delay: 0.3 }}
                 className="text-center"
               >
-                <div className="text-8xl xl:text-9xl font-extralight leading-none tracking-tight">
-                  {/* Capitalize - Blue-silver gradient */}
-                  <div className="bg-gradient-to-br from-blue-200 via-slate-100 to-blue-300 bg-clip-text text-transparent mb-4 drop-shadow-2xl">
-                    Capitalize
-                  </div>
-                  {/* Sell - Gold-silver gradient */}
-                  <div className="bg-gradient-to-br from-yellow-200 via-slate-50 to-amber-300 bg-clip-text text-transparent mb-4 drop-shadow-2xl">
-                    Sell
-                  </div>
-                  {/* Monetize - Green-silver gradient */}
-                  <div className="bg-gradient-to-br from-emerald-200 via-slate-100 to-teal-300 bg-clip-text text-transparent drop-shadow-2xl">
-                    Monetize
-                  </div>
+                {/* Capitalize - Blue-silver gradient */}
+                <div
+                  className="text-[12rem] xl:text-[14rem] font-extralight leading-none tracking-tight transform-gpu"
+                  style={{
+                    textShadow:
+                      "0 8px 16px rgba(59, 130, 246, 0.3), 0 4px 8px rgba(255, 255, 255, 0.2), 0 2px 4px rgba(0, 0, 0, 0.1)",
+                    filter: "drop-shadow(0 0 20px rgba(59, 130, 246, 0.4))",
+                    WebkitTextStroke: "1px rgba(255, 255, 255, 0.1)",
+                  }}
+                >
+                  Capitalize
+                </div>
+                {/* Sell - Gold-silver gradient */}
+                <div
+                  className="text-[12rem] xl:text-[14rem] font-extralight leading-none tracking-tight transform-gpu"
+                  style={{
+                    textShadow:
+                      "0 8px 16px rgba(245, 158, 11, 0.3), 0 4px 8px rgba(255, 255, 255, 0.2), 0 2px 4px rgba(0, 0, 0, 0.1)",
+                    filter: "drop-shadow(0 0 20px rgba(245, 158, 11, 0.4))",
+                    WebkitTextStroke: "1px rgba(255, 255, 255, 0.1)",
+                  }}
+                >
+                  Sell
+                </div>
+                {/* Monetize - Green-silver gradient */}
+                <div
+                  className="text-[12rem] xl:text-[14rem] font-extralight leading-none tracking-tight transform-gpu"
+                  style={{
+                    textShadow:
+                      "0 8px 16px rgba(16, 185, 129, 0.3), 0 4px 8px rgba(255, 255, 255, 0.2), 0 2px 4px rgba(0, 0, 0, 0.1)",
+                    filter: "drop-shadow(0 0 20px rgba(16, 185, 129, 0.4))",
+                    WebkitTextStroke: "1px rgba(255, 255, 255, 0.1)",
+                  }}
+                >
+                  Monetize
                 </div>
               </motion.div>
 
@@ -116,11 +138,29 @@ export default function LandingPage() {
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.8, delay: 0.6 }}
-                className="flex space-x-2"
+                className="flex space-x-4"
               >
-                <div className="w-16 h-px bg-gradient-to-r from-transparent via-blue-300/60 to-transparent"></div>
-                <div className="w-16 h-px bg-gradient-to-r from-transparent via-yellow-300/60 to-transparent"></div>
-                <div className="w-16 h-px bg-gradient-to-r from-transparent via-emerald-300/60 to-transparent"></div>
+                <div
+                  className="w-20 h-1 rounded-full transform rotate-3"
+                  style={{
+                    background: "linear-gradient(45deg, #3b82f6, #ffffff, #60a5fa)",
+                    boxShadow: "0 4px 8px rgba(59, 130, 246, 0.3), inset 0 1px 2px rgba(255, 255, 255, 0.5)",
+                  }}
+                ></div>
+                <div
+                  className="w-20 h-1 rounded-full transform -rotate-2"
+                  style={{
+                    background: "linear-gradient(45deg, #f59e0b, #ffffff, #fbbf24)",
+                    boxShadow: "0 4px 8px rgba(245, 158, 11, 0.3), inset 0 1px 2px rgba(255, 255, 255, 0.5)",
+                  }}
+                ></div>
+                <div
+                  className="w-20 h-1 rounded-full transform rotate-1"
+                  style={{
+                    background: "linear-gradient(45deg, #10b981, #ffffff, #34d399)",
+                    boxShadow: "0 4px 8px rgba(16, 185, 129, 0.3), inset 0 1px 2px rgba(255, 255, 255, 0.5)",
+                  }}
+                ></div>
               </motion.div>
             </div>
           </div>
