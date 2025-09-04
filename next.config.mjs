@@ -3,7 +3,7 @@ const nextConfig = {
   experimental: {
     serverComponentsExternalPackages: ["firebase-admin"],
     optimizeCss: true,
-    scrollRestoration: true,
+    optimizePackageImports: ['lucide-react', '@radix-ui/react-icons'],
   },
   eslint: {
     ignoreDuringBuilds: true,
@@ -18,11 +18,20 @@ const nextConfig = {
       "storage.googleapis.com",
       "pub-3626123a908346a7a8be8d9295f44e26.r2.dev",
     ],
-    unoptimized: false,
+    unoptimized: false, // Enable Next.js image optimization
     formats: ['image/webp', 'image/avif'],
   },
   compress: true,
-  poweredByHeader: false,
+  ...(process.env.ANALYZE === 'true' && {
+    webpack: (config) => {
+      config.plugins.push(
+        new (require('@next/bundle-analyzer')({
+          enabled: true,
+        }))()
+      )
+      return config
+    },
+  }),
   async headers() {
     return [
       {
@@ -35,18 +44,6 @@ const nextConfig = {
           {
             key: "Cross-Origin-Embedder-Policy",
             value: "unsafe-none",
-          },
-          {
-            key: "X-DNS-Prefetch-Control",
-            value: "on",
-          },
-          {
-            key: "X-Frame-Options",
-            value: "DENY",
-          },
-          {
-            key: "X-Content-Type-Options",
-            value: "nosniff",
           },
         ],
       },

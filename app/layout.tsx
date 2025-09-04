@@ -106,6 +106,16 @@ export default function RootLayout({
                 contactType: "customer service",
                 email: "support@massclip.com",
               },
+              foundingDate: "2024",
+              knowsAbout: [
+                "Content Creation",
+                "Digital Marketing",
+                "Faceless Content",
+                "Video Production",
+                "Content Monetization",
+              ],
+              areaServed: "Worldwide",
+              serviceType: "Digital Content Platform",
             }),
           }}
         />
@@ -121,10 +131,7 @@ export default function RootLayout({
               description: "The #1 platform for faceless creators to monetize anonymous content",
               potentialAction: {
                 "@type": "SearchAction",
-                target: {
-                  "@type": "EntryPoint",
-                  urlTemplate: "https://massclip.com/search?q={search_term_string}",
-                },
+                target: "https://massclip.com/search?q={search_term_string}",
                 "query-input": "required name=search_term_string",
               },
             }),
@@ -139,8 +146,7 @@ export default function RootLayout({
               "@type": "SoftwareApplication",
               name: "MassClip",
               applicationCategory: "BusinessApplication",
-              operatingSystem: "Web",
-              description: "Platform for faceless creators to monetize anonymous content",
+              operatingSystem: "Web Browser",
               offers: {
                 "@type": "Offer",
                 price: "0",
