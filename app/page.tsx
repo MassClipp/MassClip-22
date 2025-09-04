@@ -129,10 +129,13 @@ export default function LandingPage() {
                 <img
                   src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/copy_F4D1F389-0F67-4BC7-8D61-765ACE700108.JPEG-gqY3xEoKD6wy3wN7LioOeGOSduoxSf.jpeg"
                   alt="MassClip mobile app interface"
-                  className="h-[50vh] w-auto object-contain mix-blend-screen"
+                  className="h-[50vh] w-auto object-contain"
                   style={{
-                    filter: "brightness(1.1) contrast(1.1)",
-                    maskImage: "radial-gradient(ellipse at center, black 60%, transparent 100%)",
+                    filter: "brightness(1.8) contrast(1.5) saturate(1.2)",
+                    mixBlendMode: "screen",
+                    maskImage: "radial-gradient(ellipse 70% 80% at center, black 50%, transparent 85%)",
+                    WebkitMaskImage: "radial-gradient(ellipse 70% 80% at center, black 50%, transparent 85%)",
+                    dropShadow: "0 20px 40px rgba(255, 255, 255, 0.1)",
                   }}
                 />
               </motion.div>
