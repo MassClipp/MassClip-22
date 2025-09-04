@@ -21,8 +21,9 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-black relative overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-tl from-white/20 via-white/5 to-transparent opacity-60" />
-      <div className="absolute bottom-0 right-0 w-1/2 h-1/2 bg-gradient-radial from-white/15 via-white/8 to-transparent opacity-80" />
+      <div className="absolute inset-0 bg-gradient-to-tl from-white/30 via-white/10 to-transparent opacity-70" />
+      <div className="absolute bottom-0 right-0 w-1/2 h-1/2 bg-gradient-radial from-white/25 via-white/12 to-transparent opacity-90" />
+      <div className="absolute top-0 left-0 w-1/3 h-1/3 bg-gradient-radial from-white/15 via-white/5 to-transparent opacity-60" />
 
       {/* Header */}
       <header className="relative z-10 px-6 py-6">
@@ -46,24 +47,24 @@ export default function LandingPage() {
                 <ChevronDown className={`w-4 h-4 transition-transform ${isResourcesOpen ? "rotate-180" : ""}`} />
               </button>
               {isResourcesOpen && (
-                <div className="absolute top-full left-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-2 z-50 border border-gray-200">
+                <div className="absolute top-full left-0 mt-2 w-48 bg-white rounded-lg shadow-xl py-1 z-50 border border-gray-300">
                   <Link
                     href="/resources/free-content"
-                    className="block px-4 py-1.5 text-black hover:bg-gray-50 font-light text-sm"
+                    className="block px-3 py-2 text-gray-900 hover:bg-gray-100 font-medium text-sm transition-colors"
                     onClick={() => setIsResourcesOpen(false)}
                   >
                     How to use free content
                   </Link>
                   <Link
                     href="/resources/optimize-storefront"
-                    className="block px-4 py-1.5 text-black hover:bg-gray-50 font-light text-sm"
+                    className="block px-3 py-2 text-gray-900 hover:bg-gray-100 font-medium text-sm transition-colors"
                     onClick={() => setIsResourcesOpen(false)}
                   >
                     How to optimize your storefront
                   </Link>
                   <Link
                     href="/resources/organize-bundles"
-                    className="block px-4 py-1.5 text-black hover:bg-gray-50 font-light text-sm"
+                    className="block px-3 py-2 text-gray-900 hover:bg-gray-100 font-medium text-sm transition-colors"
                     onClick={() => setIsResourcesOpen(false)}
                   >
                     How to organize your bundles
@@ -121,7 +122,7 @@ export default function LandingPage() {
       </main>
 
       {/* Earning Money Section */}
-      <section className="relative z-10 bg-white py-20 px-6">
+      <section className="relative z-10 bg-black py-20 px-6">
         <div className="max-w-7xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
@@ -130,17 +131,17 @@ export default function LandingPage() {
             viewport={{ once: true }}
             className="space-y-8"
           >
-            <h2 className="text-4xl lg:text-5xl font-thin text-black">Earning Money As A Faceless Creator</h2>
+            <h2 className="text-4xl lg:text-5xl font-thin text-white">Earning Money As A Faceless Creator</h2>
 
             <div className="max-w-4xl">
-              <p className="text-lg lg:text-xl text-black/70 leading-relaxed font-light">
+              <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
                 If you run a faceless page, you already create content that other creators need. Whether it is
                 motivation, memes, sports, trending topics, or cinema, your posts can be packaged and sold. Creators are
                 constantly looking for ready-to-use content that saves them time and effort, and you can turn what you
                 are already making into a new source of income.
               </p>
 
-              <p className="text-lg lg:text-xl text-black/70 leading-relaxed font-light mt-6">
+              <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light mt-6">
                 We provide you with a profile style storefront where you can showcase your work. Share free downloads to
                 grow your audience and offer premium content for purchase, giving creators exactly what they want while
                 you build a steady stream of revenue.
@@ -151,7 +152,7 @@ export default function LandingPage() {
       </section>
 
       {/* What You Can Sell Section */}
-      <section className="relative z-10 bg-black py-20 px-6">
+      <section className="relative z-10 bg-white py-20 px-6">
         <div className="max-w-7xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
@@ -160,7 +161,7 @@ export default function LandingPage() {
             viewport={{ once: true }}
             className="space-y-12"
           >
-            <h2 className="text-4xl lg:text-5xl font-thin text-white">What You Can Sell</h2>
+            <h2 className="text-4xl lg:text-5xl font-thin text-black">What You Can Sell</h2>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
               <motion.div
