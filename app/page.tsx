@@ -46,24 +46,24 @@ export default function LandingPage() {
                 <ChevronDown className={`w-4 h-4 transition-transform ${isResourcesOpen ? "rotate-180" : ""}`} />
               </button>
               {isResourcesOpen && (
-                <div className="absolute top-full left-0 mt-2 w-56 bg-white rounded-lg shadow-lg py-1 z-50 border border-gray-200">
+                <div className="absolute top-full left-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-2 z-50 border border-gray-200">
                   <Link
                     href="/resources/free-content"
-                    className="block px-3 py-2 text-gray-900 hover:bg-gray-100 font-light text-sm"
+                    className="block px-4 py-1.5 text-black hover:bg-gray-50 font-light text-sm"
                     onClick={() => setIsResourcesOpen(false)}
                   >
                     How to use free content
                   </Link>
                   <Link
                     href="/resources/optimize-storefront"
-                    className="block px-3 py-2 text-gray-900 hover:bg-gray-100 font-light text-sm"
+                    className="block px-4 py-1.5 text-black hover:bg-gray-50 font-light text-sm"
                     onClick={() => setIsResourcesOpen(false)}
                   >
                     How to optimize your storefront
                   </Link>
                   <Link
                     href="/resources/organize-bundles"
-                    className="block px-3 py-2 text-gray-900 hover:bg-gray-100 font-light text-sm"
+                    className="block px-4 py-1.5 text-black hover:bg-gray-50 font-light text-sm"
                     onClick={() => setIsResourcesOpen(false)}
                   >
                     How to organize your bundles
@@ -220,9 +220,9 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="relative z-10 bg-white py-12 px-6">
+      <footer className="relative z-10 bg-white py-6 px-6">
         <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             {/* Company */}
             <div>
               <h3 className="text-black font-light text-lg mb-4">Company</h3>
@@ -297,7 +297,7 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div className="border-t border-gray-200 mt-8 pt-6">
+          <div className="border-t border-gray-200 mt-6 pt-4">
             <div className="flex flex-col md:flex-row justify-between items-center">
               <div className="text-gray-600 font-light">© 2025 MassClip. All rights reserved.</div>
               <div className="text-black font-light text-xl mt-4 md:mt-0">MassClip</div>
