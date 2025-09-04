@@ -20,38 +20,52 @@ export default function LandingPage() {
     <div className="min-h-screen bg-black relative overflow-hidden">
       <div className="absolute inset-0">
         <div
-          className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-white/5 animate-pulse"
+          className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-white/15 animate-pulse"
           style={{ animationDuration: "8s" }}
         />
         <div
-          className="absolute inset-0 bg-gradient-to-tl from-transparent via-white/8 to-white/12 opacity-60"
+          className="absolute inset-0 bg-gradient-to-tl from-transparent via-white/25 to-white/30 opacity-80"
           style={{
             animation: "float 12s ease-in-out infinite",
             animationDelay: "2s",
           }}
         />
         <div
-          className="absolute inset-0 bg-gradient-to-r from-white/5 via-white/15 to-white/3 opacity-40"
+          className="absolute inset-0 bg-gradient-to-r from-white/15 via-white/35 to-white/10 opacity-60"
           style={{
             animation: "drift 15s linear infinite",
             animationDelay: "4s",
+          }}
+        />
+        <div
+          className="absolute inset-0 bg-gradient-to-bl from-white/10 via-white/20 to-transparent opacity-50"
+          style={{
+            animation: "sweep 20s ease-in-out infinite",
+            animationDelay: "6s",
           }}
         />
       </div>
 
       <style jsx>{`
         @keyframes float {
-          0%, 100% { transform: translateY(0px) rotate(0deg); opacity: 0.6; }
-          50% { transform: translateY(-20px) rotate(1deg); opacity: 0.8; }
+          0%, 100% { transform: translateY(0px) translateX(0px) rotate(0deg); opacity: 0.8; }
+          50% { transform: translateY(-40px) translateX(30px) rotate(2deg); opacity: 1; }
         }
         @keyframes drift {
-          0% { transform: translateX(-100px) scale(1); }
-          50% { transform: translateX(100px) scale(1.05); }
-          100% { transform: translateX(-100px) scale(1); }
+          0% { transform: translateX(-200px) translateY(0px) scale(1); }
+          50% { transform: translateX(200px) translateY(-50px) scale(1.1); }
+          100% { transform: translateX(-200px) translateY(0px) scale(1); }
+        }
+        @keyframes sweep {
+          0% { transform: translateX(-300px) translateY(100px) rotate(0deg); }
+          25% { transform: translateX(100px) translateY(-50px) rotate(90deg); }
+          50% { transform: translateX(300px) translateY(50px) rotate(180deg); }
+          75% { transform: translateX(-100px) translateY(100px) rotate(270deg); }
+          100% { transform: translateX(-300px) translateY(100px) rotate(360deg); }
         }
       `}</style>
 
-      <div className="absolute bottom-0 right-0 w-1/2 h-1/2 bg-gradient-radial from-white/15 via-white/8 to-transparent opacity-80" />
+      <div className="absolute bottom-0 right-0 w-1/2 h-1/2 bg-gradient-radial from-white/25 via-white/15 to-transparent opacity-90" />
 
       {/* Header */}
       <header className="relative z-10 px-6 py-6">
@@ -115,8 +129,7 @@ export default function LandingPage() {
         </div>
       </main>
 
-      {/* Earning Money Section */}
-      <section className="relative z-10 bg-white py-20 px-6">
+      <section className="relative z-10 py-20 px-6">
         <div className="max-w-7xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
@@ -125,17 +138,17 @@ export default function LandingPage() {
             viewport={{ once: true }}
             className="space-y-8"
           >
-            <h2 className="text-4xl lg:text-5xl font-thin text-black">Earning Money As A Faceless Creator</h2>
+            <h2 className="text-4xl lg:text-5xl font-thin text-white">Earning Money As A Faceless Creator</h2>
 
             <div className="max-w-4xl">
-              <p className="text-lg lg:text-xl text-black/70 leading-relaxed font-light">
+              <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
                 If you run a faceless page, you already create content that other creators need. Whether it is
                 motivation, memes, sports, trending topics, or cinema, your posts can be packaged and sold. Creators are
                 constantly looking for ready-to-use content that saves them time and effort, and you can turn what you
                 are already making into a new source of income.
               </p>
 
-              <p className="text-lg lg:text-xl text-black/70 leading-relaxed font-light mt-6">
+              <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light mt-6">
                 We provide you with a profile style storefront where you can showcase your work. Share free downloads to
                 grow your audience and offer premium content for purchase, giving creators exactly what they want while
                 you build a steady stream of revenue.
@@ -146,7 +159,7 @@ export default function LandingPage() {
       </section>
 
       {/* What You Can Sell Section */}
-      <section className="relative z-10 bg-black py-20 px-6">
+      <section className="relative z-10 py-20 px-6">
         <div className="max-w-7xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
