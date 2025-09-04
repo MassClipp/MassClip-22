@@ -50,24 +50,24 @@ export default function LandingPage() {
                 <ChevronDown className={`w-4 h-4 transition-transform ${isResourcesOpen ? "rotate-180" : ""}`} />
               </button>
               {isResourcesOpen && (
-                <div className="absolute top-full left-0 mt-2 py-3 px-4 z-[100] min-w-[220px] bg-white/95 backdrop-blur-sm rounded-lg border border-white/20 shadow-lg">
+                <div className="absolute top-full left-0 mt-2 z-[100] min-w-[220px]">
                   <Link
                     href="/resources/free-content"
-                    className="block py-2 px-2 text-gray-800 hover:text-black font-light text-sm transition-colors hover:bg-gray-100/50 rounded"
+                    className="block py-3 text-white/90 hover:text-white font-light text-sm transition-colors"
                     onClick={() => setIsResourcesOpen(false)}
                   >
                     How to use free content
                   </Link>
                   <Link
                     href="/resources/optimize-storefront"
-                    className="block py-2 px-2 text-gray-800 hover:text-black font-light text-sm transition-colors hover:bg-gray-100/50 rounded"
+                    className="block py-3 text-white/90 hover:text-white font-light text-sm transition-colors"
                     onClick={() => setIsResourcesOpen(false)}
                   >
                     How to optimize your storefront
                   </Link>
                   <Link
                     href="/resources/organize-bundles"
-                    className="block py-2 px-2 text-gray-800 hover:text-black font-light text-sm transition-colors hover:bg-gray-100/50 rounded"
+                    className="block py-3 text-white/90 hover:text-white font-light text-sm transition-colors"
                     onClick={() => setIsResourcesOpen(false)}
                   >
                     How to organize your bundles
@@ -125,38 +125,38 @@ export default function LandingPage() {
 
             <div className="hidden lg:flex justify-center items-center relative">
               <motion.div
-                initial={{ opacity: 0, x: 50, rotateY: -15 }}
+                initial={{ opacity: 0, x: 50, rotateY: -25 }}
                 animate={{
                   opacity: 1,
                   x: 0,
-                  y: [0, -20, 0],
-                  rotateY: [-15, -10, -15],
-                  rotateX: [5, 10, 5],
-                  rotateZ: [2, -2, 2],
+                  y: [0, -80, 0],
+                  rotateY: [-25, 15, -25],
+                  rotateX: [10, -15, 10],
+                  rotateZ: [5, -8, 5],
                 }}
                 transition={{
                   opacity: { duration: 1, delay: 0.5 },
                   x: { duration: 1, delay: 0.5 },
                   y: {
-                    duration: 4,
+                    duration: 3,
                     repeat: Number.POSITIVE_INFINITY,
                     ease: "easeInOut",
                     repeatType: "reverse",
                   },
                   rotateY: {
-                    duration: 6,
+                    duration: 4,
                     repeat: Number.POSITIVE_INFINITY,
                     ease: "easeInOut",
                     repeatType: "reverse",
                   },
                   rotateX: {
-                    duration: 5,
+                    duration: 3.5,
                     repeat: Number.POSITIVE_INFINITY,
                     ease: "easeInOut",
                     repeatType: "reverse",
                   },
                   rotateZ: {
-                    duration: 7,
+                    duration: 5,
                     repeat: Number.POSITIVE_INFINITY,
                     ease: "easeInOut",
                     repeatType: "reverse",
@@ -166,10 +166,10 @@ export default function LandingPage() {
                   perspective: "1000px",
                   transformStyle: "preserve-3d",
                 }}
-                className="relative"
+                className="relative w-80 h-[600px]"
               >
                 {/* Phone Body */}
-                <div className="absolute inset-0 bg-gradient-to-br from-gray-800 via-gray-900 to-black rounded-[3rem] shadow-2xl border border-gray-700">
+                <div className="w-full h-full bg-gradient-to-br from-gray-800 via-gray-900 to-black rounded-[3rem] shadow-2xl border border-gray-700 relative">
                   {/* Phone Depth/Side */}
                   <div className="absolute inset-0 bg-gradient-to-r from-gray-700 to-gray-800 rounded-[3rem] transform translate-x-1 translate-y-1 -z-10" />
 
