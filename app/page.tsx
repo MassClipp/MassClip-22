@@ -96,8 +96,8 @@ export default function LandingPage() {
                 className="text-center"
               >
                 {/* Single flowing gradient across all three words */}
-                <div className="text-9xl xl:text-[12rem] font-extralight leading-none tracking-tight">
-                  <div className="bg-gradient-to-br from-blue-600 via-yellow-400 via-emerald-500 to-white bg-clip-text text-transparent drop-shadow-2xl">
+                <div className="text-7xl xl:text-8xl font-extralight leading-none tracking-tight">
+                  <div className="bg-gradient-to-br from-slate-300 via-cyan-200 via-blue-100 to-white bg-clip-text text-transparent drop-shadow-2xl">
                     <div className="mb-2">Capitalize</div>
                     <div className="mb-2">Sell</div>
                     <div>Monetize</div>
@@ -112,9 +112,9 @@ export default function LandingPage() {
                 transition={{ duration: 0.8, delay: 0.6 }}
                 className="flex space-x-3"
               >
-                <div className="w-20 h-px bg-gradient-to-r from-transparent via-blue-600/80 to-transparent shadow-lg"></div>
-                <div className="w-20 h-px bg-gradient-to-r from-transparent via-yellow-400/80 to-transparent shadow-lg"></div>
-                <div className="w-20 h-px bg-gradient-to-r from-transparent via-emerald-500/80 to-transparent shadow-lg"></div>
+                <div className="w-20 h-px bg-gradient-to-r from-transparent via-slate-300/80 to-transparent shadow-lg"></div>
+                <div className="w-20 h-px bg-gradient-to-r from-transparent via-cyan-200/80 to-transparent shadow-lg"></div>
+                <div className="w-20 h-px bg-gradient-to-r from-transparent via-blue-100/80 to-transparent shadow-lg"></div>
                 <div className="w-20 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent shadow-lg"></div>
               </motion.div>
             </div>
