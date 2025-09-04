@@ -50,8 +50,8 @@ export default function LandingPage() {
       {/* Hero Section */}
       <main className="relative z-10 flex items-end justify-start min-h-[calc(100vh-120px)] px-6 pb-16">
         <div className="max-w-7xl mx-auto w-full">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-end">
-            {/* Left Content */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-end">
+            {/* Left side - existing content */}
             <div className="max-w-3xl ml-8 lg:ml-16">
               <motion.div
                 initial={{ opacity: 0, y: 30 }}
@@ -87,8 +87,8 @@ export default function LandingPage() {
               </motion.div>
             </div>
 
-            {/* Right Side Gradient Text */}
-            <div className="hidden lg:flex flex-col justify-end items-end pr-8 space-y-4">
+            {/* Right side stylized text with gradients and modern styling */}
+            <div className="hidden lg:flex flex-col items-end justify-end space-y-4 pr-8">
               <motion.div
                 initial={{ opacity: 0, x: 50 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -96,24 +96,24 @@ export default function LandingPage() {
                 className="text-right"
               >
                 <div className="text-6xl xl:text-8xl font-extralight leading-none">
-                  <div className="bg-gradient-to-br from-white via-white/90 to-white/60 bg-clip-text text-transparent mb-2">
-                    CAPITALIZE
+                  <div className="bg-gradient-to-r from-white via-white/90 to-white/70 bg-clip-text text-transparent mb-2">
+                    Capitalize
                   </div>
-                  <div className="bg-gradient-to-br from-white/80 via-white/70 to-white/40 bg-clip-text text-transparent mb-2">
-                    SELL
+                  <div className="bg-gradient-to-r from-white/80 via-white/95 to-white/60 bg-clip-text text-transparent mb-2">
+                    Sell
                   </div>
-                  <div className="bg-gradient-to-br from-white/90 via-white/80 to-white/50 bg-clip-text text-transparent">
-                    MONETIZE
+                  <div className="bg-gradient-to-r from-white/70 via-white to-white/80 bg-clip-text text-transparent">
+                    Monetize
                   </div>
                 </div>
               </motion.div>
 
-              {/* Subtle Accent Line */}
+              {/* Subtle accent elements for professional SaaS feel */}
               <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: "100%" }}
-                transition={{ duration: 1.2, delay: 0.8 }}
-                className="h-px bg-gradient-to-r from-transparent via-white/30 to-white/60 max-w-xs"
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.8, delay: 0.6 }}
+                className="w-24 h-px bg-gradient-to-r from-transparent via-white/40 to-transparent"
               />
             </div>
           </div>
