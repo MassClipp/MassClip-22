@@ -50,39 +50,72 @@ export default function LandingPage() {
       {/* Hero Section */}
       <main className="relative z-10 flex items-end justify-start min-h-[calc(100vh-120px)] px-6 pb-16">
         <div className="max-w-7xl mx-auto w-full">
-          <div className="max-w-3xl ml-8 lg:ml-16">
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8 }}
-              className="space-y-6"
-            >
-              <h1 className="text-5xl lg:text-7xl font-thin text-white/80 leading-tight">
-                Monetize Your Faceless Content
-              </h1>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-end">
+            {/* Left Content */}
+            <div className="max-w-3xl ml-8 lg:ml-16">
+              <motion.div
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8 }}
+                className="space-y-6"
+              >
+                <h1 className="text-5xl lg:text-7xl font-thin text-white/80 leading-tight">
+                  Monetize Your Faceless Content
+                </h1>
 
-              <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
-                Welcome to a simple way to monetize, sell, and get paid for your faceless content.
-              </p>
+                <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
+                  Welcome to a simple way to monetize, sell, and get paid for your faceless content.
+                </p>
 
-              {/* Buttons */}
-              <div className="flex flex-col sm:flex-row gap-4 pt-4">
-                <Button
-                  onClick={handleGetStarted}
-                  className="px-8 py-4 bg-white text-black hover:bg-white/90 font-light rounded-full text-lg transition-all duration-200 hover:scale-105"
-                >
-                  Get Started
-                </Button>
+                {/* Buttons */}
+                <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                  <Button
+                    onClick={handleGetStarted}
+                    className="px-8 py-4 bg-white text-black hover:bg-white/90 font-light rounded-full text-lg transition-all duration-200 hover:scale-105"
+                  >
+                    Get Started
+                  </Button>
 
-                <Button
-                  onClick={handleExplore}
-                  variant="outline"
-                  className="px-8 py-4 border-2 border-white/30 text-white hover:bg-white/10 font-light rounded-full text-lg transition-all duration-200 hover:scale-105 bg-transparent"
-                >
-                  Explore
-                </Button>
-              </div>
-            </motion.div>
+                  <Button
+                    onClick={handleExplore}
+                    variant="outline"
+                    className="px-8 py-4 border-2 border-white/30 text-white hover:bg-white/10 font-light rounded-full text-lg transition-all duration-200 hover:scale-105 bg-transparent"
+                  >
+                    Explore
+                  </Button>
+                </div>
+              </motion.div>
+            </div>
+
+            {/* Right Side Gradient Text */}
+            <div className="hidden lg:flex flex-col justify-end items-end pr-8 space-y-4">
+              <motion.div
+                initial={{ opacity: 0, x: 50 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 1, delay: 0.3 }}
+                className="text-right"
+              >
+                <div className="text-6xl xl:text-8xl font-extralight leading-none">
+                  <div className="bg-gradient-to-br from-white via-white/90 to-white/60 bg-clip-text text-transparent mb-2">
+                    CAPITALIZE
+                  </div>
+                  <div className="bg-gradient-to-br from-white/80 via-white/70 to-white/40 bg-clip-text text-transparent mb-2">
+                    SELL
+                  </div>
+                  <div className="bg-gradient-to-br from-white/90 via-white/80 to-white/50 bg-clip-text text-transparent">
+                    MONETIZE
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Subtle Accent Line */}
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: "100%" }}
+                transition={{ duration: 1.2, delay: 0.8 }}
+                className="h-px bg-gradient-to-r from-transparent via-white/30 to-white/60 max-w-xs"
+              />
+            </div>
           </div>
         </div>
       </main>
