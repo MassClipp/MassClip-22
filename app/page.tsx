@@ -123,17 +123,17 @@ export default function LandingPage() {
               </motion.div>
             </div>
 
-            <div className="hidden lg:flex justify-center items-end">
+            <div className="hidden lg:flex justify-center items-end w-full">
               <motion.div
                 initial={{ opacity: 0, x: 30 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.8, delay: 0.2 }}
-                className="relative"
+                className="relative w-full max-w-lg"
               >
                 <img
                   src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/63677835-9A97-4A84-918B-DD1AF62F8019-removebg-preview%202-UefE8mOiDpVV6bRFizvvTreMqRPCuQ.png"
                   alt="Phone showing SELL MONETIZE CAPITALIZE"
-                  className="w-80 h-auto object-contain"
+                  className="w-full h-auto object-contain"
                 />
               </motion.div>
             </div>
