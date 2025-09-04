@@ -123,7 +123,7 @@ export default function LandingPage() {
       </main>
 
       {/* Earning Money Section */}
-      <section className="relative z-10 bg-black py-20 px-6">
+      <section className="relative z-10 py-20 px-6">
         <div className="max-w-7xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
@@ -222,7 +222,7 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="relative z-10 bg-white py-6 px-6">
+      <footer className="relative z-10 bg-white py-4 px-6">
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             {/* Company */}
