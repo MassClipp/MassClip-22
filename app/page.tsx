@@ -3,13 +3,14 @@
 import { motion } from "framer-motion"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { ChevronDown } from "lucide-react"
 
 export default function LandingPage() {
   const router = useRouter()
   const [isResourcesOpen, setIsResourcesOpen] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
 
   const handleGetStarted = () => {
     router.push("/signup")
@@ -18,6 +19,25 @@ export default function LandingPage() {
   const handleExplore = () => {
     router.push("/explore")
   }
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsResourcesOpen(false)
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+    }
+  }, [])
+
+  const resourceLinks = [
+    { href: "/resources/free-content", label: "How to use free content" },
+    { href: "/resources/optimize-storefront", label: "How to optimize your storefront" },
+    { href: "/resources/organize-bundles", label: "How to organize your bundles" },
+  ]
 
   return (
     <div className="min-h-screen bg-black relative overflow-hidden">
@@ -41,39 +61,30 @@ export default function LandingPage() {
             <Link href="/explore" className="text-white/80 hover:text-white transition-colors font-light">
               Explore
             </Link>
-            <div className="relative">
+            <div className="relative" ref={dropdownRef}>
               <button
                 onClick={() => setIsResourcesOpen(!isResourcesOpen)}
-                className="text-white/80 hover:text-white transition-colors font-light flex items-center gap-1"
+                className="text-white/80 hover:text-white transition-colors font-light flex items-center gap-1 py-2"
+                type="button"
               >
                 Resources
-                <ChevronDown className={`w-4 h-4 transition-transform ${isResourcesOpen ? "rotate-180" : ""}`} />
+                <ChevronDown
+                  className={`w-4 h-4 transition-transform duration-200 ${isResourcesOpen ? "rotate-180" : ""}`}
+                />
               </button>
+
               {isResourcesOpen && (
-                <div className="absolute top-full left-0 mt-2 z-50">
-                  <div className="flex flex-col py-2 min-w-[200px]">
-                    <a
-                      href="/resources/free-content"
-                      className="text-white/90 hover:text-white font-light text-sm transition-colors whitespace-nowrap px-2 py-2 block"
+                <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-lg border border-gray-200 py-2 min-w-[240px] z-[9999]">
+                  {resourceLinks.map((link, index) => (
+                    <Link
+                      key={index}
+                      href={link.href}
+                      className="block px-4 py-3 text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition-colors font-light text-sm"
                       onClick={() => setIsResourcesOpen(false)}
                     >
-                      How to use free content
-                    </a>
-                    <a
-                      href="/resources/optimize-storefront"
-                      className="text-white/90 hover:text-white font-light text-sm transition-colors whitespace-nowrap px-2 py-2 block"
-                      onClick={() => setIsResourcesOpen(false)}
-                    >
-                      How to optimize your storefront
-                    </a>
-                    <a
-                      href="/resources/organize-bundles"
-                      className="text-white/90 hover:text-white font-light text-sm transition-colors whitespace-nowrap px-2 py-2 block"
-                      onClick={() => setIsResourcesOpen(false)}
-                    >
-                      How to organize your bundles
-                    </a>
-                  </div>
+                      {link.label}
+                    </Link>
+                  ))}
                 </div>
               )}
             </div>
