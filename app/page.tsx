@@ -27,7 +27,10 @@ export default function LandingPage() {
       <header className="relative z-10 px-6 py-6">
         <nav className="flex items-center justify-between max-w-7xl mx-auto">
           <div className="text-white font-light text-2xl">
-            Mass<span className="bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent">Clip</span>
+            Mass
+            <span className="bg-gradient-to-br from-slate-300 via-cyan-200 via-blue-100 to-white bg-clip-text text-transparent">
+              Clip
+            </span>
           </div>
 
           {/* Center Navigation */}
@@ -303,7 +306,7 @@ export default function LandingPage() {
             <div className="flex flex-col md:flex-row justify-between items-center">
               <div className="text-gray-600 font-light">© 2025 MassClip. All rights reserved.</div>
               <div className="text-black font-light text-xl mt-4 md:mt-0">
-                Mass<span className="bg-gradient-to-r from-black to-black/60 bg-clip-text text-transparent">Clip</span>
+                Mass<span className="bg-gradient-to-br from-black to-black/60 bg-clip-text text-transparent">Clip</span>
               </div>
             </div>
           </div>
