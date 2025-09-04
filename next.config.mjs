@@ -2,6 +2,8 @@
 const nextConfig = {
   experimental: {
     serverComponentsExternalPackages: ["firebase-admin"],
+    optimizeCss: true,
+    scrollRestoration: true,
   },
   eslint: {
     ignoreDuringBuilds: true,
@@ -16,8 +18,11 @@ const nextConfig = {
       "storage.googleapis.com",
       "pub-3626123a908346a7a8be8d9295f44e26.r2.dev",
     ],
-    unoptimized: true,
+    unoptimized: false,
+    formats: ['image/webp', 'image/avif'],
   },
+  compress: true,
+  poweredByHeader: false,
   async headers() {
     return [
       {
@@ -30,6 +35,18 @@ const nextConfig = {
           {
             key: "Cross-Origin-Embedder-Policy",
             value: "unsafe-none",
+          },
+          {
+            key: "X-DNS-Prefetch-Control",
+            value: "on",
+          },
+          {
+            key: "X-Frame-Options",
+            value: "DENY",
+          },
+          {
+            key: "X-Content-Type-Options",
+            value: "nosniff",
           },
         ],
       },

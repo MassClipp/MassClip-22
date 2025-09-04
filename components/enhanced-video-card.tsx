@@ -4,6 +4,7 @@ import type React from "react"
 import { useState, useRef, useEffect } from "react"
 import { Play, Pause, Download, Heart } from "lucide-react"
 import { formatFileSize } from "@/lib/utils"
+import Image from "next/image"
 
 interface EnhancedVideoCardProps {
   id: string
@@ -161,11 +162,14 @@ export default function EnhancedVideoCard({
       >
         {/* Thumbnail Image - Always visible */}
         <div className="absolute inset-0">
-          <img
+          <Image
             src={displayThumbnail || "/placeholder.svg"}
             alt={title}
-            className="w-full h-full object-cover"
+            fill
+            className="object-cover"
             onError={() => setThumbnailError(true)}
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+            priority={false}
           />
         </div>
 

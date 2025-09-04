@@ -43,7 +43,7 @@ export default function ImageWithFallback({
       className={className}
       onError={() => setError(true)}
       sizes={sizes}
-      priority={false}
+      priority={true}
     />
   )
 }

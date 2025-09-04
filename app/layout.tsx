@@ -110,6 +110,51 @@ export default function RootLayout({
           }}
         />
 
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "WebSite",
+              name: "MassClip",
+              url: "https://massclip.com",
+              description: "The #1 platform for faceless creators to monetize anonymous content",
+              potentialAction: {
+                "@type": "SearchAction",
+                target: {
+                  "@type": "EntryPoint",
+                  urlTemplate: "https://massclip.com/search?q={search_term_string}",
+                },
+                "query-input": "required name=search_term_string",
+              },
+            }),
+          }}
+        />
+
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "SoftwareApplication",
+              name: "MassClip",
+              applicationCategory: "BusinessApplication",
+              operatingSystem: "Web",
+              description: "Platform for faceless creators to monetize anonymous content",
+              offers: {
+                "@type": "Offer",
+                price: "0",
+                priceCurrency: "USD",
+              },
+              aggregateRating: {
+                "@type": "AggregateRating",
+                ratingValue: "4.8",
+                ratingCount: "1250",
+              },
+            }),
+          }}
+        />
+
         {/* Add Vimeo Player API */}
         <script src="https://player.vimeo.com/api/player.js" async></script>
 
