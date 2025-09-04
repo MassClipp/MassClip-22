@@ -18,7 +18,39 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-black relative overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-tl from-white/20 via-white/5 to-transparent opacity-60" />
+      <div className="absolute inset-0">
+        <div
+          className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-white/5 animate-pulse"
+          style={{ animationDuration: "8s" }}
+        />
+        <div
+          className="absolute inset-0 bg-gradient-to-tl from-transparent via-white/8 to-white/12 opacity-60"
+          style={{
+            animation: "float 12s ease-in-out infinite",
+            animationDelay: "2s",
+          }}
+        />
+        <div
+          className="absolute inset-0 bg-gradient-to-r from-white/5 via-white/15 to-white/3 opacity-40"
+          style={{
+            animation: "drift 15s linear infinite",
+            animationDelay: "4s",
+          }}
+        />
+      </div>
+
+      <style jsx>{`
+        @keyframes float {
+          0%, 100% { transform: translateY(0px) rotate(0deg); opacity: 0.6; }
+          50% { transform: translateY(-20px) rotate(1deg); opacity: 0.8; }
+        }
+        @keyframes drift {
+          0% { transform: translateX(-100px) scale(1); }
+          50% { transform: translateX(100px) scale(1.05); }
+          100% { transform: translateX(-100px) scale(1); }
+        }
+      `}</style>
+
       <div className="absolute bottom-0 right-0 w-1/2 h-1/2 bg-gradient-radial from-white/15 via-white/8 to-transparent opacity-80" />
 
       {/* Header */}
