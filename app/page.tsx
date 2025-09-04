@@ -48,24 +48,24 @@ export default function LandingPage() {
                 <ChevronDown className={`w-4 h-4 transition-transform ${isResourcesOpen ? "rotate-180" : ""}`} />
               </button>
               {isResourcesOpen && (
-                <div className="absolute top-full left-0 mt-2 w-48 bg-gray-900 rounded-lg shadow-xl py-1 z-50 border border-gray-700">
+                <div className="absolute top-full left-0 mt-2 py-1 z-50">
                   <Link
                     href="/resources/free-content"
-                    className="block px-3 py-2 text-white hover:bg-gray-800 font-medium text-sm transition-colors"
+                    className="block py-1 text-white/80 hover:text-white font-light text-sm transition-colors"
                     onClick={() => setIsResourcesOpen(false)}
                   >
                     How to use free content
                   </Link>
                   <Link
                     href="/resources/optimize-storefront"
-                    className="block px-3 py-2 text-white hover:bg-gray-800 font-medium text-sm transition-colors"
+                    className="block py-1 text-white/80 hover:text-white font-light text-sm transition-colors"
                     onClick={() => setIsResourcesOpen(false)}
                   >
                     How to optimize your storefront
                   </Link>
                   <Link
                     href="/resources/organize-bundles"
-                    className="block px-3 py-2 text-white hover:bg-gray-800 font-medium text-sm transition-colors"
+                    className="block py-1 text-white/80 hover:text-white font-light text-sm transition-colors"
                     onClick={() => setIsResourcesOpen(false)}
                   >
                     How to organize your bundles
