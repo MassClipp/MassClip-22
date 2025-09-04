@@ -24,6 +24,7 @@ export default function LandingPage() {
       <div className="absolute inset-0 bg-gradient-to-tl from-white/30 via-white/10 to-transparent opacity-70" />
       <div className="absolute bottom-0 right-0 w-1/2 h-1/2 bg-gradient-radial from-white/25 via-white/12 to-transparent opacity-90" />
       <div className="absolute top-0 left-0 w-1/3 h-1/3 bg-gradient-radial from-white/15 via-white/5 to-transparent opacity-60" />
+      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-white/5 to-white/10 opacity-50" />
 
       {/* Header */}
       <header className="relative z-10 px-6 py-6">
@@ -47,24 +48,24 @@ export default function LandingPage() {
                 <ChevronDown className={`w-4 h-4 transition-transform ${isResourcesOpen ? "rotate-180" : ""}`} />
               </button>
               {isResourcesOpen && (
-                <div className="absolute top-full left-0 mt-2 w-48 bg-white rounded-lg shadow-xl py-1 z-50 border border-gray-300">
+                <div className="absolute top-full left-0 mt-2 w-48 bg-gray-900 rounded-lg shadow-xl py-1 z-50 border border-gray-700">
                   <Link
                     href="/resources/free-content"
-                    className="block px-3 py-2 text-gray-900 hover:bg-gray-100 font-medium text-sm transition-colors"
+                    className="block px-3 py-2 text-white hover:bg-gray-800 font-medium text-sm transition-colors"
                     onClick={() => setIsResourcesOpen(false)}
                   >
                     How to use free content
                   </Link>
                   <Link
                     href="/resources/optimize-storefront"
-                    className="block px-3 py-2 text-gray-900 hover:bg-gray-100 font-medium text-sm transition-colors"
+                    className="block px-3 py-2 text-white hover:bg-gray-800 font-medium text-sm transition-colors"
                     onClick={() => setIsResourcesOpen(false)}
                   >
                     How to optimize your storefront
                   </Link>
                   <Link
                     href="/resources/organize-bundles"
-                    className="block px-3 py-2 text-gray-900 hover:bg-gray-100 font-medium text-sm transition-colors"
+                    className="block px-3 py-2 text-white hover:bg-gray-800 font-medium text-sm transition-colors"
                     onClick={() => setIsResourcesOpen(false)}
                   >
                     How to organize your bundles
@@ -152,7 +153,7 @@ export default function LandingPage() {
       </section>
 
       {/* What You Can Sell Section */}
-      <section className="relative z-10 bg-white py-20 px-6">
+      <section className="relative z-10 py-20 px-6">
         <div className="max-w-7xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
@@ -161,7 +162,7 @@ export default function LandingPage() {
             viewport={{ once: true }}
             className="space-y-12"
           >
-            <h2 className="text-4xl lg:text-5xl font-thin text-black">What You Can Sell</h2>
+            <h2 className="text-4xl lg:text-5xl font-thin text-white">What You Can Sell</h2>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
               <motion.div
