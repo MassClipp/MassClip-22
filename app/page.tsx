@@ -46,24 +46,24 @@ export default function LandingPage() {
                 <ChevronDown className={`w-4 h-4 transition-transform ${isResourcesOpen ? "rotate-180" : ""}`} />
               </button>
               {isResourcesOpen && (
-                <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-lg shadow-lg py-2 z-50">
+                <div className="absolute top-full left-0 mt-2 w-56 bg-white rounded-lg shadow-lg py-1 z-50 border border-gray-200">
                   <Link
                     href="/resources/free-content"
-                    className="block px-4 py-2 text-gray-700 hover:bg-gray-50 font-light"
+                    className="block px-3 py-2 text-gray-900 hover:bg-gray-100 font-light text-sm"
                     onClick={() => setIsResourcesOpen(false)}
                   >
                     How to use free content
                   </Link>
                   <Link
                     href="/resources/optimize-storefront"
-                    className="block px-4 py-2 text-gray-700 hover:bg-gray-50 font-light"
+                    className="block px-3 py-2 text-gray-900 hover:bg-gray-100 font-light text-sm"
                     onClick={() => setIsResourcesOpen(false)}
                   >
                     How to optimize your storefront
                   </Link>
                   <Link
                     href="/resources/organize-bundles"
-                    className="block px-4 py-2 text-gray-700 hover:bg-gray-50 font-light"
+                    className="block px-3 py-2 text-gray-900 hover:bg-gray-100 font-light text-sm"
                     onClick={() => setIsResourcesOpen(false)}
                   >
                     How to organize your bundles
@@ -83,63 +83,39 @@ export default function LandingPage() {
       {/* Hero Section */}
       <main className="relative z-10 flex items-end justify-start min-h-[calc(100vh-120px)] px-6 pb-16">
         <div className="max-w-7xl mx-auto w-full">
-          <div className="flex items-end justify-between w-full">
-            <div className="max-w-3xl -ml-4 flex-1">
-              <motion.div
-                initial={{ opacity: 0, y: 30 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.8 }}
-                className="space-y-6"
-              >
-                <h1 className="text-5xl lg:text-7xl font-thin text-white leading-tight">
-                  Monetize Your Faceless Content
-                </h1>
+          <div className="max-w-3xl -ml-4">
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8 }}
+              className="space-y-6"
+            >
+              <h1 className="text-5xl lg:text-7xl font-thin text-white leading-tight">
+                Monetize Your Faceless Content
+              </h1>
 
-                <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
-                  Welcome to a simple way to monetize, sell, and get paid for your faceless content.
-                </p>
+              <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
+                Welcome to a simple way to monetize, sell, and get paid for your faceless content.
+              </p>
 
-                {/* Buttons */}
-                <div className="flex flex-col sm:flex-row gap-4 pt-4">
-                  <Button
-                    onClick={handleGetStarted}
-                    className="px-8 py-4 bg-white text-black hover:bg-white/90 font-light rounded-full text-lg transition-all duration-200 hover:scale-105"
-                  >
-                    Get Started
-                  </Button>
+              {/* Buttons */}
+              <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                <Button
+                  onClick={handleGetStarted}
+                  className="px-8 py-4 bg-white text-black hover:bg-white/90 font-light rounded-full text-lg transition-all duration-200 hover:scale-105"
+                >
+                  Get Started
+                </Button>
 
-                  <Button
-                    onClick={handleExplore}
-                    variant="outline"
-                    className="px-8 py-4 border-2 border-white/30 text-white hover:bg-white/10 font-light rounded-full text-lg transition-all duration-200 hover:scale-105 bg-transparent"
-                  >
-                    Explore
-                  </Button>
-                </div>
-              </motion.div>
-            </div>
-
-            <div className="hidden lg:block flex-shrink-0 ml-8">
-              <motion.div
-                initial={{ opacity: 0, x: 30 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.8, delay: 0.2 }}
-                className="relative"
-              >
-                <img
-                  src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/copy_F4D1F389-0F67-4BC7-8D61-765ACE700108.JPEG-gqY3xEoKD6wy3wN7LioOeGOSduoxSf.jpeg"
-                  alt="MassClip mobile app interface"
-                  className="h-[50vh] w-auto object-contain"
-                  style={{
-                    filter: "brightness(1.8) contrast(1.5) saturate(1.2)",
-                    mixBlendMode: "screen",
-                    maskImage: "radial-gradient(ellipse 70% 80% at center, black 50%, transparent 85%)",
-                    WebkitMaskImage: "radial-gradient(ellipse 70% 80% at center, black 50%, transparent 85%)",
-                    dropShadow: "0 20px 40px rgba(255, 255, 255, 0.1)",
-                  }}
-                />
-              </motion.div>
-            </div>
+                <Button
+                  onClick={handleExplore}
+                  variant="outline"
+                  className="px-8 py-4 border-2 border-white/30 text-white hover:bg-white/10 font-light rounded-full text-lg transition-all duration-200 hover:scale-105 bg-transparent"
+                >
+                  Explore
+                </Button>
+              </div>
+            </motion.div>
           </div>
         </div>
       </main>
@@ -244,20 +220,20 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="relative z-10 bg-gray-900 py-16 px-6">
+      <footer className="relative z-10 bg-white py-12 px-6">
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             {/* Company */}
             <div>
-              <h3 className="text-white font-light text-lg mb-4">Company</h3>
+              <h3 className="text-black font-light text-lg mb-4">Company</h3>
               <div className="space-y-3">
-                <Link href="/about" className="block text-gray-400 hover:text-white transition-colors font-light">
+                <Link href="/about" className="block text-gray-600 hover:text-black transition-colors font-light">
                   About
                 </Link>
-                <Link href="/contact" className="block text-gray-400 hover:text-white transition-colors font-light">
+                <Link href="/contact" className="block text-gray-600 hover:text-black transition-colors font-light">
                   Contact
                 </Link>
-                <Link href="/careers" className="block text-gray-400 hover:text-white transition-colors font-light">
+                <Link href="/careers" className="block text-gray-600 hover:text-black transition-colors font-light">
                   Careers
                 </Link>
               </div>
@@ -265,23 +241,23 @@ export default function LandingPage() {
 
             {/* Resources */}
             <div>
-              <h3 className="text-white font-light text-lg mb-4">Resources</h3>
+              <h3 className="text-black font-light text-lg mb-4">Resources</h3>
               <div className="space-y-3">
                 <Link
                   href="/resources/free-content"
-                  className="block text-gray-400 hover:text-white transition-colors font-light"
+                  className="block text-gray-600 hover:text-black transition-colors font-light"
                 >
                   How to use free content
                 </Link>
                 <Link
                   href="/resources/optimize-storefront"
-                  className="block text-gray-400 hover:text-white transition-colors font-light"
+                  className="block text-gray-600 hover:text-black transition-colors font-light"
                 >
                   How to optimize your storefront
                 </Link>
                 <Link
                   href="/resources/organize-bundles"
-                  className="block text-gray-400 hover:text-white transition-colors font-light"
+                  className="block text-gray-600 hover:text-black transition-colors font-light"
                 >
                   How to organize your bundles
                 </Link>
@@ -290,15 +266,15 @@ export default function LandingPage() {
 
             {/* Legal */}
             <div>
-              <h3 className="text-white font-light text-lg mb-4">Legal</h3>
+              <h3 className="text-black font-light text-lg mb-4">Legal</h3>
               <div className="space-y-3">
-                <Link href="/terms" className="block text-gray-400 hover:text-white transition-colors font-light">
+                <Link href="/terms" className="block text-gray-600 hover:text-black transition-colors font-light">
                   Terms of Service
                 </Link>
-                <Link href="/privacy" className="block text-gray-400 hover:text-white transition-colors font-light">
+                <Link href="/privacy" className="block text-gray-600 hover:text-black transition-colors font-light">
                   Privacy Policy
                 </Link>
-                <Link href="/cookies" className="block text-gray-400 hover:text-white transition-colors font-light">
+                <Link href="/cookies" className="block text-gray-600 hover:text-black transition-colors font-light">
                   Cookie Policy
                 </Link>
               </div>
@@ -306,25 +282,25 @@ export default function LandingPage() {
 
             {/* Support */}
             <div>
-              <h3 className="text-white font-light text-lg mb-4">Support</h3>
+              <h3 className="text-black font-light text-lg mb-4">Support</h3>
               <div className="space-y-3">
-                <Link href="/help" className="block text-gray-400 hover:text-white transition-colors font-light">
+                <Link href="/help" className="block text-gray-600 hover:text-black transition-colors font-light">
                   Help Center
                 </Link>
-                <Link href="/support" className="block text-gray-400 hover:text-white transition-colors font-light">
+                <Link href="/support" className="block text-gray-600 hover:text-black transition-colors font-light">
                   Contact Support
                 </Link>
-                <Link href="/status" className="block text-gray-400 hover:text-white transition-colors font-light">
+                <Link href="/status" className="block text-gray-600 hover:text-black transition-colors font-light">
                   System Status
                 </Link>
               </div>
             </div>
           </div>
 
-          <div className="border-t border-gray-800 mt-12 pt-8">
+          <div className="border-t border-gray-200 mt-8 pt-6">
             <div className="flex flex-col md:flex-row justify-between items-center">
-              <div className="text-gray-400 font-light">© 2025 MassClip. All rights reserved.</div>
-              <div className="text-white font-light text-xl mt-4 md:mt-0">MassClip</div>
+              <div className="text-gray-600 font-light">© 2025 MassClip. All rights reserved.</div>
+              <div className="text-black font-light text-xl mt-4 md:mt-0">MassClip</div>
             </div>
           </div>
         </div>
