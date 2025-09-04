@@ -95,27 +95,25 @@ export default function LandingPage() {
                 transition={{ duration: 1, delay: 0.3 }}
                 className="text-center"
               >
-                {/* Single flowing gradient across all three words */}
-                <div className="text-7xl xl:text-8xl font-extralight leading-none tracking-tight">
+                <div className="text-6xl xl:text-7xl font-extralight leading-tight tracking-normal max-w-xs">
                   <div className="bg-gradient-to-br from-slate-300 via-cyan-200 via-blue-100 to-white bg-clip-text text-transparent drop-shadow-2xl">
-                    <div className="mb-2">Capitalize</div>
-                    <div className="mb-2">Sell</div>
+                    <div className="mb-4">Capitalize</div>
+                    <div className="mb-4">Sell</div>
                     <div>Monetize</div>
                   </div>
                 </div>
               </motion.div>
 
-              {/* Enhanced accent elements for anodized pearl stainless steel effect */}
               <motion.div
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.8, delay: 0.6 }}
-                className="flex space-x-3"
+                className="flex space-x-2"
               >
-                <div className="w-20 h-px bg-gradient-to-r from-transparent via-slate-300/80 to-transparent shadow-lg"></div>
-                <div className="w-20 h-px bg-gradient-to-r from-transparent via-cyan-200/80 to-transparent shadow-lg"></div>
-                <div className="w-20 h-px bg-gradient-to-r from-transparent via-blue-100/80 to-transparent shadow-lg"></div>
-                <div className="w-20 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent shadow-lg"></div>
+                <div className="w-12 h-px bg-gradient-to-r from-transparent via-slate-300/80 to-transparent shadow-lg"></div>
+                <div className="w-12 h-px bg-gradient-to-r from-transparent via-cyan-200/80 to-transparent shadow-lg"></div>
+                <div className="w-12 h-px bg-gradient-to-r from-transparent via-blue-100/80 to-transparent shadow-lg"></div>
+                <div className="w-12 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent shadow-lg"></div>
               </motion.div>
             </div>
           </div>
