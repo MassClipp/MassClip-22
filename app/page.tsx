@@ -3,10 +3,13 @@
 import { motion } from "framer-motion"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
+import { ChevronDown } from "lucide-react"
 
 export default function LandingPage() {
   const router = useRouter()
+  const [isResourcesOpen, setIsResourcesOpen] = useState(false)
 
   const handleGetStarted = () => {
     router.push("/signup")
@@ -18,55 +21,8 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-black relative overflow-hidden">
-      <div className="absolute inset-0">
-        <div
-          className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-white/15 animate-pulse"
-          style={{ animationDuration: "6s" }}
-        />
-        <div
-          className="absolute inset-0 bg-gradient-to-tl from-transparent via-white/25 to-white/30 opacity-70"
-          style={{
-            animation: "float 10s ease-in-out infinite",
-            animationDelay: "1s",
-          }}
-        />
-        <div
-          className="absolute inset-0 bg-gradient-to-r from-white/15 via-white/35 to-white/10 opacity-60"
-          style={{
-            animation: "drift 12s linear infinite",
-            animationDelay: "3s",
-          }}
-        />
-        <div
-          className="absolute inset-0 bg-gradient-to-bl from-white/10 via-white/20 to-transparent opacity-50"
-          style={{
-            animation: "sweep 14s ease-in-out infinite",
-            animationDelay: "5s",
-          }}
-        />
-      </div>
-
-      <style jsx>{`
-        @keyframes float {
-          0%, 100% { transform: translateY(0px) translateX(0px) rotate(0deg); opacity: 0.7; }
-          33% { transform: translateY(-30px) translateX(20px) rotate(1deg); opacity: 0.9; }
-          66% { transform: translateY(10px) translateX(-15px) rotate(-0.5deg); opacity: 0.8; }
-        }
-        @keyframes drift {
-          0% { transform: translateX(-150px) translateY(0px) scale(1); }
-          25% { transform: translateX(50px) translateY(-20px) scale(1.1); }
-          50% { transform: translateX(150px) translateY(10px) scale(0.95); }
-          75% { transform: translateX(-50px) translateY(20px) scale(1.05); }
-          100% { transform: translateX(-150px) translateY(0px) scale(1); }
-        }
-        @keyframes sweep {
-          0% { transform: translateX(100vw) translateY(-50px) rotate(0deg); }
-          50% { transform: translateX(-50px) translateY(30px) rotate(2deg); }
-          100% { transform: translateX(-100vw) translateY(-20px) rotate(-1deg); }
-        }
-      `}</style>
-
-      <div className="absolute bottom-0 right-0 w-1/2 h-1/2 bg-gradient-radial from-white/25 via-white/15 to-transparent opacity-90" />
+      <div className="absolute inset-0 bg-gradient-to-tl from-white/20 via-white/5 to-transparent opacity-60" />
+      <div className="absolute bottom-0 right-0 w-1/2 h-1/2 bg-gradient-radial from-white/15 via-white/8 to-transparent opacity-80" />
 
       {/* Header */}
       <header className="relative z-10 px-6 py-6">
@@ -81,6 +37,40 @@ export default function LandingPage() {
             <Link href="/explore" className="text-white/80 hover:text-white transition-colors font-light">
               Explore
             </Link>
+            <div className="relative">
+              <button
+                onClick={() => setIsResourcesOpen(!isResourcesOpen)}
+                className="text-white/80 hover:text-white transition-colors font-light flex items-center gap-1"
+              >
+                Resources
+                <ChevronDown className={`w-4 h-4 transition-transform ${isResourcesOpen ? "rotate-180" : ""}`} />
+              </button>
+              {isResourcesOpen && (
+                <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-lg shadow-lg py-2 z-50">
+                  <Link
+                    href="/resources/free-content"
+                    className="block px-4 py-2 text-gray-700 hover:bg-gray-50 font-light"
+                    onClick={() => setIsResourcesOpen(false)}
+                  >
+                    How to use free content
+                  </Link>
+                  <Link
+                    href="/resources/optimize-storefront"
+                    className="block px-4 py-2 text-gray-700 hover:bg-gray-50 font-light"
+                    onClick={() => setIsResourcesOpen(false)}
+                  >
+                    How to optimize your storefront
+                  </Link>
+                  <Link
+                    href="/resources/organize-bundles"
+                    className="block px-4 py-2 text-gray-700 hover:bg-gray-50 font-light"
+                    onClick={() => setIsResourcesOpen(false)}
+                  >
+                    How to organize your bundles
+                  </Link>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Login */}
@@ -130,7 +120,8 @@ export default function LandingPage() {
         </div>
       </main>
 
-      <section className="relative z-10 bg-black py-20 px-6">
+      {/* Earning Money Section */}
+      <section className="relative z-10 bg-white py-20 px-6">
         <div className="max-w-7xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
@@ -139,17 +130,17 @@ export default function LandingPage() {
             viewport={{ once: true }}
             className="space-y-8"
           >
-            <h2 className="text-4xl lg:text-5xl font-thin text-white">Earning Money As A Faceless Creator</h2>
+            <h2 className="text-4xl lg:text-5xl font-thin text-black">Earning Money As A Faceless Creator</h2>
 
             <div className="max-w-4xl">
-              <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
+              <p className="text-lg lg:text-xl text-black/70 leading-relaxed font-light">
                 If you run a faceless page, you already create content that other creators need. Whether it is
                 motivation, memes, sports, trending topics, or cinema, your posts can be packaged and sold. Creators are
                 constantly looking for ready-to-use content that saves them time and effort, and you can turn what you
                 are already making into a new source of income.
               </p>
 
-              <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light mt-6">
+              <p className="text-lg lg:text-xl text-black/70 leading-relaxed font-light mt-6">
                 We provide you with a profile style storefront where you can showcase your work. Share free downloads to
                 grow your audience and offer premium content for purchase, giving creators exactly what they want while
                 you build a steady stream of revenue.
@@ -227,6 +218,93 @@ export default function LandingPage() {
           </motion.div>
         </div>
       </section>
+
+      {/* Footer */}
+      <footer className="relative z-10 bg-gray-900 py-16 px-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+            {/* Company */}
+            <div>
+              <h3 className="text-white font-light text-lg mb-4">Company</h3>
+              <div className="space-y-3">
+                <Link href="/about" className="block text-gray-400 hover:text-white transition-colors font-light">
+                  About
+                </Link>
+                <Link href="/contact" className="block text-gray-400 hover:text-white transition-colors font-light">
+                  Contact
+                </Link>
+                <Link href="/careers" className="block text-gray-400 hover:text-white transition-colors font-light">
+                  Careers
+                </Link>
+              </div>
+            </div>
+
+            {/* Resources */}
+            <div>
+              <h3 className="text-white font-light text-lg mb-4">Resources</h3>
+              <div className="space-y-3">
+                <Link
+                  href="/resources/free-content"
+                  className="block text-gray-400 hover:text-white transition-colors font-light"
+                >
+                  How to use free content
+                </Link>
+                <Link
+                  href="/resources/optimize-storefront"
+                  className="block text-gray-400 hover:text-white transition-colors font-light"
+                >
+                  How to optimize your storefront
+                </Link>
+                <Link
+                  href="/resources/organize-bundles"
+                  className="block text-gray-400 hover:text-white transition-colors font-light"
+                >
+                  How to organize your bundles
+                </Link>
+              </div>
+            </div>
+
+            {/* Legal */}
+            <div>
+              <h3 className="text-white font-light text-lg mb-4">Legal</h3>
+              <div className="space-y-3">
+                <Link href="/terms" className="block text-gray-400 hover:text-white transition-colors font-light">
+                  Terms of Service
+                </Link>
+                <Link href="/privacy" className="block text-gray-400 hover:text-white transition-colors font-light">
+                  Privacy Policy
+                </Link>
+                <Link href="/cookies" className="block text-gray-400 hover:text-white transition-colors font-light">
+                  Cookie Policy
+                </Link>
+              </div>
+            </div>
+
+            {/* Support */}
+            <div>
+              <h3 className="text-white font-light text-lg mb-4">Support</h3>
+              <div className="space-y-3">
+                <Link href="/help" className="block text-gray-400 hover:text-white transition-colors font-light">
+                  Help Center
+                </Link>
+                <Link href="/support" className="block text-gray-400 hover:text-white transition-colors font-light">
+                  Contact Support
+                </Link>
+                <Link href="/status" className="block text-gray-400 hover:text-white transition-colors font-light">
+                  System Status
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-gray-800 mt-12 pt-8">
+            <div className="flex flex-col md:flex-row justify-between items-center">
+              <div className="text-gray-400 font-light">© 2025 MassClip. All rights reserved.</div>
+              <div className="text-white font-light text-xl mt-4 md:mt-0">MassClip</div>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   )
 }
