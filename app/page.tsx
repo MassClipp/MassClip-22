@@ -29,7 +29,9 @@ export default function LandingPage() {
       {/* Header */}
       <header className="relative z-10 px-6 py-6">
         <nav className="flex items-center justify-between max-w-7xl mx-auto">
-          <div className="text-white font-light text-xl">MassClip</div>
+          <div className="text-white font-light text-2xl">
+            Mass<span className="bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent">Clip</span>
+          </div>
 
           {/* Center Navigation */}
           <div className="hidden md:flex items-center space-x-8">
@@ -48,24 +50,24 @@ export default function LandingPage() {
                 <ChevronDown className={`w-4 h-4 transition-transform ${isResourcesOpen ? "rotate-180" : ""}`} />
               </button>
               {isResourcesOpen && (
-                <div className="absolute top-full left-0 mt-2 py-1 z-50">
+                <div className="absolute top-full left-0 mt-2 py-2 z-[100] min-w-[200px]">
                   <Link
                     href="/resources/free-content"
-                    className="block py-1 text-white/80 hover:text-white font-light text-sm transition-colors"
+                    className="block py-2 px-1 text-white/80 hover:text-white font-light text-sm transition-colors"
                     onClick={() => setIsResourcesOpen(false)}
                   >
                     How to use free content
                   </Link>
                   <Link
                     href="/resources/optimize-storefront"
-                    className="block py-1 text-white/80 hover:text-white font-light text-sm transition-colors"
+                    className="block py-2 px-1 text-white/80 hover:text-white font-light text-sm transition-colors"
                     onClick={() => setIsResourcesOpen(false)}
                   >
                     How to optimize your storefront
                   </Link>
                   <Link
                     href="/resources/organize-bundles"
-                    className="block py-1 text-white/80 hover:text-white font-light text-sm transition-colors"
+                    className="block py-2 px-1 text-white/80 hover:text-white font-light text-sm transition-colors"
                     onClick={() => setIsResourcesOpen(false)}
                   >
                     How to organize your bundles
@@ -302,7 +304,9 @@ export default function LandingPage() {
           <div className="border-t border-gray-200 mt-6 pt-4">
             <div className="flex flex-col md:flex-row justify-between items-center">
               <div className="text-gray-600 font-light">© 2025 MassClip. All rights reserved.</div>
-              <div className="text-black font-light text-xl mt-4 md:mt-0">MassClip</div>
+              <div className="text-black font-light text-xl mt-4 md:mt-0">
+                Mass<span className="bg-gradient-to-r from-black to-black/60 bg-clip-text text-transparent">Clip</span>
+              </div>
             </div>
           </div>
         </div>
