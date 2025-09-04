@@ -50,7 +50,7 @@ export default function LandingPage() {
       {/* Hero Section */}
       <main className="relative z-10 flex items-end justify-start min-h-[calc(100vh-120px)] px-6 pb-16">
         <div className="max-w-7xl mx-auto w-full">
-          <div className="max-w-3xl -ml-4">
+          <div className="max-w-3xl ml-8 lg:ml-16">
             <motion.div
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
