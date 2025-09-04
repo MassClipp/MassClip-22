@@ -48,11 +48,11 @@ export default function LandingPage() {
       </header>
 
       {/* Hero Section */}
-      <main className="relative z-10 flex items-end justify-start min-h-[calc(100vh-120px)] px-6 pb-16">
+      <main className="relative z-10 flex items-center justify-start min-h-[calc(100vh-120px)] px-6">
         <div className="max-w-7xl mx-auto w-full">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-end">
-            {/* Left side - existing content */}
-            <div className="max-w-3xl ml-8 lg:ml-16">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+            {/* Left side - moved to far left and vertically centered */}
+            <div className="max-w-3xl">
               <motion.div
                 initial={{ opacity: 0, y: 30 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -87,34 +87,41 @@ export default function LandingPage() {
               </motion.div>
             </div>
 
-            {/* Right side stylized text with gradients and modern styling */}
-            <div className="hidden lg:flex flex-col items-end justify-end space-y-4 pr-8">
+            {/* Right side - larger stylized text with stainless steel gradients */}
+            <div className="hidden lg:flex flex-col items-center justify-center space-y-6 h-full">
               <motion.div
                 initial={{ opacity: 0, x: 50 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 1, delay: 0.3 }}
-                className="text-right"
+                className="text-center"
               >
-                <div className="text-6xl xl:text-8xl font-extralight leading-none">
-                  <div className="bg-gradient-to-r from-white via-white/90 to-white/70 bg-clip-text text-transparent mb-2">
+                <div className="text-8xl xl:text-9xl font-extralight leading-none tracking-tight">
+                  {/* Capitalize - Blue-silver gradient */}
+                  <div className="bg-gradient-to-br from-blue-200 via-slate-100 to-blue-300 bg-clip-text text-transparent mb-4 drop-shadow-2xl">
                     Capitalize
                   </div>
-                  <div className="bg-gradient-to-r from-white/80 via-white/95 to-white/60 bg-clip-text text-transparent mb-2">
+                  {/* Sell - Gold-silver gradient */}
+                  <div className="bg-gradient-to-br from-yellow-200 via-slate-50 to-amber-300 bg-clip-text text-transparent mb-4 drop-shadow-2xl">
                     Sell
                   </div>
-                  <div className="bg-gradient-to-r from-white/70 via-white to-white/80 bg-clip-text text-transparent">
+                  {/* Monetize - Green-silver gradient */}
+                  <div className="bg-gradient-to-br from-emerald-200 via-slate-100 to-teal-300 bg-clip-text text-transparent drop-shadow-2xl">
                     Monetize
                   </div>
                 </div>
               </motion.div>
 
-              {/* Subtle accent elements for professional SaaS feel */}
+              {/* Enhanced accent elements for stainless steel effect */}
               <motion.div
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.8, delay: 0.6 }}
-                className="w-24 h-px bg-gradient-to-r from-transparent via-white/40 to-transparent"
-              />
+                className="flex space-x-2"
+              >
+                <div className="w-16 h-px bg-gradient-to-r from-transparent via-blue-300/60 to-transparent"></div>
+                <div className="w-16 h-px bg-gradient-to-r from-transparent via-yellow-300/60 to-transparent"></div>
+                <div className="w-16 h-px bg-gradient-to-r from-transparent via-emerald-300/60 to-transparent"></div>
+              </motion.div>
             </div>
           </div>
         </div>
