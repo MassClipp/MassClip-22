@@ -3,14 +3,10 @@
 import { motion } from "framer-motion"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { ChevronDown } from "lucide-react"
 
 export default function LandingPage() {
   const router = useRouter()
-  const [isResourcesOpen, setIsResourcesOpen] = useState(false)
-  const dropdownRef = useRef<HTMLDivElement>(null)
 
   const handleGetStarted = () => {
     router.push("/signup")
@@ -19,25 +15,6 @@ export default function LandingPage() {
   const handleExplore = () => {
     router.push("/explore")
   }
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsResourcesOpen(false)
-      }
-    }
-
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside)
-    }
-  }, [])
-
-  const resourceLinks = [
-    { href: "/resources/free-content", label: "How to use free content" },
-    { href: "/resources/optimize-storefront", label: "How to optimize your storefront" },
-    { href: "/resources/organize-bundles", label: "How to organize your bundles" },
-  ]
 
   return (
     <div className="min-h-screen bg-black relative overflow-hidden">
@@ -61,33 +38,6 @@ export default function LandingPage() {
             <Link href="/explore" className="text-white/80 hover:text-white transition-colors font-light">
               Explore
             </Link>
-            <div className="relative" ref={dropdownRef}>
-              <button
-                onClick={() => setIsResourcesOpen(!isResourcesOpen)}
-                className="text-white/80 hover:text-white transition-colors font-light flex items-center gap-1 py-2"
-                type="button"
-              >
-                Resources
-                <ChevronDown
-                  className={`w-4 h-4 transition-transform duration-200 ${isResourcesOpen ? "rotate-180" : ""}`}
-                />
-              </button>
-
-              {isResourcesOpen && (
-                <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-lg border border-gray-200 py-2 min-w-[240px] z-[9999]">
-                  {resourceLinks.map((link, index) => (
-                    <Link
-                      key={index}
-                      href={link.href}
-                      className="block px-4 py-3 text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition-colors font-light text-sm"
-                      onClick={() => setIsResourcesOpen(false)}
-                    >
-                      {link.label}
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </div>
           </div>
 
           {/* Login */}
