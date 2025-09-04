@@ -50,28 +50,30 @@ export default function LandingPage() {
                 <ChevronDown className={`w-4 h-4 transition-transform ${isResourcesOpen ? "rotate-180" : ""}`} />
               </button>
               {isResourcesOpen && (
-                <div className="absolute top-full left-0 mt-2 z-[100] min-w-[220px]">
-                  <Link
-                    href="/resources/free-content"
-                    className="block py-3 text-white/90 hover:text-white font-light text-sm transition-colors"
-                    onClick={() => setIsResourcesOpen(false)}
-                  >
-                    How to use free content
-                  </Link>
-                  <Link
-                    href="/resources/optimize-storefront"
-                    className="block py-3 text-white/90 hover:text-white font-light text-sm transition-colors"
-                    onClick={() => setIsResourcesOpen(false)}
-                  >
-                    How to optimize your storefront
-                  </Link>
-                  <Link
-                    href="/resources/organize-bundles"
-                    className="block py-3 text-white/90 hover:text-white font-light text-sm transition-colors"
-                    onClick={() => setIsResourcesOpen(false)}
-                  >
-                    How to organize your bundles
-                  </Link>
+                <div className="absolute top-full left-0 mt-2 z-50">
+                  <div className="flex flex-col space-y-2">
+                    <a
+                      href="/resources/free-content"
+                      className="text-white/90 hover:text-white font-light text-sm transition-colors whitespace-nowrap"
+                      onClick={() => setIsResourcesOpen(false)}
+                    >
+                      How to use free content
+                    </a>
+                    <a
+                      href="/resources/optimize-storefront"
+                      className="text-white/90 hover:text-white font-light text-sm transition-colors whitespace-nowrap"
+                      onClick={() => setIsResourcesOpen(false)}
+                    >
+                      How to optimize your storefront
+                    </a>
+                    <a
+                      href="/resources/organize-bundles"
+                      className="text-white/90 hover:text-white font-light text-sm transition-colors whitespace-nowrap"
+                      onClick={() => setIsResourcesOpen(false)}
+                    >
+                      How to organize your bundles
+                    </a>
+                  </div>
                 </div>
               )}
             </div>
@@ -87,134 +89,39 @@ export default function LandingPage() {
       {/* Hero Section */}
       <main className="relative z-10 flex items-end justify-start min-h-[calc(100vh-120px)] px-6 pb-16">
         <div className="max-w-7xl mx-auto w-full">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-            <div className="max-w-3xl -ml-4">
-              <motion.div
-                initial={{ opacity: 0, y: 30 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.8 }}
-                className="space-y-6"
-              >
-                <h1 className="text-5xl lg:text-7xl font-thin text-white/80 leading-tight">
-                  Monetize Your Faceless Content
-                </h1>
+          <div className="max-w-3xl -ml-4">
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8 }}
+              className="space-y-6"
+            >
+              <h1 className="text-5xl lg:text-7xl font-thin text-white/80 leading-tight">
+                Monetize Your Faceless Content
+              </h1>
 
-                <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
-                  Welcome to a simple way to monetize, sell, and get paid for your faceless content.
-                </p>
+              <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
+                Welcome to a simple way to monetize, sell, and get paid for your faceless content.
+              </p>
 
-                {/* Buttons */}
-                <div className="flex flex-col sm:flex-row gap-4 pt-4">
-                  <Button
-                    onClick={handleGetStarted}
-                    className="px-8 py-4 bg-white text-black hover:bg-white/90 font-light rounded-full text-lg transition-all duration-200 hover:scale-105"
-                  >
-                    Get Started
-                  </Button>
+              {/* Buttons */}
+              <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                <Button
+                  onClick={handleGetStarted}
+                  className="px-8 py-4 bg-white text-black hover:bg-white/90 font-light rounded-full text-lg transition-all duration-200 hover:scale-105"
+                >
+                  Get Started
+                </Button>
 
-                  <Button
-                    onClick={handleExplore}
-                    variant="outline"
-                    className="px-8 py-4 border-2 border-white/30 text-white hover:bg-white/10 font-light rounded-full text-lg transition-all duration-200 hover:scale-105 bg-transparent"
-                  >
-                    Explore
-                  </Button>
-                </div>
-              </motion.div>
-            </div>
-
-            <div className="hidden lg:flex justify-center items-center relative">
-              <motion.div
-                initial={{ opacity: 0, x: 50, rotateY: -25 }}
-                animate={{
-                  opacity: 1,
-                  x: 0,
-                  y: [0, -80, 0],
-                  rotateY: [-25, 15, -25],
-                  rotateX: [10, -15, 10],
-                  rotateZ: [5, -8, 5],
-                }}
-                transition={{
-                  opacity: { duration: 1, delay: 0.5 },
-                  x: { duration: 1, delay: 0.5 },
-                  y: {
-                    duration: 3,
-                    repeat: Number.POSITIVE_INFINITY,
-                    ease: "easeInOut",
-                    repeatType: "reverse",
-                  },
-                  rotateY: {
-                    duration: 4,
-                    repeat: Number.POSITIVE_INFINITY,
-                    ease: "easeInOut",
-                    repeatType: "reverse",
-                  },
-                  rotateX: {
-                    duration: 3.5,
-                    repeat: Number.POSITIVE_INFINITY,
-                    ease: "easeInOut",
-                    repeatType: "reverse",
-                  },
-                  rotateZ: {
-                    duration: 5,
-                    repeat: Number.POSITIVE_INFINITY,
-                    ease: "easeInOut",
-                    repeatType: "reverse",
-                  },
-                }}
-                style={{
-                  perspective: "1000px",
-                  transformStyle: "preserve-3d",
-                }}
-                className="relative w-80 h-[600px]"
-              >
-                {/* Phone Body */}
-                <div className="w-full h-full bg-gradient-to-br from-gray-800 via-gray-900 to-black rounded-[3rem] shadow-2xl border border-gray-700 relative">
-                  {/* Phone Depth/Side */}
-                  <div className="absolute inset-0 bg-gradient-to-r from-gray-700 to-gray-800 rounded-[3rem] transform translate-x-1 translate-y-1 -z-10" />
-
-                  {/* Screen */}
-                  <div className="absolute top-6 left-4 right-4 bottom-6 bg-black rounded-[2.5rem] overflow-hidden border border-gray-600">
-                    {/* Screen Content */}
-                    <div className="h-full bg-gradient-to-br from-gray-900 to-black flex flex-col items-center justify-center text-white p-8">
-                      <div className="text-center space-y-4">
-                        <div className="text-2xl font-thin tracking-wider">SELL</div>
-                        <div className="text-2xl font-thin tracking-wider">MONETIZE</div>
-                        <div className="text-2xl font-thin tracking-wider opacity-70">CAPITALIZE</div>
-                      </div>
-                    </div>
-
-                    {/* Screen Reflection */}
-                    <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none" />
-                  </div>
-
-                  {/* Camera */}
-                  <div className="absolute top-8 left-1/2 transform -translate-x-1/2 w-3 h-3 bg-gray-800 rounded-full border border-gray-600">
-                    <div className="absolute inset-0.5 bg-gray-900 rounded-full">
-                      <div className="absolute inset-0.5 bg-black rounded-full" />
-                    </div>
-                  </div>
-
-                  {/* Speaker */}
-                  <div className="absolute top-6 left-1/2 transform -translate-x-1/2 w-12 h-1 bg-gray-700 rounded-full" />
-
-                  {/* Home Indicator */}
-                  <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 w-32 h-1 bg-white/30 rounded-full" />
-
-                  {/* Side Buttons */}
-                  <div className="absolute left-0 top-20 w-1 h-8 bg-gray-700 rounded-r-sm transform -translate-x-0.5" />
-                  <div className="absolute left-0 top-32 w-1 h-12 bg-gray-700 rounded-r-sm transform -translate-x-0.5" />
-                  <div className="absolute left-0 top-48 w-1 h-12 bg-gray-700 rounded-r-sm transform -translate-x-0.5" />
-
-                  {/* Power Button */}
-                  <div className="absolute right-0 top-24 w-1 h-16 bg-gray-700 rounded-l-sm transform translate-x-0.5" />
-
-                  {/* Phone Highlights */}
-                  <div className="absolute top-0 left-4 right-4 h-32 bg-gradient-to-b from-white/5 to-transparent rounded-t-[2.5rem] pointer-events-none" />
-                  <div className="absolute top-4 left-8 w-16 h-16 bg-white/3 rounded-full blur-xl pointer-events-none" />
-                </div>
-              </motion.div>
-            </div>
+                <Button
+                  onClick={handleExplore}
+                  variant="outline"
+                  className="px-8 py-4 border-2 border-white/30 text-white hover:bg-white/10 font-light rounded-full text-lg transition-all duration-200 hover:scale-105 bg-transparent"
+                >
+                  Explore
+                </Button>
+              </div>
+            </motion.div>
           </div>
         </div>
       </main>
