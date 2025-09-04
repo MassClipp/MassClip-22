@@ -92,7 +92,7 @@ export default function LandingPage() {
               transition={{ duration: 0.8 }}
               className="space-y-6"
             >
-              <h1 className="text-5xl lg:text-7xl font-thin text-white leading-tight">
+              <h1 className="text-5xl lg:text-7xl font-thin text-white/80 leading-tight">
                 Monetize Your Faceless Content
               </h1>
 
