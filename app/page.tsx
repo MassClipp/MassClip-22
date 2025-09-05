@@ -13,11 +13,11 @@ export default function LandingPage() {
   }
 
   const handleExplore = () => {
-    router.push("/explore")
+    router.push("/dashboard/explore")
   }
 
   const handlePricing = () => {
-    router.push("/membership")
+    router.push("/dashboard/membership")
   }
 
   return (
@@ -39,10 +39,10 @@ export default function LandingPage() {
 
           {/* Center Navigation */}
           <div className="hidden md:flex items-center space-x-8">
-            <Link href="/membership" className="text-white/80 hover:text-white transition-colors font-light">
+            <Link href="/dashboard/membership" className="text-white/80 hover:text-white transition-colors font-light">
               Pricing
             </Link>
-            <Link href="/explore" className="text-white/80 hover:text-white transition-colors font-light">
+            <Link href="/dashboard/explore" className="text-white/80 hover:text-white transition-colors font-light">
               Explore
             </Link>
             <Link href="/about" className="text-white/80 hover:text-white transition-colors font-light">
