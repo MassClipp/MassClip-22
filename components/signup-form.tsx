@@ -132,7 +132,7 @@ export function SignupForm() {
       {/* Content */}
       <div className="relative z-10 flex flex-col min-h-screen">
         {/* Header with Logo */}
-        <div className="absolute top-6 left-6 z-20">
+        <div className="absolute top-6 left-6 z-20 hidden md:block">
           <Link href="/" className="inline-block cursor-pointer transition-transform hover:scale-105">
             <span className="text-2xl font-thin">
               <span className="text-white">Mass</span>
@@ -144,17 +144,17 @@ export function SignupForm() {
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 flex items-center justify-center p-8">
-          <div className="w-full max-w-md space-y-8">
+        <div className="flex-1 flex items-center justify-center p-4 md:p-8 pt-8 md:pt-8">
+          <div className="w-full max-w-md space-y-6 md:space-y-8">
             {/* Header */}
-            <div className="text-center space-y-4">
-              <h1 className="text-4xl font-thin bg-gradient-to-br from-slate-300 via-cyan-200 via-blue-100 to-white bg-clip-text text-transparent">
+            <div className="text-center space-y-3 md:space-y-4">
+              <h1 className="text-3xl md:text-4xl font-thin bg-gradient-to-br from-slate-300 via-cyan-200 via-blue-100 to-white bg-clip-text text-transparent">
                 Create Account
               </h1>
-              <p className="text-gray-400 text-lg">Sign up to start using MassClip</p>
+              <p className="text-gray-400 text-base md:text-lg">Sign up to start using MassClip</p>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-3 md:space-y-4">
               {/* Error Message */}
               {error && (
                 <Alert variant="destructive" className="border-red-800 bg-red-900/20 backdrop-blur-sm">
@@ -166,7 +166,7 @@ export function SignupForm() {
               <Button
                 type="button"
                 onClick={handleGoogleSignup}
-                className="w-full h-12 bg-white hover:bg-gray-100 text-gray-900 font-medium rounded-lg transition-all duration-200 flex items-center justify-center space-x-3 backdrop-blur-sm"
+                className="w-full h-11 md:h-12 bg-white hover:bg-gray-100 text-gray-900 font-medium rounded-lg transition-all duration-200 flex items-center justify-center space-x-3 backdrop-blur-sm"
                 disabled={loading}
               >
                 {loading ? (
@@ -205,43 +205,43 @@ export function SignupForm() {
               </div>
 
               {/* Email Form */}
-              <form onSubmit={handleEmailSignup} className="space-y-4">
+              <form onSubmit={handleEmailSignup} className="space-y-3 md:space-y-4">
                 {/* Username Field */}
-                <div className="space-y-2">
+                <div className="space-y-1 md:space-y-2">
                   <label className="text-sm font-medium text-gray-300">Username (optional)</label>
                   <Input
                     type="text"
                     placeholder="Enter your username"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    className="h-12 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-gray-600 focus:ring-0 backdrop-blur-sm"
+                    className="h-11 md:h-12 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-gray-600 focus:ring-0 backdrop-blur-sm"
                     disabled={loading}
                   />
                 </div>
 
                 {/* Email Field */}
-                <div className="space-y-2">
+                <div className="space-y-1 md:space-y-2">
                   <label className="text-sm font-medium text-gray-300">Email</label>
                   <Input
                     type="email"
                     placeholder="massclip@gmail.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="h-12 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-gray-600 focus:ring-0 backdrop-blur-sm"
+                    className="h-11 md:h-12 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-gray-600 focus:ring-0 backdrop-blur-sm"
                     required
                     disabled={loading}
                   />
                 </div>
 
                 {/* Password Field */}
-                <div className="space-y-2">
+                <div className="space-y-1 md:space-y-2">
                   <label className="text-sm font-medium text-gray-300">Password</label>
                   <Input
                     type="password"
                     placeholder="••••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="h-12 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-gray-600 focus:ring-0 backdrop-blur-sm"
+                    className="h-11 md:h-12 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-gray-600 focus:ring-0 backdrop-blur-sm"
                     required
                     disabled={loading}
                     minLength={6}
@@ -249,14 +249,14 @@ export function SignupForm() {
                 </div>
 
                 {/* Confirm Password Field */}
-                <div className="space-y-2">
+                <div className="space-y-1 md:space-y-2">
                   <label className="text-sm font-medium text-gray-300">Confirm Password</label>
                   <Input
                     type="password"
                     placeholder="Confirm your password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="h-12 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-gray-600 focus:ring-0 backdrop-blur-sm"
+                    className="h-11 md:h-12 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-gray-600 focus:ring-0 backdrop-blur-sm"
                     required
                     disabled={loading}
                     minLength={6}
@@ -266,7 +266,7 @@ export function SignupForm() {
                 {/* Create Account Button with gradient */}
                 <Button
                   type="submit"
-                  className="w-full h-12 bg-gradient-to-br from-slate-300 via-cyan-200 via-blue-100 to-white text-black font-medium rounded-lg transition-all duration-200 hover:opacity-90"
+                  className="w-full h-11 md:h-12 bg-gradient-to-br from-slate-300 via-cyan-200 via-blue-100 to-white text-black font-medium rounded-lg transition-all duration-200 hover:opacity-90"
                   disabled={loading}
                 >
                   {loading ? (
@@ -298,7 +298,7 @@ export function SignupForm() {
         </div>
 
         {/* Footer */}
-        <div className="pb-8 px-8">
+        <div className="pb-6 md:pb-8 px-4 md:px-8">
           <div className="text-center text-sm text-gray-400">
             By continuing, you agree to our{" "}
             <Button
