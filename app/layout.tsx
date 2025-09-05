@@ -48,7 +48,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: "https://massclip.com",
+    url: "https://massclip.pro",
     siteName: "MassClip",
     title: "MassClip: The #1 Platform for Faceless Creators",
     description:
@@ -71,7 +71,7 @@ export const metadata: Metadata = {
     site: "@massclip",
   },
   alternates: {
-    canonical: "https://massclip.com",
+    canonical: "https://massclip.pro",
   },
   viewport: "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no",
   generator: "v0.dev",
@@ -98,13 +98,13 @@ export default function RootLayout({
               "@type": "Organization",
               name: "MassClip",
               description: "The #1 platform for faceless creators to monetize anonymous content",
-              url: "https://massclip.com",
-              logo: "https://massclip.com/favicon.png",
+              url: "https://massclip.pro",
+              logo: "https://massclip.pro/favicon.png",
               sameAs: ["https://twitter.com/massclip"],
               contactPoint: {
                 "@type": "ContactPoint",
                 contactType: "customer service",
-                email: "support@massclip.com",
+                email: "support@massclip.pro",
               },
               foundingDate: "2024",
               knowsAbout: [
@@ -127,11 +127,11 @@ export default function RootLayout({
               "@context": "https://schema.org",
               "@type": "WebSite",
               name: "MassClip",
-              url: "https://massclip.com",
+              url: "https://massclip.pro",
               description: "The #1 platform for faceless creators to monetize anonymous content",
               potentialAction: {
                 "@type": "SearchAction",
-                target: "https://massclip.com/search?q={search_term_string}",
+                target: "https://massclip.pro/search?q={search_term_string}",
                 "query-input": "required name=search_term_string",
               },
             }),
