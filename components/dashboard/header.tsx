@@ -168,7 +168,7 @@ export default function DashboardHeader() {
 
           <Button
             onClick={() => router.push("/dashboard/upload")}
-            className="hidden md:flex bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 border-none"
+            className="hidden md:flex bg-white text-black hover:bg-zinc-100 font-medium"
             size="sm"
           >
             <Upload className="h-4 w-4 mr-2" />
