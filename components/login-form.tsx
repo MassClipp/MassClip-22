@@ -112,7 +112,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
         {/* Header with Logo */}
         <div className="absolute top-6 left-6 z-20">
           <Link href="/" className="inline-block cursor-pointer transition-transform hover:scale-105">
-            <span className="text-2xl font-bold">
+            <span className="text-2xl font-thin">
               <span className="text-white">Mass</span>
               <span className="bg-gradient-to-br from-slate-300 via-cyan-200 via-blue-100 to-white bg-clip-text text-transparent">
                 Clip
@@ -209,7 +209,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                     placeholder="Enter your email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="h-12 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-gray-400 focus:ring-gray-400 backdrop-blur-sm"
+                    className="h-12 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-gray-600 focus:ring-0 backdrop-blur-sm"
                     required
                   />
 
@@ -220,7 +220,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                       placeholder="Enter your password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="h-12 pr-10 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-gray-400 focus:ring-gray-400 backdrop-blur-sm"
+                      className="h-12 pr-10 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-gray-600 focus:ring-0 backdrop-blur-sm"
                       required
                     />
                     <Button

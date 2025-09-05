@@ -123,18 +123,18 @@ export function SignupForm() {
 
   return (
     <div className="min-h-screen bg-black flex flex-col relative overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-tl from-white/8 via-white/3 to-transparent" />
-      <div className="absolute inset-0 bg-gradient-to-br from-transparent via-white/2 to-white/6" />
-      <div className="absolute inset-0 bg-gradient-radial from-white/10 via-white/4 to-transparent" />
-      <div className="absolute top-0 left-1/4 w-96 h-96 bg-white/8 rounded-full blur-3xl opacity-20" />
-      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-white/8 rounded-full blur-3xl opacity-20" />
+      <div className="absolute inset-0 bg-gradient-to-tl from-white/3 via-white/1 to-transparent" />
+      <div className="absolute inset-0 bg-gradient-to-br from-transparent via-white/1 to-white/2" />
+      <div className="absolute inset-0 bg-gradient-radial from-white/4 via-white/2 to-transparent" />
+      <div className="absolute top-0 left-1/4 w-96 h-96 bg-white/3 rounded-full blur-3xl opacity-20" />
+      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-white/3 rounded-full blur-3xl opacity-20" />
 
       {/* Content */}
       <div className="relative z-10 flex flex-col min-h-screen">
         {/* Header with Logo */}
         <div className="absolute top-6 left-6 z-20">
           <Link href="/" className="inline-block cursor-pointer transition-transform hover:scale-105">
-            <span className="text-2xl font-bold">
+            <span className="text-2xl font-thin">
               <span className="text-white">Mass</span>
               <span className="bg-gradient-to-br from-slate-300 via-cyan-200 via-blue-100 to-white bg-clip-text text-transparent">
                 Clip
@@ -214,7 +214,7 @@ export function SignupForm() {
                     placeholder="Enter your username"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    className="h-12 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-gray-400 focus:ring-gray-400 backdrop-blur-sm"
+                    className="h-12 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-gray-600 focus:ring-0 backdrop-blur-sm"
                     disabled={loading}
                   />
                 </div>
@@ -227,7 +227,7 @@ export function SignupForm() {
                     placeholder="massclip@gmail.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="h-12 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-gray-400 focus:ring-gray-400 backdrop-blur-sm"
+                    className="h-12 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-gray-600 focus:ring-0 backdrop-blur-sm"
                     required
                     disabled={loading}
                   />
@@ -241,7 +241,7 @@ export function SignupForm() {
                     placeholder="••••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="h-12 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-gray-400 focus:ring-gray-400 backdrop-blur-sm"
+                    className="h-12 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-gray-600 focus:ring-0 backdrop-blur-sm"
                     required
                     disabled={loading}
                     minLength={6}
@@ -256,7 +256,7 @@ export function SignupForm() {
                     placeholder="Confirm your password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="h-12 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-gray-400 focus:ring-gray-400 backdrop-blur-sm"
+                    className="h-12 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-gray-600 focus:ring-0 backdrop-blur-sm"
                     required
                     disabled={loading}
                     minLength={6}

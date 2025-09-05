@@ -1,4 +1,4 @@
-export default function DeployLoading() {
+export default function MinimalLoading() {
   return (
     <div className="min-h-screen bg-black flex items-center justify-center">
       <div className="flex space-x-2">
