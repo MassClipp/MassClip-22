@@ -61,7 +61,7 @@ export async function generateMetadata({ params }: { params: { username: string 
     }
 
     // Prioritize profilePic over photoURL
-    const profileImage = userData.profilePic || userData.photoURL || "https://massclip.pro/og-image.jpg"
+    const profileImage = userData.profilePic || userData.photoURL || "https://massclip.com/og-image.jpg"
 
     return {
       title: `${userData?.displayName || username} | MassClip`,
@@ -69,7 +69,7 @@ export async function generateMetadata({ params }: { params: { username: string 
       openGraph: {
         title: `${userData?.displayName || username} | MassClip`,
         description: userData?.bio || `Check out ${userData?.displayName || username}'s content on MassClip`,
-        url: `https://massclip.pro/creator/${username}`,
+        url: `https://massclip.com/creator/${username}`,
         siteName: "MassClip",
         images: [
           {
@@ -81,6 +81,9 @@ export async function generateMetadata({ params }: { params: { username: string 
         ],
         locale: "en_US",
         type: "website",
+      },
+      alternates: {
+        canonical: `https://massclip.com/creator/${username}`,
       },
     }
   } catch (error) {

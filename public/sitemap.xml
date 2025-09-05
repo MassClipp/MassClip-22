@@ -2,51 +2,51 @@
 <!-- Basic sitemap for search engine indexing -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://massclip.pro</loc>
-    <lastmod>2025-09-03</lastmod>
+    <loc>https://massclip.com</loc>
+    <lastmod>2025-09-05</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://massclip.pro/about</loc>
-    <lastmod>2025-09-03</lastmod>
+    <loc>https://massclip.com/about</loc>
+    <lastmod>2025-09-05</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://massclip.pro/pricing</loc>
-    <lastmod>2025-09-03</lastmod>
+    <loc>https://massclip.com/pricing</loc>
+    <lastmod>2025-09-05</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://massclip.pro/membership-plans</loc>
-    <lastmod>2025-09-03</lastmod>
+    <loc>https://massclip.com/membership-plans</loc>
+    <lastmod>2025-09-05</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
   </url>
   <!-- Added explore page and resource pages to sitemap -->
   <url>
-    <loc>https://massclip.pro/explore</loc>
-    <lastmod>2025-09-04</lastmod>
+    <loc>https://massclip.com/explore</loc>
+    <lastmod>2025-09-05</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://massclip.pro/resources/free-content</loc>
-    <lastmod>2025-09-04</lastmod>
+    <loc>https://massclip.com/resources/free-content</loc>
+    <lastmod>2025-09-05</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://massclip.pro/resources/optimize-storefront</loc>
-    <lastmod>2025-09-04</lastmod>
+    <loc>https://massclip.com/resources/optimize-storefront</loc>
+    <lastmod>2025-09-05</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://massclip.pro/resources/organize-bundles</loc>
-    <lastmod>2025-09-04</lastmod>
+    <loc>https://massclip.com/resources/organize-bundles</loc>
+    <lastmod>2025-09-05</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
