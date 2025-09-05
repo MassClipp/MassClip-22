@@ -1185,7 +1185,7 @@ function InlineVideoRow({
       onMouseLeave={() => setIsHovered(false)}
     >
       <div className="px-6 mb-4 flex items-center justify-between">
-        <h2 className="text-2xl font-extralight tracking-wider text-white category-title group-hover:text-crimson transition-colors duration-300">
+        <h2 className="text-2xl font-extralight tracking-wider text-white category-title group-hover:bg-gradient-to-r group-hover:from-slate-300 group-hover:via-cyan-200 group-hover:to-blue-100 group-hover:bg-clip-text group-hover:text-transparent transition-all duration-300">
           {title}
         </h2>
         <div className="flex items-center gap-2">
@@ -1602,7 +1602,7 @@ export default function ExplorePage() {
                     variant="outline"
                     className="flex items-center justify-start h-auto py-4 px-5 bg-zinc-900/30 backdrop-blur-sm border-zinc-800/50 hover:bg-zinc-900/50 hover:border-zinc-700 rounded-xl transition-all duration-300"
                   >
-                    <div className="p-2 rounded-full bg-black/30 mr-3 text-crimson">
+                    <div className="p-2 rounded-full bg-black/30 mr-3 text-cyan-400">
                       <Lock className="h-4 w-4 md:h-5 md:w-5" />
                     </div>
                     <div className="text-left">
@@ -1623,11 +1623,11 @@ export default function ExplorePage() {
                   }}
                   variant="outline"
                   className={`flex items-center justify-start h-auto py-4 px-5 bg-zinc-900/30 backdrop-blur-sm border-zinc-800/50 hover:bg-zinc-900/50 hover:border-zinc-700 rounded-xl transition-all duration-300 ${
-                    activeCategory === category.name ? "border-crimson/50 bg-crimson/5" : ""
+                    activeCategory === category.name ? "border-cyan-400/50 bg-cyan-400/5" : ""
                   }`}
                 >
                   <div
-                    className={`p-2 rounded-full bg-black/30 mr-3 ${activeCategory === category.name ? "text-crimson" : "text-crimson"}`}
+                    className={`p-2 rounded-full bg-black/30 mr-3 ${activeCategory === category.name ? "text-cyan-400" : "text-cyan-400"}`}
                   >
                     {category.icon}
                   </div>

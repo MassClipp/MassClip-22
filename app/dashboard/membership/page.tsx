@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { CheckCircle2, Crown, Shield, Sparkles, Zap, Star } from "lucide-react"
+import { CheckCircle2, Crown, Shield, Zap, Star } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { useAuth } from "@/contexts/auth-context"
@@ -68,10 +68,10 @@ export default function MembershipPage() {
           </p>
         </div>
 
-        <div className="max-w-6xl mx-auto grid gap-8 lg:grid-cols-2">
+        <div className="grid gap-8 lg:grid-cols-2">
           {/* Free Plan */}
           <Card
-            className={`group relative overflow-hidden border-2 transition-all duration-500 hover:scale-105 ${
+            className={`group relative overflow-hidden border-2 transition-all duration-500 ${
               selectedPlan === "free"
                 ? "border-cyan-400/50 shadow-2xl shadow-cyan-500/20"
                 : "border-zinc-700/50 hover:border-zinc-600/70"
@@ -134,7 +134,7 @@ export default function MembershipPage() {
 
           {/* Creator Pro Plan */}
           <Card
-            className={`group relative overflow-hidden border-2 transition-all duration-500 hover:scale-105 ${
+            className={`group relative overflow-hidden border-2 transition-all duration-500 ${
               selectedPlan === "pro"
                 ? "border-cyan-400/50 shadow-2xl shadow-cyan-500/20"
                 : "border-zinc-700/50 hover:border-zinc-600/70"
@@ -190,12 +190,12 @@ export default function MembershipPage() {
                 <Button
                   onClick={handleUpgradeClick}
                   disabled={isRedirecting}
-                  className="w-full py-4 text-lg font-medium rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white transition-all duration-300 hover:scale-105 shadow-lg shadow-cyan-500/25"
+                  className="w-full py-4 text-lg font-medium rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white transition-all duration-300 shadow-lg shadow-cyan-500/25"
                 >
                   {isRedirecting ? (
                     <div className="flex items-center justify-center">
-                      <Sparkles className="mr-2 h-5 w-5 animate-spin" />
-                      Redirecting...
+                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
+                      Loading...
                     </div>
                   ) : (
                     <div className="flex items-center justify-center">
