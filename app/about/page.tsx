@@ -87,6 +87,19 @@ export default function AboutPage() {
               </div>
             </div>
 
+            {/* Contact Section */}
+            <div className="space-y-6 pt-8 border-t border-white/10">
+              <p className="text-lg text-white/70 leading-relaxed font-light">
+                Have questions or need support? Contact us at{" "}
+                <a
+                  href="mailto:contact@massclip.pro"
+                  className="bg-gradient-to-br from-slate-300 via-cyan-200 via-blue-100 to-white bg-clip-text text-transparent hover:from-white hover:to-white transition-all duration-200"
+                >
+                  contact@massclip.pro
+                </a>
+              </p>
+            </div>
+
             {/* Back to Home */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -108,23 +121,7 @@ export default function AboutPage() {
       {/* Footer */}
       <footer className="relative z-10 bg-white py-4 px-6 mt-20">
         <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            {/* Company */}
-            <div>
-              <h3 className="text-black font-light text-lg mb-4">Company</h3>
-              <div className="space-y-3">
-                <Link href="/about" className="block text-gray-600 hover:text-black transition-colors font-light">
-                  About
-                </Link>
-                <Link href="/contact" className="block text-gray-600 hover:text-black transition-colors font-light">
-                  Contact
-                </Link>
-                <Link href="/careers" className="block text-gray-600 hover:text-black transition-colors font-light">
-                  Careers
-                </Link>
-              </div>
-            </div>
-
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Resources */}
             <div>
               <h3 className="text-black font-light text-lg mb-4">Resources</h3>
@@ -150,6 +147,22 @@ export default function AboutPage() {
               </div>
             </div>
 
+            {/* Company */}
+            <div>
+              <h3 className="text-black font-light text-lg mb-4">Company</h3>
+              <div className="space-y-3">
+                <Link href="/about" className="block text-gray-600 hover:text-black transition-colors font-light">
+                  About Us
+                </Link>
+                <a
+                  href="mailto:contact@massclip.pro"
+                  className="block text-gray-600 hover:text-black transition-colors font-light"
+                >
+                  contact@massclip.pro
+                </a>
+              </div>
+            </div>
+
             {/* Legal */}
             <div>
               <h3 className="text-black font-light text-lg mb-4">Legal</h3>
@@ -159,25 +172,6 @@ export default function AboutPage() {
                 </Link>
                 <Link href="/privacy" className="block text-gray-600 hover:text-black transition-colors font-light">
                   Privacy Policy
-                </Link>
-                <Link href="/cookies" className="block text-gray-600 hover:text-black transition-colors font-light">
-                  Cookie Policy
-                </Link>
-              </div>
-            </div>
-
-            {/* Support */}
-            <div>
-              <h3 className="text-black font-light text-lg mb-4">Support</h3>
-              <div className="space-y-3">
-                <Link href="/help" className="block text-gray-600 hover:text-black transition-colors font-light">
-                  Help Center
-                </Link>
-                <Link href="/support" className="block text-gray-600 hover:text-black transition-colors font-light">
-                  Contact Support
-                </Link>
-                <Link href="/status" className="block text-gray-600 hover:text-black transition-colors font-light">
-                  System Status
                 </Link>
               </div>
             </div>

@@ -16,6 +16,10 @@ export default function LandingPage() {
     router.push("/explore")
   }
 
+  const handlePricing = () => {
+    router.push("/membership")
+  }
+
   return (
     <div className="min-h-screen bg-black relative overflow-hidden">
       <div className="absolute inset-0 bg-gradient-to-tl from-white/30 via-white/10 to-transparent opacity-70" />
@@ -35,7 +39,7 @@ export default function LandingPage() {
 
           {/* Center Navigation */}
           <div className="hidden md:flex items-center space-x-8">
-            <Link href="/pricing" className="text-white/80 hover:text-white transition-colors font-light">
+            <Link href="/membership" className="text-white/80 hover:text-white transition-colors font-light">
               Pricing
             </Link>
             <Link href="/explore" className="text-white/80 hover:text-white transition-colors font-light">
@@ -107,25 +111,12 @@ export default function LandingPage() {
               >
                 {/* Single flowing gradient across all three words */}
                 <div className="text-8xl xl:text-9xl font-extralight leading-none tracking-tight">
-                  <div className="bg-gradient-to-br from-slate-300 via-cyan-200 via-blue-100 to-white bg-clip-text text-transparent drop-shadow-2xl">
+                  <div className="bg-gradient-to-br from-slate-300 via-cyan-200 via-blue-100 to-white bg-clip-text text-transparent drop-shadow-[0_8px_16px_rgba(255,255,255,0.3)]">
                     <div className="mb-2">Capitalize</div>
                     <div className="mb-2">Sell</div>
                     <div>Monetize</div>
                   </div>
                 </div>
-              </motion.div>
-
-              {/* Enhanced accent elements for anodized pearl stainless steel effect */}
-              <motion.div
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.8, delay: 0.6 }}
-                className="flex space-x-3"
-              >
-                <div className="w-20 h-px bg-gradient-to-r from-transparent via-slate-300/80 to-transparent shadow-lg"></div>
-                <div className="w-20 h-px bg-gradient-to-r from-transparent via-cyan-200/80 to-transparent shadow-lg"></div>
-                <div className="w-20 h-px bg-gradient-to-r from-transparent via-blue-100/80 to-transparent shadow-lg"></div>
-                <div className="w-20 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent shadow-lg"></div>
               </motion.div>
             </div>
           </div>
@@ -234,23 +225,7 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="relative z-10 bg-white py-4 px-6">
         <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            {/* Company */}
-            <div>
-              <h3 className="text-black font-light text-lg mb-4">Company</h3>
-              <div className="space-y-3">
-                <Link href="/about" className="block text-gray-600 hover:text-black transition-colors font-light">
-                  About
-                </Link>
-                <Link href="/contact" className="block text-gray-600 hover:text-black transition-colors font-light">
-                  Contact
-                </Link>
-                <Link href="/careers" className="block text-gray-600 hover:text-black transition-colors font-light">
-                  Careers
-                </Link>
-              </div>
-            </div>
-
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Resources */}
             <div>
               <h3 className="text-black font-light text-lg mb-4">Resources</h3>
@@ -276,6 +251,22 @@ export default function LandingPage() {
               </div>
             </div>
 
+            {/* Company */}
+            <div>
+              <h3 className="text-black font-light text-lg mb-4">Company</h3>
+              <div className="space-y-3">
+                <Link href="/about" className="block text-gray-600 hover:text-black transition-colors font-light">
+                  About Us
+                </Link>
+                <a
+                  href="mailto:contact@massclip.pro"
+                  className="block text-gray-600 hover:text-black transition-colors font-light"
+                >
+                  contact@massclip.pro
+                </a>
+              </div>
+            </div>
+
             {/* Legal */}
             <div>
               <h3 className="text-black font-light text-lg mb-4">Legal</h3>
@@ -285,25 +276,6 @@ export default function LandingPage() {
                 </Link>
                 <Link href="/privacy" className="block text-gray-600 hover:text-black transition-colors font-light">
                   Privacy Policy
-                </Link>
-                <Link href="/cookies" className="block text-gray-600 hover:text-black transition-colors font-light">
-                  Cookie Policy
-                </Link>
-              </div>
-            </div>
-
-            {/* Support */}
-            <div>
-              <h3 className="text-black font-light text-lg mb-4">Support</h3>
-              <div className="space-y-3">
-                <Link href="/help" className="block text-gray-600 hover:text-black transition-colors font-light">
-                  Help Center
-                </Link>
-                <Link href="/support" className="block text-gray-600 hover:text-black transition-colors font-light">
-                  Contact Support
-                </Link>
-                <Link href="/status" className="block text-gray-600 hover:text-black transition-colors font-light">
-                  System Status
                 </Link>
               </div>
             </div>
