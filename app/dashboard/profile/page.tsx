@@ -659,7 +659,7 @@ export default function ProfilePage() {
                   <Button
                     type="submit"
                     disabled={saving || !displayName.trim() || !username.trim()}
-                    className="ml-auto bg-red-600 hover:bg-red-700"
+                    className="ml-auto bg-white hover:bg-gray-100 text-black"
                   >
                     {saving ? (
                       <>
@@ -833,17 +833,17 @@ export default function ProfilePage() {
                         <>
                           <div className="flex items-center gap-2">
                             <CheckCircle className="h-4 w-4 text-green-500" />
-                            <span className="text-sm">5 Downloads per Month</span>
+                            <span className="text-sm">15 downloads per month</span>
                           </div>
 
                           <div className="flex items-center gap-2">
                             <CheckCircle className="h-4 w-4 text-green-500" />
-                            <span className="text-sm">3 Bundles Maximum</span>
+                            <span className="text-sm">2 bundles max on storefront</span>
                           </div>
 
                           <div className="flex items-center gap-2">
                             <CheckCircle className="h-4 w-4 text-green-500" />
-                            <span className="text-sm">5 Videos per Bundle</span>
+                            <span className="text-sm">10 videos per bundle limit</span>
                           </div>
 
                           <div className="flex items-center gap-2">
@@ -853,7 +853,7 @@ export default function ProfilePage() {
 
                           <div className="flex items-center gap-2">
                             <CheckCircle className="h-4 w-4 text-green-500" />
-                            <span className="text-sm">MassClip Watermark</span>
+                            <span className="text-sm">Limited organization features</span>
                           </div>
 
                           <div className="flex items-center gap-2">
@@ -870,7 +870,7 @@ export default function ProfilePage() {
                     {subscriptionData?.plan !== "creator_pro" || !subscriptionData?.isActive ? (
                       <Button
                         onClick={() => router.push("/dashboard/membership")}
-                        className="bg-red-600 hover:bg-red-700"
+                        className="bg-white hover:bg-gray-100 text-black"
                       >
                         <Crown className="h-4 w-4 mr-2" />
                         Upgrade to Pro

@@ -209,7 +209,7 @@ export default function MembershipPage() {
           </Card>
         </div>
 
-        <div className="max-w-4xl mx-auto">
+        <div>
           <h3 className="mb-12 text-center text-4xl font-light text-white">
             Frequently Asked{" "}
             <span className="bg-gradient-to-br from-slate-300 via-cyan-200 via-blue-100 to-white bg-clip-text text-transparent">
