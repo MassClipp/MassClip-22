@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2 } from "lucide-react"
-import Logo from "@/components/logo"
+import Link from "next/link"
 
 export function SignupForm() {
   const [email, setEmail] = useState("")
@@ -123,23 +123,24 @@ export function SignupForm() {
 
   return (
     <div className="min-h-screen bg-black flex flex-col relative overflow-hidden">
-      {/* Enhanced gradient background to match landing page */}
-      <div className="absolute inset-0 bg-gradient-to-tl from-white/30 via-white/10 to-transparent" />
-      <div className="absolute inset-0 bg-gradient-to-br from-transparent via-white/5 to-white/20" />
-      <div className="absolute inset-0 bg-gradient-radial from-white/25 via-white/12 to-transparent" />
-      <div className="absolute top-0 left-1/4 w-96 h-96 bg-white/15 rounded-full blur-3xl opacity-30" />
-      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-white/15 rounded-full blur-3xl opacity-30" />
+      <div className="absolute inset-0 bg-gradient-to-tl from-white/8 via-white/3 to-transparent" />
+      <div className="absolute inset-0 bg-gradient-to-br from-transparent via-white/2 to-white/6" />
+      <div className="absolute inset-0 bg-gradient-radial from-white/10 via-white/4 to-transparent" />
+      <div className="absolute top-0 left-1/4 w-96 h-96 bg-white/8 rounded-full blur-3xl opacity-20" />
+      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-white/8 rounded-full blur-3xl opacity-20" />
 
       {/* Content */}
       <div className="relative z-10 flex flex-col min-h-screen">
         {/* Header with Logo */}
         <div className="absolute top-6 left-6 z-20">
-          <Logo
-            href="/"
-            size="md"
-            className="cursor-pointer transition-transform hover:scale-105"
-            linkClassName="inline-block"
-          />
+          <Link href="/" className="inline-block cursor-pointer transition-transform hover:scale-105">
+            <span className="text-2xl font-bold">
+              <span className="text-white">Mass</span>
+              <span className="bg-gradient-to-br from-slate-300 via-cyan-200 via-blue-100 to-white bg-clip-text text-transparent">
+                Clip
+              </span>
+            </span>
+          </Link>
         </div>
 
         {/* Main Content */}
@@ -147,8 +148,7 @@ export function SignupForm() {
           <div className="w-full max-w-md space-y-8">
             {/* Header */}
             <div className="text-center space-y-4">
-              {/* Applied gradient to main heading */}
-              <h1 className="text-4xl font-bold bg-gradient-to-br from-slate-300 via-cyan-200 via-blue-100 to-white bg-clip-text text-transparent">
+              <h1 className="text-4xl font-thin bg-gradient-to-br from-slate-300 via-cyan-200 via-blue-100 to-white bg-clip-text text-transparent">
                 Create Account
               </h1>
               <p className="text-gray-400 text-lg">Sign up to start using MassClip</p>
@@ -214,7 +214,7 @@ export function SignupForm() {
                     placeholder="Enter your username"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    className="h-12 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-cyan-400 focus:ring-cyan-400 backdrop-blur-sm"
+                    className="h-12 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-gray-400 focus:ring-gray-400 backdrop-blur-sm"
                     disabled={loading}
                   />
                 </div>
@@ -227,7 +227,7 @@ export function SignupForm() {
                     placeholder="massclip@gmail.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="h-12 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-cyan-400 focus:ring-cyan-400 backdrop-blur-sm"
+                    className="h-12 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-gray-400 focus:ring-gray-400 backdrop-blur-sm"
                     required
                     disabled={loading}
                   />
@@ -241,7 +241,7 @@ export function SignupForm() {
                     placeholder="••••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="h-12 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-cyan-400 focus:ring-cyan-400 backdrop-blur-sm"
+                    className="h-12 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-gray-400 focus:ring-gray-400 backdrop-blur-sm"
                     required
                     disabled={loading}
                     minLength={6}
@@ -256,7 +256,7 @@ export function SignupForm() {
                     placeholder="Confirm your password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="h-12 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-cyan-400 focus:ring-cyan-400 backdrop-blur-sm"
+                    className="h-12 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-gray-400 focus:ring-gray-400 backdrop-blur-sm"
                     required
                     disabled={loading}
                     minLength={6}
@@ -284,7 +284,6 @@ export function SignupForm() {
             {/* Sign In Link */}
             <div className="text-center">
               <span className="text-gray-400">Already have an account? </span>
-              {/* Applied gradient to sign in link */}
               <Button
                 variant="link"
                 size="sm"
@@ -300,12 +299,12 @@ export function SignupForm() {
 
         {/* Footer */}
         <div className="pb-8 px-8">
-          <div className="text-center text-sm text-gray-500">
+          <div className="text-center text-sm text-gray-400">
             By continuing, you agree to our{" "}
             <Button
               variant="link"
               size="sm"
-              className="h-auto p-0 text-sm text-gray-500 hover:text-gray-400 underline"
+              className="h-auto p-0 text-sm text-gray-300 hover:text-white underline"
               onClick={() => router.push("/terms")}
               type="button"
             >
@@ -315,7 +314,7 @@ export function SignupForm() {
             <Button
               variant="link"
               size="sm"
-              className="h-auto p-0 text-sm text-gray-500 hover:text-gray-400 underline"
+              className="h-auto p-0 text-sm text-gray-300 hover:text-white underline"
               onClick={() => router.push("/privacy")}
               type="button"
             >
