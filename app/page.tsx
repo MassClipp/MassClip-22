@@ -22,10 +22,11 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-black relative overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-tl from-white/30 via-white/10 to-transparent opacity-70" />
-      <div className="absolute bottom-0 right-0 w-1/2 h-1/2 bg-gradient-radial from-white/25 via-white/12 to-transparent opacity-90" />
-      <div className="absolute top-0 left-0 w-1/3 h-1/3 bg-gradient-radial from-white/15 via-white/5 to-transparent opacity-60" />
-      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-white/5 to-white/10 opacity-50" />
+      <div className="absolute inset-0 bg-gradient-to-tl from-cyan-200/20 via-white/10 to-transparent opacity-70" />
+      <div className="absolute bottom-0 right-0 w-1/2 h-1/2 bg-gradient-radial from-cyan-100/15 via-white/12 to-transparent opacity-90" />
+      <div className="absolute top-0 left-0 w-1/3 h-1/3 bg-gradient-radial from-slate-300/10 via-cyan-200/5 to-transparent opacity-60" />
+      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-cyan-200/3 to-blue-100/8 opacity-50" />
+      <div className="absolute inset-0 bg-gradient-to-br from-transparent via-cyan-200/5 to-transparent opacity-40" />
 
       {/* Header */}
       <header className="relative z-10 px-6 py-6">
