@@ -1512,7 +1512,7 @@ export default function ExplorePage() {
                 name="search"
                 placeholder="Search videos..."
                 defaultValue={searchQuery}
-                className="w-full py-2.5 pl-10 pr-4 bg-zinc-900/60 border border-zinc-800 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-all"
+                className={`w-full py-2.5 pl-10 pr-4 bg-zinc-900/60 border border-zinc-800 rounded-lg text-white placeholder-zinc-500 focus:outline-none transition-all ${"focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/50"}`}
               />
             </div>
           </form>

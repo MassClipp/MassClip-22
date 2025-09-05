@@ -123,11 +123,11 @@ export function NavDropdown() {
                           isActive
                             ? "bg-zinc-800/80 text-white font-medium shadow-sm"
                             : isMembership
-                              ? "text-yellow-400 hover:text-yellow-300 bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/20"
+                              ? "text-cyan-300 hover:text-cyan-200 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20"
                               : "text-zinc-300 hover:text-white"
                         }`}
                       >
-                        <Icon className={`h-4 w-4 ${isMembership ? "text-yellow-400" : ""}`} />
+                        <Icon className={`h-4 w-4 ${isMembership ? "text-cyan-300" : ""}`} />
                         {item.title}
                       </Link>
                     )

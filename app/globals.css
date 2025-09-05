@@ -815,7 +815,7 @@
 
 /* Add this to your globals.css file if it's not already there */
 .text-gradient-accent {
-  background: linear-gradient(to right, #e61e4d, #d70466);
+  background: linear-gradient(to right, #cbd5e1, #a5f3fc, #dbeafe, #ffffff);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -829,4 +829,13 @@
 
 .group:hover .group-hover\:opacity-100 {
   opacity: 1;
+}
+
+/* New gradient background utility classes */
+.bg-gradient-accent {
+  background: linear-gradient(135deg, #cbd5e1, #a5f3fc, #dbeafe, #ffffff);
+}
+
+.border-gradient-accent {
+  border-image: linear-gradient(135deg, #cbd5e1, #a5f3fc, #dbeafe, #ffffff) 1;
 }
