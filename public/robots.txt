@@ -15,4 +15,4 @@ Disallow: /debug
 Allow: /api/og/
 Allow: /api/sitemap
 
-Sitemap: https://massclip.com/sitemap.xml
+Sitemap: https://massclip.pro/sitemap.xml
