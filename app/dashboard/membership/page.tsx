@@ -54,8 +54,8 @@ export default function MembershipPage() {
       <div className="absolute bottom-0 right-0 w-1/2 h-1/2 bg-gradient-radial from-slate-400/20 via-cyan-400/10 to-transparent opacity-30" />
       <div className="absolute top-0 left-0 w-1/3 h-1/3 bg-gradient-radial from-blue-400/15 via-slate-400/5 to-transparent opacity-40" />
 
-      <div className="relative z-10 space-y-12 p-8">
-        <div className="text-center space-y-4">
+      <div className="relative z-10 space-y-12">
+        <div className="text-center space-y-4 px-8 pt-8">
           <h1 className="text-5xl lg:text-6xl font-thin text-white leading-tight">
             Choose Your{" "}
             <span className="bg-gradient-to-br from-slate-300 via-cyan-200 via-blue-100 to-white bg-clip-text text-transparent">
@@ -68,7 +68,7 @@ export default function MembershipPage() {
           </p>
         </div>
 
-        <div className="grid gap-8 lg:grid-cols-2">
+        <div className="grid gap-8 lg:grid-cols-2 px-8">
           {/* Free Plan */}
           <Card
             className={`group relative overflow-hidden border-2 transition-all duration-500 ${
@@ -209,7 +209,7 @@ export default function MembershipPage() {
           </Card>
         </div>
 
-        <div>
+        <div className="px-8 pb-8">
           <h3 className="mb-12 text-center text-4xl font-light text-white">
             Frequently Asked{" "}
             <span className="bg-gradient-to-br from-slate-300 via-cyan-200 via-blue-100 to-white bg-clip-text text-transparent">
