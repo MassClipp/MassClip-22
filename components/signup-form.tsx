@@ -1,18 +1,15 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from "firebase/auth"
 import { auth } from "@/lib/firebase-safe"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Separator } from "@/components/ui/separator"
 import { Loader2 } from "lucide-react"
+import Logo from "@/components/logo"
 
 export function SignupForm() {
   const [email, setEmail] = useState("")
@@ -125,137 +122,209 @@ export function SignupForm() {
   }
 
   return (
-    <Card className="w-full max-w-md mx-auto">
-      <CardHeader>
-        <CardTitle>Create Account</CardTitle>
-        <CardDescription>Sign up to start using MassClip</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {error && (
-          <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
+    <div className="min-h-screen bg-black flex flex-col relative overflow-hidden">
+      {/* Enhanced gradient background to match landing page */}
+      <div className="absolute inset-0 bg-gradient-to-tl from-white/30 via-white/10 to-transparent" />
+      <div className="absolute inset-0 bg-gradient-to-br from-transparent via-white/5 to-white/20" />
+      <div className="absolute inset-0 bg-gradient-radial from-white/25 via-white/12 to-transparent" />
+      <div className="absolute top-0 left-1/4 w-96 h-96 bg-white/15 rounded-full blur-3xl opacity-30" />
+      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-white/15 rounded-full blur-3xl opacity-30" />
 
-        <Button
-          type="button"
-          variant="outline"
-          className="w-full bg-transparent"
-          onClick={handleGoogleSignup}
-          disabled={loading}
-        >
-          {loading ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
-              <path
-                fill="currentColor"
-                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-              />
-              <path
-                fill="currentColor"
-                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-              />
-              <path
-                fill="currentColor"
-                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-              />
-              <path
-                fill="currentColor"
-                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-              />
-            </svg>
-          )}
-          Continue with Google
-        </Button>
+      {/* Content */}
+      <div className="relative z-10 flex flex-col min-h-screen">
+        {/* Header with Logo */}
+        <div className="absolute top-6 left-6 z-20">
+          <Logo
+            href="/"
+            size="md"
+            className="cursor-pointer transition-transform hover:scale-105"
+            linkClassName="inline-block"
+          />
+        </div>
 
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <Separator className="w-full" />
-          </div>
-          <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-background px-2 text-muted-foreground">Or continue with email</span>
+        {/* Main Content */}
+        <div className="flex-1 flex items-center justify-center p-8">
+          <div className="w-full max-w-md space-y-8">
+            {/* Header */}
+            <div className="text-center space-y-4">
+              {/* Applied gradient to main heading */}
+              <h1 className="text-4xl font-bold bg-gradient-to-br from-slate-300 via-cyan-200 via-blue-100 to-white bg-clip-text text-transparent">
+                Create Account
+              </h1>
+              <p className="text-gray-400 text-lg">Sign up to start using MassClip</p>
+            </div>
+
+            <div className="space-y-4">
+              {/* Error Message */}
+              {error && (
+                <Alert variant="destructive" className="border-red-800 bg-red-900/20 backdrop-blur-sm">
+                  <AlertDescription className="text-red-400">{error}</AlertDescription>
+                </Alert>
+              )}
+
+              {/* Google Sign Up */}
+              <Button
+                type="button"
+                onClick={handleGoogleSignup}
+                className="w-full h-12 bg-white hover:bg-gray-100 text-gray-900 font-medium rounded-lg transition-all duration-200 flex items-center justify-center space-x-3 backdrop-blur-sm"
+                disabled={loading}
+              >
+                {loading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <svg className="w-5 h-5" viewBox="0 0 24 24">
+                    <path
+                      fill="#4285F4"
+                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                    />
+                    <path
+                      fill="#EA4335"
+                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                    />
+                  </svg>
+                )}
+                <span>Continue with Google</span>
+              </Button>
+
+              {/* Divider */}
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-600" />
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-4 bg-black text-gray-400">OR CONTINUE WITH EMAIL</span>
+                </div>
+              </div>
+
+              {/* Email Form */}
+              <form onSubmit={handleEmailSignup} className="space-y-4">
+                {/* Username Field */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-300">Username (optional)</label>
+                  <Input
+                    type="text"
+                    placeholder="Enter your username"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    className="h-12 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-cyan-400 focus:ring-cyan-400 backdrop-blur-sm"
+                    disabled={loading}
+                  />
+                </div>
+
+                {/* Email Field */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-300">Email</label>
+                  <Input
+                    type="email"
+                    placeholder="massclip@gmail.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="h-12 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-cyan-400 focus:ring-cyan-400 backdrop-blur-sm"
+                    required
+                    disabled={loading}
+                  />
+                </div>
+
+                {/* Password Field */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-300">Password</label>
+                  <Input
+                    type="password"
+                    placeholder="••••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="h-12 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-cyan-400 focus:ring-cyan-400 backdrop-blur-sm"
+                    required
+                    disabled={loading}
+                    minLength={6}
+                  />
+                </div>
+
+                {/* Confirm Password Field */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-300">Confirm Password</label>
+                  <Input
+                    type="password"
+                    placeholder="Confirm your password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="h-12 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-cyan-400 focus:ring-cyan-400 backdrop-blur-sm"
+                    required
+                    disabled={loading}
+                    minLength={6}
+                  />
+                </div>
+
+                {/* Create Account Button with gradient */}
+                <Button
+                  type="submit"
+                  className="w-full h-12 bg-gradient-to-br from-slate-300 via-cyan-200 via-blue-100 to-white text-black font-medium rounded-lg transition-all duration-200 hover:opacity-90"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Creating Account...
+                    </>
+                  ) : (
+                    "Create Account"
+                  )}
+                </Button>
+              </form>
+            </div>
+
+            {/* Sign In Link */}
+            <div className="text-center">
+              <span className="text-gray-400">Already have an account? </span>
+              {/* Applied gradient to sign in link */}
+              <Button
+                variant="link"
+                size="sm"
+                className="h-auto p-0 text-sm bg-gradient-to-br from-slate-300 via-cyan-200 via-blue-100 to-white bg-clip-text text-transparent hover:opacity-80 font-medium"
+                onClick={() => router.push("/login")}
+                disabled={loading}
+              >
+                Sign in
+              </Button>
+            </div>
           </div>
         </div>
 
-        <form onSubmit={handleEmailSignup} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="username">Username (optional)</Label>
-            <Input
-              id="username"
-              type="text"
-              placeholder="Enter your username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              disabled={loading}
-            />
+        {/* Footer */}
+        <div className="pb-8 px-8">
+          <div className="text-center text-sm text-gray-500">
+            By continuing, you agree to our{" "}
+            <Button
+              variant="link"
+              size="sm"
+              className="h-auto p-0 text-sm text-gray-500 hover:text-gray-400 underline"
+              onClick={() => router.push("/terms")}
+              type="button"
+            >
+              Terms of Service
+            </Button>{" "}
+            and{" "}
+            <Button
+              variant="link"
+              size="sm"
+              className="h-auto p-0 text-sm text-gray-500 hover:text-gray-400 underline"
+              onClick={() => router.push("/privacy")}
+              type="button"
+            >
+              Privacy Policy
+            </Button>
+            .
           </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="Enter your email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              disabled={loading}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              type="password"
-              placeholder="Enter your password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              disabled={loading}
-              minLength={6}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="confirmPassword">Confirm Password</Label>
-            <Input
-              id="confirmPassword"
-              type="password"
-              placeholder="Confirm your password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-              disabled={loading}
-              minLength={6}
-            />
-          </div>
-
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Creating Account...
-              </>
-            ) : (
-              "Create Account"
-            )}
-          </Button>
-        </form>
-
-        <div className="text-center text-sm">
-          <span className="text-muted-foreground">Already have an account? </span>
-          <Button
-            variant="link"
-            className="p-0 h-auto font-normal"
-            onClick={() => router.push("/login")}
-            disabled={loading}
-          >
-            Sign in
-          </Button>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }
