@@ -41,6 +41,9 @@ export default function LandingPage() {
             <Link href="/explore" className="text-white/80 hover:text-white transition-colors font-light">
               Explore
             </Link>
+            <Link href="/about" className="text-white/80 hover:text-white transition-colors font-light">
+              About Us
+            </Link>
           </div>
 
           {/* Login */}
@@ -63,7 +66,11 @@ export default function LandingPage() {
                 className="space-y-6"
               >
                 <h1 className="text-5xl lg:text-7xl font-thin text-white/80 leading-tight">
-                  Monetize Your Faceless Content
+                  Monetize Your{" "}
+                  <span className="bg-gradient-to-br from-slate-300 via-cyan-200 via-blue-100 to-white bg-clip-text text-transparent">
+                    Faceless
+                  </span>{" "}
+                  Content
                 </h1>
 
                 <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
