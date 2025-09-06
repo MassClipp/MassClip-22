@@ -13,7 +13,11 @@ import { FullscreenBlocker } from "@/components/fullscreen-blocker"
 import { ZoomPrevention } from "@/components/zoom-prevention"
 import { Providers } from "@/components/providers"
 
-const inter = Inter({ subsets: ["latin"] })
+const inter = Inter({
+  subsets: ["latin"],
+  display: "swap",
+  preload: true,
+})
 
 export const metadata: Metadata = {
   title: {
@@ -189,6 +193,24 @@ export default function RootLayout({
               }
             })();
             `,
+          }}
+        />
+
+        <link rel="preload" href="/og-image.png" as="image" />
+        <link rel="dns-prefetch" href="https://player.vimeo.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `
+            .hero-text { font-display: swap; }
+            .gradient-text { 
+              background: linear-gradient(to bottom right, rgb(203 213 225), rgb(165 243 252), rgb(219 234 254), rgb(255 255 255));
+              -webkit-background-clip: text;
+              background-clip: text;
+              -webkit-text-fill-color: transparent;
+            }
+          `,
           }}
         />
       </head>
