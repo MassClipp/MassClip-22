@@ -839,3 +839,77 @@
 .border-gradient-accent {
   border-image: linear-gradient(135deg, #cbd5e1, #a5f3fc, #dbeafe, #ffffff) 1;
 }
+
+/* Slide in animations for landing page */
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(50px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* CSS-only scroll animations */
+.slide-in-right {
+  animation: slideInRight 1s ease-out 0.3s both;
+}
+
+.scroll-animate {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 0.8s ease, transform 0.8s ease;
+}
+
+.scroll-animate.animate-in {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Staggered animation delays for grid items */
+.scroll-animate[style*="0.1s"] {
+  transition-delay: 0.1s;
+}
+
+.scroll-animate[style*="0.2s"] {
+  transition-delay: 0.2s;
+}
+
+.scroll-animate[style*="0.3s"] {
+  transition-delay: 0.3s;
+}
+
+.scroll-animate[style*="0.4s"] {
+  transition-delay: 0.4s;
+}
+
+/* Performance optimized animations */
+.animate-performance {
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* Reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .slide-in-right,
+  .scroll-animate {
+    animation: none;
+    transition: none;
+    opacity: 1;
+    transform: none;
+  }
+}

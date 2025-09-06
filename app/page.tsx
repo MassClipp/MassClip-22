@@ -2,16 +2,40 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import dynamic from "next/dynamic"
-import { Suspense } from "react"
+import { useEffect, useRef } from "react"
 
-const MotionDiv = dynamic(() => import("framer-motion").then((mod) => ({ default: mod.motion.div })), {
-  ssr: false,
-  loading: () => <div className="opacity-0" />,
-})
-
-export default function LandingPage() {
+const LandingPage = () => {
   const router = useRouter()
+  const observerRef = useRef<IntersectionObserver | null>(null)
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      // Pre-warm router for better UX
+      router.prefetch("/signup")
+      router.prefetch("/dashboard/explore")
+      router.prefetch("/dashboard/membership")
+    }, 100)
+
+    return () => clearTimeout(timer)
+  }, [router])
+
+  useEffect(() => {
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("animate-in")
+          }
+        })
+      },
+      { threshold: 0.1, rootMargin: "50px" },
+    )
+
+    const elements = document.querySelectorAll(".scroll-animate")
+    elements.forEach((el) => observerRef.current?.observe(el))
+
+    return () => observerRef.current?.disconnect()
+  }, [])
 
   const handleGetStarted = () => {
     router.push("/signup")
@@ -19,10 +43,6 @@ export default function LandingPage() {
 
   const handleExplore = () => {
     router.push("/dashboard/explore")
-  }
-
-  const handlePricing = () => {
-    router.push("/dashboard/membership")
   }
 
   return (
@@ -89,125 +109,92 @@ export default function LandingPage() {
             </div>
 
             <div className="hidden lg:flex flex-col items-center justify-center space-y-6 h-full">
-              <Suspense fallback={<div className="opacity-0" />}>
-                <MotionDiv
-                  initial={{ opacity: 0, x: 50 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 1, delay: 0.3 }}
-                  className="text-center"
-                >
-                  <div className="text-8xl xl:text-9xl font-extralight leading-none tracking-tight">
-                    <div className="gradient-text drop-shadow-[0_8px_16px_rgba(255,255,255,0.3)]">
-                      <div className="mb-2">Capitalize</div>
-                      <div className="mb-2">Sell</div>
-                      <div>Monetize</div>
-                    </div>
+              <div className="text-center slide-in-right">
+                <div className="text-8xl xl:text-9xl font-extralight leading-none tracking-tight">
+                  <div className="gradient-text drop-shadow-[0_8px_16px_rgba(255,255,255,0.3)]">
+                    <div className="mb-2">Capitalize</div>
+                    <div className="mb-2">Sell</div>
+                    <div>Monetize</div>
                   </div>
-                </MotionDiv>
-              </Suspense>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </main>
 
-      <Suspense fallback={<div />}>
-        <section className="relative z-10 py-20 px-6">
-          <div className="max-w-7xl mx-auto">
-            <MotionDiv
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8 }}
-              viewport={{ once: true }}
-              className="space-y-8"
-            >
-              <h2 className="text-4xl lg:text-5xl font-thin text-white">Earning Money As A Faceless Creator</h2>
+      <section className="relative z-10 py-20 px-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="scroll-animate space-y-8">
+            <h2 className="text-4xl lg:text-5xl font-thin text-white">Earning Money As A Faceless Creator</h2>
 
-              <div className="max-w-4xl">
-                <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
-                  If you run a faceless page, you already create content that other creators need. Whether it is
-                  motivation, memes, sports, trending topics, or cinema, your posts can be packaged and sold. Creators
-                  are constantly looking for ready-to-use content that saves them time and effort, and you can turn what
-                  you are already making into a new source of income.
-                </p>
+            <div className="max-w-4xl">
+              <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
+                If you run a faceless page, you already create content that other creators need. Whether it is
+                motivation, memes, sports, trending topics, or cinema, your posts can be packaged and sold. Creators are
+                constantly looking for ready-to-use content that saves them time and effort, and you can turn what you
+                are already making into a new source of income.
+              </p>
 
-                <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light mt-6">
-                  We provide you with a profile style storefront where you can showcase your work. Share free downloads
-                  to grow your audience and offer premium content for purchase, giving creators exactly what they want
-                  while you build a steady stream of revenue.
+              <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light mt-6">
+                We provide you with a profile style storefront where you can showcase your work. Share free downloads to
+                grow your audience and offer premium content for purchase, giving creators exactly what they want while
+                you build a steady stream of revenue.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="relative z-10 py-20 px-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="scroll-animate space-y-12">
+            <h2 className="text-4xl lg:text-5xl font-thin text-white">What You Can Sell</h2>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+              <div
+                className="scroll-animate bg-white p-8 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
+                style={{ animationDelay: "0.1s" }}
+              >
+                <h3 className="text-xl font-light text-black mb-4">B-Roll Content</h3>
+                <p className="text-gray-600 font-light leading-relaxed">
+                  High-quality background footage that creators can use to enhance their videos and storytelling.
                 </p>
               </div>
-            </MotionDiv>
-          </div>
-        </section>
 
-        <section className="relative z-10 py-20 px-6">
-          <div className="max-w-7xl mx-auto">
-            <MotionDiv
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8 }}
-              viewport={{ once: true }}
-              className="space-y-12"
-            >
-              <h2 className="text-4xl lg:text-5xl font-thin text-white">What You Can Sell</h2>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-                <MotionDiv
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6, delay: 0.1 }}
-                  viewport={{ once: true }}
-                  className="bg-white p-8 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
-                >
-                  <h3 className="text-xl font-light text-black mb-4">B-Roll Content</h3>
-                  <p className="text-gray-600 font-light leading-relaxed">
-                    High-quality background footage that creators can use to enhance their videos and storytelling.
-                  </p>
-                </MotionDiv>
-
-                <MotionDiv
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6, delay: 0.2 }}
-                  viewport={{ once: true }}
-                  className="bg-white p-8 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
-                >
-                  <h3 className="text-xl font-light text-black mb-4">Background Videos</h3>
-                  <p className="text-gray-600 font-light leading-relaxed">
-                    Looping video backgrounds perfect for social media posts, presentations, and content creation.
-                  </p>
-                </MotionDiv>
-
-                <MotionDiv
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6, delay: 0.3 }}
-                  viewport={{ once: true }}
-                  className="bg-white p-8 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
-                >
-                  <h3 className="text-xl font-light text-black mb-4">Audio Tracks</h3>
-                  <p className="text-gray-600 font-light leading-relaxed">
-                    Music, sound effects, and audio clips that creators can use to enhance their content.
-                  </p>
-                </MotionDiv>
-
-                <MotionDiv
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6, delay: 0.4 }}
-                  viewport={{ once: true }}
-                  className="bg-white p-8 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
-                >
-                  <h3 className="text-xl font-light text-black mb-4">Carousels</h3>
-                  <p className="text-gray-600 font-light leading-relaxed">
-                    Ready-made carousel posts and slide templates for Instagram, LinkedIn, and other platforms.
-                  </p>
-                </MotionDiv>
+              <div
+                className="scroll-animate bg-white p-8 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
+                style={{ animationDelay: "0.2s" }}
+              >
+                <h3 className="text-xl font-light text-black mb-4">Background Videos</h3>
+                <p className="text-gray-600 font-light leading-relaxed">
+                  Looping video backgrounds perfect for social media posts, presentations, and content creation.
+                </p>
               </div>
-            </MotionDiv>
+
+              <div
+                className="scroll-animate bg-white p-8 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
+                style={{ animationDelay: "0.3s" }}
+              >
+                <h3 className="text-xl font-light text-black mb-4">Audio Tracks</h3>
+                <p className="text-gray-600 font-light leading-relaxed">
+                  Music, sound effects, and audio clips that creators can use to enhance their content.
+                </p>
+              </div>
+
+              <div
+                className="scroll-animate bg-white p-8 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
+                style={{ animationDelay: "0.4s" }}
+              >
+                <h3 className="text-xl font-light text-black mb-4">Carousels</h3>
+                <p className="text-gray-600 font-light leading-relaxed">
+                  Ready-made carousel posts and slide templates for Instagram, LinkedIn, and other platforms.
+                </p>
+              </div>
+            </div>
           </div>
-        </section>
-      </Suspense>
+        </div>
+      </section>
 
       <footer className="relative z-10 bg-white py-4 px-6">
         <div className="max-w-7xl mx-auto">
@@ -277,3 +264,5 @@ export default function LandingPage() {
     </div>
   )
 }
+
+export default LandingPage
