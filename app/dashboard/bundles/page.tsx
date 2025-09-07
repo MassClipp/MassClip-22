@@ -19,6 +19,7 @@ import { db } from "@/lib/firebase"
 import { useAuth } from "@/contexts/auth-context"
 import { useUserPlan } from "@/hooks/use-user-plan"
 import { useRouter } from "next/navigation"
+import { useFreeTierLimits } from "@/hooks/use-free-tier-limits"
 
 interface ContentItem {
   id: string
@@ -65,6 +66,8 @@ interface EditBundleForm {
   coverImage: string
 }
 
+const CONTENT_LIMIT_FREE = 5
+
 export default function BundlesPage() {
   const { user } = useAuth()
   const [productBoxes, setProductBoxes] = useState<ProductBox[]>([])
@@ -85,10 +88,10 @@ export default function BundlesPage() {
   const { toast, toast: customToast } = useToast()
   const router = useRouter()
 
-  // Bundle limit logic for free users
+  const { limits: freeTierLimits, loading: limitsLoading } = useFreeTierLimits()
   const { planData, isProUser } = useUserPlan()
-  const CONTENT_LIMIT_FREE = 10
-  const bundleLimit = isProUser ? Number.POSITIVE_INFINITY : 2
+
+  const bundleLimit = isProUser ? Number.POSITIVE_INFINITY : freeTierLimits?.bundlesLimit || 2
   const isAtBundleLimit = !isProUser && productBoxes.length >= bundleLimit
 
   const [availableUploads, setAvailableUploads] = useState<ContentItem[]>([])
@@ -1054,7 +1057,10 @@ export default function BundlesPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
           <h1 className="text-2xl sm:text-3xl font-light text-white mb-2">
-            Bundles <span className="text-zinc-500 text-lg font-normal">{productBoxes.length}/2</span>
+            Bundles{" "}
+            <span className="text-zinc-500 text-lg font-normal">
+              {productBoxes.length}/{isProUser ? "∞" : bundleLimit}
+            </span>
           </h1>
           <p className="text-zinc-400 text-sm">Create and manage premium content packages for your audience</p>
         </div>
