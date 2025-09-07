@@ -1,5 +1,6 @@
 import { getFreeUser, createFreeUser, incrementFreeUserDownloads, incrementFreeUserBundles } from "./free-users-service"
 import { getMembership, incrementDownloads, incrementBundles, toTierInfo } from "./memberships-service"
+import { getUserBundleSlots, consumeBundleSlot } from "./bundle-slots-service"
 
 export type UserTier = "free" | "creator_pro"
 
@@ -55,22 +56,30 @@ export async function getUserTierInfo(uid: string): Promise<TierInfo> {
 
   if (!freeUser) {
     console.log("🔄 Creating new free user...")
-    freeUser = await createFreeUser(uid)
+    freeUser = await createFreeUser(uid, "")
   }
+
+  const bundleSlots = await getUserBundleSlots(uid)
+  const extraBundleSlots = bundleSlots ? bundleSlots.availableSlots : 0
+  const totalBundleLimit = freeUser.bundlesLimit + extraBundleSlots
 
   const tierInfo: TierInfo = {
     tier: "free",
     downloadsUsed: freeUser.downloadsUsed,
     downloadsLimit: freeUser.downloadsLimit,
     bundlesCreated: freeUser.bundlesCreated,
-    bundlesLimit: freeUser.bundlesLimit,
+    bundlesLimit: totalBundleLimit, // Base limit + purchased slots
     maxVideosPerBundle: freeUser.maxVideosPerBundle,
     platformFeePercentage: freeUser.platformFeePercentage,
     reachedDownloadLimit: freeUser.downloadsUsed >= freeUser.downloadsLimit,
-    reachedBundleLimit: freeUser.bundlesCreated >= freeUser.bundlesLimit,
+    reachedBundleLimit: freeUser.bundlesCreated >= totalBundleLimit,
   }
 
-  console.log("✅ Returning free tier info:", tierInfo)
+  console.log("✅ Returning free tier info with bundle slots:", {
+    ...tierInfo,
+    extraBundleSlots,
+    baseBundleLimit: freeUser.bundlesLimit,
+  })
   return tierInfo
 }
 
@@ -111,9 +120,43 @@ export async function incrementUserBundles(uid: string): Promise<{ success: bool
     }
   }
 
-  // User is free - check limits
-  console.log("🔄 Free user - checking limits...")
-  return await incrementFreeUserBundles(uid)
+  // User is free - check limits and consume bundle slots if needed
+  console.log("🔄 Free user - checking limits and bundle slots...")
+
+  const freeUser = await getFreeUser(uid)
+  if (!freeUser) {
+    return { success: false, reason: "User not found" }
+  }
+
+  // Check if within base free limit
+  if (freeUser.bundlesCreated < freeUser.bundlesLimit) {
+    console.log("✅ Within base free limit, incrementing normally")
+    return await incrementFreeUserBundles(uid)
+  }
+
+  console.log("🔄 Beyond free limit, checking bundle slots...")
+  const slotResult = await consumeBundleSlot(uid)
+
+  if (!slotResult.success) {
+    console.log("❌ No bundle slots available")
+    return {
+      success: false,
+      reason: `Bundle limit reached (${freeUser.bundlesLimit} bundles max). Purchase extra bundle slots or upgrade to Creator Pro for unlimited bundles.`,
+    }
+  }
+
+  // Consume slot successful, increment bundle count
+  console.log("✅ Bundle slot consumed, incrementing bundle count")
+  const incrementResult = await incrementFreeUserBundles(uid)
+
+  if (!incrementResult.success) {
+    // This shouldn't happen since we already checked limits, but handle gracefully
+    console.error("❌ Failed to increment bundle count after consuming slot")
+    return { success: false, reason: "Failed to create bundle after consuming slot" }
+  }
+
+  console.log("✅ Bundle created using purchased slot")
+  return { success: true }
 }
 
 export async function canUserAddVideoToBundle(

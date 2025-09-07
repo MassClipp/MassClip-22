@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
 import { auth, isFirebaseAdminInitialized } from "@/lib/firebase-admin"
+import { createBundleSlotPurchase, BUNDLE_SLOT_TIERS } from "@/lib/bundle-slots-service"
 
 // Initialize Stripe with the secret key
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -43,6 +44,20 @@ export async function POST(request: NextRequest) {
     const { uid, email, name } = decodedToken
     console.log("✅ [Bundle Checkout] User authenticated:", { uid, email })
 
+    const bundleSlotTier = Object.entries(BUNDLE_SLOT_TIERS).find(([_, tier]) => tier.priceId === priceId)
+
+    if (!bundleSlotTier) {
+      console.error("❌ [Bundle Checkout] Invalid price ID for bundle slots:", priceId)
+      return NextResponse.json({ error: "Invalid bundle slot tier." }, { status: 400 })
+    }
+
+    const [tierKey, tierInfo] = bundleSlotTier
+    console.log("✅ [Bundle Checkout] Bundle slot tier validated:", {
+      tierKey,
+      slots: tierInfo.slots,
+      amount: tierInfo.amount,
+    })
+
     // --- Construct Metadata ---
     const metadata = {
       buyerUid: uid,
@@ -51,8 +66,10 @@ export async function POST(request: NextRequest) {
       bundleId,
       bundleCount: bundles.toString(),
       bundlePrice: price.toString(),
-      contentType: "bundle_purchase",
-      source: "dashboard_bundle_purchase",
+      bundleSlots: tierInfo.slots.toString(),
+      bundleTier: tierKey,
+      contentType: "bundle_slot_purchase",
+      source: "dashboard_bundle_slot_purchase",
     }
     console.log("📋 [Bundle Checkout] Constructed metadata for Stripe:", metadata)
 
@@ -62,7 +79,7 @@ export async function POST(request: NextRequest) {
     const siteUrl = `${protocol}://${host}`
 
     // --- Create Stripe Checkout Session ---
-    console.log("🔄 [Bundle Checkout] Creating Stripe session for bundle purchase...")
+    console.log("🔄 [Bundle Checkout] Creating Stripe session for bundle slot purchase...")
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       mode: "payment", // One-time payment, not subscription
@@ -73,16 +90,30 @@ export async function POST(request: NextRequest) {
         },
       ],
       customer_email: email,
-      success_url: `${siteUrl}/purchase/success?session_id={CHECKOUT_SESSION_ID}&type=bundle`,
-      cancel_url: `${siteUrl}/dashboard/membership`,
+      success_url: `${siteUrl}/purchase/success?session_id={CHECKOUT_SESSION_ID}&type=bundle_slots`,
+      cancel_url: `${siteUrl}/dashboard/pricing`,
       metadata: metadata,
     })
 
-    console.log("✅ [Bundle Checkout] Stripe session created successfully!")
+    const purchaseId = await createBundleSlotPurchase(
+      uid,
+      email || "",
+      tierKey as keyof typeof BUNDLE_SLOT_TIERS,
+      session.id,
+    )
+
+    console.log("✅ [Bundle Checkout] Stripe session and purchase record created successfully!")
     console.log(`   - Session ID: ${session.id}`)
+    console.log(`   - Purchase ID: ${purchaseId}`)
+    console.log(`   - Bundle Slots: ${tierInfo.slots}`)
     console.log(`   - Checkout URL: ${session.url}`)
 
-    return NextResponse.json({ url: session.url, sessionId: session.id })
+    return NextResponse.json({
+      url: session.url,
+      sessionId: session.id,
+      purchaseId,
+      bundleSlots: tierInfo.slots,
+    })
   } catch (error: any) {
     console.error("❌ [Bundle Checkout] An unexpected error occurred:", error)
     if (error instanceof Stripe.errors.StripeError) {

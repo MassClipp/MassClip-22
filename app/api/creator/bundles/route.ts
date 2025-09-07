@@ -4,6 +4,7 @@ import { getFirestore } from "firebase-admin/firestore"
 import { initializeApp, getApps, cert } from "firebase-admin/app"
 import Stripe from "stripe"
 import { ConnectedStripeAccountsService } from "@/lib/connected-stripe-accounts-service"
+import { getUserTierInfo, incrementUserBundles } from "@/lib/user-tier-service"
 
 // Initialize Firebase Admin
 if (!getApps().length) {
@@ -147,6 +148,39 @@ export async function POST(request: NextRequest) {
 
     const userId = decodedToken.uid
     console.log("✅ [Bundle Creation] User authenticated:", userId)
+
+    console.log("🔍 [Bundle Creation] Checking bundle limits...")
+    const tierInfo = await getUserTierInfo(userId)
+
+    if (tierInfo.reachedBundleLimit) {
+      console.warn("❌ [Bundle Creation] Bundle limit reached:", {
+        bundlesCreated: tierInfo.bundlesCreated,
+        bundlesLimit: tierInfo.bundlesLimit,
+        tier: tierInfo.tier,
+      })
+
+      return NextResponse.json(
+        {
+          error: "Bundle limit reached",
+          details: `You've reached your limit of ${tierInfo.bundlesLimit} bundles. ${
+            tierInfo.tier === "free"
+              ? "Upgrade to Creator Pro for unlimited bundles or purchase extra bundle slots."
+              : "Please contact support if you need additional bundles."
+          }`,
+          code: "BUNDLE_LIMIT_REACHED",
+          currentCount: tierInfo.bundlesCreated,
+          maxAllowed: tierInfo.bundlesLimit,
+          tier: tierInfo.tier,
+        },
+        { status: 403 },
+      )
+    }
+
+    console.log("✅ [Bundle Creation] Bundle limit check passed:", {
+      bundlesCreated: tierInfo.bundlesCreated,
+      bundlesLimit: tierInfo.bundlesLimit,
+      tier: tierInfo.tier,
+    })
 
     const connectedAccount = await ConnectedStripeAccountsService.getAccount(userId)
     console.log("🔍 [Bundle Creation] Stripe account lookup result:", {
@@ -341,6 +375,21 @@ export async function POST(request: NextRequest) {
 
     console.log("💾 [Bundle Creation] Saving bundle to Firestore...")
     await db.collection("bundles").doc(bundleId).set(bundleData)
+
+    console.log("📊 [Bundle Creation] Incrementing user bundle count...")
+    const incrementResult = await incrementUserBundles(userId)
+
+    if (!incrementResult.success) {
+      console.warn("⚠️ [Bundle Creation] Failed to increment bundle count:", incrementResult.reason)
+      // Bundle was created but count wasn't incremented - log for manual review
+      console.error("🚨 [Bundle Creation] CRITICAL: Bundle created but count not incremented", {
+        bundleId,
+        userId,
+        reason: incrementResult.reason,
+      })
+    } else {
+      console.log("✅ [Bundle Creation] Bundle count incremented successfully")
+    }
 
     console.log("✅ [Bundle Creation] Bundle created successfully:", {
       bundleId,
