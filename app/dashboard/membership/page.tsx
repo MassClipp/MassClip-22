@@ -148,7 +148,7 @@ export default function MembershipPage() {
               </div>
               <div>
                 <h2 className="text-3xl font-light text-white">Creator Pro</h2>
-                <p className="text-zinc-400 font-light">Everything you need to succeed</p>
+                <p className="text-zinc-400 font-light">Ready to take your monetization seriously?</p>
               </div>
             </div>
 
