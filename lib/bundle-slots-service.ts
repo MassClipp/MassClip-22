@@ -19,15 +19,6 @@ export interface BundleSlotPurchase {
   }
 }
 
-export interface UserBundleSlots {
-  uid: string
-  totalPurchasedSlots: number
-  totalUsedSlots: number
-  availableSlots: number
-  purchases: string[] // Array of purchase IDs
-  lastUpdated: any
-}
-
 // Bundle slot pricing tiers
 export const BUNDLE_SLOT_TIERS = {
   "1_bundle": {
@@ -121,8 +112,30 @@ export async function completeBundleSlotPurchase(
   })
 }
 
+export interface UserBundleSlots {
+  uid: string
+  totalPurchasedSlots: number
+  totalUsedSlots: number
+  availableSlots: number
+  purchases: string[] // Array of purchase IDs
+  lastUpdated: any
+}
+
 export async function applyBundleSlotsToUser(uid: string, slots: number, purchaseId: string): Promise<void> {
   console.log("🔄 Applying bundle slots to user:", { uid: uid.substring(0, 8) + "...", slots })
+
+  const freeUserRef = adminDb.collection("freeUsers").doc(uid)
+  const freeUserDoc = await freeUserRef.get()
+
+  if (freeUserDoc.exists) {
+    await freeUserRef.update({
+      bundlesLimit: FieldValue.increment(slots),
+    })
+    console.log(`✅ Updated freeUsers bundlesLimit by ${slots} slots`)
+  } else {
+    console.log("⚠️ freeUsers document not found, user may not be a free user")
+    throw new Error(`freeUsers document not found for uid: ${uid}`)
+  }
 
   const userSlotsRef = adminDb.collection("userBundleSlots").doc(uid)
   const userSlotsDoc = await userSlotsRef.get()
@@ -146,18 +159,6 @@ export async function applyBundleSlotsToUser(uid: string, slots: number, purchas
       lastUpdated: FieldValue.serverTimestamp(),
     }
     await userSlotsRef.set(userSlots)
-  }
-
-  const freeUserRef = adminDb.collection("freeUsers").doc(uid)
-  const freeUserDoc = await freeUserRef.get()
-
-  if (freeUserDoc.exists) {
-    await freeUserRef.update({
-      bundlesLimit: FieldValue.increment(slots),
-    })
-    console.log(`✅ Updated freeUsers bundlesLimit by ${slots} slots`)
-  } else {
-    console.log("⚠️ freeUsers document not found, user may not be a free user")
   }
 
   console.log("✅ Bundle slots applied to user account")
