@@ -41,6 +41,7 @@ const navigationSections: NavSection[] = [
     items: [
       { title: "Dashboard", href: "/dashboard", icon: Home },
       { title: "Explore", href: "/dashboard/explore", icon: Search },
+      { title: "Membership", href: "/dashboard/membership", icon: Crown },
     ],
   },
   {
@@ -60,10 +61,7 @@ const navigationSections: NavSection[] = [
   },
   {
     title: "Business",
-    items: [
-      { title: "Earnings", href: "/dashboard/earnings", icon: DollarSign },
-      { title: "Membership", href: "/dashboard/membership", icon: Crown },
-    ],
+    items: [{ title: "Earnings", href: "/dashboard/earnings", icon: DollarSign }],
   },
   {
     title: "Settings",
