@@ -131,10 +131,25 @@ export async function applyBundleSlotsToUser(uid: string, slots: number, purchas
     await freeUserRef.update({
       bundlesLimit: FieldValue.increment(slots),
     })
-    console.log(`✅ Updated freeUsers bundlesLimit by ${slots} slots`)
+    console.log(`✅ Updated existing freeUsers bundlesLimit by ${slots} slots`)
   } else {
-    console.log("⚠️ freeUsers document not found, user may not be a free user")
-    throw new Error(`freeUsers document not found for uid: ${uid}`)
+    // Create freeUsers document with default values + purchased slots
+    console.log("ℹ️ Creating new freeUsers document with purchased bundle slots")
+    await freeUserRef.set({
+      bundlesCreated: 0,
+      bundlesLimit: 2 + slots, // Default 2 + purchased slots
+      downloadsLimit: 15,
+      downloadsUsed: 0,
+      currentPeriodStart: FieldValue.serverTimestamp(),
+      email: "", // Will be updated when user data is available
+      hasLimitedOrganization: true,
+      hasNoWatermark: false,
+      hasPremiumContent: false,
+      hasPrioritySupport: false,
+      hasUnlimitedDownloads: false,
+      createdAt: FieldValue.serverTimestamp(),
+    })
+    console.log(`✅ Created new freeUsers document with bundlesLimit: ${2 + slots}`)
   }
 
   const userSlotsRef = adminDb.collection("userBundleSlots").doc(uid)
