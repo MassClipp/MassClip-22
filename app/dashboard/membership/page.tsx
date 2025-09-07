@@ -16,6 +16,7 @@ const bundleOptions = [
     bundles: 1,
     description: "Perfect for trying out premium bundles",
     icon: Package,
+    priceId: "price_1S4ZhuDheyb0pkWFdCOq7EZQ",
   },
   {
     id: "bundle-3",
@@ -25,6 +26,7 @@ const bundleOptions = [
     description: "Great value for regular creators",
     icon: Package,
     popular: true,
+    priceId: "price_1S4Zl9Dheyb0pkWFPtZk6z5m",
   },
   {
     id: "bundle-5",
@@ -33,6 +35,7 @@ const bundleOptions = [
     bundles: 5,
     description: "Best deal for power users",
     icon: Package,
+    priceId: "price_1S4ZlnDheyb0pkWFVxbaxaNV",
   },
 ]
 
@@ -45,11 +48,23 @@ export default function PricingPage() {
   const handleBundlePurchase = async (bundleId: string) => {
     try {
       setPurchasingBundle(bundleId)
+      const bundleOption = bundleOptions.find((option) => option.id === bundleId)
+      if (!bundleOption) {
+        console.warn("[Pricing] Bundle option not found")
+        return
+      }
+
       const idToken = await user?.getIdToken?.()
       const res = await fetch("/api/stripe/checkout/bundles", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken, bundleId }),
+        body: JSON.stringify({
+          idToken,
+          bundleId,
+          priceId: bundleOption.priceId,
+          bundles: bundleOption.bundles,
+          price: bundleOption.price,
+        }),
       })
 
       if (!res.ok) {
