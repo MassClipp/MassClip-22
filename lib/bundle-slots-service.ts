@@ -32,19 +32,19 @@ export interface UserBundleSlots {
 export const BUNDLE_SLOT_TIERS = {
   "1_bundle": {
     slots: 1,
-    priceId: "price_1S4ZhuDheyb0pkWFdCOq7EZQ",
+    priceId: "price_1S4pU2Dheyb0pkWFfJNzelxi",
     amount: 399, // $3.99
     description: "1 Extra Bundle",
   },
   "3_bundle": {
     slots: 3,
-    priceId: "price_1S4Zl9Dheyb0pkWFPtZk6z5m",
+    priceId: "price_1S4pUrDheyb0pkWFAY0jv6Xy",
     amount: 799, // $7.99
     description: "3 Extra Bundles",
   },
   "5_bundle": {
     slots: 5,
-    priceId: "price_1S4ZlnDheyb0pkWFVxbaxaNV",
+    priceId: "price_1S4pVUDheyb0pkWF4AT6vKMQ",
     amount: 1199, // $11.99
     description: "5 Extra Bundles",
   },

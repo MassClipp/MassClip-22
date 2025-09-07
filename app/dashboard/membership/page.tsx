@@ -16,7 +16,7 @@ const bundleOptions = [
     bundles: 1,
     description: "Perfect for trying out premium bundles",
     icon: Package,
-    priceId: "price_1S4ZhuDheyb0pkWFdCOq7EZQ",
+    priceId: "price_1S4pU2Dheyb0pkWFfJNzelxi",
   },
   {
     id: "bundle-3",
@@ -26,7 +26,7 @@ const bundleOptions = [
     description: "Great value for regular creators",
     icon: Package,
     popular: true,
-    priceId: "price_1S4Zl9Dheyb0pkWFPtZk6z5m",
+    priceId: "price_1S4pUrDheyb0pkWFAY0jv6Xy",
   },
   {
     id: "bundle-5",
@@ -35,7 +35,7 @@ const bundleOptions = [
     bundles: 5,
     description: "Best deal for power users",
     icon: Package,
-    priceId: "price_1S4ZlnDheyb0pkWFVxbaxaNV",
+    priceId: "price_1S4pVUDheyb0pkWF4AT6vKMQ",
   },
 ]
 
