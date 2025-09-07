@@ -8,7 +8,6 @@ import {
   processSubscriptionUpdated,
 } from "@/lib/stripe/webhook-processor"
 import { NotificationService } from "@/lib/notification-service"
-import { completeBundleSlotPurchase } from "@/lib/bundle-slots-service"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2023-10-16",
@@ -219,30 +218,6 @@ async function processBundlePurchase(session: Stripe.Checkout.Session) {
   )
 }
 
-async function processBundleSlotPurchase(session: Stripe.Checkout.Session) {
-  console.log(`🎯 [Bundle Slot Webhook] Processing bundle slot purchase: ${session.id}`)
-
-  const metadata = session.metadata || {}
-  const { buyerUid, bundleTier, bundleSlots } = metadata
-
-  if (!buyerUid) {
-    throw new Error("Missing buyer UID in session metadata")
-  }
-
-  if (!bundleTier || !bundleSlots) {
-    throw new Error("Missing bundle slot information in session metadata")
-  }
-
-  console.log(`📦 [Bundle Slot Webhook] Processing ${bundleSlots} bundle slots for user ${buyerUid.substring(0, 8)}...`)
-
-  // Complete the bundle slot purchase using the service
-  await completeBundleSlotPurchase(session.id, session.payment_intent as string)
-
-  console.log(
-    `✅ [Bundle Slot Webhook] Bundle slot purchase completed: ${session.id} - ${bundleSlots} slots added to user ${buyerUid.substring(0, 8)}...`,
-  )
-}
-
 export async function POST(request: Request) {
   const sig = headers().get("stripe-signature") || headers().get("Stripe-Signature")
   const body = await request.text()
@@ -305,10 +280,7 @@ export async function POST(request: Request) {
         const contentType = metadata.contentType
         const bundleId = metadata.bundleId || metadata.productBoxId
 
-        if (contentType === "bundle_slot_purchase") {
-          // Handle bundle slot purchase
-          await processBundleSlotPurchase(session)
-        } else if (contentType === "bundle" || bundleId) {
+        if (contentType === "bundle" || bundleId) {
           // Handle bundle purchase
           await processBundlePurchase(session)
         } else {
