@@ -127,7 +127,7 @@ export async function applyBundleSlotsToUser(uid: string, slots: number, purchas
   const userSlotsRef = adminDb.collection("userBundleSlots").doc(uid)
   const userSlotsDoc = await userSlotsRef.get()
 
-  if (userSlotsDoc.exists()) {
+  if (userSlotsDoc.exists) {
     // Update existing record
     await userSlotsRef.update({
       totalPurchasedSlots: FieldValue.increment(slots),
@@ -156,7 +156,7 @@ export async function getUserBundleSlots(uid: string): Promise<UserBundleSlots |
 
   const userSlotsDoc = await adminDb.collection("userBundleSlots").doc(uid).get()
 
-  if (!userSlotsDoc.exists()) {
+  if (!userSlotsDoc.exists) {
     console.log("ℹ️ No bundle slots found for user")
     return null
   }
@@ -177,7 +177,7 @@ export async function consumeBundleSlot(uid: string): Promise<{ success: boolean
   const userSlotsRef = adminDb.collection("userBundleSlots").doc(uid)
   const userSlotsDoc = await userSlotsRef.get()
 
-  if (!userSlotsDoc.exists()) {
+  if (!userSlotsDoc.exists) {
     console.log("ℹ️ No bundle slots available for user")
     return { success: false, reason: "No bundle slots available" }
   }
