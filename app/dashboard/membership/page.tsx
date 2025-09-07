@@ -2,24 +2,74 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { CheckCircle2, Crown, Shield, Zap, Star } from "lucide-react"
+import { CheckCircle2, Crown, Shield, Zap, Star, Package } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { useAuth } from "@/contexts/auth-context"
 import { useUserPlan } from "@/hooks/use-user-plan"
 
-const TEMP_PAYMENT_LINK = "https://buy.stripe.com/aFa3cvbKsgRvexnfxdeIw05"
+const bundleOptions = [
+  {
+    id: "bundle-1",
+    name: "1 Extra Bundle",
+    price: 3.99,
+    bundles: 1,
+    description: "Perfect for trying out premium bundles",
+    icon: Package,
+  },
+  {
+    id: "bundle-3",
+    name: "3 Extra Bundles",
+    price: 7.99,
+    bundles: 3,
+    description: "Great value for regular creators",
+    icon: Package,
+    popular: true,
+  },
+  {
+    id: "bundle-5",
+    name: "5 Extra Bundles",
+    price: 11.99,
+    bundles: 5,
+    description: "Best deal for power users",
+    icon: Package,
+  },
+]
 
-export default function MembershipPage() {
+export default function PricingPage() {
   const router = useRouter()
   const { user } = useAuth()
   const { isProUser, loading } = useUserPlan()
-  const [selectedPlan, setSelectedPlan] = useState<"free" | "pro">(isProUser ? "pro" : "free")
-  const [isRedirecting, setIsRedirecting] = useState(false)
+  const [purchasingBundle, setPurchasingBundle] = useState<string | null>(null)
+
+  const handleBundlePurchase = async (bundleId: string) => {
+    try {
+      setPurchasingBundle(bundleId)
+      const idToken = await user?.getIdToken?.()
+      const res = await fetch("/api/stripe/checkout/bundles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken, bundleId }),
+      })
+
+      if (!res.ok) {
+        console.warn("[Pricing] Failed to create checkout session for bundle purchase.")
+        return
+      }
+
+      const data = (await res.json()) as { url?: string }
+      if (data?.url) {
+        window.location.href = data.url
+      }
+    } catch (err) {
+      console.error("[Pricing] Error starting bundle checkout:", err)
+    } finally {
+      setPurchasingBundle(null)
+    }
+  }
 
   const handleUpgradeClick = async () => {
     try {
-      setIsRedirecting(true)
       const idToken = await user?.getIdToken?.()
       const res = await fetch("/api/stripe/checkout/membership", {
         method: "POST",
@@ -28,23 +78,16 @@ export default function MembershipPage() {
       })
 
       if (!res.ok) {
-        console.warn("[Membership] Failed to create checkout session, falling back to payment link.")
-        window.open(TEMP_PAYMENT_LINK, "_blank")
-        setIsRedirecting(false)
+        console.warn("[Pricing] Failed to create checkout session for membership.")
         return
       }
 
       const data = (await res.json()) as { url?: string }
       if (data?.url) {
         window.location.href = data.url
-      } else {
-        window.open(TEMP_PAYMENT_LINK, "_blank")
       }
     } catch (err) {
-      console.error("[Membership] Error starting checkout:", err)
-      window.open(TEMP_PAYMENT_LINK, "_blank")
-    } finally {
-      setIsRedirecting(false)
+      console.error("[Pricing] Error starting membership checkout:", err)
     }
   }
 
@@ -54,24 +97,109 @@ export default function MembershipPage() {
         <h1 className="text-5xl lg:text-6xl font-thin text-white leading-tight">
           Choose Your{" "}
           <span className="bg-gradient-to-br from-slate-300 via-cyan-200 via-blue-100 to-white bg-clip-text text-transparent">
-            Creative
+            Pricing
           </span>{" "}
-          Journey
+          Plan
         </h1>
         <p className="text-xl text-white/70 font-light max-w-2xl mx-auto">
-          Unlock premium features to accelerate your content creation workflow and maximize your earning potential
+          Get extra bundles with one-time purchases or upgrade to Creator Pro for unlimited access
         </p>
+      </div>
+
+      <div className="space-y-8">
+        <div className="text-center">
+          <h2 className="text-3xl font-light text-white mb-4">One-Time Bundle Purchases</h2>
+          <p className="text-white/60 font-light">
+            Perfect for free users who want extra bundles without a subscription
+          </p>
+        </div>
+
+        <div className="grid gap-6 md:grid-cols-3">
+          {bundleOptions.map((option) => {
+            const Icon = option.icon
+            const isPurchasing = purchasingBundle === option.id
+
+            return (
+              <Card
+                key={option.id}
+                className={`group relative overflow-hidden border-2 transition-all duration-500 ${
+                  option.popular
+                    ? "border-cyan-400/50 shadow-2xl shadow-cyan-500/20 scale-105"
+                    : "border-zinc-700/50 hover:border-zinc-600/70"
+                } bg-gradient-to-br from-zinc-900/90 via-zinc-800/80 to-black/90 backdrop-blur-xl`}
+              >
+                {option.popular && (
+                  <div className="absolute right-0 top-0 bg-gradient-to-r from-cyan-400 to-blue-400 px-4 py-2 text-sm font-bold text-black">
+                    POPULAR
+                  </div>
+                )}
+
+                <div className="p-8">
+                  <div className="mb-6 flex items-center">
+                    <div className="mr-4 p-3 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-400/30">
+                      <Icon className="h-6 w-6 text-cyan-300" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-light text-white">{option.name}</h3>
+                      <p className="text-zinc-400 text-sm font-light">{option.description}</p>
+                    </div>
+                  </div>
+
+                  <div className="mb-6 flex items-baseline">
+                    <p className="text-4xl font-thin text-white">${option.price}</p>
+                    <span className="ml-2 text-sm text-zinc-400 font-light">one-time</span>
+                  </div>
+
+                  <ul className="mb-8 space-y-3">
+                    <li className="flex items-start">
+                      <CheckCircle2 className="mr-3 mt-1 h-4 w-4 flex-shrink-0 text-cyan-400" />
+                      <span className="text-white font-light">
+                        {option.bundles} extra bundle{option.bundles > 1 ? "s" : ""}
+                      </span>
+                    </li>
+                    <li className="flex items-start">
+                      <CheckCircle2 className="mr-3 mt-1 h-4 w-4 flex-shrink-0 text-cyan-400" />
+                      <span className="text-white font-light">Can purchase multiple times</span>
+                    </li>
+                    <li className="flex items-start">
+                      <CheckCircle2 className="mr-3 mt-1 h-4 w-4 flex-shrink-0 text-cyan-400" />
+                      <span className="text-white font-light">Instant activation</span>
+                    </li>
+                  </ul>
+
+                  <Button
+                    onClick={() => handleBundlePurchase(option.id)}
+                    disabled={isPurchasing}
+                    className="w-full py-3 text-sm font-medium rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white transition-all duration-300 shadow-lg shadow-cyan-500/25"
+                  >
+                    {isPurchasing ? (
+                      <div className="flex items-center justify-center">
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
+                        Processing...
+                      </div>
+                    ) : (
+                      `Purchase ${option.bundles} Bundle${option.bundles > 1 ? "s" : ""}`
+                    )}
+                  </Button>
+                </div>
+              </Card>
+            )
+          })}
+        </div>
+      </div>
+
+      <div className="text-center">
+        <div className="inline-block p-1 bg-gradient-to-r from-cyan-500/20 to-blue-500/20 rounded-2xl">
+          <div className="bg-zinc-900 rounded-xl p-8">
+            <h3 className="text-2xl font-light text-white mb-4">Or Go Unlimited</h3>
+            <p className="text-white/60 mb-6">Get unlimited bundles and premium features with Creator Pro</p>
+          </div>
+        </div>
       </div>
 
       <div className="grid gap-8 lg:grid-cols-2">
         {/* Free Plan */}
-        <Card
-          className={`group relative overflow-hidden border-2 transition-all duration-500 ${
-            selectedPlan === "free"
-              ? "border-cyan-400/50 shadow-2xl shadow-cyan-500/20"
-              : "border-zinc-700/50 hover:border-zinc-600/70"
-          } bg-gradient-to-br from-zinc-900/90 via-zinc-800/80 to-black/90 backdrop-blur-xl`}
-        >
+        <Card className="group relative overflow-hidden border-2 border-zinc-700/50 hover:border-zinc-600/70 bg-gradient-to-br from-zinc-900/90 via-zinc-800/80 to-black/90 backdrop-blur-xl transition-all duration-500">
           {!isProUser && !loading && (
             <div className="absolute right-0 top-0 bg-gradient-to-r from-slate-400 to-cyan-400 px-4 py-2 text-sm font-medium text-black">
               CURRENT PLAN
@@ -128,13 +256,7 @@ export default function MembershipPage() {
         </Card>
 
         {/* Creator Pro Plan */}
-        <Card
-          className={`group relative overflow-hidden border-2 transition-all duration-500 ${
-            selectedPlan === "pro"
-              ? "border-cyan-400/50 shadow-2xl shadow-cyan-500/20"
-              : "border-zinc-700/50 hover:border-zinc-600/70"
-          } bg-gradient-to-br from-zinc-900/90 via-zinc-800/80 to-black/90 backdrop-blur-xl`}
-        >
+        <Card className="group relative overflow-hidden border-2 border-zinc-700/50 hover:border-zinc-600/70 bg-gradient-to-br from-zinc-900/90 via-zinc-800/80 to-black/90 backdrop-blur-xl transition-all duration-500">
           {!loading && (
             <div className="absolute right-0 top-0 bg-gradient-to-r from-cyan-400 to-blue-400 px-4 py-2 text-sm font-bold text-black">
               {isProUser ? "CURRENT PLAN" : "RECOMMENDED"}
@@ -184,20 +306,12 @@ export default function MembershipPage() {
             ) : (
               <Button
                 onClick={handleUpgradeClick}
-                disabled={isRedirecting}
                 className="w-full py-4 text-lg font-medium rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white transition-all duration-300 shadow-lg shadow-cyan-500/25"
               >
-                {isRedirecting ? (
-                  <div className="flex items-center justify-center">
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
-                    Loading...
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center">
-                    <Zap className="mr-2 h-5 w-5" />
-                    Upgrade to Creator Pro
-                  </div>
-                )}
+                <div className="flex items-center justify-center">
+                  <Zap className="mr-2 h-5 w-5" />
+                  Upgrade to Creator Pro
+                </div>
               </Button>
             )}
           </div>
@@ -215,24 +329,24 @@ export default function MembershipPage() {
         <div className="space-y-6">
           {[
             {
-              question: "What are bundle video limits?",
+              question: "How do bundle purchases work?",
               answer:
-                "Free users can include up to 10 videos in each bundle they create. Creator Pro users have no limits and can include as many videos as they want in their bundles, perfect for comprehensive content packages.",
+                "Bundle purchases are one-time payments that instantly add extra bundles to your account. You can purchase multiple times to stack bundles, and they never expire. Perfect for free users who want more bundles without a monthly subscription.",
+            },
+            {
+              question: "What's the difference between bundles and Creator Pro?",
+              answer:
+                "Bundle purchases give you extra bundles one-time, while Creator Pro gives you unlimited bundles plus premium features like unlimited downloads, priority support, and reduced platform fees (10% vs 20%).",
+            },
+            {
+              question: "Can I upgrade to Creator Pro later?",
+              answer:
+                "Yes! You can upgrade to Creator Pro anytime. Any bundles you've purchased will still be available, and you'll get all the unlimited benefits of Creator Pro membership.",
             },
             {
               question: "What are platform fees?",
               answer:
                 "Platform fees are charged on each sale to cover payment processing, hosting, and platform maintenance. Free users pay 20% while Creator Pro users enjoy a reduced 10% fee, helping you keep more of your earnings.",
-            },
-            {
-              question: "Can I cancel my subscription?",
-              answer:
-                "Yes, you can cancel your subscription anytime. You'll continue to have access until the end of your billing period, after which you'll return to the Free plan with bundle video limits and 20% platform fees.",
-            },
-            {
-              question: "How do I get started?",
-              answer:
-                'Click "Upgrade to Creator Pro", complete checkout, and your membership will be activated automatically.',
             },
           ].map((faq, index) => (
             <Card
