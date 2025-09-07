@@ -118,3 +118,7 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ received: true })
 }
+
+export async function GET() {
+  return NextResponse.json({ message: "Bundle slot webhook endpoint - POST only" }, { status: 405 })
+}
