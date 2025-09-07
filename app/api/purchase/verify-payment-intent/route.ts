@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
 
     const purchaseQuery = await db
       .collection("bundleSlotPurchases")
-      .where("paymentIntentId", "==", paymentIntentId)
+      .where("stripePaymentIntentId", "==", paymentIntentId)
       .limit(1)
       .get()
 
@@ -65,11 +65,11 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(`✅ [Verify Payment Intent] Found bundle slot purchase:`, {
-      paymentIntentId: purchaseData.paymentIntentId,
-      buyerUid: purchaseData.buyerUid,
+      paymentIntentId: purchaseData.stripePaymentIntentId,
+      uid: purchaseData.uid,
       bundleSlots: purchaseData.bundleSlots,
       status: purchaseData.status,
-      bundleTier: purchaseData.bundleTier,
+      tier: purchaseData.metadata?.tier,
     })
 
     // STEP 2: Verify payment intent with Stripe
@@ -110,17 +110,17 @@ export async function POST(request: NextRequest) {
       success: true,
       purchase: {
         id: purchaseDoc?.id,
-        paymentIntentId: purchaseData.paymentIntentId,
-        sessionId: purchaseData.sessionId,
-        userId: purchaseData.buyerUid,
+        paymentIntentId: purchaseData.stripePaymentIntentId,
+        sessionId: purchaseData.stripeSessionId,
+        userId: purchaseData.uid,
         bundleSlots: purchaseData.bundleSlots,
-        bundleTier: purchaseData.bundleTier,
+        bundleTier: purchaseData.metadata?.tier,
         amount: purchaseData.amount,
-        currency: purchaseData.currency,
+        currency: "usd",
         status: purchaseData.status,
         type: "bundle_slot_purchase",
-        createdAt: purchaseData.createdAt,
-        completedAt: purchaseData.completedAt,
+        createdAt: purchaseData.purchaseDate,
+        completedAt: purchaseData.appliedDate,
       },
       paymentIntent: {
         id: paymentIntent.id,
