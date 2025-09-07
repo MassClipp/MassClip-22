@@ -8,7 +8,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2023-10-16",
 })
 
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
+const webhookSecret = process.env.WEBHOOK_SECRET_KEY_2!
 
 async function processBundleSlotPurchase(session: Stripe.Checkout.Session) {
   console.log(`🛒 [Bundle Slot Webhook] Processing bundle slot purchase: ${session.id}`)
