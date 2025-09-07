@@ -148,6 +148,18 @@ export async function applyBundleSlotsToUser(uid: string, slots: number, purchas
     await userSlotsRef.set(userSlots)
   }
 
+  const freeUserRef = adminDb.collection("freeUsers").doc(uid)
+  const freeUserDoc = await freeUserRef.get()
+
+  if (freeUserDoc.exists) {
+    await freeUserRef.update({
+      bundlesLimit: FieldValue.increment(slots),
+    })
+    console.log(`✅ Updated freeUsers bundlesLimit by ${slots} slots`)
+  } else {
+    console.log("⚠️ freeUsers document not found, user may not be a free user")
+  }
+
   console.log("✅ Bundle slots applied to user account")
 }
 
