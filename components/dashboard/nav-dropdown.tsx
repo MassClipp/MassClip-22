@@ -41,7 +41,7 @@ const navigationSections: NavSection[] = [
     items: [
       { title: "Dashboard", href: "/dashboard", icon: Home },
       { title: "Explore", href: "/dashboard/explore", icon: Search },
-      { title: "Pricing", href: "/dashboard/membership", icon: Crown },
+      { title: "Pricing", href: "/dashboard/pricing", icon: Crown },
     ],
   },
   {

@@ -13,7 +13,7 @@ const LandingPage = () => {
       // Pre-warm router for better UX
       router.prefetch("/signup")
       router.prefetch("/dashboard/explore")
-      router.prefetch("/dashboard/membership")
+      router.prefetch("/dashboard/pricing")
     }, 100)
 
     return () => clearTimeout(timer)
@@ -59,7 +59,7 @@ const LandingPage = () => {
           </div>
 
           <div className="hidden md:flex items-center space-x-8">
-            <Link href="/dashboard/membership" className="text-white/80 hover:text-white transition-colors font-light">
+            <Link href="/dashboard/pricing" className="text-white/80 hover:text-white transition-colors font-light">
               Pricing
             </Link>
             <Link href="/dashboard/explore" className="text-white/80 hover:text-white transition-colors font-light">
