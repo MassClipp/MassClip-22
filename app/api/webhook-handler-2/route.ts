@@ -34,21 +34,10 @@ async function processBundleSlotPurchase(session: Stripe.Checkout.Session) {
     paymentStatus: session.payment_status,
   })
 
-  try {
-    console.log(
-      `🔄 [Bundle Slot Webhook] Calling completeBundleSlotPurchase with sessionId: ${session.id}, paymentIntent: ${session.payment_intent}`,
-    )
-    await completeBundleSlotPurchase(session.id, session.payment_intent as string)
-    console.log(`✅ [Bundle Slot Webhook] Bundle slot purchase completed successfully: ${session.id}`)
-  } catch (error: any) {
-    console.error(`❌ [Bundle Slot Webhook] completeBundleSlotPurchase failed:`, {
-      sessionId: session.id,
-      paymentIntent: session.payment_intent,
-      error: error.message,
-      stack: error.stack,
-    })
-    throw error
-  }
+  // Complete the bundle slot purchase using the service
+  await completeBundleSlotPurchase(session.id, session.payment_intent as string)
+
+  console.log(`✅ [Bundle Slot Webhook] Bundle slot purchase completed successfully: ${session.id}`)
 }
 
 export async function POST(request: Request) {
