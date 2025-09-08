@@ -15,7 +15,8 @@ export interface UploadProgress {
   completedChunks: number
   speed: number // bytes per second
   eta: number // seconds remaining
-  status: 'queued' | 'uploading' | 'completed' | 'error' | 'paused'
+  percentage: number // percentage completed (0-100)
+  status: "queued" | "uploading" | "completed" | "error" | "paused"
   error?: string
 }
 
@@ -43,16 +44,16 @@ export class ChunkedUploadService {
   private sessions = new Map<string, ChunkedUploadSession>()
   private progressCallbacks = new Map<string, (progress: UploadProgress) => void>()
   private authToken: string | null = null
-  private tokenExpiry: number = 0
+  private tokenExpiry = 0
 
   async setAuthToken(token: string) {
     this.authToken = token
-    this.tokenExpiry = Date.now() + (50 * 60 * 1000) // 50 minutes
+    this.tokenExpiry = Date.now() + 50 * 60 * 1000 // 50 minutes
   }
 
   private async getValidAuthToken(): Promise<string> {
     if (!this.authToken || Date.now() > this.tokenExpiry) {
-      throw new Error('Auth token expired or not set')
+      throw new Error("Auth token expired or not set")
     }
     return this.authToken
   }
@@ -76,7 +77,7 @@ export class ChunkedUploadService {
         chunkData,
         chunkSize: endByte - startByte,
         startByte,
-        endByte
+        endByte,
       })
     }
 
@@ -92,11 +93,11 @@ export class ChunkedUploadService {
 
     try {
       // Initialize upload session on server
-      const response = await fetch('/api/uploads/chunked/initialize', {
-        method: 'POST',
+      const response = await fetch("/api/uploads/chunked/initialize", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           uploadId,
@@ -104,14 +105,14 @@ export class ChunkedUploadService {
           fileSize: file.size,
           fileType: file.type,
           totalChunks: chunks.length,
-          chunkSize: ChunkedUploadService.CHUNK_SIZE
-        })
+          chunkSize: ChunkedUploadService.CHUNK_SIZE,
+        }),
       })
 
       if (!response.ok) {
         const error = await response.json()
-        console.error('❌ [Chunked Upload] Initialization failed:', error)
-        throw new Error(error.error || 'Failed to initialize upload')
+        console.error("❌ [Chunked Upload] Initialization failed:", error)
+        throw new Error(error.error || "Failed to initialize upload")
       }
 
       const { publicUrl, r2Key } = await response.json()
@@ -130,11 +131,11 @@ export class ChunkedUploadService {
         r2Key,
         startTime: Date.now(),
         lastProgressTime: Date.now(),
-        uploadedBytes: 0
+        uploadedBytes: 0,
       }
 
       this.sessions.set(uploadId, session)
-      
+
       if (onProgress) {
         this.progressCallbacks.set(uploadId, onProgress)
       }
@@ -143,9 +144,8 @@ export class ChunkedUploadService {
       this.uploadChunks(uploadId, chunks)
 
       return uploadId
-
     } catch (error) {
-      console.error('❌ [Chunked Upload] Failed to initialize:', error)
+      console.error("❌ [Chunked Upload] Failed to initialize:", error)
       throw error
     }
   }
@@ -155,7 +155,7 @@ export class ChunkedUploadService {
     if (!session) return
 
     console.log(`📦 [Chunked Upload] Starting chunk uploads for ${uploadId}`)
-    this.updateProgress(uploadId, 'uploading')
+    this.updateProgress(uploadId, "uploading")
 
     try {
       // Process chunks in batches
@@ -187,10 +187,9 @@ export class ChunkedUploadService {
 
       // Finalize upload
       await this.finalizeUpload(uploadId)
-
     } catch (error) {
       console.error(`❌ [Chunked Upload] Chunk upload failed for ${uploadId}:`, error)
-      this.updateProgress(uploadId, 'error', error instanceof Error ? error.message : 'Chunk upload failed')
+      this.updateProgress(uploadId, "error", error instanceof Error ? error.message : "Chunk upload failed")
     }
   }
 
@@ -204,23 +203,23 @@ export class ChunkedUploadService {
       const token = await this.getValidAuthToken()
 
       // Get presigned URL for this chunk
-      const urlResponse = await fetch('/api/uploads/chunked/chunk-url', {
-        method: 'POST',
+      const urlResponse = await fetch("/api/uploads/chunked/chunk-url", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           uploadId,
           chunkIndex: chunk.chunkIndex,
-          chunkSize: chunk.chunkSize
-        })
+          chunkSize: chunk.chunkSize,
+        }),
       })
 
       if (!urlResponse.ok) {
         const error = await urlResponse.json()
         console.error(`❌ [Chunked Upload] Failed to get chunk URL for ${chunk.chunkIndex}:`, error)
-        throw new Error(error.error || 'Failed to get chunk upload URL')
+        throw new Error(error.error || "Failed to get chunk upload URL")
       }
 
       const { uploadUrl } = await urlResponse.json()
@@ -228,15 +227,19 @@ export class ChunkedUploadService {
 
       // Upload chunk to R2
       const uploadResponse = await fetch(uploadUrl, {
-        method: 'PUT',
+        method: "PUT",
         body: chunk.chunkData,
         headers: {
-          'Content-Type': 'application/octet-stream'
-        }
+          "Content-Type": "application/octet-stream",
+        },
       })
 
       if (!uploadResponse.ok) {
-        console.error(`❌ [Chunked Upload] R2 upload failed for chunk ${chunk.chunkIndex}:`, uploadResponse.status, uploadResponse.statusText)
+        console.error(
+          `❌ [Chunked Upload] R2 upload failed for chunk ${chunk.chunkIndex}:`,
+          uploadResponse.status,
+          uploadResponse.statusText,
+        )
         throw new Error(`Chunk upload failed: ${uploadResponse.statusText}`)
       }
 
@@ -245,20 +248,23 @@ export class ChunkedUploadService {
       session.uploadedBytes += chunk.chunkSize
 
       console.log(`✅ [Chunked Upload] Chunk ${chunk.chunkIndex} uploaded successfully`)
-      this.updateProgress(uploadId, 'uploading')
-
+      this.updateProgress(uploadId, "uploading")
     } catch (error) {
       console.error(`❌ [Chunked Upload] Chunk ${chunk.chunkIndex} upload failed:`, error)
 
       if (retryCount < ChunkedUploadService.MAX_RETRIES) {
         // Exponential backoff retry
         const delay = ChunkedUploadService.RETRY_DELAY * Math.pow(2, retryCount)
-        console.log(`🔄 [Chunked Upload] Retrying chunk ${chunk.chunkIndex} in ${delay}ms (attempt ${retryCount + 1}/${ChunkedUploadService.MAX_RETRIES})`)
-        await new Promise(resolve => setTimeout(resolve, delay))
+        console.log(
+          `🔄 [Chunked Upload] Retrying chunk ${chunk.chunkIndex} in ${delay}ms (attempt ${retryCount + 1}/${ChunkedUploadService.MAX_RETRIES})`,
+        )
+        await new Promise((resolve) => setTimeout(resolve, delay))
         return this.uploadSingleChunk(uploadId, chunk, retryCount + 1)
       } else {
-        console.error(`💥 [Chunked Upload] Chunk ${chunk.chunkIndex} failed after ${ChunkedUploadService.MAX_RETRIES} retries`)
-        this.updateProgress(uploadId, 'error', error instanceof Error ? error.message : 'Chunk upload failed')
+        console.error(
+          `💥 [Chunked Upload] Chunk ${chunk.chunkIndex} failed after ${ChunkedUploadService.MAX_RETRIES} retries`,
+        )
+        this.updateProgress(uploadId, "error", error instanceof Error ? error.message : "Chunk upload failed")
         throw error
       }
     }
@@ -274,50 +280,51 @@ export class ChunkedUploadService {
       const token = await this.getValidAuthToken()
 
       // Finalize upload on server
-      const response = await fetch('/api/uploads/chunked/finalize', {
-        method: 'POST',
+      const response = await fetch("/api/uploads/chunked/finalize", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           uploadId,
-          completedChunks: Array.from(session.uploadedChunks)
-        })
+          completedChunks: Array.from(session.uploadedChunks),
+        }),
       })
 
       if (!response.ok) {
         const error = await response.json()
-        console.error('❌ [Chunked Upload] Finalization failed:', error)
-        throw new Error(error.error || 'Failed to finalize upload')
+        console.error("❌ [Chunked Upload] Finalization failed:", error)
+        throw new Error(error.error || "Failed to finalize upload")
       }
 
       console.log(`✅ [Chunked Upload] Upload completed: ${uploadId}`)
-      this.updateProgress(uploadId, 'completed')
-
+      this.updateProgress(uploadId, "completed")
     } catch (error) {
-      console.error('❌ [Chunked Upload] Upload finalization failed:', error)
-      this.updateProgress(uploadId, 'error', error instanceof Error ? error.message : 'Finalization failed')
+      console.error("❌ [Chunked Upload] Upload finalization failed:", error)
+      this.updateProgress(uploadId, "error", error instanceof Error ? error.message : "Finalization failed")
     }
   }
 
-  private updateProgress(uploadId: string, status: UploadProgress['status'], error?: string) {
+  private updateProgress(uploadId: string, status: UploadProgress["status"], error?: string) {
     const session = this.sessions.get(uploadId)
     const callback = this.progressCallbacks.get(uploadId)
-    
+
     if (!session || !callback) return
 
     const now = Date.now()
     const timeDiff = (now - session.lastProgressTime) / 1000 // seconds
     const bytesDiff = session.uploadedBytes
-    
+
     // Calculate speed (bytes per second)
     const totalTime = (now - session.startTime) / 1000
     const speed = totalTime > 0 ? session.uploadedBytes / totalTime : 0
-    
+
     // Calculate ETA
     const remainingBytes = session.fileSize - session.uploadedBytes
     const eta = speed > 0 ? remainingBytes / speed : 0
+
+    const percentage = session.fileSize > 0 ? Math.min(100, (session.uploadedBytes / session.fileSize) * 100) : 0
 
     const progress: UploadProgress = {
       uploadId,
@@ -328,8 +335,9 @@ export class ChunkedUploadService {
       completedChunks: session.uploadedChunks.size,
       speed,
       eta,
+      percentage,
       status,
-      error
+      error,
     }
 
     session.lastProgressTime = now
@@ -339,14 +347,14 @@ export class ChunkedUploadService {
   pauseUpload(uploadId: string) {
     const session = this.sessions.get(uploadId)
     if (session) {
-      this.updateProgress(uploadId, 'paused')
+      this.updateProgress(uploadId, "paused")
     }
   }
 
   resumeUpload(uploadId: string) {
     const session = this.sessions.get(uploadId)
     if (session) {
-      this.updateProgress(uploadId, 'uploading')
+      this.updateProgress(uploadId, "uploading")
       // Resume logic would go here
     }
   }
@@ -360,6 +368,8 @@ export class ChunkedUploadService {
     const session = this.sessions.get(uploadId)
     if (!session) return null
 
+    const percentage = session.fileSize > 0 ? Math.min(100, (session.uploadedBytes / session.fileSize) * 100) : 0
+
     return {
       uploadId,
       fileName: session.fileName,
@@ -369,7 +379,8 @@ export class ChunkedUploadService {
       completedChunks: session.uploadedChunks.size,
       speed: 0,
       eta: 0,
-      status: 'uploading'
+      percentage,
+      status: "uploading",
     }
   }
 }

@@ -573,7 +573,7 @@ export default function UploadPage() {
                 variant="ghost"
                 size="sm"
                 onClick={clearCompletedUploads}
-                className="text-zinc-400 hover:text-white text-xs"
+                className="text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 text-xs transition-colors"
               >
                 Clear Completed
               </Button>
@@ -597,10 +597,10 @@ export default function UploadPage() {
                       </div>
                       {progress && (
                         <div className="space-y-1">
-                          <Progress value={progress.percentage} className="h-1.5" />
+                          <Progress value={progress.percentage} className="h-2 bg-zinc-800/60" />
                           <div className="flex justify-between text-xs text-zinc-500">
                             <span>{Math.round(progress.percentage)}%</span>
-                            {progress.speed > 0 && <span>{formatFileSize(progress.speed)}/s</span>}
+                            {progress.speed > 0 && <span>{formatSpeed(progress.speed)}</span>}
                           </div>
                         </div>
                       )}
