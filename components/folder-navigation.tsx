@@ -3,11 +3,11 @@
 import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Folder, FolderPlus, ChevronRight, Home, MoreVertical, Edit, Trash2, ArrowLeft } from "lucide-react"
-import { auth, db } from "@/lib/firebase"
-import { collection, query, where, orderBy, onSnapshot } from "firebase/firestore"
+import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
+import { useToast } from "@/components/ui/use-toast"
 import { cn } from "@/lib/utils"
 
 interface FolderItem {
@@ -36,40 +36,49 @@ export default function FolderNavigation({
 }: FolderNavigationProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { user } = useFirebaseAuth()
+  const { toast } = useToast()
+
   const [folders, setFolders] = useState<FolderItem[]>([])
   const [currentFolder, setCurrentFolder] = useState<FolderItem | null>(null)
   const [breadcrumbs, setBreadcrumbs] = useState<FolderItem[]>([])
+  const [loading, setLoading] = useState(true)
 
-  // Load folders from Firebase
-  useEffect(() => {
-    const user = auth.currentUser
+  const fetchFolders = async () => {
     if (!user) return
 
-    const foldersQuery = query(
-      collection(db, "folders"),
-      where("uid", "==", user.uid),
-      where("isDeleted", "==", false),
-      orderBy("path", "asc"),
-    )
-
-    const unsubscribe = onSnapshot(foldersQuery, (snapshot) => {
-      const folderData: FolderItem[] = []
-      snapshot.forEach((doc) => {
-        const data = doc.data()
-        folderData.push({
-          id: doc.id,
-          name: data.name,
-          path: data.path,
-          parentId: data.parentId || null,
-          level: data.level || 0,
-          fileCount: data.fileCount || 0,
-        })
+    try {
+      setLoading(true)
+      const token = await user.getIdToken()
+      const response = await fetch("/api/folders", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       })
-      setFolders(folderData)
-    })
 
-    return () => unsubscribe()
-  }, [])
+      if (!response.ok) {
+        throw new Error("Failed to fetch folders")
+      }
+
+      const data = await response.json()
+      setFolders(data.folders || [])
+    } catch (error) {
+      console.error("Error fetching folders:", error)
+      toast({
+        title: "Error Loading Folders",
+        description: "Failed to load folder structure",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (user) {
+      fetchFolders()
+    }
+  }, [user])
 
   // Update current folder and breadcrumbs when currentFolderId changes
   useEffect(() => {
@@ -117,7 +126,6 @@ export default function FolderNavigation({
   }
 
   const handleFolderAction = async (action: string, folderId: string) => {
-    const user = auth.currentUser
     if (!user) return
 
     try {
@@ -134,10 +142,37 @@ export default function FolderNavigation({
         if (!response.ok) {
           throw new Error("Failed to delete folder")
         }
+
+        toast({
+          title: "Folder Deleted",
+          description: "Folder deleted successfully",
+        })
+
+        // Refresh folders
+        fetchFolders()
       }
     } catch (error) {
       console.error(`Error ${action} folder:`, error)
+      toast({
+        title: "Error",
+        description: `Failed to ${action} folder`,
+        variant: "destructive",
+      })
     }
+  }
+
+  if (loading) {
+    return (
+      <div className={cn("space-y-4", className)}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <Folder className="h-5 w-5 text-zinc-400" />
+            <div className="h-6 w-24 bg-zinc-800 rounded animate-pulse" />
+          </div>
+          {showCreateButton && <div className="h-8 w-28 bg-zinc-800 rounded animate-pulse" />}
+        </div>
+      </div>
+    )
   }
 
   return (
