@@ -546,18 +546,20 @@ export default function UploadSelector({
       )}
 
       {/* Action Buttons */}
-      <div className="flex justify-end gap-3 pt-6 border-t border-zinc-800/50">
+      <div className="flex justify-end gap-3 pt-6 border-t border-zinc-800/50 bg-zinc-950/80 backdrop-blur-sm -mx-6 px-6 -mb-6 pb-6 rounded-b-xl">
         <Button
           variant="outline"
+          size="lg"
           onClick={onCancel}
-          className="border-zinc-700/50 bg-zinc-900/30 hover:bg-zinc-800/50 text-zinc-300 hover:text-white transition-colors"
+          className="border-zinc-600 bg-zinc-800/80 hover:bg-zinc-700 text-zinc-200 hover:text-white transition-all duration-200 font-medium px-8 shadow-lg hover:shadow-xl hover:border-zinc-500"
         >
           Cancel
         </Button>
         <Button
+          size="lg"
           onClick={handleSubmit}
           disabled={loading || selectedIds.length === 0}
-          className="bg-white text-black hover:bg-zinc-100 disabled:bg-zinc-700 disabled:text-zinc-400 font-medium transition-colors"
+          className="bg-white text-black hover:bg-zinc-100 disabled:bg-zinc-700 disabled:text-zinc-400 font-semibold transition-all duration-200 px-8 shadow-lg hover:shadow-xl hover:scale-[1.02] disabled:hover:scale-100"
         >
           {loading ? (
             <>
