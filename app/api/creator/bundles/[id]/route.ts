@@ -103,6 +103,9 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     if (body.title !== undefined) updateData.title = body.title.trim()
     if (body.description !== undefined) updateData.description = body.description.trim()
     if (body.price !== undefined) updateData.price = Number(body.price)
+    if (body.comparePrice !== undefined) {
+      updateData.comparePrice = body.comparePrice ? Number.parseFloat(body.comparePrice) : null
+    }
     if (body.coverImage !== undefined) updateData.coverImage = body.coverImage
     if (body.active !== undefined) updateData.active = body.active
 

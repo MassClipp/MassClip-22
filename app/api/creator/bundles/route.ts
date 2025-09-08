@@ -118,12 +118,13 @@ export async function POST(request: NextRequest) {
     console.log("🚀 [Bundle Creation] Starting bundle creation...")
 
     const body = await request.json()
-    const { title, description, price, billingType, thumbnailUrl, contentItems } = body
+    const { title, description, price, comparePrice, billingType, thumbnailUrl, contentItems } = body
 
     console.log("📝 [Bundle Creation] Request data:", {
       title,
       description,
       price,
+      comparePrice,
       billingType,
       thumbnailUrl,
       contentItemsCount: contentItems?.length || 0,
@@ -330,6 +331,7 @@ export async function POST(request: NextRequest) {
       title,
       description: description || "",
       price,
+      comparePrice: comparePrice ? Number.parseFloat(comparePrice) : null,
       currency: "usd",
       billingType: billingType || "one_time",
       type: "one_time",
@@ -410,6 +412,7 @@ export async function POST(request: NextRequest) {
         title,
         description,
         price,
+        comparePrice: comparePrice ? Number.parseFloat(comparePrice) : null,
         stripeProductId: product.id,
         stripePriceId: stripePrice.id,
         contentItems: processedContentItems.length,
