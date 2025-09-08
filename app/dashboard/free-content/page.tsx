@@ -471,16 +471,16 @@ export default function FreeContentPage() {
 
       {/* Add Content Dialog */}
       <Dialog open={showAddContentDialog} onOpenChange={setShowAddContentDialog}>
-        <DialogContent className="bg-zinc-900 border-zinc-800 max-w-4xl max-h-[80vh] overflow-hidden">
-          <DialogHeader>
-            <DialogTitle className="text-white">Add Content to Library</DialogTitle>
+        <DialogContent className="bg-zinc-900/95 backdrop-blur-xl border-zinc-800/50 max-w-5xl max-h-[90vh] overflow-hidden">
+          <DialogHeader className="pb-4">
+            <DialogTitle className="text-white text-xl font-semibold">Add Content to Library</DialogTitle>
             <DialogDescription className="text-zinc-400">
               Select uploads to add to your public content library. These will be visible to all visitors on your
               profile.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="overflow-y-auto">
+          <div className="flex-1 overflow-hidden">
             <UploadSelector
               excludeIds={freeContent.map((item) => item.id)}
               onSelect={handleAddSelectedContent}

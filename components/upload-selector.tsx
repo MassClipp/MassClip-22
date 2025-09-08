@@ -341,19 +341,29 @@ export default function UploadSelector({
             placeholder="Search uploads..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 bg-zinc-800 border-zinc-700 text-white"
+            className="pl-10 bg-zinc-900/50 border-zinc-700/50 text-white placeholder:text-zinc-500 focus:border-white/20 focus:ring-white/10"
           />
         </div>
         <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className="w-full sm:w-[180px] bg-zinc-800 border-zinc-700 text-white">
+          <SelectTrigger className="w-full sm:w-[180px] bg-zinc-900/50 border-zinc-700/50 text-white hover:bg-zinc-800/50 focus:border-white/20">
             <SelectValue />
           </SelectTrigger>
-          <SelectContent className="bg-zinc-800 border-zinc-700">
-            <SelectItem value="all">All Types</SelectItem>
-            <SelectItem value="video">Videos</SelectItem>
-            <SelectItem value="audio">Audio</SelectItem>
-            <SelectItem value="image">Images</SelectItem>
-            <SelectItem value="document">Documents</SelectItem>
+          <SelectContent className="bg-zinc-900 border-zinc-700/50 backdrop-blur-sm">
+            <SelectItem value="all" className="hover:bg-zinc-800/50 focus:bg-zinc-800/50">
+              All Types
+            </SelectItem>
+            <SelectItem value="video" className="hover:bg-zinc-800/50 focus:bg-zinc-800/50">
+              Videos
+            </SelectItem>
+            <SelectItem value="audio" className="hover:bg-zinc-800/50 focus:bg-zinc-800/50">
+              Audio
+            </SelectItem>
+            <SelectItem value="image" className="hover:bg-zinc-800/50 focus:bg-zinc-800/50">
+              Images
+            </SelectItem>
+            <SelectItem value="document" className="hover:bg-zinc-800/50 focus:bg-zinc-800/50">
+              Documents
+            </SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -364,10 +374,20 @@ export default function UploadSelector({
           {selectedIds.length} of {filteredUploads.length} selected
         </span>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={handleSelectAll} className="border-zinc-700 bg-transparent">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSelectAll}
+            className="border-zinc-700/50 bg-zinc-900/30 hover:bg-white hover:text-black transition-colors"
+          >
             Select All
           </Button>
-          <Button variant="outline" size="sm" onClick={handleDeselectAll} className="border-zinc-700 bg-transparent">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDeselectAll}
+            className="border-zinc-700/50 bg-zinc-900/30 hover:bg-white hover:text-black transition-colors"
+          >
             Deselect All
           </Button>
         </div>
@@ -415,7 +435,7 @@ export default function UploadSelector({
                 size="sm"
                 onClick={fetchDiagnostic}
                 disabled={runningDiagnostic}
-                className="mt-2 bg-transparent"
+                className="mt-2 bg-zinc-900/30 hover:bg-white hover:text-black transition-colors"
               >
                 {runningDiagnostic ? (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -428,33 +448,59 @@ export default function UploadSelector({
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto">
-          {filteredUploads.map((upload, index) => (
-            <motion.div
-              key={upload.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.2, delay: index * 0.05 }}
-              className={`relative bg-zinc-800 rounded-lg border transition-all duration-200 cursor-pointer hover:border-zinc-600 ${
-                selectedIds.includes(upload.id) ? "border-red-500 bg-red-900/20" : "border-zinc-700"
-              }`}
-              onClick={() => handleToggleSelection(upload.id)}
-            >
-              {/* Checkbox */}
-              <div className="absolute top-2 left-2 z-10">
-                <Checkbox
-                  checked={selectedIds.includes(upload.id)}
-                  onChange={() => handleToggleSelection(upload.id)}
-                  className="bg-zinc-900 border-zinc-600"
-                />
-              </div>
-
-              {/* Thumbnail */}
-              <div
-                className={`${aspectRatio === "portrait" ? "aspect-[9/16]" : "aspect-video"} bg-zinc-900 rounded-t-lg overflow-hidden relative`}
+        <div className="h-[60vh] min-h-[400px] max-h-[600px] overflow-y-auto overscroll-contain">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-4">
+            {filteredUploads.map((upload, index) => (
+              <motion.div
+                key={upload.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2, delay: index * 0.05 }}
+                className={`relative bg-zinc-900/40 backdrop-blur-sm rounded-xl border transition-all duration-200 cursor-pointer hover:border-zinc-600/50 hover:bg-zinc-800/50 ${
+                  selectedIds.includes(upload.id) ? "border-white/30 bg-white/5 shadow-lg" : "border-zinc-700/30"
+                }`}
+                onClick={() => handleToggleSelection(upload.id)}
               >
-                {upload.contentType === "video" ? (
-                  upload.thumbnailUrl ? (
+                {/* Checkbox */}
+                <div className="absolute top-3 left-3 z-10">
+                  <Checkbox
+                    checked={selectedIds.includes(upload.id)}
+                    onChange={() => handleToggleSelection(upload.id)}
+                    className="bg-zinc-900/80 border-zinc-600/50 data-[state=checked]:bg-white data-[state=checked]:border-white"
+                  />
+                </div>
+
+                {/* Thumbnail */}
+                <div
+                  className={`${aspectRatio === "portrait" ? "aspect-[9/16]" : "aspect-video"} bg-zinc-900/50 rounded-t-xl overflow-hidden relative`}
+                >
+                  {upload.contentType === "video" ? (
+                    upload.thumbnailUrl ? (
+                      <img
+                        src={upload.thumbnailUrl || "/placeholder.svg"}
+                        alt={upload.title}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement
+                          target.style.display = "none"
+                          target.nextElementSibling?.classList.remove("hidden")
+                        }}
+                      />
+                    ) : (
+                      <video
+                        src={upload.fileUrl}
+                        className="w-full h-full object-cover"
+                        muted
+                        playsInline
+                        preload="metadata"
+                        onError={(e) => {
+                          const target = e.target as HTMLVideoElement
+                          target.style.display = "none"
+                          target.nextElementSibling?.classList.remove("hidden")
+                        }}
+                      />
+                    )
+                  ) : upload.thumbnailUrl ? (
                     <img
                       src={upload.thumbnailUrl || "/placeholder.svg"}
                       alt={upload.title}
@@ -465,65 +511,48 @@ export default function UploadSelector({
                         target.nextElementSibling?.classList.remove("hidden")
                       }}
                     />
-                  ) : (
-                    <video
-                      src={upload.fileUrl}
-                      className="w-full h-full object-cover"
-                      muted
-                      playsInline
-                      preload="metadata"
-                      onError={(e) => {
-                        const target = e.target as HTMLVideoElement
-                        target.style.display = "none"
-                        target.nextElementSibling?.classList.remove("hidden")
-                      }}
-                    />
-                  )
-                ) : upload.thumbnailUrl ? (
-                  <img
-                    src={upload.thumbnailUrl || "/placeholder.svg"}
-                    alt={upload.title}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement
-                      target.style.display = "none"
-                      target.nextElementSibling?.classList.remove("hidden")
-                    }}
-                  />
-                ) : null}
-                <div
-                  className={`${(upload.contentType === "video" && !upload.thumbnailUrl) || upload.thumbnailUrl ? "hidden" : ""} absolute inset-0 flex items-center justify-center text-zinc-400 bg-zinc-800`}
-                >
-                  {getContentIcon(upload.contentType)}
+                  ) : null}
+                  <div
+                    className={`${(upload.contentType === "video" && !upload.thumbnailUrl) || upload.thumbnailUrl ? "hidden" : ""} absolute inset-0 flex items-center justify-center text-zinc-400 bg-zinc-800/50`}
+                  >
+                    {getContentIcon(upload.contentType)}
+                  </div>
                 </div>
-              </div>
 
-              {/* Content Info */}
-              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
-                <h4 className="text-sm font-medium text-white truncate mb-1" title={upload.title}>
-                  {upload.title}
-                </h4>
-                <div className="flex items-center justify-between text-xs">
-                  <Badge variant="outline" className="text-xs border-zinc-600 text-zinc-300 bg-black/50">
-                    {upload.contentType}
-                  </Badge>
-                  <span className="text-zinc-300">{formatFileSize(upload.fileSize || 0)}</span>
+                {/* Content Info */}
+                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-4 rounded-b-xl">
+                  <h4 className="text-sm font-medium text-white truncate mb-2" title={upload.title}>
+                    {upload.title}
+                  </h4>
+                  <div className="flex items-center justify-between text-xs">
+                    <Badge
+                      variant="outline"
+                      className="text-xs border-zinc-600/50 text-zinc-300 bg-black/30 backdrop-blur-sm"
+                    >
+                      {upload.contentType}
+                    </Badge>
+                    <span className="text-zinc-300">{formatFileSize(upload.fileSize || 0)}</span>
+                  </div>
                 </div>
-              </div>
-            </motion.div>
-          ))}
+              </motion.div>
+            ))}
+          </div>
         </div>
       )}
 
       {/* Action Buttons */}
-      <div className="flex justify-end gap-3 pt-4 border-t border-zinc-800">
-        <Button variant="outline" onClick={onCancel} className="border-zinc-700 bg-transparent">
+      <div className="flex justify-end gap-3 pt-6 border-t border-zinc-800/50">
+        <Button
+          variant="outline"
+          onClick={onCancel}
+          className="border-zinc-700/50 bg-zinc-900/30 hover:bg-zinc-800/50 text-zinc-300 hover:text-white transition-colors"
+        >
           Cancel
         </Button>
         <Button
           onClick={handleSubmit}
           disabled={loading || selectedIds.length === 0}
-          className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800"
+          className="bg-white text-black hover:bg-zinc-100 disabled:bg-zinc-700 disabled:text-zinc-400 font-medium transition-colors"
         >
           {loading ? (
             <>
