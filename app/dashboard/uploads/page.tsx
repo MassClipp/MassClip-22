@@ -581,6 +581,18 @@ const UploadsPage = () => {
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-64"
           />
+          <Select
+            value={currentFolderId || "root"}
+            onValueChange={(value) => handleFolderChange(value === "root" ? null : value)}
+          >
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Select folder" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="root">📁 Root Folder</SelectItem>
+              {/* TODO: Add dynamic folder options here */}
+            </SelectContent>
+          </Select>
           <Select value={filterType} onValueChange={setFilterType}>
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Filter by type" />
@@ -594,6 +606,9 @@ const UploadsPage = () => {
               <SelectItem value="other">Other</SelectItem>
             </SelectContent>
           </Select>
+          <Button variant="outline" onClick={() => setShowCreateFolderDialog(true)}>
+            <PlusCircle className="h-4 w-4" />
+          </Button>
           <Button variant="outline" onClick={() => fetchUploads()}>
             <RefreshCw className="mr-2 h-4 w-4" />
             Refresh
