@@ -313,7 +313,7 @@ export default function FreeContentPage() {
         </div>
       ) : (
         <AnimatePresence>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 md:gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
             {filteredContent.map((item, index) => {
               const IconComponent = FILE_TYPE_ICONS[item.type as keyof typeof FILE_TYPE_ICONS] || File
               const colorClass = FILE_TYPE_COLORS[item.type as keyof typeof FILE_TYPE_COLORS] || "text-white"
@@ -327,8 +327,8 @@ export default function FreeContentPage() {
                   transition={{ duration: 0.2, delay: index * 0.02 }}
                 >
                   <div className="bg-zinc-900/30 border border-zinc-800/30 rounded-lg hover:border-zinc-700/50 transition-all duration-200 group">
-                    <div className="p-2 md:p-3">
-                      <div className="mb-2 md:mb-3 relative">
+                    <div className="p-3">
+                      <div className="mb-3 relative">
                         {item.type === "video" ? (
                           <div className="aspect-[9/16]">
                             <VideoPreviewPlayer videoUrl={item.fileUrl} title={item.title} />
@@ -346,18 +346,18 @@ export default function FreeContentPage() {
                               }}
                             />
                             <div className="hidden w-full h-full flex items-center justify-center absolute inset-0 bg-zinc-800/50">
-                              <IconComponent className={`h-6 w-6 md:h-8 md:w-8 ${colorClass}`} />
+                              <IconComponent className={`h-8 w-8 ${colorClass}`} />
                             </div>
                           </div>
                         ) : (
                           <div className="aspect-[9/16] bg-zinc-800/50 rounded-md flex items-center justify-center">
-                            <IconComponent className={`h-6 w-6 md:h-8 md:w-8 ${colorClass}`} />
+                            <IconComponent className={`h-8 w-8 ${colorClass}`} />
                           </div>
                         )}
 
                         {/* Action buttons overlay - only show for non-video types */}
                         {item.type !== "video" && (
-                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1 md:gap-2">
+                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                             <Button
                               size="sm"
                               variant="secondary"
@@ -365,9 +365,9 @@ export default function FreeContentPage() {
                                 e.stopPropagation()
                                 window.open(item.fileUrl, "_blank")
                               }}
-                              className="bg-white/20 hover:bg-white/30 text-white border-white/20 h-8 w-8 p-0"
+                              className="bg-white/20 hover:bg-white/30 text-white border-white/20"
                             >
-                              <Search className="h-3 w-3 md:h-4 md:w-4" />
+                              <Search className="h-4 w-4" />
                             </Button>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
@@ -375,9 +375,9 @@ export default function FreeContentPage() {
                                   size="sm"
                                   variant="secondary"
                                   onClick={(e) => e.stopPropagation()}
-                                  className="bg-white/20 hover:bg-white/30 text-white border-white/20 h-8 w-8 p-0"
+                                  className="bg-white/20 hover:bg-white/30 text-white border-white/20"
                                 >
-                                  <MoreVertical className="h-3 w-3 md:h-4 md:w-4" />
+                                  <MoreVertical className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent className="bg-zinc-900 border-zinc-800">
@@ -406,45 +406,42 @@ export default function FreeContentPage() {
                         )}
                       </div>
 
-                      <div className="space-y-1 md:space-y-2">
+                      <div className="space-y-2">
                         <div className="flex items-center justify-between">
-                          <h3 className="font-medium text-white text-xs md:text-sm truncate pr-2">{item.title}</h3>
-                          <Badge
-                            variant="outline"
-                            className="text-xs border-zinc-700/50 text-zinc-300 bg-zinc-800/30 shrink-0"
-                          >
+                          <h3 className="font-medium text-white text-sm truncate">{item.title}</h3>
+                          <Badge variant="outline" className="text-xs border-zinc-700/50 text-zinc-300 bg-zinc-800/30">
                             {item.type}
                           </Badge>
                         </div>
 
                         <div className="flex items-center justify-between text-xs text-zinc-400">
-                          <span className="truncate">{formatFileSize(item.size)}</span>
-                          <span className="shrink-0">{safelyFormatRelativeTime(item.addedAt)}</span>
+                          <span>{formatFileSize(item.size)}</span>
+                          <span>{safelyFormatRelativeTime(item.addedAt)}</span>
                         </div>
 
                         {/* Action buttons for videos - show below the video */}
                         {item.type === "video" && (
-                          <div className="flex items-center gap-1 md:gap-2 mt-2 md:mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex items-center gap-2 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
                             <Button
                               size="sm"
                               variant="outline"
-                              className="flex-1 bg-zinc-800/50 border-zinc-700/50 text-zinc-300 hover:bg-white hover:text-black text-xs h-7 md:h-8"
+                              className="flex-1 bg-zinc-800/50 border-zinc-700/50 text-zinc-300 hover:bg-zinc-700/50 hover:text-white text-xs"
                               onClick={(e) => {
                                 e.stopPropagation()
                                 copyToClipboard(item.fileUrl)
                               }}
                             >
-                              <Copy className="h-3 w-3 mr-1" /> Copy
+                              <Copy className="h-3 w-3 mr-1" /> Copy URL
                             </Button>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  className="px-2 bg-zinc-800/50 border-zinc-700/50 text-zinc-300 hover:bg-white hover:text-black h-7 md:h-8"
+                                  className="px-2 bg-zinc-800/50 border-zinc-700/50 text-zinc-300 hover:bg-zinc-700/50 hover:text-white"
                                   onClick={(e) => e.stopPropagation()}
                                 >
-                                  <MoreVertical className="h-3 w-3 md:h-4 md:w-4" />
+                                  <MoreVertical className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent className="bg-zinc-900 border-zinc-800">

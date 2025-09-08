@@ -448,8 +448,8 @@ export default function UploadSelector({
           )}
         </div>
       ) : (
-        <div className="h-[60vh] min-h-[400px] max-h-[600px] overflow-y-auto overscroll-contain">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-4">
+        <div className="h-[60vh] min-h-[400px] max-h-[600px] overflow-y-auto overscroll-contain touch-pan-y">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 pb-4">
             {filteredUploads.map((upload, index) => (
               <motion.div
                 key={upload.id}
@@ -488,21 +488,20 @@ export default function UploadSelector({
                       />
                     ) : (
                       <video
-                        src={upload.fileUrl}
+                        src={`/api/proxy-video?url=${encodeURIComponent(upload.fileUrl)}`}
                         className="w-full h-full object-cover"
                         muted
                         playsInline
                         preload="metadata"
-                        crossOrigin="anonymous"
-                        webkit-playsinline="true"
+                        poster={upload.thumbnailUrl}
+                        onLoadedMetadata={(e) => {
+                          const target = e.target as HTMLVideoElement
+                          target.currentTime = 0.1 // Set to a small time to generate thumbnail
+                        }}
                         onError={(e) => {
                           const target = e.target as HTMLVideoElement
                           target.style.display = "none"
                           target.nextElementSibling?.classList.remove("hidden")
-                        }}
-                        onLoadedMetadata={(e) => {
-                          const video = e.target as HTMLVideoElement
-                          video.currentTime = Math.min(1, video.duration * 0.1)
                         }}
                       />
                     )
@@ -519,16 +518,9 @@ export default function UploadSelector({
                     />
                   ) : null}
                   <div
-                    className={`${(upload.contentType === "video" && !upload.thumbnailUrl) || upload.thumbnailUrl ? "hidden" : ""} absolute inset-0 flex items-center justify-center text-zinc-400 bg-zinc-800/50 backdrop-blur-sm`}
+                    className={`${(upload.contentType === "video" && !upload.thumbnailUrl) || upload.thumbnailUrl ? "hidden" : ""} absolute inset-0 flex items-center justify-center text-zinc-400 bg-zinc-800/50`}
                   >
-                    <div className="flex flex-col items-center gap-2">
-                      {getContentIcon(upload.contentType)}
-                      <span className="text-xs text-zinc-500 text-center px-2">
-                        {upload.contentType === "video"
-                          ? "Video Preview"
-                          : upload.contentType.charAt(0).toUpperCase() + upload.contentType.slice(1)}
-                      </span>
-                    </div>
+                    {getContentIcon(upload.contentType)}
                   </div>
                 </div>
 
