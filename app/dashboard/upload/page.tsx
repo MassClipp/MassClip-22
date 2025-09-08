@@ -30,6 +30,8 @@ import {
   CheckCircle,
   AlertCircle,
   Clock,
+  Plus,
+  Folder,
 } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -41,6 +43,7 @@ import ProfileSetup from "@/components/profile-setup"
 import { VideoPreviewPlayer } from "@/components/video-preview-player"
 import { chunkedUploadService } from "@/lib/chunked-upload-service"
 import { uploadQueueManager, type QueuedUpload } from "@/lib/upload-queue-manager"
+import { CreateFolderDialog } from "@/components/create-folder-dialog"
 
 interface UploadType {
   id: string
@@ -51,6 +54,16 @@ interface UploadType {
   type: "video" | "audio" | "image" | "document" | "other"
   size?: number
   mimeType?: string
+  createdAt: Date
+  updatedAt: Date
+}
+
+interface FolderType {
+  id: string
+  name: string
+  path: string
+  parentId: string | null
+  userId: string
   createdAt: Date
   updatedAt: Date
 }
@@ -115,6 +128,10 @@ export default function UploadPage() {
     error: 0,
     paused: 0,
   })
+  const [folders, setFolders] = useState<FolderType[]>([])
+  const [selectedFolderId, setSelectedFolderId] = useState<string>("root")
+  const [isCreateFolderDialogOpen, setIsCreateFolderDialogOpen] = useState(false)
+  const [loadingFolders, setLoadingFolders] = useState(false)
 
   // Initialize upload services
   useEffect(() => {
@@ -234,6 +251,42 @@ export default function UploadPage() {
       fetchUploads()
     }
   }, [user, hasUserProfile, fetchUploads])
+
+  // Fetch folders
+  const fetchFolders = useCallback(async () => {
+    if (!user) return
+
+    try {
+      setLoadingFolders(true)
+      const token = await user.getIdToken()
+      const response = await fetch("/api/folders", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setFolders(
+          data.folders.map((folder: any) => ({
+            ...folder,
+            createdAt: new Date(folder.createdAt),
+            updatedAt: new Date(folder.updatedAt),
+          })),
+        )
+      }
+    } catch (error) {
+      console.error("Error fetching folders:", error)
+    } finally {
+      setLoadingFolders(false)
+    }
+  }, [user])
+
+  useEffect(() => {
+    if (user && hasUserProfile) {
+      fetchFolders()
+    }
+  }, [user, hasUserProfile, fetchFolders])
 
   // Handle file upload with chunked upload service
   const handleFileUpload = async (files: FileList) => {
@@ -728,6 +781,32 @@ export default function UploadPage() {
               <SelectItem value="other">Other</SelectItem>
             </SelectContent>
           </Select>
+
+          <Select value={selectedFolderId} onValueChange={setSelectedFolderId}>
+            <SelectTrigger className="w-48 bg-zinc-900/30 border-zinc-800/30 text-white">
+              <Folder className="h-4 w-4 mr-2" />
+              <SelectValue placeholder="Root Folder" />
+            </SelectTrigger>
+            <SelectContent className="bg-zinc-900 border-zinc-800">
+              <SelectItem value="root">Root Folder</SelectItem>
+              {folders.map((folder) => (
+                <SelectItem key={folder.id} value={folder.id}>
+                  {"  ".repeat(folder.path.split("/").length - 1)}
+                  {folder.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsCreateFolderDialogOpen(true)}
+            className="border-zinc-700/50 bg-zinc-900/50 hover:bg-zinc-800/50 text-zinc-300 px-3"
+            title="Create New Folder"
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
         </div>
 
         <div className="flex items-center gap-1 bg-zinc-900/30 border border-zinc-800/30 rounded-md p-1">
@@ -999,36 +1078,26 @@ export default function UploadPage() {
       <Dialog open={isRenameDialogOpen} onOpenChange={setIsRenameDialogOpen}>
         <DialogContent className="bg-zinc-900 border-zinc-800">
           <DialogHeader>
-            <DialogTitle className="text-white">Rename File</DialogTitle>
-            <DialogDescription className="text-zinc-400">Update the display name for this file</DialogDescription>
+            <DialogTitle className="text-white">Rename Upload</DialogTitle>
+            <DialogDescription className="text-zinc-400">Enter a new title for this upload.</DialogDescription>
           </DialogHeader>
-
           <div className="space-y-4">
             <Input
               value={newTitle}
               onChange={(e) => setNewTitle(e.target.value)}
-              placeholder="Enter new name"
-              className="bg-zinc-800/50 border-zinc-700/50 text-white"
+              placeholder="Enter new title..."
+              className="bg-zinc-800/50 border-zinc-700 text-white"
             />
-
-            <div className="flex justify-end gap-3">
+            <div className="flex justify-end gap-2">
               <Button
                 variant="outline"
-                onClick={() => {
-                  setIsRenameDialogOpen(false)
-                  setSelectedUpload(null)
-                  setNewTitle("")
-                }}
-                className="border-zinc-700/50 text-zinc-300"
+                onClick={() => setIsRenameDialogOpen(false)}
+                className="border-zinc-700 text-zinc-300"
               >
                 Cancel
               </Button>
-              <Button
-                onClick={handleRename}
-                disabled={!newTitle.trim()}
-                className="bg-white text-black hover:bg-zinc-100"
-              >
-                Save Changes
+              <Button onClick={handleRename} className="bg-white text-black">
+                Rename
               </Button>
             </div>
           </div>
@@ -1040,34 +1109,36 @@ export default function UploadPage() {
           <DialogHeader>
             <DialogTitle className="text-white">Add to Free Content</DialogTitle>
             <DialogDescription className="text-zinc-400">
-              Make selected files available in your public content library
+              Add {selectedUploads.length} selected item(s) to your free content library?
             </DialogDescription>
           </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="bg-zinc-800/30 border border-zinc-700/30 p-4 rounded-lg">
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-medium text-white">Selected Files</span>
-                <span className="text-sm text-zinc-400">{selectedUploads.length} items</span>
-              </div>
-              <p className="text-sm text-zinc-500">These files will be visible to visitors on your public profile</p>
-            </div>
-
-            <div className="flex justify-end gap-3">
-              <Button
-                variant="outline"
-                onClick={() => setShowAddToFreeContentDialog(false)}
-                className="border-zinc-700/50 text-zinc-300"
-              >
-                Cancel
-              </Button>
-              <Button onClick={addToFreeContent} className="bg-white text-black hover:bg-zinc-100">
-                Add to Library
-              </Button>
-            </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowAddToFreeContentDialog(false)}
+              className="border-zinc-700 text-zinc-300"
+            >
+              Cancel
+            </Button>
+            <Button onClick={addToFreeContent} className="bg-white text-black">
+              Add to Free Content
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
+
+      <CreateFolderDialog
+        isOpen={isCreateFolderDialogOpen}
+        onClose={() => setIsCreateFolderDialogOpen(false)}
+        parentFolderId={selectedFolderId || null}
+        onFolderCreated={() => {
+          fetchFolders()
+          toast({
+            title: "Success!",
+            description: "Folder created successfully",
+          })
+        }}
+      />
     </div>
   )
 }

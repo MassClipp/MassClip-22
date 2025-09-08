@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,25 +14,26 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { useToast } from "@/components/ui/use-toast"
-import { auth } from "@/lib/firebase"
+import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 import { Folder, Loader2 } from "lucide-react"
 
 interface CreateFolderDialogProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
+  isOpen: boolean
+  onClose: () => void
   parentFolderId?: string | null
   onFolderCreated?: (folderId: string) => void
 }
 
-export default function CreateFolderDialog({
-  open,
-  onOpenChange,
+export function CreateFolderDialog({
+  isOpen,
+  onClose,
   parentFolderId = null,
   onFolderCreated,
 }: CreateFolderDialogProps) {
   const [folderName, setFolderName] = useState("")
   const [isCreating, setIsCreating] = useState(false)
   const { toast } = useToast()
+  const { user } = useFirebaseAuth()
 
   const handleCreateFolder = async () => {
     if (!folderName.trim()) {
@@ -45,7 +45,6 @@ export default function CreateFolderDialog({
       return
     }
 
-    const user = auth.currentUser
     if (!user) {
       toast({
         title: "Error",
@@ -84,7 +83,7 @@ export default function CreateFolderDialog({
       })
 
       setFolderName("")
-      onOpenChange(false)
+      onClose()
       onFolderCreated?.(folder.id)
     } catch (error) {
       console.error("Error creating folder:", error)
@@ -105,7 +104,7 @@ export default function CreateFolderDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="bg-zinc-900 border-zinc-800 sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-white">
@@ -136,9 +135,9 @@ export default function CreateFolderDialog({
         <DialogFooter>
           <Button
             variant="outline"
-            onClick={() => onOpenChange(false)}
+            onClick={onClose}
             disabled={isCreating}
-            className="border-zinc-700 hover:bg-zinc-800"
+            className="border-zinc-700 hover:bg-zinc-800 bg-transparent"
           >
             Cancel
           </Button>
@@ -164,3 +163,5 @@ export default function CreateFolderDialog({
     </Dialog>
   )
 }
+
+export default CreateFolderDialog
