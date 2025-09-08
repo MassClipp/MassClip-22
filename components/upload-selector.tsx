@@ -449,7 +449,7 @@ export default function UploadSelector({
         </div>
       ) : (
         <div className="h-[60vh] min-h-[400px] max-h-[600px] overflow-y-auto overscroll-contain touch-pan-y">
-          <div className="grid grid-cols-2 gap-3 sm:gap-4 pb-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 pb-4">
             {filteredUploads.map((upload, index) => (
               <motion.div
                 key={upload.id}
