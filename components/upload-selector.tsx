@@ -493,10 +493,16 @@ export default function UploadSelector({
                         muted
                         playsInline
                         preload="metadata"
+                        crossOrigin="anonymous"
+                        webkit-playsinline="true"
                         onError={(e) => {
                           const target = e.target as HTMLVideoElement
                           target.style.display = "none"
                           target.nextElementSibling?.classList.remove("hidden")
+                        }}
+                        onLoadedMetadata={(e) => {
+                          const video = e.target as HTMLVideoElement
+                          video.currentTime = Math.min(1, video.duration * 0.1)
                         }}
                       />
                     )
@@ -513,9 +519,16 @@ export default function UploadSelector({
                     />
                   ) : null}
                   <div
-                    className={`${(upload.contentType === "video" && !upload.thumbnailUrl) || upload.thumbnailUrl ? "hidden" : ""} absolute inset-0 flex items-center justify-center text-zinc-400 bg-zinc-800/50`}
+                    className={`${(upload.contentType === "video" && !upload.thumbnailUrl) || upload.thumbnailUrl ? "hidden" : ""} absolute inset-0 flex items-center justify-center text-zinc-400 bg-zinc-800/50 backdrop-blur-sm`}
                   >
-                    {getContentIcon(upload.contentType)}
+                    <div className="flex flex-col items-center gap-2">
+                      {getContentIcon(upload.contentType)}
+                      <span className="text-xs text-zinc-500 text-center px-2">
+                        {upload.contentType === "video"
+                          ? "Video Preview"
+                          : upload.contentType.charAt(0).toUpperCase() + upload.contentType.slice(1)}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
