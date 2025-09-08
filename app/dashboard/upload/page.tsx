@@ -254,9 +254,13 @@ export default function UploadPage() {
 
   // Fetch folders
   const fetchFolders = useCallback(async () => {
-    if (!user) return
+    if (!user) {
+      console.log("[v0] No user available for fetching folders")
+      return
+    }
 
     try {
+      console.log("[v0] Fetching folders for user:", user.uid)
       setLoadingFolders(true)
       const token = await user.getIdToken()
       const response = await fetch("/api/folders", {
@@ -265,8 +269,11 @@ export default function UploadPage() {
         },
       })
 
+      console.log("[v0] Folders API response status:", response.status)
+
       if (response.ok) {
         const data = await response.json()
+        console.log("[v0] Folders API response data:", data)
         setFolders(
           data.folders.map((folder: any) => ({
             ...folder,
@@ -274,9 +281,13 @@ export default function UploadPage() {
             updatedAt: new Date(folder.updatedAt),
           })),
         )
+        console.log("[v0] Set folders state with", data.folders.length, "folders")
+      } else {
+        const errorData = await response.json()
+        console.error("[v0] Folders API error:", errorData)
       }
     } catch (error) {
-      console.error("Error fetching folders:", error)
+      console.error("[v0] Error fetching folders:", error)
     } finally {
       setLoadingFolders(false)
     }
@@ -1132,6 +1143,7 @@ export default function UploadPage() {
         onClose={() => setIsCreateFolderDialogOpen(false)}
         parentFolderId={selectedFolderId || null}
         onFolderCreated={() => {
+          console.log("[v0] Folder created, refreshing folder list...")
           fetchFolders()
           toast({
             title: "Success!",
