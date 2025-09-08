@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Folder, FolderPlus, ChevronRight } from "lucide-react"
-import { auth, db } from "@/lib/firebase"
-import { collection, query, where, orderBy, onSnapshot } from "firebase/firestore"
+import { useToast } from "@/hooks/use-toast"
 
 interface FolderSelectorProps {
   selectedFolderId: string | null
@@ -23,34 +22,61 @@ export default function FolderSelector({ selectedFolderId, onFolderSelect, class
   const [folders, setFolders] = useState<FolderItem[]>([])
   const [isOpen, setIsOpen] = useState(false)
   const [selectedFolder, setSelectedFolder] = useState<FolderItem | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const { toast } = useToast()
+
+  const fetchFolders = async () => {
+    try {
+      setIsLoading(true)
+
+      // Get ID token for authentication
+      const user = (await import("@/lib/firebase")).auth.currentUser
+      if (!user) {
+        console.log("[v0] No authenticated user found")
+        setFolders([])
+        return
+      }
+
+      const idToken = await user.getIdToken()
+
+      const response = await fetch("/api/folders", {
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch folders: ${response.status}`)
+      }
+
+      const data = await response.json()
+      console.log("[v0] Fetched folders:", data)
+
+      // Transform folders to include level for indentation
+      const transformedFolders = data.folders.map((folder: any) => ({
+        id: folder.id,
+        name: folder.name,
+        path: folder.path,
+        parentId: folder.parentId,
+        level: (folder.path.match(/\//g) || []).length - 1, // Count slashes to determine level
+      }))
+
+      setFolders(transformedFolders)
+    } catch (error) {
+      console.error("[v0] Error fetching folders:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load folders",
+        variant: "destructive",
+      })
+      setFolders([])
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   useEffect(() => {
-    const user = auth.currentUser
-    if (!user) return
-
-    const foldersQuery = query(
-      collection(db, "folders"),
-      where("uid", "==", user.uid),
-      where("isDeleted", "==", false),
-      orderBy("path", "asc"),
-    )
-
-    const unsubscribe = onSnapshot(foldersQuery, (snapshot) => {
-      const folderData: FolderItem[] = []
-      snapshot.forEach((doc) => {
-        const data = doc.data()
-        folderData.push({
-          id: doc.id,
-          name: data.name,
-          path: data.path,
-          parentId: data.parentId || null,
-          level: data.level || 0,
-        })
-      })
-      setFolders(folderData)
-    })
-
-    return () => unsubscribe()
+    fetchFolders()
   }, [])
 
   useEffect(() => {
@@ -76,10 +102,11 @@ export default function FolderSelector({ selectedFolderId, onFolderSelect, class
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         className="w-full bg-zinc-900 border border-zinc-700 rounded-md p-3 text-left text-white focus:outline-none focus:ring-1 focus:ring-red-500 flex items-center justify-between"
+        disabled={isLoading}
       >
         <div className="flex items-center">
           <Folder className="h-4 w-4 text-zinc-400 mr-2" />
-          <span>{selectedFolder ? selectedFolder.name : "Root Folder"}</span>
+          <span>{isLoading ? "Loading..." : selectedFolder ? selectedFolder.name : "Root Folder"}</span>
         </div>
         <ChevronRight className={`h-4 w-4 text-zinc-400 transition-transform ${isOpen ? "rotate-90" : ""}`} />
       </button>
