@@ -3,8 +3,9 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ChevronRight, ChevronDown, Folder, FolderPlus, X, Plus } from "lucide-react"
+import { ChevronRight, ChevronDown, Folder, FolderPlus, X, Plus, Home } from "lucide-react"
 import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
+import FolderActionsMenu from "./folder-actions-menu"
 
 interface FolderSidebarProps {
   isOpen: boolean
@@ -206,12 +207,16 @@ export default function FolderSidebar({
             {folder.name}
           </button>
 
-          <button
-            onClick={() => setCreatingFolder(folder.id)}
-            className="opacity-0 group-hover:opacity-100 p-1 hover:bg-zinc-700/50 rounded"
-          >
-            <Plus className="h-3 w-3 text-zinc-400" />
-          </button>
+          <div className="flex items-center gap-1">
+            <FolderActionsMenu folderId={folder.id} folderName={folder.name} onFolderUpdated={fetchFolders} />
+
+            <button
+              onClick={() => setCreatingFolder(folder.id)}
+              className="opacity-0 group-hover:opacity-100 p-1 hover:bg-zinc-700/50 rounded"
+            >
+              <Plus className="h-3 w-3 text-zinc-400" />
+            </button>
+          </div>
         </div>
 
         {creatingFolder === folder.id && (
@@ -275,16 +280,15 @@ export default function FolderSidebar({
         </Button>
       </div>
 
-      {/* Root Folder Selection */}
       <div className="p-3 border-b border-zinc-800/50">
         <button
-          onClick={() => onFolderSelect("root")}
+          onClick={() => onFolderSelect("main")}
           className={`w-full flex items-center gap-2 py-2 px-3 rounded hover:bg-zinc-800/30 ${
-            selectedFolderId === "root" ? "bg-zinc-800/50 border border-white/20" : ""
+            selectedFolderId === "main" ? "bg-zinc-800/50 border border-white/20" : ""
           }`}
         >
-          <Folder className="h-4 w-4 text-zinc-400" />
-          <span className="text-sm text-zinc-300">Root Folder</span>
+          <Home className="h-4 w-4 text-zinc-400" />
+          <span className="text-sm text-zinc-300">Main</span>
         </button>
       </div>
 
