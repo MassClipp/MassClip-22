@@ -649,18 +649,9 @@ export default function UploadPage() {
 
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 pb-6 border-b border-zinc-800/50">
         <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-semibold text-white tracking-tight">Content Library</h1>
-            {selectedFolderId !== "main" && (
-              <span className="text-sm text-zinc-400">
-                / {folders.find((f) => f.id === selectedFolderId)?.name || "Unknown Folder"}
-              </span>
-            )}
-          </div>
+          <h1 className="text-2xl font-semibold text-white tracking-tight">Content Library</h1>
           <p className="text-zinc-400 text-sm">
-            {selectedFolderId === "main"
-              ? "Manage your main content library"
-              : `Manage content in ${folders.find((f) => f.id === selectedFolderId)?.name || "this folder"}`}
+            Manage and organize your digital assets with enterprise-grade upload capabilities
           </p>
           {username && (
             <div className="flex items-center gap-2 text-xs text-zinc-500">
@@ -808,11 +799,6 @@ export default function UploadPage() {
           Drag and drop files here, or click to browse. Advanced chunked upload technology ensures reliable transfers
           for large files.
         </p>
-        {selectedFolderId !== "main" && (
-          <p className="text-xs text-zinc-500 mb-4">
-            Files will be uploaded to: {folders.find((f) => f.id === selectedFolderId)?.name || "Selected folder"}
-          </p>
-        )}
         <Button onClick={() => fileInputRef.current?.click()} className="bg-white text-black hover:bg-zinc-200">
           <Upload className="mr-2 h-4 w-4" />
           Choose Files
@@ -822,25 +808,19 @@ export default function UploadPage() {
       {/* File Statistics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
         <div className="text-center">
-          <div className="text-2xl font-bold text-white">{filteredUploads.length}</div>
+          <div className="text-2xl font-bold text-white">{stats.total}</div>
           <div className="text-sm text-zinc-400 uppercase tracking-wide">Total Files</div>
         </div>
         <div className="text-center">
-          <div className="text-2xl font-bold text-white">
-            {filteredUploads.filter((u) => u.type === "video").length}
-          </div>
+          <div className="text-2xl font-bold text-white">{stats.video}</div>
           <div className="text-sm text-zinc-400 uppercase tracking-wide">Videos</div>
         </div>
         <div className="text-center">
-          <div className="text-2xl font-bold text-white">
-            {filteredUploads.filter((u) => u.type === "audio").length}
-          </div>
+          <div className="text-2xl font-bold text-white">{stats.audio}</div>
           <div className="text-sm text-zinc-400 uppercase tracking-wide">Audio</div>
         </div>
         <div className="text-center">
-          <div className="text-2xl font-bold text-white">
-            {filteredUploads.filter((u) => u.type === "image").length}
-          </div>
+          <div className="text-2xl font-bold text-white">{stats.image}</div>
           <div className="text-sm text-zinc-400 uppercase tracking-wide">Images</div>
         </div>
       </div>
@@ -880,11 +860,7 @@ export default function UploadPage() {
         </div>
       ) : filteredUploads.length === 0 ? (
         <div className="text-center py-12">
-          <div className="text-zinc-400">
-            {selectedFolderId === "main"
-              ? "No files in your main library yet"
-              : `No files in ${folders.find((f) => f.id === selectedFolderId)?.name || "this folder"} yet`}
-          </div>
+          <div className="text-zinc-400">No uploads found</div>
         </div>
       ) : (
         <div
