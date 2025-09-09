@@ -53,32 +53,6 @@ export class TrackingService {
       // Update daily stats
       await this.updateDailyStats(creatorId, "downloads", 1)
 
-      try {
-        // Get video title for notification
-        const videoDoc = await getDoc(videoRef)
-        const videoTitle = videoDoc.exists() ? videoDoc.data()?.title || "your video" : "your video"
-
-        console.log(`[v0] Creating download notification for video: ${videoTitle}`)
-
-        // Call server-side notification creation
-        await fetch("/api/notifications/create-download", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            creatorId,
-            bundleName: videoTitle,
-            downloaderId,
-          }),
-        })
-
-        console.log(`[v0] Download notification API call completed`)
-      } catch (notificationError) {
-        console.error("[v0] Error creating download notification:", notificationError)
-        // Don't fail the download tracking if notification fails
-      }
-
       console.log(`✅ Download tracked successfully`)
     } catch (error) {
       console.error("Error tracking download:", error)
