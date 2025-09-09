@@ -5,14 +5,23 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/components/ui/use-toast"
 import {
   Upload,
+  Search,
+  Grid3X3,
+  List,
+  Trash2,
+  Edit2,
   Film,
   Music,
   ImageIcon,
   File,
   RefreshCw,
+  MoreVertical,
+  Eye,
+  Copy,
   Loader2,
   PlusCircle,
   Pause,
@@ -23,15 +32,18 @@ import {
   Clock,
 } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Progress } from "@/components/ui/progress"
+import { motion, AnimatePresence } from "framer-motion"
+import { formatDistanceToNow } from "date-fns"
 import FirestoreIndexHelper from "@/components/firestore-index-helper"
 import ProfileSetup from "@/components/profile-setup"
+import { VideoPreviewPlayer } from "@/components/video-preview-player"
 import { chunkedUploadService } from "@/lib/chunked-upload-service"
 import { uploadQueueManager, type QueuedUpload } from "@/lib/upload-queue-manager"
 import { CreateFolderDialog } from "@/components/create-folder-dialog"
 import FolderSidebar from "@/components/folder-sidebar"
 import { Menu } from "lucide-react"
-import UploadCard from "@/components/upload-card"
 
 interface UploadType {
   id: string
@@ -44,8 +56,6 @@ interface UploadType {
   mimeType?: string
   createdAt: Date
   updatedAt: Date
-  folderId?: string | null
-  originalName?: string
 }
 
 interface FolderType {
@@ -95,7 +105,6 @@ export default function UploadPage() {
   const { toast } = useToast()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false) // Declare isSidebarOpen
-  const [isDragOver, setIsDragOver] = useState(false) // Declare isDragOver
 
   // State
   const [uploads, setUploads] = useState<UploadType[]>([])
@@ -121,7 +130,7 @@ export default function UploadPage() {
     paused: 0,
   })
   const [folders, setFolders] = useState<FolderType[]>([])
-  const [selectedFolderId, setSelectedFolderId] = useState<string>("main") // Default to "main" folder
+  const [selectedFolderId, setSelectedFolderId] = useState<string>("root")
   const [isCreateFolderDialogOpen, setIsCreateFolderDialogOpen] = useState(false)
   const [loadingFolders, setLoadingFolders] = useState(false)
 
@@ -195,6 +204,12 @@ export default function UploadPage() {
       if (filterType !== "all") params.append("type", filterType)
       if (searchTerm) params.append("search", searchTerm)
 
+      if (selectedFolderId === "main") {
+        params.append("folder", "main") // Files without folder assignment
+      } else if (selectedFolderId !== "root") {
+        params.append("folderId", selectedFolderId)
+      }
+
       const response = await fetch(`/api/uploads?${params}`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -236,7 +251,7 @@ export default function UploadPage() {
     } finally {
       setLoading(false)
     }
-  }, [user, filterType, searchTerm, toast])
+  }, [user, filterType, searchTerm, selectedFolderId, toast]) // Add selectedFolderId dependency
 
   useEffect(() => {
     if (user && hasUserProfile) {
@@ -323,7 +338,7 @@ export default function UploadPage() {
       const queueId = uploadQueueManager.addToQueue(
         file,
         priority,
-        selectedFolderId === "main" ? undefined : selectedFolderId,
+        selectedFolderId === "root" ? undefined : selectedFolderId,
         folderPath,
       )
 
@@ -355,12 +370,6 @@ export default function UploadPage() {
   // Handle drag and drop
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
-    setIsDragOver(true)
-  }
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragOver(false)
   }
 
   const handleDrop = (e: React.DragEvent) => {
@@ -369,7 +378,6 @@ export default function UploadPage() {
     if (files.length > 0) {
       handleFileUpload(files)
     }
-    setIsDragOver(false)
   }
 
   // Queue management functions
@@ -580,26 +588,11 @@ export default function UploadPage() {
     })
   }
 
-  const filteredUploads = uploads.filter((upload) => {
-    // Apply search and type filters first
-    const matchesSearch =
-      !searchTerm ||
-      upload.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      upload.originalName?.toLowerCase().includes(searchTerm.toLowerCase())
-
-    const matchesType = filterType === "all" || upload.type === filterType
-
-    if (!matchesSearch || !matchesType) return false
-
-    // Filter by folder
-    if (selectedFolderId === "main") {
-      // Show uploads without folder assignment (existing content)
-      return !upload.folderId || upload.folderId === null
-    } else {
-      // Show uploads in the selected folder
-      return upload.folderId === selectedFolderId
-    }
-  })
+  const handleFolderSelect = (folderId: string) => {
+    setSelectedFolderId(folderId)
+    // Refresh uploads when folder changes
+    setTimeout(() => fetchUploads(), 100)
+  }
 
   if (loading || authLoading) {
     return (
@@ -637,7 +630,7 @@ export default function UploadPage() {
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
         selectedFolderId={selectedFolderId}
-        onFolderSelect={setSelectedFolderId}
+        onFolderSelect={handleFolderSelect}
         onFolderCreated={handleFolderCreated}
       />
 
@@ -784,44 +777,21 @@ export default function UploadPage() {
         </div>
       )}
 
-      {/* Upload Area */}
       <div
-        className={`border-2 border-dashed border-zinc-700 rounded-lg p-12 text-center transition-colors ${
-          isDragOver ? "border-blue-500 bg-blue-500/5" : ""
-        }`}
+        className="border-2 border-dashed border-zinc-700/50 rounded-lg bg-zinc-900/20 hover:border-zinc-600/50 hover:bg-zinc-900/30 transition-all duration-200 cursor-pointer"
         onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
         onDrop={handleDrop}
+        onClick={() => fileInputRef.current?.click()}
       >
-        <Upload className="mx-auto h-12 w-12 text-zinc-500 mb-4" />
-        <h3 className="text-lg font-medium text-white mb-2">Upload your files</h3>
-        <p className="text-zinc-400 mb-4">
-          Drag and drop files here, or click to browse. Advanced chunked upload technology ensures reliable transfers
-          for large files.
-        </p>
-        <Button onClick={() => fileInputRef.current?.click()} className="bg-white text-black hover:bg-zinc-200">
-          <Upload className="mr-2 h-4 w-4" />
-          Choose Files
-        </Button>
-      </div>
-
-      {/* File Statistics */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-        <div className="text-center">
-          <div className="text-2xl font-bold text-white">{stats.total}</div>
-          <div className="text-sm text-zinc-400 uppercase tracking-wide">Total Files</div>
-        </div>
-        <div className="text-center">
-          <div className="text-2xl font-bold text-white">{stats.video}</div>
-          <div className="text-sm text-zinc-400 uppercase tracking-wide">Videos</div>
-        </div>
-        <div className="text-center">
-          <div className="text-2xl font-bold text-white">{stats.audio}</div>
-          <div className="text-sm text-zinc-400 uppercase tracking-wide">Audio</div>
-        </div>
-        <div className="text-center">
-          <div className="text-2xl font-bold text-white">{stats.image}</div>
-          <div className="text-sm text-zinc-400 uppercase tracking-wide">Images</div>
+        <div className="flex flex-col items-center justify-center py-12 px-6">
+          <div className="w-12 h-12 bg-zinc-800/50 rounded-lg flex items-center justify-center mb-4">
+            <Upload className="h-6 w-6 text-zinc-400" />
+          </div>
+          <h3 className="text-lg font-medium text-white mb-2">Upload your files</h3>
+          <p className="text-zinc-400 text-center text-sm max-w-md">
+            Drag and drop files here, or click to browse. Advanced chunked upload technology ensures reliable transfers
+            for large files.
+          </p>
         </div>
       </div>
 
@@ -853,34 +823,311 @@ export default function UploadPage() {
         </div>
       )}
 
-      {/* Upload Grid/List */}
-      {loading ? (
-        <div className="text-center py-12">
-          <div className="text-zinc-400">Loading uploads...</div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { label: "Total Files", value: stats.total, color: "text-white" },
+          { label: "Videos", value: stats.video, color: "text-white" },
+          { label: "Audio", value: stats.audio, color: "text-white" },
+          { label: "Images", value: stats.image, color: "text-white" },
+        ].map((stat, index) => (
+          <div key={index} className="bg-zinc-900/30 border border-zinc-800/30 rounded-lg p-4">
+            <div className={`text-2xl font-semibold ${stat.color} mb-1`}>{stat.value}</div>
+            <div className="text-xs text-white uppercase tracking-wide">{stat.label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+        <div className="flex items-center gap-4 w-full md:w-auto">
+          <div className="relative flex-1 md:w-80">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-500 h-4 w-4" />
+            <Input
+              placeholder="Search files..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 bg-zinc-900/30 border-zinc-800/30 text-white placeholder:text-zinc-500"
+            />
+          </div>
+
+          <Select value={filterType} onValueChange={setFilterType}>
+            <SelectTrigger className="w-36 bg-zinc-900/30 border-zinc-800/30 text-white">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="bg-zinc-900 border-zinc-800">
+              <SelectItem value="all">All Types</SelectItem>
+              <SelectItem value="video">Videos</SelectItem>
+              <SelectItem value="audio">Audio</SelectItem>
+              <SelectItem value="image">Images</SelectItem>
+              <SelectItem value="document">Documents</SelectItem>
+              <SelectItem value="other">Other</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-      ) : filteredUploads.length === 0 ? (
-        <div className="text-center py-12">
-          <div className="text-zinc-400">No uploads found</div>
+
+        <div className="flex items-center gap-1 bg-zinc-900/30 border border-zinc-800/30 rounded-md p-1">
+          <Button
+            variant={viewMode === "grid" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setViewMode("grid")}
+            className={viewMode === "grid" ? "bg-white text-black" : "text-zinc-400 hover:text-white"}
+          >
+            <Grid3X3 className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={viewMode === "list" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setViewMode("list")}
+            className={viewMode === "list" ? "bg-white text-black" : "text-zinc-400 hover:text-white"}
+          >
+            <List className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Content */}
+      {uploads.length === 0 ? (
+        <div className="bg-zinc-900/20 border border-zinc-800/30 rounded-lg">
+          <div className="flex flex-col items-center justify-center py-16 px-6">
+            <div className="w-16 h-16 bg-zinc-800/50 rounded-lg flex items-center justify-center mb-6">
+              <Upload className="h-8 w-8 text-zinc-500" />
+            </div>
+            <h3 className="text-xl font-medium text-white mb-2">No files uploaded</h3>
+            <p className="text-zinc-400 text-center mb-8 max-w-md text-sm">
+              Start building your content library by uploading your first file. Our advanced upload system handles large
+              files with ease.
+            </p>
+            <Button
+              onClick={() => fileInputRef.current?.click()}
+              className="bg-white text-black hover:bg-zinc-100 font-medium px-6"
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              Upload First File
+            </Button>
+          </div>
         </div>
       ) : (
-        <div
-          className={
-            viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6" : "space-y-4"
-          }
-        >
-          {filteredUploads.map((upload) => (
-            <UploadCard
-              key={upload.id}
-              upload={upload}
-              viewMode={viewMode}
-              isSelected={selectedUploads.includes(upload.id)}
-              onSelect={toggleUploadSelection}
-              onRename={handleRename}
-              onDelete={handleDelete}
-              onToggleFreeContent={() => {}}
-            />
-          ))}
-        </div>
+        <AnimatePresence>
+          {viewMode === "grid" ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+              {uploads.map((upload, index) => {
+                const IconComponent = FILE_TYPE_ICONS[upload.type]
+                const colorClass = FILE_TYPE_COLORS[upload.type]
+                const isSelected = selectedUploads.includes(upload.id)
+
+                return (
+                  <motion.div
+                    key={upload.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.2, delay: index * 0.02 }}
+                  >
+                    <div
+                      className={`bg-zinc-900/30 border border-zinc-800/30 rounded-lg hover:border-zinc-700/50 transition-all duration-200 cursor-pointer group ${
+                        isSelected ? "ring-2 ring-white/20 border-white/20" : ""
+                      }`}
+                      onClick={() => toggleUploadSelection(upload.id)}
+                    >
+                      <div className="p-3">
+                        <div className="mb-3 relative">
+                          {upload.type === "video" ? (
+                            <VideoPreviewPlayer videoUrl={upload.fileUrl} title={upload.title} />
+                          ) : upload.type === "image" ? (
+                            <div className="aspect-square bg-zinc-800/50 rounded-md flex items-center justify-center relative overflow-hidden">
+                              <img
+                                src={upload.fileUrl || "/placeholder.svg"}
+                                alt={upload.title}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  const target = e.target as HTMLImageElement
+                                  target.style.display = "none"
+                                  target.nextElementSibling?.classList.remove("hidden")
+                                }}
+                              />
+                              <div className="hidden absolute inset-0 flex items-center justify-center">
+                                <IconComponent className={`h-8 w-8 ${colorClass}`} />
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="aspect-square bg-zinc-800/50 rounded-md flex items-center justify-center">
+                              <IconComponent className={`h-8 w-8 ${colorClass}`} />
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="space-y-2">
+                          <h3 className="font-medium text-white text-sm truncate">{upload.title}</h3>
+                          <div className="flex items-center justify-between text-xs text-zinc-500">
+                            <span className="uppercase tracking-wide">{upload.type}</span>
+                            <span>{formatFileSize(upload.size)}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <span className="text-xs text-zinc-500">
+                            {formatDistanceToNow(upload.createdAt, { addSuffix: true })}
+                          </span>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 w-6 p-0"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <MoreVertical className="h-3 w-3" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent className="bg-zinc-900 border-zinc-800">
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  window.open(upload.fileUrl, "_blank")
+                                }}
+                              >
+                                <Eye className="h-4 w-4 mr-2" />
+                                View
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setSelectedUpload(upload)
+                                  setNewTitle(upload.title)
+                                  setIsRenameDialogOpen(true)
+                                }}
+                              >
+                                <Edit2 className="h-4 w-4 mr-2" />
+                                Rename
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  copyToClipboard(upload.fileUrl)
+                                }}
+                              >
+                                <Copy className="h-4 w-4 mr-2" />
+                                Copy URL
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleDelete(upload)
+                                }}
+                                className="text-red-400"
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="bg-zinc-900/30 border border-zinc-800/30 rounded-lg">
+              <div className="divide-y divide-zinc-800/30">
+                {uploads.map((upload, index) => {
+                  const IconComponent = FILE_TYPE_ICONS[upload.type]
+                  const colorClass = FILE_TYPE_COLORS[upload.type]
+                  const isSelected = selectedUploads.includes(upload.id)
+
+                  return (
+                    <motion.div
+                      key={upload.id}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 20 }}
+                      transition={{ duration: 0.2, delay: index * 0.01 }}
+                      className={`flex items-center gap-4 p-4 hover:bg-zinc-800/20 transition-colors cursor-pointer ${
+                        isSelected ? "bg-zinc-800/30" : ""
+                      }`}
+                      onClick={() => toggleUploadSelection(upload.id)}
+                    >
+                      <div className="w-10 h-10 bg-zinc-800/50 rounded-md flex items-center justify-center">
+                        {isSelected ? (
+                          <CheckCircle className="h-5 w-5 text-white" />
+                        ) : (
+                          <IconComponent className={`h-5 w-5 ${colorClass}`} />
+                        )}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium text-white truncate">{upload.title}</h3>
+                        <div className="flex items-center gap-4 text-xs text-zinc-500 mt-1">
+                          <span className="uppercase tracking-wide">{upload.type}</span>
+                          <span>{formatFileSize(upload.size)}</span>
+                          <span>{formatDistanceToNow(upload.createdAt, { addSuffix: true })}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            window.open(upload.fileUrl, "_blank")
+                          }}
+                          className="text-zinc-400 hover:text-white"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-zinc-400 hover:text-white"
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent className="bg-zinc-900 border-zinc-800">
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setSelectedUpload(upload)
+                                setNewTitle(upload.title)
+                                setIsRenameDialogOpen(true)
+                              }}
+                            >
+                              <Edit2 className="h-4 w-4 mr-2" />
+                              Rename
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                copyToClipboard(upload.fileUrl)
+                              }}
+                            >
+                              <Copy className="h-4 w-4 mr-2" />
+                              Copy URL
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleDelete(upload)
+                              }}
+                              className="text-red-400"
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </motion.div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </AnimatePresence>
       )}
 
       <Dialog open={isRenameDialogOpen} onOpenChange={setIsRenameDialogOpen}>

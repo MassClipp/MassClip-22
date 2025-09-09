@@ -3,9 +3,10 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ChevronRight, ChevronDown, Folder, FolderPlus, X, Plus, Home } from "lucide-react"
+import { ChevronRight, ChevronDown, Folder, FolderPlus, X, Plus, MoreVertical, Edit2, Trash2 } from "lucide-react"
 import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
-import FolderActionsMenu from "./folder-actions-menu"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { useToast } from "@/components/ui/use-toast"
 
 interface FolderSidebarProps {
   isOpen: boolean
@@ -33,10 +34,13 @@ export default function FolderSidebar({
   onFolderCreated,
 }: FolderSidebarProps) {
   const { user } = useFirebaseAuth()
+  const { toast } = useToast()
   const [folders, setFolders] = useState<FolderItem[]>([])
   const [loading, setLoading] = useState(false)
   const [creatingFolder, setCreatingFolder] = useState<string | null>(null)
   const [newFolderName, setNewFolderName] = useState("")
+  const [renamingFolder, setRenamingFolder] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState("")
 
   const fetchFolders = async () => {
     if (!user) {
@@ -159,6 +163,90 @@ export default function FolderSidebar({
     }
   }
 
+  const renameFolder = async (folderId: string) => {
+    if (!user || !renameValue.trim()) return
+
+    try {
+      const token = await user.getIdToken()
+      const response = await fetch(`/api/folders/${folderId}`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: renameValue.trim(),
+        }),
+      })
+
+      if (response.ok) {
+        toast({
+          title: "Success!",
+          description: "Folder renamed successfully",
+        })
+        setRenamingFolder(null)
+        setRenameValue("")
+        await fetchFolders()
+      } else {
+        const errorData = await response.json()
+        toast({
+          title: "Error",
+          description: errorData.error || "Failed to rename folder",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to rename folder",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const deleteFolder = async (folderId: string, folderName: string) => {
+    if (!user) return
+
+    if (!confirm(`Are you sure you want to delete "${folderName}"? This action cannot be undone.`)) {
+      return
+    }
+
+    try {
+      const token = await user.getIdToken()
+      const response = await fetch(`/api/folders/${folderId}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (response.ok) {
+        toast({
+          title: "Success!",
+          description: "Folder deleted successfully",
+        })
+        // If the deleted folder was selected, switch to root
+        if (selectedFolderId === folderId) {
+          onFolderSelect("root")
+        }
+        await fetchFolders()
+      } else {
+        const errorData = await response.json()
+        toast({
+          title: "Error",
+          description: errorData.error || "Failed to delete folder",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete folder",
+        variant: "destructive",
+      })
+    }
+  }
+
   const toggleFolder = (folderId: string) => {
     const updateFolders = (folders: FolderItem[]): FolderItem[] => {
       return folders.map((folder) => {
@@ -177,6 +265,7 @@ export default function FolderSidebar({
   const renderFolder = (folder: FolderItem, level = 0) => {
     const hasChildren = folder.children && folder.children.length > 0
     const isSelected = selectedFolderId === folder.id
+    const isRenaming = renamingFolder === folder.id
 
     return (
       <div key={folder.id}>
@@ -200,22 +289,60 @@ export default function FolderSidebar({
 
           <Folder className="h-4 w-4 text-zinc-400" />
 
-          <button
-            onClick={() => onFolderSelect(folder.id)}
-            className="flex-1 text-left text-sm text-zinc-300 hover:text-white truncate"
-          >
-            {folder.name}
-          </button>
-
-          <div className="flex items-center gap-1">
-            <FolderActionsMenu folderId={folder.id} folderName={folder.name} onFolderUpdated={fetchFolders} />
-
+          {isRenaming ? (
+            <Input
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              className="h-6 text-xs bg-zinc-900 border-zinc-700 text-white flex-1"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") renameFolder(folder.id)
+                if (e.key === "Escape") {
+                  setRenamingFolder(null)
+                  setRenameValue("")
+                }
+              }}
+              onBlur={() => {
+                setRenamingFolder(null)
+                setRenameValue("")
+              }}
+              autoFocus
+            />
+          ) : (
             <button
-              onClick={() => setCreatingFolder(folder.id)}
-              className="opacity-0 group-hover:opacity-100 p-1 hover:bg-zinc-700/50 rounded"
+              onClick={() => onFolderSelect(folder.id)}
+              className="flex-1 text-left text-sm text-zinc-300 hover:text-white truncate"
             >
+              {folder.name}
+            </button>
+          )}
+
+          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
+            <button onClick={() => setCreatingFolder(folder.id)} className="p-1 hover:bg-zinc-700/50 rounded">
               <Plus className="h-3 w-3 text-zinc-400" />
             </button>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="p-1 hover:bg-zinc-700/50 rounded">
+                  <MoreVertical className="h-3 w-3 text-zinc-400" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="bg-zinc-900 border-zinc-800">
+                <DropdownMenuItem
+                  onClick={() => {
+                    setRenamingFolder(folder.id)
+                    setRenameValue(folder.name)
+                  }}
+                >
+                  <Edit2 className="h-3 w-3 mr-2" />
+                  Rename
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => deleteFolder(folder.id, folder.name)} className="text-red-400">
+                  <Trash2 className="h-3 w-3 mr-2" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
@@ -283,12 +410,22 @@ export default function FolderSidebar({
       <div className="p-3 border-b border-zinc-800/50">
         <button
           onClick={() => onFolderSelect("main")}
-          className={`w-full flex items-center gap-2 py-2 px-3 rounded hover:bg-zinc-800/30 ${
+          className={`w-full flex items-center gap-2 py-2 px-3 rounded hover:bg-zinc-800/30 mb-2 ${
             selectedFolderId === "main" ? "bg-zinc-800/50 border border-white/20" : ""
           }`}
         >
-          <Home className="h-4 w-4 text-zinc-400" />
+          <Folder className="h-4 w-4 text-zinc-400" />
           <span className="text-sm text-zinc-300">Main</span>
+        </button>
+
+        <button
+          onClick={() => onFolderSelect("root")}
+          className={`w-full flex items-center gap-2 py-2 px-3 rounded hover:bg-zinc-800/30 ${
+            selectedFolderId === "root" ? "bg-zinc-800/50 border border-white/20" : ""
+          }`}
+        >
+          <Folder className="h-4 w-4 text-zinc-400" />
+          <span className="text-sm text-zinc-300">Root Folder</span>
         </button>
       </div>
 
