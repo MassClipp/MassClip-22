@@ -84,12 +84,20 @@ export class ChunkedUploadService {
     return chunks
   }
 
-  async initializeUpload(file: File, onProgress?: (progress: UploadProgress) => void): Promise<string> {
+  async initializeUpload(
+    file: File,
+    onProgress?: (progress: UploadProgress) => void,
+    folderId?: string,
+    folderPath?: string,
+  ): Promise<string> {
     const uploadId = this.generateUploadId()
     const chunks = this.createChunks(file)
     const token = await this.getValidAuthToken()
 
     console.log(`🚀 [Chunked Upload] Initializing upload: ${file.name} (${file.size} bytes, ${chunks.length} chunks)`)
+    if (folderId) {
+      console.log(`📁 [Chunked Upload] Target folder: ${folderId} (${folderPath})`)
+    }
 
     try {
       // Initialize upload session on server
@@ -106,6 +114,8 @@ export class ChunkedUploadService {
           fileType: file.type,
           totalChunks: chunks.length,
           chunkSize: ChunkedUploadService.CHUNK_SIZE,
+          folderId,
+          folderPath,
         }),
       })
 

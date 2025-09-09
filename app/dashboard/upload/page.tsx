@@ -319,11 +319,21 @@ export default function UploadPage() {
     if (!user || files.length === 0 || !hasUserProfile) return
 
     console.log(`🔍 [Chunked Upload] Starting upload for ${files.length} files`)
+    console.log(`📁 [Chunked Upload] Selected folder: ${selectedFolderId}`)
 
-    // Add files to upload queue
+    // Get folder path for the selected folder
+    const selectedFolder = folders.find((f) => f.id === selectedFolderId)
+    const folderPath = selectedFolder?.path || null
+
+    // Add files to upload queue with folder information
     Array.from(files).forEach((file, index) => {
       const priority = file.size < 50 * 1024 * 1024 ? 1 : 0 // Prioritize smaller files
-      const queueId = uploadQueueManager.addToQueue(file, priority)
+      const queueId = uploadQueueManager.addToQueue(
+        file,
+        priority,
+        selectedFolderId === "root" ? undefined : selectedFolderId,
+        folderPath,
+      )
 
       // Set up individual progress callback
       uploadQueueManager.setProgressCallback(queueId, (queuedUpload) => {
@@ -346,7 +356,7 @@ export default function UploadPage() {
 
     toast({
       title: "Files Added to Queue",
-      description: `${files.length} file(s) added to upload queue`,
+      description: `${files.length} file(s) added to upload queue${selectedFolder ? ` in "${selectedFolder.name}"` : ""}`,
     })
   }
 
