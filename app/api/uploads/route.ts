@@ -91,13 +91,18 @@ export async function GET(request: NextRequest) {
       })
 
       if (folder === "main") {
-        // Show files without folder assignment (folderId is null or undefined)
-        uploads = uploads.filter((upload) => !upload.folderId)
-        console.log(`🔍 [Uploads API] Filtered to ${uploads.length} uploads in main folder`)
+        // Main folder: only show files without folder assignment
+        uploads = uploads.filter(
+          (upload) => !upload.folderId || upload.folderId === null || upload.folderId === undefined,
+        )
+        console.log(`🔍 [Uploads API] Main folder: ${uploads.length} uploads without folder assignment`)
       } else if (folder && folder !== "main") {
-        // Show files in specific folder
+        // Specific folder: only show files with exact folder ID match
         uploads = uploads.filter((upload) => upload.folderId === folder)
-        console.log(`🔍 [Uploads API] Filtered to ${uploads.length} uploads in folder: ${folder}`)
+        console.log(`🔍 [Uploads API] Folder ${folder}: ${uploads.length} uploads with matching folderId`)
+      } else {
+        // No folder specified: show all uploads (fallback)
+        console.log(`🔍 [Uploads API] No folder filter: showing all ${uploads.length} uploads`)
       }
 
       // Apply client-side filtering
@@ -169,8 +174,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid JSON in request body" }, { status: 400 })
     }
 
-    const { fileUrl, filename, title, size, mimeType, r2Key, thumbnailUrl } = body
-    console.log("🔍 [Uploads API] Upload data:", { fileUrl, filename, title, size, mimeType, r2Key })
+    const { fileUrl, filename, title, size, mimeType, r2Key, thumbnailUrl, folderId, folderPath } = body
+    console.log("🔍 [Uploads API] Upload data:", {
+      fileUrl,
+      filename,
+      title,
+      size,
+      mimeType,
+      r2Key,
+      folderId,
+      folderPath,
+    })
 
     if (!filename) {
       return NextResponse.json({ error: "Missing required field: filename" }, { status: 400 })
@@ -188,7 +202,7 @@ export async function POST(request: NextRequest) {
       else if (mimeType.includes("pdf") || mimeType.includes("document")) contentType = "document"
     }
 
-    // Create comprehensive metadata object
+    // Create comprehensive metadata object with folder information
     const metadata = {
       uid: user.uid,
 
@@ -199,6 +213,9 @@ export async function POST(request: NextRequest) {
       fileSize: size || 0,
       mimeType: mimeType || "application/octet-stream",
       contentType,
+
+      // Folder assignment - only set if not main folder
+      ...(folderId && folderId !== "main" ? { folderId, folderPath } : {}),
 
       // Optional fields
       thumbnailUrl: thumbnailUrl || null,

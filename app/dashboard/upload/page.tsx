@@ -591,7 +591,6 @@ export default function UploadPage() {
   const handleFolderSelect = (folderId: string) => {
     console.log(`[v0] Folder selected: ${folderId}`)
     setSelectedFolderId(folderId)
-    fetchUploads()
   }
 
   if (loading || authLoading) {
@@ -891,18 +890,14 @@ export default function UploadPage() {
             <div className="w-16 h-16 bg-zinc-800/50 rounded-lg flex items-center justify-center mb-6">
               <Upload className="h-8 w-8 text-zinc-500" />
             </div>
-            <h3 className="text-xl font-medium text-white mb-2">No files uploaded</h3>
+            <h3 className="text-xl font-medium text-white mb-2">
+              {selectedFolderId === "main" ? "No content yet" : "No content in this folder"}
+            </h3>
             <p className="text-zinc-400 text-center mb-8 max-w-md text-sm">
-              Start building your content library by uploading your first file. Our advanced upload system handles large
-              files with ease.
+              {selectedFolderId === "main"
+                ? "Upload files to get started with your content library."
+                : "Upload files to this folder to organize your content."}
             </p>
-            <Button
-              onClick={() => fileInputRef.current?.click()}
-              className="bg-white text-black hover:bg-zinc-100 font-medium px-6"
-            >
-              <Upload className="h-4 w-4 mr-2" />
-              Upload First File
-            </Button>
           </div>
         </div>
       ) : (
