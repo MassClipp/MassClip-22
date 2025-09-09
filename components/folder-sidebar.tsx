@@ -37,11 +37,18 @@ export default function FolderSidebar({
   const [newFolderName, setNewFolderName] = useState("")
 
   const fetchFolders = async () => {
-    if (!user) return
+    if (!user) {
+      console.log("[v0] No user available for folder fetch")
+      return
+    }
 
+    console.log("[v0] Fetching folders for user:", user.uid)
     setLoading(true)
     try {
       const token = await user.getIdToken()
+      console.log("[v0] Got ID token, length:", token.length)
+      console.log("[v0] Token preview:", token.substring(0, 50) + "...")
+
       const response = await fetch("/api/folders", {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -49,13 +56,20 @@ export default function FolderSidebar({
         },
       })
 
+      console.log("[v0] Folders API response status:", response.status)
+      console.log("[v0] Response headers:", Object.fromEntries(response.headers.entries()))
+
       if (response.ok) {
         const data = await response.json()
+        console.log("[v0] Folders API success:", data)
         const hierarchicalFolders = buildFolderHierarchy(data.folders || [])
         setFolders(hierarchicalFolders)
+      } else {
+        const errorData = await response.text()
+        console.error("[v0] Folders API error:", response.status, errorData)
       }
     } catch (error) {
-      console.error("Failed to fetch folders:", error)
+      console.error("[v0] Failed to fetch folders:", error)
     } finally {
       setLoading(false)
     }
@@ -92,10 +106,16 @@ export default function FolderSidebar({
   }
 
   const createFolder = async (parentId: string | null) => {
-    if (!user || !newFolderName.trim()) return
+    if (!user || !newFolderName.trim()) {
+      console.log("[v0] Cannot create folder - missing user or name")
+      return
+    }
 
+    console.log("[v0] Creating folder:", newFolderName.trim(), "in parent:", parentId)
     try {
       const token = await user.getIdToken()
+      console.log("[v0] Got token for folder creation, length:", token.length)
+
       const response = await fetch("/api/folders", {
         method: "POST",
         headers: {
@@ -108,14 +128,21 @@ export default function FolderSidebar({
         }),
       })
 
+      console.log("[v0] Create folder response status:", response.status)
+
       if (response.ok) {
+        const data = await response.json()
+        console.log("[v0] Folder created successfully:", data)
         setNewFolderName("")
         setCreatingFolder(null)
         await fetchFolders()
         onFolderCreated()
+      } else {
+        const errorData = await response.text()
+        console.error("[v0] Create folder error:", response.status, errorData)
       }
     } catch (error) {
-      console.error("Failed to create folder:", error)
+      console.error("[v0] Failed to create folder:", error)
     }
   }
 
