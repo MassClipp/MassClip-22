@@ -261,15 +261,24 @@ export default function UploadPage() {
 
     try {
       console.log("[v0] Fetching folders for user:", user.uid)
+      console.log("[v0] User object:", { uid: user.uid, email: user.email, emailVerified: user.emailVerified })
+
       setLoadingFolders(true)
+
+      console.log("[v0] Getting ID token...")
       const token = await user.getIdToken()
+      console.log("[v0] Got ID token, length:", token?.length)
+      console.log("[v0] Token preview:", token?.substring(0, 50) + "...")
+
       const response = await fetch("/api/folders", {
         headers: {
           Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
         },
       })
 
       console.log("[v0] Folders API response status:", response.status)
+      console.log("[v0] Response headers:", Object.fromEntries(response.headers.entries()))
 
       if (response.ok) {
         const data = await response.json()
@@ -285,9 +294,15 @@ export default function UploadPage() {
       } else {
         const errorData = await response.json()
         console.error("[v0] Folders API error:", errorData)
+        console.error("[v0] Full response:", response)
       }
     } catch (error) {
       console.error("[v0] Error fetching folders:", error)
+      if (error instanceof Error) {
+        console.error("[v0] Error name:", error.name)
+        console.error("[v0] Error message:", error.message)
+        console.error("[v0] Error stack:", error.stack)
+      }
     } finally {
       setLoadingFolders(false)
     }
