@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
     }
 
     const token = authHeader.split("Bearer ")[1]
+    console.log("🔍 [Folders API] Token received, length:", token?.length)
 
     try {
       // Verify the Firebase ID token
@@ -24,6 +25,14 @@ export async function GET(request: NextRequest) {
       const userId = decodedToken.uid
 
       console.log("✅ [Folders API] Authenticated user:", userId)
+
+      try {
+        await db.collection("folders").limit(1).get()
+        console.log("✅ [Folders API] Database connection successful")
+      } catch (dbError) {
+        console.error("❌ [Folders API] Database connection failed:", dbError)
+        return NextResponse.json({ error: "Database connection failed" }, { status: 500 })
+      }
 
       // Get query parameters
       const { searchParams } = new URL(request.url)
@@ -75,8 +84,18 @@ export async function GET(request: NextRequest) {
         parentId: parentId || "root",
       })
     } catch (authError) {
-      console.error("❌ [Folders API] Auth error:", authError)
-      return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
+      console.error("❌ [Folders API] Auth error details:", {
+        error: authError,
+        message: authError instanceof Error ? authError.message : "Unknown auth error",
+        tokenLength: token?.length,
+      })
+      return NextResponse.json(
+        {
+          error: "Invalid authentication token",
+          details: authError instanceof Error ? authError.message : "Unknown auth error",
+        },
+        { status: 401 },
+      )
     }
   } catch (error) {
     console.error("❌ [Folders API] Error fetching folders:", error)

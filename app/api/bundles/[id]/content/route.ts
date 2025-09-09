@@ -2,7 +2,6 @@ import { type NextRequest, NextResponse } from "next/server"
 import { initializeApp, getApps, cert } from "firebase-admin/app"
 import { getAuth } from "firebase-admin/auth"
 import { getFirestore } from "firebase-admin/firestore"
-import { NotificationService } from "@/lib/notification-service"
 
 // Initialize Firebase Admin if not already initialized
 if (!getApps().length) {
@@ -280,47 +279,47 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       return processedContent
     })
 
-    if (purchaseData.creatorId && bundleContents.length > 0) {
-      try {
-        console.log(`[v0] Attempting to send download notification for creator: ${purchaseData.creatorId}`)
+    // if (purchaseData.creatorId && bundleContents.length > 0) {
+    //   try {
+    //     console.log(`[v0] Attempting to send download notification for creator: ${purchaseData.creatorId}`)
 
-        // Get creator details for notification
-        const creatorDoc = await db.collection("users").doc(purchaseData.creatorId).get()
-        if (creatorDoc.exists) {
-          const creatorData = creatorDoc.data()!
-          const creatorEmail = creatorData.email
-          const creatorName = creatorData.displayName || creatorData.name || creatorData.username || "Creator"
+    //     // Get creator details for notification
+    //     const creatorDoc = await db.collection("users").doc(purchaseData.creatorId).get()
+    //     if (creatorDoc.exists) {
+    //       const creatorData = creatorDoc.data()!
+    //       const creatorEmail = creatorData.email
+    //       const creatorName = creatorData.displayName || creatorData.name || creatorData.username || "Creator"
 
-          console.log(`[v0] Creator found:`, {
-            id: purchaseData.creatorId,
-            email: creatorEmail,
-            name: creatorName,
-          })
+    //       console.log(`[v0] Creator found:`, {
+    //         id: purchaseData.creatorId,
+    //         email: creatorEmail,
+    //         name: creatorName,
+    //       })
 
-          if (creatorEmail) {
-            await NotificationService.notifyDownload(
-              purchaseData.creatorId,
-              creatorEmail,
-              creatorName,
-              bundleId,
-              bundleInfo.title,
-            )
-            console.log(`✅ [Bundle Content API] Download notifications sent to creator: ${creatorEmail}`)
-          } else {
-            console.log(`⚠️ [Bundle Content API] Creator has no email address for notifications`)
-          }
-        } else {
-          console.log(`⚠️ [Bundle Content API] Creator document not found: ${purchaseData.creatorId}`)
-        }
-      } catch (notificationError) {
-        console.error(`❌ [Bundle Content API] Failed to send download notifications:`, notificationError)
-        // Don't fail the content request if notifications fail
-      }
-    } else {
-      console.log(
-        `[v0] Skipping download notification - creatorId: ${purchaseData.creatorId}, contentCount: ${bundleContents.length}`,
-      )
-    }
+    //       if (creatorEmail) {
+    //         await NotificationService.notifyDownload(
+    //           purchaseData.creatorId,
+    //           creatorEmail,
+    //           creatorName,
+    //           bundleId,
+    //           bundleInfo.title,
+    //         )
+    //         console.log(`✅ [Bundle Content API] Download notifications sent to creator: ${creatorEmail}`)
+    //       } else {
+    //         console.log(`⚠️ [Bundle Content API] Creator has no email address for notifications`)
+    //       }
+    //     } else {
+    //       console.log(`⚠️ [Bundle Content API] Creator document not found: ${purchaseData.creatorId}`)
+    //     }
+    //   } catch (notificationError) {
+    //     console.error(`❌ [Bundle Content API] Failed to send download notifications:`, notificationError)
+    //     // Don't fail the content request if notifications fail
+    //   }
+    // } else {
+    //   console.log(
+    //     `[v0] Skipping download notification - creatorId: ${purchaseData.creatorId}, contentCount: ${bundleContents.length}`,
+    //   )
+    // }
 
     const response = {
       hasAccess: true,

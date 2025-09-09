@@ -7,7 +7,6 @@ import {
   processSubscriptionDeleted,
   processSubscriptionUpdated,
 } from "@/lib/stripe/webhook-processor"
-import { NotificationService } from "@/lib/notification-service"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2023-10-16",
@@ -198,20 +197,20 @@ async function processBundlePurchase(session: Stripe.Checkout.Session) {
   // Store in bundlePurchases collection
   await adminDb.collection("bundlePurchases").doc(session.id).set(purchaseData)
 
-  if (creatorId && creatorData.email && finalPrice > 0) {
-    try {
-      await NotificationService.createPurchaseNotification(
-        creatorId,
-        bundleData.title || "Untitled Bundle",
-        finalPrice,
-        buyerUid,
-      )
-      console.log(`✅ [Bundle Webhook] Purchase notifications sent to creator: ${creatorData.email}`)
-    } catch (notificationError) {
-      console.error(`❌ [Bundle Webhook] Failed to send purchase notifications:`, notificationError)
-      // Don't fail the entire webhook if notifications fail
-    }
-  }
+  // if (creatorId && creatorData.email && finalPrice > 0) {
+  //   try {
+  //     await NotificationService.createPurchaseNotification(
+  //       creatorId,
+  //       bundleData.title || "Untitled Bundle",
+  //       finalPrice,
+  //       buyerUid,
+  //     )
+  //     console.log(`✅ [Bundle Webhook] Purchase notifications sent to creator: ${creatorData.email}`)
+  //   } catch (notificationError) {
+  //     console.error(`❌ [Bundle Webhook] Failed to send purchase notifications:`, notificationError)
+  //     // Don't fail the entire webhook if notifications fail
+  //   }
+  // }
 
   console.log(
     `✅ [Bundle Webhook] Bundle purchase created: ${session.id} for user ${buyerUid} with ${bundleContents.length} content items at $${finalPrice}`,
