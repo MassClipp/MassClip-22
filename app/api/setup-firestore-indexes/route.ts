@@ -34,6 +34,27 @@ export async function GET(request: NextRequest) {
           description: "For fetching user uploads ordered by creation date",
           createUrl: `https://console.firebase.google.com/project/${process.env.FIREBASE_PROJECT_ID}/firestore/indexes?create_composite=CgdlcGxvYWRzEgwKA3VpZBABEhEKCWNyZWF0ZWRBdBAC`,
         },
+        {
+          collection: "folders",
+          fields: [
+            { field: "userId", order: "ASCENDING" },
+            { field: "parentId", order: "ASCENDING" },
+            { field: "isDeleted", order: "ASCENDING" },
+            { field: "createdAt", order: "DESCENDING" },
+          ],
+          description: "For fetching user folders with parent and deletion filtering",
+          createUrl: `https://console.firebase.google.com/project/${process.env.FIREBASE_PROJECT_ID}/firestore/indexes?create_composite=Ck5wcm9qZWN0cy9tYXNzY2xpcC05NmRjNC9kYXRhYmFzZXMvKGRlZmF1bHQpL2NvbGxlY3Rpb25Hcm91cHMvZm9sZGVycy9pbmRleGVzL18QARoNCglpc0RlbGV0ZWQQARoMCghwYXJlbnRJZBABGgoKBnVzZXJJZBABGg0KCWNyZWF0ZWRBdBACGgwKCF9fbmFtZV9fEAI`,
+        },
+        {
+          collection: "folders",
+          fields: [
+            { field: "userId", order: "ASCENDING" },
+            { field: "isDeleted", order: "ASCENDING" },
+            { field: "createdAt", order: "DESCENDING" },
+          ],
+          description: "For fetching user folders with deletion filtering",
+          createUrl: `https://console.firebase.google.com/project/${process.env.FIREBASE_PROJECT_ID}/firestore/indexes?create_composite=Cgdmb2xkZXJzEhAKBnVzZXJJZBABEhMKCWlzRGVsZXRlZBABEhEKCWNyZWF0ZWRBdBAC`,
+        },
       ],
       instructions: {
         automatic: "Click the index creation links below to automatically create the required indexes",
