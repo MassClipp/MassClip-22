@@ -30,8 +30,6 @@ import {
   CheckCircle,
   AlertCircle,
   Clock,
-  Plus,
-  Folder,
 } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -44,6 +42,8 @@ import { VideoPreviewPlayer } from "@/components/video-preview-player"
 import { chunkedUploadService } from "@/lib/chunked-upload-service"
 import { uploadQueueManager, type QueuedUpload } from "@/lib/upload-queue-manager"
 import { CreateFolderDialog } from "@/components/create-folder-dialog"
+import FolderSidebar from "@/components/folder-sidebar"
+import { Menu } from "lucide-react"
 
 interface UploadType {
   id: string
@@ -104,6 +104,7 @@ export default function UploadPage() {
   const { user, loading: authLoading } = useFirebaseAuth()
   const { toast } = useToast()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false) // Declare isSidebarOpen
 
   // State
   const [uploads, setUploads] = useState<UploadType[]>([])
@@ -571,6 +572,16 @@ export default function UploadPage() {
     fetchUploads()
   }
 
+  // Handle folder creation
+  const handleFolderCreated = () => {
+    console.log("[v0] Folder created, refreshing folder list...")
+    fetchFolders()
+    toast({
+      title: "Success!",
+      description: "Folder created successfully",
+    })
+  }
+
   if (loading || authLoading) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
@@ -602,6 +613,18 @@ export default function UploadPage() {
 
   return (
     <div className="space-y-6">
+      {/* Folder Sidebar */}
+      <FolderSidebar
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+        selectedFolderId={selectedFolderId}
+        onFolderSelect={setSelectedFolderId}
+        onFolderCreated={handleFolderCreated}
+      />
+
+      {/* Overlay when sidebar is open */}
+      {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setIsSidebarOpen(false)} />}
+
       {/* Index Setup Helper */}
       {hasIndexError && <FirestoreIndexHelper />}
 
@@ -620,6 +643,16 @@ export default function UploadPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Sidebar toggle button */}
+          <Button
+            variant="outline"
+            onClick={() => setIsSidebarOpen(true)}
+            className="border-zinc-700/50 bg-zinc-900/50 hover:bg-zinc-800/50 text-zinc-300"
+          >
+            <Menu className="h-4 w-4 mr-2" />
+            Folders
+          </Button>
+
           <Button
             variant="outline"
             onClick={() => fetchUploads()}
@@ -817,32 +850,6 @@ export default function UploadPage() {
               <SelectItem value="other">Other</SelectItem>
             </SelectContent>
           </Select>
-
-          <Select value={selectedFolderId} onValueChange={setSelectedFolderId}>
-            <SelectTrigger className="w-48 bg-zinc-900/30 border-zinc-800/30 text-white">
-              <Folder className="h-4 w-4 mr-2" />
-              <SelectValue placeholder="Root Folder" />
-            </SelectTrigger>
-            <SelectContent className="bg-zinc-900 border-zinc-800">
-              <SelectItem value="root">Root Folder</SelectItem>
-              {folders.map((folder) => (
-                <SelectItem key={folder.id} value={folder.id}>
-                  {"  ".repeat(folder.path.split("/").length - 1)}
-                  {folder.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIsCreateFolderDialogOpen(true)}
-            className="border-zinc-700/50 bg-zinc-900/50 hover:bg-zinc-800/50 text-zinc-300 px-3"
-            title="Create New Folder"
-          >
-            <Plus className="h-4 w-4" />
-          </Button>
         </div>
 
         <div className="flex items-center gap-1 bg-zinc-900/30 border border-zinc-800/30 rounded-md p-1">
