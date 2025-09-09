@@ -34,28 +34,8 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: "Database connection failed" }, { status: 500 })
       }
 
-      // Get query parameters
-      const { searchParams } = new URL(request.url)
-      const parentId = searchParams.get("parentId")
-      const includeDeleted = searchParams.get("includeDeleted") === "true"
-
-      // Build query
-      let query = db.collection("folders").where("userId", "==", userId)
-
-      // Filter by parent folder
-      if (parentId === "root" || parentId === null) {
-        query = query.where("parentId", "==", null)
-      } else if (parentId) {
-        query = query.where("parentId", "==", parentId)
-      }
-
-      // Filter deleted folders unless explicitly requested
-      if (!includeDeleted) {
-        query = query.where("isDeleted", "==", false)
-      }
-
-      // Execute query
-      const snapshot = await query.orderBy("createdAt", "desc").get()
+      // Use simple single-field query and let client handle filtering
+      const snapshot = await db.collection("folders").where("userId", "==", userId).get()
 
       const folders = snapshot.docs.map((doc) => {
         const data = doc.data()
@@ -66,7 +46,7 @@ export async function GET(request: NextRequest) {
           path: data.path,
           color: data.color,
           description: data.description,
-          isDeleted: data.isDeleted,
+          isDeleted: data.isDeleted || false,
           createdAt: data.createdAt,
           updatedAt: data.updatedAt,
           // Add computed fields
@@ -81,7 +61,6 @@ export async function GET(request: NextRequest) {
         success: true,
         folders,
         count: folders.length,
-        parentId: parentId || "root",
       })
     } catch (authError) {
       console.error("❌ [Folders API] Auth error details:", {

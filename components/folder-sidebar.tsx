@@ -21,6 +21,7 @@ interface FolderItem {
   parentId: string | null
   children?: FolderItem[]
   isExpanded?: boolean
+  isDeleted?: boolean
 }
 
 export default function FolderSidebar({
@@ -76,11 +77,13 @@ export default function FolderSidebar({
   }
 
   const buildFolderHierarchy = (flatFolders: any[]): FolderItem[] => {
+    const activeFolders = flatFolders.filter((folder) => !folder.isDeleted)
+
     const folderMap = new Map<string, FolderItem>()
     const rootFolders: FolderItem[] = []
 
     // Create folder items
-    flatFolders.forEach((folder) => {
+    activeFolders.forEach((folder) => {
       folderMap.set(folder.id, {
         id: folder.id,
         name: folder.name,
@@ -102,7 +105,16 @@ export default function FolderSidebar({
       }
     })
 
-    return rootFolders
+    const sortFolders = (folders: FolderItem[]): FolderItem[] => {
+      return folders
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((folder) => ({
+          ...folder,
+          children: folder.children ? sortFolders(folder.children) : [],
+        }))
+    }
+
+    return sortFolders(rootFolders)
   }
 
   const createFolder = async (parentId: string | null) => {
