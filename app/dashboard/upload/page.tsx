@@ -130,7 +130,7 @@ export default function UploadPage() {
     paused: 0,
   })
   const [folders, setFolders] = useState<FolderType[]>([])
-  const [selectedFolderId, setSelectedFolderId] = useState<string>("root")
+  const [selectedFolderId, setSelectedFolderId] = useState<string>("main") // Default to main instead of root
   const [isCreateFolderDialogOpen, setIsCreateFolderDialogOpen] = useState(false)
   const [loadingFolders, setLoadingFolders] = useState(false)
 
@@ -206,7 +206,8 @@ export default function UploadPage() {
 
       if (selectedFolderId === "main") {
         params.append("folder", "main") // Files without folder assignment
-      } else if (selectedFolderId !== "root") {
+      } else if (selectedFolderId !== "main") {
+        // Compare against main instead of root
         params.append("folderId", selectedFolderId)
       }
 
@@ -338,7 +339,7 @@ export default function UploadPage() {
       const queueId = uploadQueueManager.addToQueue(
         file,
         priority,
-        selectedFolderId === "root" ? undefined : selectedFolderId,
+        selectedFolderId === "main" ? undefined : selectedFolderId, // Use main instead of root
         folderPath,
       )
 

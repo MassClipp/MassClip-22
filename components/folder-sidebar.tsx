@@ -225,9 +225,9 @@ export default function FolderSidebar({
           title: "Success!",
           description: "Folder deleted successfully",
         })
-        // If the deleted folder was selected, switch to root
+        // If the deleted folder was selected, switch to main
         if (selectedFolderId === folderId) {
-          onFolderSelect("root")
+          onFolderSelect("main")
         }
         await fetchFolders()
       } else {
@@ -416,16 +416,6 @@ export default function FolderSidebar({
         >
           <Folder className="h-4 w-4 text-zinc-400" />
           <span className="text-sm text-zinc-300">Main</span>
-        </button>
-
-        <button
-          onClick={() => onFolderSelect("root")}
-          className={`w-full flex items-center gap-2 py-2 px-3 rounded hover:bg-zinc-800/30 ${
-            selectedFolderId === "root" ? "bg-zinc-800/50 border border-white/20" : ""
-          }`}
-        >
-          <Folder className="h-4 w-4 text-zinc-400" />
-          <span className="text-sm text-zinc-300">Root Folder</span>
         </button>
       </div>
 
