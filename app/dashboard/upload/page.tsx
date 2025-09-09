@@ -204,12 +204,9 @@ export default function UploadPage() {
       if (filterType !== "all") params.append("type", filterType)
       if (searchTerm) params.append("search", searchTerm)
 
-      if (selectedFolderId === "main") {
-        params.append("folder", "main") // Files without folder assignment
-      } else if (selectedFolderId !== "main") {
-        // Compare against main instead of root
-        params.append("folderId", selectedFolderId)
-      }
+      params.append("folder", selectedFolderId)
+
+      console.log(`[v0] Fetching uploads for folder: ${selectedFolderId}`)
 
       const response = await fetch(`/api/uploads?${params}`, {
         headers: {
@@ -235,6 +232,8 @@ export default function UploadPage() {
       }
 
       const data = await response.json()
+      console.log(`[v0] Received ${data.uploads.length} uploads for folder: ${selectedFolderId}`)
+
       setUploads(
         data.uploads.map((upload: any) => ({
           ...upload,
@@ -590,9 +589,9 @@ export default function UploadPage() {
   }
 
   const handleFolderSelect = (folderId: string) => {
+    console.log(`[v0] Folder selected: ${folderId}`)
     setSelectedFolderId(folderId)
-    // Refresh uploads when folder changes
-    setTimeout(() => fetchUploads(), 100)
+    fetchUploads()
   }
 
   if (loading || authLoading) {

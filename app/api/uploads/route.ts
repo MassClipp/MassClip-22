@@ -68,11 +68,10 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const type = searchParams.get("type")
     const search = searchParams.get("search")
-    const folderId = searchParams.get("folderId")
     const folder = searchParams.get("folder")
 
     console.log(`🔍 [Uploads API] Fetching uploads for user: ${user.uid}`)
-    console.log(`🔍 [Uploads API] Folder filter - folderId: ${folderId}, folder: ${folder}`)
+    console.log(`🔍 [Uploads API] Folder filter: ${folder}`)
 
     try {
       // Simple query by UID only to avoid index requirements
@@ -94,11 +93,12 @@ export async function GET(request: NextRequest) {
       if (folder === "main") {
         // Show files without folder assignment (folderId is null or undefined)
         uploads = uploads.filter((upload) => !upload.folderId)
-      } else if (folderId && folderId !== "root") {
+        console.log(`🔍 [Uploads API] Filtered to ${uploads.length} uploads in main folder`)
+      } else if (folder && folder !== "main") {
         // Show files in specific folder
-        uploads = uploads.filter((upload) => upload.folderId === folderId)
+        uploads = uploads.filter((upload) => upload.folderId === folder)
+        console.log(`🔍 [Uploads API] Filtered to ${uploads.length} uploads in folder: ${folder}`)
       }
-      // If no folder filter or "root", show all files (existing behavior)
 
       // Apply client-side filtering
       if (type && type !== "all") {
@@ -120,7 +120,7 @@ export async function GET(request: NextRequest) {
         return dateB - dateA
       })
 
-      console.log(`✅ [Uploads API] Returning ${uploads.length} uploads after folder filtering`)
+      console.log(`✅ [Uploads API] Returning ${uploads.length} uploads after all filtering`)
       return NextResponse.json({ uploads })
     } catch (firestoreError) {
       console.error("❌ [Uploads API] Firestore error:", firestoreError)
