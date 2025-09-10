@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { CheckCircle2, Crown, Shield, Zap, Star, Package } from "lucide-react"
+import { CheckCircle2, Crown, Shield, Star, Package } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { useAuth } from "@/contexts/auth-context"
@@ -278,7 +278,7 @@ export default function PricingPage() {
             </div>
           )}
 
-          <div className="p-10">
+          <div className="p-6 sm:p-10">
             <div className="mb-8 flex items-center">
               <div className="mr-4 p-3 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-400/30">
                 <Crown className="h-8 w-8 text-cyan-300" />
@@ -294,7 +294,7 @@ export default function PricingPage() {
               <span className="ml-3 text-xl text-zinc-400 font-light">/month</span>
             </div>
 
-            <ul className="mb-10 space-y-4">
+            <ul className="mb-10 space-y-5 sm:space-y-4 px-2 sm:px-0">
               {[
                 "Unlimited downloads",
                 "Unlimited bundles on storefront",
@@ -303,9 +303,9 @@ export default function PricingPage() {
                 "Priority support",
                 "Only 10% platform fee on sales",
               ].map((feature, index) => (
-                <li key={index} className="flex items-start">
+                <li key={index} className="flex items-start py-1">
                   <CheckCircle2 className="mr-4 mt-1 h-5 w-5 flex-shrink-0 text-cyan-400" />
-                  <span className="text-white font-light">{feature}</span>
+                  <span className="text-white font-light text-base sm:text-sm leading-relaxed">{feature}</span>
                 </li>
               ))}
             </ul>
@@ -323,10 +323,7 @@ export default function PricingPage() {
                 onClick={handleUpgradeClick}
                 className="w-full py-4 text-lg font-medium rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white transition-all duration-300 shadow-lg shadow-cyan-500/25"
               >
-                <div className="flex items-center justify-center">
-                  <Zap className="mr-2 h-5 w-5" />
-                  Upgrade to Creator Pro
-                </div>
+                Upgrade to Creator Pro
               </Button>
             )}
           </div>
