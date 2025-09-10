@@ -94,41 +94,47 @@ export class ChunkedUploadService {
     const chunks = this.createChunks(file)
     const token = await this.getValidAuthToken()
 
-    console.log(`🚀 [Chunked Upload] Initializing upload: ${file.name} (${file.size} bytes, ${chunks.length} chunks)`)
-    if (folderId) {
-      console.log(`📁 [Chunked Upload] Target folder: ${folderId} (${folderPath})`)
+    console.log(`🚀 [v0] Chunked Upload Service - Initializing upload:`)
+    console.log(`   Upload ID: ${uploadId}`)
+    console.log(`   File: ${file.name} (${file.size} bytes, ${chunks.length} chunks)`)
+    console.log(`   Folder ID: ${folderId}`)
+    console.log(`   Folder Path: ${folderPath}`)
+    console.log(`   Has folder info: ${folderId ? "YES" : "NO"}`)
+
+    const requestBody = {
+      uploadId,
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type,
+      totalChunks: chunks.length,
+      chunkSize: ChunkedUploadService.CHUNK_SIZE,
+      folderId,
+      folderPath,
     }
 
+    console.log(`📤 [v0] Chunked Upload Service - Sending to API:`, requestBody)
+
     try {
-      // Initialize upload session on server
       const response = await fetch("/api/uploads/chunked/initialize", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          uploadId,
-          fileName: file.name,
-          fileSize: file.size,
-          fileType: file.type,
-          totalChunks: chunks.length,
-          chunkSize: ChunkedUploadService.CHUNK_SIZE,
-          folderId,
-          folderPath,
-        }),
+        body: JSON.stringify(requestBody),
       })
 
       if (!response.ok) {
         const error = await response.json()
-        console.error("❌ [Chunked Upload] Initialization failed:", error)
+        console.error("❌ [v0] Chunked Upload Service - Initialization failed:", error)
         throw new Error(error.error || "Failed to initialize upload")
       }
 
       const { publicUrl, r2Key } = await response.json()
-      console.log(`✅ [Chunked Upload] Initialized: ${uploadId}`)
+      console.log(`✅ [v0] Chunked Upload Service - Initialized: ${uploadId}`)
+      console.log(`   Public URL: ${publicUrl}`)
+      console.log(`   R2 Key: ${r2Key}`)
 
-      // Create local session
       const session: ChunkedUploadSession = {
         uploadId,
         fileName: file.name,
@@ -150,12 +156,11 @@ export class ChunkedUploadService {
         this.progressCallbacks.set(uploadId, onProgress)
       }
 
-      // Start uploading chunks
       this.uploadChunks(uploadId, chunks)
 
       return uploadId
     } catch (error) {
-      console.error("❌ [Chunked Upload] Failed to initialize:", error)
+      console.error("❌ [v0] Chunked Upload Service - Failed to initialize:", error)
       throw error
     }
   }
@@ -168,12 +173,10 @@ export class ChunkedUploadService {
     this.updateProgress(uploadId, "uploading")
 
     try {
-      // Process chunks in batches
       const chunkQueue = [...chunks]
       const activeUploads = new Set<Promise<void>>()
 
       while (chunkQueue.length > 0 || activeUploads.size > 0) {
-        // Start new uploads up to the concurrent limit
         while (chunkQueue.length > 0 && activeUploads.size < ChunkedUploadService.MAX_CONCURRENT_CHUNKS) {
           const chunk = chunkQueue.shift()!
           const uploadPromise = this.uploadSingleChunk(uploadId, chunk)
@@ -184,18 +187,15 @@ export class ChunkedUploadService {
           })
         }
 
-        // Wait for at least one upload to complete
         if (activeUploads.size > 0) {
           await Promise.race(activeUploads)
         }
       }
 
-      // Wait for all remaining uploads to complete
       await Promise.all(activeUploads)
 
       console.log(`✅ [Chunked Upload] All chunks uploaded for ${uploadId}`)
 
-      // Finalize upload
       await this.finalizeUpload(uploadId)
     } catch (error) {
       console.error(`❌ [Chunked Upload] Chunk upload failed for ${uploadId}:`, error)
@@ -212,7 +212,6 @@ export class ChunkedUploadService {
     try {
       const token = await this.getValidAuthToken()
 
-      // Get presigned URL for this chunk
       const urlResponse = await fetch("/api/uploads/chunked/chunk-url", {
         method: "POST",
         headers: {
@@ -235,7 +234,6 @@ export class ChunkedUploadService {
       const { uploadUrl } = await urlResponse.json()
       console.log(`🔗 [Chunked Upload] Got upload URL for chunk ${chunk.chunkIndex}`)
 
-      // Upload chunk to R2
       const uploadResponse = await fetch(uploadUrl, {
         method: "PUT",
         body: chunk.chunkData,
@@ -253,7 +251,6 @@ export class ChunkedUploadService {
         throw new Error(`Chunk upload failed: ${uploadResponse.statusText}`)
       }
 
-      // Mark chunk as completed
       session.uploadedChunks.add(chunk.chunkIndex)
       session.uploadedBytes += chunk.chunkSize
 
@@ -263,7 +260,6 @@ export class ChunkedUploadService {
       console.error(`❌ [Chunked Upload] Chunk ${chunk.chunkIndex} upload failed:`, error)
 
       if (retryCount < ChunkedUploadService.MAX_RETRIES) {
-        // Exponential backoff retry
         const delay = ChunkedUploadService.RETRY_DELAY * Math.pow(2, retryCount)
         console.log(
           `🔄 [Chunked Upload] Retrying chunk ${chunk.chunkIndex} in ${delay}ms (attempt ${retryCount + 1}/${ChunkedUploadService.MAX_RETRIES})`,
@@ -289,7 +285,6 @@ export class ChunkedUploadService {
     try {
       const token = await this.getValidAuthToken()
 
-      // Finalize upload on server
       const response = await fetch("/api/uploads/chunked/finalize", {
         method: "POST",
         headers: {
@@ -326,11 +321,9 @@ export class ChunkedUploadService {
     const timeDiff = (now - session.lastProgressTime) / 1000 // seconds
     const bytesDiff = session.uploadedBytes
 
-    // Calculate speed (bytes per second)
     const totalTime = (now - session.startTime) / 1000
     const speed = totalTime > 0 ? session.uploadedBytes / totalTime : 0
 
-    // Calculate ETA
     const remainingBytes = session.fileSize - session.uploadedBytes
     const eta = speed > 0 ? remainingBytes / speed : 0
 
@@ -395,5 +388,4 @@ export class ChunkedUploadService {
   }
 }
 
-// Singleton instance
 export const chunkedUploadService = new ChunkedUploadService()

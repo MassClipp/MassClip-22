@@ -32,6 +32,12 @@ class UploadQueueManager {
   addToQueue(file: File, priority = 0, folderId?: string, folderPath?: string): string {
     const queueId = `queue_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
+    console.log(`📥 [v0] Queue Manager - Adding file to queue:`)
+    console.log(`   File: ${file.name}`)
+    console.log(`   Folder ID: ${folderId}`)
+    console.log(`   Folder Path: ${folderPath}`)
+    console.log(`   Queue ID: ${queueId}`)
+
     const queuedUpload: QueuedUpload = {
       id: queueId,
       file,
@@ -83,6 +89,12 @@ class UploadQueueManager {
       this.activeUploads.add(queuedUpload.id)
       this.notifyProgress(queuedUpload)
       this.notifyGlobalProgress()
+
+      console.log(`🚀 [v0] Queue Manager - Starting upload:`)
+      console.log(`   Queue ID: ${queuedUpload.id}`)
+      console.log(`   File: ${queuedUpload.file.name}`)
+      console.log(`   Folder ID: ${queuedUpload.folderId}`)
+      console.log(`   Folder Path: ${queuedUpload.folderPath}`)
 
       // Start chunked upload
       const uploadId = await chunkedUploadService.initializeUpload(

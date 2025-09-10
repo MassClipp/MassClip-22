@@ -325,22 +325,32 @@ export default function UploadPage() {
   const handleFileUpload = async (files: FileList) => {
     if (!user || files.length === 0 || !hasUserProfile) return
 
-    console.log(`🔍 [Chunked Upload] Starting upload for ${files.length} files`)
-    console.log(`📁 [Chunked Upload] Selected folder: ${selectedFolderId}`)
+    console.log(`🔍 [v0] Starting upload for ${files.length} files`)
+    console.log(`📁 [v0] Selected folder ID: ${selectedFolderId}`)
+    console.log(
+      `📂 [v0] Available folders:`,
+      folders.map((f) => ({ id: f.id, name: f.name, path: f.path })),
+    )
 
     // Get folder path for the selected folder
     const selectedFolder = folders.find((f) => f.id === selectedFolderId)
     const folderPath = selectedFolder?.path || null
 
+    console.log(`🎯 [v0] Selected folder object:`, selectedFolder)
+    console.log(`🛤️ [v0] Resolved folder path:`, folderPath)
+
+    const finalFolderId = selectedFolderId === "main" ? undefined : selectedFolderId
+    console.log(`✅ [v0] Final folder ID to pass to queue:`, finalFolderId)
+
     // Add files to upload queue with folder information
     Array.from(files).forEach((file, index) => {
       const priority = file.size < 50 * 1024 * 1024 ? 1 : 0 // Prioritize smaller files
-      const queueId = uploadQueueManager.addToQueue(
-        file,
-        priority,
-        selectedFolderId === "main" ? undefined : selectedFolderId, // Use main instead of root
-        folderPath,
+
+      console.log(
+        `📤 [v0] Adding file ${file.name} to queue with folderId: ${finalFolderId}, folderPath: ${folderPath}`,
       )
+
+      const queueId = uploadQueueManager.addToQueue(file, priority, finalFolderId, folderPath)
 
       // Set up individual progress callback
       uploadQueueManager.setProgressCallback(queueId, (queuedUpload) => {
