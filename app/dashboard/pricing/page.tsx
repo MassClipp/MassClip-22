@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { CheckCircle2, Crown, Shield, Star, Package } from "lucide-react"
+import { CheckCircle2, Crown, Shield, Package } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { useAuth } from "@/contexts/auth-context"
@@ -273,7 +273,7 @@ export default function PricingPage() {
         {/* Creator Pro Plan */}
         <Card className="group relative overflow-hidden border-2 border-zinc-700/50 hover:border-zinc-600/70 bg-gradient-to-br from-zinc-900/90 via-zinc-800/80 to-black/90 backdrop-blur-xl transition-all duration-500">
           {!loading && (
-            <div className="absolute right-0 top-0 bg-gradient-to-r from-cyan-400 to-blue-400 px-4 py-2 text-sm font-bold text-black">
+            <div className="absolute -right-1 -top-1 bg-gradient-to-r from-cyan-400 to-blue-400 px-3 py-1.5 text-xs font-bold text-black rounded-bl-lg z-10">
               {isProUser ? "CURRENT PLAN" : "RECOMMENDED"}
             </div>
           )}
@@ -330,52 +330,7 @@ export default function PricingPage() {
         </Card>
       </div>
 
-      <div>
-        <h3 className="mb-12 text-center text-4xl font-light text-white">
-          Frequently Asked{" "}
-          <span className="bg-gradient-to-br from-slate-300 via-cyan-200 via-blue-100 to-white bg-clip-text text-transparent">
-            Questions
-          </span>
-        </h3>
-
-        <div className="space-y-6">
-          {[
-            {
-              question: "How do bundle purchases work?",
-              answer:
-                "Bundle purchases are one-time payments that instantly add extra bundles to your account. You can purchase multiple times to stack bundles, and they never expire. Perfect for free users who want more bundles without a monthly subscription.",
-            },
-            {
-              question: "What's the difference between bundles and Creator Pro?",
-              answer:
-                "Bundle purchases give you extra bundles one-time, while Creator Pro gives you unlimited bundles plus premium features like unlimited downloads, priority support, and reduced platform fees (10% vs 20%).",
-            },
-            {
-              question: "Can I upgrade to Creator Pro later?",
-              answer:
-                "Yes! You can upgrade to Creator Pro anytime. Any bundles you've purchased will still be available, and you'll get all the unlimited benefits of Creator Pro membership.",
-            },
-            {
-              question: "What are platform fees?",
-              answer:
-                "Platform fees are charged on each sale to cover payment processing, hosting, and platform maintenance. Free users pay 20% while Creator Pro users enjoy a reduced 10% fee, helping you keep more of your earnings.",
-            },
-          ].map((faq, index) => (
-            <Card
-              key={index}
-              className="overflow-hidden border-zinc-700/30 bg-gradient-to-br from-zinc-900/50 to-zinc-800/30 backdrop-blur-sm transition-all duration-300 hover:border-cyan-500/30 hover:shadow-lg hover:shadow-cyan-500/10"
-            >
-              <div className="p-8">
-                <h4 className="mb-4 text-xl font-light text-white flex items-center">
-                  <Star className="mr-3 h-5 w-5 text-cyan-400" />
-                  {faq.question}
-                </h4>
-                <p className="text-zinc-300 font-light leading-relaxed pl-8">{faq.answer}</p>
-              </div>
-            </Card>
-          ))}
-        </div>
-      </div>
+      {/* Removed entire FAQs section as requested */}
     </div>
   )
 }
