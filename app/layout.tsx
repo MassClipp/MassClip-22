@@ -21,11 +21,11 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: "MassClip: Sell Your Content Seriously",
+    default: "MassClip: Monetize Your Faceless Content",
     template: "%s | MassClip - Faceless Creator Platform",
   },
   description:
-    "The #1 clip vault for faceless creators. Monetize your anonymous content, build your audience, and sell digital products without showing your face. Join thousands of successful faceless creators.",
+    "Monetize your faceless content effortlessly. Sell b-rolls, background videos, clips, images, and audio through a clean, minimal storefront profile. MassClip handles all file hosting so you can focus on creating. Just upload your content, publish it in full HD, and start earning — no file management required.",
   keywords: [
     "faceless creators",
     "anonymous content",
@@ -34,6 +34,16 @@ export const metadata: Metadata = {
     "clip vault",
     "faceless YouTube",
     "anonymous creator platform",
+    "sell your faceless content",
+    "monetize faceless content",
+    "sell video content online",
+    "b-roll marketplace",
+    "digital product storefront",
+    "sell anonymous content",
+    "sell stock footage platform",
+    "faceless content selling platform",
+    "passive income for faceless creators",
+    "digital monetization platform",
   ],
   authors: [{ name: "MassClip" }],
   creator: "MassClip",
