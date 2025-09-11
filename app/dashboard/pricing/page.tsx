@@ -86,7 +86,7 @@ export default function PricingPage() {
   const handleUpgradeClick = async () => {
     try {
       const idToken = await user?.getIdToken?.()
-      const res = await fetch("/api/stripe/checkout/membership", {
+      const res = await fetch("/api/stripe/checkout/pricing", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ idToken }),
