@@ -31,6 +31,7 @@ import ReactCrop, { type Crop, centerCrop, makeAspectCrop } from "react-image-cr
 import "react-image-crop/dist/ReactCrop.css"
 import CancelSubscriptionButton from "@/components/cancel-subscription-button"
 import { Badge } from "@/components/ui/badge"
+import { safelyFormatDate } from "@/lib/date-utils"
 
 export default function ProfilePage() {
   const { user } = useAuth()
@@ -783,11 +784,7 @@ export default function ProfilePage() {
                           {subscriptionData?.status === "canceled" ? "Subscription Ends:" : "Next Billing:"}
                         </span>
                         <span className={subscriptionData?.status === "canceled" ? "text-orange-400" : ""}>
-                          {new Date(
-                            subscriptionData.currentPeriodEnd.seconds
-                              ? subscriptionData.currentPeriodEnd.seconds * 1000
-                              : subscriptionData.currentPeriodEnd,
-                          ).toLocaleDateString()}
+                          {safelyFormatDate(subscriptionData.currentPeriodEnd)}
                         </span>
                       </div>
                     )}
@@ -887,7 +884,7 @@ export default function ProfilePage() {
                           Refresh Status
                         </Button>
 
-                        <CancelSubscriptionButton />
+                        {subscriptionData?.status !== "canceled" && <CancelSubscriptionButton />}
                       </div>
                     )}
                   </div>
