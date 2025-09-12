@@ -1084,11 +1084,7 @@ export default function BundlesPage() {
               disabled={isAtBundleLimit}
               onClick={() => {
                 if (isAtBundleLimit) {
-                  toast({
-                    title: "Bundle Limit Reached",
-                    description: "Free users can create up to 2 bundles. Upgrade to Creator Pro for unlimited bundles.",
-                    variant: "destructive",
-                  })
+                  router.push("/pricing")
                   return
                 }
                 setShowCreateModal(true)
@@ -1096,7 +1092,7 @@ export default function BundlesPage() {
             >
               <Plus className="h-4 w-4 mr-2" />
               Create Bundle
-              {isAtBundleLimit && " (Limit Reached)"}
+              {isAtBundleLimit && " - Want more bundles?"}
             </Button>
           </DialogTrigger>
           <DialogContent className="bg-zinc-900 border-zinc-800 text-white">
@@ -1321,11 +1317,7 @@ export default function BundlesPage() {
             disabled={isAtBundleLimit}
             onClick={() => {
               if (isAtBundleLimit) {
-                toast({
-                  title: "Bundle Limit Reached",
-                  description: "Free users can create up to 2 bundles. Upgrade to Creator Pro for unlimited bundles.",
-                  variant: "destructive",
-                })
+                router.push("/pricing")
                 return
               }
               setShowCreateModal(true)
