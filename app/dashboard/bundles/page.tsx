@@ -64,7 +64,6 @@ interface EditBundleForm {
   title: string
   description: string
   price: string
-  comparePrice: string
   coverImage: string
 }
 
@@ -111,7 +110,6 @@ export default function BundlesPage() {
     title: "",
     description: "",
     price: "",
-    comparePrice: "",
     coverImage: "",
   })
 
@@ -672,21 +670,10 @@ export default function BundlesPage() {
       const currentBundle = productBoxes.find((box) => box.id === productBoxId)
       const priceChanged = currentBundle && Number.parseFloat(editForm.price) !== currentBundle.price
 
-      console.log("[v0] DETAILED DEBUG - Form state:", {
-        rawComparePrice: editForm.comparePrice,
-        comparePriceType: typeof editForm.comparePrice,
-        comparePriceLength: editForm.comparePrice?.length,
-        parsedComparePrice: editForm.comparePrice ? Number.parseFloat(editForm.comparePrice) : null,
-        isComparePriceEmpty: editForm.comparePrice === "",
-        isComparePriceNull: editForm.comparePrice === null,
-        isComparePriceUndefined: editForm.comparePrice === undefined,
-      })
-
       const requestData = {
         title: editForm.title.trim(),
         description: editForm.description.trim(),
         price: Number.parseFloat(editForm.price),
-        comparePrice: editForm.comparePrice ? Number.parseFloat(editForm.comparePrice) : null,
         coverImage: editForm.coverImage || null,
       }
 
@@ -710,7 +697,6 @@ export default function BundlesPage() {
 
       const data = await response.json()
       console.log("[v0] Bundle update response:", data)
-      console.log("[v0] Response comparePrice:", data.comparePrice)
 
       // Update local state
       setProductBoxes((prev) =>
@@ -721,7 +707,6 @@ export default function BundlesPage() {
                 title: editForm.title.trim(),
                 description: editForm.description.trim(),
                 price: Number.parseFloat(editForm.price),
-                comparePrice: editForm.comparePrice ? Number.parseFloat(editForm.comparePrice) : null,
                 coverImage: editForm.coverImage || box.coverImage,
               }
             : box,
@@ -754,7 +739,6 @@ export default function BundlesPage() {
       title: productBox.title,
       description: productBox.description,
       price: productBox.price.toString(),
-      comparePrice: productBox.comparePrice ? productBox.comparePrice.toString() : "",
       coverImage: productBox.coverImage || "",
     })
     setShowEditModal(productBox.id)
@@ -1608,55 +1592,8 @@ export default function BundlesPage() {
                 onChange={(e) => setEditForm((prev) => ({ ...prev, price: e.target.value }))}
                 placeholder="9.99"
                 className="bg-zinc-800 border-zinc-700"
+                required
               />
-              <div className="mt-2 p-3 bg-amber-900/20 border border-amber-700/50 rounded-md">
-                <p className="text-xs text-amber-200">
-                  <strong>Note:</strong> Changing the price will create a new Stripe price automatically. However, you
-                  may need to manually update the price in your Stripe Product Catalog if there are any sync issues.
-                </p>
-              </div>
-            </div>
-
-            <div>
-              <Label htmlFor="edit-comparePrice">Compare At Price (USD)</Label>
-              <Input
-                id="edit-comparePrice"
-                type="number"
-                step="0.01"
-                min="0"
-                value={editForm.comparePrice}
-                onChange={(e) => setEditForm((prev) => ({ ...prev, comparePrice: e.target.value }))}
-                placeholder="19.99"
-                className="bg-zinc-800 border-zinc-700"
-              />
-              <p className="text-xs text-zinc-400 mt-1">
-                Optional: Show customers how much they save compared to the original price
-              </p>
-              {editForm.comparePrice &&
-                editForm.price &&
-                Number.parseFloat(editForm.comparePrice) > Number.parseFloat(editForm.price) && (
-                  <div className="mt-2 p-2 bg-green-900/20 border border-green-700/50 rounded-md">
-                    <p className="text-xs text-green-200">
-                      Customers will save $
-                      {(Number.parseFloat(editForm.comparePrice) - Number.parseFloat(editForm.price)).toFixed(2)}(
-                      {Math.round(
-                        ((Number.parseFloat(editForm.comparePrice) - Number.parseFloat(editForm.price)) /
-                          Number.parseFloat(editForm.comparePrice)) *
-                          100,
-                      )}
-                      % off)
-                    </p>
-                  </div>
-                )}
-              {editForm.comparePrice &&
-                editForm.price &&
-                Number.parseFloat(editForm.comparePrice) <= Number.parseFloat(editForm.price) && (
-                  <div className="mt-2 p-2 bg-amber-900/20 border border-amber-700/50 rounded-md">
-                    <p className="text-xs text-amber-200">
-                      Compare price should be higher than the regular price to show savings
-                    </p>
-                  </div>
-                )}
             </div>
 
             {/* Thumbnail Upload Section */}

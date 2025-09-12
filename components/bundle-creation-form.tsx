@@ -37,7 +37,6 @@ export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormPr
     title: "",
     description: "",
     price: "",
-    comparePrice: "", // Added compare price field
     thumbnailUrl: "",
   })
 
@@ -160,7 +159,6 @@ export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormPr
           title: formData.title.trim(),
           description: formData.description.trim(),
           price: Number.parseFloat(formData.price),
-          comparePrice: formData.comparePrice ? Number.parseFloat(formData.comparePrice) : null, // Include compare price in API call
           thumbnailUrl: formData.thumbnailUrl.trim() || null,
           contentItems: [],
         }),
@@ -245,7 +243,6 @@ export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormPr
         title: "",
         description: "",
         price: "",
-        comparePrice: "", // Reset compare price field
         thumbnailUrl: "",
       })
 
@@ -376,50 +373,6 @@ export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormPr
               disabled={loading || !canActuallyCreateBundle}
               required
             />
-          </div>
-
-          <div>
-            <label htmlFor="comparePrice" className="block text-sm font-medium mb-2">
-              Compare At Price (USD)
-            </label>
-            <Input
-              id="comparePrice"
-              type="number"
-              step="0.01"
-              min="0"
-              value={formData.comparePrice}
-              onChange={(e) => setFormData({ ...formData, comparePrice: e.target.value })}
-              placeholder="19.99"
-              disabled={loading || !canActuallyCreateBundle}
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              Optional: Show customers how much they save compared to the original price
-            </p>
-            {formData.comparePrice &&
-              formData.price &&
-              Number.parseFloat(formData.comparePrice) > Number.parseFloat(formData.price) && (
-                <div className="mt-2 p-2 bg-green-900/20 border border-green-700/50 rounded-md">
-                  <p className="text-xs text-green-200">
-                    Customers will save $
-                    {(Number.parseFloat(formData.comparePrice) - Number.parseFloat(formData.price)).toFixed(2)} (
-                    {Math.round(
-                      ((Number.parseFloat(formData.comparePrice) - Number.parseFloat(formData.price)) /
-                        Number.parseFloat(formData.comparePrice)) *
-                        100,
-                    )}
-                    % off)
-                  </p>
-                </div>
-              )}
-            {formData.comparePrice &&
-              formData.price &&
-              Number.parseFloat(formData.comparePrice) <= Number.parseFloat(formData.price) && (
-                <div className="mt-2 p-2 bg-amber-900/20 border border-amber-700/50 rounded-md">
-                  <p className="text-xs text-amber-200">
-                    Compare price should be higher than the regular price to show savings
-                  </p>
-                </div>
-              )}
           </div>
 
           <div>
