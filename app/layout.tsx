@@ -21,7 +21,7 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: "MassClip: Monetize Your Faceless Content",
+    default: "MassClip: Monetize Your Facless Content",
     template: "%s | MassClip - Faceless Creator Platform",
   },
   description:
@@ -64,7 +64,7 @@ export const metadata: Metadata = {
     locale: "en_US",
     url: "https://massclip.pro",
     siteName: "MassClip",
-    title: "MassClip: Monetize Your Faceless Content",
+    title: "MassClip: Monetize Your Facless Content",
     description:
       "Monetize your faceless content effortlessly. Sell b-rolls, background videos, clips, images, and audio through a clean, minimal storefront profile. MassClip handles all file hosting so you can focus on creating. Just upload your content, publish it in full HD, and start earning — no file management required.",
     images: [
@@ -78,7 +78,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "MassClip: Monetize Your Faceless Content",
+    title: "MassClip: Monetize Your Facless Content",
     description:
       "Monetize your faceless content effortlessly. Sell b-rolls, background videos, clips, images, and audio through a clean, minimal storefront profile. MassClip handles all file hosting so you can focus on creating. Just upload your content, publish it in full HD, and start earning — no file management required.",
     images: ["/og-image.png"],
