@@ -672,13 +672,25 @@ export default function BundlesPage() {
       const currentBundle = productBoxes.find((box) => box.id === productBoxId)
       const priceChanged = currentBundle && Number.parseFloat(editForm.price) !== currentBundle.price
 
-      console.log("[v0] Submitting bundle edit with data:", {
+      console.log("[v0] DETAILED DEBUG - Form state:", {
+        rawComparePrice: editForm.comparePrice,
+        comparePriceType: typeof editForm.comparePrice,
+        comparePriceLength: editForm.comparePrice?.length,
+        parsedComparePrice: editForm.comparePrice ? Number.parseFloat(editForm.comparePrice) : null,
+        isComparePriceEmpty: editForm.comparePrice === "",
+        isComparePriceNull: editForm.comparePrice === null,
+        isComparePriceUndefined: editForm.comparePrice === undefined,
+      })
+
+      const requestData = {
         title: editForm.title.trim(),
         description: editForm.description.trim(),
         price: Number.parseFloat(editForm.price),
         comparePrice: editForm.comparePrice ? Number.parseFloat(editForm.comparePrice) : null,
         coverImage: editForm.coverImage || null,
-      })
+      }
+
+      console.log("[v0] Submitting bundle edit with data:", requestData)
 
       const idToken = await user?.getIdToken()
       const response = await fetch(`/api/creator/bundles/${productBoxId}`, {
@@ -687,13 +699,7 @@ export default function BundlesPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${idToken}`,
         },
-        body: JSON.stringify({
-          title: editForm.title.trim(),
-          description: editForm.description.trim(),
-          price: Number.parseFloat(editForm.price),
-          comparePrice: editForm.comparePrice ? Number.parseFloat(editForm.comparePrice) : null,
-          coverImage: editForm.coverImage || null,
-        }),
+        body: JSON.stringify(requestData),
       })
 
       if (!response.ok) {
@@ -704,6 +710,7 @@ export default function BundlesPage() {
 
       const data = await response.json()
       console.log("[v0] Bundle update response:", data)
+      console.log("[v0] Response comparePrice:", data.comparePrice)
 
       // Update local state
       setProductBoxes((prev) =>
@@ -1695,7 +1702,7 @@ export default function BundlesPage() {
                         const file = e.target.files?.[0]
                         if (file && showEditModal) {
                           // Validate file type
-                          const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"]
+                          const allowedTypes = ["image/jpeg", "image/jpg,image/png", "image/webp"]
                           if (!allowedTypes.includes(file.type)) {
                             toast({
                               title: "Invalid File Type",
