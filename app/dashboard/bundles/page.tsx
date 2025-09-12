@@ -70,7 +70,7 @@ interface EditBundleForm {
   coverImage: string
 }
 
-const CONTENT_LIMIT_FREE = 5
+const CONTENT_LIMIT_FREE = 10
 
 export default function BundlesPage() {
   const { user } = useAuth()
