@@ -71,6 +71,7 @@ export async function GET(request: NextRequest) {
         title: data.title,
         description: data.description || "",
         price: data.price || 0,
+        comparePrice: data.comparePrice || null,
         currency: data.currency || "usd",
         coverImage: data.coverImage || data.thumbnailUrl || data.coverImageUrl || "",
         active: data.active !== false, // Default to true if not specified
