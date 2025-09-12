@@ -1551,11 +1551,11 @@ export default function BundlesPage() {
 
       {/* Edit Bundle Modal */}
       <Dialog open={!!showEditModal} onOpenChange={() => setShowEditModal(null)}>
-        <DialogContent className="bg-zinc-900 border-zinc-800 text-white max-w-2xl">
-          <DialogHeader>
+        <DialogContent className="bg-zinc-900 border-zinc-800 text-white max-w-2xl max-h-[90vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle>Edit Bundle</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-4 overflow-y-auto flex-1 pr-2">
             <div>
               <Label htmlFor="edit-title">Title *</Label>
               <Input
