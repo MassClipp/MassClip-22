@@ -735,7 +735,7 @@ export default function BundlesPage() {
       title: productBox.title,
       description: productBox.description,
       price: productBox.price.toString(),
-      comparePrice: "",
+      comparePrice: productBox.comparePrice ? productBox.comparePrice.toString() : "",
       coverImage: productBox.coverImage || "",
     })
     setShowEditModal(productBox.id)
