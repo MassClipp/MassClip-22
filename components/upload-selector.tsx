@@ -23,6 +23,9 @@ interface Upload {
   duration?: number
   createdAt: any
   contentType: "video" | "audio" | "image" | "document"
+  folderId?: string
+  folder?: string
+  folderPath?: string
 }
 
 interface UploadSelectorProps {
@@ -31,6 +34,7 @@ interface UploadSelectorProps {
   onCancel: () => void
   loading?: boolean
   aspectRatio?: "landscape" | "portrait"
+  selectedFolderId?: string | null
 }
 
 export default function UploadSelector({
@@ -39,6 +43,7 @@ export default function UploadSelector({
   onCancel,
   loading = false,
   aspectRatio = "landscape",
+  selectedFolderId = null,
 }: UploadSelectorProps) {
   const { user } = useAuth()
   const { toast } = useToast() // Declare useToast
@@ -197,7 +202,7 @@ export default function UploadSelector({
     fetchUploads()
   }, [user, excludeIds])
 
-  // Filter uploads based on search and type
+  // Filter uploads based on search, type, and folder
   useEffect(() => {
     let filtered = uploads
 
@@ -215,8 +220,17 @@ export default function UploadSelector({
       filtered = filtered.filter((upload) => upload.contentType === typeFilter)
     }
 
+    if (selectedFolderId) {
+      filtered = filtered.filter(
+        (upload) =>
+          upload.folderId === selectedFolderId ||
+          upload.folder === selectedFolderId ||
+          upload.folderPath?.includes(selectedFolderId),
+      )
+    }
+
     setFilteredUploads(filtered)
-  }, [uploads, searchTerm, typeFilter])
+  }, [uploads, searchTerm, typeFilter, selectedFolderId])
 
   // Handle individual selection
   const handleToggleSelection = (uploadId: string) => {

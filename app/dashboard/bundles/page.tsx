@@ -20,6 +20,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { useUserPlan } from "@/hooks/use-user-plan"
 import { useRouter } from "next/navigation"
 import { useFreeTierLimits } from "@/hooks/use-free-tier-limits"
+import FolderSelector from "@/components/folder-selector"
 
 interface ContentItem {
   id: string
@@ -33,6 +34,8 @@ interface ContentItem {
   filename: string
   createdAt?: any
   type?: string
+  folderId?: string
+  folder?: string
 }
 
 interface ProductBox {
@@ -101,6 +104,7 @@ export default function BundlesPage() {
   const [selectedContentIds, setSelectedContentIds] = useState<string[]>([])
   const [addContentLoading, setAddContentLoading] = useState(false)
   const [uploadsLoading, setUploadsLoading] = useState(false)
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
 
   // Edit bundle states
   const [showEditModal, setShowEditModal] = useState<string | null>(null)
@@ -288,6 +292,8 @@ export default function BundlesPage() {
                 filename: uploadData.filename || uploadData.originalFileName || `${uploadId}.file`,
                 createdAt: uploadData.createdAt || uploadData.uploadedAt,
                 type: uploadData.type,
+                folderId: uploadData.folderId,
+                folder: uploadData.folder,
               }
 
               if (item.fileUrl && item.fileUrl.startsWith("http")) {
@@ -824,6 +830,8 @@ export default function BundlesPage() {
           duration: upload.duration,
           createdAt: upload.createdAt || upload.addedAt || upload.timestamp,
           type: upload.type || upload.mimeType?.split("/")[0] || "document",
+          folderId: upload.folderId,
+          folder: upload.folder,
         }))
 
       setAvailableUploads(availableUploads)
@@ -839,6 +847,11 @@ export default function BundlesPage() {
       setUploadsLoading(false)
     }
   }
+
+  const filteredUploads = availableUploads.filter((upload) => {
+    if (!selectedFolderId) return true // Show all if no folder selected
+    return upload.folderId === selectedFolderId || upload.folder === selectedFolderId
+  })
 
   // Handle adding content to bundle with detailed metadata storage - ENHANCED VERSION
   async function handleAddContentToBundle(productBoxId: string) {
@@ -1730,19 +1743,43 @@ export default function BundlesPage() {
               Select content from your uploads to add to this bundle:
             </p>
 
+            <div className="flex-shrink-0">
+              <FolderSelector
+                selectedFolderId={selectedFolderId}
+                onFolderSelect={setSelectedFolderId}
+                className="w-full"
+              />
+            </div>
+
             {uploadsLoading ? (
               <div className="flex items-center justify-center py-8 flex-1">
                 <Loader2 className="h-5 w-5 text-zinc-500 animate-spin" />
                 <span className="ml-2 text-sm text-zinc-400">Loading uploads...</span>
               </div>
-            ) : availableUploads.length === 0 ? (
+            ) : filteredUploads.length === 0 ? (
               <div className="text-center py-8 flex-1 flex items-center justify-center">
-                <p className="text-zinc-500">No uploads available. Upload some content first.</p>
+                <div className="space-y-2">
+                  <p className="text-zinc-500">
+                    {selectedFolderId
+                      ? "No uploads in selected folder."
+                      : "No uploads available. Upload some content first."}
+                  </p>
+                  {selectedFolderId && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSelectedFolderId(null)}
+                      className="border-zinc-700 text-zinc-300"
+                    >
+                      Show All Folders
+                    </Button>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="flex-1 overflow-y-auto">
                 <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-3 pb-4">
-                  {availableUploads.map((item) => (
+                  {filteredUploads.map((item) => (
                     <div key={item.id} className="group relative">
                       <div
                         className={`relative aspect-[9/16] bg-zinc-800 rounded-lg overflow-hidden cursor-pointer border-2 transition-all duration-200 ${

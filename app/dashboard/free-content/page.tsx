@@ -20,6 +20,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/use-toast"
 import UploadSelector from "@/components/upload-selector"
+import FolderSelector from "@/components/folder-selector"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
@@ -59,6 +60,7 @@ export default function FreeContentPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [showAddContentDialog, setShowAddContentDialog] = useState(false)
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
 
   // Fetch free content
   const fetchFreeContent = async () => {
@@ -480,6 +482,14 @@ export default function FreeContentPage() {
             </DialogDescription>
           </DialogHeader>
 
+          <div className="mb-4">
+            <FolderSelector
+              selectedFolderId={selectedFolderId}
+              onFolderSelect={setSelectedFolderId}
+              className="w-full"
+            />
+          </div>
+
           <div className="flex-1 overflow-hidden">
             <UploadSelector
               excludeIds={freeContent.map((item) => item.id)}
@@ -487,6 +497,7 @@ export default function FreeContentPage() {
               onCancel={() => setShowAddContentDialog(false)}
               loading={false}
               aspectRatio="portrait"
+              selectedFolderId={selectedFolderId}
             />
           </div>
         </DialogContent>
