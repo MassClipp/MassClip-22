@@ -84,6 +84,14 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     const bundleId = params.id
     const body = await request.json()
 
+    console.log("[v0] Bundle update request received:", {
+      bundleId,
+      userId,
+      requestBody: body,
+      comparePrice: body.comparePrice,
+      comparePriceType: typeof body.comparePrice,
+    })
+
     const bundleDoc = await db.collection("bundles").doc(bundleId).get()
 
     if (!bundleDoc.exists) {
@@ -105,11 +113,25 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     if (body.price !== undefined) updateData.price = Number(body.price)
     if (body.comparePrice !== undefined) {
       updateData.comparePrice = body.comparePrice ? Number.parseFloat(body.comparePrice) : null
+      console.log("[v0] Processing comparePrice:", {
+        originalValue: body.comparePrice,
+        processedValue: updateData.comparePrice,
+        isNull: updateData.comparePrice === null,
+        isNumber: typeof updateData.comparePrice === "number",
+      })
     }
     if (body.coverImage !== undefined) updateData.coverImage = body.coverImage
     if (body.active !== undefined) updateData.active = body.active
 
+    console.log("[v0] Final update data being saved:", updateData)
+
     await db.collection("bundles").doc(bundleId).update(updateData)
+
+    console.log("[v0] Bundle update successful:", {
+      bundleId,
+      savedComparePrice: updateData.comparePrice,
+      updateSuccess: true,
+    })
 
     return NextResponse.json({
       success: true,

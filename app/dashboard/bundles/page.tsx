@@ -672,6 +672,14 @@ export default function BundlesPage() {
       const currentBundle = productBoxes.find((box) => box.id === productBoxId)
       const priceChanged = currentBundle && Number.parseFloat(editForm.price) !== currentBundle.price
 
+      console.log("[v0] Submitting bundle edit with data:", {
+        title: editForm.title.trim(),
+        description: editForm.description.trim(),
+        price: Number.parseFloat(editForm.price),
+        comparePrice: editForm.comparePrice ? Number.parseFloat(editForm.comparePrice) : null,
+        coverImage: editForm.coverImage || null,
+      })
+
       const idToken = await user?.getIdToken()
       const response = await fetch(`/api/creator/bundles/${productBoxId}`, {
         method: "PUT",
@@ -683,16 +691,19 @@ export default function BundlesPage() {
           title: editForm.title.trim(),
           description: editForm.description.trim(),
           price: Number.parseFloat(editForm.price),
+          comparePrice: editForm.comparePrice ? Number.parseFloat(editForm.comparePrice) : null,
           coverImage: editForm.coverImage || null,
         }),
       })
 
       if (!response.ok) {
         const errorData = await response.json()
+        console.error("[v0] Bundle update failed:", errorData)
         throw new Error(errorData.message || "Failed to update bundle")
       }
 
       const data = await response.json()
+      console.log("[v0] Bundle update response:", data)
 
       // Update local state
       setProductBoxes((prev) =>
@@ -703,6 +714,7 @@ export default function BundlesPage() {
                 title: editForm.title.trim(),
                 description: editForm.description.trim(),
                 price: Number.parseFloat(editForm.price),
+                comparePrice: editForm.comparePrice ? Number.parseFloat(editForm.comparePrice) : null,
                 coverImage: editForm.coverImage || box.coverImage,
               }
             : box,
@@ -718,7 +730,7 @@ export default function BundlesPage() {
 
       setShowEditModal(null)
     } catch (error) {
-      console.error("Error updating bundle:", error)
+      console.error("[v0] Error updating bundle:", error)
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to update bundle",
