@@ -64,9 +64,9 @@ export const metadata: Metadata = {
     locale: "en_US",
     url: "https://massclip.pro",
     siteName: "MassClip",
-    title: "MassClip: The #1 Platform for Faceless Creators",
+    title: "MassClip: Monetize Your Faceless Content",
     description:
-      "Monetize your anonymous content and build your audience without showing your face. Join thousands of successful faceless creators.",
+      "Monetize your faceless content effortlessly. Sell b-rolls, background videos, clips, images, and audio through a clean, minimal storefront profile. MassClip handles all file hosting so you can focus on creating. Just upload your content, publish it in full HD, and start earning — no file management required.",
     images: [
       {
         url: "/og-image.png",
@@ -78,8 +78,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "MassClip: The #1 Platform for Faceless Creators",
-    description: "Monetize your anonymous content and build your audience without showing your face.",
+    title: "MassClip: Monetize Your Faceless Content",
+    description:
+      "Monetize your faceless content effortlessly. Sell b-rolls, background videos, clips, images, and audio through a clean, minimal storefront profile. MassClip handles all file hosting so you can focus on creating. Just upload your content, publish it in full HD, and start earning — no file management required.",
     images: ["/og-image.png"],
     creator: "@massclip",
     site: "@massclip",
