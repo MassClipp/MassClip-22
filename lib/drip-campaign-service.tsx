@@ -35,8 +35,8 @@ const EMAIL_TEMPLATES: EmailTemplate[] = [
         </head>
         <body style="font-family: Arial, sans-serif; font-size: 16px; line-height: 1.5; color: #000;">
           <p>Hi there,</p>
-          <p>Welcome to MassClip. Monetize your faceless content effortlessly. Sell b-rolls, background videos, clips, images, and audio through a clean, minimal storefront profile. MassClip handles all file hosting so you can focus on creating.</p>
-          <p>Just upload your content, publish it in full HD, and start earning — no file management required.</p>
+          <p>Welcome to MassClip. We built this platform because we believe selling content should be taken more seriously and treated as a real business. Many creators are left with tools that don't feel professional or make it difficult to earn consistently.</p>
+          <p>MassClip is designed to give you a simple and structured way to share your work and build steady income.</p>
           <p>Over the next few days, we'll guide you step by step so you can get everything set up.</p>
           <p><a href="https://www.massclip.pro/dashboard" style="color: #007BFF; text-decoration: underline;">You can take a look around the platform here.</a></p>
           <p>Best,<br>MassClip</p>
