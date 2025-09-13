@@ -132,16 +132,16 @@ export default function FreeContentPage() {
 
       const data = await response.json()
 
+      const allFolders = [
+        ...new Set((data.uploads || []).map((upload: Upload) => upload.folder || "Root Folder").filter(Boolean)),
+      ]
+      setAvailableFolders(allFolders)
+
       // Filter out uploads that are already in free content
       const freeContentIds = freeContent.map((item) => item.id)
       const availableUploads = (data.uploads || []).filter((upload: Upload) => !freeContentIds.includes(upload.id))
 
       setUploads(availableUploads)
-
-      const folders = [
-        ...new Set(availableUploads.map((upload: Upload) => upload.folder || "Root Folder").filter(Boolean)),
-      ]
-      setAvailableFolders(folders)
     } catch (error) {
       console.error("Error fetching uploads:", error)
       toast({
@@ -270,6 +270,9 @@ export default function FreeContentPage() {
 
   // Filter content based on search term
   const filteredContent = freeContent.filter((item) => item.title.toLowerCase().includes(searchTerm.toLowerCase()))
+
+  const filteredUploads =
+    selectedFolder === "all" ? uploads : uploads.filter((upload) => (upload.folder || "Root Folder") === selectedFolder)
 
   if (loading || authLoading) {
     return (
@@ -595,7 +598,7 @@ export default function FreeContentPage() {
               </div>
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-4">
-                {uploads.map((upload) => {
+                {filteredUploads.map((upload) => {
                   const isSelected = selectedUploadIds.includes(upload.id)
                   const IconComponent = FILE_TYPE_ICONS[upload.type as keyof typeof FILE_TYPE_ICONS] || File
 
