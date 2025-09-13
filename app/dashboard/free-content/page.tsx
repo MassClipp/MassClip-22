@@ -61,6 +61,7 @@ export default function FreeContentPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [showAddContentDialog, setShowAddContentDialog] = useState(false)
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
+  const [selectedUploads, setSelectedUploads] = useState<string[]>([])
 
   // Fetch free content
   const fetchFreeContent = async () => {
@@ -141,7 +142,7 @@ export default function FreeContentPage() {
       console.error("Error removing from free content:", error)
       toast({
         title: "Error",
-        description: "Failed to remove item from free content",
+        description: error instanceof Error ? error.message : "Failed to remove item from free content",
         variant: "destructive",
       })
     }
@@ -173,6 +174,7 @@ export default function FreeContentPage() {
       })
 
       setShowAddContentDialog(false)
+      setSelectedUploads([]) // Reset selection
       fetchFreeContent() // Refresh the list
     } catch (error) {
       console.error("Error adding content:", error)
@@ -491,6 +493,30 @@ export default function FreeContentPage() {
             />
           </div>
 
+          <div className="flex items-center justify-between mb-4 p-4 bg-zinc-800/30 rounded-lg border border-zinc-700/50">
+            <div className="text-sm text-zinc-300">
+              {selectedUploads.length > 0
+                ? `${selectedUploads.length} item(s) selected`
+                : "Select content to add to your library"}
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setShowAddContentDialog(false)}
+                className="border-zinc-700/50 bg-zinc-800/50 hover:bg-zinc-700/50 text-zinc-300"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => handleAddSelectedContent(selectedUploads)}
+                disabled={selectedUploads.length === 0}
+                className="bg-white text-black hover:bg-zinc-100 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Add {selectedUploads.length > 0 ? `${selectedUploads.length} ` : ""}to Library
+              </Button>
+            </div>
+          </div>
+
           <div className="flex-1 overflow-hidden">
             <UploadSelector
               excludeIds={freeContent.map((item) => item.id)}
@@ -499,6 +525,7 @@ export default function FreeContentPage() {
               loading={false}
               aspectRatio="portrait"
               selectedFolderId={selectedFolderId}
+              onSelectionChange={setSelectedUploads}
             />
           </div>
         </DialogContent>
