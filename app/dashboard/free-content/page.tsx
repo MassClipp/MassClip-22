@@ -482,7 +482,6 @@ export default function FreeContentPage() {
             </DialogDescription>
           </DialogHeader>
 
-          {/* Upload Location section */}
           <div className="mb-4">
             <h3 className="text-sm font-medium text-white mb-3">Upload Location</h3>
             <FolderSelector
