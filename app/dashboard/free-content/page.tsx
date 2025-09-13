@@ -20,7 +20,6 @@ import {
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/use-toast"
 import UploadSelector from "@/components/upload-selector"
-import FolderSelector from "@/components/folder-selector"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
@@ -484,15 +483,6 @@ export default function FreeContentPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="mb-4">
-            <h3 className="text-sm font-medium text-white mb-3">Upload Location</h3>
-            <FolderSelector
-              selectedFolderId={selectedFolderId}
-              onFolderSelect={setSelectedFolderId}
-              className="w-full"
-            />
-          </div>
-
           <div className="flex items-center justify-between mb-4 p-4 bg-zinc-800/30 rounded-lg border border-zinc-700/50">
             <div className="text-sm text-zinc-300">
               {selectedUploads.length > 0
@@ -512,7 +502,7 @@ export default function FreeContentPage() {
                 disabled={selectedUploads.length === 0}
                 className="bg-white text-black hover:bg-zinc-100 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Add {selectedUploads.length > 0 ? `${selectedUploads.length} ` : ""}to Library
+                Add {selectedUploads.length > 0 ? `${selectedUploads.length} ` : ""}Items to Library
               </Button>
             </div>
           </div>
