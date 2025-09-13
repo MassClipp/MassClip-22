@@ -1090,14 +1090,13 @@ export default function BundlesPage() {
         <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
           <DialogTrigger asChild>
             <Button
-              variant="outline"
-              className={`border-white/20 text-white hover:bg-white/5 hover:border-white/40 transition-all duration-200 ${
+              className={`bg-white text-black hover:bg-zinc-100 font-medium px-6 ${
                 isAtBundleLimit ? "opacity-60 cursor-not-allowed" : ""
               }`}
               disabled={isAtBundleLimit}
               onClick={() => {
                 if (isAtBundleLimit) {
-                  router.push("/pricing")
+                  router.push("/dashboard/upgrade")
                   return
                 }
                 setShowCreateModal(true)
@@ -1330,7 +1329,7 @@ export default function BundlesPage() {
             disabled={isAtBundleLimit}
             onClick={() => {
               if (isAtBundleLimit) {
-                router.push("/pricing")
+                router.push("/dashboard/upgrade")
                 return
               }
               setShowCreateModal(true)

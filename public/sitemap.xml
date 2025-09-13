@@ -16,8 +16,8 @@
     <priority>0.8</priority>
   </url>
   <url>
-    <!-- Updated domain from massclip.com to massclip.pro -->
-    <loc>https://massclip.pro/pricing</loc>
+    <!-- Updated pricing URL to upgrade -->
+    <loc>https://massclip.pro/dashboard/upgrade</loc>
     <lastmod>2025-09-05</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
