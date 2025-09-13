@@ -482,7 +482,9 @@ export default function FreeContentPage() {
             </DialogDescription>
           </DialogHeader>
 
+          {/* Upload Location section */}
           <div className="mb-4">
+            <h3 className="text-sm font-medium text-white mb-3">Upload Location</h3>
             <FolderSelector
               selectedFolderId={selectedFolderId}
               onFolderSelect={setSelectedFolderId}
@@ -498,6 +500,9 @@ export default function FreeContentPage() {
               loading={false}
               aspectRatio="portrait"
               selectedFolderId={selectedFolderId}
+              showSelectionControls={true}
+              selectButtonText="Add to Library"
+              cancelButtonText="Cancel"
             />
           </div>
         </DialogContent>

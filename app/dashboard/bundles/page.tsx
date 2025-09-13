@@ -58,7 +58,6 @@ interface CreateBundleForm {
   title: string
   description: string
   price: string
-  comparePrice: string
   billingType: "one_time" | "subscription"
   thumbnail: File | null
 }
@@ -86,7 +85,6 @@ export default function BundlesPage() {
     title: "",
     description: "",
     price: "",
-    comparePrice: "",
     billingType: "one_time" as "one_time" | "subscription",
     thumbnail: null as File | null,
   })
@@ -566,7 +564,6 @@ export default function BundlesPage() {
         title: "",
         description: "",
         price: "",
-        comparePrice: "",
         billingType: "one_time",
         thumbnail: null,
       })
@@ -1143,48 +1140,6 @@ export default function BundlesPage() {
                   placeholder="9.99"
                   className="bg-zinc-800 border-zinc-700"
                 />
-              </div>
-
-              <div>
-                <Label htmlFor="comparePrice">Compare At Price (USD)</Label>
-                <Input
-                  id="comparePrice"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={createForm.comparePrice}
-                  onChange={(e) => setCreateForm((prev) => ({ ...prev, comparePrice: e.target.value }))}
-                  placeholder="19.99"
-                  className="bg-zinc-800 border-zinc-700"
-                />
-                <p className="text-xs text-zinc-400 mt-1">
-                  Optional: Show customers how much they save compared to the original price
-                </p>
-                {createForm.comparePrice &&
-                  createForm.price &&
-                  Number.parseFloat(createForm.comparePrice) > Number.parseFloat(createForm.price) && (
-                    <div className="mt-2 p-2 bg-green-900/20 border border-green-700/50 rounded-md">
-                      <p className="text-xs text-green-200">
-                        Customers will save $
-                        {(Number.parseFloat(createForm.comparePrice) - Number.parseFloat(createForm.price)).toFixed(2)}(
-                        {Math.round(
-                          ((Number.parseFloat(createForm.comparePrice) - Number.parseFloat(createForm.price)) /
-                            Number.parseFloat(createForm.comparePrice)) *
-                            100,
-                        )}
-                        % off)
-                      </p>
-                    </div>
-                  )}
-                {createForm.comparePrice &&
-                  createForm.price &&
-                  Number.parseFloat(createForm.comparePrice) <= Number.parseFloat(createForm.price) && (
-                    <div className="mt-2 p-2 bg-amber-900/20 border border-amber-700/50 rounded-md">
-                      <p className="text-xs text-amber-200">
-                        Compare price should be higher than the regular price to show savings
-                      </p>
-                    </div>
-                  )}
               </div>
 
               {/* Enhanced Thumbnail Section */}
