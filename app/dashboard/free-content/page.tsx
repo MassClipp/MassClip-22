@@ -499,9 +499,6 @@ export default function FreeContentPage() {
               loading={false}
               aspectRatio="portrait"
               selectedFolderId={selectedFolderId}
-              showSelectionControls={true}
-              selectButtonText="Add to Library"
-              cancelButtonText="Cancel"
             />
           </div>
         </DialogContent>
