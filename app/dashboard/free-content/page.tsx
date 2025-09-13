@@ -149,9 +149,18 @@ export default function FreeContentPage() {
 
   // Add selected content to free content
   const handleAddSelectedContent = async (uploadIds: string[]) => {
-    if (!user || uploadIds.length === 0) return
+    console.log("[v0] Add button clicked!")
+    console.log("[v0] selectedUploads state:", selectedUploads)
+    console.log("[v0] uploadIds parameter:", uploadIds)
+    console.log("[v0] user:", user)
+
+    if (!user || uploadIds.length === 0) {
+      console.log("[v0] Early return - no user or no uploads selected")
+      return
+    }
 
     try {
+      console.log("[v0] Making API request to add content...")
       const token = await user.getIdToken()
       const response = await fetch("/api/free-content", {
         method: "POST",
@@ -162,11 +171,15 @@ export default function FreeContentPage() {
         body: JSON.stringify({ uploadIds }),
       })
 
+      console.log("[v0] API response status:", response.status)
+
       if (!response.ok) {
         const errorData = await response.json()
+        console.log("[v0] API error:", errorData)
         throw new Error(errorData.error || "Failed to add content")
       }
 
+      console.log("[v0] Content added successfully!")
       toast({
         title: "Success!",
         description: `${uploadIds.length} item(s) added to free content`,
@@ -176,7 +189,7 @@ export default function FreeContentPage() {
       setSelectedUploads([]) // Reset selection
       fetchFreeContent() // Refresh the list
     } catch (error) {
-      console.error("Error adding content:", error)
+      console.error("[v0] Error adding content:", error)
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to add content",
@@ -498,7 +511,10 @@ export default function FreeContentPage() {
                 Cancel
               </Button>
               <Button
-                onClick={() => handleAddSelectedContent(selectedUploads)}
+                onClick={() => {
+                  console.log("[v0] Button clicked! selectedUploads:", selectedUploads)
+                  handleAddSelectedContent(selectedUploads)
+                }}
                 disabled={selectedUploads.length === 0}
                 className="bg-white text-black hover:bg-zinc-100 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
