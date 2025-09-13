@@ -1089,22 +1089,19 @@ export default function BundlesPage() {
 
         <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
           <DialogTrigger asChild>
+            {/* Make the Create Bundle button clickable and redirect to upgrade when at limit */}
             <Button
-              className={`bg-white text-black hover:bg-zinc-100 font-medium px-6 ${
-                isAtBundleLimit ? "opacity-60 cursor-not-allowed" : ""
-              }`}
-              disabled={isAtBundleLimit}
               onClick={() => {
-                if (isAtBundleLimit) {
+                if (productBoxes.length >= bundleLimit) {
                   router.push("/dashboard/upgrade")
-                  return
+                } else {
+                  setShowCreateModal(true)
                 }
-                setShowCreateModal(true)
               }}
+              className={`bg-white text-black hover:bg-zinc-100 font-medium px-6`}
             >
               <Plus className="h-4 w-4 mr-2" />
-              Create Bundle
-              {isAtBundleLimit && " - Want more bundles?"}
+              {productBoxes.length >= bundleLimit ? "Want more bundles?" : "Create Bundle"}
             </Button>
           </DialogTrigger>
           <DialogContent className="bg-zinc-900 border-zinc-800 text-white">
@@ -1324,19 +1321,19 @@ export default function BundlesPage() {
           <div className="text-6xl mb-4">📦</div>
           <h3 className="text-xl font-medium text-white mb-2">No Bundles Yet</h3>
           <p className="text-zinc-400 mb-4">Create your first premium content bundle to get started</p>
+          {/* Update the empty state button to redirect to upgrade when at limit */}
           <Button
-            className="bg-red-600 hover:bg-red-700"
-            disabled={isAtBundleLimit}
             onClick={() => {
-              if (isAtBundleLimit) {
+              if (productBoxes.length >= bundleLimit) {
                 router.push("/dashboard/upgrade")
-                return
+              } else {
+                setShowCreateModal(true)
               }
-              setShowCreateModal(true)
             }}
+            className="bg-red-600 hover:bg-red-700"
           >
             <Plus className="h-4 w-4 mr-2" />
-            Create Your First Bundle
+            {productBoxes.length >= bundleLimit ? "Want more bundles?" : "Create Your First Bundle"}
           </Button>
         </div>
       ) : (

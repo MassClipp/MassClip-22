@@ -39,7 +39,7 @@ const bundleOptions = [
   },
 ]
 
-export default function PricingPage() {
+export default function UpgradePage() {
   const router = useRouter()
   const { user } = useAuth()
   const { isProUser, loading } = useUserPlan()
@@ -50,7 +50,7 @@ export default function PricingPage() {
       setPurchasingBundle(bundleId)
       const bundleOption = bundleOptions.find((option) => option.id === bundleId)
       if (!bundleOption) {
-        console.warn("[Pricing] Bundle option not found")
+        console.warn("[Upgrade] Bundle option not found")
         return
       }
 
@@ -68,7 +68,7 @@ export default function PricingPage() {
       })
 
       if (!res.ok) {
-        console.warn("[Pricing] Failed to create checkout session for bundle purchase.")
+        console.warn("[Upgrade] Failed to create checkout session for bundle purchase.")
         return
       }
 
@@ -77,7 +77,7 @@ export default function PricingPage() {
         window.location.href = data.url
       }
     } catch (err) {
-      console.error("[Pricing] Error starting bundle checkout:", err)
+      console.error("[Upgrade] Error starting bundle checkout:", err)
     } finally {
       setPurchasingBundle(null)
     }
@@ -93,7 +93,7 @@ export default function PricingPage() {
       })
 
       if (!res.ok) {
-        console.warn("[Pricing] Failed to create checkout session for membership.")
+        console.warn("[Upgrade] Failed to create checkout session for membership.")
         return
       }
 
@@ -102,7 +102,7 @@ export default function PricingPage() {
         window.location.href = data.url
       }
     } catch (err) {
-      console.error("[Pricing] Error starting membership checkout:", err)
+      console.error("[Upgrade] Error starting membership checkout:", err)
     }
   }
 
@@ -112,7 +112,7 @@ export default function PricingPage() {
         <h1 className="text-5xl lg:text-6xl font-thin text-white leading-tight">
           Choose Your{" "}
           <span className="bg-gradient-to-br from-slate-300 via-cyan-200 via-blue-100 to-white bg-clip-text text-transparent">
-            Pricing
+            Upgrade
           </span>{" "}
           Plan
         </h1>
@@ -329,8 +329,6 @@ export default function PricingPage() {
           </div>
         </Card>
       </div>
-
-      {/* Removed entire FAQs section as requested */}
     </div>
   )
 }

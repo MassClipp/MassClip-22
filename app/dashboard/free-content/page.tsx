@@ -315,7 +315,7 @@ export default function FreeContentPage() {
         </div>
       ) : (
         <AnimatePresence>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-5 gap-4">
             {filteredContent.map((item, index) => {
               const IconComponent = FILE_TYPE_ICONS[item.type as keyof typeof FILE_TYPE_ICONS] || File
               const colorClass = FILE_TYPE_COLORS[item.type as keyof typeof FILE_TYPE_COLORS] || "text-white"

@@ -118,8 +118,8 @@ const navItems = [
         icon: Lock,
       },
       {
-        title: "Membership",
-        href: "/dashboard/membership",
+        title: "Upgrade",
+        href: "/dashboard/upgrade",
         icon: Crown,
       },
     ],

@@ -41,7 +41,7 @@ const navigationSections: NavSection[] = [
     items: [
       { title: "Dashboard", href: "/dashboard", icon: Home },
       { title: "Explore", href: "/dashboard/explore", icon: Search },
-      { title: "Pricing", href: "/dashboard/pricing", icon: Crown },
+      { title: "Upgrade", href: "/dashboard/upgrade", icon: Crown },
     ],
   },
   {
@@ -110,7 +110,7 @@ export function NavDropdown() {
                   {section.items.map((item) => {
                     const Icon = item.icon
                     const isActive = pathname === item.href
-                    const isMembership = item.title === "Pricing"
+                    const isMembership = item.title === "Upgrade"
 
                     return (
                       <Link
