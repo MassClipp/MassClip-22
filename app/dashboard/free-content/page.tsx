@@ -19,7 +19,6 @@ import {
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/use-toast"
-import UploadSelector from "@/components/upload-selector"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
@@ -34,6 +33,15 @@ interface FreeContentItem {
   type: string
   size?: number
   addedAt: any // Can be various date formats
+}
+
+interface Upload {
+  id: string
+  title: string
+  fileUrl: string
+  type: string
+  size?: number
+  thumbnailUrl?: string
 }
 
 const FILE_TYPE_ICONS = {
@@ -59,8 +67,9 @@ export default function FreeContentPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [showAddContentDialog, setShowAddContentDialog] = useState(false)
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
-  const [selectedUploads, setSelectedUploads] = useState<string[]>([])
+  const [uploads, setUploads] = useState<Upload[]>([])
+  const [selectedUploadIds, setSelectedUploadIds] = useState<string[]>([])
+  const [uploadsLoading, setUploadsLoading] = useState(false)
 
   // Fetch free content
   const fetchFreeContent = async () => {
@@ -82,18 +91,12 @@ export default function FreeContentPage() {
 
       const data = await response.json()
 
-      // Add logging after API response
-      console.log("✅ [Free Content] Raw API Response:", data)
-      console.log("✅ [Free Content] Free content array:", data.freeContent)
-
       // Safely process the data with proper date handling
       const processedContent = (data.freeContent || []).map((item: any) => ({
         ...item,
         addedAt: safelyConvertToDate(item.addedAt), // Convert to safe Date object
       }))
 
-      // Add logging before setting the state
-      console.log(`✅ [Free Content] Setting ${processedContent.length} items to state`)
       setFreeContent(processedContent)
     } catch (error) {
       console.error("Error fetching free content:", error)
@@ -107,11 +110,53 @@ export default function FreeContentPage() {
     }
   }
 
+  const fetchUploads = async () => {
+    if (!user) return
+
+    try {
+      setUploadsLoading(true)
+      const token = await user.getIdToken()
+
+      const response = await fetch("/api/uploads", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch uploads")
+      }
+
+      const data = await response.json()
+
+      // Filter out uploads that are already in free content
+      const freeContentIds = freeContent.map((item) => item.id)
+      const availableUploads = (data.uploads || []).filter((upload: Upload) => !freeContentIds.includes(upload.id))
+
+      setUploads(availableUploads)
+    } catch (error) {
+      console.error("Error fetching uploads:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load uploads",
+        variant: "destructive",
+      })
+    } finally {
+      setUploadsLoading(false)
+    }
+  }
+
   useEffect(() => {
     if (user) {
       fetchFreeContent()
     }
   }, [user])
+
+  useEffect(() => {
+    if (showAddContentDialog && user) {
+      fetchUploads()
+    }
+  }, [showAddContentDialog, user, freeContent])
 
   // Remove from free content
   const removeFromFreeContent = async (id: string) => {
@@ -147,20 +192,10 @@ export default function FreeContentPage() {
     }
   }
 
-  // Add selected content to free content
-  const handleAddSelectedContent = async (uploadIds: string[]) => {
-    console.log("[v0] Add button clicked!")
-    console.log("[v0] selectedUploads state:", selectedUploads)
-    console.log("[v0] uploadIds parameter:", uploadIds)
-    console.log("[v0] user:", user)
-
-    if (!user || uploadIds.length === 0) {
-      console.log("[v0] Early return - no user or no uploads selected")
-      return
-    }
+  const handleAddToLibrary = async () => {
+    if (!user || selectedUploadIds.length === 0) return
 
     try {
-      console.log("[v0] Making API request to add content...")
       const token = await user.getIdToken()
       const response = await fetch("/api/free-content", {
         method: "POST",
@@ -168,34 +203,36 @@ export default function FreeContentPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ uploadIds }),
+        body: JSON.stringify({ uploadIds: selectedUploadIds }),
       })
-
-      console.log("[v0] API response status:", response.status)
 
       if (!response.ok) {
         const errorData = await response.json()
-        console.log("[v0] API error:", errorData)
         throw new Error(errorData.error || "Failed to add content")
       }
 
-      console.log("[v0] Content added successfully!")
       toast({
         title: "Success!",
-        description: `${uploadIds.length} item(s) added to free content`,
+        description: `${selectedUploadIds.length} item(s) added to free content`,
       })
 
       setShowAddContentDialog(false)
-      setSelectedUploads([]) // Reset selection
+      setSelectedUploadIds([])
       fetchFreeContent() // Refresh the list
     } catch (error) {
-      console.error("[v0] Error adding content:", error)
+      console.error("Error adding content:", error)
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to add content",
         variant: "destructive",
       })
     }
+  }
+
+  const toggleUploadSelection = (uploadId: string) => {
+    setSelectedUploadIds((prev) =>
+      prev.includes(uploadId) ? prev.filter((id) => id !== uploadId) : [...prev, uploadId],
+    )
   }
 
   // Copy URL to clipboard
@@ -485,7 +522,6 @@ export default function FreeContentPage() {
         </AnimatePresence>
       )}
 
-      {/* Add Content Dialog */}
       <Dialog open={showAddContentDialog} onOpenChange={setShowAddContentDialog}>
         <DialogContent className="bg-zinc-900/95 backdrop-blur-xl border-zinc-800/50 max-w-5xl max-h-[90vh] overflow-hidden">
           <DialogHeader className="pb-4">
@@ -498,41 +534,116 @@ export default function FreeContentPage() {
 
           <div className="flex items-center justify-between mb-4 p-4 bg-zinc-800/30 rounded-lg border border-zinc-700/50">
             <div className="text-sm text-zinc-300">
-              {selectedUploads.length > 0
-                ? `${selectedUploads.length} item(s) selected`
+              {selectedUploadIds.length > 0
+                ? `${selectedUploadIds.length} item(s) selected`
                 : "Select content to add to your library"}
             </div>
             <div className="flex gap-2">
               <Button
                 variant="outline"
-                onClick={() => setShowAddContentDialog(false)}
+                onClick={() => {
+                  setShowAddContentDialog(false)
+                  setSelectedUploadIds([])
+                }}
                 className="border-zinc-700/50 bg-zinc-800/50 hover:bg-zinc-700/50 text-zinc-300"
               >
                 Cancel
               </Button>
               <Button
-                onClick={() => {
-                  console.log("[v0] Button clicked! selectedUploads:", selectedUploads)
-                  handleAddSelectedContent(selectedUploads)
-                }}
-                disabled={selectedUploads.length === 0}
+                onClick={handleAddToLibrary}
+                disabled={selectedUploadIds.length === 0}
                 className="bg-white text-black hover:bg-zinc-100 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Add {selectedUploads.length > 0 ? `${selectedUploads.length} ` : ""}Items to Library
+                Add {selectedUploadIds.length > 0 ? `${selectedUploadIds.length} ` : ""}Items to Library
               </Button>
             </div>
           </div>
 
-          <div className="flex-1 overflow-hidden">
-            <UploadSelector
-              excludeIds={freeContent.map((item) => item.id)}
-              onSelect={handleAddSelectedContent}
-              onCancel={() => setShowAddContentDialog(false)}
-              loading={false}
-              aspectRatio="portrait"
-              selectedFolderId={selectedFolderId}
-              onSelectionChange={setSelectedUploads}
-            />
+          <div className="flex-1 overflow-y-auto max-h-[60vh]">
+            {uploadsLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 text-zinc-500 animate-spin" />
+              </div>
+            ) : uploads.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12">
+                <Video className="h-12 w-12 text-zinc-500 mb-4" />
+                <p className="text-zinc-400 text-center">No uploads available to add</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-4">
+                {uploads.map((upload) => {
+                  const isSelected = selectedUploadIds.includes(upload.id)
+                  const IconComponent = FILE_TYPE_ICONS[upload.type as keyof typeof FILE_TYPE_ICONS] || File
+
+                  return (
+                    <div
+                      key={upload.id}
+                      onClick={() => toggleUploadSelection(upload.id)}
+                      className={`relative cursor-pointer rounded-lg border-2 transition-all duration-200 ${
+                        isSelected
+                          ? "border-white bg-zinc-800/50"
+                          : "border-zinc-700/50 hover:border-zinc-600/50 bg-zinc-900/30"
+                      }`}
+                    >
+                      <div className="p-3">
+                        <div className="aspect-[9/16] mb-3 relative">
+                          {upload.type === "video" ? (
+                            <div className="w-full h-full bg-zinc-800/50 rounded-md flex items-center justify-center">
+                              {upload.thumbnailUrl ? (
+                                <img
+                                  src={upload.thumbnailUrl || "/placeholder.svg"}
+                                  alt={upload.title}
+                                  className="w-full h-full object-cover rounded-md"
+                                />
+                              ) : (
+                                <Film className="h-8 w-8 text-white" />
+                              )}
+                            </div>
+                          ) : upload.type === "image" ? (
+                            <img
+                              src={upload.fileUrl || "/placeholder.svg"}
+                              alt={upload.title}
+                              className="w-full h-full object-cover rounded-md"
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement
+                                target.style.display = "none"
+                                target.nextElementSibling?.classList.remove("hidden")
+                              }}
+                            />
+                          ) : (
+                            <div className="w-full h-full bg-zinc-800/50 rounded-md flex items-center justify-center">
+                              <IconComponent className="h-8 w-8 text-white" />
+                            </div>
+                          )}
+
+                          {/* Selection indicator */}
+                          <div
+                            className={`absolute top-2 right-2 w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                              isSelected ? "bg-white border-white" : "border-white/50 bg-transparent"
+                            }`}
+                          >
+                            {isSelected && <div className="w-3 h-3 bg-black rounded-full" />}
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <h3 className="font-medium text-white text-sm truncate">{upload.title}</h3>
+                          <div className="flex items-center justify-between text-xs text-zinc-400">
+                            <Badge
+                              variant="outline"
+                              className="text-xs border-zinc-700/50 text-zinc-300 bg-zinc-800/30"
+                            >
+                              {upload.type}
+                            </Badge>
+                            <span>{formatFileSize(upload.size)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
