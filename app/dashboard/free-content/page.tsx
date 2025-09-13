@@ -42,6 +42,7 @@ interface Upload {
   type: string
   size?: number
   thumbnailUrl?: string
+  folder?: string // Added folder property
 }
 
 const FILE_TYPE_ICONS = {
@@ -70,6 +71,8 @@ export default function FreeContentPage() {
   const [uploads, setUploads] = useState<Upload[]>([])
   const [selectedUploadIds, setSelectedUploadIds] = useState<string[]>([])
   const [uploadsLoading, setUploadsLoading] = useState(false)
+  const [selectedFolder, setSelectedFolder] = useState<string>("all") // Added folder selection state
+  const [availableFolders, setAvailableFolders] = useState<string[]>([]) // Added available folders state
 
   // Fetch free content
   const fetchFreeContent = async () => {
@@ -134,6 +137,11 @@ export default function FreeContentPage() {
       const availableUploads = (data.uploads || []).filter((upload: Upload) => !freeContentIds.includes(upload.id))
 
       setUploads(availableUploads)
+
+      const folders = [
+        ...new Set(availableUploads.map((upload: Upload) => upload.folder || "Root Folder").filter(Boolean)),
+      ]
+      setAvailableFolders(folders)
     } catch (error) {
       console.error("Error fetching uploads:", error)
       toast({
@@ -559,6 +567,22 @@ export default function FreeContentPage() {
             </div>
           </div>
 
+          <div className="mb-4 px-4">
+            <label className="block text-sm font-medium text-zinc-300 mb-2">Upload Location</label>
+            <select
+              value={selectedFolder}
+              onChange={(e) => setSelectedFolder(e.target.value)}
+              className="w-full bg-zinc-800/50 border border-zinc-700/50 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-white/20"
+            >
+              <option value="all">All Folders</option>
+              {availableFolders.map((folder) => (
+                <option key={folder} value={folder}>
+                  {folder}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div className="flex-1 overflow-y-auto max-h-[60vh]">
             {uploadsLoading ? (
               <div className="flex items-center justify-center py-12">
@@ -588,16 +612,23 @@ export default function FreeContentPage() {
                       <div className="p-3">
                         <div className="aspect-[9/16] mb-3 relative">
                           {upload.type === "video" ? (
-                            <div className="w-full h-full bg-zinc-800/50 rounded-md flex items-center justify-center">
-                              {upload.thumbnailUrl ? (
-                                <img
-                                  src={upload.thumbnailUrl || "/placeholder.svg"}
-                                  alt={upload.title}
-                                  className="w-full h-full object-cover rounded-md"
-                                />
-                              ) : (
+                            <div className="w-full h-full bg-zinc-800/50 rounded-md flex items-center justify-center overflow-hidden">
+                              <video
+                                src={upload.fileUrl}
+                                className="w-full h-full object-cover rounded-md"
+                                muted
+                                playsInline
+                                preload="metadata"
+                                onError={(e) => {
+                                  // Fallback to icon if video fails to load
+                                  const target = e.target as HTMLVideoElement
+                                  target.style.display = "none"
+                                  target.nextElementSibling?.classList.remove("hidden")
+                                }}
+                              />
+                              <div className="hidden w-full h-full flex items-center justify-center absolute inset-0 bg-zinc-800/50">
                                 <Film className="h-8 w-8 text-white" />
-                              )}
+                              </div>
                             </div>
                           ) : upload.type === "image" ? (
                             <img
