@@ -200,6 +200,10 @@ class UploadQueueManager {
     }
   }
 
+  cancelUpload(queueId: string) {
+    this.removeFromQueue(queueId)
+  }
+
   clearCompleted() {
     this.queue = this.queue.filter((item) => item.status !== "completed")
     this.notifyGlobalProgress()
