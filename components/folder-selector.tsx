@@ -50,9 +50,15 @@ export default function FolderSelector({ selectedFolderId, onFolderSelect, class
       }
 
       const data = await response.json()
-      console.log("[v0] Fetched folders:", data)
+      console.log("[v0] Raw API response:", data)
+      console.log("[v0] Total folders from API:", data.folders?.length || 0)
 
       const activeFolders = data.folders.filter((folder: any) => !folder.isDeleted)
+      console.log("[v0] Active folders after filtering:", activeFolders.length)
+      console.log(
+        "[v0] Active folders details:",
+        activeFolders.map((f: any) => ({ id: f.id, name: f.name, path: f.path, isDeleted: f.isDeleted })),
+      )
 
       // Transform folders to include level for indentation and sort by path
       const transformedFolders = activeFolders
@@ -65,7 +71,11 @@ export default function FolderSelector({ selectedFolderId, onFolderSelect, class
         }))
         .sort((a: FolderItem, b: FolderItem) => a.path.localeCompare(b.path)) // Sort by path for proper hierarchy
 
-      console.log("[v0] Transformed folders with hierarchy:", transformedFolders)
+      console.log("[v0] Final transformed folders for dropdown:", transformedFolders)
+      console.log(
+        "[v0] Folder names that will appear in dropdown:",
+        transformedFolders.map((f) => f.name),
+      )
       setFolders(transformedFolders)
     } catch (error) {
       console.error("[v0] Error fetching folders:", error)
