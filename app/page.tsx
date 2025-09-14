@@ -148,6 +148,41 @@ const LandingPage = () => {
 
       <section className="relative z-10 py-20 px-6">
         <div className="max-w-7xl mx-auto">
+          <div className="scroll-animate grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+            <div className="order-2 lg:order-1">
+              <img
+                src="/images/folder-structure-interface.png"
+                alt="HD Folder Structure Interface"
+                className="w-full max-w-md mx-auto rounded-lg shadow-2xl"
+              />
+            </div>
+
+            <div className="order-1 lg:order-2 space-y-6">
+              <h2 className="text-4xl lg:text-5xl font-thin text-white">HD Folders</h2>
+
+              <div className="space-y-4">
+                <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
+                  Create organized, specific folders for all your content uploads in crystal-clear HD quality. No more
+                  dealing with messy raw files or complicated file management.
+                </p>
+
+                <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
+                  Say goodbye to selling chaotic zip folders to your audience. MassClip handles all file storage and
+                  organization automatically, ensuring everything stays in HD and perfectly organized.
+                </p>
+
+                <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
+                  Your customers get clean, professional access to high-quality content without the frustration of
+                  downloading and extracting messy zip files. Everything is streamlined, organized, and ready to use.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="relative z-10 py-20 px-6">
+        <div className="max-w-7xl mx-auto">
           <div className="scroll-animate space-y-12">
             <h2 className="text-4xl lg:text-5xl font-thin text-white">What You Can Sell</h2>
 
