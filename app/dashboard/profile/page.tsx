@@ -5,7 +5,7 @@ import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
-import { doc, getDoc, setDoc, serverTimestamp, updateDoc } from "firebase/firestore"
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -32,6 +32,31 @@ import "react-image-crop/dist/ReactCrop.css"
 import CancelSubscriptionButton from "@/components/cancel-subscription-button"
 import { Badge } from "@/components/ui/badge"
 import { safelyFormatDate } from "@/lib/date-utils"
+import { fetchSubscriptionData } from "@/lib/subscription-utils"
+import { handleSubmit, handleViewProfile, handleCropComplete } from "@/lib/profile-utils"
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      delayChildren: 0.3,
+      staggerChildren: 0.2,
+    },
+  },
+}
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.5,
+      ease: "easeInOut",
+    },
+  },
+}
 
 export default function ProfilePage() {
   const { user } = useAuth()
@@ -67,6 +92,8 @@ export default function ProfilePage() {
 
   const [subscriptionData, setSubscriptionData] = useState<any>(null)
   const [loadingSubscription, setLoadingSubscription] = useState(false)
+
+  const isProUser = subscriptionData?.plan === "creator_pro" && subscriptionData?.isActive
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true)
@@ -161,7 +188,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (user) {
-      fetchSubscriptionData()
+      fetchSubscriptionData(user, setSubscriptionData, setLoadingSubscription)
     }
   }, [user])
 
@@ -217,273 +244,6 @@ export default function ProfilePage() {
     setCrop(crop)
   }
 
-  const getCroppedImg = (image: HTMLImageElement, crop: Crop): Promise<Blob> => {
-    const canvas = document.createElement("canvas")
-    const ctx = canvas.getContext("2d")
-
-    if (!ctx) {
-      throw new Error("No 2d context")
-    }
-
-    const scaleX = image.naturalWidth / image.width
-    const scaleY = image.naturalHeight / image.height
-    const pixelRatio = window.devicePixelRatio
-
-    canvas.width = crop.width * pixelRatio * scaleX
-    canvas.height = crop.height * pixelRatio * scaleY
-
-    ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0)
-    ctx.imageSmoothingQuality = "high"
-
-    ctx.drawImage(
-      image,
-      crop.x * scaleX,
-      crop.y * scaleY,
-      crop.width * scaleX,
-      crop.height * scaleY,
-      0,
-      0,
-      crop.width * scaleX,
-      crop.height * scaleY,
-    )
-
-    return new Promise((resolve) => {
-      canvas.toBlob(
-        (blob) => {
-          if (blob) {
-            resolve(blob)
-          }
-        },
-        "image/jpeg",
-        0.9,
-      )
-    })
-  }
-
-  const handleCropComplete = async () => {
-    if (!imgRef.current || !completedCrop) return
-
-    try {
-      const croppedBlob = await getCroppedImg(imgRef.current, completedCrop)
-      setCroppedImageBlob(croppedBlob)
-
-      // Create preview URL
-      const previewUrl = URL.createObjectURL(croppedBlob)
-      setProfilePicPreview(previewUrl)
-
-      setShowCropModal(false)
-      setImageToCrop(null)
-    } catch (error) {
-      console.error("Error cropping image:", error)
-      toast({
-        title: "Cropping failed",
-        description: "Failed to crop image. Please try again.",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-
-    if (!user) {
-      toast({
-        title: "Authentication required",
-        description: "Please log in to update your profile.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    if (!isOnline) {
-      toast({
-        title: "No internet connection",
-        description: "Please check your connection and try again.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    try {
-      setSaving(true)
-      console.log("🔄 Starting profile update for user:", user.uid)
-
-      let profilePicUrl = profilePic
-
-      // Upload new profile pic if cropped
-      if (croppedImageBlob) {
-        console.log("📸 Uploading new profile picture...")
-
-        try {
-          // Get fresh auth token
-          const idToken = await user.getIdToken(true)
-
-          const formData = new FormData()
-          formData.append("file", croppedImageBlob, "profile.jpg")
-          formData.append("userId", user.uid)
-
-          const uploadResponse = await fetch("/api/upload-profile-pic", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${idToken}`,
-            },
-            body: formData,
-          })
-
-          if (!uploadResponse.ok) {
-            const errorText = await uploadResponse.text()
-            throw new Error(`Upload failed: ${errorText}`)
-          }
-
-          const uploadResult = await uploadResponse.json()
-          profilePicUrl = uploadResult.url
-          console.log("✅ Profile picture uploaded:", profilePicUrl)
-        } catch (uploadError) {
-          console.error("❌ Profile picture upload failed:", uploadError)
-          toast({
-            title: "Upload failed",
-            description: "Failed to upload profile picture. Continuing with other updates.",
-            variant: "destructive",
-          })
-          // Continue with other updates even if image upload fails
-        }
-      }
-
-      // Prepare profile data
-      const profileData = {
-        displayName: displayName.trim(),
-        username: username.toLowerCase().trim(),
-        bio: bio.trim(),
-        profilePic: profilePicUrl,
-        socialLinks: {
-          instagram: instagramHandle.trim(),
-          twitter: twitterHandle.trim(),
-          website: websiteUrl.trim(),
-        },
-        email: user.email,
-        updatedAt: serverTimestamp(),
-      }
-
-      console.log("💾 Updating user profile with data:", profileData)
-
-      // Update user profile in Firestore
-      const userDocRef = doc(db, "users", user.uid)
-
-      // Check if document exists first
-      const userDoc = await getDoc(userDocRef)
-
-      if (userDoc.exists()) {
-        // Update existing document
-        await updateDoc(userDocRef, profileData)
-        console.log("✅ User profile updated successfully")
-      } else {
-        // Create new document with createdAt timestamp
-        await setDoc(userDocRef, {
-          ...profileData,
-          uid: user.uid,
-          createdAt: serverTimestamp(),
-        })
-        console.log("✅ User profile created successfully")
-      }
-
-      // Also update the creators collection if username exists
-      if (username.trim()) {
-        try {
-          const creatorDocRef = doc(db, "creators", username.toLowerCase().trim())
-          const creatorData = {
-            uid: user.uid,
-            username: username.toLowerCase().trim(),
-            displayName: displayName.trim(),
-            bio: bio.trim(),
-            profilePic: profilePicUrl,
-            email: user.email,
-            updatedAt: serverTimestamp(),
-          }
-
-          const creatorDoc = await getDoc(creatorDocRef)
-
-          if (creatorDoc.exists()) {
-            await updateDoc(creatorDocRef, creatorData)
-          } else {
-            await setDoc(creatorDocRef, {
-              ...creatorData,
-              totalVideos: 0,
-              totalDownloads: 0,
-              totalEarnings: 0,
-              isVerified: false,
-              createdAt: serverTimestamp(),
-            })
-          }
-
-          console.log("✅ Creator profile updated successfully")
-        } catch (creatorError) {
-          console.error("⚠️ Creator profile update failed:", creatorError)
-          // Don't fail the whole operation if creator update fails
-        }
-      }
-
-      // Clear the cropped image blob after successful upload
-      setCroppedImageBlob(null)
-      setProfilePicPreview(null)
-
-      // Update the profile pic state with the new URL
-      setProfilePic(profilePicUrl)
-
-      // Show success message
-      setSaveSuccess(true)
-      setTimeout(() => setSaveSuccess(false), 3000)
-
-      toast({
-        title: "Profile updated",
-        description: "Your profile has been updated successfully",
-      })
-
-      // Refresh the page data
-      setTimeout(() => {
-        window.location.reload()
-      }, 1500)
-    } catch (error) {
-      console.error("❌ Error updating profile:", error)
-      toast({
-        title: "Update failed",
-        description: error instanceof Error ? error.message : "Failed to update profile. Please try again.",
-        variant: "destructive",
-      })
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleViewProfile = () => {
-    if (username) {
-      window.open(`/creator/${username}?updated=true`, "_blank")
-    }
-  }
-
-  const fetchSubscriptionData = async () => {
-    if (!user) return
-
-    setLoadingSubscription(true)
-    try {
-      const response = await fetch("/api/membership-status", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ userId: user.uid }),
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        setSubscriptionData(data)
-      }
-    } catch (error) {
-      console.error("Error fetching subscription data:", error)
-    } finally {
-      setLoadingSubscription(false)
-    }
-  }
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
@@ -515,7 +275,21 @@ export default function ProfilePage() {
                   </p>
                 </div>
               )}
-              <form onSubmit={handleSubmit}>
+              <form
+                onSubmit={(e) =>
+                  handleSubmit(
+                    e,
+                    user,
+                    setDisplayName,
+                    setUsername,
+                    setBio,
+                    setProfilePic,
+                    setNewProfilePic,
+                    setSaveSuccess,
+                    toast,
+                  )
+                }
+              >
                 <CardHeader>
                   <CardTitle>Profile Information</CardTitle>
                   <CardDescription>Update your profile details and social links</CardDescription>
@@ -740,7 +514,7 @@ export default function ProfilePage() {
                   <Button
                     variant="outline"
                     className="w-full mt-6 border-zinc-700 hover:bg-zinc-800 bg-transparent"
-                    onClick={handleViewProfile}
+                    onClick={() => handleViewProfile(username)}
                   >
                     <ExternalLink className="h-4 w-4 mr-2" />
                     View Public Profile
@@ -866,7 +640,8 @@ export default function ProfilePage() {
                   <div className="flex gap-4">
                     {subscriptionData?.plan !== "creator_pro" || !subscriptionData?.isActive ? (
                       <Button
-                        onClick={() => router.push("/dashboard/membership")}
+                        // Updated route from /dashboard/membership to /dashboard/upgrade
+                        onClick={() => router.push("/dashboard/upgrade")}
                         className="bg-white hover:bg-gray-100 text-black"
                       >
                         <Crown className="h-4 w-4 mr-2" />
@@ -930,7 +705,19 @@ export default function ProfilePage() {
               >
                 Cancel
               </Button>
-              <Button onClick={handleCropComplete} className="bg-red-600 hover:bg-red-700" disabled={!completedCrop}>
+              <Button
+                onClick={() =>
+                  handleCropComplete(
+                    completedCrop,
+                    setImageToCrop,
+                    setShowCropModal,
+                    setProfilePicPreview,
+                    setNewProfilePic,
+                  )
+                }
+                className="bg-red-600 hover:bg-red-700"
+                disabled={!completedCrop}
+              >
                 Apply Crop
               </Button>
             </div>
