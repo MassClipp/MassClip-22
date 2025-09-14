@@ -12,7 +12,6 @@ import {
   Rocket,
   ChevronRight,
   ChevronLeft,
-  TrendingUp,
   Lock,
   Film,
   Heart,
@@ -1539,67 +1538,33 @@ export default function ExplorePage() {
       {/* Featured Section (if not searching) */}
       {!searchQuery && !isLoadingData && (
         <motion.div variants={containerVariants} initial="hidden" animate="visible">
+          <motion.div variants={itemVariants} className="mb-8">
+            <div className="px-6 mb-4 flex items-center justify-between">
+              <h2 className="text-2xl font-extralight tracking-wider text-white">Featured Clips</h2>
+              <Link
+                href="/dashboard/upgrade"
+                className="text-zinc-400 hover:text-white flex items-center group bg-zinc-900/30 hover:bg-zinc-900/50 px-3 py-1 rounded-full transition-all duration-300"
+              >
+                <span className="mr-1 text-sm">Upgrade</span>
+                <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+              </Link>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 px-6">
+              {featuredVideos.map((video, index) => (
+                <motion.div
+                  key={video.uri || index}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, delay: index * 0.1 }}
+                >
+                  <InlineVimeoCard video={video} />
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+
           <motion.div variants={itemVariants} className="mb-12">
             <div className="h-px bg-gradient-to-r from-transparent via-zinc-800 to-transparent" />
-          </motion.div>
-        </motion.div>
-      )}
-
-      {/* Category Quick Links (if not searching) */}
-      {!searchQuery && !isLoadingData && (
-        <motion.div variants={containerVariants} initial="hidden" animate="visible">
-          <motion.h3
-            variants={itemVariants}
-            className="text-xl font-light tracking-tight text-white mb-4 flex items-center"
-          >
-            <TrendingUp className="h-4 w-4 mr-2 text-zinc-400" />
-            Trending Categories
-          </motion.h3>
-
-          <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
-            {quickCategories.map((category, index) => {
-              // If category is premium and user is not pro, show locked version
-              if (category.premium && !isProUser) {
-                return (
-                  <Button
-                    key={category.name}
-                    onClick={() => router.push("/dashboard/upgrade")}
-                    variant="outline"
-                    className="flex items-center justify-start h-auto py-4 px-5 bg-zinc-900/30 backdrop-blur-sm border-zinc-800/50 hover:bg-zinc-900/50 hover:border-zinc-700 rounded-xl transition-all duration-300"
-                  >
-                    <div className="p-2 rounded-full bg-black/30 mr-3 text-cyan-400">
-                      <Lock className="h-4 w-4 md:h-5 md:w-5" />
-                    </div>
-                    <div className="text-left">
-                      <span className="font-light text-sm md:text-base">{category.name}</span>
-                      <span className="block text-xs text-zinc-500">Pro Only</span>
-                    </div>
-                  </Button>
-                )
-              }
-
-              // Otherwise show normal category button
-              return (
-                <Button
-                  key={category.name}
-                  onClick={() => {
-                    setActiveCategory(category.name)
-                    router.push(category.href)
-                  }}
-                  variant="outline"
-                  className={`flex items-center justify-start h-auto py-4 px-5 bg-zinc-900/30 backdrop-blur-sm border-zinc-800/50 hover:bg-zinc-900/50 hover:border-zinc-700 rounded-xl transition-all duration-300 ${
-                    activeCategory === category.name ? "border-cyan-400/50 bg-cyan-400/5" : ""
-                  }`}
-                >
-                  <div
-                    className={`p-2 rounded-full bg-black/30 mr-3 ${activeCategory === category.name ? "text-cyan-400" : "text-cyan-400"}`}
-                  >
-                    {category.icon}
-                  </div>
-                  <span className="text-left font-light text-sm md:text-base">{category.name}</span>
-                </Button>
-              )
-            })}
           </motion.div>
         </motion.div>
       )}
