@@ -150,14 +150,21 @@ export default function NewFolderSelector({ selectedFolderId, onFolderSelect, cl
           </SelectValue>
         </SelectTrigger>
         <SelectContent className="bg-zinc-800 border-zinc-700">
-          <SelectItem value="root" className="text-white hover:bg-zinc-700">
+          <SelectItem
+            value="root"
+            className="text-white hover:bg-zinc-700 focus:bg-zinc-700 data-[highlighted]:bg-zinc-700"
+          >
             <div className="flex items-center gap-2">
               <Folder className="h-4 w-4" />
               <span>Root Folder</span>
             </div>
           </SelectItem>
           {folders.map((folder) => (
-            <SelectItem key={folder.id} value={folder.id} className="text-white hover:bg-zinc-700">
+            <SelectItem
+              key={folder.id}
+              value={folder.id}
+              className="text-white hover:bg-zinc-700 focus:bg-zinc-700 data-[highlighted]:bg-zinc-700"
+            >
               <div className="flex items-center gap-2">
                 <FolderOpen className="h-4 w-4" />
                 <span style={{ fontFamily: "monospace" }}>{getIndentedName(folder)}</span>
