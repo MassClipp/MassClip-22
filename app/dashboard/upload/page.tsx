@@ -652,9 +652,6 @@ export default function UploadPage() {
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 pb-6 border-b border-zinc-800/50">
         <div className="space-y-2">
           <h1 className="text-2xl font-semibold text-white tracking-tight">Content Library</h1>
-          <p className="text-zinc-400 text-sm">
-            Manage and organize your digital assets with enterprise-grade upload capabilities
-          </p>
           {username && (
             <div className="flex items-center gap-2 text-xs text-zinc-500">
               <div className="w-1.5 h-1.5 bg-zinc-500 rounded-full"></div>

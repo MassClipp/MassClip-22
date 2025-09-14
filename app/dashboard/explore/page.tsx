@@ -1543,8 +1543,9 @@ export default function ExplorePage() {
             <h2 className="text-2xl font-light tracking-tight text-white">
               <span className="text-gradient-accent">Featured</span> Clips
             </h2>
+            {/* Minimal Download Counter */}
             <Button
-              onClick={() => router.push(isProUser ? "/category/browse-all" : "/dashboard/membership")}
+              onClick={() => router.push(isProUser ? "/category/browse-all" : "/dashboard/upgrade")}
               variant="ghost"
               className="text-zinc-400 hover:text-white hover:bg-zinc-900/50 rounded-full px-4 py-2 transition-all duration-300"
             >
@@ -1598,7 +1599,7 @@ export default function ExplorePage() {
                 return (
                   <Button
                     key={category.name}
-                    onClick={() => router.push("/dashboard/membership")}
+                    onClick={() => router.push("/dashboard/upgrade")}
                     variant="outline"
                     className="flex items-center justify-start h-auto py-4 px-5 bg-zinc-900/30 backdrop-blur-sm border-zinc-800/50 hover:bg-zinc-900/50 hover:border-zinc-700 rounded-xl transition-all duration-300"
                   >
