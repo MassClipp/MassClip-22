@@ -71,8 +71,8 @@ export default function FreeContentPage() {
   const [uploads, setUploads] = useState<Upload[]>([])
   const [selectedUploadIds, setSelectedUploadIds] = useState<string[]>([])
   const [uploadsLoading, setUploadsLoading] = useState(false)
-  const [selectedFolder, setSelectedFolder] = useState<string>("all") // Added folder selection state
-  const [availableFolders, setAvailableFolders] = useState<string[]>([]) // Added available folders state
+  const [selectedFolder, setSelectedFolder] = useState<string>("all")
+  const [availableFolders, setAvailableFolders] = useState<{ id: string; name: string; path: string }[]>([])
 
   // Fetch free content
   const fetchFreeContent = async () => {
@@ -113,6 +113,47 @@ export default function FreeContentPage() {
     }
   }
 
+  const fetchFolders = async () => {
+    if (!user) return
+
+    try {
+      console.log("[v0] Fetching folders from API...")
+      const idToken = await user.getIdToken()
+
+      const response = await fetch("/api/folders", {
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch folders: ${response.status}`)
+      }
+
+      const data = await response.json()
+      console.log("[v0] Fetched folders:", data)
+
+      // Transform folders to include level for display
+      const transformedFolders = (data.folders || []).map((folder: any) => ({
+        id: folder.id,
+        name: folder.name,
+        path: folder.path,
+        level: (folder.path.match(/\//g) || []).length - 1,
+      }))
+
+      setAvailableFolders(transformedFolders)
+      console.log("[v0] Available folders set:", transformedFolders)
+    } catch (error) {
+      console.error("[v0] Error fetching folders:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load folders",
+        variant: "destructive",
+      })
+      setAvailableFolders([])
+    }
+  }
+
   const fetchUploads = async () => {
     if (!user) return
 
@@ -131,12 +172,6 @@ export default function FreeContentPage() {
       }
 
       const data = await response.json()
-
-      const allFolders = [
-        ...new Set((data.uploads || []).map((upload: Upload) => upload.folder || "Root Folder").filter(Boolean)),
-      ]
-      console.log("[v0] All folders found:", allFolders)
-      setAvailableFolders(allFolders)
 
       // Filter out uploads that are already in free content
       const freeContentIds = freeContent.map((item) => item.id)
@@ -163,6 +198,7 @@ export default function FreeContentPage() {
 
   useEffect(() => {
     if (showAddContentDialog && user) {
+      fetchFolders()
       fetchUploads()
     }
   }, [showAddContentDialog, user, freeContent])
@@ -273,7 +309,13 @@ export default function FreeContentPage() {
   const filteredContent = freeContent.filter((item) => item.title.toLowerCase().includes(searchTerm.toLowerCase()))
 
   const filteredUploads =
-    selectedFolder === "all" ? uploads : uploads.filter((upload) => (upload.folder || "Root Folder") === selectedFolder)
+    selectedFolder === "all"
+      ? uploads
+      : uploads.filter(
+          (upload) =>
+            upload.folder === selectedFolder ||
+            upload.folder === availableFolders.find((f) => f.id === selectedFolder)?.name,
+        )
 
   if (loading || authLoading) {
     return (
@@ -580,8 +622,9 @@ export default function FreeContentPage() {
             >
               <option value="all">All Folders</option>
               {availableFolders.map((folder) => (
-                <option key={folder} value={folder}>
-                  {folder}
+                <option key={folder.id} value={folder.id}>
+                  {"  ".repeat(folder.level)}
+                  {folder.name}
                 </option>
               ))}
             </select>
