@@ -25,6 +25,7 @@ import { Badge } from "@/components/ui/badge"
 import { VideoPreviewPlayer } from "@/components/video-preview-player"
 import { motion, AnimatePresence } from "framer-motion"
 import { safelyConvertToDate, safelyFormatRelativeTime } from "@/lib/date-utils"
+import FolderSelector from "@/components/folder-selector"
 
 interface FreeContentItem {
   id: string
@@ -43,6 +44,7 @@ interface Upload {
   size?: number
   thumbnailUrl?: string
   folder?: string // Added folder property
+  folderId?: string // Include folderId for proper filtering
 }
 
 const FILE_TYPE_ICONS = {
@@ -71,10 +73,8 @@ export default function FreeContentPage() {
   const [uploads, setUploads] = useState<Upload[]>([])
   const [selectedUploadIds, setSelectedUploadIds] = useState<string[]>([])
   const [uploadsLoading, setUploadsLoading] = useState(false)
-  const [selectedFolder, setSelectedFolder] = useState<string>("all")
-  const [availableFolders, setAvailableFolders] = useState<{ id: string; name: string; path: string }[]>([])
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
 
-  // Fetch free content
   const fetchFreeContent = async () => {
     if (!user) return
 
@@ -94,10 +94,9 @@ export default function FreeContentPage() {
 
       const data = await response.json()
 
-      // Safely process the data with proper date handling
       const processedContent = (data.freeContent || []).map((item: any) => ({
         ...item,
-        addedAt: safelyConvertToDate(item.addedAt), // Convert to safe Date object
+        addedAt: safelyConvertToDate(item.addedAt),
       }))
 
       setFreeContent(processedContent)
@@ -113,47 +112,6 @@ export default function FreeContentPage() {
     }
   }
 
-  const fetchFolders = async () => {
-    if (!user) return
-
-    try {
-      console.log("[v0] Fetching folders from API...")
-      const idToken = await user.getIdToken()
-
-      const response = await fetch("/api/folders", {
-        headers: {
-          Authorization: `Bearer ${idToken}`,
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch folders: ${response.status}`)
-      }
-
-      const data = await response.json()
-      console.log("[v0] Fetched folders:", data)
-
-      // Transform folders to include level for display
-      const transformedFolders = (data.folders || []).map((folder: any) => ({
-        id: folder.id,
-        name: folder.name,
-        path: folder.path,
-        level: (folder.path.match(/\//g) || []).length - 1,
-      }))
-
-      setAvailableFolders(transformedFolders)
-      console.log("[v0] Available folders set:", transformedFolders)
-    } catch (error) {
-      console.error("[v0] Error fetching folders:", error)
-      toast({
-        title: "Error",
-        description: "Failed to load folders",
-        variant: "destructive",
-      })
-      setAvailableFolders([])
-    }
-  }
-
   const fetchUploads = async () => {
     if (!user) return
 
@@ -161,23 +119,58 @@ export default function FreeContentPage() {
       setUploadsLoading(true)
       const token = await user.getIdToken()
 
-      const response = await fetch("/api/uploads", {
+      let response = await fetch("/api/creator/uploads", {
+        method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
         },
       })
 
-      if (!response.ok) {
-        throw new Error("Failed to fetch uploads")
+      let data
+      if (response.ok) {
+        data = await response.json()
+        console.log("✅ [Free Content] Creator uploads API Response:", data)
+      } else {
+        console.log("⚠️ [Free Content] Creator uploads failed, trying uploads API")
+        response = await fetch("/api/uploads", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (response.ok) {
+          data = await response.json()
+          console.log("✅ [Free Content] Uploads API Response:", data)
+        } else {
+          throw new Error(`HTTP ${response.status}: Failed to fetch uploads`)
+        }
       }
 
-      const data = await response.json()
+      const uploadsData = Array.isArray(data.uploads)
+        ? data.uploads
+        : Array.isArray(data.videos)
+          ? data.videos
+          : Array.isArray(data)
+            ? data
+            : []
 
-      // Filter out uploads that are already in free content
       const freeContentIds = freeContent.map((item) => item.id)
-      const availableUploads = (data.uploads || []).filter((upload: Upload) => !freeContentIds.includes(upload.id))
+      const availableUploads = uploadsData
+        .filter((upload: any) => !freeContentIds.includes(upload.id))
+        .map((upload: any) => ({
+          id: upload.id,
+          title: upload.title || upload.filename || upload.name || "Untitled",
+          fileUrl: upload.fileUrl,
+          type: upload.type || upload.mimeType?.split("/")[0] || "document",
+          size: upload.size || upload.fileSize,
+          thumbnailUrl: upload.thumbnailUrl,
+          folder: upload.folder,
+          folderId: upload.folderId,
+        }))
 
       setUploads(availableUploads)
+      console.log(`✅ [Free Content] Loaded ${availableUploads.length} available uploads`)
     } catch (error) {
       console.error("Error fetching uploads:", error)
       toast({
@@ -198,12 +191,10 @@ export default function FreeContentPage() {
 
   useEffect(() => {
     if (showAddContentDialog && user) {
-      fetchFolders()
       fetchUploads()
     }
   }, [showAddContentDialog, user, freeContent])
 
-  // Remove from free content
   const removeFromFreeContent = async (id: string) => {
     if (!user) return
 
@@ -225,7 +216,6 @@ export default function FreeContentPage() {
         description: "Item removed from free content",
       })
 
-      // Update the list
       setFreeContent(freeContent.filter((item) => item.id !== id))
     } catch (error) {
       console.error("Error removing from free content:", error)
@@ -263,7 +253,7 @@ export default function FreeContentPage() {
 
       setShowAddContentDialog(false)
       setSelectedUploadIds([])
-      fetchFreeContent() // Refresh the list
+      fetchFreeContent()
     } catch (error) {
       console.error("Error adding content:", error)
       toast({
@@ -280,7 +270,6 @@ export default function FreeContentPage() {
     )
   }
 
-  // Copy URL to clipboard
   const copyToClipboard = async (url: string) => {
     try {
       await navigator.clipboard.writeText(url)
@@ -297,7 +286,6 @@ export default function FreeContentPage() {
     }
   }
 
-  // Format file size
   const formatFileSize = (bytes?: number) => {
     if (!bytes) return "Unknown size"
     const sizes = ["Bytes", "KB", "MB", "GB"]
@@ -305,17 +293,12 @@ export default function FreeContentPage() {
     return Math.round((bytes / Math.pow(1024, i)) * 100) / 100 + " " + sizes[i]
   }
 
-  // Filter content based on search term
   const filteredContent = freeContent.filter((item) => item.title.toLowerCase().includes(searchTerm.toLowerCase()))
 
-  const filteredUploads =
-    selectedFolder === "all"
-      ? uploads
-      : uploads.filter(
-          (upload) =>
-            upload.folder === selectedFolder ||
-            upload.folder === availableFolders.find((f) => f.id === selectedFolder)?.name,
-        )
+  const filteredUploads = uploads.filter((upload) => {
+    if (!selectedFolderId) return true
+    return upload.folderId === selectedFolderId || upload.folder === selectedFolderId
+  })
 
   if (loading || authLoading) {
     return (
@@ -394,7 +377,6 @@ export default function FreeContentPage() {
         />
       </div>
 
-      {/* Content Grid */}
       {filteredContent.length === 0 ? (
         <div className="bg-zinc-900/20 border border-zinc-800/30 rounded-lg">
           <div className="flex flex-col items-center justify-center py-16 px-6">
@@ -462,7 +444,6 @@ export default function FreeContentPage() {
                           </div>
                         )}
 
-                        {/* Action buttons overlay - only show for non-video types */}
                         {item.type !== "video" && (
                           <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                             <Button
@@ -526,7 +507,6 @@ export default function FreeContentPage() {
                           <span>{safelyFormatRelativeTime(item.addedAt)}</span>
                         </div>
 
-                        {/* Action buttons for videos - show below the video */}
                         {item.type === "video" && (
                           <div className="flex items-center gap-2 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
                             <Button
@@ -613,21 +593,12 @@ export default function FreeContentPage() {
             </div>
           </div>
 
-          <div className="mb-4 px-4">
-            <label className="block text-sm font-medium text-zinc-300 mb-2">Upload Location</label>
-            <select
-              value={selectedFolder}
-              onChange={(e) => setSelectedFolder(e.target.value)}
-              className="w-full bg-zinc-800/50 border border-zinc-700/50 rounded-md px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-white/20"
-            >
-              <option value="all">All Folders</option>
-              {availableFolders.map((folder) => (
-                <option key={folder.id} value={folder.id}>
-                  {"  ".repeat(folder.level)}
-                  {folder.name}
-                </option>
-              ))}
-            </select>
+          <div className="flex-shrink-0 px-4">
+            <FolderSelector
+              selectedFolderId={selectedFolderId}
+              onFolderSelect={setSelectedFolderId}
+              className="w-full"
+            />
           </div>
 
           <div className="flex-1 overflow-y-auto max-h-[60vh]">
@@ -639,6 +610,26 @@ export default function FreeContentPage() {
               <div className="flex flex-col items-center justify-center py-12">
                 <Video className="h-12 w-12 text-zinc-500 mb-4" />
                 <p className="text-zinc-400 text-center">No uploads available to add</p>
+              </div>
+            ) : filteredUploads.length === 0 ? (
+              <div className="text-center py-8 flex-1 flex items-center justify-center">
+                <div className="space-y-2">
+                  <p className="text-zinc-500">
+                    {selectedFolderId
+                      ? "No uploads in selected folder."
+                      : "No uploads available. Upload some content first."}
+                  </p>
+                  {selectedFolderId && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSelectedFolderId(null)}
+                      className="border-zinc-700 text-zinc-300"
+                    >
+                      Show All Folders
+                    </Button>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-4">
@@ -667,7 +658,6 @@ export default function FreeContentPage() {
                                 playsInline
                                 preload="metadata"
                                 onError={(e) => {
-                                  // Fallback to icon if video fails to load
                                   const target = e.target as HTMLVideoElement
                                   target.style.display = "none"
                                   target.nextElementSibling?.classList.remove("hidden")
@@ -694,7 +684,6 @@ export default function FreeContentPage() {
                             </div>
                           )}
 
-                          {/* Selection indicator */}
                           <div
                             className={`absolute top-2 right-2 w-6 h-6 rounded-full border-2 flex items-center justify-center ${
                               isSelected ? "bg-white border-white" : "border-white/50 bg-transparent"
