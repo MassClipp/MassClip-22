@@ -395,7 +395,7 @@ export default function FolderSidebar({
       <div className="flex items-center justify-between p-4 border-b border-zinc-800">
         <div className="flex items-center gap-2">
           <FolderPlus className="h-5 w-5 text-white" />
-          <h2 className="text-sm font-medium text-white uppercase tracking-wide">Folder Structure</h2>
+          <h2 className="text-sm font-medium text-white uppercase tracking-wide">Content Folders</h2>
         </div>
         <Button
           variant="ghost"
