@@ -1539,44 +1539,8 @@ export default function ExplorePage() {
       {/* Featured Section (if not searching) */}
       {!searchQuery && !isLoadingData && (
         <motion.div variants={containerVariants} initial="hidden" animate="visible">
-          <motion.div variants={itemVariants} className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-light tracking-tight text-white">
-              <span className="text-gradient-accent">Featured</span> Clips
-            </h2>
-            {/* Minimal Download Counter */}
-            <Button
-              onClick={() => router.push(isProUser ? "/category/browse-all" : "/dashboard/upgrade")}
-              variant="ghost"
-              className="text-zinc-400 hover:text-white hover:bg-zinc-900/50 rounded-full px-4 py-2 transition-all duration-300"
-            >
-              {isProUser ? (
-                <>
-                  View All <ChevronRight className="h-4 w-4 ml-1" />
-                </>
-              ) : (
-                <>
-                  Upgrade <ChevronRight className="h-4 w-4 ml-1" />
-                </>
-              )}
-            </Button>
-          </motion.div>
-
-          {/* Featured Videos Grid */}
-          <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-12">
-            {isLoading
-              ? // Skeleton loaders
-                Array.from({ length: 6 }).map((_, index) => (
-                  <div
-                    key={`skeleton-${index}`}
-                    className="aspect-[9/16] rounded-xl bg-zinc-900/50 animate-pulse"
-                  ></div>
-                ))
-              : // Featured videos
-                featuredVideos.map((video, index) => (
-                  <div key={`featured-${video.uri || index}`} className="group">
-                    <InlineVimeoCard video={video} />
-                  </div>
-                ))}
+          <motion.div variants={itemVariants} className="mb-12">
+            <div className="h-px bg-gradient-to-r from-transparent via-zinc-800 to-transparent" />
           </motion.div>
         </motion.div>
       )}
