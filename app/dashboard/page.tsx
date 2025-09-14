@@ -14,7 +14,6 @@ import {
   Video,
   RefreshCw,
   Activity,
-  Calendar,
   CheckCircle2,
   CreditCard,
   Upload,
@@ -25,9 +24,9 @@ import {
 import { useRouter } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
 import { useVideoStatsAPI } from "@/hooks/use-video-stats-api"
-import { useStripeDashboardSales } from "@/hooks/use-stripe-dashboard-sales"
+import ProfileViewStatsNew from "@/components/profile-view-stats-new"
+import SalesMetricsNew from "@/components/sales-metrics-new"
 import { SalesForecastCard } from "@/components/sales-forecast-card"
-import ProfileViewStats from "@/components/profile-view-stats"
 
 export default function DashboardPage() {
   const { user } = useAuth()
@@ -42,21 +41,18 @@ export default function DashboardPage() {
     upload: false,
     freeContent: false,
     bundle: false,
-    socialBio: false, // Added social bio task to state
+    socialBio: false,
   })
 
   // Use API-based video statistics (avoids Firestore index issues)
   const videoStats = useVideoStatsAPI()
-
-  // Use live dashboard sales data
-  const salesData = useStripeDashboardSales()
 
   // Manual refresh function
   const handleRefresh = async () => {
     setRefreshing(true)
     try {
       await videoStats.refetch()
-      // Force refresh sales data by reloading the page
+      // Force refresh by reloading the page
       window.location.reload()
     } catch (error) {
       console.error("Error refreshing data:", error)
@@ -98,16 +94,8 @@ export default function DashboardPage() {
 
   const resolvedUserId = user?.uid || username || user?.email?.split("@")[0] || ""
 
-  console.log("[v0] Dashboard userId resolution:", {
-    userUid: user?.uid,
-    username: username,
-    userEmail: user?.email,
-    resolvedUserId: resolvedUserId,
-    userObject: user,
-  })
-
   // Show loading state while profile is being initialized or stats are loading
-  if (isInitializing || videoStats.loading || salesData.loading) {
+  if (isInitializing || videoStats.loading) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -168,12 +156,6 @@ export default function DashboardPage() {
     )
   }
 
-  // Show dashboard with fallback data if there are API errors but we have some data
-  if (videoStats.error && !videoStats.loading) {
-    console.warn("Video stats API error:", videoStats.error)
-    // Continue rendering with fallback data
-  }
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -210,20 +192,7 @@ export default function DashboardPage() {
 
       {/* Stats Grid */}
       <div className="grid gap-4 md:grid-cols-3">
-        <Card className="bg-zinc-900/50 border-zinc-800/50">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-zinc-200">Sales (30 Days)</CardTitle>
-            <Calendar className="h-4 w-4 text-zinc-400" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">${salesData.totalRevenueLast30Days.toFixed(2)}</div>
-            <p className="text-xs text-zinc-500">{salesData.totalSalesLast30Days} sales in last 30 days</p>
-            {salesData.averageOrderValue > 0 && (
-              <p className="text-xs text-zinc-400 mt-1">Avg: ${salesData.averageOrderValue.toFixed(2)} per sale</p>
-            )}
-            {salesData.error && <p className="text-xs text-red-400 mt-1">Data may be outdated</p>}
-          </CardContent>
-        </Card>
+        <SalesMetricsNew />
 
         <Card className="bg-zinc-900/50 border-zinc-800/50">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -246,7 +215,7 @@ export default function DashboardPage() {
 
         <div className="bg-zinc-900/50 border-zinc-800/50 rounded-lg">
           {resolvedUserId ? (
-            <ProfileViewStats userId={resolvedUserId} />
+            <ProfileViewStatsNew userId={resolvedUserId} />
           ) : (
             <Card className="bg-transparent border-0">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
