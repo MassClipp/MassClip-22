@@ -20,6 +20,8 @@ export async function handleSubmit(
   if (!user) return
 
   try {
+    console.log("💾 Saving profile changes...")
+
     const formData = new FormData(e.target as HTMLFormElement)
     const displayName = formData.get("displayName") as string
     const username = formData.get("username") as string
@@ -31,21 +33,21 @@ export async function handleSubmit(
     let profilePicUrl = null
 
     // Handle profile picture upload if there's a new one
-    const newProfilePic = formData.get("newProfilePic") as File
-    if (newProfilePic && newProfilePic.size > 0) {
+    const newProfilePicFile = (e.target as any).newProfilePic
+    if (newProfilePicFile) {
       const storageRef = ref(storage, `profile-pics/${user.uid}`)
-      await uploadBytes(storageRef, newProfilePic)
+      await uploadBytes(storageRef, newProfilePicFile)
       profilePicUrl = await getDownloadURL(storageRef)
     }
 
     const updateData = {
-      displayName,
-      username: username.toLowerCase(),
-      bio,
+      displayName: displayName.trim(),
+      username: username.trim().toLowerCase(),
+      bio: bio.trim(),
       socialLinks: {
-        instagram: instagramHandle,
-        twitter: twitterHandle,
-        website: websiteUrl,
+        instagram: instagramHandle.trim(),
+        twitter: twitterHandle.trim(),
+        website: websiteUrl.trim(),
       },
       updatedAt: serverTimestamp(),
       ...(profilePicUrl && { profilePic: profilePicUrl }),
@@ -54,9 +56,9 @@ export async function handleSubmit(
     await setDoc(doc(db, "users", user.uid), updateData, { merge: true })
 
     // Update local state
-    setDisplayName(displayName)
-    setUsername(username.toLowerCase())
-    setBio(bio)
+    setDisplayName(updateData.displayName)
+    setUsername(updateData.username)
+    setBio(updateData.bio)
     if (profilePicUrl) {
       setProfilePic(profilePicUrl)
       setNewProfilePic(null)
@@ -69,11 +71,13 @@ export async function handleSubmit(
       title: "Success",
       description: "Profile updated successfully!",
     })
+
+    console.log("✅ Profile saved successfully")
   } catch (error) {
-    console.error("Error updating profile:", error)
+    console.error("❌ Error saving profile:", error)
     toast({
       title: "Error",
-      description: "Failed to update profile. Please try again.",
+      description: "Failed to save profile. Please try again.",
       variant: "destructive",
     })
   }
