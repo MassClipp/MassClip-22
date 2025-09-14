@@ -39,7 +39,7 @@ export default function FolderSelector({ selectedFolderId, onFolderSelect, class
 
       const idToken = await user.getIdToken()
 
-      const response = await fetch("/api/folders", {
+      const response = await fetch(`/api/folders?t=${Date.now()}`, {
         headers: {
           Authorization: `Bearer ${idToken}`,
         },
@@ -52,15 +52,20 @@ export default function FolderSelector({ selectedFolderId, onFolderSelect, class
       const data = await response.json()
       console.log("[v0] Fetched folders:", data)
 
-      // Transform folders to include level for indentation
-      const transformedFolders = data.folders.map((folder: any) => ({
-        id: folder.id,
-        name: folder.name,
-        path: folder.path,
-        parentId: folder.parentId,
-        level: (folder.path.match(/\//g) || []).length - 1, // Count slashes to determine level
-      }))
+      const activeFolders = data.folders.filter((folder: any) => !folder.isDeleted)
 
+      // Transform folders to include level for indentation and sort by path
+      const transformedFolders = activeFolders
+        .map((folder: any) => ({
+          id: folder.id,
+          name: folder.name,
+          path: folder.path,
+          parentId: folder.parentId,
+          level: (folder.path.match(/\//g) || []).length - 1, // Count slashes to determine level
+        }))
+        .sort((a: FolderItem, b: FolderItem) => a.path.localeCompare(b.path)) // Sort by path for proper hierarchy
+
+      console.log("[v0] Transformed folders with hierarchy:", transformedFolders)
       setFolders(transformedFolders)
     } catch (error) {
       console.error("[v0] Error fetching folders:", error)
@@ -94,9 +99,23 @@ export default function FolderSelector({ selectedFolderId, onFolderSelect, class
     setIsOpen(false)
   }
 
+  const refreshFolders = () => {
+    fetchFolders()
+  }
+
   return (
     <div className={`relative ${className}`}>
-      <label className="block text-white mb-2">Upload Location</label>
+      <label className="block text-white mb-2 flex items-center justify-between">
+        Upload Location
+        <button
+          type="button"
+          onClick={refreshFolders}
+          className="text-xs text-zinc-400 hover:text-white transition-colors"
+          disabled={isLoading}
+        >
+          {isLoading ? "Loading..." : "Refresh"}
+        </button>
+      </label>
 
       <button
         type="button"
@@ -134,6 +153,12 @@ export default function FolderSelector({ selectedFolderId, onFolderSelect, class
               {folder.name}
             </button>
           ))}
+
+          {folders.length > 0 && (
+            <div className="px-3 py-1 text-xs text-zinc-500 border-t border-zinc-700">
+              {folders.length} folder{folders.length !== 1 ? "s" : ""} available
+            </div>
+          )}
 
           <div className="border-t border-zinc-700 p-2">
             <button
