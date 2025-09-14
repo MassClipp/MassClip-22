@@ -25,7 +25,7 @@ import { Badge } from "@/components/ui/badge"
 import { VideoPreviewPlayer } from "@/components/video-preview-player"
 import { motion, AnimatePresence } from "framer-motion"
 import { safelyConvertToDate, safelyFormatRelativeTime } from "@/lib/date-utils"
-import FolderSelector from "@/components/folder-selector"
+import NewFolderSelector from "@/components/new-folder-selector"
 
 interface FreeContentItem {
   id: string
@@ -594,7 +594,7 @@ export default function FreeContentPage() {
           </div>
 
           <div className="flex-shrink-0 px-4">
-            <FolderSelector
+            <NewFolderSelector
               selectedFolderId={selectedFolderId}
               onFolderSelect={setSelectedFolderId}
               className="w-full"

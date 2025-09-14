@@ -20,7 +20,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { useUserPlan } from "@/hooks/use-user-plan"
 import { useRouter } from "next/navigation"
 import { useFreeTierLimits } from "@/hooks/use-free-tier-limits"
-import FolderSelector from "@/components/folder-selector"
+import NewFolderSelector from "@/components/new-folder-selector"
 
 interface ContentItem {
   id: string
@@ -1695,7 +1695,7 @@ export default function BundlesPage() {
             </p>
 
             <div className="flex-shrink-0">
-              <FolderSelector
+              <NewFolderSelector
                 selectedFolderId={selectedFolderId}
                 onFolderSelect={setSelectedFolderId}
                 className="w-full"
