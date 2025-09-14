@@ -135,6 +135,7 @@ export default function FreeContentPage() {
       const allFolders = [
         ...new Set((data.uploads || []).map((upload: Upload) => upload.folder || "Root Folder").filter(Boolean)),
       ]
+      console.log("[v0] All folders found:", allFolders)
       setAvailableFolders(allFolders)
 
       // Filter out uploads that are already in free content
