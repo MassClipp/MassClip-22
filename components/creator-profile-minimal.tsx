@@ -6,12 +6,12 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Share2, Play, Calendar, Users, Heart, Check, Package, Download, Pause, Lock, ChevronDown } from "lucide-react"
 import { useAuthState } from "react-firebase-hooks/auth"
 import { auth, db } from "@/lib/firebase"
-import { UnlockButton } from "@/components/unlock-button"
 import { doc, updateDoc, increment } from "firebase/firestore"
 import { useToast } from "@/hooks/use-toast"
 import { useDownloadLimit } from "@/contexts/download-limit-context"
 import ImageCard from "@/components/image-card"
 import AudioCard from "@/components/audio-card"
+import { UnlockButton } from "@/components/unlock-button"
 
 interface CreatorData {
   uid: string
@@ -702,23 +702,21 @@ function VideoContentCard({ item }: { item: ContentItem }) {
           Your browser does not support the video tag.
         </video>
 
-        <div
-          className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-200 ${
-            isHovered || !isPlaying ? "opacity-100" : "opacity-0"
-          }`}
-        >
-          <button
-            onClick={handlePlayPause}
-            className="bg-white/20 backdrop-blur-sm rounded-full p-2 transition-transform duration-300 hover:scale-110"
-            aria-label={isPlaying ? "Pause video" : "Play video"}
-          >
-            {isPlaying ? (
-              <Pause className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
-            ) : (
-              <Play className="h-4 w-4 sm:h-5 sm:w-5 text-white ml-0.5" />
-            )}
-          </button>
-        </div>
+        {(isHovered || !isPlaying) && (
+          <div className="absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-200">
+            <button
+              onClick={handlePlayPause}
+              className="bg-white/20 backdrop-blur-sm rounded-full p-2 transition-transform duration-300 hover:scale-110"
+              aria-label={isPlaying ? "Pause video" : "Play video"}
+            >
+              {isPlaying ? (
+                <Pause className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+              ) : (
+                <Play className="h-4 w-4 sm:h-5 sm:w-5 text-white ml-0.5" />
+              )}
+            </button>
+          </div>
+        )}
 
         <button
           onClick={handleDownload}
