@@ -553,13 +553,34 @@ export default function ProfilePage() {
                     </div>
 
                     {subscriptionData?.isActive && subscriptionData?.currentPeriodEnd && (
-                      <div className="flex justify-between">
-                        <span className="text-zinc-400">
-                          {subscriptionData?.status === "canceled" ? "Subscription Ends:" : "Next Billing:"}
-                        </span>
-                        <span className={subscriptionData?.status === "canceled" ? "text-orange-400" : ""}>
-                          {safelyFormatDate(subscriptionData.currentPeriodEnd)}
-                        </span>
+                      <div className="space-y-2">
+                        <div className="flex justify-between">
+                          <span className="text-zinc-400">
+                            {subscriptionData?.status === "canceled" ? "Subscription Ends:" : "Next Billing:"}
+                          </span>
+                          <span className={subscriptionData?.status === "canceled" ? "text-orange-400" : ""}>
+                            {safelyFormatDate(subscriptionData.currentPeriodEnd)}
+                          </span>
+                        </div>
+
+                        {subscriptionData?.status === "canceled" && (
+                          <div className="p-3 rounded-lg bg-orange-900/20 border border-orange-500/30">
+                            <p className="text-orange-400 text-sm">
+                              ⚠️ Your subscription has been canceled. You'll continue to have Pro access until{" "}
+                              {safelyFormatDate(subscriptionData.currentPeriodEnd)}, after which your account will
+                              revert to the Free plan.
+                            </p>
+                          </div>
+                        )}
+
+                        {subscriptionData?.status === "active" && (
+                          <div className="p-3 rounded-lg bg-green-900/20 border border-green-500/30">
+                            <p className="text-green-400 text-sm">
+                              ✅ Your subscription is active and will automatically renew on{" "}
+                              {safelyFormatDate(subscriptionData.currentPeriodEnd)}.
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -660,6 +681,16 @@ export default function ProfilePage() {
                         </Button>
 
                         {subscriptionData?.status !== "canceled" && <CancelSubscriptionButton />}
+
+                        {subscriptionData?.status === "canceled" && (
+                          <Button
+                            onClick={() => router.push("/dashboard/upgrade")}
+                            className="bg-green-600 hover:bg-green-700 text-white"
+                          >
+                            <Crown className="h-4 w-4 mr-2" />
+                            Reactivate Subscription
+                          </Button>
+                        )}
                       </div>
                     )}
                   </div>
