@@ -5,7 +5,7 @@ import type React from "react"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
-import { Search, User, Upload, ExternalLink } from "lucide-react"
+import { Search, User, Upload, ExternalLink, Diamond } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -26,16 +26,37 @@ export default function DashboardHeader() {
   const { user, signOut } = useAuth()
   const [searchQuery, setSearchQuery] = useState("")
   const [userData, setUserData] = useState<any>(null)
+  const [isProUser, setIsProUser] = useState(false)
 
-  // Fetch user data
   useEffect(() => {
     const fetchUserData = async () => {
       if (!user) return
 
       try {
-        const userDoc = await getDoc(doc(db, "users", user.uid))
+        const [userDoc, membershipResponse] = await Promise.all([
+          getDoc(doc(db, "users", user.uid)),
+          fetch("/api/membership-status", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId: user.uid }),
+          }).catch(() => null),
+        ])
+
         if (userDoc.exists()) {
           setUserData(userDoc.data())
+        }
+
+        if (membershipResponse?.ok) {
+          const membershipData = await membershipResponse.json()
+          setIsProUser(membershipData.plan === "creator_pro" && membershipData.isActive)
+        } else if (userDoc.exists()) {
+          const userData = userDoc.data()
+          const userPlan = userData.plan === "pro" ? "creator_pro" : userData.plan
+          const subscriptionPlan = userData.subscriptionPlan === "pro" ? "creator_pro" : userData.subscriptionPlan
+          setIsProUser(
+            (userPlan === "creator_pro" || subscriptionPlan === "creator_pro") &&
+              (userData.subscriptionStatus === "active" || userData.plan === "creator_pro"),
+          )
         }
       } catch (error) {
         console.error("Error fetching user data:", error)
@@ -45,7 +66,6 @@ export default function DashboardHeader() {
     fetchUserData()
   }, [user])
 
-  // Handle search
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
     if (searchQuery.trim()) {
@@ -53,7 +73,6 @@ export default function DashboardHeader() {
     }
   }
 
-  // Handle sign out
   const handleSignOut = async () => {
     try {
       await signOut()
@@ -68,7 +87,15 @@ export default function DashboardHeader() {
       <div className="container flex h-16 items-center justify-between px-4">
         <div className="flex items-center gap-4">
           <NavDropdown />
-          <Logo href="/dashboard" size="sm" />
+          <div className="flex items-center gap-2">
+            <Logo href="/dashboard" size="sm" />
+            {isProUser && (
+              <div className="flex items-center gap-1 px-2 py-1 bg-gradient-to-r from-yellow-500/20 to-amber-500/20 border border-yellow-500/30 rounded-full">
+                <Diamond className="h-3 w-3 text-yellow-400 fill-yellow-400" />
+                <span className="text-xs font-medium text-yellow-400">PRO</span>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center gap-3">

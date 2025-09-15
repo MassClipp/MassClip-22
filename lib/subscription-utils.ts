@@ -13,28 +13,51 @@ export async function fetchSubscriptionData(
     setLoadingSubscription(true)
     console.log("🔍 Fetching subscription data for:", user.uid)
 
-    const userDoc = await getDoc(doc(db, "users", user.uid))
+    const [userDoc, membershipResponse] = await Promise.all([
+      getDoc(doc(db, "users", user.uid)),
+      fetch("/api/membership-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.uid }),
+      }).catch(() => null),
+    ])
 
-    if (userDoc.exists()) {
-      const userData = userDoc.data()
-      const subscriptionData = {
-        plan: userData.subscriptionPlan || "free",
-        isActive: userData.subscriptionStatus === "active",
-        status: userData.subscriptionStatus || "inactive",
-        currentPeriodEnd: userData.subscriptionCurrentPeriodEnd || null,
-      }
-
-      console.log("✅ Subscription data loaded:", subscriptionData)
-      setSubscriptionData(subscriptionData)
-    } else {
-      console.log("❌ No user document found for subscription data")
-      setSubscriptionData({
-        plan: "free",
-        isActive: false,
-        status: "inactive",
-        currentPeriodEnd: null,
-      })
+    let subscriptionData = {
+      plan: "free",
+      isActive: false,
+      status: "inactive",
+      currentPeriodEnd: null,
     }
+
+    if (membershipResponse?.ok) {
+      const membershipData = await membershipResponse.json()
+      if (membershipData.plan === "creator_pro" && membershipData.isActive) {
+        subscriptionData = {
+          plan: "creator_pro",
+          isActive: true,
+          status: membershipData.status || "active",
+          currentPeriodEnd: membershipData.currentPeriodEnd || null,
+        }
+      }
+    }
+
+    if (subscriptionData.plan === "free" && userDoc.exists()) {
+      const userData = userDoc.data()
+      const userPlan = userData.plan === "pro" ? "creator_pro" : userData.plan
+      const subscriptionPlan = userData.subscriptionPlan === "pro" ? "creator_pro" : userData.subscriptionPlan
+
+      if (userPlan === "creator_pro" || subscriptionPlan === "creator_pro") {
+        subscriptionData = {
+          plan: "creator_pro",
+          isActive: userData.subscriptionStatus === "active" || userData.plan === "creator_pro",
+          status: userData.subscriptionStatus || "active",
+          currentPeriodEnd: userData.subscriptionCurrentPeriodEnd || null,
+        }
+      }
+    }
+
+    console.log("✅ Final subscription data:", subscriptionData)
+    setSubscriptionData(subscriptionData)
   } catch (error) {
     console.error("❌ Error fetching subscription data:", error)
     setSubscriptionData({
