@@ -52,10 +52,8 @@ export default function DashboardHeader({ initialSearchQuery = "" }: DashboardHe
       {isProUser && (
         <div className="absolute top-2 left-4 z-50">
           <div className="relative">
-            {/* Diamond shape with gradient */}
-            <div className="w-6 h-6 bg-gradient-to-br from-yellow-400 via-orange-500 to-red-500 transform rotate-45 shadow-lg border border-yellow-300/50"></div>
-            {/* Inner diamond for depth */}
-            <div className="absolute top-1 left-1 w-4 h-4 bg-gradient-to-br from-yellow-300 to-orange-400 transform rotate-45"></div>
+            <div className="w-6 h-6 bg-gradient-to-br from-blue-400 via-blue-500 to-blue-600 transform rotate-45 shadow-lg border border-blue-300/50"></div>
+            <div className="absolute top-1 left-1 w-4 h-4 bg-gradient-to-br from-blue-300 to-blue-500 transform rotate-45"></div>
             {/* Sparkle effect */}
             <div className="absolute -top-1 -right-1 w-2 h-2 bg-white rounded-full opacity-80 animate-pulse"></div>
           </div>
@@ -70,10 +68,8 @@ export default function DashboardHeader({ initialSearchQuery = "" }: DashboardHe
               <div className="relative">
                 <div className="absolute -top-2 -left-2 z-10">
                   <div className="relative">
-                    {/* Diamond shape with gradient */}
-                    <div className="w-6 h-6 bg-gradient-to-br from-yellow-400 via-orange-500 to-red-500 transform rotate-45 shadow-lg border border-yellow-300/50"></div>
-                    {/* Inner diamond for depth */}
-                    <div className="absolute top-1 left-1 w-4 h-4 bg-gradient-to-br from-yellow-300 to-orange-400 transform rotate-45"></div>
+                    <div className="w-6 h-6 bg-gradient-to-br from-blue-400 via-blue-500 to-blue-600 transform rotate-45 shadow-lg border border-blue-300/50"></div>
+                    <div className="absolute top-1 left-1 w-4 h-4 bg-gradient-to-br from-blue-300 to-blue-500 transform rotate-45"></div>
                     {/* Sparkle effect */}
                     <div className="absolute -top-1 -right-1 w-2 h-2 bg-white rounded-full opacity-80 animate-pulse"></div>
                   </div>
