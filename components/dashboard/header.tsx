@@ -86,9 +86,10 @@ export default function DashboardHeader() {
           <div className="flex items-center gap-2">
             <Logo href="/dashboard" size="sm" />
             {isProUser && (
-              <div className="flex items-center gap-1 px-2 py-1 bg-gradient-to-r from-yellow-500/20 to-amber-500/20 border border-yellow-500/30 rounded-full">
-                <Diamond className="h-3 w-3 text-yellow-400 fill-yellow-400" />
-                <span className="text-xs font-medium text-yellow-400">PRO</span>
+              <div className="relative flex items-center justify-center px-3 py-1.5 bg-gradient-to-br from-blue-500 via-blue-600 to-blue-700 border border-blue-400/30 rounded-lg shadow-lg">
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-400/20 to-transparent rounded-lg"></div>
+                <Diamond className="h-3 w-3 text-white fill-white mr-1 relative z-10" />
+                <span className="text-xs font-bold text-white relative z-10 tracking-wide">PRO</span>
               </div>
             )}
           </div>
