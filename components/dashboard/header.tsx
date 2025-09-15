@@ -87,11 +87,9 @@ export default function DashboardHeader() {
             <Logo href="/dashboard" size="sm" />
             {isProUser && (
               <div className="relative">
-                <div className="w-6 h-6 bg-gradient-to-br from-blue-400 via-blue-500 to-blue-600 transform rotate-45 shadow-lg border border-blue-300/50 flex items-center justify-center">
-                  <span className="text-[8px] font-bold text-white transform -rotate-45 leading-none">PRO</span>
+                <div className="w-7 h-7 bg-gradient-to-br from-blue-500 to-white rounded-full shadow-lg border border-blue-200/30 flex items-center justify-center">
+                  <span className="text-[9px] font-bold text-white leading-none">PRO</span>
                 </div>
-                {/* Sparkle effect */}
-                <div className="absolute -top-1 -right-1 w-2 h-2 bg-white rounded-full opacity-80 animate-pulse"></div>
               </div>
             )}
           </div>
