@@ -65,39 +65,30 @@ export async function getStripeSubscriptionStatus(userId: string): Promise<Strip
 
     const isActiveInStripe = ["active", "trialing"].includes(subscription.status)
     const isWithinPeriod = now <= currentPeriodEnd
-    const isCanceled = subscription.cancel_at_period_end || subscription.status === "canceled"
-
     const isActive = isActiveInStripe && isWithinPeriod
 
-    if (!isActive || subscription.status === "canceled") {
-      await adminDb
-        .collection("memberships")
-        .doc(userId)
-        .update({
-          isActive: isActive,
-          status: isCanceled ? "canceled" : subscription.status,
-          plan: isActive ? "creator_pro" : "free",
-          cancelAtPeriodEnd: subscription.cancel_at_period_end,
-          updatedAt: new Date().toISOString(),
-        })
+    const isCanceled =
+      subscription.cancel_at_period_end || ["canceled", "incomplete_expired"].includes(subscription.status)
 
-      // If completely expired, move to freeUsers
-      if (!isActive) {
-        await adminDb.collection("freeUsers").doc(userId).set({
-          uid: userId,
-          plan: "free",
-          downloadsUsed: 0,
-          bundlesCreated: 0,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        })
-      }
-    } else {
-      await adminDb.collection("memberships").doc(userId).update({
-        isActive: true,
+    await adminDb
+      .collection("memberships")
+      .doc(userId)
+      .update({
+        isActive: isActive,
         status: subscription.status,
-        plan: "creator_pro",
+        plan: isActive ? "creator_pro" : "free",
         cancelAtPeriodEnd: subscription.cancel_at_period_end,
+        currentPeriodEnd: currentPeriodEnd.toISOString(),
+        updatedAt: new Date().toISOString(),
+      })
+
+    if (!isActive) {
+      await adminDb.collection("freeUsers").doc(userId).set({
+        uid: userId,
+        plan: "free",
+        downloadsUsed: 0,
+        bundlesCreated: 0,
+        createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       })
     }
