@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Share2, Play, Calendar, Users, Heart, Check, Package, Download, Pause, Lock, ChevronDown } from "lucide-react"
 import { useAuthState } from "react-firebase-hooks/auth"
 import { auth, db } from "@/lib/firebase"
+import { UnlockButton } from "@/components/unlock-button"
 import { doc, updateDoc, increment } from "firebase/firestore"
 import { useToast } from "@/hooks/use-toast"
 import { useDownloadLimit } from "@/contexts/download-limit-context"
@@ -382,24 +383,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
             >
               {filteredContent.map((item) =>
                 activeTab === "premium" ? (
-                  <div key={item.id} className="w-full max-w-[180px] sm:max-w-[200px]">
-                    <div className="relative aspect-[9/16] bg-zinc-900 rounded-lg overflow-hidden mb-2">
-                      <div className="absolute inset-0 bg-zinc-800 flex items-center justify-center">
-                        <div className="text-center">
-                          <Package className="w-8 h-8 text-zinc-600 mx-auto mb-2" />
-                          <p className="text-xs text-zinc-500">Bundle unavailable</p>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="space-y-1">
-                      <h3
-                        className="text-white text-xs sm:text-sm font-medium line-clamp-2 leading-tight"
-                        title={item.title}
-                      >
-                        {item.title}
-                      </h3>
-                    </div>
-                  </div>
+                  <BundleCard key={item.id} item={item} user={user} creatorId={creator.uid} />
                 ) : (
                   <ContentCard key={item.id} item={item} />
                 ),
@@ -705,30 +689,22 @@ function VideoContentCard({ item }: { item: ContentItem }) {
       onMouseLeave={() => setIsHovered(false)}
     >
       <div
-        className={`relative aspect-[9/16] bg-zinc-900 rounded-lg overflow-hidden mb-2 transition-all duration-300 ${
+        className={`relative aspect-[9/16] bg-black rounded-lg overflow-hidden mb-2 transition-all duration-300 ${
           isHovered ? "border border-white/50" : "border border-transparent"
         }`}
       >
-        {item.fileUrl ? (
-          <video
-            ref={videoRef}
-            className="w-full h-full object-cover"
-            preload="metadata"
-            muted
-            playsInline
-            controls={false}
-          >
-            <source src={item.fileUrl} type="video/mp4" />
-            Your browser does not support the video tag.
-          </video>
-        ) : (
-          <div className="absolute inset-0 bg-zinc-800 flex items-center justify-center">
-            <div className="text-center">
-              <Play className="w-8 h-8 text-zinc-600 mx-auto mb-2" />
-              <p className="text-xs text-zinc-500">Video unavailable</p>
-            </div>
-          </div>
-        )}
+        <video
+          ref={videoRef}
+          className="w-full h-full object-cover"
+          preload="metadata"
+          muted
+          playsInline
+          controls={false}
+          poster={item.thumbnailUrl}
+        >
+          <source src={item.fileUrl} type="video/mp4" />
+          Your browser does not support the video tag.
+        </video>
 
         <div
           className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-200 ${
@@ -737,8 +713,7 @@ function VideoContentCard({ item }: { item: ContentItem }) {
         >
           <button
             onClick={handlePlayPause}
-            disabled={!item.fileUrl}
-            className="bg-white/20 backdrop-blur-sm rounded-full p-2 transition-transform duration-300 hover:scale-110 disabled:opacity-50"
+            className="bg-white/20 backdrop-blur-sm rounded-full p-2 transition-transform duration-300 hover:scale-110"
             aria-label={isPlaying ? "Pause video" : "Play video"}
           >
             {isPlaying ? (
@@ -749,39 +724,123 @@ function VideoContentCard({ item }: { item: ContentItem }) {
           </button>
         </div>
 
-        {item.fileUrl && (
-          <button
-            onClick={handleDownload}
-            disabled={isDownloading || (user && hasReachedLimit && !isProUser)}
-            className={`absolute bottom-2 right-2 backdrop-blur-sm p-1.5 rounded-full transition-all duration-200 hover:scale-110 ${
-              user && hasReachedLimit && !isProUser
-                ? "bg-zinc-800/90 cursor-not-allowed"
-                : "bg-black/60 hover:bg-black/80"
-            } ${isHovered ? "opacity-100" : "opacity-70"}`}
-            aria-label={
-              user && hasReachedLimit && !isProUser
-                ? "Upgrade to Creator Pro for unlimited downloads"
-                : "Download video"
-            }
-            title={
-              user && hasReachedLimit && !isProUser
-                ? "Upgrade to Creator Pro for unlimited downloads"
-                : "Download video"
-            }
-          >
-            {user && hasReachedLimit && !isProUser ? (
-              <Lock className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-zinc-400" />
-            ) : (
-              <Download className={`h-3 w-3 sm:h-3.5 sm:w-3.5 text-white ${isDownloading ? "animate-pulse" : ""}`} />
-            )}
-          </button>
-        )}
+        <button
+          onClick={handleDownload}
+          disabled={isDownloading || (user && hasReachedLimit && !isProUser)}
+          className={`absolute bottom-2 right-2 backdrop-blur-sm p-1.5 rounded-full transition-all duration-200 hover:scale-110 ${
+            user && hasReachedLimit && !isProUser
+              ? "bg-zinc-800/90 cursor-not-allowed"
+              : "bg-black/60 hover:bg-black/80"
+          } ${isHovered ? "opacity-100" : "opacity-70"}`}
+          aria-label={
+            user && hasReachedLimit && !isProUser ? "Upgrade to Creator Pro for unlimited downloads" : "Download video"
+          }
+          title={
+            user && hasReachedLimit && !isProUser ? "Upgrade to Creator Pro for unlimited downloads" : "Download video"
+          }
+        >
+          {user && hasReachedLimit && !isProUser ? (
+            <Lock className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-zinc-400" />
+          ) : (
+            <Download className={`h-3 w-3 sm:h-3.5 sm:w-3.5 text-white ${isDownloading ? "animate-pulse" : ""}`} />
+          )}
+        </button>
       </div>
 
       <div className="space-y-1">
         <h3 className="text-white text-xs sm:text-sm font-medium line-clamp-2 leading-tight" title={item.title}>
           {item.title}
         </h3>
+      </div>
+    </div>
+  )
+}
+
+function BundleCard({ item, user, creatorId }: { item: ContentItem; user: any; creatorId: string }) {
+  const [isThumbnailHovered, setIsThumbnailHovered] = useState(false)
+  const [imageError, setImageError] = useState(false)
+
+  console.log("🎯 BundleCard rendering with item:", {
+    id: item.id,
+    title: item.title,
+    thumbnailUrl: item.thumbnailUrl,
+    stripePriceId: item.stripePriceId,
+    stripeProductId: item.stripeProductId,
+    price: item.price,
+    contentCount: item.contentCount,
+    creatorId,
+    currentUserId: user?.uid,
+  })
+
+  const handleImageError = () => {
+    console.log("❌ Image failed to load:", item.thumbnailUrl)
+    setImageError(true)
+  }
+
+  const handleImageLoad = () => {
+    console.log("✅ Image loaded successfully:", item.thumbnailUrl)
+    setImageError(false)
+  }
+
+  const formatPrice = (price: number | undefined | null): string => {
+    console.log("🔢 Formatting price:", price, typeof price)
+    if (typeof price === "number" && !isNaN(price) && isFinite(price)) {
+      return price.toFixed(2)
+    }
+    return "0.00"
+  }
+
+  const formattedPrice = formatPrice(item.price)
+  console.log("💰 Final formatted price:", formattedPrice)
+
+  return (
+    <div className="bg-zinc-900 rounded-lg overflow-hidden border border-zinc-700/30 hover:border-zinc-600/40 transition-all duration-300 w-full max-w-[340px] sm:max-w-[320px] relative">
+      <div
+        className="relative aspect-square bg-zinc-800 overflow-hidden"
+        onMouseEnter={() => setIsThumbnailHovered(true)}
+        onMouseLeave={() => setIsThumbnailHovered(false)}
+      >
+        {item.thumbnailUrl && !imageError ? (
+          <img
+            src={item.thumbnailUrl || "/placeholder.svg"}
+            alt={item.title}
+            className={`w-full h-full object-cover transition-transform duration-500 ${isThumbnailHovered ? "scale-110" : "scale-100"}`}
+            onError={handleImageError}
+            onLoad={handleImageLoad}
+          />
+        ) : (
+          <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
+            <Package className="w-12 h-12 sm:w-16 sm:h-16 text-zinc-600" />
+          </div>
+        )}
+
+        <div className="absolute top-2 right-2 sm:top-4 sm:right-4 bg-black/80 backdrop-blur-sm px-2 py-1 sm:px-3 sm:py-1.5 rounded-full text-xs text-white font-semibold">
+          {item.contentCount || 0} items
+        </div>
+      </div>
+
+      <div className="p-3 sm:p-4 space-y-2 bg-gradient-to-br from-black via-black to-zinc-800/30 relative">
+        <div className="space-y-1">
+          <h3 className="text-white text-base sm:text-lg font-bold line-clamp-1" title={item.title}>
+            {item.title}
+          </h3>
+          <p className="text-zinc-400 text-sm line-clamp-1">{item.description || "Premium content bundle"}</p>
+        </div>
+
+        <div className="flex items-center justify-between pt-1">
+          <span className="text-white text-xl sm:text-2xl font-light">${formattedPrice}</span>
+
+          <UnlockButton
+            stripePriceId={item.stripePriceId}
+            bundleId={item.id}
+            user={user}
+            creatorId={creatorId}
+            price={item.price || 0}
+            title={item.title}
+            variant="outline"
+            className="border-white/20 text-white hover:bg-white/5 rounded-md font-light text-sm px-4 py-2"
+          />
+        </div>
       </div>
     </div>
   )
