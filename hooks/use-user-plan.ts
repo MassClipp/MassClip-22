@@ -32,39 +32,89 @@ export function useUserPlan() {
 
       try {
         setLoading(true)
-        const userDocRef = doc(db, "users", user.uid)
-        const userDoc = await getDoc(userDocRef)
 
-        if (userDoc.exists()) {
-          const userData = userDoc.data()
-          // Handle legacy "pro" plan values
-          const userPlan = userData.plan === "pro" ? "creator_pro" : userData.plan || "free"
+        // First check membership status API for most accurate data
+        const membershipResponse = await fetch("/api/membership-status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: user.uid }),
+        })
 
-          setPlanData({
-            plan: userPlan,
-            downloads: userData.downloads || 0,
-            downloadsLimit: userPlan === "creator_pro" ? Number.POSITIVE_INFINITY : 25,
-            lastReset: userData.lastReset ? userData.lastReset.toDate() : null,
-          })
-        } else {
-          // Create a user document if it doesn't exist
-          const defaultUserData = {
-            plan: "free",
-            downloads: 0,
-            lastReset: Timestamp.now(),
-            createdAt: Timestamp.now(),
-            email: user.email,
-            displayName: user.displayName,
+        let finalPlan: UserPlan = "free"
+
+        if (membershipResponse.ok) {
+          const membershipData = await membershipResponse.json()
+
+          // Check if subscription is expired
+          let isExpired = false
+          if (membershipData.currentPeriodEnd) {
+            const endDate = new Date(membershipData.currentPeriodEnd)
+            const now = new Date()
+            isExpired = now > endDate
           }
 
-          await setDoc(userDocRef, defaultUserData)
+          // Only use creator_pro if active and not expired
+          if (membershipData.plan === "creator_pro" && membershipData.isActive && !isExpired) {
+            finalPlan = "creator_pro"
+          }
+        }
 
-          // Default to a plan object
+        // Fallback to user document if membership API fails
+        if (finalPlan === "free") {
+          const userDocRef = doc(db, "users", user.uid)
+          const userDoc = await getDoc(userDocRef)
+
+          if (userDoc.exists()) {
+            const userData = userDoc.data()
+            const userPlan = userData.plan === "pro" ? "creator_pro" : userData.plan || "free"
+
+            // Check expiration for legacy subscriptions
+            if (userPlan === "creator_pro" && userData.subscriptionCurrentPeriodEnd) {
+              const endDate = new Date(userData.subscriptionCurrentPeriodEnd)
+              const now = new Date()
+              const isExpired = now > endDate
+
+              if (!isExpired) {
+                finalPlan = "creator_pro"
+              }
+            } else if (userPlan === "creator_pro" && !userData.subscriptionCurrentPeriodEnd) {
+              // Legacy pro without expiration date - assume expired
+              finalPlan = "free"
+            }
+
+            setPlanData({
+              plan: finalPlan,
+              downloads: userData.downloads || 0,
+              downloadsLimit: finalPlan === "creator_pro" ? Number.POSITIVE_INFINITY : 25,
+              lastReset: userData.lastReset ? userData.lastReset.toDate() : null,
+            })
+          } else {
+            // Create default user document
+            const defaultUserData = {
+              plan: "free",
+              downloads: 0,
+              lastReset: Timestamp.now(),
+              createdAt: Timestamp.now(),
+              email: user.email,
+              displayName: user.displayName,
+            }
+
+            await setDoc(userDocRef, defaultUserData)
+
+            setPlanData({
+              plan: "free",
+              downloads: 0,
+              downloadsLimit: 25,
+              lastReset: new Date(),
+            })
+          }
+        } else {
+          // Pro user from membership API
           setPlanData({
-            plan: "free",
-            downloads: 0,
-            downloadsLimit: 25,
-            lastReset: new Date(),
+            plan: finalPlan,
+            downloads: 0, // Pro users don't track downloads
+            downloadsLimit: Number.POSITIVE_INFINITY,
+            lastReset: null,
           })
         }
 
@@ -72,7 +122,6 @@ export function useUserPlan() {
       } catch (err) {
         console.error("Error fetching user plan:", err)
         setError("Failed to load user plan data")
-        // Default to a plan object even on error
         setPlanData({
           plan: "free",
           downloads: 0,

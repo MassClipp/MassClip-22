@@ -45,43 +45,86 @@ export function DownloadLimitProvider({ children }: { children: ReactNode }) {
     }
 
     setLoading(true)
-    const userDocRef = doc(db, "users", user.uid)
 
-    // Initial fetch
-    getDoc(userDocRef)
-      .then((doc) => {
-        if (doc.exists()) {
-          const userData = doc.data()
-          const isPro = userData?.plan === "creator_pro"
-          const downloads = userData.downloads || 0
-          const limit = isPro ? Number.POSITIVE_INFINITY : 15
+    const checkSubscriptionStatus = async () => {
+      try {
+        // Check membership status first
+        const membershipResponse = await fetch("/api/membership-status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: user.uid }),
+        })
 
-          setIsProUser(isPro)
-          setRemainingDownloads(Math.max(0, limit - downloads))
-          setHasReachedLimit(!isPro && downloads >= limit)
+        let isPro = false
+
+        if (membershipResponse.ok) {
+          const membershipData = await membershipResponse.json()
+
+          // Check if subscription is expired
+          let isExpired = false
+          if (membershipData.currentPeriodEnd) {
+            const endDate = new Date(membershipData.currentPeriodEnd)
+            const now = new Date()
+            isExpired = now > endDate
+          }
+
+          isPro = membershipData.plan === "creator_pro" && membershipData.isActive && !isExpired
         }
-        setLoading(false)
-      })
-      .catch((err) => {
-        console.error("Error fetching initial user plan:", err)
-        setLoading(false)
-      })
 
-    // Set up real-time listener
+        // Fallback to user document
+        if (!isPro) {
+          const userDocRef = doc(db, "users", user.uid)
+          const userDoc = await getDoc(userDocRef)
+
+          if (userDoc.exists()) {
+            const userData = userDoc.data()
+            const userPlan = userData?.plan === "pro" ? "creator_pro" : userData?.plan
+
+            if (userPlan === "creator_pro" && userData.subscriptionCurrentPeriodEnd) {
+              const endDate = new Date(userData.subscriptionCurrentPeriodEnd)
+              const now = new Date()
+              isPro = now <= endDate
+            }
+          }
+        }
+
+        setIsProUser(isPro)
+
+        if (isPro) {
+          setRemainingDownloads(Number.POSITIVE_INFINITY)
+          setHasReachedLimit(false)
+        } else {
+          // Get user document for download tracking
+          const userDocRef = doc(db, "users", user.uid)
+          const userDoc = await getDoc(userDocRef)
+
+          if (userDoc.exists()) {
+            const userData = userDoc.data()
+            const downloads = userData.downloads || 0
+            const limit = 15
+
+            setRemainingDownloads(Math.max(0, limit - downloads))
+            setHasReachedLimit(downloads >= limit)
+          }
+        }
+
+        setLoading(false)
+      } catch (error) {
+        console.error("Error checking subscription status:", error)
+        setIsProUser(false)
+        setLoading(false)
+      }
+    }
+
+    checkSubscriptionStatus()
+
+    // Set up real-time listener for user document changes
+    const userDocRef = doc(db, "users", user.uid)
     const unsubscribe = onSnapshot(
       userDocRef,
-      (doc) => {
-        if (doc.exists()) {
-          const userData = doc.data()
-          const isPro = userData?.plan === "creator_pro"
-          const downloads = userData.downloads || 0
-          const limit = isPro ? Number.POSITIVE_INFINITY : 15
-
-          setIsProUser(isPro)
-          setRemainingDownloads(Math.max(0, limit - downloads))
-          setHasReachedLimit(!isPro && downloads >= limit)
-        }
-        setLoading(false)
+      () => {
+        // Re-check subscription status when user document changes
+        checkSubscriptionStatus()
       },
       (error) => {
         console.error("Error in download limit listener:", error)
