@@ -31,11 +31,33 @@ export async function fetchSubscriptionData(
 
     if (membershipResponse?.ok) {
       const membershipData = await membershipResponse.json()
-      if (membershipData.plan === "creator_pro" && membershipData.isActive) {
+
+      let isExpired = false
+      if (membershipData.currentPeriodEnd) {
+        const endDate = new Date(membershipData.currentPeriodEnd)
+        const now = new Date()
+        isExpired = now > endDate
+
+        console.log("🕐 Subscription date check:", {
+          endDate: endDate.toISOString(),
+          now: now.toISOString(),
+          isExpired,
+        })
+      }
+
+      if (membershipData.plan === "creator_pro" && membershipData.isActive && !isExpired) {
         subscriptionData = {
           plan: "creator_pro",
           isActive: true,
           status: membershipData.status || "active",
+          currentPeriodEnd: membershipData.currentPeriodEnd || null,
+        }
+      } else if (isExpired) {
+        console.log("⚠️ Subscription expired, reverting to free plan")
+        subscriptionData = {
+          plan: "free",
+          isActive: false,
+          status: "expired",
           currentPeriodEnd: membershipData.currentPeriodEnd || null,
         }
       }
@@ -47,11 +69,22 @@ export async function fetchSubscriptionData(
       const subscriptionPlan = userData.subscriptionPlan === "pro" ? "creator_pro" : userData.subscriptionPlan
 
       if (userPlan === "creator_pro" || subscriptionPlan === "creator_pro") {
-        subscriptionData = {
-          plan: "creator_pro",
-          isActive: userData.subscriptionStatus === "active" || userData.plan === "creator_pro",
-          status: userData.subscriptionStatus || "active",
-          currentPeriodEnd: userData.subscriptionCurrentPeriodEnd || null,
+        let isExpired = false
+        if (userData.subscriptionCurrentPeriodEnd) {
+          const endDate = new Date(userData.subscriptionCurrentPeriodEnd)
+          const now = new Date()
+          isExpired = now > endDate
+        }
+
+        if (!isExpired) {
+          subscriptionData = {
+            plan: "creator_pro",
+            isActive: userData.subscriptionStatus === "active" || userData.plan === "creator_pro",
+            status: userData.subscriptionStatus || "active",
+            currentPeriodEnd: userData.subscriptionCurrentPeriodEnd || null,
+          }
+        } else {
+          console.log("⚠️ Legacy subscription expired, keeping free plan")
         }
       }
     }
