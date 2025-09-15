@@ -1,5 +1,4 @@
 "use client"
-
 import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
@@ -689,7 +688,7 @@ function VideoContentCard({ item }: { item: ContentItem }) {
       onMouseLeave={() => setIsHovered(false)}
     >
       <div
-        className={`relative aspect-[9/16] bg-black rounded-lg overflow-hidden mb-2 transition-all duration-300 ${
+        className={`relative aspect-[9/16] rounded-lg overflow-hidden mb-2 transition-all duration-300 ${
           isHovered ? "border border-white/50" : "border border-transparent"
         }`}
       >
