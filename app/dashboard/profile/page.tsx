@@ -24,7 +24,6 @@ import {
   Save,
   CheckCircle,
   ExternalLink,
-  Crown,
   RefreshCw,
 } from "lucide-react"
 import ReactCrop, { type Crop, centerCrop, makeAspectCrop } from "react-image-crop"
@@ -528,170 +527,171 @@ export default function ProfilePage() {
         <TabsContent value="membership">
           <Card className="bg-zinc-900/60 border-zinc-800/50 backdrop-blur-sm">
             <CardHeader>
-              <CardTitle>Membership & Billing</CardTitle>
+              <CardTitle className="text-xl font-semibold">Membership & Billing</CardTitle>
               <CardDescription>Manage your subscription and billing information</CardDescription>
             </CardHeader>
 
-            <CardContent className="space-y-6">
+            <CardContent className="space-y-8">
               {loadingSubscription ? (
-                <div className="flex items-center justify-center p-8">
-                  <Loader2 className="h-6 w-6 animate-spin mr-2" />
-                  <span>Loading subscription data...</span>
+                <div className="flex items-center justify-center p-12">
+                  <Loader2 className="h-6 w-6 animate-spin mr-3 text-zinc-400" />
+                  <span className="text-zinc-400">Loading subscription data...</span>
                 </div>
               ) : (
-                <div className="space-y-6">
-                  {/* Current Plan */}
-                  <div className="p-4 rounded-lg border border-zinc-700/50 bg-zinc-800/30">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-lg font-medium">Current Plan</h3>
+                <div className="space-y-8">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-medium text-white">Current Plan</h3>
                       <Badge
                         variant={subscriptionData?.isActive ? "default" : "secondary"}
-                        className={subscriptionData?.isActive ? "bg-green-600" : "bg-zinc-600"}
+                        className={`px-3 py-1 font-medium ${
+                          subscriptionData?.isActive
+                            ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                            : "bg-zinc-600 hover:bg-zinc-700 text-zinc-200"
+                        }`}
                       >
-                        {subscriptionData?.plan === "creator_pro" ? "Creator Pro" : "Free"}
+                        {subscriptionData?.plan === "creator_pro" && subscriptionData?.isActive
+                          ? "Creator Pro"
+                          : "Free"}
                       </Badge>
                     </div>
 
-                    {subscriptionData?.isActive && subscriptionData?.currentPeriodEnd && (
-                      <div className="space-y-2">
-                        <div className="flex justify-between">
-                          <span className="text-zinc-400">
-                            {subscriptionData?.status === "canceled" ? "Subscription Ends:" : "Next Billing:"}
+                    {subscriptionData?.currentPeriodEnd && (
+                      <div className="p-4 rounded-lg border border-zinc-700/50 bg-zinc-800/20">
+                        <div className="flex justify-between items-center mb-3">
+                          <span className="text-sm font-medium text-zinc-300">
+                            {subscriptionData?.cancelAtPeriodEnd || subscriptionData?.status === "canceled"
+                              ? "Access Ends"
+                              : "Next Billing"}
                           </span>
-                          <span className={subscriptionData?.status === "canceled" ? "text-orange-400" : ""}>
+                          <span className="text-sm font-mono text-white">
                             {safelyFormatDate(subscriptionData.currentPeriodEnd)}
                           </span>
                         </div>
 
-                        {subscriptionData?.status === "canceled" && (
-                          <div className="p-3 rounded-lg bg-orange-900/20 border border-orange-500/30">
-                            <p className="text-orange-400 text-sm">
-                              ⚠️ Your subscription has been canceled. You'll continue to have Pro access until{" "}
-                              {safelyFormatDate(subscriptionData.currentPeriodEnd)}, after which your account will
-                              revert to the Free plan.
-                            </p>
+                        {subscriptionData?.cancelAtPeriodEnd || subscriptionData?.status === "canceled" ? (
+                          <div className="p-3 rounded-md bg-amber-900/20 border border-amber-500/30">
+                            <div className="flex items-start gap-3">
+                              <div className="w-2 h-2 rounded-full bg-amber-500 mt-2 flex-shrink-0"></div>
+                              <div>
+                                <p className="text-amber-200 text-sm font-medium mb-1">Subscription Canceled</p>
+                                <p className="text-amber-300/80 text-xs leading-relaxed">
+                                  Your Pro access continues until {safelyFormatDate(subscriptionData.currentPeriodEnd)}.
+                                  After this date, your account will automatically switch to the Free plan.
+                                </p>
+                              </div>
+                            </div>
                           </div>
-                        )}
-
-                        {subscriptionData?.status === "active" && (
-                          <div className="p-3 rounded-lg bg-green-900/20 border border-green-500/30">
-                            <p className="text-green-400 text-sm">
-                              ✅ Your subscription is active and will automatically renew on{" "}
-                              {safelyFormatDate(subscriptionData.currentPeriodEnd)}.
-                            </p>
+                        ) : subscriptionData?.isActive ? (
+                          <div className="p-3 rounded-md bg-emerald-900/20 border border-emerald-500/30">
+                            <div className="flex items-start gap-3">
+                              <div className="w-2 h-2 rounded-full bg-emerald-500 mt-2 flex-shrink-0"></div>
+                              <div>
+                                <p className="text-emerald-200 text-sm font-medium mb-1">Active Subscription</p>
+                                <p className="text-emerald-300/80 text-xs leading-relaxed">
+                                  Your subscription will automatically renew on{" "}
+                                  {safelyFormatDate(subscriptionData.currentPeriodEnd)}.
+                                </p>
+                              </div>
+                            </div>
                           </div>
-                        )}
+                        ) : null}
                       </div>
                     )}
                   </div>
 
-                  {/* Plan Features */}
-                  <div className="p-4 rounded-lg border border-zinc-700/50 bg-zinc-800/30">
-                    <h3 className="text-lg font-medium mb-4">Plan Features</h3>
-                    <div className="grid grid-cols-2 gap-4">
-                      {subscriptionData?.plan === "creator_pro" ? (
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-medium text-white">Plan Features</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {subscriptionData?.plan === "creator_pro" && subscriptionData?.isActive ? (
                         <>
-                          <div className="flex items-center gap-2">
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                            <span className="text-sm">Unlimited Downloads</span>
+                          <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                            <span className="text-sm text-zinc-200">Unlimited Downloads</span>
                           </div>
-
-                          <div className="flex items-center gap-2">
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                            <span className="text-sm">Unlimited Bundles</span>
+                          <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                            <span className="text-sm text-zinc-200">Unlimited Bundles</span>
                           </div>
-
-                          <div className="flex items-center gap-2">
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                            <span className="text-sm">Unlimited Videos per Bundle</span>
+                          <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                            <span className="text-sm text-zinc-200">Unlimited Videos per Bundle</span>
                           </div>
-
-                          <div className="flex items-center gap-2">
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                            <span className="text-sm">Access to All Clips</span>
+                          <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                            <span className="text-sm text-zinc-200">Access to All Clips</span>
                           </div>
-
-                          <div className="flex items-center gap-2">
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                            <span className="text-sm">No Watermark</span>
+                          <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                            <span className="text-sm text-zinc-200">No Watermark</span>
                           </div>
-
-                          <div className="flex items-center gap-2">
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                            <span className="text-sm">Only 10% Platform Fee</span>
+                          <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                            <span className="text-sm text-zinc-200">Only 10% Platform Fee</span>
                           </div>
                         </>
                       ) : (
                         <>
-                          <div className="flex items-center gap-2">
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                            <span className="text-sm">15 downloads per month</span>
+                          <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
+                            <div className="w-1.5 h-1.5 rounded-full bg-zinc-500"></div>
+                            <span className="text-sm text-zinc-300">15 downloads per month</span>
                           </div>
-
-                          <div className="flex items-center gap-2">
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                            <span className="text-sm">2 bundles max on storefront</span>
+                          <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
+                            <div className="w-1.5 h-1.5 rounded-full bg-zinc-500"></div>
+                            <span className="text-sm text-zinc-300">2 bundles max on storefront</span>
                           </div>
-
-                          <div className="flex items-center gap-2">
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                            <span className="text-sm">10 videos per bundle limit</span>
+                          <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
+                            <div className="w-1.5 h-1.5 rounded-full bg-zinc-500"></div>
+                            <span className="text-sm text-zinc-300">10 videos per bundle limit</span>
                           </div>
-
-                          <div className="flex items-center gap-2">
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                            <span className="text-sm">Access to Free Content</span>
+                          <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
+                            <div className="w-1.5 h-1.5 rounded-full bg-zinc-500"></div>
+                            <span className="text-sm text-zinc-300">Access to Free Content</span>
                           </div>
-
-                          <div className="flex items-center gap-2">
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                            <span className="text-sm">Limited organization features</span>
+                          <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
+                            <div className="w-1.5 h-1.5 rounded-full bg-zinc-500"></div>
+                            <span className="text-sm text-zinc-300">Limited organization features</span>
                           </div>
-
-                          <div className="flex items-center gap-2">
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                            <span className="text-sm">20% Platform Fee</span>
+                          <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
+                            <div className="w-1.5 h-1.5 rounded-full bg-zinc-500"></div>
+                            <span className="text-sm text-zinc-300">20% Platform Fee</span>
                           </div>
                         </>
                       )}
                     </div>
                   </div>
 
-                  {/* Actions */}
-                  <div className="flex gap-4">
+                  <div className="flex flex-wrap gap-3 pt-4 border-t border-zinc-800/50">
                     {subscriptionData?.plan !== "creator_pro" || !subscriptionData?.isActive ? (
                       <Button
-                        // Updated route from /dashboard/membership to /dashboard/upgrade
                         onClick={() => router.push("/dashboard/upgrade")}
-                        className="bg-white hover:bg-gray-100 text-black"
+                        className="bg-white hover:bg-gray-100 text-black font-medium px-6"
                       >
-                        <Crown className="h-4 w-4 mr-2" />
                         Upgrade to Pro
                       </Button>
                     ) : (
-                      <div className="flex gap-4">
+                      <>
                         <Button
                           variant="outline"
-                          onClick={fetchSubscriptionData}
+                          onClick={() => fetchSubscriptionData(user, setSubscriptionData, setLoadingSubscription)}
                           disabled={loadingSubscription}
-                          className="border-zinc-700 hover:bg-zinc-800 bg-transparent"
+                          className="border-zinc-600 hover:bg-zinc-800 bg-transparent text-zinc-200 font-medium"
                         >
                           <RefreshCw className={`h-4 w-4 mr-2 ${loadingSubscription ? "animate-spin" : ""}`} />
                           Refresh Status
                         </Button>
 
-                        {subscriptionData?.status !== "canceled" && <CancelSubscriptionButton />}
-
-                        {subscriptionData?.status === "canceled" && (
+                        {subscriptionData?.cancelAtPeriodEnd || subscriptionData?.status === "canceled" ? (
                           <Button
                             onClick={() => router.push("/dashboard/upgrade")}
-                            className="bg-green-600 hover:bg-green-700 text-white"
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-6"
                           >
-                            <Crown className="h-4 w-4 mr-2" />
                             Reactivate Subscription
                           </Button>
+                        ) : (
+                          <CancelSubscriptionButton />
                         )}
-                      </div>
+                      </>
                     )}
                   </div>
                 </div>

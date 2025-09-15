@@ -65,30 +65,39 @@ export async function getStripeSubscriptionStatus(userId: string): Promise<Strip
 
     const isActiveInStripe = ["active", "trialing"].includes(subscription.status)
     const isWithinPeriod = now <= currentPeriodEnd
-    const isActive = isActiveInStripe && isWithinPeriod
+    const isCanceled = subscription.cancel_at_period_end || subscription.status === "canceled"
 
-    if (!isActive || subscription.status === "canceled") {
-      await adminDb.collection("memberships").doc(userId).update({
-        isActive: false,
-        status: "canceled",
-        plan: "free",
-        updatedAt: new Date().toISOString(),
-      })
+    // If subscription is canceled or past due, it's not active
+    const isActive = isActiveInStripe && isWithinPeriod && !subscription.cancel_at_period_end
 
-      // Move user to freeUsers collection
-      await adminDb.collection("freeUsers").doc(userId).set({
-        uid: userId,
-        plan: "free",
-        downloadsUsed: 0,
-        bundlesCreated: 0,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      })
+    if (!isActive || subscription.status === "canceled" || subscription.cancel_at_period_end) {
+      await adminDb
+        .collection("memberships")
+        .doc(userId)
+        .update({
+          isActive: isActive,
+          status: isCanceled ? "canceled" : subscription.status,
+          plan: isActive ? "creator_pro" : "free",
+          cancelAtPeriodEnd: subscription.cancel_at_period_end,
+          updatedAt: new Date().toISOString(),
+        })
+
+      // If completely expired, move to freeUsers
+      if (!isActive) {
+        await adminDb.collection("freeUsers").doc(userId).set({
+          uid: userId,
+          plan: "free",
+          downloadsUsed: 0,
+          bundlesCreated: 0,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        })
+      }
     }
 
     return {
       isActive,
-      isCanceled: subscription.cancel_at_period_end || subscription.status === "canceled",
+      isCanceled,
       status: subscription.status,
       currentPeriodEnd,
       cancelAtPeriodEnd: subscription.cancel_at_period_end,
