@@ -5,7 +5,7 @@ import type React from "react"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
-import { Search, User, Upload, ExternalLink, Diamond } from "lucide-react"
+import { Search, User, Upload, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -86,10 +86,12 @@ export default function DashboardHeader() {
           <div className="flex items-center gap-2">
             <Logo href="/dashboard" size="sm" />
             {isProUser && (
-              <div className="relative flex items-center justify-center px-3 py-1.5 bg-gradient-to-br from-blue-500 via-blue-600 to-blue-700 border border-blue-400/30 rounded-lg shadow-lg">
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-400/20 to-transparent rounded-lg"></div>
-                <Diamond className="h-3 w-3 text-white fill-white mr-1 relative z-10" />
-                <span className="text-xs font-bold text-white relative z-10 tracking-wide">PRO</span>
+              <div className="relative">
+                <div className="w-6 h-6 bg-gradient-to-br from-blue-400 via-blue-500 to-blue-600 transform rotate-45 shadow-lg border border-blue-300/50 flex items-center justify-center">
+                  <span className="text-[8px] font-bold text-white transform -rotate-45 leading-none">PRO</span>
+                </div>
+                {/* Sparkle effect */}
+                <div className="absolute -top-1 -right-1 w-2 h-2 bg-white rounded-full opacity-80 animate-pulse"></div>
               </div>
             )}
           </div>
