@@ -700,6 +700,7 @@ function VideoContentCard({ item }: { item: ContentItem }) {
           playsInline
           controls={false}
           poster={item.thumbnailUrl}
+          src={item.fileUrl}
         >
           <source src={item.fileUrl} type="video/mp4" />
           Your browser does not support the video tag.
