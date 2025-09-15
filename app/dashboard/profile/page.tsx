@@ -191,6 +191,18 @@ export default function ProfilePage() {
     }
   }, [user])
 
+  useEffect(() => {
+    if (subscriptionData) {
+      console.log("[v0] Subscription data received:", {
+        plan: subscriptionData.plan,
+        isActive: subscriptionData.isActive,
+        status: subscriptionData.status,
+        cancelAtPeriodEnd: subscriptionData.cancelAtPeriodEnd,
+        currentPeriodEnd: subscriptionData.currentPeriodEnd,
+      })
+    }
+  }, [subscriptionData])
+
   const handleProfilePicChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return

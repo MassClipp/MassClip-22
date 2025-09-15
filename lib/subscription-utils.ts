@@ -22,18 +22,29 @@ export async function fetchSubscriptionData(
       isActive: false,
       status: "inactive",
       currentPeriodEnd: null,
+      cancelAtPeriodEnd: false,
     }
 
     if (membershipResponse?.ok) {
       const membershipData = await membershipResponse.json()
+      console.log("[v0] Raw membership API response:", membershipData)
 
-      // Simple check - if membership is active, user has pro plan
       if (membershipData.isActive) {
         subscriptionData = {
           plan: "creator_pro",
           isActive: true,
           status: membershipData.status || "active",
           currentPeriodEnd: membershipData.currentPeriodEnd || null,
+          cancelAtPeriodEnd: membershipData.cancelAtPeriodEnd || false,
+        }
+      } else {
+        // Even if not active, preserve cancellation data for display
+        subscriptionData = {
+          plan: "free",
+          isActive: false,
+          status: membershipData.status || "inactive",
+          currentPeriodEnd: membershipData.currentPeriodEnd || null,
+          cancelAtPeriodEnd: membershipData.cancelAtPeriodEnd || false,
         }
       }
     }
@@ -47,6 +58,7 @@ export async function fetchSubscriptionData(
       isActive: false,
       status: "inactive",
       currentPeriodEnd: null,
+      cancelAtPeriodEnd: false,
     })
   } finally {
     setLoadingSubscription(false)
