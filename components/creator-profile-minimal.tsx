@@ -493,43 +493,28 @@ function VideoContentCard({ item }: { item: ContentItem }) {
   const [user] = useAuthState(auth)
   const [isHovered, setIsHovered] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
-  const [thumbnailError, setThumbnailError] = useState(false)
-  const [videoError, setVideoError] = useState(false)
-  const [videoLoaded, setVideoLoaded] = useState(false)
   const [isDownloading, setIsDownloading] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const { toast } = useToast()
   const { hasReachedLimit, isProUser, forceRefresh } = useDownloadLimit()
 
-  const getProxiedVideoUrl = (originalUrl: string) => {
-    if (!originalUrl) return ""
-    return `/api/proxy-video?url=${encodeURIComponent(originalUrl)}`
-  }
-
-  const proxiedVideoUrl = getProxiedVideoUrl(item.fileUrl)
-
   console.log("🎥 ContentCard rendering with:", {
     id: item.id,
     title: item.title,
-    originalFileUrl: item.fileUrl,
-    proxiedVideoUrl: proxiedVideoUrl,
+    fileUrl: item.fileUrl,
     thumbnailUrl: item.thumbnailUrl,
   })
 
   const recordDownload = async () => {
-    if (!user) return { success: true } // Allow guest downloads without recording
-
+    if (!user) return { success: true }
     if (isProUser) return { success: true }
 
     try {
       const userDocRef = doc(db, "users", user.uid)
-
       await updateDoc(userDocRef, {
         downloads: increment(1),
       })
-
       forceRefresh()
-
       return { success: true }
     } catch (err) {
       console.error("Error recording download:", err)
@@ -546,7 +531,6 @@ function VideoContentCard({ item }: { item: ContentItem }) {
       if (!response.ok) throw new Error("Network response was not ok")
 
       const blob = await response.blob()
-
       const objectUrl = URL.createObjectURL(blob)
 
       const link = document.createElement("a")
@@ -569,68 +553,25 @@ function VideoContentCard({ item }: { item: ContentItem }) {
     }
   }
 
-  useEffect(() => {
-    const videoElement = videoRef.current
-    if (!videoElement || !proxiedVideoUrl) return
-
-    const handleLoadedMetadata = () => {
-      console.log("✅ Video metadata loaded for:", item.title)
-      setVideoLoaded(true)
-      setVideoError(false)
-      videoElement.currentTime = 0.1
-    }
-
-    const handleLoadedData = () => {
-      console.log("✅ Video data loaded for:", item.title)
-      setVideoLoaded(true)
-    }
-
-    const handleError = (e: Event) => {
-      console.error("❌ Video loading error:", e)
-      setVideoError(true)
-      setVideoLoaded(false)
-    }
-
-    const handleCanPlay = () => {
-      console.log("✅ Video can play:", item.title)
-      setVideoLoaded(true)
-    }
-
-    videoElement.addEventListener("loadedmetadata", handleLoadedMetadata)
-    videoElement.addEventListener("loadeddata", handleLoadedData)
-    videoElement.addEventListener("error", handleError)
-    videoElement.addEventListener("canplay", handleCanPlay)
-
-    videoElement.load()
-
-    return () => {
-      videoElement.removeEventListener("loadedmetadata", handleLoadedMetadata)
-      videoElement.removeEventListener("loadeddata", handleLoadedData)
-      videoElement.removeEventListener("error", handleError)
-      videoElement.removeEventListener("canplay", handleCanPlay)
-    }
-  }, [proxiedVideoUrl, item.title])
-
   const handlePlayPause = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
 
-    if (!videoRef.current || !proxiedVideoUrl) {
-      console.error("❌ No video element or proxied URL available")
+    if (!videoRef.current || !item.fileUrl) {
+      console.error("❌ No video element or file URL available")
       return
     }
 
-    console.log("🎬 Attempting to play video:", proxiedVideoUrl)
-
     if (isPlaying) {
       videoRef.current.pause()
-      videoRef.current.currentTime = 0.1
+      videoRef.current.currentTime = 0
       setIsPlaying(false)
     } else {
+      // Pause all other videos
       document.querySelectorAll("video").forEach((v) => {
         if (v !== videoRef.current) {
           v.pause()
-          v.currentTime = 0.1
+          v.currentTime = 0
         }
       })
 
@@ -638,12 +579,10 @@ function VideoContentCard({ item }: { item: ContentItem }) {
       videoRef.current
         .play()
         .then(() => {
-          console.log("✅ Video started playing")
           setIsPlaying(true)
         })
         .catch((error) => {
           console.error("❌ Error playing video:", error)
-          setVideoError(true)
         })
     }
   }
@@ -651,14 +590,8 @@ function VideoContentCard({ item }: { item: ContentItem }) {
   const handleVideoEnd = () => {
     setIsPlaying(false)
     if (videoRef.current) {
-      videoRef.current.currentTime = 0.1
+      videoRef.current.currentTime = 0
     }
-  }
-
-  const handleVideoError = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
-    console.error("❌ Video error:", e.currentTarget.error)
-    setVideoError(true)
-    setVideoLoaded(false)
   }
 
   const handleDownload = async (e: React.MouseEvent) => {
@@ -666,7 +599,6 @@ function VideoContentCard({ item }: { item: ContentItem }) {
     e.stopPropagation()
 
     if (isDownloading) return
-
     setIsDownloading(true)
 
     try {
@@ -702,12 +634,11 @@ function VideoContentCard({ item }: { item: ContentItem }) {
       }
 
       const filename = `${item.title?.replace(/[^\w\s]/gi, "") || "video"}.mp4`
-
-      const success = await startDirectDownload(proxiedVideoUrl, filename)
+      const success = await startDirectDownload(item.fileUrl, filename)
 
       if (!success) {
         const link = document.createElement("a")
-        link.href = proxiedVideoUrl
+        link.href = item.fileUrl
         link.download = filename
         link.target = "_blank"
         link.style.display = "none"
@@ -723,7 +654,6 @@ function VideoContentCard({ item }: { item: ContentItem }) {
       })
     } catch (error) {
       console.error("Download failed:", error)
-
       toast({
         title: "Download Error",
         description: "There was an issue starting your download. Please try again.",
@@ -732,10 +662,6 @@ function VideoContentCard({ item }: { item: ContentItem }) {
     } finally {
       setIsDownloading(false)
     }
-  }
-
-  const handleThumbnailError = () => {
-    setThumbnailError(true)
   }
 
   useEffect(() => {
@@ -767,7 +693,7 @@ function VideoContentCard({ item }: { item: ContentItem }) {
           isHovered ? "border border-white/50" : "border border-transparent"
         }`}
       >
-        {proxiedVideoUrl && !videoError ? (
+        {item.fileUrl ? (
           <video
             ref={videoRef}
             className="w-full h-full object-cover"
@@ -775,27 +701,17 @@ function VideoContentCard({ item }: { item: ContentItem }) {
             muted
             playsInline
             controls={false}
-            onError={handleVideoError}
-            style={{ display: videoLoaded ? "block" : "none" }}
+            poster={item.thumbnailUrl}
           >
-            <source src={proxiedVideoUrl} type="video/mp4" />
+            <source src={item.fileUrl} type="video/mp4" />
             Your browser does not support the video tag.
           </video>
-        ) : null}
-
-        {(!videoLoaded || videoError) && (
+        ) : (
           <div className="absolute inset-0 bg-zinc-800 flex items-center justify-center">
-            {!videoError ? (
-              <div className="text-center">
-                <div className="w-4 h-4 border border-zinc-600 border-t-white rounded-full animate-spin mx-auto mb-2" />
-                <p className="text-xs text-zinc-500">Loading...</p>
-              </div>
-            ) : (
-              <div className="text-center">
-                <Play className="w-8 h-8 text-zinc-600 mx-auto mb-2" />
-                <p className="text-xs text-zinc-500">Video unavailable</p>
-              </div>
-            )}
+            <div className="text-center">
+              <Play className="w-8 h-8 text-zinc-600 mx-auto mb-2" />
+              <p className="text-xs text-zinc-500">Video unavailable</p>
+            </div>
           </div>
         )}
 
@@ -806,7 +722,7 @@ function VideoContentCard({ item }: { item: ContentItem }) {
         >
           <button
             onClick={handlePlayPause}
-            disabled={!proxiedVideoUrl || videoError || !videoLoaded}
+            disabled={!item.fileUrl}
             className="bg-white/20 backdrop-blur-sm rounded-full p-2 transition-transform duration-300 hover:scale-110 disabled:opacity-50"
             aria-label={isPlaying ? "Pause video" : "Play video"}
           >
@@ -818,7 +734,7 @@ function VideoContentCard({ item }: { item: ContentItem }) {
           </button>
         </div>
 
-        {proxiedVideoUrl && !videoError && videoLoaded && (
+        {item.fileUrl && (
           <button
             onClick={handleDownload}
             disabled={isDownloading || (user && hasReachedLimit && !isProUser)}
