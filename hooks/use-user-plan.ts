@@ -5,7 +5,6 @@ import { doc, getDoc, updateDoc, setDoc, Timestamp, increment } from "firebase/f
 import { db } from "@/lib/firebase"
 import { useAuth } from "@/contexts/auth-context"
 
-// Define plan types
 export type UserPlan = "free" | "creator_pro"
 
 export interface UserPlanData {
@@ -21,7 +20,6 @@ export function useUserPlan() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Fetch user plan data
   useEffect(() => {
     const fetchUserPlan = async () => {
       if (!user) {
@@ -33,7 +31,6 @@ export function useUserPlan() {
       try {
         setLoading(true)
 
-        // First check membership status API for most accurate data
         const membershipResponse = await fetch("/api/membership-status", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -44,48 +41,30 @@ export function useUserPlan() {
 
         if (membershipResponse.ok) {
           const membershipData = await membershipResponse.json()
-
-          // Check if subscription is expired
-          let isExpired = false
-          if (membershipData.currentPeriodEnd) {
-            const endDate = new Date(membershipData.currentPeriodEnd)
-            const now = new Date()
-            isExpired = now > endDate
-          }
-
-          // Only use creator_pro if active and not expired
-          if (membershipData.plan === "creator_pro" && membershipData.isActive && !isExpired) {
+          // Simple check - if membership is active, user is pro
+          if (membershipData.isActive) {
             finalPlan = "creator_pro"
           }
         }
 
-        // Fallback to user document if membership API fails
-        if (finalPlan === "free") {
+        if (finalPlan === "creator_pro") {
+          setPlanData({
+            plan: finalPlan,
+            downloads: 0,
+            downloadsLimit: Number.POSITIVE_INFINITY,
+            lastReset: null,
+          })
+        } else {
+          // Free user - get download tracking from user document
           const userDocRef = doc(db, "users", user.uid)
           const userDoc = await getDoc(userDocRef)
 
           if (userDoc.exists()) {
             const userData = userDoc.data()
-            const userPlan = userData.plan === "pro" ? "creator_pro" : userData.plan || "free"
-
-            // Check expiration for legacy subscriptions
-            if (userPlan === "creator_pro" && userData.subscriptionCurrentPeriodEnd) {
-              const endDate = new Date(userData.subscriptionCurrentPeriodEnd)
-              const now = new Date()
-              const isExpired = now > endDate
-
-              if (!isExpired) {
-                finalPlan = "creator_pro"
-              }
-            } else if (userPlan === "creator_pro" && !userData.subscriptionCurrentPeriodEnd) {
-              // Legacy pro without expiration date - assume expired
-              finalPlan = "free"
-            }
-
             setPlanData({
-              plan: finalPlan,
+              plan: "free",
               downloads: userData.downloads || 0,
-              downloadsLimit: finalPlan === "creator_pro" ? Number.POSITIVE_INFINITY : 25,
+              downloadsLimit: 25,
               lastReset: userData.lastReset ? userData.lastReset.toDate() : null,
             })
           } else {
@@ -108,14 +87,6 @@ export function useUserPlan() {
               lastReset: new Date(),
             })
           }
-        } else {
-          // Pro user from membership API
-          setPlanData({
-            plan: finalPlan,
-            downloads: 0, // Pro users don't track downloads
-            downloadsLimit: Number.POSITIVE_INFINITY,
-            lastReset: null,
-          })
         }
 
         setError(null)
@@ -136,18 +107,14 @@ export function useUserPlan() {
     fetchUserPlan()
   }, [user])
 
-  // Calculate if user has reached their download limit - this is used by all components
   const hasReachedLimit = !!(planData && planData.plan === "free" && planData.downloads >= planData.downloadsLimit)
 
-  // Function to increment download count and handle resets
   const recordDownload = useCallback(async () => {
     if (!user || !planData) return { success: false, message: "User not authenticated" }
 
-    // Creator Pro users don't need to track downloads
     if (planData.plan === "creator_pro") return { success: true }
 
     try {
-      // CRITICAL: Check if user has reached their limit BEFORE incrementing
       if (planData.downloads >= planData.downloadsLimit) {
         return {
           success: false,
@@ -156,38 +123,27 @@ export function useUserPlan() {
       }
 
       const userDocRef = doc(db, "users", user.uid)
-
-      // Check if we need to reset downloads (new month)
       const now = new Date()
       const lastReset = planData.lastReset
 
       if (lastReset && (lastReset.getMonth() !== now.getMonth() || lastReset.getFullYear() !== now.getFullYear())) {
-        // Reset for new month
         await updateDoc(userDocRef, {
-          downloads: 1, // Set to 1 because we're counting this download
+          downloads: 1,
           lastReset: Timestamp.now(),
         })
 
-        // Update local state immediately
         setPlanData((prev) => (prev ? { ...prev, downloads: 1, lastReset: now } : null))
-
         return { success: true }
       }
 
-      // Increment download count
       await updateDoc(userDocRef, {
         downloads: increment(1),
       })
 
-      // Update local state immediately to prevent race conditions
       setPlanData((prev) => {
         if (!prev) return null
-
         const newDownloads = prev.downloads + 1
-        return {
-          ...prev,
-          downloads: newDownloads,
-        }
+        return { ...prev, downloads: newDownloads }
       })
 
       return { success: true }
@@ -207,6 +163,6 @@ export function useUserPlan() {
     isProUser: planData?.plan === "creator_pro",
     recordDownload,
     remainingDownloads: planData ? Math.max(0, planData.downloadsLimit - planData.downloads) : 0,
-    hasReachedLimit, // Export this value for all components to use
+    hasReachedLimit,
   }
 }

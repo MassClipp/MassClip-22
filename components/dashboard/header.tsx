@@ -47,36 +47,9 @@ export default function DashboardHeader() {
         }
 
         let isPro = false
-
         if (membershipResponse?.ok) {
           const membershipData = await membershipResponse.json()
-
-          // Check if subscription is expired
-          let isExpired = false
-          if (membershipData.currentPeriodEnd) {
-            const endDate = new Date(membershipData.currentPeriodEnd)
-            const now = new Date()
-            isExpired = now > endDate
-          }
-
-          isPro = membershipData.plan === "creator_pro" && membershipData.isActive && !isExpired
-        } else if (userDoc.exists()) {
-          const userData = userDoc.data()
-          const userPlan = userData.plan === "pro" ? "creator_pro" : userData.plan
-          const subscriptionPlan = userData.subscriptionPlan === "pro" ? "creator_pro" : userData.subscriptionPlan
-
-          // Check expiration for legacy subscriptions
-          let isExpired = false
-          if (userData.subscriptionCurrentPeriodEnd) {
-            const endDate = new Date(userData.subscriptionCurrentPeriodEnd)
-            const now = new Date()
-            isExpired = now > endDate
-          }
-
-          isPro =
-            (userPlan === "creator_pro" || subscriptionPlan === "creator_pro") &&
-            (userData.subscriptionStatus === "active" || userData.plan === "creator_pro") &&
-            !isExpired
+          isPro = membershipData.isActive
         }
 
         setIsProUser(isPro)

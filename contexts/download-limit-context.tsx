@@ -29,12 +29,10 @@ export function DownloadLimitProvider({ children }: { children: ReactNode }) {
   const [refreshCounter, setRefreshCounter] = useState(0)
   const [loading, setLoading] = useState(true)
 
-  // Force a refresh of the limit status
   const forceRefresh = useCallback(() => {
     setRefreshCounter((prev) => prev + 1)
   }, [])
 
-  // Set up a real-time listener for user plan data
   useEffect(() => {
     if (!user) {
       setHasReachedLimit(false)
@@ -48,7 +46,6 @@ export function DownloadLimitProvider({ children }: { children: ReactNode }) {
 
     const checkSubscriptionStatus = async () => {
       try {
-        // Check membership status first
         const membershipResponse = await fetch("/api/membership-status", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -59,33 +56,8 @@ export function DownloadLimitProvider({ children }: { children: ReactNode }) {
 
         if (membershipResponse.ok) {
           const membershipData = await membershipResponse.json()
-
-          // Check if subscription is expired
-          let isExpired = false
-          if (membershipData.currentPeriodEnd) {
-            const endDate = new Date(membershipData.currentPeriodEnd)
-            const now = new Date()
-            isExpired = now > endDate
-          }
-
-          isPro = membershipData.plan === "creator_pro" && membershipData.isActive && !isExpired
-        }
-
-        // Fallback to user document
-        if (!isPro) {
-          const userDocRef = doc(db, "users", user.uid)
-          const userDoc = await getDoc(userDocRef)
-
-          if (userDoc.exists()) {
-            const userData = userDoc.data()
-            const userPlan = userData?.plan === "pro" ? "creator_pro" : userData?.plan
-
-            if (userPlan === "creator_pro" && userData.subscriptionCurrentPeriodEnd) {
-              const endDate = new Date(userData.subscriptionCurrentPeriodEnd)
-              const now = new Date()
-              isPro = now <= endDate
-            }
-          }
+          // Simple check - if membership is active, user is pro
+          isPro = membershipData.isActive
         }
 
         setIsProUser(isPro)
@@ -123,7 +95,6 @@ export function DownloadLimitProvider({ children }: { children: ReactNode }) {
     const unsubscribe = onSnapshot(
       userDocRef,
       () => {
-        // Re-check subscription status when user document changes
         checkSubscriptionStatus()
       },
       (error) => {
