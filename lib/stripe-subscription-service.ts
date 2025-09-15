@@ -67,10 +67,9 @@ export async function getStripeSubscriptionStatus(userId: string): Promise<Strip
     const isWithinPeriod = now <= currentPeriodEnd
     const isCanceled = subscription.cancel_at_period_end || subscription.status === "canceled"
 
-    // If subscription is canceled or past due, it's not active
-    const isActive = isActiveInStripe && isWithinPeriod && !subscription.cancel_at_period_end
+    const isActive = isActiveInStripe && isWithinPeriod
 
-    if (!isActive || subscription.status === "canceled" || subscription.cancel_at_period_end) {
+    if (!isActive || subscription.status === "canceled") {
       await adminDb
         .collection("memberships")
         .doc(userId)
@@ -93,6 +92,14 @@ export async function getStripeSubscriptionStatus(userId: string): Promise<Strip
           updatedAt: new Date().toISOString(),
         })
       }
+    } else {
+      await adminDb.collection("memberships").doc(userId).update({
+        isActive: true,
+        status: subscription.status,
+        plan: "creator_pro",
+        cancelAtPeriodEnd: subscription.cancel_at_period_end,
+        updatedAt: new Date().toISOString(),
+      })
     }
 
     return {
