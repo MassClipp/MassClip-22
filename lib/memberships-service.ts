@@ -53,48 +53,35 @@ const PRO_FEATURES: MembershipFeatures = {
 export async function getMembership(uid: string): Promise<MembershipDoc | null> {
   try {
     console.log("🔄 Getting membership for uid:", uid.substring(0, 8) + "...")
+
+    const { getStripeSubscriptionStatus } = await import("./stripe-subscription-service")
+    const stripeStatus = await getStripeSubscriptionStatus(uid)
+
+    // If Stripe says the subscription is inactive, return null (free user)
+    if (!stripeStatus.isActive) {
+      console.log("ℹ️ Stripe subscription inactive - user is free tier")
+      return null
+    }
+
     const docRef = adminDb.collection("memberships").doc(uid)
     const docSnap = await docRef.get()
 
     if (docSnap.exists) {
       const data = docSnap.data() as MembershipDoc
 
-      const now = new Date()
-      let isExpired = false
-
-      if (data.currentPeriodEnd) {
-        const endDate = data.currentPeriodEnd instanceof Date ? data.currentPeriodEnd : new Date(data.currentPeriodEnd)
-        isExpired = now > endDate
-
-        if (isExpired) {
-          console.log("⚠️ Subscription expired:", {
-            currentPeriodEnd: endDate.toISOString(),
-            now: now.toISOString(),
-          })
-
-          // Update the membership to reflect expired status
-          await docRef.update({
-            status: "inactive",
-            isActive: false,
-            updatedAt: FieldValue.serverTimestamp(),
-          })
-
-          // Return the updated data
-          return {
-            ...data,
-            status: "inactive",
-            isActive: false,
-          }
-        }
+      const updatedData = {
+        ...data,
+        status: stripeStatus.status as MembershipStatus,
+        isActive: stripeStatus.isActive,
+        currentPeriodEnd: stripeStatus.currentPeriodEnd,
       }
 
-      console.log("✅ Found existing membership:", {
-        plan: data.plan,
-        status: data.status,
-        isActive: data.isActive,
-        expired: isExpired,
+      console.log("✅ Found existing membership with Stripe validation:", {
+        plan: updatedData.plan,
+        status: updatedData.status,
+        isActive: updatedData.isActive,
       })
-      return data
+      return updatedData
     }
 
     console.log("ℹ️ No membership found - user is free tier")
