@@ -40,7 +40,7 @@ export function SalesForecastCard() {
             <Target className="h-5 w-5 text-zinc-400" />
             <CardTitle className="text-zinc-200">Revenue Forecast</CardTitle>
           </div>
-          <CardDescription>Next 7 days projection</CardDescription>
+          <CardDescription>7-day projection based on past week sales</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <Skeleton className="h-8 w-24" />
@@ -96,7 +96,7 @@ export function SalesForecastCard() {
 
   const chartData =
     Array.isArray(forecast.chartData) && forecast.chartData.length > 0
-      ? forecast.chartData.slice(-7) // Only show last 7 days
+      ? forecast.chartData.slice(-14) // Show last 14 days (7 past + 7 projected)
       : []
 
   if (chartData.length === 0) {
@@ -109,7 +109,7 @@ export function SalesForecastCard() {
               <CardTitle className="text-zinc-200">Revenue Forecast</CardTitle>
             </div>
           </div>
-          <CardDescription>Next 7 days projection</CardDescription>
+          <CardDescription>7-day projection based on past week sales</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="text-center py-8">
@@ -136,7 +136,7 @@ export function SalesForecastCard() {
             </span>
           </div>
         </div>
-        <CardDescription>Next 7 days projection</CardDescription>
+        <CardDescription>Next 7 days projected from past week performance</CardDescription>
       </CardHeader>
       <CardContent className="p-0">
         <div className="h-64 w-full" style={{ width: "100%", height: "256px" }}>
@@ -179,7 +179,10 @@ export function SalesForecastCard() {
                   day: "numeric",
                 })
               }}
-              formatter={(value: any) => [formatCurrency(value), "Revenue"]}
+              formatter={(value: any, name: string, props: any) => [
+                formatCurrency(value),
+                props.payload?.isProjected ? "Projected Revenue" : "Actual Revenue",
+              ]}
             />
             <Line
               type="monotone"
@@ -193,7 +196,7 @@ export function SalesForecastCard() {
                     cx={cx}
                     cy={cy}
                     r={4}
-                    fill="#ffffff"
+                    fill={payload?.isProjected ? "#ffffff80" : "#ffffff"}
                     strokeWidth={2}
                     stroke="#18181b"
                     style={{
@@ -225,7 +228,7 @@ export function SalesForecastCard() {
 
         <div className="flex items-center justify-center gap-1 p-4">
           <Activity className="h-3 w-3 text-green-500 animate-pulse" />
-          <span className="text-xs text-green-500">Live Stripe data</span>
+          <span className="text-xs text-green-500">Based on past week sales data</span>
         </div>
       </CardContent>
     </Card>

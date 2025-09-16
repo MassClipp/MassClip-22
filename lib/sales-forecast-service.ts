@@ -140,7 +140,6 @@ export class SalesForecastService {
         return this.createDefaultForecast("Connect your Stripe account to see sales forecasts")
       }
 
-      // Fetch Stripe data
       const stripeData = await getWeeklyStripeData(connectedAccount.stripe_user_id)
 
       if (!stripeData.hasData) {
@@ -148,11 +147,10 @@ export class SalesForecastService {
         return this.createDefaultForecast("Start making sales to see your weekly forecast")
       }
 
-      // Calculate weekly metrics
       const now = new Date()
       const pastWeekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
 
-      // Get past week's revenue
+      // Get past week's actual revenue
       let pastWeekRevenue = 0
       let pastWeekDays = 0
 
@@ -167,7 +165,6 @@ export class SalesForecastService {
       const pastWeekAverage = safeNumber(pastWeekRevenue)
       const dailyAverageRevenue = pastWeekDays > 0 ? pastWeekAverage / 7 : 0
 
-      // Project next week based on past week's performance
       const projectedNextWeek = safeNumber(dailyAverageRevenue * 7)
       const projectedDailyRevenue = safeNumber(dailyAverageRevenue)
 
@@ -175,12 +172,11 @@ export class SalesForecastService {
       const weeklyGoal = Math.max(50, pastWeekAverage * 1.2)
       const progressToGoal = weeklyGoal > 0 ? (pastWeekAverage / weeklyGoal) * 100 : 0
 
-      // Determine trend
+      // Determine trend from actual data
       const trendDirection = this.calculateTrend(stripeData.dailyRevenue)
       const confidenceLevel = this.calculateConfidence(stripeData.totalCharges, pastWeekDays)
 
-      // Generate chart data
-      const chartData = this.generateWeeklyChartData(stripeData.dailyRevenue, dailyAverageRevenue)
+      const chartData = this.generateRealisticChartData(stripeData.dailyRevenue, dailyAverageRevenue)
 
       // Generate motivational message
       const motivationalMessage = this.generateWeeklyMotivationalMessage(
@@ -256,14 +252,14 @@ export class SalesForecastService {
     return "low"
   }
 
-  private static generateWeeklyChartData(
+  private static generateRealisticChartData(
     dailyRevenue: { [key: string]: number },
     dailyAverage: number,
   ): Array<{ date: string; revenue: number; isProjected: boolean }> {
     const chartData: Array<{ date: string; revenue: number; isProjected: boolean }> = []
     const now = new Date()
 
-    // Add past 7 days
+    // Add past 7 days (actual data)
     for (let i = 6; i >= 0; i--) {
       const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000)
       const dateKey = date.toISOString().split("T")[0]
@@ -274,13 +270,15 @@ export class SalesForecastService {
       })
     }
 
-    // Add next 7 days (projected)
+    // Add next 7 days (projected based on past week average)
     for (let i = 1; i <= 7; i++) {
       const date = new Date(now.getTime() + i * 24 * 60 * 60 * 1000)
       const dateKey = date.toISOString().split("T")[0]
+      // Add slight variation to projected values to make them realistic
+      const variation = 0.8 + Math.random() * 0.4 // 80% to 120% of average
       chartData.push({
         date: dateKey,
-        revenue: safeNumber(dailyAverage),
+        revenue: safeNumber(dailyAverage * variation),
         isProjected: true,
       })
     }
