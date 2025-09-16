@@ -12,7 +12,6 @@ import { useToast } from "@/hooks/use-toast"
 import { useDownloadLimit } from "@/contexts/download-limit-context"
 import ImageCard from "@/components/image-card"
 import AudioCard from "@/components/audio-card"
-import PremiumContentSection from "@/components/premium-content-section"
 
 interface CreatorData {
   uid: string
@@ -373,13 +372,38 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
             <div className="flex items-center justify-center py-16 sm:py-24">
               <div className="w-6 h-6 border border-zinc-800 border-t-white rounded-full animate-spin"></div>
             </div>
-          ) : activeTab === "premium" ? (
-            <PremiumContentSection creatorId={creator.uid} creatorUsername={creator.username} isOwner={false} />
           ) : filteredContent.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 sm:gap-6 justify-items-center">
-              {filteredContent.map((item) => (
-                <ContentCard key={item.id} item={item} />
-              ))}
+            <div
+              className={
+                activeTab === "premium"
+                  ? "flex flex-col items-center gap-6 sm:grid sm:grid-cols-3 sm:gap-8 sm:justify-items-center"
+                  : "grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 sm:gap-6 justify-items-center"
+              }
+            >
+              {filteredContent.map((item) =>
+                activeTab === "premium" ? (
+                  <div key={item.id} className="w-full max-w-[180px] sm:max-w-[200px]">
+                    <div className="relative aspect-[9/16] bg-zinc-900 rounded-lg overflow-hidden mb-2">
+                      <div className="absolute inset-0 bg-zinc-800 flex items-center justify-center">
+                        <div className="text-center">
+                          <Package className="w-8 h-8 text-zinc-600 mx-auto mb-2" />
+                          <p className="text-xs text-zinc-500">Bundle unavailable</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <h3
+                        className="text-white text-xs sm:text-sm font-medium line-clamp-2 leading-tight"
+                        title={item.title}
+                      >
+                        {item.title}
+                      </h3>
+                    </div>
+                  </div>
+                ) : (
+                  <ContentCard key={item.id} item={item} />
+                ),
+              )}
             </div>
           ) : (
             <div className="text-center py-16 sm:py-24">
@@ -685,26 +709,17 @@ function VideoContentCard({ item }: { item: ContentItem }) {
           isHovered ? "border border-white/50" : "border border-transparent"
         }`}
       >
-        {item.fileUrl ? (
-          <video
-            ref={videoRef}
-            className="w-full h-full object-cover"
-            preload="metadata"
-            muted
-            playsInline
-            controls={false}
-          >
-            <source src={item.fileUrl} type="video/mp4" />
-            Your browser does not support the video tag.
-          </video>
-        ) : (
-          <div className="absolute inset-0 bg-zinc-800 flex items-center justify-center">
-            <div className="text-center">
-              <Play className="w-8 h-8 text-zinc-600 mx-auto mb-2" />
-              <p className="text-xs text-zinc-500">Video unavailable</p>
-            </div>
-          </div>
-        )}
+        <video
+          ref={videoRef}
+          className="w-full h-full object-cover"
+          preload="metadata"
+          muted
+          playsInline
+          controls={false}
+        >
+          <source src={item.fileUrl} type="video/mp4" />
+          Your browser does not support the video tag.
+        </video>
 
         <div
           className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-200 ${
