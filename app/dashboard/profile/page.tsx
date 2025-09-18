@@ -274,6 +274,7 @@ export default function ProfilePage() {
         <TabsList className="bg-zinc-800/50 border border-zinc-700/50">
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="membership">Membership</TabsTrigger>
+          <TabsTrigger value="security">Security</TabsTrigger>
         </TabsList>
 
         <TabsContent value="profile">
@@ -708,6 +709,42 @@ export default function ProfilePage() {
                   </div>
                 </div>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="security">
+          <Card className="bg-zinc-900/60 border-zinc-800/50 backdrop-blur-sm">
+            <CardHeader>
+              <CardTitle className="text-xl font-semibold">Security Settings</CardTitle>
+              <CardDescription>Manage your account security and password</CardDescription>
+            </CardHeader>
+
+            <CardContent className="space-y-6">
+              <div className="text-center py-8">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-zinc-800/50 flex items-center justify-center">
+                  <svg className="w-8 h-8 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                    />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-medium text-white mb-2">Security Center</h3>
+                <p className="text-zinc-400 mb-6">
+                  Access comprehensive security settings including password management, account protection, and security
+                  tips.
+                </p>
+
+                <Button
+                  onClick={() => router.push("/dashboard/security")}
+                  className="bg-white hover:bg-gray-100 text-black font-medium px-6"
+                >
+                  Go to Security Settings
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
