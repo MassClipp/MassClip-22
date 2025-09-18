@@ -568,21 +568,9 @@ export default function FreeContentPage() {
 
           <div className="flex items-center justify-between mb-4 p-4 bg-zinc-800/30 rounded-lg border border-zinc-700/50">
             <div className="text-sm text-zinc-300">
-              {selectedUploadIds.length > 0
-                ? `${selectedUploadIds.length} item(s) selected`
-                : "Select content to add to your library"}
+              {selectedUploadIds.length > 0 && `${selectedUploadIds.length} item(s) selected`}
             </div>
             <div className="flex gap-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowAddContentDialog(false)
-                  setSelectedUploadIds([])
-                }}
-                className="border-zinc-700/50 bg-zinc-800/50 hover:bg-zinc-700/50 text-zinc-300"
-              >
-                Cancel
-              </Button>
               <Button
                 onClick={handleAddToLibrary}
                 disabled={selectedUploadIds.length === 0}
