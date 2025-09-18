@@ -88,10 +88,13 @@ export default function PremiumVideoCard({
           <video
             ref={videoRef}
             className="w-full h-full object-cover"
-            preload="metadata"
+            preload="auto"
             onClick={togglePlay}
             onEnded={() => setIsPlaying(false)}
             poster={thumbnailUrl}
+            playsInline
+            muted
+            webkit-playsinline="true"
           >
             <source src={fileUrl} type="video/mp4" />
           </video>

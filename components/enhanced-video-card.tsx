@@ -196,10 +196,11 @@ export default function EnhancedVideoCard({
           <video
             ref={videoRef}
             className="absolute inset-0 w-full h-full object-cover z-10"
-            preload="metadata"
+            preload="auto"
             onEnded={() => setIsPlaying(false)}
             muted
             playsInline
+            webkit-playsinline="true"
           >
             <source src={fileUrl} type={mimeType} />
           </video>
