@@ -49,6 +49,8 @@ export default function EnhancedVideoCard({
       video.muted = true
       video.playsInline = true
       video.preload = "metadata"
+      video.setAttribute("webkit-playsinline", "true")
+      video.setAttribute("playsinline", "true")
 
       video.onloadedmetadata = () => {
         // Seek to 1 second or 10% of video duration, whichever is smaller
@@ -67,12 +69,17 @@ export default function EnhancedVideoCard({
           canvas.width = video.videoWidth || 320
           canvas.height = video.videoHeight || 180
 
-          // Draw video frame to canvas
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+          try {
+            // Draw video frame to canvas
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
 
-          // Convert to data URL
-          const thumbnailDataUrl = canvas.toDataURL("image/jpeg", 0.8)
-          setGeneratedThumbnail(thumbnailDataUrl)
+            // Convert to data URL with Safari-compatible format
+            const thumbnailDataUrl = canvas.toDataURL("image/jpeg", 0.8)
+            setGeneratedThumbnail(thumbnailDataUrl)
+          } catch (canvasError) {
+            console.error("Canvas drawing error (Safari compatibility):", canvasError)
+            setThumbnailError(true)
+          }
 
           // Clean up
           video.remove()
@@ -82,9 +89,19 @@ export default function EnhancedVideoCard({
         }
       }
 
-      video.onerror = () => {
-        console.error("Error loading video for thumbnail")
+      video.onerror = (error) => {
+        console.error("Error loading video for thumbnail:", error)
         setThumbnailError(true)
+      }
+
+      video.onloadstart = () => {
+        // Set a timeout for Safari in case it hangs
+        setTimeout(() => {
+          if (!generatedThumbnail && !thumbnailError) {
+            console.warn("Thumbnail generation timeout - Safari compatibility issue")
+            setThumbnailError(true)
+          }
+        }, 5000)
       }
 
       video.src = fileUrl
@@ -93,7 +110,7 @@ export default function EnhancedVideoCard({
     // Small delay to ensure DOM is ready
     const timer = setTimeout(generateThumbnail, 100)
     return () => clearTimeout(timer)
-  }, [fileUrl, generatedThumbnail, thumbnailUrl])
+  }, [fileUrl, generatedThumbnail, thumbnailUrl, thumbnailError])
 
   // Handle play/pause
   const togglePlay = (e: React.MouseEvent) => {
@@ -170,6 +187,7 @@ export default function EnhancedVideoCard({
             onError={() => setThumbnailError(true)}
             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
             priority={false}
+            crossOrigin="anonymous"
           />
         </div>
 

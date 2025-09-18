@@ -570,6 +570,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
                   className="hidden"
                   onLoad={handleThumbnailLoad}
                   crossOrigin="anonymous"
+                  referrerPolicy="no-referrer-when-downgrade"
                 />
               </div>
             )}
