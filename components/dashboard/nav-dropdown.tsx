@@ -109,7 +109,7 @@ export function NavDropdown() {
   }, [user])
 
   return (
-    <div className="md:hidden">
+    <div className="">
       <DropdownMenu open={open} onOpenChange={setOpen}>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="sm" className="gap-2 hover:bg-zinc-800/50 transition-colors duration-200">
@@ -125,32 +125,7 @@ export function NavDropdown() {
         >
           <ScrollArea className="max-h-[70vh]">
             <div className="p-2">
-              <div className="mb-3 space-y-2">
-                {isProUser && (
-                  <div className="flex items-center justify-center py-2">
-                    <div className="relative">
-                      <div className="flex items-center justify-center px-3 py-1.5 bg-gradient-to-r from-blue-500 via-blue-600 to-blue-700 rounded-full shadow-lg border border-blue-400/30">
-                        <span className="text-xs font-bold text-white tracking-wide">PRO</span>
-                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent rounded-full animate-pulse"></div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {username && (
-                  <Link
-                    href={`/creator/${username}`}
-                    target="_blank"
-                    onClick={() => setOpen(false)}
-                    className="flex items-center gap-3 px-2 py-2 text-sm rounded-lg transition-all duration-200 hover:bg-zinc-800/50 hover:text-white text-zinc-300 border border-zinc-700/50 hover:border-zinc-600/50"
-                  >
-                    <User className="h-4 w-4" />
-                    View Profile
-                  </Link>
-                )}
-              </div>
-
-              {isProUser || username ? <Separator className="mb-3 bg-zinc-800/50" /> : null}
+              <div className="mb-3 space-y-2">{/* PRO badge and View Profile removed for desktop */}</div>
 
               {navigationSections.map((section, sectionIndex) => (
                 <div key={section.title} aria-label={section.title}>
