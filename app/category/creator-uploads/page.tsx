@@ -135,11 +135,12 @@ export default function CreatorUploadsPage() {
           >
             {visibleVideos.map((video, index) => (
               <motion.div key={video.uri || index} variants={itemVariants}>
+                {/* Video card component would go here - using placeholder for now */}
                 <EnhancedVideoCard
                   id={video.uri || video.id || index.toString()}
                   title={video.name || video.title || "Untitled"}
                   fileUrl={video.link || video.fileUrl || ""}
-                  thumbnailUrl={video.thumbnailUrl || video.thumbnail}
+                  thumbnailUrl={video.thumbnailUrl}
                   fileSize={video.fileSize}
                   mimeType={video.mimeType || "video/mp4"}
                   aspectRatio="video"
