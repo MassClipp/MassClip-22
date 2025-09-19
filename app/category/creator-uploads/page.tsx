@@ -65,37 +65,28 @@ export default function CreatorUploadsPage() {
   const [visibleVideos, setVisibleVideos] = useState<any[]>([])
 
   useEffect(() => {
-    console.log("[v0] CreatorUploadsPage - Raw creatorUploads data:", creatorUploads)
-    console.log("[v0] CreatorUploadsPage - Loading state:", creatorUploadsLoading)
+    console.log("[v0] CreatorUploadsPage - creatorUploads data:", creatorUploads)
+    console.log("[v0] CreatorUploadsPage - loading state:", creatorUploadsLoading)
   }, [creatorUploads, creatorUploadsLoading])
 
   // Filter and shuffle videos when data loads
   useEffect(() => {
-    if (creatorUploads && creatorUploads.length > 0) {
-      console.log("[v0] CreatorUploadsPage - Processing videos, total count:", creatorUploads.length)
+    console.log("[v0] CreatorUploadsPage - Processing videos, count:", creatorUploads?.length || 0)
 
+    if (creatorUploads && creatorUploads.length > 0) {
       // Filter for video content only
       const filteredVideos = creatorUploads.filter((video) => {
         const contentType = detectCreatorUploadContentType(video)
-        console.log(
-          "[v0] CreatorUploadsPage - Video:",
-          video.name || video.title,
-          "Type:",
-          contentType,
-          "URL:",
-          video.link || video.fileUrl,
-        )
+        console.log("[v0] Video content type:", contentType, "for video:", video.title || video.name)
         return contentType === "video"
       })
 
-      console.log("[v0] CreatorUploadsPage - Filtered videos count:", filteredVideos.length)
+      console.log("[v0] Filtered videos count:", filteredVideos.length)
 
       // Shuffle and set all videos (no limit on this page)
       const shuffledVideos = shuffleArray([...filteredVideos], Math.random())
       setVisibleVideos(shuffledVideos)
-      console.log("[v0] CreatorUploadsPage - Final visible videos count:", shuffledVideos.length)
-    } else {
-      console.log("[v0] CreatorUploadsPage - No creator uploads data available")
+      console.log("[v0] Final visible videos count:", shuffledVideos.length)
     }
   }, [creatorUploads])
 
