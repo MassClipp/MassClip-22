@@ -237,22 +237,13 @@ const LandingPage = () => {
             <div>
               <h3 className="text-black font-light text-lg mb-4">Resources</h3>
               <div className="space-y-3">
-                <Link
-                  href="/resources/free-content"
-                  className="block text-gray-600 hover:text-black transition-colors font-light"
-                >
+                <Link href="/blog" className="block text-gray-600 hover:text-black transition-colors font-light">
                   How to use free content
                 </Link>
-                <Link
-                  href="/resources/optimize-storefront"
-                  className="block text-gray-600 hover:text-black transition-colors font-light"
-                >
+                <Link href="/blog" className="block text-gray-600 hover:text-black transition-colors font-light">
                   How to optimize your storefront
                 </Link>
-                <Link
-                  href="/resources/organize-bundles"
-                  className="block text-gray-600 hover:text-black transition-colors font-light"
-                >
+                <Link href="/blog" className="block text-gray-600 hover:text-black transition-colors font-light">
                   How to organize your bundles
                 </Link>
               </div>
