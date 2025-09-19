@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { useProfileInitialization } from "@/hooks/use-profile-initialization"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -20,6 +20,8 @@ import {
   Gift,
   ShoppingBag,
   Link,
+  Wifi,
+  WifiOff,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
@@ -35,6 +37,7 @@ export default function DashboardPage() {
   const { toast } = useToast()
 
   const [refreshing, setRefreshing] = useState(false)
+  const [isOnline, setIsOnline] = useState(typeof navigator !== "undefined" ? navigator.onLine : true)
 
   const [checkedTasks, setCheckedTasks] = useState({
     stripe: false,
@@ -44,21 +47,27 @@ export default function DashboardPage() {
     socialBio: false,
   })
 
-  // Use API-based video statistics (avoids Firestore index issues)
   const videoStats = useVideoStatsAPI()
 
-  // Manual refresh function
   const handleRefresh = async () => {
+    if (!navigator.onLine) {
+      toast({
+        title: "Offline",
+        description: "Please check your internet connection and try again",
+        variant: "destructive",
+      })
+      return
+    }
+
     setRefreshing(true)
     try {
       await videoStats.refetch()
-      // Force refresh by reloading the page
       window.location.reload()
     } catch (error) {
       console.error("Error refreshing data:", error)
       toast({
         title: "Error",
-        description: "Failed to refresh data",
+        description: "Failed to refresh data. Please try again.",
         variant: "destructive",
       })
     } finally {
@@ -94,18 +103,34 @@ export default function DashboardPage() {
 
   const resolvedUserId = user?.uid || username || user?.email?.split("@")[0] || ""
 
-  // Show loading state while profile is being initialized or stats are loading
+  useEffect(() => {
+    const handleOnlineStatusChange = () => {
+      setIsOnline(navigator.onLine)
+    }
+
+    window.addEventListener("online", handleOnlineStatusChange)
+    window.addEventListener("offline", handleOnlineStatusChange)
+
+    return () => {
+      window.removeEventListener("online", handleOnlineStatusChange)
+      window.removeEventListener("offline", handleOnlineStatusChange)
+    }
+  }, [])
+
   if (isInitializing || videoStats.loading) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <Skeleton className="h-8 w-48 mb-2" />
-            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-9 w-64 mb-2" />
+            <Skeleton className="h-5 w-48 mb-2" />
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-3 w-3 rounded-full" />
+              <Skeleton className="h-3 w-20" />
+            </div>
           </div>
           <div className="flex gap-3">
-            <Skeleton className="h-10 w-32" />
-            <Skeleton className="h-10 w-32" />
+            <Skeleton className="h-10 w-28" />
           </div>
         </div>
 
@@ -113,33 +138,95 @@ export default function DashboardPage() {
           {Array.from({ length: 3 }).map((_, i) => (
             <Card key={i} className="bg-zinc-900/50 border-zinc-800/50">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-4 w-28" />
                 <Skeleton className="h-4 w-4" />
               </CardHeader>
               <CardContent>
-                <Skeleton className="h-8 w-16 mb-1" />
-                <Skeleton className="h-3 w-20" />
+                <Skeleton className="h-8 w-20 mb-2" />
+                <Skeleton className="h-3 w-32 mb-1" />
+                <Skeleton className="h-3 w-24" />
               </CardContent>
             </Card>
           ))}
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <Card className="bg-zinc-900/50 border-zinc-800/50">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Skeleton className="h-5 w-5" />
+                    <Skeleton className="h-6 w-28" />
+                  </div>
+                  <Skeleton className="h-4 w-16" />
+                </div>
+                <Skeleton className="h-4 w-48" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-64 w-full" />
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="space-y-6">
+            <Card className="bg-zinc-900/50 border-zinc-800/50">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Skeleton className="h-5 w-5" />
+                      <Skeleton className="h-6 w-28" />
+                    </div>
+                    <Skeleton className="h-4 w-40" />
+                  </div>
+                  <div className="text-right">
+                    <Skeleton className="h-4 w-8 mb-1" />
+                    <Skeleton className="h-3 w-16" />
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Skeleton className="h-2 w-full" />
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="flex items-center space-x-3">
+                    <Skeleton className="h-4 w-4" />
+                    <Skeleton className="h-4 w-4" />
+                    <Skeleton className="h-4 w-32" />
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
     )
   }
 
-  // Show error state if profile initialization failed
   if (error && !videoStats.loading) {
+    const isNetworkError = !navigator.onLine || error.includes("network") || error.includes("fetch")
+
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <Card className="w-full max-w-md bg-zinc-900/50 border-zinc-800/50">
           <CardHeader>
-            <CardTitle className="text-red-400">Dashboard Error</CardTitle>
-            <CardDescription>There was an issue loading your dashboard</CardDescription>
+            <div className="flex items-center gap-2">
+              {isNetworkError ? (
+                <WifiOff className="h-5 w-5 text-red-400" />
+              ) : (
+                <Activity className="h-5 w-5 text-red-400" />
+              )}
+              <CardTitle className="text-red-400">{isNetworkError ? "Connection Error" : "Dashboard Error"}</CardTitle>
+            </div>
+            <CardDescription>
+              {isNetworkError ? "Unable to connect to the server" : "There was an issue loading your dashboard"}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-zinc-400 mb-4">{error}</p>
             <div className="space-y-2">
               <Button onClick={() => window.location.reload()} className="w-full">
+                <RefreshCw className="h-4 w-4 mr-2" />
                 Try Again
               </Button>
               <Button
@@ -147,8 +234,17 @@ export default function DashboardPage() {
                 variant="outline"
                 className="w-full border-zinc-700 hover:bg-zinc-800"
               >
+                <Upload className="h-4 w-4 mr-2" />
                 Go to Upload
               </Button>
+              {isNetworkError && (
+                <div className="mt-4 p-3 bg-yellow-900/20 border border-yellow-800/50 rounded-lg">
+                  <p className="text-sm text-yellow-400">
+                    <Wifi className="h-4 w-4 inline mr-1" />
+                    Check your internet connection and try again
+                  </p>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -158,21 +254,29 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Creator Dashboard</h1>
           <p className="text-zinc-400">Welcome back, {user?.displayName || username || "Creator"}</p>
           <div className="flex items-center gap-2 mt-1">
-            <Activity className="h-3 w-3 text-green-500" />
-            <span className="text-xs text-green-500">Live Data</span>
+            {isOnline ? (
+              <>
+                <Activity className="h-3 w-3 text-green-500" />
+                <span className="text-xs text-green-500">Live Data</span>
+              </>
+            ) : (
+              <>
+                <WifiOff className="h-3 w-3 text-red-500" />
+                <span className="text-xs text-red-500">Offline</span>
+              </>
+            )}
           </div>
         </div>
         <div className="flex gap-3">
           <Button
             onClick={handleRefresh}
             variant="outline"
-            disabled={refreshing}
+            disabled={refreshing || !isOnline}
             className="border-zinc-700 hover:bg-zinc-800 bg-transparent"
           >
             {refreshing ? (
@@ -190,7 +294,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Stats Grid */}
       <div className="grid gap-4 md:grid-cols-3">
         <SalesMetricsNew />
 
@@ -231,15 +334,12 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Main Content Grid */}
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Financial Forecast - Replaces Sales Performance */}
         <div className="lg:col-span-2">
           <SalesForecastCard />
         </div>
 
         <div className="space-y-6">
-          {/* Creator Checklist - Replaces Content Library */}
           <Card className="bg-gradient-to-br from-zinc-900/50 to-zinc-800/30 border-zinc-700/50">
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -259,7 +359,6 @@ export default function DashboardPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Progress bar */}
               <div className="w-full bg-zinc-800 rounded-full h-2">
                 <div
                   className="bg-gradient-to-r from-white to-gray-300 h-2 rounded-full transition-all duration-300"
@@ -267,7 +366,6 @@ export default function DashboardPage() {
                 />
               </div>
 
-              {/* Task list */}
               <div className="space-y-3">
                 <div className="flex items-center space-x-3">
                   <Checkbox
@@ -375,7 +473,6 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          {/* Quick Actions - Moved below checklist */}
           <Card className="bg-zinc-900/50 border-zinc-800/50">
             <CardHeader>
               <CardTitle>Quick Actions</CardTitle>
