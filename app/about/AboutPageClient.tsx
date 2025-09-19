@@ -23,8 +23,8 @@ export default function AboutPageClient() {
 
           {/* Center Navigation */}
           <div className="hidden md:flex items-center space-x-8">
-            <Link href="/pricing" className="text-white/80 hover:text-white transition-colors font-light">
-              Pricing
+            <Link href="/dashboard/upgrade" className="text-white/80 hover:text-white transition-colors font-light">
+              Upgrade
             </Link>
             <Link href="/explore" className="text-white/80 hover:text-white transition-colors font-light">
               Explore

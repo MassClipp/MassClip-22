@@ -86,7 +86,7 @@ const LandingPage = () => {
                 </h1>
 
                 <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
-                  Welcome to a simple way to monetize, sell, and get paid for your faceless content.
+                  Welcome to a smarter way to monetize, sell, and get paid for your faceless content.
                 </p>
 
                 <div className="flex flex-col sm:flex-row gap-4 pt-4">
