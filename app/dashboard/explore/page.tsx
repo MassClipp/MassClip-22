@@ -1201,7 +1201,7 @@ function InlineVideoRow({
               {isRefreshing ? "Refreshing..." : "Refresh"}
             </Button>
           )}
-          {hasMore && !isCreatorUploads && (
+          {hasMore && (
             <Link
               href={linkPath}
               className="text-zinc-400 hover:text-white flex items-center group bg-zinc-900/30 hover:bg-zinc-900/50 px-3 py-1 rounded-full transition-all duration-300"
@@ -1593,7 +1593,7 @@ export default function ExplorePage() {
         <motion.div variants={containerVariants} initial="hidden" animate="visible">
           <motion.div variants={itemVariants}>
             {creatorUploads && creatorUploads.length > 0 ? (
-              <InlineVideoRow title="Creator Uploads" videos={creatorUploads} limit={20} isCreatorUploads={true} />
+              <InlineVideoRow title="Creator Uploads" videos={creatorUploads} limit={10} isCreatorUploads={true} />
             ) : (
               <div className="px-6 py-4 bg-zinc-900/30 rounded-xl">
                 <h3 className="text-lg font-light text-white mb-2">Creator Uploads</h3>
