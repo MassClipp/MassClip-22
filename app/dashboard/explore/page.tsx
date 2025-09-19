@@ -1031,6 +1031,8 @@ function InlineVideoRow({
   showcaseId,
   isCreatorUploads = false,
   onRefresh,
+  linkPath, // Added linkPath prop
+  buttonText, // Added buttonText prop
 }: {
   title: string
   videos: any[]
@@ -1039,6 +1041,8 @@ function InlineVideoRow({
   showcaseId?: string
   isCreatorUploads?: boolean
   onRefresh?: () => void
+  linkPath?: string // Added linkPath prop type
+  buttonText?: string // Added buttonText prop type
 }) {
   const [visibleVideos, setVisibleVideos] = useState<any[]>([])
   const [isIntersecting, setIsIntersecting] = useState(false)
@@ -1054,10 +1058,10 @@ function InlineVideoRow({
   const slug = encodeURIComponent(title.toLowerCase().replace(/\s+/g, "-"))
 
   // Determine the correct link path based on whether this is a showcase or tag
-  const linkPath = isShowcase && showcaseId ? `/showcase/${showcaseId}` : `/category/${slug}`
+  const effectiveLinkPath = linkPath || (isShowcase && showcaseId ? `/showcase/${showcaseId}` : `/category/${slug}`)
 
   // Determine button text based on category name
-  const buttonText = title.toLowerCase() === "browse all" ? "Browse all" : "See all"
+  const effectiveButtonText = buttonText || (title.toLowerCase() === "browse all" ? "Browse all" : "See all")
 
   // Handle manual refresh for creator uploads
   const handleRefresh = async () => {
@@ -1203,10 +1207,10 @@ function InlineVideoRow({
           )}
           {hasMore && (
             <Link
-              href={linkPath}
+              href={effectiveLinkPath}
               className="text-zinc-400 hover:text-white flex items-center group bg-zinc-900/30 hover:bg-zinc-900/50 px-3 py-1 rounded-full transition-all duration-300"
             >
-              <span className="mr-1 text-sm">{buttonText}</span>
+              <span className="mr-1 text-sm">{effectiveButtonText}</span>
               <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
             </Link>
           )}
@@ -1593,7 +1597,14 @@ export default function ExplorePage() {
         <motion.div variants={containerVariants} initial="hidden" animate="visible">
           <motion.div variants={itemVariants}>
             {creatorUploads && creatorUploads.length > 0 ? (
-              <InlineVideoRow title="Creator Uploads" videos={creatorUploads} limit={10} isCreatorUploads={true} />
+              <InlineVideoRow
+                title="Creator Uploads"
+                videos={creatorUploads}
+                limit={10}
+                isCreatorUploads={true}
+                linkPath="/category/creator-uploads"
+                buttonText="See all"
+              />
             ) : (
               <div className="px-6 py-4 bg-zinc-900/30 rounded-xl">
                 <h3 className="text-lg font-light text-white mb-2">Creator Uploads</h3>

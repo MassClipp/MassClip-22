@@ -222,7 +222,7 @@ export default function DashboardHeader({ initialSearchQuery = "" }: DashboardHe
               variant="ghost"
               className="w-full text-zinc-400 hover:text-white hover:bg-zinc-900/50 rounded-lg px-4 py-2 transition-all duration-300 flex items-center justify-center gap-2"
             >
-              <Heart className="h-4 w-4" />
+              <Heart className="h-4 w-4 mr-2" />
               Favorites
             </Button>
           </div>
@@ -233,7 +233,63 @@ export default function DashboardHeader({ initialSearchQuery = "" }: DashboardHe
       {isMobileMenuOpen && (
         <div className="md:hidden border-t border-zinc-800/50">
           <div className="container mx-auto px-4 py-4">
-            <UserDropdown />
+            <nav className="space-y-2">
+              <Button
+                onClick={() => {
+                  router.push("/dashboard")
+                  setIsMobileMenuOpen(false)
+                }}
+                variant="ghost"
+                className="w-full justify-start text-zinc-400 hover:text-white hover:bg-zinc-900/50"
+              >
+                Dashboard
+              </Button>
+              <Button
+                onClick={() => {
+                  router.push("/dashboard/explore")
+                  setIsMobileMenuOpen(false)
+                }}
+                variant="ghost"
+                className="w-full justify-start text-zinc-400 hover:text-white hover:bg-zinc-900/50"
+              >
+                Explore
+              </Button>
+              <Button
+                onClick={() => {
+                  router.push("/dashboard/favorites")
+                  setIsMobileMenuOpen(false)
+                }}
+                variant="ghost"
+                className="w-full justify-start text-zinc-400 hover:text-white hover:bg-zinc-900/50"
+              >
+                <Heart className="h-4 w-4 mr-2" />
+                Favorites
+              </Button>
+              <Button
+                onClick={() => {
+                  router.push("/dashboard/upload")
+                  setIsMobileMenuOpen(false)
+                }}
+                variant="ghost"
+                className="w-full justify-start text-zinc-400 hover:text-white hover:bg-zinc-900/50"
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                Upload
+              </Button>
+              {username && (
+                <Button
+                  onClick={() => {
+                    window.open(`/creator/${username}`, "_blank")
+                    setIsMobileMenuOpen(false)
+                  }}
+                  variant="ghost"
+                  className="w-full justify-start text-zinc-400 hover:text-white hover:bg-zinc-900/50"
+                >
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  View Profile
+                </Button>
+              )}
+            </nav>
           </div>
         </div>
       )}
