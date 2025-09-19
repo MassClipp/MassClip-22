@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
 import { useCreatorUploads } from "@/hooks/use-creator-uploads"
 import { shuffleArray } from "@/lib/utils"
+import EnhancedVideoCard from "@/components/enhanced-video-card"
 
 // Inline VideoSkeleton component
 function VideoSkeleton() {
@@ -134,10 +135,16 @@ export default function CreatorUploadsPage() {
           >
             {visibleVideos.map((video, index) => (
               <motion.div key={video.uri || index} variants={itemVariants}>
-                {/* Video card component would go here - using placeholder for now */}
-                <div className="bg-zinc-900/30 rounded-lg p-4 aspect-[9/16]">
-                  <div className="text-sm text-white truncate">{video.name || video.title || "Untitled"}</div>
-                </div>
+                <EnhancedVideoCard
+                  id={video.uri || video.id || index.toString()}
+                  title={video.name || video.title || "Untitled"}
+                  fileUrl={video.link || video.fileUrl || ""}
+                  thumbnailUrl={video.thumbnailUrl || video.thumbnail}
+                  fileSize={video.fileSize}
+                  mimeType={video.mimeType || "video/mp4"}
+                  aspectRatio="video"
+                  showControls={true}
+                />
               </motion.div>
             ))}
           </motion.div>
