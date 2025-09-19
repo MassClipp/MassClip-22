@@ -66,7 +66,19 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
       provider.addScope("email")
       provider.addScope("profile")
 
-      const result = await signInWithPopup(auth, provider)
+      let result
+      try {
+        result = await signInWithPopup(auth, provider)
+      } catch (popupError: any) {
+        if (popupError.code === "auth/popup-blocked") {
+          // Fallback to redirect method
+          setError("Popup blocked. Redirecting to Google sign-in...")
+          const { signInWithRedirect } = await import("firebase/auth")
+          await signInWithRedirect(auth, provider)
+          return // signInWithRedirect doesn't return a result immediately
+        }
+        throw popupError // Re-throw other errors
+      }
 
       if (result.user) {
         console.log("Google login successful:", result.user.email)
@@ -88,11 +100,11 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
       if (error.code === "auth/popup-closed-by-user") {
         setError("Sign-in was cancelled")
       } else if (error.code === "auth/popup-blocked") {
-        setError("Popup was blocked. Please allow popups and try again.")
+        setError("Popup was blocked. Please allow popups and try again, or we'll redirect you to Google.")
       } else if (error.code === "auth/unauthorized-domain") {
         setError("This domain is not authorized for Google sign-in. Please contact support.")
       } else {
-        setError("Failed to sign in with Google. Please try again.")
+        setError("Unable to sign in with Google. Please try email login or contact support if the issue persists.")
       }
     } finally {
       setGoogleLoading(false)
@@ -180,7 +192,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                     />
                   </svg>
                 )}
-                <span>{googleLoading ? "Signing in..." : "Continue with Google"}</span>
+                <span>{googleLoading ? "Signing in..." : "Sign in with Google"}</span>
               </Button>
 
               {/* Divider */}
