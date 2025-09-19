@@ -72,7 +72,7 @@ export default function DashboardHeader({ initialSearchQuery = "" }: DashboardHe
     <header className="sticky top-0 z-50 w-full border-b border-zinc-800/50 bg-black/80 backdrop-blur-sm">
       <div className="container mx-auto px-4">
         <div className="flex h-16 items-center justify-between">
-          {/* Left Section - Logo with PRO badge */}
+          {/* Left Section - Logo without PRO badge */}
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"
@@ -85,16 +85,6 @@ export default function DashboardHeader({ initialSearchQuery = "" }: DashboardHe
 
             <div className="flex items-center gap-2">
               <Logo href="/dashboard" size="sm" className="scale-75 md:scale-100" />
-
-              {isProUser && (
-                <div className="relative">
-                  <div className="flex items-center justify-center w-8 h-5 bg-gradient-to-r from-blue-500 via-blue-600 to-blue-700 rounded-full shadow-lg border border-blue-400/30">
-                    <span className="text-[10px] font-bold text-white tracking-wide">PRO</span>
-                    {/* Subtle shine effect */}
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent rounded-full animate-pulse"></div>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
 

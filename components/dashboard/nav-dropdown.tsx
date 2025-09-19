@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { usePathname } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -22,6 +22,10 @@ import {
   Shield,
   ChevronDown,
 } from "lucide-react"
+import { useAuth } from "@/contexts/auth-context"
+import { useUserPlan } from "@/hooks/use-user-plan"
+import { doc, getDoc } from "firebase/firestore"
+import { db } from "@/lib/firebase"
 
 interface NavItem {
   title: string
@@ -82,6 +86,27 @@ const HamburgerIcon = ({ className }: { className?: string }) => (
 export function NavDropdown() {
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
+  const { user } = useAuth()
+  const { isProUser } = useUserPlan()
+  const [username, setUsername] = useState<string | null>(null)
+
+  useEffect(() => {
+    const fetchUserData = async () => {
+      if (user) {
+        try {
+          const userDoc = await getDoc(doc(db, "users", user.uid))
+          if (userDoc.exists()) {
+            const userData = userDoc.data()
+            setUsername(userData.username || null)
+          }
+        } catch (error) {
+          console.error("Error fetching user data:", error)
+        }
+      }
+    }
+
+    fetchUserData()
+  }, [user])
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -93,14 +118,39 @@ export function NavDropdown() {
         </Button>
       </DropdownMenuTrigger>
 
-      {/* Increase z-index and allow vertical overflow so lower sections are reachable */}
       <DropdownMenuContent
         className="w-56 p-0 bg-zinc-900/95 backdrop-blur-sm border-zinc-800/50 shadow-2xl overflow-y-auto z-50"
         align="start"
       >
-        {/* Increase the scrollable area height so Business/Settings are visible without clipping */}
         <ScrollArea className="max-h-[70vh]">
           <div className="p-2">
+            <div className="mb-3 space-y-2">
+              {isProUser && (
+                <div className="flex items-center justify-center py-2">
+                  <div className="relative">
+                    <div className="flex items-center justify-center px-3 py-1.5 bg-gradient-to-r from-blue-500 via-blue-600 to-blue-700 rounded-full shadow-lg border border-blue-400/30">
+                      <span className="text-xs font-bold text-white tracking-wide">PRO</span>
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent rounded-full animate-pulse"></div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {username && (
+                <Link
+                  href={`/creator/${username}`}
+                  target="_blank"
+                  onClick={() => setOpen(false)}
+                  className="flex items-center gap-3 px-2 py-2 text-sm rounded-lg transition-all duration-200 hover:bg-zinc-800/50 hover:text-white text-zinc-300 border border-zinc-700/50 hover:border-zinc-600/50"
+                >
+                  <User className="h-4 w-4" />
+                  View Profile
+                </Link>
+              )}
+            </div>
+
+            {isProUser || username ? <Separator className="mb-3 bg-zinc-800/50" /> : null}
+
             {navigationSections.map((section, sectionIndex) => (
               <div key={section.title} aria-label={section.title}>
                 <div className="px-2 py-1.5 text-xs font-semibold text-zinc-400 uppercase tracking-wider">
