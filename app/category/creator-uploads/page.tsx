@@ -61,7 +61,7 @@ function detectCreatorUploadContentType(video: any): "video" | "audio" | "image"
 
 export default function CreatorUploadsPage() {
   const router = useRouter()
-  const { creatorUploads, loading: creatorUploadsLoading } = useCreatorUploads()
+  const { videos: creatorUploads, loading: creatorUploadsLoading } = useCreatorUploads()
   const [visibleVideos, setVisibleVideos] = useState<any[]>([])
 
   useEffect(() => {
