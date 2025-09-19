@@ -66,19 +66,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
       provider.addScope("email")
       provider.addScope("profile")
 
-      let result
-      try {
-        result = await signInWithPopup(auth, provider)
-      } catch (popupError: any) {
-        if (popupError.code === "auth/popup-blocked") {
-          // Fallback to redirect method
-          setError("Popup blocked. Redirecting to Google sign-in...")
-          const { signInWithRedirect } = await import("firebase/auth")
-          await signInWithRedirect(auth, provider)
-          return // signInWithRedirect doesn't return a result immediately
-        }
-        throw popupError // Re-throw other errors
-      }
+      const result = await signInWithPopup(auth, provider)
 
       if (result.user) {
         console.log("Google login successful:", result.user.email)
@@ -99,12 +87,8 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
       console.error("Google login error:", error)
       if (error.code === "auth/popup-closed-by-user") {
         setError("Sign-in was cancelled")
-      } else if (error.code === "auth/popup-blocked") {
-        setError("Popup was blocked. Please allow popups and try again, or we'll redirect you to Google.")
-      } else if (error.code === "auth/unauthorized-domain") {
-        setError("This domain is not authorized for Google sign-in. Please contact support.")
       } else {
-        setError("Unable to sign in with Google. Please try email login or contact support if the issue persists.")
+        setError("Unable to sign in with Google. Please try again.")
       }
     } finally {
       setGoogleLoading(false)
@@ -184,7 +168,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                     />
                     <path
                       fill="#FBBC05"
-                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
                     />
                     <path
                       fill="#EA4335"
