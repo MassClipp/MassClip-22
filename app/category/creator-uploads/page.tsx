@@ -151,16 +151,16 @@ export default function CreatorUploadsPage() {
                   id={video.id || video.uri || index.toString()}
                   title={video.title || video.name || "Untitled"}
                   fileUrl={video.fileUrl || video.link || video.url || ""}
-                  thumbnailUrl={video.thumbnailUrl || video.thumbnail}
                   fileSize={video.size || video.fileSize || 0}
                   mimeType={video.mimeType || video.type || "video/mp4"}
                   aspectRatio="video"
                   showControls={true}
-                  creatorName={video.creatorName || `Creator ${video.uid?.slice(-4) || "Unknown"}`}
-                  creatorId={video.uid}
+                  creatorName={video.creatorDisplayName || video.creatorName || video.displayName || "Unknown Creator"}
+                  creatorId={video.creatorUid || video.uid}
                   onCreatorClick={() => {
-                    if (video.uid) {
-                      router.push(`/creator/${video.uid}`)
+                    const creatorId = video.creatorUid || video.uid
+                    if (creatorId) {
+                      router.push(`/creator/${creatorId}`)
                     }
                   }}
                 />
