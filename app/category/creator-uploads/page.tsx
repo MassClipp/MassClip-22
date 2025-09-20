@@ -145,21 +145,24 @@ export default function CreatorUploadsPage() {
             className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-4"
           >
             {visibleVideos.map((video, index) => (
-              <motion.div key={video.uri || index} variants={itemVariants}>
+              <motion.div key={video.id || video.uri || index} variants={itemVariants}>
                 {/* Video card component would go here - using placeholder for now */}
                 <EnhancedVideoCard
-                  id={video.uri || video.id || index.toString()}
-                  title={video.name || video.title || "Untitled"}
-                  fileUrl={video.link || video.fileUrl || video.url || ""}
+                  id={video.id || video.uri || index.toString()}
+                  title={video.title || video.name || "Untitled"}
+                  fileUrl={video.fileUrl || video.link || video.url || ""}
                   thumbnailUrl={video.thumbnailUrl || video.thumbnail}
-                  fileSize={video.fileSize || video.size}
-                  mimeType={video.mimeType || video.contentType || "video/mp4"}
+                  fileSize={video.size || video.fileSize || 0}
+                  mimeType={video.mimeType || video.type || "video/mp4"}
                   aspectRatio="video"
                   showControls={true}
-                  uid={video.uid}
-                  creatorName={video.creatorName || video.userDisplayName}
-                  username={video.username}
-                  userDisplayName={video.userDisplayName}
+                  creatorName={video.creatorName || `Creator ${video.uid?.slice(-4) || "Unknown"}`}
+                  creatorId={video.uid}
+                  onCreatorClick={() => {
+                    if (video.uid) {
+                      router.push(`/creator/${video.uid}`)
+                    }
+                  }}
                 />
               </motion.div>
             ))}
