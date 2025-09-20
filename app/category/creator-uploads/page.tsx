@@ -156,6 +156,10 @@ export default function CreatorUploadsPage() {
                   mimeType={video.mimeType || video.contentType || "video/mp4"}
                   aspectRatio="video"
                   showControls={true}
+                  uid={video.uid}
+                  creatorName={video.creatorName || video.userDisplayName}
+                  username={video.username}
+                  userDisplayName={video.userDisplayName}
                 />
               </motion.div>
             ))}

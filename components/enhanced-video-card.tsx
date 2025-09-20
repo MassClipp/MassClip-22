@@ -4,7 +4,9 @@ import type React from "react"
 import { useState, useRef, useEffect } from "react"
 import { Play, Pause, Download, Heart } from "lucide-react"
 import { formatFileSize } from "@/lib/utils"
-import Image from "next/image"
+import { useRouter } from "next/navigation"
+import { db } from "@/lib/firebase"
+import { doc, getDoc } from "firebase/firestore"
 
 interface EnhancedVideoCardProps {
   id: string
@@ -17,6 +19,10 @@ interface EnhancedVideoCardProps {
   className?: string
   aspectRatio?: "video" | "square" | "wide"
   showControls?: boolean
+  uid?: string
+  creatorName?: string
+  username?: string
+  userDisplayName?: string
 }
 
 export default function EnhancedVideoCard({
@@ -30,6 +36,10 @@ export default function EnhancedVideoCard({
   className = "",
   aspectRatio = "video",
   showControls = true,
+  uid,
+  creatorName,
+  username,
+  userDisplayName,
 }: EnhancedVideoCardProps) {
   const [isHovered, setIsHovered] = useState(false)
   const [isFavorite, setIsFavorite] = useState(false)
@@ -37,11 +47,59 @@ export default function EnhancedVideoCard({
   const [generatedThumbnail, setGeneratedThumbnail] = useState<string | null>(null)
   const [thumbnailError, setThumbnailError] = useState(false)
   const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false)
+  const [creatorUsername, setCreatorUsername] = useState<string | null>(null)
+  const [creatorDisplayName, setCreatorDisplayName] = useState<string | null>(null)
+  const [isLoadingCreatorData, setIsLoadingCreatorData] = useState(true)
   const videoRef = useRef<HTMLVideoElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const router = useRouter()
 
   useEffect(() => {
-    if (!fileUrl || generatedThumbnail || thumbnailUrl || isGeneratingThumbnail) return
+    const fetchCreatorData = async () => {
+      setIsLoadingCreatorData(true)
+
+      if (!uid) {
+        // Fallback to existing data if no UID
+        setCreatorUsername(username || creatorName?.toLowerCase().replace(/\s+/g, "") || "unknown")
+        setCreatorDisplayName(userDisplayName || creatorName || "Creator")
+        setIsLoadingCreatorData(false)
+        return
+      }
+
+      try {
+        // Get the user document directly by UID for most current data
+        const userDocRef = doc(db, "users", uid)
+        const userDoc = await getDoc(userDocRef)
+
+        if (userDoc.exists()) {
+          const userData = userDoc.data()
+
+          // Use the current data from Firestore - prioritize username, fallback to displayName
+          const currentUsername =
+            userData.username || userData.displayName?.toLowerCase().replace(/\s+/g, "") || "unknown"
+          const currentDisplayName = userData.displayName || userData.username || "Creator"
+
+          setCreatorUsername(currentUsername)
+          setCreatorDisplayName(currentDisplayName)
+        } else {
+          // Fallback to existing data
+          setCreatorUsername(username || creatorName?.toLowerCase().replace(/\s+/g, "") || "unknown")
+          setCreatorDisplayName(userDisplayName || creatorName || "Creator")
+        }
+      } catch (error) {
+        console.error("Error fetching creator data:", error)
+        // Fallback to existing data
+        setCreatorUsername(username || creatorName?.toLowerCase().replace(/\s+/g, "") || "unknown")
+        setCreatorDisplayName(userDisplayName || creatorName || "Creator")
+      } finally {
+        setIsLoadingCreatorData(false)
+      }
+    }
+
+    fetchCreatorData()
+  }, [uid, username, creatorName, userDisplayName, id])
+
+  useEffect(() => {
+    if (!fileUrl || generatedThumbnail || isGeneratingThumbnail) return
 
     const generateThumbnail = async () => {
       setIsGeneratingThumbnail(true)
@@ -99,7 +157,15 @@ export default function EnhancedVideoCard({
     // Small delay to ensure DOM is ready
     const timer = setTimeout(generateThumbnail, 100)
     return () => clearTimeout(timer)
-  }, [fileUrl, generatedThumbnail, thumbnailUrl, isGeneratingThumbnail])
+  }, [fileUrl, generatedThumbnail, isGeneratingThumbnail])
+
+  const handleCreatorClick = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    const username = creatorUsername || "unknown"
+    router.push(`/creator/${username}`)
+  }
 
   // Handle play/pause
   const togglePlay = (e: React.MouseEvent) => {
@@ -154,9 +220,7 @@ export default function EnhancedVideoCard({
   const aspectRatioClass =
     aspectRatio === "square" ? "aspect-square" : aspectRatio === "wide" ? "aspect-video" : "aspect-[9/16]"
 
-  const displayThumbnail = thumbnailUrl || generatedThumbnail
-  const showThumbnailLoading =
-    !displayThumbnail && !thumbnailError && (isGeneratingThumbnail || (!thumbnailUrl && !generatedThumbnail))
+  const displayThumbnail = generatedThumbnail
 
   return (
     <div className={`flex-shrink-0 w-full ${className}`}>
@@ -166,17 +230,9 @@ export default function EnhancedVideoCard({
         onMouseLeave={() => setIsHovered(false)}
         onClick={onClick}
       >
-        {/* Thumbnail Image - Show when available */}
-        {displayThumbnail && (
+        {displayThumbnail && !isPlaying && (
           <div className="absolute inset-0">
-            <Image
-              src={displayThumbnail || "/placeholder.svg"}
-              alt={title}
-              fill
-              className="object-cover"
-              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-              priority={false}
-            />
+            <img src={displayThumbnail || "/placeholder.svg"} alt={title} className="w-full h-full object-cover" />
           </div>
         )}
 
@@ -191,6 +247,16 @@ export default function EnhancedVideoCard({
         >
           <source src={fileUrl} type={mimeType} />
         </video>
+
+        {!isLoadingCreatorData && creatorDisplayName && (
+          <button
+            onClick={handleCreatorClick}
+            className="absolute top-2 right-2 bg-black/80 backdrop-blur-sm text-white text-xs px-2 py-1 rounded-full hover:bg-black/90 transition-all duration-200 z-30"
+            title={`Visit ${creatorDisplayName}'s storefront`}
+          >
+            @{creatorUsername}
+          </button>
+        )}
 
         {/* Border that appears on hover */}
         <div className="absolute inset-0 border border-white/0 group-hover:border-white/40 rounded-lg transition-all duration-200 z-20"></div>
@@ -236,16 +302,16 @@ export default function EnhancedVideoCard({
           </>
         )}
 
-        {showThumbnailLoading && (
+        {isGeneratingThumbnail && !displayThumbnail && (
           <div className="absolute inset-0 flex items-center justify-center bg-zinc-800 z-5">
             <div className="flex flex-col items-center gap-2">
               <div className="w-6 h-6 border-2 border-zinc-600 border-t-white rounded-full animate-spin"></div>
-              <span className="text-xs text-zinc-400">Generating thumbnail...</span>
+              <span className="text-xs text-zinc-400">Loading...</span>
             </div>
           </div>
         )}
 
-        {thumbnailError && !displayThumbnail && (
+        {thumbnailError && !displayThumbnail && !isGeneratingThumbnail && (
           <div className="absolute inset-0 flex items-center justify-center bg-zinc-800 z-5">
             <div className="flex flex-col items-center gap-2 text-center p-4">
               <Play className="h-8 w-8 text-zinc-400" />
@@ -260,9 +326,6 @@ export default function EnhancedVideoCard({
         <span className="text-xs text-zinc-400 truncate max-w-[70%]">{title}</span>
         {fileSize > 0 && <span className="text-xs text-zinc-400">{formatFileSize(fileSize)}</span>}
       </div>
-
-      {/* Hidden canvas for thumbnail generation */}
-      <canvas ref={canvasRef} className="hidden" />
     </div>
   )
 }
