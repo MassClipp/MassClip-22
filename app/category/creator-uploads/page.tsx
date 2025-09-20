@@ -150,10 +150,10 @@ export default function CreatorUploadsPage() {
                 <EnhancedVideoCard
                   id={video.uri || video.id || index.toString()}
                   title={video.name || video.title || "Untitled"}
-                  fileUrl={video.link || video.fileUrl || ""}
-                  thumbnailUrl={video.thumbnailUrl}
-                  fileSize={video.fileSize}
-                  mimeType={video.mimeType || "video/mp4"}
+                  fileUrl={video.link || video.fileUrl || video.url || ""}
+                  thumbnailUrl={video.thumbnailUrl || video.thumbnail}
+                  fileSize={video.fileSize || video.size}
+                  mimeType={video.mimeType || video.contentType || "video/mp4"}
                   aspectRatio="video"
                   showControls={true}
                 />

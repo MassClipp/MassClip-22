@@ -45,7 +45,6 @@ export default function EnhancedVideoCard({
 
     const generateThumbnail = () => {
       const video = document.createElement("video")
-      video.crossOrigin = "anonymous"
       video.muted = true
       video.playsInline = true
       video.preload = "metadata"
@@ -180,8 +179,8 @@ export default function EnhancedVideoCard({
             className="absolute inset-0 w-full h-full object-cover z-10"
             preload="metadata"
             onEnded={() => setIsPlaying(false)}
-            muted
             playsInline
+            controls={false}
           >
             <source src={fileUrl} type={mimeType} />
           </video>
@@ -234,7 +233,10 @@ export default function EnhancedVideoCard({
         {/* Loading indicator while generating thumbnail */}
         {!thumbnailUrl && !generatedThumbnail && !thumbnailError && (
           <div className="absolute inset-0 flex items-center justify-center bg-zinc-800 z-5">
-            <div className="w-6 h-6 border-2 border-zinc-600 border-t-white rounded-full animate-spin"></div>
+            <div className="flex flex-col items-center gap-2">
+              <div className="w-6 h-6 border-2 border-zinc-600 border-t-white rounded-full animate-spin"></div>
+              <span className="text-xs text-zinc-400">Loading...</span>
+            </div>
           </div>
         )}
       </div>
