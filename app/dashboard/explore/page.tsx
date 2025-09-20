@@ -1178,7 +1178,7 @@ function InlineVideoRow({
     return null
   }
 
-  const hasMore = videos.length > limit
+  const hasMore = !isCreatorUploads && videos.length > limit
 
   return (
     <section
@@ -1246,8 +1246,9 @@ function InlineVideoRow({
         )}
 
         <div
+          className="flex gap-4 px-6 overflow-x-auto scrollbar-hide scroll-smooth"
+          style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
           ref={scrollContainerRef}
-          className="flex overflow-x-auto scrollbar-hide gap-4 px-6 py-4"
           onScroll={handleManualScroll}
         >
           {isIntersecting
