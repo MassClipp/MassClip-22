@@ -61,8 +61,13 @@ export default function BundleContentManagePage() {
       }
 
       const data = await response.json()
-      setBundle(data.productBox)
-      setContent(data.productBox.detailedContentItems || [])
+      if (data.productBox) {
+        setBundle(data.productBox)
+        setContent(data.productBox.detailedContentItems || [])
+      } else {
+        setBundle(null)
+        setContent([])
+      }
     } catch (err) {
       console.error("Error fetching bundle content:", err)
       setError(err instanceof Error ? err.message : "Failed to fetch bundle content")
@@ -109,11 +114,9 @@ export default function BundleContentManagePage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-black text-white p-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
-            <span className="ml-2 text-zinc-400">Loading bundle content...</span>
-          </div>
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
+          <span className="ml-2 text-zinc-400">Loading bundle content...</span>
         </div>
       </div>
     )
@@ -122,17 +125,15 @@ export default function BundleContentManagePage() {
   if (error) {
     return (
       <div className="min-h-screen bg-black text-white p-6">
-        <div className="max-w-7xl mx-auto">
-          <Button onClick={() => router.back()} variant="ghost" className="mb-6 text-zinc-400 hover:text-white">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Bundles
+        <Button onClick={() => router.back()} variant="ghost" className="mb-6 text-zinc-400 hover:text-white">
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to Bundles
+        </Button>
+        <div className="text-center py-12">
+          <p className="text-red-400 mb-4">{error}</p>
+          <Button onClick={fetchBundleContent} variant="outline">
+            Try Again
           </Button>
-          <div className="text-center py-12">
-            <p className="text-red-400 mb-4">{error}</p>
-            <Button onClick={fetchBundleContent} variant="outline">
-              Try Again
-            </Button>
-          </div>
         </div>
       </div>
     )
@@ -140,93 +141,91 @@ export default function BundleContentManagePage() {
 
   return (
     <div className="min-h-screen bg-black text-white p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-4">
-            <Button onClick={() => router.back()} variant="ghost" className="text-zinc-400 hover:text-white">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Bundles
-            </Button>
-            <div>
-              <h1 className="text-2xl font-bold">{bundle?.title}</h1>
-              <p className="text-zinc-400 text-sm">{content.length} items in this bundle</p>
-            </div>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center gap-4">
+          <Button onClick={() => router.back()} variant="ghost" className="text-zinc-400 hover:text-white">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Bundles
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold">{bundle?.title}</h1>
+            <p className="text-zinc-400 text-sm">{content.length} items in this bundle</p>
           </div>
         </div>
+      </div>
 
-        {/* Content Grid */}
-        {content.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="text-4xl mb-4">📹</div>
-            <h3 className="text-xl font-semibold mb-2">No content in this bundle</h3>
-            <p className="text-zinc-400 mb-6">Add some content to get started</p>
-            <Button onClick={() => router.back()} className="bg-red-600 hover:bg-red-700">
-              <Plus className="h-4 w-4 mr-2" />
-              Add Content
-            </Button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-            {content.map((item) => (
-              <div key={item.id} className="group relative">
-                <div className="relative aspect-[9/16] bg-zinc-900 rounded-lg overflow-hidden shadow-md border border-transparent hover:border-white/20 transition-all duration-300">
-                  <button
-                    onClick={() => handleRemoveContent(item.id)}
-                    disabled={removeLoading === item.id}
-                    className="absolute top-2 right-2 z-30 w-6 h-6 bg-black/80 hover:bg-black rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 shadow-lg disabled:opacity-50"
-                    title="Remove from bundle"
-                  >
-                    {removeLoading === item.id ? (
-                      <Loader2 className="w-3 h-3 text-white animate-spin" />
-                    ) : (
-                      <X className="w-3 h-3 text-white" />
-                    )}
-                  </button>
-
-                  {item.contentType === "video" ? (
-                    <video
-                      src={item.fileUrl}
-                      className="w-full h-full object-cover cursor-pointer"
-                      muted
-                      preload="metadata"
-                      poster={item.thumbnailUrl}
-                      onMouseEnter={(e) => {
-                        const video = e.target as HTMLVideoElement
-                        video.play().catch(() => {})
-                      }}
-                      onMouseLeave={(e) => {
-                        const video = e.target as HTMLVideoElement
-                        video.pause()
-                        video.currentTime = 0
-                      }}
-                      onClick={() => window.open(item.fileUrl, "_blank")}
-                    />
+      {/* Content Grid */}
+      {content.length === 0 ? (
+        <div className="text-center py-12">
+          <div className="text-4xl mb-4">📹</div>
+          <h3 className="text-xl font-semibold mb-2">No content in this bundle</h3>
+          <p className="text-zinc-400 mb-6">Add some content to get started</p>
+          <Button onClick={() => router.back()} className="bg-red-600 hover:bg-red-700">
+            <Plus className="h-4 w-4 mr-2" />
+            Add Content
+          </Button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+          {content.map((item) => (
+            <div key={item.id} className="group relative">
+              <div className="relative aspect-[9/16] bg-zinc-900 rounded-lg overflow-hidden shadow-md border border-transparent hover:border-white/20 transition-all duration-300">
+                <button
+                  onClick={() => handleRemoveContent(item.id)}
+                  disabled={removeLoading === item.id}
+                  className="absolute top-2 right-2 z-30 w-6 h-6 bg-black/80 hover:bg-black rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 shadow-lg disabled:opacity-50"
+                  title="Remove from bundle"
+                >
+                  {removeLoading === item.id ? (
+                    <Loader2 className="w-3 h-3 text-white animate-spin" />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center cursor-pointer bg-zinc-800">
-                      <div className="text-center">
-                        <div className="text-2xl mb-1">
-                          {item.contentType === "audio" ? "🎵" : item.contentType === "image" ? "🖼️" : "📄"}
-                        </div>
+                    <X className="w-3 h-3 text-white" />
+                  )}
+                </button>
+
+                {item.contentType === "video" ? (
+                  <video
+                    src={item.fileUrl}
+                    className="w-full h-full object-cover cursor-pointer"
+                    muted
+                    preload="metadata"
+                    poster={item.thumbnailUrl}
+                    onMouseEnter={(e) => {
+                      const video = e.target as HTMLVideoElement
+                      video.play().catch(() => {})
+                    }}
+                    onMouseLeave={(e) => {
+                      const video = e.target as HTMLVideoElement
+                      video.pause()
+                      video.currentTime = 0
+                    }}
+                    onClick={() => window.open(item.fileUrl, "_blank")}
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center cursor-pointer bg-zinc-800">
+                    <div className="text-center">
+                      <div className="text-2xl mb-1">
+                        {item.contentType === "audio" ? "🎵" : item.contentType === "image" ? "🖼️" : "📄"}
                       </div>
                     </div>
-                  )}
+                  </div>
+                )}
 
-                  {/* Play overlay for videos */}
-                  {item.contentType === "video" && (
-                    <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
-                  )}
-                </div>
-
-                {/* File info */}
-                <div className="mt-2">
-                  <p className="text-xs text-zinc-300 truncate font-light">{item.title}</p>
-                </div>
+                {/* Play overlay for videos */}
+                {item.contentType === "video" && (
+                  <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
+                )}
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+
+              {/* File info */}
+              <div className="mt-2">
+                <p className="text-xs text-zinc-300 truncate font-light">{item.title}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
