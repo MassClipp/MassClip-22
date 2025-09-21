@@ -78,45 +78,76 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       console.log(`🔍 [Bundle Content API] contentItems:`, contentItems.length)
       console.log(`🔍 [Bundle Content API] content:`, content.length)
 
-      // Use whichever content array has data
       let finalContentItems = []
+      let contentIds = []
+
+      // Extract content IDs from whichever array has data
       if (detailedContentItems.length > 0) {
-        finalContentItems = detailedContentItems
-        console.log(`✅ [Bundle Content API] Using detailedContentItems (${finalContentItems.length} items)`)
-        console.log(
-          `🔍 [Bundle Content API] Sample detailedContentItem:`,
-          JSON.stringify(detailedContentItems[0], null, 2),
-        )
+        contentIds = detailedContentItems.map((item) => item.id || item)
+        console.log(`✅ [Bundle Content API] Using detailedContentItems IDs:`, contentIds)
       } else if (contentItems.length > 0) {
-        finalContentItems = contentItems.map((item, index) => ({
-          id: item.id || item,
-          title: item.title || `Video ${index + 1}`,
-          description: item.description || "",
-          contentType: "video",
-          thumbnailUrl: item.thumbnailUrl || "",
-          fileUrl: item.fileUrl || item.videoUrl || "",
-          downloadUrl: item.downloadUrl || item.fileUrl || "",
-          videoUrl: item.fileUrl || item.videoUrl || "",
-          ...item,
-        }))
-        console.log(`✅ [Bundle Content API] Using contentItems (${finalContentItems.length} items)`)
-        console.log(`🔍 [Bundle Content API] Sample contentItem:`, JSON.stringify(contentItems[0], null, 2))
-        console.log(`🔍 [Bundle Content API] Sample mapped item:`, JSON.stringify(finalContentItems[0], null, 2))
+        contentIds = contentItems.map((item) => item.id || item)
+        console.log(`✅ [Bundle Content API] Using contentItems IDs:`, contentIds)
       } else if (content.length > 0) {
-        finalContentItems = content.map((item, index) => ({
-          id: item.id || item,
-          title: item.title || `Video ${index + 1}`,
-          description: item.description || "",
-          contentType: "video",
-          thumbnailUrl: item.thumbnailUrl || "",
-          fileUrl: item.fileUrl || item.videoUrl || "",
-          downloadUrl: item.downloadUrl || item.fileUrl || "",
-          videoUrl: item.fileUrl || item.videoUrl || "",
-          ...item,
-        }))
-        console.log(`✅ [Bundle Content API] Using content (${finalContentItems.length} items)`)
-        console.log(`🔍 [Bundle Content API] Sample content item:`, JSON.stringify(content[0], null, 2))
-        console.log(`🔍 [Bundle Content API] Sample mapped item:`, JSON.stringify(finalContentItems[0], null, 2))
+        contentIds = content.map((item) => item.id || item)
+        console.log(`✅ [Bundle Content API] Using content IDs:`, contentIds)
+      }
+
+      // Fetch actual video documents from creatorUploads collection
+      if (contentIds.length > 0) {
+        console.log(`🔍 [Bundle Content API] Fetching ${contentIds.length} video documents...`)
+
+        try {
+          const videoPromises = contentIds.map(async (contentId) => {
+            const videoDoc = await db.collection("creatorUploads").doc(contentId).get()
+            if (videoDoc.exists) {
+              const videoData = videoDoc.data()
+              return {
+                id: contentId,
+                title: videoData.title || videoData.name || `Video ${contentId}`,
+                description: videoData.description || "",
+                contentType: "video",
+                thumbnailUrl: videoData.thumbnailUrl || videoData.thumbnail || "",
+                fileUrl: videoData.fileUrl || videoData.videoUrl || videoData.url || "",
+                downloadUrl: videoData.downloadUrl || videoData.fileUrl || "",
+                videoUrl: videoData.fileUrl || videoData.videoUrl || videoData.url || "",
+                duration: videoData.duration || 0,
+                size: videoData.size || 0,
+                createdAt: videoData.createdAt || null,
+                ...videoData,
+              }
+            } else {
+              console.log(`⚠️ [Bundle Content API] Video document not found: ${contentId}`)
+              return {
+                id: contentId,
+                title: `Video ${contentId}`,
+                description: "",
+                contentType: "video",
+                thumbnailUrl: "",
+                fileUrl: "",
+                downloadUrl: "",
+                videoUrl: "",
+              }
+            }
+          })
+
+          finalContentItems = await Promise.all(videoPromises)
+          console.log(`✅ [Bundle Content API] Fetched ${finalContentItems.length} video documents`)
+          console.log(`🔍 [Bundle Content API] Sample video document:`, JSON.stringify(finalContentItems[0], null, 2))
+        } catch (error) {
+          console.error(`❌ [Bundle Content API] Error fetching video documents:`, error)
+          // Fallback to basic content items
+          finalContentItems = contentIds.map((id, index) => ({
+            id,
+            title: `Video ${index + 1}`,
+            description: "",
+            contentType: "video",
+            thumbnailUrl: "",
+            fileUrl: "",
+            downloadUrl: "",
+            videoUrl: "",
+          }))
+        }
       }
 
       const response = {
