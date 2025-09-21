@@ -63,7 +63,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         bundleData = bundleRef.data()
 
         console.log(`🔍 [Bundle Content API] Bundle document found. Keys:`, Object.keys(bundleData))
-        console.log(`🔍 [Bundle Content API] Bundle data:`, JSON.stringify(bundleData, null, 2))
+        console.log(`🔍 [Bundle Content API] Bundle title: ${bundleData.title}`)
+        console.log(`🔍 [Bundle Content API] Bundle active: ${bundleData.active}`)
+        console.log(`🔍 [Bundle Content API] Bundle status: ${bundleData.status}`)
 
         const creatorId = bundleData.creatorId || bundleData.creatorUid || bundleData.userId
 
@@ -73,18 +75,25 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         console.log(`  - userId: ${bundleData.userId}`)
         console.log(`  - resolved creatorId: ${creatorId}`)
         console.log(`  - current userUid: ${userUid}`)
+        console.log(`  - types: creatorId(${typeof bundleData.creatorId}), userUid(${typeof userUid})`)
+        console.log(`  - strict equality: ${creatorId === userUid}`)
+        console.log(`  - loose equality: ${creatorId == userUid}`)
 
         if (creatorId === userUid) {
           isOwner = true
           console.log(`✅ [Bundle Content API] User is bundle owner!`)
         } else {
           console.log(`❌ [Bundle Content API] User is NOT bundle owner. Creator: ${creatorId}, User: ${userUid}`)
+          console.log(`🚫 [Bundle Content API] Returning 403 - User does not own this bundle`)
+          return NextResponse.json({ error: "You don't have access to this bundle" }, { status: 403 })
         }
       } else {
         console.log(`❌ [Bundle Content API] Bundle document not found in bundles collection`)
+        return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
       }
     } catch (error) {
       console.log(`⚠️ [Bundle Content API] Error checking bundle ownership:`, error)
+      return NextResponse.json({ error: "Error checking bundle access" }, { status: 500 })
     }
 
     // If user is the owner, get content from the bundle document
