@@ -70,8 +70,18 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
       console.log(`✅ [Bundle Content API] User is bundle owner, returning content`)
 
-      // Return the detailed content items directly from the bundle document
       const detailedContentItems = bundleData.detailedContentItems || []
+      const contentItems = bundleData.contentItems || []
+      const content = bundleData.content || []
+
+      console.log(`🔍 [Bundle Content API] detailedContentItems length: ${detailedContentItems.length}`)
+      console.log(`🔍 [Bundle Content API] contentItems length: ${contentItems.length}`)
+      console.log(`🔍 [Bundle Content API] content length: ${content.length}`)
+      console.log(`🔍 [Bundle Content API] Bundle data keys:`, Object.keys(bundleData))
+
+      // Use whichever content array has items
+      const finalContentItems =
+        detailedContentItems.length > 0 ? detailedContentItems : contentItems.length > 0 ? contentItems : content
 
       const response = {
         hasAccess: true,
@@ -84,7 +94,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
           price: bundleData.price || 0,
           currency: bundleData.currency || "usd",
         },
-        contents: detailedContentItems.map((item, index) => ({
+        contents: finalContentItems.map((item, index) => ({
           id: item.id || `content_${index}`,
           title: item.title || `Video ${index + 1}`,
           description: item.description || "",
@@ -102,7 +112,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         isOwner: true,
       }
 
-      console.log(`✅ [Bundle Content API] Returning ${detailedContentItems.length} content items`)
+      console.log(`✅ [Bundle Content API] Returning ${finalContentItems.length} content items`)
       return NextResponse.json(response)
     } catch (error) {
       console.error("❌ [Bundle Content API] Error accessing bundle:", error)
