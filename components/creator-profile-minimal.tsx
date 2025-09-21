@@ -4,7 +4,22 @@ import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Share2, Play, Calendar, Users, Heart, Check, Package, Download, Pause, Lock, ChevronDown } from "lucide-react"
+import {
+  Share2,
+  Play,
+  Calendar,
+  Users,
+  Heart,
+  Check,
+  Package,
+  Download,
+  Pause,
+  Lock,
+  ChevronDown,
+  Instagram,
+  Twitter,
+  Globe,
+} from "lucide-react"
 import { useAuthState } from "react-firebase-hooks/auth"
 import { auth, db } from "@/lib/firebase"
 import { doc, updateDoc, increment } from "firebase/firestore"
@@ -21,6 +36,11 @@ interface CreatorData {
   bio?: string
   profilePic?: string
   createdAt?: string
+  socialLinks?: {
+    instagram?: string
+    twitter?: string
+    website?: string
+  }
 }
 
 interface CreatorProfileMinimalProps {
@@ -257,6 +277,42 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
               {/* Bio */}
               {creator.bio && <p className="text-zinc-400 text-sm max-w-sm leading-relaxed">{creator.bio}</p>}
 
+              {/* Social Links */}
+              {creator.socialLinks && Object.keys(creator.socialLinks).length > 0 && (
+                <div className="flex gap-2 justify-center">
+                  {creator.socialLinks.instagram && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                      onClick={() => window.open(`https://instagram.com/${creator.socialLinks!.instagram}`, "_blank")}
+                    >
+                      <Instagram className="w-4 h-4" />
+                    </Button>
+                  )}
+                  {creator.socialLinks.twitter && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                      onClick={() => window.open(`https://twitter.com/${creator.socialLinks!.twitter}`, "_blank")}
+                    >
+                      <Twitter className="w-4 h-4" />
+                    </Button>
+                  )}
+                  {creator.socialLinks.website && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                      onClick={() => window.open(creator.socialLinks!.website, "_blank")}
+                    >
+                      <Globe className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
+              )}
+
               {/* Share Button */}
               <Button
                 variant="ghost"
@@ -292,6 +348,42 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
                 </div>
 
                 {creator.bio && <p className="text-zinc-400 text-sm max-w-md leading-relaxed">{creator.bio}</p>}
+
+                {/* Social Links */}
+                {creator.socialLinks && Object.keys(creator.socialLinks).length > 0 && (
+                  <div className="flex gap-2">
+                    {creator.socialLinks.instagram && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                        onClick={() => window.open(`https://instagram.com/${creator.socialLinks!.instagram}`, "_blank")}
+                      >
+                        <Instagram className="w-4 h-4" />
+                      </Button>
+                    )}
+                    {creator.socialLinks.twitter && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                        onClick={() => window.open(`https://twitter.com/${creator.socialLinks!.twitter}`, "_blank")}
+                      >
+                        <Twitter className="w-4 h-4" />
+                      </Button>
+                    )}
+                    {creator.socialLinks.website && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                        onClick={() => window.open(creator.socialLinks!.website, "_blank")}
+                      >
+                        <Globe className="w-4 h-4" />
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
