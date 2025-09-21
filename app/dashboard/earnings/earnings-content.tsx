@@ -188,15 +188,7 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
 
   const generateRevenueData = () => {
     if (!data || data.grossSales === 0) {
-      // No sales - show empty data for past months only
-      return [
-        { month: "Jul", revenue: 0, profit: 0 },
-        { month: "Aug", revenue: 0, profit: 0 },
-        { month: "Sep", revenue: 0, profit: 0 },
-        { month: "Oct", revenue: 0, profit: 0 },
-        { month: "Nov", revenue: 0, profit: 0 },
-        { month: "Dec", revenue: 0, profit: 0 },
-      ]
+      return []
     }
 
     const now = new Date()
@@ -211,11 +203,11 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
       const monthIndex = (currentMonth - i + 12) % 12
       const monthName = monthNames[monthIndex]
 
-      // Calculate what portion of total revenue belongs to each past month
-      // Distribute revenue realistically across past months
-      const monthFactor = (6 - i) / 21 // Weighted towards recent months
-      const monthRevenue = data.grossSales * monthFactor
-      const monthProfit = data.totalEarnings * monthFactor
+      // For now, we can only show current month data accurately
+      // Future enhancement: store monthly data in database
+      const isCurrentMonth = i === 0
+      const monthRevenue = isCurrentMonth ? data.thisMonth : 0
+      const monthProfit = isCurrentMonth ? data.thisMonth : 0
 
       pastMonthsData.push({
         month: monthName,
@@ -228,31 +220,29 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
   }
 
   const generateSalesData = () => {
+    if (!data || data.totalSales === 0) {
+      return []
+    }
+
     const now = new Date()
     const pastWeekData = []
 
-    // Show actual past 7 days
+    // Show actual past 7 days (for now, we can only show today's data accurately)
     for (let i = 6; i >= 0; i--) {
       const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000)
       const dayName = date.toLocaleDateString("en-US", { weekday: "short" })
 
-      if (!data || data.totalSales === 0) {
-        pastWeekData.push({
-          day: dayName,
-          sales: 0,
-          revenue: 0,
-        })
-      } else {
-        // Distribute sales across past week realistically
-        const dailySales = Math.max(0, Math.round((data.totalSales / 7) * (0.5 + Math.random())))
-        const dailyRevenue = Math.max(0, (data.grossSales / 7) * (0.5 + Math.random()))
+      // For now, we can only show current day data accurately
+      // Future enhancement: store daily sales data in database
+      const isToday = i === 0
+      const dailySales = isToday ? data.thisMonthSales : 0
+      const dailyRevenue = isToday ? data.thisMonth : 0
 
-        pastWeekData.push({
-          day: dayName,
-          sales: dailySales,
-          revenue: Math.round(dailyRevenue * 100) / 100,
-        })
-      }
+      pastWeekData.push({
+        day: dayName,
+        sales: dailySales,
+        revenue: Math.round(dailyRevenue * 100) / 100,
+      })
     }
 
     return pastWeekData
@@ -439,62 +429,72 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
             <p className="text-sm text-white/70">Past 6 months revenue performance</p>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="h-80 w-full">
-              <AreaChart
-                width={1200}
-                height={320}
-                data={revenueData}
-                margin={{ top: 20, right: 20, left: 20, bottom: 20 }}
-                style={{ width: "100%", height: "100%" }}
-              >
-                <defs>
-                  <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#ffffff" stopOpacity={0.1} />
-                    <stop offset="95%" stopColor="#ffffff" stopOpacity={0} />
-                  </linearGradient>
-                  <filter id="lineShadow" x="-50%" y="-50%" width="200%" height="200%">
-                    <feDropShadow dx="0" dy="0" stdDeviation="3" floodColor="#ffffff" floodOpacity="0.3" />
-                  </filter>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#4b5563" opacity={0.2} />
-                <XAxis
-                  dataKey="month"
-                  stroke="#ffffff"
-                  fontSize={12}
-                  tickLine={{ stroke: "#ffffff" }}
-                  axisLine={{ stroke: "#ffffff" }}
-                />
-                <YAxis
-                  stroke="#ffffff"
-                  fontSize={12}
-                  tickLine={{ stroke: "#ffffff" }}
-                  axisLine={{ stroke: "#ffffff" }}
-                  tickFormatter={(value) => `$${value}`}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "#1f2937",
-                    border: "1px solid #374151",
-                    borderRadius: "8px",
-                    color: "#fff",
-                    boxShadow: "0 10px 25px rgba(0, 0, 0, 0.5)",
-                  }}
-                  formatter={(value: any, name: string) => [`$${Number(value).toFixed(2)}`, "Revenue"]}
-                  coordinate={{ x: 0, y: 0 }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="revenue"
-                  stroke="#ffffff"
-                  strokeWidth={3}
-                  fill="url(#revenueGradient)"
-                  name="revenue"
-                  filter="url(#lineShadow)"
-                  dot={{ fill: "#ffffff", strokeWidth: 2, r: 4 }}
-                  activeDot={{ r: 6, fill: "#ffffff", stroke: "#ffffff", strokeWidth: 2 }}
-                />
-              </AreaChart>
-            </div>
+            {revenueData.length === 0 ? (
+              <div className="h-80 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="text-6xl mb-4">📊</div>
+                  <h3 className="text-lg font-medium text-white mb-2">No Revenue Data</h3>
+                  <p className="text-zinc-400">Start making sales to see your revenue trends</p>
+                </div>
+              </div>
+            ) : (
+              <div className="h-80 w-full">
+                <AreaChart
+                  width={1200}
+                  height={320}
+                  data={revenueData}
+                  margin={{ top: 20, right: 20, left: 20, bottom: 20 }}
+                  style={{ width: "100%", height: "100%" }}
+                >
+                  <defs>
+                    <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#ffffff" stopOpacity={0.1} />
+                      <stop offset="95%" stopColor="#ffffff" stopOpacity={0} />
+                    </linearGradient>
+                    <filter id="lineShadow" x="-50%" y="-50%" width="200%" height="200%">
+                      <feDropShadow dx="0" dy="0" stdDeviation="3" floodColor="#ffffff" floodOpacity="0.3" />
+                    </filter>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#4b5563" opacity={0.2} />
+                  <XAxis
+                    dataKey="month"
+                    stroke="#ffffff"
+                    fontSize={12}
+                    tickLine={{ stroke: "#ffffff" }}
+                    axisLine={{ stroke: "#ffffff" }}
+                  />
+                  <YAxis
+                    stroke="#ffffff"
+                    fontSize={12}
+                    tickLine={{ stroke: "#ffffff" }}
+                    axisLine={{ stroke: "#ffffff" }}
+                    tickFormatter={(value) => `$${value}`}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#1f2937",
+                      border: "1px solid #374151",
+                      borderRadius: "8px",
+                      color: "#fff",
+                      boxShadow: "0 10px 25px rgba(0, 0, 0, 0.5)",
+                    }}
+                    formatter={(value: any, name: string) => [`$${Number(value).toFixed(2)}`, "Revenue"]}
+                    coordinate={{ x: 0, y: 0 }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="revenue"
+                    stroke="#ffffff"
+                    strokeWidth={3}
+                    fill="url(#revenueGradient)"
+                    name="revenue"
+                    filter="url(#lineShadow)"
+                    dot={{ fill: "#ffffff", strokeWidth: 2, r: 4 }}
+                    activeDot={{ r: 6, fill: "#ffffff", stroke: "#ffffff", strokeWidth: 2 }}
+                  />
+                </AreaChart>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -505,64 +505,74 @@ export default function EarningsContent({ initialData }: EarningsContentProps) {
             <p className="text-sm text-white/70">Past 7 days sales activity</p>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="h-64 w-full">
-              <BarChart
-                width={600}
-                height={256}
-                data={salesData}
-                margin={{ top: 20, right: 20, left: 20, bottom: 20 }}
-                style={{ width: "100%", height: "100%" }}
-              >
-                <defs>
-                  <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#a855f7" stopOpacity={1} />
-                    <stop offset="50%" stopColor="#8b5cf6" stopOpacity={0.9} />
-                    <stop offset="100%" stopColor="#7c3aed" stopOpacity={0.8} />
-                  </linearGradient>
-                  <filter id="barShadow" x="-50%" y="-50%" width="200%" height="200%">
-                    <feDropShadow dx="0" dy="2" stdDeviation="4" floodColor="#000000" floodOpacity="0.3" />
-                  </filter>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#4b5563" opacity={0.2} />
-                <XAxis
-                  dataKey="day"
-                  stroke="#ffffff"
-                  fontSize={12}
-                  tickLine={{ stroke: "#ffffff" }}
-                  axisLine={{ stroke: "#ffffff" }}
-                />
-                <YAxis
-                  stroke="#ffffff"
-                  fontSize={12}
-                  tickLine={{ stroke: "#ffffff" }}
-                  axisLine={{ stroke: "#ffffff" }}
-                  domain={[0, "dataMax + 1"]}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "#1f2937",
-                    border: "1px solid #374151",
-                    borderRadius: "8px",
-                    color: "#fff",
-                    boxShadow: "0 10px 25px rgba(0, 0, 0, 0.5)",
-                  }}
-                  formatter={(value: any, name: string) => [
-                    name === "sales" ? `${value} sale${value !== 1 ? "s" : ""}` : `$${Number(value).toFixed(2)}`,
-                    name === "sales" ? "Sales" : "Revenue",
-                  ]}
-                  coordinate={{ x: 0, y: 0 }}
-                />
-                <Bar
-                  dataKey="sales"
-                  fill="url(#barGradient)"
-                  radius={[8, 8, 0, 0]}
-                  name="sales"
-                  stroke="#a855f7"
-                  strokeWidth={1}
-                  filter="url(#barShadow)"
-                />
-              </BarChart>
-            </div>
+            {salesData.length === 0 ? (
+              <div className="h-64 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="text-4xl mb-3">📈</div>
+                  <h3 className="text-md font-medium text-white mb-1">No Sales Data</h3>
+                  <p className="text-zinc-400 text-sm">Your weekly sales will appear here</p>
+                </div>
+              </div>
+            ) : (
+              <div className="h-64 w-full">
+                <BarChart
+                  width={600}
+                  height={256}
+                  data={salesData}
+                  margin={{ top: 20, right: 20, left: 20, bottom: 20 }}
+                  style={{ width: "100%", height: "100%" }}
+                >
+                  <defs>
+                    <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#a855f7" stopOpacity={1} />
+                      <stop offset="50%" stopColor="#8b5cf6" stopOpacity={0.9} />
+                      <stop offset="100%" stopColor="#7c3aed" stopOpacity={0.8} />
+                    </linearGradient>
+                    <filter id="barShadow" x="-50%" y="-50%" width="200%" height="200%">
+                      <feDropShadow dx="0" dy="2" stdDeviation="4" floodColor="#000000" floodOpacity="0.3" />
+                    </filter>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#4b5563" opacity={0.2} />
+                  <XAxis
+                    dataKey="day"
+                    stroke="#ffffff"
+                    fontSize={12}
+                    tickLine={{ stroke: "#ffffff" }}
+                    axisLine={{ stroke: "#ffffff" }}
+                  />
+                  <YAxis
+                    stroke="#ffffff"
+                    fontSize={12}
+                    tickLine={{ stroke: "#ffffff" }}
+                    axisLine={{ stroke: "#ffffff" }}
+                    domain={[0, "dataMax + 1"]}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#1f2937",
+                      border: "1px solid #374151",
+                      borderRadius: "8px",
+                      color: "#fff",
+                      boxShadow: "0 10px 25px rgba(0, 0, 0, 0.5)",
+                    }}
+                    formatter={(value: any, name: string) => [
+                      name === "sales" ? `${value} sale${value !== 1 ? "s" : ""}` : `$${Number(value).toFixed(2)}`,
+                      name === "sales" ? "Sales" : "Revenue",
+                    ]}
+                    coordinate={{ x: 0, y: 0 }}
+                  />
+                  <Bar
+                    dataKey="sales"
+                    fill="url(#barGradient)"
+                    radius={[8, 8, 0, 0]}
+                    name="sales"
+                    stroke="#a855f7"
+                    strokeWidth={1}
+                    filter="url(#barShadow)"
+                  />
+                </BarChart>
+              </div>
+            )}
           </CardContent>
         </Card>
 
