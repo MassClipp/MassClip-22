@@ -107,7 +107,7 @@ export default function UpgradePage() {
   }
 
   return (
-    <div className="space-y-12 p-8">
+    <div className="space-y-12 px-4 py-8 sm:px-6 md:px-8">
       <div className="text-center space-y-4">
         <h1 className="text-5xl lg:text-6xl font-thin text-white leading-tight">
           Choose Your{" "}
@@ -129,7 +129,7 @@ export default function UpgradePage() {
           </p>
         </div>
 
-        <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3">
+        <div className="grid gap-6 grid-cols-1 md:grid-cols-3">
           {bundleOptions.map((option) => {
             const Icon = option.icon
             const isPurchasing = purchasingBundle === option.id
@@ -149,7 +149,7 @@ export default function UpgradePage() {
                   </div>
                 )}
 
-                <div className="p-8">
+                <div className="p-6 sm:p-8">
                   <div className="mb-6 flex items-center">
                     <div className="mr-4 p-3 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-400/30">
                       <Icon className="h-6 w-6 text-cyan-300" />
@@ -212,7 +212,7 @@ export default function UpgradePage() {
         </div>
       </div>
 
-      <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-2">
+      <div className="grid gap-8 grid-cols-1 lg:grid-cols-2">
         {/* Free Plan */}
         <Card className="group relative overflow-hidden border-2 border-zinc-700/50 hover:border-zinc-600/70 bg-gradient-to-br from-zinc-900/90 via-zinc-800/80 to-black/90 backdrop-blur-xl transition-all duration-500">
           {!isProUser && !loading && (
@@ -221,7 +221,7 @@ export default function UpgradePage() {
             </div>
           )}
 
-          <div className="p-10">
+          <div className="p-6 sm:p-10">
             <div className="mb-8 flex items-center">
               <div className="mr-4 p-3 rounded-2xl bg-zinc-800/50 border border-zinc-700/50">
                 <Shield className="h-8 w-8 text-zinc-300" />
