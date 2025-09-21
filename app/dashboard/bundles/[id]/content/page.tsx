@@ -50,7 +50,7 @@ export default function BundleContentManagePage() {
       setError(null)
 
       const token = await user.getIdToken()
-      const response = await fetch(`/api/creator/bundles/${bundleId}`, {
+      const response = await fetch(`/api/bundles/${bundleId}/content`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -61,9 +61,15 @@ export default function BundleContentManagePage() {
       }
 
       const data = await response.json()
-      if (data.productBox) {
-        setBundle(data.productBox)
-        setContent(data.productBox.detailedContentItems || [])
+      if (data.bundle) {
+        setBundle({
+          id: data.bundle.id,
+          title: data.bundle.title,
+          description: data.bundle.description,
+          price: data.bundle.price,
+          thumbnailUrl: data.bundle.thumbnailUrl,
+        })
+        setContent(data.contents || [])
       } else {
         setBundle(null)
         setContent([])
