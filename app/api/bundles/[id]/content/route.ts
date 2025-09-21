@@ -68,20 +68,55 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         return NextResponse.json({ error: "You don't have access to this bundle" }, { status: 403 })
       }
 
-      console.log(`✅ [Bundle Content API] User is bundle owner, returning content`)
+      console.log(`✅ [Bundle Content API] User is bundle owner, fetching content details`)
 
       const detailedContentItems = bundleData.detailedContentItems || []
       const contentItems = bundleData.contentItems || []
       const content = bundleData.content || []
 
-      console.log(`🔍 [Bundle Content API] detailedContentItems length: ${detailedContentItems.length}`)
-      console.log(`🔍 [Bundle Content API] contentItems length: ${contentItems.length}`)
-      console.log(`🔍 [Bundle Content API] content length: ${content.length}`)
-      console.log(`🔍 [Bundle Content API] Bundle data keys:`, Object.keys(bundleData))
+      // Get content IDs from any available source
+      let contentIds = []
+      if (detailedContentItems.length > 0) {
+        contentIds = detailedContentItems.map((item) => item.id).filter(Boolean)
+      } else if (contentItems.length > 0) {
+        contentIds = contentItems.map((item) => item.id || item).filter(Boolean)
+      } else if (content.length > 0) {
+        contentIds = content.map((item) => item.id || item).filter(Boolean)
+      }
 
-      // Use whichever content array has items
-      const finalContentItems =
-        detailedContentItems.length > 0 ? detailedContentItems : contentItems.length > 0 ? contentItems : content
+      console.log(`🔍 [Bundle Content API] Found ${contentIds.length} content IDs:`, contentIds)
+
+      // Fetch full video details from creatorUploads collection
+      const fullContentItems = []
+      if (contentIds.length > 0) {
+        for (const contentId of contentIds) {
+          try {
+            const videoRef = await db.collection("creatorUploads").doc(contentId).get()
+            if (videoRef.exists) {
+              const videoData = videoRef.data()
+              fullContentItems.push({
+                id: contentId,
+                title: videoData.title || videoData.name || `Video ${fullContentItems.length + 1}`,
+                description: videoData.description || "",
+                contentType: "video",
+                fileType: videoData.mimeType || "video/mp4",
+                size: videoData.fileSize || 0,
+                duration: videoData.duration || 0,
+                thumbnailUrl: videoData.thumbnailUrl || "",
+                fileUrl: videoData.fileUrl || "",
+                downloadUrl: videoData.downloadUrl || videoData.fileUrl || "",
+                videoUrl: videoData.fileUrl || "",
+                createdAt: videoData.createdAt || new Date().toISOString(),
+                metadata: videoData.metadata || {},
+              })
+            } else {
+              console.log(`⚠️ [Bundle Content API] Video not found: ${contentId}`)
+            }
+          } catch (error) {
+            console.error(`❌ [Bundle Content API] Error fetching video ${contentId}:`, error)
+          }
+        }
+      }
 
       const response = {
         hasAccess: true,
@@ -94,25 +129,11 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
           price: bundleData.price || 0,
           currency: bundleData.currency || "usd",
         },
-        contents: finalContentItems.map((item, index) => ({
-          id: item.id || `content_${index}`,
-          title: item.title || `Video ${index + 1}`,
-          description: item.description || "",
-          contentType: item.contentType || "video",
-          fileType: item.mimeType || "video/mp4",
-          size: item.fileSize || 0,
-          duration: item.duration || 0,
-          thumbnailUrl: item.thumbnailUrl || "",
-          fileUrl: item.fileUrl || "",
-          downloadUrl: item.downloadUrl || item.fileUrl || "",
-          videoUrl: item.fileUrl || "",
-          createdAt: item.createdAt || new Date().toISOString(),
-          metadata: item.metadata || {},
-        })),
+        contents: fullContentItems,
         isOwner: true,
       }
 
-      console.log(`✅ [Bundle Content API] Returning ${finalContentItems.length} content items`)
+      console.log(`✅ [Bundle Content API] Returning ${fullContentItems.length} content items with full metadata`)
       return NextResponse.json(response)
     } catch (error) {
       console.error("❌ [Bundle Content API] Error accessing bundle:", error)
