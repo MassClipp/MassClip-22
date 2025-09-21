@@ -74,48 +74,41 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       const contentItems = bundleData.contentItems || []
       const content = bundleData.content || []
 
-      // Get content IDs from any available source
-      let contentIds = []
+      console.log(`🔍 [Bundle Content API] detailedContentItems:`, detailedContentItems.length)
+      console.log(`🔍 [Bundle Content API] contentItems:`, contentItems.length)
+      console.log(`🔍 [Bundle Content API] content:`, content.length)
+
+      // Use whichever content array has data
+      let finalContentItems = []
       if (detailedContentItems.length > 0) {
-        contentIds = detailedContentItems.map((item) => item.id).filter(Boolean)
+        finalContentItems = detailedContentItems
+        console.log(`✅ [Bundle Content API] Using detailedContentItems (${finalContentItems.length} items)`)
       } else if (contentItems.length > 0) {
-        contentIds = contentItems.map((item) => item.id || item).filter(Boolean)
+        finalContentItems = contentItems.map((item, index) => ({
+          id: item.id || item,
+          title: item.title || `Video ${index + 1}`,
+          description: item.description || "",
+          contentType: "video",
+          thumbnailUrl: item.thumbnailUrl || "",
+          fileUrl: item.fileUrl || item.videoUrl || "",
+          downloadUrl: item.downloadUrl || item.fileUrl || "",
+          videoUrl: item.fileUrl || item.videoUrl || "",
+          ...item,
+        }))
+        console.log(`✅ [Bundle Content API] Using contentItems (${finalContentItems.length} items)`)
       } else if (content.length > 0) {
-        contentIds = content.map((item) => item.id || item).filter(Boolean)
-      }
-
-      console.log(`🔍 [Bundle Content API] Found ${contentIds.length} content IDs:`, contentIds)
-
-      // Fetch full video details from creatorUploads collection
-      const fullContentItems = []
-      if (contentIds.length > 0) {
-        for (const contentId of contentIds) {
-          try {
-            const videoRef = await db.collection("creatorUploads").doc(contentId).get()
-            if (videoRef.exists) {
-              const videoData = videoRef.data()
-              fullContentItems.push({
-                id: contentId,
-                title: videoData.title || videoData.name || `Video ${fullContentItems.length + 1}`,
-                description: videoData.description || "",
-                contentType: "video",
-                fileType: videoData.mimeType || "video/mp4",
-                size: videoData.fileSize || 0,
-                duration: videoData.duration || 0,
-                thumbnailUrl: videoData.thumbnailUrl || "",
-                fileUrl: videoData.fileUrl || "",
-                downloadUrl: videoData.downloadUrl || videoData.fileUrl || "",
-                videoUrl: videoData.fileUrl || "",
-                createdAt: videoData.createdAt || new Date().toISOString(),
-                metadata: videoData.metadata || {},
-              })
-            } else {
-              console.log(`⚠️ [Bundle Content API] Video not found: ${contentId}`)
-            }
-          } catch (error) {
-            console.error(`❌ [Bundle Content API] Error fetching video ${contentId}:`, error)
-          }
-        }
+        finalContentItems = content.map((item, index) => ({
+          id: item.id || item,
+          title: item.title || `Video ${index + 1}`,
+          description: item.description || "",
+          contentType: "video",
+          thumbnailUrl: item.thumbnailUrl || "",
+          fileUrl: item.fileUrl || item.videoUrl || "",
+          downloadUrl: item.downloadUrl || item.fileUrl || "",
+          videoUrl: item.fileUrl || item.videoUrl || "",
+          ...item,
+        }))
+        console.log(`✅ [Bundle Content API] Using content (${finalContentItems.length} items)`)
       }
 
       const response = {
@@ -129,11 +122,11 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
           price: bundleData.price || 0,
           currency: bundleData.currency || "usd",
         },
-        contents: fullContentItems,
+        contents: finalContentItems,
         isOwner: true,
       }
 
-      console.log(`✅ [Bundle Content API] Returning ${fullContentItems.length} content items with full metadata`)
+      console.log(`✅ [Bundle Content API] Returning ${finalContentItems.length} content items`)
       return NextResponse.json(response)
     } catch (error) {
       console.error("❌ [Bundle Content API] Error accessing bundle:", error)
