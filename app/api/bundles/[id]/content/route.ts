@@ -83,6 +83,10 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       if (detailedContentItems.length > 0) {
         finalContentItems = detailedContentItems
         console.log(`✅ [Bundle Content API] Using detailedContentItems (${finalContentItems.length} items)`)
+        console.log(
+          `🔍 [Bundle Content API] Sample detailedContentItem:`,
+          JSON.stringify(detailedContentItems[0], null, 2),
+        )
       } else if (contentItems.length > 0) {
         finalContentItems = contentItems.map((item, index) => ({
           id: item.id || item,
@@ -96,6 +100,8 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
           ...item,
         }))
         console.log(`✅ [Bundle Content API] Using contentItems (${finalContentItems.length} items)`)
+        console.log(`🔍 [Bundle Content API] Sample contentItem:`, JSON.stringify(contentItems[0], null, 2))
+        console.log(`🔍 [Bundle Content API] Sample mapped item:`, JSON.stringify(finalContentItems[0], null, 2))
       } else if (content.length > 0) {
         finalContentItems = content.map((item, index) => ({
           id: item.id || item,
@@ -109,6 +115,8 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
           ...item,
         }))
         console.log(`✅ [Bundle Content API] Using content (${finalContentItems.length} items)`)
+        console.log(`🔍 [Bundle Content API] Sample content item:`, JSON.stringify(content[0], null, 2))
+        console.log(`🔍 [Bundle Content API] Sample mapped item:`, JSON.stringify(finalContentItems[0], null, 2))
       }
 
       const response = {
