@@ -102,31 +102,30 @@ export function SalesForecastCard() {
     }
   }
 
-  const chartData =
-    Array.isArray(forecast.chartData) && forecast.chartData.length > 0
-      ? forecast.chartData.slice(-14) // Show last 14 days (7 past + 7 projected)
-      : []
-
-  if (chartData.length === 0) {
-    return (
-      <Card className="bg-zinc-900/50 border-zinc-800/50">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Target className="h-5 w-5 text-zinc-400" />
-              <CardTitle className="text-zinc-200">Revenue Forecast</CardTitle>
-            </div>
-          </div>
-          <CardDescription>7-day projection based on past week sales</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="text-center py-8">
-            <p className="text-zinc-400 mb-4">No sales data yet</p>
-            <p className="text-sm text-zinc-500">Make your first sale to see revenue forecasts</p>
-          </div>
-        </CardContent>
-      </Card>
-    )
+  let chartData = []
+  if (Array.isArray(forecast.chartData) && forecast.chartData.length > 0) {
+    chartData = forecast.chartData.slice(-14) // Show last 14 days
+  } else {
+    // Create minimal data points to show the chart structure
+    const today = new Date()
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date(today)
+      date.setDate(date.getDate() - i)
+      chartData.push({
+        date: date.toISOString().split("T")[0],
+        revenue: 0,
+        isProjected: false,
+      })
+    }
+    for (let i = 1; i <= 7; i++) {
+      const date = new Date(today)
+      date.setDate(date.getDate() + i)
+      chartData.push({
+        date: date.toISOString().split("T")[0],
+        revenue: 0,
+        isProjected: true,
+      })
+    }
   }
 
   const pastWeekRevenue = chartData
@@ -213,6 +212,7 @@ export function SalesForecastCard() {
                 dataKey="revenue"
                 stroke="#ffffff"
                 strokeWidth={2}
+                strokeDasharray={(entry: any) => (entry?.isProjected ? "4 4" : "0")}
                 dot={(props: any) => {
                   const { cx, cy, payload } = props
                   return (
@@ -232,15 +232,6 @@ export function SalesForecastCard() {
                   strokeWidth: 2,
                   stroke: "#18181b",
                 }}
-                connectNulls={false}
-              />
-              <Line
-                type="monotone"
-                dataKey={(entry: any) => (entry.isProjected ? entry.revenue : null)}
-                stroke="#ffffff80"
-                strokeWidth={2}
-                strokeDasharray="4 4"
-                dot={false}
                 connectNulls={true}
               />
             </LineChart>
