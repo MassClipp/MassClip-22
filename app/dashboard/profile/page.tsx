@@ -66,18 +66,20 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
 
-  // Profile state
-  const [displayName, setDisplayName] = useState("")
-  const [username, setUsername] = useState("")
-  const [bio, setBio] = useState("")
-  const [profilePic, setProfilePic] = useState<string | null>(null)
+  const [profileData, setProfileData] = useState({
+    displayName: "",
+    username: "",
+    bio: "",
+    profilePic: null as string | null,
+    socialLinks: {
+      instagram: "",
+      twitter: "",
+      website: "",
+    },
+  })
+
   const [newProfilePic, setNewProfilePic] = useState<File | null>(null)
   const [profilePicPreview, setProfilePicPreview] = useState<string | null>(null)
-
-  // Social links
-  const [instagramHandle, setInstagramHandle] = useState("")
-  const [twitterHandle, setTwitterHandle] = useState("")
-  const [websiteUrl, setWebsiteUrl] = useState("")
 
   const [crop, setCrop] = useState<Crop>()
   const [completedCrop, setCompletedCrop] = useState<Crop>()
@@ -106,87 +108,73 @@ export default function ProfilePage() {
     }
   }, [])
 
-  // Fetch user profile
-  useEffect(() => {
-    const fetchUserProfile = async () => {
-      if (!user) return
+  const fetchProfile = async () => {
+    if (!user) return
 
-      try {
-        setLoading(true)
-        console.log("🔍 Fetching user profile for:", user.uid)
+    try {
+      setLoading(true)
+      console.log("[v0] Fetching profile for user:", user.uid)
 
-        const userDoc = await getDoc(doc(db, "users", user.uid))
+      const userDoc = await getDoc(doc(db, "users", user.uid))
 
-        if (userDoc.exists()) {
-          const userData = userDoc.data()
-          console.log("✅ User data loaded:", userData)
+      if (userDoc.exists()) {
+        const data = userDoc.data()
+        console.log("[v0] Profile data from database:", data)
 
-          setDisplayName(userData.displayName || "")
-          setUsername(userData.username || "")
-          setBio(userData.bio || "")
-
-          // Handle profile picture
-          const profilePicUrl = userData.profilePic
-          if (profilePicUrl) {
-            const cacheBustedUrl = profilePicUrl.includes("?")
-              ? `${profilePicUrl}&cb=${Date.now()}`
-              : `${profilePicUrl}?cb=${Date.now()}`
-            setProfilePic(cacheBustedUrl)
-          } else {
-            setProfilePic(null)
-          }
-
-          const socialLinks = userData.socialLinks || {}
-          console.log("[v0] Social links from database:", socialLinks)
-
-          setInstagramHandle(socialLinks.instagram || "")
-          setTwitterHandle(socialLinks.twitter || "")
-          setWebsiteUrl(socialLinks.website || "")
-        } else {
-          console.log("❌ No user document found, creating one...")
-          // Create initial user document
-          const initialData = {
-            uid: user.uid,
-            email: user.email,
-            displayName: user.displayName || "",
-            username: "",
-            bio: "",
-            profilePic: user.photoURL || null,
-            socialLinks: {
-              instagram: "",
-              twitter: "",
-              website: "",
-            },
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          }
-
-          await setDoc(doc(db, "users", user.uid), initialData)
-          console.log("✅ Initial user document created")
-
-          // Set the state with initial data
-          setDisplayName(initialData.displayName)
-          setUsername(initialData.username)
-          setBio(initialData.bio)
-          setProfilePic(initialData.profilePic)
-          setInstagramHandle("")
-          setTwitterHandle("")
-          setWebsiteUrl("")
-        }
-      } catch (error) {
-        console.error("❌ Error fetching user profile:", error)
-        toast({
-          title: "Error",
-          description: "Failed to load profile data. Please try again.",
-          variant: "destructive",
+        setProfileData({
+          displayName: data.displayName || "",
+          username: data.username || "",
+          bio: data.bio || "",
+          profilePic: data.profilePic || null,
+          socialLinks: {
+            instagram: data.socialLinks?.instagram || "",
+            twitter: data.socialLinks?.twitter || "",
+            website: data.socialLinks?.website || "",
+          },
         })
-      } finally {
-        setLoading(false)
-      }
-    }
+      } else {
+        // Create initial profile
+        const initialData = {
+          uid: user.uid,
+          email: user.email,
+          displayName: user.displayName || "",
+          username: "",
+          bio: "",
+          profilePic: user.photoURL || null,
+          socialLinks: {
+            instagram: "",
+            twitter: "",
+            website: "",
+          },
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }
 
-    fetchUserProfile()
-  }, [user, toast])
+        await setDoc(doc(db, "users", user.uid), initialData)
+
+        setProfileData({
+          displayName: initialData.displayName,
+          username: initialData.username,
+          bio: initialData.bio,
+          profilePic: initialData.profilePic,
+          socialLinks: initialData.socialLinks,
+        })
+      }
+    } catch (error) {
+      console.error("[v0] Error fetching profile:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load profile data. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchProfile()
+  }, [user])
 
   useEffect(() => {
     if (user) {
@@ -194,17 +182,70 @@ export default function ProfilePage() {
     }
   }, [user])
 
-  useEffect(() => {
-    if (subscriptionData) {
-      console.log("[v0] Subscription data received:", {
-        plan: subscriptionData.plan,
-        isActive: subscriptionData.isActive,
-        status: subscriptionData.status,
-        cancelAtPeriodEnd: subscriptionData.cancelAtPeriodEnd,
-        currentPeriodEnd: subscriptionData.currentPeriodEnd,
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!user) return
+
+    setSaving(true)
+    setSaveSuccess(false)
+
+    try {
+      console.log("[v0] Saving profile data:", profileData)
+
+      const updateData = {
+        displayName: profileData.displayName.trim(),
+        username: profileData.username.toLowerCase().trim(),
+        bio: profileData.bio.trim(),
+        socialLinks: {
+          instagram: profileData.socialLinks.instagram.trim(),
+          twitter: profileData.socialLinks.twitter.trim(),
+          website: profileData.socialLinks.website.trim(),
+        },
+        updatedAt: serverTimestamp(),
+      }
+
+      await setDoc(doc(db, "users", user.uid), updateData, { merge: true })
+      console.log("[v0] Profile saved successfully")
+
+      // Refresh data from database
+      await fetchProfile()
+
+      setSaveSuccess(true)
+      setTimeout(() => setSaveSuccess(false), 3000)
+
+      toast({
+        title: "Success",
+        description: "Profile updated successfully!",
       })
+    } catch (error) {
+      console.error("[v0] Error saving profile:", error)
+      toast({
+        title: "Error",
+        description: "Failed to save profile. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setSaving(false)
     }
-  }, [subscriptionData])
+  }
+
+  const updateProfileData = (field: string, value: string) => {
+    if (field.includes(".")) {
+      const [parent, child] = field.split(".")
+      setProfileData((prev) => ({
+        ...prev,
+        [parent]: {
+          ...prev[parent as keyof typeof prev],
+          [child]: value,
+        },
+      }))
+    } else {
+      setProfileData((prev) => ({
+        ...prev,
+        [field]: value,
+      }))
+    }
+  }
 
   const handleProfilePicChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -333,71 +374,7 @@ export default function ProfilePage() {
                   </p>
                 </div>
               )}
-              <form
-                onSubmit={async (e) => {
-                  e.preventDefault()
-                  if (!user) return
-
-                  setSaving(true)
-                  setSaveSuccess(false)
-
-                  try {
-                    console.log("[v0] Starting profile save...")
-
-                    const updateData = {
-                      displayName: displayName.trim(),
-                      username: username.toLowerCase().trim(),
-                      bio: bio.trim(),
-                      socialLinks: {
-                        instagram: instagramHandle.trim(),
-                        twitter: twitterHandle.trim(),
-                        website: websiteUrl.trim(),
-                      },
-                      updatedAt: serverTimestamp(),
-                    }
-
-                    console.log("[v0] Update data:", updateData)
-
-                    const userDocRef = doc(db, "users", user.uid)
-                    await setDoc(userDocRef, updateData, { merge: true })
-
-                    console.log("[v0] Profile saved successfully")
-
-                    const updatedDoc = await getDoc(userDocRef)
-                    if (updatedDoc.exists()) {
-                      const updatedData = updatedDoc.data()
-                      console.log("[v0] Refreshed data after save:", updatedData)
-
-                      // Update state with fresh data from database
-                      setDisplayName(updatedData.displayName || "")
-                      setUsername(updatedData.username || "")
-                      setBio(updatedData.bio || "")
-
-                      const socialLinks = updatedData.socialLinks || {}
-                      setInstagramHandle(socialLinks.instagram || "")
-                      setTwitterHandle(socialLinks.twitter || "")
-                      setWebsiteUrl(socialLinks.website || "")
-                    }
-
-                    setSaveSuccess(true)
-                    setTimeout(() => setSaveSuccess(false), 3000)
-
-                    toast({
-                      title: "Success",
-                      description: "Profile updated successfully!",
-                    })
-                  } catch (error) {
-                    console.error("[v0] Error saving profile:", error)
-                    toast({
-                      title: "Error",
-                      description: "Failed to save profile. Please try again.",
-                      variant: "destructive",
-                    })
-                  } finally {
-                    setSaving(false)
-                  }
-                }}
-              >
+              <form onSubmit={handleSave}>
                 <CardHeader>
                   <CardTitle>Profile Information</CardTitle>
                   <CardDescription>Update your profile details and social links</CardDescription>
@@ -410,20 +387,24 @@ export default function ProfilePage() {
                       className="relative w-24 h-24 rounded-full overflow-hidden bg-zinc-800 cursor-pointer group"
                       onClick={() => fileInputRef.current?.click()}
                     >
-                      {profilePicPreview || profilePic ? (
+                      {profilePicPreview || profileData.profilePic ? (
                         <img
-                          src={profilePicPreview || profilePic || ""}
-                          alt={displayName || "Profile"}
+                          src={profilePicPreview || profileData.profilePic || ""}
+                          alt={profileData.displayName || "Profile"}
                           className="w-full h-full object-cover"
-                          key={profilePicPreview || profilePic}
+                          key={profilePicPreview || profileData.profilePic}
                           onError={(e) => {
                             console.error("Failed to load profile image:", e)
-                            setProfilePic(null)
+                            setProfileData((prev) => ({ ...prev, profilePic: null }))
                           }}
                         />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center bg-zinc-800 text-zinc-400 text-4xl font-light">
-                          {displayName ? displayName.charAt(0).toUpperCase() : <User className="h-8 w-8" />}
+                          {profileData.displayName ? (
+                            profileData.displayName.charAt(0).toUpperCase()
+                          ) : (
+                            <User className="h-8 w-8" />
+                          )}
                         </div>
                       )}
 
@@ -447,8 +428,8 @@ export default function ProfilePage() {
                     <Label htmlFor="displayName">Display Name</Label>
                     <Input
                       id="displayName"
-                      value={displayName}
-                      onChange={(e) => setDisplayName(e.target.value)}
+                      value={profileData.displayName}
+                      onChange={(e) => updateProfileData("displayName", e.target.value)}
                       className="bg-zinc-800/50 border-zinc-700 focus:border-red-500 text-white mt-1.5"
                       placeholder="Your display name"
                       required
@@ -460,14 +441,16 @@ export default function ProfilePage() {
                     <Label htmlFor="username">Username</Label>
                     <Input
                       id="username"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
+                      value={profileData.username}
+                      onChange={(e) =>
+                        updateProfileData("username", e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))
+                      }
                       className="bg-zinc-800/50 border-zinc-700 focus:border-red-500 text-white mt-1.5"
                       placeholder="username"
                       required
                     />
                     <p className="text-xs text-zinc-500 mt-1.5">
-                      This will be your profile URL: massclip.pro/creator/{username || "username"}
+                      This will be your profile URL: massclip.pro/creator/{profileData.username || "username"}
                     </p>
                   </div>
 
@@ -476,8 +459,8 @@ export default function ProfilePage() {
                     <Label htmlFor="bio">Bio</Label>
                     <Textarea
                       id="bio"
-                      value={bio}
-                      onChange={(e) => setBio(e.target.value)}
+                      value={profileData.bio}
+                      onChange={(e) => updateProfileData("bio", e.target.value)}
                       className="bg-zinc-800/50 border-zinc-700 focus:border-red-500 text-white mt-1.5 resize-none"
                       placeholder="Tell viewers about yourself"
                       rows={4}
@@ -497,8 +480,10 @@ export default function ProfilePage() {
                         <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-500">@</span>
                         <Input
                           id="instagram"
-                          value={instagramHandle}
-                          onChange={(e) => setInstagramHandle(e.target.value.replace(/[^a-zA-Z0-9_.]/g, ""))}
+                          value={profileData.socialLinks.instagram}
+                          onChange={(e) =>
+                            updateProfileData("socialLinks.instagram", e.target.value.replace(/[^a-zA-Z0-9_.]/g, ""))
+                          }
                           className="bg-zinc-800/50 border-zinc-700 focus:border-red-500 text-white pl-8"
                           placeholder="username"
                         />
@@ -514,8 +499,10 @@ export default function ProfilePage() {
                         <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-500">@</span>
                         <Input
                           id="twitter"
-                          value={twitterHandle}
-                          onChange={(e) => setTwitterHandle(e.target.value.replace(/[^a-zA-Z0-9_]/g, ""))}
+                          value={profileData.socialLinks.twitter}
+                          onChange={(e) =>
+                            updateProfileData("socialLinks.twitter", e.target.value.replace(/[^a-zA-Z0-9_]/g, ""))
+                          }
                           className="bg-zinc-800/50 border-zinc-700 focus:border-red-500 text-white pl-8"
                           placeholder="username"
                         />
@@ -529,8 +516,8 @@ export default function ProfilePage() {
                       </Label>
                       <Input
                         id="website"
-                        value={websiteUrl}
-                        onChange={(e) => setWebsiteUrl(e.target.value)}
+                        value={profileData.socialLinks.website}
+                        onChange={(e) => updateProfileData("socialLinks.website", e.target.value)}
                         className="bg-zinc-800/50 border-zinc-700 focus:border-red-500 text-white mt-1.5"
                         placeholder="https://example.com"
                       />
@@ -541,7 +528,7 @@ export default function ProfilePage() {
                 <CardFooter className="border-t border-zinc-800/50 pt-6">
                   <Button
                     type="submit"
-                    disabled={saving || !displayName.trim() || !username.trim()}
+                    disabled={saving || !profileData.displayName.trim() || !profileData.username.trim()}
                     className="ml-auto bg-white hover:bg-gray-100 text-black"
                   >
                     {saving ? (
@@ -574,43 +561,47 @@ export default function ProfilePage() {
               <CardContent>
                 <div className="flex flex-col items-center text-center">
                   <div className="w-20 h-20 rounded-full overflow-hidden bg-zinc-800 mb-4">
-                    {profilePicPreview || profilePic ? (
+                    {profilePicPreview || profileData.profilePic ? (
                       <img
-                        src={profilePicPreview || profilePic || ""}
-                        alt={displayName || "Profile"}
+                        src={profilePicPreview || profileData.profilePic || ""}
+                        alt={profileData.displayName || "Profile"}
                         className="w-full h-full object-cover"
-                        key={profilePicPreview || profilePic}
+                        key={profilePicPreview || profileData.profilePic}
                         onError={(e) => {
                           console.error("Failed to load preview image:", e)
                         }}
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-zinc-800 text-zinc-400 text-3xl font-light">
-                        {displayName ? displayName.charAt(0).toUpperCase() : <User className="h-6 w-6" />}
+                        {profileData.displayName ? (
+                          profileData.displayName.charAt(0).toUpperCase()
+                        ) : (
+                          <User className="h-6 w-6" />
+                        )}
                       </div>
                     )}
                   </div>
 
-                  <h3 className="text-lg font-medium text-white">{displayName || "Your Name"}</h3>
+                  <h3 className="text-lg font-medium text-white">{profileData.displayName || "Your Name"}</h3>
 
-                  <p className="text-sm text-zinc-400 mb-4">@{username || "username"}</p>
+                  <p className="text-sm text-zinc-400 mb-4">@{profileData.username || "username"}</p>
 
-                  {bio && <p className="text-sm text-zinc-300 mb-4 line-clamp-4">{bio}</p>}
+                  {profileData.bio && <p className="text-sm text-zinc-300 mb-4 line-clamp-4">{profileData.bio}</p>}
 
                   <div className="flex gap-2 mt-2">
-                    {instagramHandle && (
+                    {profileData.socialLinks.instagram && (
                       <div className="p-2 rounded-full bg-zinc-800">
                         <Instagram className="h-4 w-4 text-zinc-400" />
                       </div>
                     )}
 
-                    {twitterHandle && (
+                    {profileData.socialLinks.twitter && (
                       <div className="p-2 rounded-full bg-zinc-800">
                         <Twitter className="h-4 w-4 text-zinc-400" />
                       </div>
                     )}
 
-                    {websiteUrl && (
+                    {profileData.socialLinks.website && (
                       <div className="p-2 rounded-full bg-zinc-800">
                         <Globe className="h-4 w-4 text-zinc-400" />
                       </div>
@@ -618,11 +609,11 @@ export default function ProfilePage() {
                   </div>
                 </div>
 
-                {username && (
+                {profileData.username && (
                   <Button
                     variant="outline"
                     className="w-full mt-6 border-zinc-700 hover:bg-zinc-800 bg-transparent"
-                    onClick={() => router.push(`/creator/${username}`)}
+                    onClick={() => router.push(`/creator/${profileData.username}`)}
                   >
                     <ExternalLink className="h-4 w-4 mr-2" />
                     View Public Profile
