@@ -232,10 +232,16 @@ export function SalesForecastCard() {
                   strokeWidth: 2,
                   stroke: "#18181b",
                 }}
-                strokeDasharray={(entry: any, index: number) => {
-                  const point = chartData[index]
-                  return point?.isProjected ? "4 4" : "0"
-                }}
+                connectNulls={false}
+              />
+              <Line
+                type="monotone"
+                dataKey={(entry: any) => (entry.isProjected ? entry.revenue : null)}
+                stroke="#ffffff80"
+                strokeWidth={2}
+                strokeDasharray="4 4"
+                dot={false}
+                connectNulls={true}
               />
             </LineChart>
           </ResponsiveContainer>
