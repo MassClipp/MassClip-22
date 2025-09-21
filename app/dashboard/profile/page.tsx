@@ -32,7 +32,6 @@ import CancelSubscriptionButton from "@/components/cancel-subscription-button"
 import { Badge } from "@/components/ui/badge"
 import { safelyFormatDate } from "@/lib/date-utils"
 import { fetchSubscriptionData } from "@/lib/subscription-utils"
-import { handleSubmit, handleViewProfile, handleCropComplete } from "@/lib/profile-utils"
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -255,6 +254,49 @@ export default function ProfilePage() {
     setCrop(crop)
   }
 
+  const handleCropComplete = async (
+    crop: Crop | undefined,
+    setImageToCrop: any,
+    setShowCropModal: any,
+    setProfilePicPreview: any,
+    setNewProfilePic: any,
+  ) => {
+    if (!crop || !imgRef.current) return
+
+    const canvas = document.createElement("canvas")
+    const scaleX = imgRef.current.naturalWidth / imgRef.current.width
+    const scaleY = imgRef.current.naturalHeight / imgRef.current.height
+    const ctx = canvas.getContext("2d")
+
+    canvas.width = crop.width * scaleX
+    canvas.height = crop.height * scaleY
+
+    if (ctx) {
+      ctx.drawImage(
+        imgRef.current,
+        crop.x * scaleX,
+        crop.y * scaleY,
+        crop.width * scaleX,
+        crop.height * scaleY,
+        0,
+        0,
+        crop.width * scaleX,
+        crop.height * scaleY,
+      )
+    }
+
+    const croppedImageBlob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve)
+    })
+
+    if (croppedImageBlob) {
+      setProfilePicPreview(URL.createObjectURL(croppedImageBlob))
+      setNewProfilePic(croppedImageBlob)
+    }
+
+    setShowCropModal(false)
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
@@ -288,19 +330,53 @@ export default function ProfilePage() {
                 </div>
               )}
               <form
-                onSubmit={(e) =>
-                  handleSubmit(
-                    e,
-                    user,
-                    setDisplayName,
-                    setUsername,
-                    setBio,
-                    setProfilePic,
-                    setNewProfilePic,
-                    setSaveSuccess,
-                    toast,
-                  )
-                }
+                onSubmit={async (e) => {
+                  e.preventDefault()
+                  if (!user) return
+
+                  setSaving(true)
+                  setSaveSuccess(false)
+
+                  try {
+                    console.log("[v0] Starting profile save...")
+
+                    const updateData = {
+                      displayName: displayName.trim(),
+                      username: username.toLowerCase().trim(),
+                      bio: bio.trim(),
+                      socialLinks: {
+                        instagram: instagramHandle.trim(),
+                        twitter: twitterHandle.trim(),
+                        website: websiteUrl.trim(),
+                      },
+                      updatedAt: serverTimestamp(),
+                    }
+
+                    console.log("[v0] Update data:", updateData)
+
+                    const userDocRef = doc(db, "users", user.uid)
+                    await setDoc(userDocRef, updateData, { merge: true })
+
+                    console.log("[v0] Profile saved successfully")
+
+                    setSaveSuccess(true)
+                    setTimeout(() => setSaveSuccess(false), 3000)
+
+                    toast({
+                      title: "Success",
+                      description: "Profile updated successfully!",
+                    })
+                  } catch (error) {
+                    console.error("[v0] Error saving profile:", error)
+                    toast({
+                      title: "Error",
+                      description: "Failed to save profile. Please try again.",
+                      variant: "destructive",
+                    })
+                  } finally {
+                    setSaving(false)
+                  }
+                }}
               >
                 <CardHeader>
                   <CardTitle>Profile Information</CardTitle>
@@ -526,7 +602,7 @@ export default function ProfilePage() {
                   <Button
                     variant="outline"
                     className="w-full mt-6 border-zinc-700 hover:bg-zinc-800 bg-transparent"
-                    onClick={() => handleViewProfile(username)}
+                    onClick={() => router.push(`/creator/${username}`)}
                   >
                     <ExternalLink className="h-4 w-4 mr-2" />
                     View Public Profile
