@@ -129,7 +129,7 @@ export default function UpgradePage() {
           </p>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-3">
+        <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3">
           {bundleOptions.map((option) => {
             const Icon = option.icon
             const isPurchasing = purchasingBundle === option.id
@@ -212,7 +212,7 @@ export default function UpgradePage() {
         </div>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-2">
+      <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-2">
         {/* Free Plan */}
         <Card className="group relative overflow-hidden border-2 border-zinc-700/50 hover:border-zinc-600/70 bg-gradient-to-br from-zinc-900/90 via-zinc-800/80 to-black/90 backdrop-blur-xl transition-all duration-500">
           {!isProUser && !loading && (
