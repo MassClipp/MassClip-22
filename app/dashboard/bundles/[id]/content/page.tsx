@@ -49,19 +49,32 @@ export default function BundleContentManagePage() {
       setLoading(true)
       setError(null)
 
+      console.log("[v0] Fetching bundle content for bundleId:", bundleId)
+
       const token = await user.getIdToken()
+      console.log("[v0] Got user token, making API call to:", `/api/bundles/${bundleId}/content`)
+
       const response = await fetch(`/api/bundles/${bundleId}/content`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       })
 
+      console.log("[v0] API response status:", response.status)
+      console.log("[v0] API response ok:", response.ok)
+
       if (!response.ok) {
-        throw new Error("Failed to fetch bundle content")
+        const errorText = await response.text()
+        console.log("[v0] API error response:", errorText)
+        throw new Error(`Failed to fetch bundle content: ${response.status} ${errorText}`)
       }
 
       const data = await response.json()
+      console.log("[v0] API response data:", data)
+
       if (data.bundle) {
+        console.log("[v0] Setting bundle data:", data.bundle)
+        console.log("[v0] Setting content data:", data.contents?.length || 0, "items")
         setBundle({
           id: data.bundle.id,
           title: data.bundle.title,
@@ -71,11 +84,12 @@ export default function BundleContentManagePage() {
         })
         setContent(data.contents || [])
       } else {
+        console.log("[v0] No bundle data in response, setting empty state")
         setBundle(null)
         setContent([])
       }
     } catch (err) {
-      console.error("Error fetching bundle content:", err)
+      console.error("[v0] Error fetching bundle content:", err)
       setError(err instanceof Error ? err.message : "Failed to fetch bundle content")
     } finally {
       setLoading(false)
