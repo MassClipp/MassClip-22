@@ -136,11 +136,12 @@ export default function ProfilePage() {
             setProfilePic(null)
           }
 
-          // Social links - handle both old and new structure
           const socialLinks = userData.socialLinks || {}
-          setInstagramHandle(socialLinks.instagram || userData.instagramHandle || "")
-          setTwitterHandle(socialLinks.twitter || userData.twitterHandle || "")
-          setWebsiteUrl(socialLinks.website || userData.websiteUrl || "")
+          console.log("[v0] Social links from database:", socialLinks)
+
+          setInstagramHandle(socialLinks.instagram || "")
+          setTwitterHandle(socialLinks.twitter || "")
+          setWebsiteUrl(socialLinks.website || "")
         } else {
           console.log("❌ No user document found, creating one...")
           // Create initial user document
@@ -168,6 +169,9 @@ export default function ProfilePage() {
           setUsername(initialData.username)
           setBio(initialData.bio)
           setProfilePic(initialData.profilePic)
+          setInstagramHandle("")
+          setTwitterHandle("")
+          setWebsiteUrl("")
         }
       } catch (error) {
         console.error("❌ Error fetching user profile:", error)
@@ -358,6 +362,22 @@ export default function ProfilePage() {
                     await setDoc(userDocRef, updateData, { merge: true })
 
                     console.log("[v0] Profile saved successfully")
+
+                    const updatedDoc = await getDoc(userDocRef)
+                    if (updatedDoc.exists()) {
+                      const updatedData = updatedDoc.data()
+                      console.log("[v0] Refreshed data after save:", updatedData)
+
+                      // Update state with fresh data from database
+                      setDisplayName(updatedData.displayName || "")
+                      setUsername(updatedData.username || "")
+                      setBio(updatedData.bio || "")
+
+                      const socialLinks = updatedData.socialLinks || {}
+                      setInstagramHandle(socialLinks.instagram || "")
+                      setTwitterHandle(socialLinks.twitter || "")
+                      setWebsiteUrl(socialLinks.website || "")
+                    }
 
                     setSaveSuccess(true)
                     setTimeout(() => setSaveSuccess(false), 3000)
