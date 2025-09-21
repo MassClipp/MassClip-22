@@ -49,6 +49,112 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     console.log(`👤 [Bundle Content API] User UID: ${userUid}`)
     console.log(`📦 [Bundle Content API] Bundle ID: ${bundleId}`)
 
+    console.log(`🔍 [Bundle Content API] Checking if user is bundle owner...`)
+
+    let bundleDoc = null
+    let bundleData = null
+    let isOwner = false
+
+    try {
+      // Check in bundles collection first
+      const bundleRef = await db.collection("bundles").doc(bundleId).get()
+      if (bundleRef.exists) {
+        bundleDoc = bundleRef
+        bundleData = bundleRef.data()
+        const creatorId = bundleData.creatorId || bundleData.creatorUid || bundleData.userId
+
+        if (creatorId === userUid) {
+          isOwner = true
+          console.log(`✅ [Bundle Content API] User is bundle owner!`)
+        }
+      }
+    } catch (error) {
+      console.log(`⚠️ [Bundle Content API] Error checking bundle ownership:`, error)
+    }
+
+    // If user is the owner, get content from the bundle document
+    if (isOwner && bundleData) {
+      console.log(`🔍 [Bundle Content API] Getting content from bundle document...`)
+
+      let bundleContents = []
+
+      // Look for content in various possible fields
+      const possibleContentFields = [
+        "content",
+        "contents",
+        "items",
+        "videos",
+        "files",
+        "bundleContent",
+        "bundleContents",
+        "contentItems",
+        "videoItems",
+        "bundleItems",
+      ]
+
+      for (const field of possibleContentFields) {
+        if (bundleData[field] && Array.isArray(bundleData[field])) {
+          bundleContents = bundleData[field]
+          console.log(`✅ [Bundle Content API] Found ${bundleContents.length} content items in bundle field: ${field}`)
+          break
+        }
+      }
+
+      if (bundleContents.length > 0) {
+        // Process and return the content
+        const processedContents = bundleContents.map((content, index) => {
+          const videoUrl =
+            content.fileUrl ||
+            content.videoUrl ||
+            content.downloadUrl ||
+            content.url ||
+            content.src ||
+            content.link ||
+            ""
+
+          return {
+            id: content.id || content.contentId || content.videoId || content._id || `content_${index}`,
+            title: content.title || content.displayTitle || content.name || content.filename || `Video ${index + 1}`,
+            description: content.description || content.desc || "",
+            type: content.type || content.contentType || "video",
+            fileType: content.fileType || content.mimeType || content.contentType || "video/mp4",
+            size: content.size || content.fileSize || content.displaySize || 0,
+            duration: content.duration || 0,
+            thumbnailUrl: content.thumbnailUrl || content.thumbnail || content.previewUrl || content.thumb || "",
+            fileUrl: videoUrl,
+            downloadUrl: videoUrl,
+            videoUrl: videoUrl,
+            createdAt: content.createdAt || content.uploadedAt || content.timestamp || new Date().toISOString(),
+            metadata: content.metadata || content.meta || {},
+          }
+        })
+
+        const bundleInfo = {
+          id: bundleId,
+          title: bundleData.title || bundleData.displayTitle || "Untitled Bundle",
+          description: bundleData.description || "",
+          creatorId: bundleData.creatorId || bundleData.creatorUid || "",
+          creatorUsername: bundleData.creatorUsername || bundleData.creatorName || "Unknown Creator",
+          thumbnailUrl: bundleData.thumbnailUrl || "",
+          price: bundleData.price || 0,
+          currency: bundleData.currency || "usd",
+        }
+
+        const response = {
+          hasAccess: true,
+          bundle: bundleInfo,
+          contents: processedContents,
+          isOwner: true,
+        }
+
+        console.log(`✅ [Bundle Content API] Returning owner content with ${processedContents.length} items`)
+        return NextResponse.json(response)
+      }
+    }
+
+    // If not owner or no content found in bundle, check purchases
+    console.log(`🔍 [Bundle Content API] User is not owner, checking purchases...`)
+
     // PRIMARY LOGIC: Look ONLY in bundlePurchases collection
     // This is the ONLY place bundle content should be stored
     console.log(`🔍 [Bundle Content API] Searching bundlePurchases collection...`)
@@ -279,48 +385,6 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       return processedContent
     })
 
-    // if (purchaseData.creatorId && bundleContents.length > 0) {
-    //   try {
-    //     console.log(`[v0] Attempting to send download notification for creator: ${purchaseData.creatorId}`)
-
-    //     // Get creator details for notification
-    //     const creatorDoc = await db.collection("users").doc(purchaseData.creatorId).get()
-    //     if (creatorDoc.exists) {
-    //       const creatorData = creatorDoc.data()!
-    //       const creatorEmail = creatorData.email
-    //       const creatorName = creatorData.displayName || creatorData.name || creatorData.username || "Creator"
-
-    //       console.log(`[v0] Creator found:`, {
-    //         id: purchaseData.creatorId,
-    //         email: creatorEmail,
-    //         name: creatorName,
-    //       })
-
-    //       if (creatorEmail) {
-    //         await NotificationService.notifyDownload(
-    //           purchaseData.creatorId,
-    //           creatorEmail,
-    //           creatorName,
-    //           bundleId,
-    //           bundleInfo.title,
-    //         )
-    //         console.log(`✅ [Bundle Content API] Download notifications sent to creator: ${creatorEmail}`)
-    //       } else {
-    //         console.log(`⚠️ [Bundle Content API] Creator has no email address for notifications`)
-    //       }
-    //     } else {
-    //       console.log(`⚠️ [Bundle Content API] Creator document not found: ${purchaseData.creatorId}`)
-    //     }
-    //   } catch (notificationError) {
-    //     console.error(`❌ [Bundle Content API] Failed to send download notifications:`, notificationError)
-    //     // Don't fail the content request if notifications fail
-    //   }
-    // } else {
-    //   console.log(
-    //     `[v0] Skipping download notification - creatorId: ${purchaseData.creatorId}, contentCount: ${bundleContents.length}`,
-    //   )
-    // }
-
     const response = {
       hasAccess: true,
       bundle: bundleInfo,
@@ -330,6 +394,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         purchaseDate: purchaseData.createdAt || purchaseData.purchaseDate,
         status: purchaseData.status || "completed",
       },
+      isOwner: false,
     }
 
     console.log(`✅ [Bundle Content API] Returning response with ${processedContents.length} content items`)
