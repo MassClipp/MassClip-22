@@ -41,13 +41,13 @@ export async function handleSubmit(
     }
 
     const updateData = {
-      displayName: displayName.trim(),
-      username: username.trim().toLowerCase(),
-      bio: bio.trim(),
+      displayName: displayName?.trim() || "",
+      username: username?.trim().toLowerCase() || "",
+      bio: bio?.trim() || "",
       socialLinks: {
-        instagram: instagramHandle.trim(),
-        twitter: twitterHandle.trim(),
-        website: websiteUrl.trim(),
+        instagram: instagramHandle?.trim() || "",
+        twitter: twitterHandle?.trim() || "",
+        website: websiteUrl?.trim() || "",
       },
       updatedAt: serverTimestamp(),
       ...(profilePicUrl && { profilePic: profilePicUrl }),
