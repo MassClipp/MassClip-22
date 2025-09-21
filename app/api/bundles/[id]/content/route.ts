@@ -78,56 +78,59 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
       let bundleContents = []
 
-      // Look for content in various possible fields
-      const possibleContentFields = [
-        "content",
-        "contents",
-        "items",
-        "videos",
-        "files",
-        "bundleContent",
-        "bundleContents",
-        "contentItems",
-        "videoItems",
-        "bundleItems",
-      ]
+      if (bundleData.detailedContentItems && Array.isArray(bundleData.detailedContentItems)) {
+        bundleContents = bundleData.detailedContentItems
+        console.log(`✅ [Bundle Content API] Found ${bundleContents.length} detailed content items in bundle`)
+      } else {
+        // Fallback to searching through other fields if detailedContentItems doesn't exist
+        const possibleContentFields = [
+          "content",
+          "contents",
+          "items",
+          "videos",
+          "files",
+          "bundleContent",
+          "bundleContents",
+          "contentItems",
+          "videoItems",
+          "bundleItems",
+        ]
 
-      for (const field of possibleContentFields) {
-        if (bundleData[field] && Array.isArray(bundleData[field])) {
-          bundleContents = bundleData[field]
-          console.log(`✅ [Bundle Content API] Found ${bundleContents.length} content items in bundle field: ${field}`)
-          break
+        for (const field of possibleContentFields) {
+          if (bundleData[field] && Array.isArray(bundleData[field])) {
+            bundleContents = bundleData[field]
+            console.log(
+              `✅ [Bundle Content API] Found ${bundleContents.length} content items in bundle field: ${field}`,
+            )
+            break
+          }
         }
       }
 
       if (bundleContents.length > 0) {
-        // Process and return the content
-        const processedContents = bundleContents.map((content, index) => {
-          const videoUrl =
+        const processedContents = bundleContents.map((content, index) => ({
+          id:
+            content.id || content.uploadId || content.contentId || content.videoId || content._id || `content_${index}`,
+          title: content.title || content.displayTitle || content.name || content.filename || `Video ${index + 1}`,
+          description: content.description || content.desc || "",
+          contentType: content.contentType || content.type || "video",
+          fileType: content.fileType || content.mimeType || content.contentType || "video/mp4",
+          size: content.size || content.fileSize || content.displaySize || 0,
+          duration: content.duration || 0,
+          thumbnailUrl: content.thumbnailUrl || content.thumbnail || content.previewUrl || content.thumb || "",
+          fileUrl:
             content.fileUrl ||
             content.videoUrl ||
             content.downloadUrl ||
             content.url ||
             content.src ||
             content.link ||
-            ""
-
-          return {
-            id: content.id || content.contentId || content.videoId || content._id || `content_${index}`,
-            title: content.title || content.displayTitle || content.name || content.filename || `Video ${index + 1}`,
-            description: content.description || content.desc || "",
-            type: content.type || content.contentType || "video",
-            fileType: content.fileType || content.mimeType || content.contentType || "video/mp4",
-            size: content.size || content.fileSize || content.displaySize || 0,
-            duration: content.duration || 0,
-            thumbnailUrl: content.thumbnailUrl || content.thumbnail || content.previewUrl || content.thumb || "",
-            fileUrl: videoUrl,
-            downloadUrl: videoUrl,
-            videoUrl: videoUrl,
-            createdAt: content.createdAt || content.uploadedAt || content.timestamp || new Date().toISOString(),
-            metadata: content.metadata || content.meta || {},
-          }
-        })
+            "",
+          downloadUrl: content.downloadUrl || content.fileUrl || content.videoUrl || content.url || "",
+          videoUrl: content.fileUrl || content.videoUrl || content.downloadUrl || content.url || "",
+          createdAt: content.createdAt || content.uploadedAt || content.timestamp || new Date().toISOString(),
+          metadata: content.metadata || content.meta || {},
+        }))
 
         const bundleInfo = {
           id: bundleId,
@@ -362,7 +365,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         id: content.id || content.contentId || content.videoId || content._id || `content_${index}`,
         title: content.title || content.displayTitle || content.name || content.filename || `Video ${index + 1}`,
         description: content.description || content.desc || "",
-        type: content.type || content.contentType || "video",
+        contentType: content.contentType || content.type || "video",
         fileType: content.fileType || content.mimeType || content.contentType || "video/mp4",
         size: content.size || content.fileSize || content.displaySize || 0,
         duration: content.duration || 0,
