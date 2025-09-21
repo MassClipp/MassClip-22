@@ -4,7 +4,20 @@ import { useRef } from "react"
 
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Plus, Edit, Eye, EyeOff, Loader2, AlertCircle, Upload, X, Check, Trash2, ImageIcon } from "lucide-react"
+import {
+  Plus,
+  Edit,
+  Eye,
+  EyeOff,
+  Loader2,
+  AlertCircle,
+  Upload,
+  X,
+  Check,
+  Trash2,
+  ImageIcon,
+  ArrowRight,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -70,6 +83,7 @@ interface EditBundleForm {
 }
 
 const CONTENT_LIMIT_FREE = 10
+const BUNDLE_DISPLAY_LIMIT = 6
 
 export default function BundlesPage() {
   const { user } = useAuth()
@@ -183,6 +197,7 @@ export default function BundlesPage() {
         updatedAt: bundle.updatedAt,
         productId: bundle.productId,
         priceId: bundle.priceId,
+        detailedContentItems: bundle.detailedContentItems || [], // Ensure detailedContentItems is mapped
       }))
 
       setProductBoxes(boxes)
@@ -1371,78 +1386,94 @@ export default function BundlesPage() {
                               <span className="ml-2 text-sm text-zinc-400">Loading content...</span>
                             </div>
                           ) : boxContent.length > 0 ? (
-                            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-                              {boxContent.map((item) => (
-                                <div key={item.id} className="group relative">
-                                  <div className="relative aspect-[9/16] bg-zinc-900 rounded-lg overflow-hidden shadow-md border border-transparent hover:border-white/20 transition-all duration-300">
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        handleRemoveContentFromBundle(productBox.id, item.id)
-                                      }}
-                                      className="absolute top-2 right-2 z-30 w-6 h-6 bg-black/80 hover:bg-black rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 shadow-lg"
-                                      title="Remove from bundle"
-                                    >
-                                      <X className="w-3 h-3 text-white" />
-                                    </button>
+                            <>
+                              <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+                                {boxContent.slice(0, BUNDLE_DISPLAY_LIMIT).map((item) => (
+                                  <div key={item.id} className="group relative">
+                                    <div className="relative aspect-[9/16] bg-zinc-900 rounded-lg overflow-hidden shadow-md border border-transparent hover:border-white/20 transition-all duration-300">
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          handleRemoveContentFromBundle(productBox.id, item.id)
+                                        }}
+                                        className="absolute top-2 right-2 z-30 w-6 h-6 bg-black/80 hover:bg-black rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 shadow-lg"
+                                        title="Remove from bundle"
+                                      >
+                                        <X className="w-3 h-3 text-white" />
+                                      </button>
 
-                                    {item.contentType === "video" ? (
-                                      <video
-                                        src={item.fileUrl}
-                                        className="w-full h-full object-cover cursor-pointer"
-                                        muted
-                                        preload="metadata"
-                                        poster={item.thumbnailUrl}
-                                        onMouseEnter={(e) => {
-                                          const video = e.target as HTMLVideoElement
-                                          video.play().catch(() => {})
-                                        }}
-                                        onMouseLeave={(e) => {
-                                          const video = e.target as HTMLVideoElement
-                                          video.pause()
-                                          video.currentTime = 0
-                                        }}
-                                        onClick={() => window.open(item.fileUrl, "_blank")}
-                                      />
-                                    ) : (
-                                      <div className="w-full h-full flex items-center justify-center cursor-pointer bg-zinc-800">
-                                        <div className="text-center">
-                                          <div className="text-2xl mb-1">
-                                            {item.contentType === "audio"
-                                              ? "🎵"
-                                              : item.contentType === "image"
-                                                ? "🖼️"
-                                                : "📄"}
+                                      {item.contentType === "video" ? (
+                                        <video
+                                          src={item.fileUrl}
+                                          className="w-full h-full object-cover cursor-pointer"
+                                          muted
+                                          preload="metadata"
+                                          poster={item.thumbnailUrl}
+                                          onMouseEnter={(e) => {
+                                            const video = e.target as HTMLVideoElement
+                                            video.play().catch(() => {})
+                                          }}
+                                          onMouseLeave={(e) => {
+                                            const video = e.target as HTMLVideoElement
+                                            video.pause()
+                                            video.currentTime = 0
+                                          }}
+                                          onClick={() => window.open(item.fileUrl, "_blank")}
+                                        />
+                                      ) : (
+                                        <div className="w-full h-full flex items-center justify-center cursor-pointer bg-zinc-800">
+                                          <div className="text-center">
+                                            <div className="text-2xl mb-1">
+                                              {item.contentType === "audio"
+                                                ? "🎵"
+                                                : item.contentType === "image"
+                                                  ? "🖼️"
+                                                  : "📄"}
+                                            </div>
                                           </div>
                                         </div>
-                                      </div>
-                                    )}
+                                      )}
 
-                                    {/* Play overlay for videos */}
-                                    {item.contentType === "video" && (
-                                      <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
-                                    )}
-                                  </div>
+                                      {/* Play overlay for videos */}
+                                      {item.contentType === "video" && (
+                                        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
+                                      )}
+                                    </div>
 
-                                  {/* File info */}
-                                  <div className="mt-2">
-                                    <p className="text-xs text-zinc-300 truncate font-light">{item.title}</p>
+                                    {/* File info */}
+                                    <div className="mt-2">
+                                      <p className="text-xs text-zinc-300 truncate font-light">{item.title}</p>
+                                    </div>
                                   </div>
+                                ))}
+
+                                {/* Add Content Placeholder - Only show when there's existing content */}
+                                <div
+                                  className="aspect-[9/16] bg-zinc-800/50 rounded-lg border-2 border-dashed border-zinc-700 flex flex-col items-center justify-center cursor-pointer hover:border-zinc-600 hover:bg-zinc-800/70 transition-all duration-200"
+                                  onClick={() => {
+                                    fetchUserUploads()
+                                    setShowAddContentModal(productBox.id)
+                                  }}
+                                >
+                                  <Plus className="w-6 h-6 text-zinc-500 mb-1" />
+                                  <p className="text-xs text-zinc-500 text-center px-1">Add Content</p>
                                 </div>
-                              ))}
-
-                              {/* Add Content Placeholder - Only show when there's existing content */}
-                              <div
-                                className="aspect-[9/16] bg-zinc-800/50 rounded-lg border-2 border-dashed border-zinc-700 flex flex-col items-center justify-center cursor-pointer hover:border-zinc-600 hover:bg-zinc-800/70 transition-all duration-200"
-                                onClick={() => {
-                                  fetchUserUploads()
-                                  setShowAddContentModal(productBox.id)
-                                }}
-                              >
-                                <Plus className="w-6 h-6 text-zinc-500 mb-1" />
-                                <p className="text-xs text-zinc-500 text-center px-1">Add Content</p>
                               </div>
-                            </div>
+
+                              {boxContent.length > BUNDLE_DISPLAY_LIMIT && (
+                                <div className="flex justify-center pt-4">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="border-zinc-700 text-zinc-300 bg-transparent hover:bg-zinc-800"
+                                    onClick={() => router.push(`/dashboard/bundles/${productBox.id}/content`)}
+                                  >
+                                    See all {boxContent.length} items
+                                    <ArrowRight className="h-3 w-3 ml-1" />
+                                  </Button>
+                                </div>
+                              )}
+                            </>
                           ) : (
                             // Empty state - Show centered Add Content button
                             <div className="text-center py-8">
