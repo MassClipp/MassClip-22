@@ -61,12 +61,27 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       if (bundleRef.exists) {
         bundleDoc = bundleRef
         bundleData = bundleRef.data()
+
+        console.log(`🔍 [Bundle Content API] Bundle document found. Keys:`, Object.keys(bundleData))
+        console.log(`🔍 [Bundle Content API] Bundle data:`, JSON.stringify(bundleData, null, 2))
+
         const creatorId = bundleData.creatorId || bundleData.creatorUid || bundleData.userId
+
+        console.log(`🔍 [Bundle Content API] Creator fields check:`)
+        console.log(`  - creatorId: ${bundleData.creatorId}`)
+        console.log(`  - creatorUid: ${bundleData.creatorUid}`)
+        console.log(`  - userId: ${bundleData.userId}`)
+        console.log(`  - resolved creatorId: ${creatorId}`)
+        console.log(`  - current userUid: ${userUid}`)
 
         if (creatorId === userUid) {
           isOwner = true
           console.log(`✅ [Bundle Content API] User is bundle owner!`)
+        } else {
+          console.log(`❌ [Bundle Content API] User is NOT bundle owner. Creator: ${creatorId}, User: ${userUid}`)
         }
+      } else {
+        console.log(`❌ [Bundle Content API] Bundle document not found in bundles collection`)
       }
     } catch (error) {
       console.log(`⚠️ [Bundle Content API] Error checking bundle ownership:`, error)
