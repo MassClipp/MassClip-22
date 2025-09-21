@@ -145,7 +145,11 @@ export default function BundleContentManagePage() {
   if (error) {
     return (
       <div className="min-h-screen bg-black text-white p-6">
-        <Button onClick={() => router.back()} variant="ghost" className="mb-6 text-zinc-400 hover:text-white">
+        <Button
+          onClick={() => router.back()}
+          variant="ghost"
+          className="mb-6 text-zinc-400 hover:text-white hover:bg-transparent"
+        >
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Bundles
         </Button>
@@ -164,7 +168,11 @@ export default function BundleContentManagePage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-4">
-          <Button onClick={() => router.back()} variant="ghost" className="text-zinc-400 hover:text-white">
+          <Button
+            onClick={() => router.back()}
+            variant="ghost"
+            className="text-zinc-400 hover:text-white hover:bg-transparent"
+          >
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Bundles
           </Button>
