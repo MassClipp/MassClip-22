@@ -107,8 +107,14 @@ async function processDownloadPurchase(session: Stripe.Checkout.Session) {
 }
 
 export async function POST(request: Request) {
+  console.log(`🔄 [Download Webhook] POST request received`)
+
   const sig = headers().get("stripe-signature") || headers().get("Stripe-Signature")
   const body = await request.text()
+
+  console.log(`🔍 [Download Webhook] Signature present: ${!!sig}`)
+  console.log(`🔍 [Download Webhook] Body length: ${body.length}`)
+  console.log(`🔍 [Download Webhook] Webhook secret configured: ${!!webhookSecret}`)
 
   if (!sig) {
     console.error("❌ [Download Webhook] Missing signature.")
@@ -120,6 +126,7 @@ export async function POST(request: Request) {
   try {
     if (webhookSecret) {
       event = stripe.webhooks.constructEvent(body, sig, webhookSecret)
+      console.log(`✅ [Download Webhook] Event constructed successfully: ${event.type}`)
     } else {
       throw new Error("No webhook secret configured")
     }
@@ -133,6 +140,7 @@ export async function POST(request: Request) {
   // Test Firebase connection
   try {
     await adminDb.collection("_test").limit(1).get()
+    console.log(`✅ [Download Webhook] Firebase connection successful`)
   } catch (error) {
     console.error("❌ [Download Webhook] Firebase not accessible:", error)
     return NextResponse.json({ error: "Database not initialized" }, { status: 500 })
@@ -186,5 +194,6 @@ export async function POST(request: Request) {
 }
 
 export async function GET() {
+  console.log(`🔄 [Download Webhook] GET request received - returning 405`)
   return NextResponse.json({ message: "Download webhook endpoint - POST only" }, { status: 405 })
 }
