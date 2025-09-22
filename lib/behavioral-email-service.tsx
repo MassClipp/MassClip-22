@@ -175,10 +175,24 @@ export class BehavioralEmailService {
       // Get all users who haven't unsubscribed
       const behavioralSnapshot = await adminDb.collection("behavioralEmails").where("unsubscribed", "==", false).get()
 
-      for (const doc of behavioralSnapshot.docs) {
-        const user = doc.data() as BehavioralEmailUser
+      const users = behavioralSnapshot.docs.map((doc) => doc.data() as BehavioralEmailUser)
+      console.log(`🔄 Processing ${users.length} users for behavioral emails...`)
+
+      for (let i = 0; i < users.length; i++) {
+        const user = users[i]
+        console.log(`📧 Processing user ${i + 1}/${users.length}: ${user.email}`)
+
         await this.checkUserAndSendEmails(user)
+
+        // Add delay between users to prevent rate limiting
+        // Wait 1 second between each user to be safe (allows up to 4 emails per user if needed)
+        if (i < users.length - 1) {
+          console.log(`⏳ Waiting 1 second before processing next user...`)
+          await new Promise((resolve) => setTimeout(resolve, 1000))
+        }
       }
+
+      console.log(`✅ Completed processing all ${users.length} users`)
     } catch (error) {
       console.error("❌ Error in checkAndSendBehavioralEmails:", error)
     }
@@ -189,28 +203,47 @@ export class BehavioralEmailService {
       const now = new Date()
       const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
 
+      const emailsToSend: BehavioralEmailTemplate["type"][] = []
+
       // Check Stripe connection
       const hasStripe = await this.hasStripeConnected(user.uid)
       if (!hasStripe && (!user.lastStripeEmailSent || user.lastStripeEmailSent < sevenDaysAgo)) {
-        await this.sendBehavioralEmail(user, "stripe")
+        emailsToSend.push("stripe")
       }
 
       // Check bundle count
       const bundleCount = await this.getBundleCount(user.uid)
       if (bundleCount === 0 && (!user.lastBundleEmailSent || user.lastBundleEmailSent < sevenDaysAgo)) {
-        await this.sendBehavioralEmail(user, "bundles")
+        emailsToSend.push("bundles")
       }
 
       // Check free content
       const freeContentCount = await this.getFreeContentCount(user.uid)
       if (freeContentCount === 0 && (!user.lastFreeContentEmailSent || user.lastFreeContentEmailSent < sevenDaysAgo)) {
-        await this.sendBehavioralEmail(user, "free-content")
+        emailsToSend.push("free-content")
       }
 
       // Check total content
       const totalContentCount = await this.getTotalContentCount(user.uid)
       if (totalContentCount === 0 && (!user.lastContentEmailSent || user.lastContentEmailSent < sevenDaysAgo)) {
-        await this.sendBehavioralEmail(user, "content")
+        emailsToSend.push("content")
+      }
+
+      // Send emails with delays between each one
+      for (let i = 0; i < emailsToSend.length; i++) {
+        const emailType = emailsToSend[i]
+        console.log(`📤 Sending ${emailType} email to ${user.email}`)
+
+        await this.sendBehavioralEmail(user, emailType)
+
+        // Wait 500ms between emails for the same user (2 requests per second = 500ms apart)
+        if (i < emailsToSend.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 500))
+        }
+      }
+
+      if (emailsToSend.length > 0) {
+        console.log(`✅ Sent ${emailsToSend.length} emails to ${user.email}`)
       }
     } catch (error) {
       console.error(`❌ Error checking user ${user.email}:`, error)
