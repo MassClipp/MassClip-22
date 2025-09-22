@@ -10,7 +10,7 @@ function getStripe(): Stripe {
   return new Stripe(key, { apiVersion: "2023-10-16" })
 }
 
-const webhookSecret = process.env.WEBHOOK_SECRET_KEY_2!
+const webhookSecret = process.env.WEBHOOK_SECRET_KEY_3!
 
 async function handleDownloadPurchase(session: Stripe.Checkout.Session, debugTrace: DebugTrace) {
   debugTrace.push(`Handling download purchase: ${session.id}`)
@@ -105,7 +105,7 @@ export async function POST(request: Request) {
 
   try {
     if (!webhookSecret) {
-      debugTrace.push("Missing WEBHOOK_SECRET_KEY_2")
+      debugTrace.push("Missing WEBHOOK_SECRET_KEY_3")
       return NextResponse.json({ error: "Server configuration error", debugTrace }, { status: 500 })
     }
 
