@@ -104,6 +104,76 @@ async function handleCheckoutCompleted(stripe: Stripe, event: Stripe.Event, debu
     return NextResponse.json({ error: "Could not find user ID", debugTrace }, { status: 400 })
   }
 
+  const downloadCount = (md as any).downloadCount
+  const source = (md as any).source
+
+  if (downloadCount && source === "dashboard_download_purchase") {
+    debugTrace.push(`Processing download purchase: ${downloadCount} downloads for user ${uid}`)
+
+    try {
+      // Record the download purchase
+      await adminDb.collection("downloadPurchases").add({
+        uid,
+        email,
+        downloadCount: Number.parseInt(downloadCount),
+        priceId,
+        stripeSessionId: session.id,
+        stripeCustomerId: customerId,
+        amount: session.amount_total,
+        currency: session.currency,
+        purchasedAt: new Date(),
+        status: "completed",
+      })
+      debugTrace.push(`Recorded download purchase in downloadPurchases collection`)
+
+      // Add downloads to user account
+      const memberDoc = await adminDb.collection("memberships").doc(uid).get()
+      if (memberDoc.exists) {
+        // User is a member - add to memberships collection
+        await adminDb
+          .collection("memberships")
+          .doc(uid)
+          .update({
+            additionalDownloads: adminDb.FieldValue.increment(Number.parseInt(downloadCount)),
+            updatedAt: new Date().toISOString(),
+          })
+        debugTrace.push(`Added ${downloadCount} downloads to member ${uid}`)
+      } else {
+        // User is free - add to freeUsers collection
+        const freeUserDoc = await adminDb.collection("freeUsers").doc(uid).get()
+        if (freeUserDoc.exists) {
+          await adminDb
+            .collection("freeUsers")
+            .doc(uid)
+            .update({
+              additionalDownloads: adminDb.FieldValue.increment(Number.parseInt(downloadCount)),
+              updatedAt: new Date().toISOString(),
+            })
+        } else {
+          // Create new free user record
+          await adminDb
+            .collection("freeUsers")
+            .doc(uid)
+            .set({
+              uid,
+              plan: "free",
+              downloadsUsed: 0,
+              bundlesCreated: 0,
+              additionalDownloads: Number.parseInt(downloadCount),
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            })
+        }
+        debugTrace.push(`Added ${downloadCount} downloads to free user ${uid}`)
+      }
+
+      return NextResponse.json({ received: true, downloadPurchase: true, debugTrace })
+    } catch (error: any) {
+      debugTrace.push(`Error processing download purchase: ${error.message}`)
+      return NextResponse.json({ error: "Failed to process download purchase", debugTrace }, { status: 500 })
+    }
+  }
+
   await upsertMembership({
     uid,
     email,
