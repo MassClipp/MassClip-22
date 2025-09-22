@@ -66,17 +66,20 @@ export function DownloadLimitProvider({ children }: { children: ReactNode }) {
           setRemainingDownloads(Number.POSITIVE_INFINITY)
           setHasReachedLimit(false)
         } else {
-          // Get user document for download tracking
-          const userDocRef = doc(db, "users", user.uid)
-          const userDoc = await getDoc(userDocRef)
+          const freeUserDocRef = doc(db, "freeUsers", user.uid)
+          const freeUserDoc = await getDoc(freeUserDocRef)
 
-          if (userDoc.exists()) {
-            const userData = userDoc.data()
-            const downloads = userData.downloads || 0
-            const limit = 15
+          if (freeUserDoc.exists()) {
+            const freeUserData = freeUserDoc.data()
+            const downloadsUsed = freeUserData.downloadsUsed || 0
+            const downloadsLimit = freeUserData.downloadsLimit || 15
 
-            setRemainingDownloads(Math.max(0, limit - downloads))
-            setHasReachedLimit(downloads >= limit)
+            setRemainingDownloads(Math.max(0, downloadsLimit - downloadsUsed))
+            setHasReachedLimit(downloadsUsed >= downloadsLimit)
+          } else {
+            // Default values if no freeUser document exists
+            setRemainingDownloads(15)
+            setHasReachedLimit(false)
           }
         }
 
@@ -90,10 +93,9 @@ export function DownloadLimitProvider({ children }: { children: ReactNode }) {
 
     checkSubscriptionStatus()
 
-    // Set up real-time listener for user document changes
-    const userDocRef = doc(db, "users", user.uid)
+    const freeUserDocRef = doc(db, "freeUsers", user.uid)
     const unsubscribe = onSnapshot(
-      userDocRef,
+      freeUserDocRef,
       () => {
         checkSubscriptionStatus()
       },
