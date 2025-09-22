@@ -1,49 +1,39 @@
 import { NextResponse } from "next/server"
 import Stripe from "stripe"
-import { headers } from "next/headers"
 import { adminDb } from "@/lib/firebase-admin"
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2023-10-16",
-})
+type DebugTrace = string[]
 
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || process.env.WEBHOOK_SECRET_KEY_2!
+function getStripe(): Stripe {
+  const key = process.env.STRIPE_SECRET_KEY
+  if (!key) throw new Error("Missing STRIPE_SECRET_KEY")
+  return new Stripe(key, { apiVersion: "2023-10-16" })
+}
 
-async function processDownloadPurchase(session: Stripe.Checkout.Session) {
-  console.log(`🛒 [Download Webhook] Processing download purchase: ${session.id}`)
+async function handleDownloadPurchase(session: Stripe.Checkout.Session, debugTrace: DebugTrace) {
+  debugTrace.push(`Handling download purchase: ${session.id}`)
 
   const metadata = session.metadata || {}
-  const { buyerUid, buyerEmail, downloadCount, contentType } = metadata
-
-  // Verify this is a download purchase
-  if (contentType !== "download_purchase") {
-    console.log(`ℹ️ [Download Webhook] Skipping non-download purchase: ${contentType}`)
-    return
-  }
+  const { buyerUid, buyerEmail, downloadCount } = metadata
 
   if (!buyerUid) {
-    throw new Error("Missing buyer UID in session metadata")
+    debugTrace.push("No buyerUid in session metadata")
+    return NextResponse.json({ error: "Could not find user ID", debugTrace }, { status: 400 })
   }
 
   const downloadsToAdd = Number.parseInt(downloadCount || "0")
   if (downloadsToAdd <= 0) {
-    throw new Error("Invalid download count in session metadata")
+    debugTrace.push(`Invalid download count: ${downloadCount}`)
+    return NextResponse.json({ error: "Invalid download count", debugTrace }, { status: 400 })
   }
 
-  console.log(`📦 [Download Webhook] Download purchase details:`, {
-    sessionId: session.id,
-    buyerUid: buyerUid.substring(0, 8) + "...",
-    downloadsToAdd,
-    paymentStatus: session.payment_status,
-  })
+  debugTrace.push(`Adding ${downloadsToAdd} downloads to user ${buyerUid}`)
 
-  // Add downloads to user account
   try {
     // Check if user is a member first
     const memberDoc = await adminDb.collection("memberships").doc(buyerUid).get()
 
     if (memberDoc.exists) {
-      // User is a member - add to their monthly downloads
       const currentData = memberDoc.data()
       const currentDownloads = currentData?.monthlyDownloads || 0
 
@@ -55,7 +45,7 @@ async function processDownloadPurchase(session: Stripe.Checkout.Session) {
           lastDownloadPurchase: new Date(),
         })
 
-      console.log(`✅ [Download Webhook] Added ${downloadsToAdd} downloads to member ${buyerUid}`)
+      debugTrace.push(`Added ${downloadsToAdd} downloads to member ${buyerUid}`)
     } else {
       // Check if user is a free user
       const freeUserDoc = await adminDb.collection("freeUsers").doc(buyerUid).get()
@@ -72,9 +62,9 @@ async function processDownloadPurchase(session: Stripe.Checkout.Session) {
             lastDownloadPurchase: new Date(),
           })
 
-        console.log(`✅ [Download Webhook] Added ${downloadsToAdd} downloads to free user ${buyerUid}`)
+        debugTrace.push(`Added ${downloadsToAdd} downloads to free user ${buyerUid}`)
       } else {
-        // Create new free user record with downloads
+        // Create new free user record
         await adminDb.collection("freeUsers").doc(buyerUid).set({
           email: buyerEmail,
           monthlyDownloads: downloadsToAdd,
@@ -82,7 +72,7 @@ async function processDownloadPurchase(session: Stripe.Checkout.Session) {
           createdAt: new Date(),
         })
 
-        console.log(`✅ [Download Webhook] Created new user ${buyerUid} with ${downloadsToAdd} downloads`)
+        debugTrace.push(`Created new user ${buyerUid} with ${downloadsToAdd} downloads`)
       }
     }
 
@@ -98,99 +88,67 @@ async function processDownloadPurchase(session: Stripe.Checkout.Session) {
       status: "completed",
       createdAt: new Date(),
     })
-  } catch (error) {
-    console.error(`❌ [Download Webhook] Failed to add downloads to user ${buyerUid}:`, error)
+
+    debugTrace.push("Download purchase completed successfully")
+  } catch (error: any) {
+    debugTrace.push(`Error processing download purchase: ${error.message}`)
     throw error
   }
 
-  console.log(`✅ [Download Webhook] Download purchase completed successfully: ${session.id}`)
+  return NextResponse.json({ received: true, debugTrace })
 }
 
 export async function POST(request: Request) {
-  console.log(`🔄 [Download Webhook] POST request received`)
-
-  const sig = headers().get("stripe-signature") || headers().get("Stripe-Signature")
-  const body = await request.text()
-
-  console.log(`🔍 [Download Webhook] Signature present: ${!!sig}`)
-  console.log(`🔍 [Download Webhook] Body length: ${body.length}`)
-  console.log(`🔍 [Download Webhook] Webhook secret configured: ${!!webhookSecret}`)
-  console.log(`🔍 [Download Webhook] Available webhook secrets:`, {
-    STRIPE_WEBHOOK_SECRET: !!process.env.STRIPE_WEBHOOK_SECRET,
-    WEBHOOK_SECRET_KEY_2: !!process.env.WEBHOOK_SECRET_KEY_2,
-    STRIPE_WEBHOOK_SECRET_LIVE: !!process.env.STRIPE_WEBHOOK_SECRET_LIVE,
-    STRIPE_WEBHOOK_SECRET_TEST: !!process.env.STRIPE_WEBHOOK_SECRET_TEST,
-  })
-
-  if (!sig) {
-    console.error("❌ [Download Webhook] Missing signature.")
-    return NextResponse.json({ error: "Missing signature" }, { status: 400 })
-  }
-
-  let event: Stripe.Event
+  const debugTrace: DebugTrace = []
 
   try {
-    if (webhookSecret) {
-      let constructionError: any
-      const secretsToTry = [
-        process.env.STRIPE_WEBHOOK_SECRET,
-        process.env.WEBHOOK_SECRET_KEY_2,
-        process.env.STRIPE_WEBHOOK_SECRET_LIVE,
-        process.env.STRIPE_WEBHOOK_SECRET_TEST,
-      ].filter(Boolean)
-
-      for (const secret of secretsToTry) {
-        try {
-          event = stripe.webhooks.constructEvent(body, sig, secret!)
-          console.log(
-            `✅ [Download Webhook] Event constructed successfully with secret: ${secret?.substring(0, 10)}...`,
-          )
-          break
-        } catch (err: any) {
-          constructionError = err
-          console.log(`❌ [Download Webhook] Failed with secret ${secret?.substring(0, 10)}...: ${err.message}`)
-        }
-      }
-
-      if (!event!) {
-        throw constructionError || new Error("No valid webhook secret found")
-      }
-    } else {
-      throw new Error("No webhook secret configured")
+    if (!process.env.STRIPE_WEBHOOK_SECRET) {
+      debugTrace.push("Missing STRIPE_WEBHOOK_SECRET")
+      return NextResponse.json({ error: "Server configuration error", debugTrace }, { status: 500 })
     }
-  } catch (err: any) {
-    console.error(`❌ [Download Webhook] Signature verification failed: ${err.message}`)
-    return new NextResponse(`Webhook Error: ${err.message}`, { status: 400 })
-  }
 
-  console.log(`✅ [Download Webhook] Received event: ${event.type} (${event.id})`)
+    try {
+      await adminDb.collection("test").limit(1).get()
+      debugTrace.push("Firebase initialized successfully")
+    } catch (error: any) {
+      debugTrace.push(`Firebase initialization failed: ${error.message}`)
+      return NextResponse.json({ error: "Firestore not initialized", debugTrace }, { status: 500 })
+    }
 
-  // Test Firebase connection
-  try {
-    await adminDb.collection("_test").limit(1).get()
-    console.log(`✅ [Download Webhook] Firebase connection successful`)
-  } catch (error) {
-    console.error("❌ [Download Webhook] Firebase not accessible:", error)
-    return NextResponse.json({ error: "Database not initialized" }, { status: 500 })
-  }
+    const stripe = getStripe()
 
-  // Store raw event for diagnostics (non-blocking)
-  adminDb
-    .collection("stripeEvents")
-    .add({
-      id: event.id,
-      type: event.type,
-      object: event.object,
-      api_version: event.api_version,
-      data: event.data,
-      created: new Date(event.created * 1000),
-      webhook: "webhook-handler-3",
-    })
-    .catch((error) => {
-      console.error("Failed to store raw stripe event", error)
-    })
+    const payload = await request.text()
+    const sig = request.headers.get("stripe-signature")
+    if (!sig) {
+      debugTrace.push("Missing stripe-signature header")
+      return NextResponse.json({ error: "Missing stripe-signature header", debugTrace }, { status: 400 })
+    }
 
-  try {
+    let event: Stripe.Event
+    try {
+      event = stripe.webhooks.constructEvent(payload, sig, process.env.STRIPE_WEBHOOK_SECRET)
+      debugTrace.push(`Verified signature for event ${event.id} (${event.type})`)
+    } catch (err: any) {
+      debugTrace.push(`Signature verification failed: ${err.message}`)
+      return NextResponse.json(
+        { error: `Webhook signature verification failed: ${err.message}`, debugTrace },
+        { status: 400 },
+      )
+    }
+
+    // Store raw event for diagnostics (best-effort)
+    try {
+      await adminDb.collection("stripeWebhookEvents").add({
+        eventType: event.type,
+        eventId: event.id,
+        receivedAt: new Date(),
+        rawEvent: JSON.parse(payload),
+        webhook: "webhook-handler-3",
+      })
+    } catch (e) {
+      console.warn("Failed to store raw event:", e)
+    }
+
     switch (event.type) {
       case "checkout.session.completed":
         const session = event.data.object as Stripe.Checkout.Session
@@ -198,30 +156,18 @@ export async function POST(request: Request) {
 
         // Only process download purchases
         if (metadata.contentType === "download_purchase") {
-          await processDownloadPurchase(session)
+          return await handleDownloadPurchase(session, debugTrace)
         } else {
-          console.log(`ℹ️ [Download Webhook] Ignoring non-download event: ${metadata.contentType}`)
+          debugTrace.push(`Ignoring non-download purchase: ${metadata.contentType}`)
+          return NextResponse.json({ received: true, debugTrace })
         }
-        break
-
       default:
-        console.log(`ℹ️ [Download Webhook] Unhandled event type: ${event.type}`)
+        debugTrace.push(`No-op for event ${event.type}`)
+        return NextResponse.json({ received: true, debugTrace })
     }
   } catch (error: any) {
-    console.error(`❌ [Download Webhook] Handler failed for event ${event.type}:`, error)
-    return NextResponse.json(
-      {
-        error: "Webhook handler failed",
-        details: error.message,
-      },
-      { status: 500 },
-    )
+    console.error("Webhook error:", error)
+    debugTrace.push(`Webhook error: ${error.message}`)
+    return NextResponse.json({ error: error?.message || "Unknown error", debugTrace }, { status: 500 })
   }
-
-  return NextResponse.json({ received: true })
-}
-
-export async function GET() {
-  console.log(`🔄 [Download Webhook] GET request received - returning 405`)
-  return NextResponse.json({ message: "Download webhook endpoint - POST only" }, { status: 405 })
 }
