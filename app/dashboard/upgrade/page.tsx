@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { CheckCircle2, Crown, Shield, Package } from "lucide-react"
+import { CheckCircle2, Crown, Shield, Package, Download, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { useAuth } from "@/contexts/auth-context"
@@ -39,11 +39,44 @@ const bundleOptions = [
   },
 ]
 
+const downloadOptions = [
+  {
+    id: "download-5",
+    name: "5 Extra Downloads",
+    price: 3.99,
+    downloads: 5,
+    description: "Perfect for occasional use",
+    icon: Download,
+    priceId: "price_download_5", // You'll need to create these in Stripe
+  },
+  {
+    id: "download-10",
+    name: "10 Extra Downloads",
+    price: 7.99,
+    downloads: 10,
+    description: "Great for regular creators",
+    icon: Download,
+    popular: true,
+    priceId: "price_download_10",
+  },
+  {
+    id: "download-20",
+    name: "20 Extra Downloads",
+    price: 11.99,
+    downloads: 20,
+    description: "Best value for power users",
+    icon: Download,
+    priceId: "price_download_20",
+  },
+]
+
 export default function UpgradePage() {
   const router = useRouter()
   const { user } = useAuth()
   const { isProUser, loading } = useUserPlan()
   const [purchasingBundle, setPurchasingBundle] = useState<string | null>(null)
+  const [purchasingDownload, setPurchasingDownload] = useState<string | null>(null)
+  const [showingDownloads, setShowingDownloads] = useState(false)
 
   const handleBundlePurchase = async (bundleId: string) => {
     try {
@@ -80,6 +113,44 @@ export default function UpgradePage() {
       console.error("[Upgrade] Error starting bundle checkout:", err)
     } finally {
       setPurchasingBundle(null)
+    }
+  }
+
+  const handleDownloadPurchase = async (downloadId: string) => {
+    try {
+      setPurchasingDownload(downloadId)
+      const downloadOption = downloadOptions.find((option) => option.id === downloadId)
+      if (!downloadOption) {
+        console.warn("[Upgrade] Download option not found")
+        return
+      }
+
+      const idToken = await user?.getIdToken?.()
+      const res = await fetch("/api/stripe/checkout/downloads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          idToken,
+          downloadId,
+          priceId: downloadOption.priceId,
+          downloads: downloadOption.downloads,
+          price: downloadOption.price,
+        }),
+      })
+
+      if (!res.ok) {
+        console.warn("[Upgrade] Failed to create checkout session for download purchase.")
+        return
+      }
+
+      const data = (await res.json()) as { url?: string }
+      if (data?.url) {
+        window.location.href = data.url
+      }
+    } catch (err) {
+      console.error("[Upgrade] Error starting download checkout:", err)
+    } finally {
+      setPurchasingDownload(null)
     }
   }
 
@@ -123,16 +194,46 @@ export default function UpgradePage() {
 
       <div className="space-y-8">
         <div className="text-center">
-          <h2 className="text-3xl font-light text-white mb-4">One-Time Bundle Purchases</h2>
+          <div className="flex items-center justify-center gap-4 mb-6">
+            <Button
+              onClick={() => setShowingDownloads(false)}
+              variant={!showingDownloads ? "default" : "outline"}
+              className={`px-6 py-2 rounded-xl transition-all duration-300 ${
+                !showingDownloads
+                  ? "bg-gradient-to-r from-cyan-500 to-blue-500 text-white"
+                  : "border-zinc-600 text-zinc-300 hover:text-white"
+              }`}
+            >
+              Bundle Offers
+            </Button>
+            <ChevronRight className="h-5 w-5 text-zinc-400" />
+            <Button
+              onClick={() => setShowingDownloads(true)}
+              variant={showingDownloads ? "default" : "outline"}
+              className={`px-6 py-2 rounded-xl transition-all duration-300 ${
+                showingDownloads
+                  ? "bg-gradient-to-r from-cyan-500 to-blue-500 text-white"
+                  : "border-zinc-600 text-zinc-300 hover:text-white"
+              }`}
+            >
+              Download Offers
+            </Button>
+          </div>
+
+          <h2 className="text-3xl font-light text-white mb-4">
+            {showingDownloads ? "One-Time Download Purchases" : "One-Time Bundle Purchases"}
+          </h2>
           <p className="text-white/60 font-light">
-            Perfect for free users who want extra bundles without a subscription
+            {showingDownloads
+              ? "Perfect for free users who need extra downloads without a subscription"
+              : "Perfect for free users who want extra bundles without a subscription"}
           </p>
         </div>
 
         <div className="grid gap-6 grid-cols-1 md:grid-cols-3">
-          {bundleOptions.map((option) => {
+          {(showingDownloads ? downloadOptions : bundleOptions).map((option) => {
             const Icon = option.icon
-            const isPurchasing = purchasingBundle === option.id
+            const isPurchasing = showingDownloads ? purchasingDownload === option.id : purchasingBundle === option.id
 
             return (
               <Card
@@ -169,7 +270,9 @@ export default function UpgradePage() {
                     <li className="flex items-start">
                       <CheckCircle2 className="mr-3 mt-1 h-4 w-4 flex-shrink-0 text-cyan-400" />
                       <span className="text-white font-light">
-                        {option.bundles} extra bundle{option.bundles > 1 ? "s" : ""}
+                        {showingDownloads
+                          ? `${(option as any).downloads} extra downloads`
+                          : `${(option as any).bundles} extra bundle${(option as any).bundles > 1 ? "s" : ""}`}
                       </span>
                     </li>
                     <li className="flex items-start">
@@ -183,7 +286,9 @@ export default function UpgradePage() {
                   </ul>
 
                   <Button
-                    onClick={() => handleBundlePurchase(option.id)}
+                    onClick={() =>
+                      showingDownloads ? handleDownloadPurchase(option.id) : handleBundlePurchase(option.id)
+                    }
                     disabled={isPurchasing}
                     className="w-full py-3 text-sm font-medium rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white transition-all duration-300 shadow-lg shadow-cyan-500/25"
                   >
@@ -192,8 +297,10 @@ export default function UpgradePage() {
                         <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
                         Processing...
                       </div>
+                    ) : showingDownloads ? (
+                      `Purchase ${(option as any).downloads} Downloads`
                     ) : (
-                      `Purchase ${option.bundles} Bundle${option.bundles > 1 ? "s" : ""}`
+                      `Purchase ${(option as any).bundles} Bundle${(option as any).bundles > 1 ? "s" : ""}`
                     )}
                   </Button>
                 </div>
@@ -299,8 +406,6 @@ export default function UpgradePage() {
                 "Unlimited downloads",
                 "Unlimited bundles on storefront",
                 "Unlimited videos per bundle",
-                "Access to all clips",
-                "Priority support",
                 "Only 10% platform fee on sales",
               ].map((feature, index) => (
                 <li key={index} className="flex items-start py-1">
