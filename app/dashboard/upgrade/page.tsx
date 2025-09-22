@@ -57,7 +57,7 @@ const downloadOptions = [
     description: "Great for regular creators",
     icon: Download,
     popular: true,
-    priceId: "price_download_10",
+    priceId: "price_1SAC0xDheyb0pkWFZQRMrkUY",
   },
   {
     id: "download-20",
