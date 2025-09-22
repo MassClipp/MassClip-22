@@ -1494,7 +1494,7 @@ export default function ExplorePage() {
             >
               <Download className="h-3 w-3" />
               <span>
-                {downloadsUsed}/{totalDownloads}
+                {remainingDownloads}/{totalDownloads}
               </span>
             </div>
           )}
