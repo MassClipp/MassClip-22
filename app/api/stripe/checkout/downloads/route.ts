@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
 import { auth, isFirebaseAdminInitialized } from "@/lib/firebase-admin"
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY_TEST_2!, {
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
 })
 

@@ -47,7 +47,7 @@ const downloadOptions = [
     downloads: 5,
     description: "Perfect for occasional use",
     icon: Download,
-    priceId: "price_download_5", // You'll need to create these in Stripe
+    priceId: "price_1SABziDheyb0pkWFkOLxpVWM",
   },
   {
     id: "download-10",
@@ -57,7 +57,7 @@ const downloadOptions = [
     description: "Great for regular creators",
     icon: Download,
     popular: true,
-    priceId: "price_1SAC0xDheyb0pkWFZQRMrkUY",
+    priceId: "price_1SAC03Dheyb0pkWFiOdBWRqd",
   },
   {
     id: "download-20",
@@ -66,7 +66,7 @@ const downloadOptions = [
     downloads: 20,
     description: "Best value for power users",
     icon: Download,
-    priceId: "price_download_20",
+    priceId: "price_1SAC0NDheyb0pkWFU6sqHzbH",
   },
 ]
 
