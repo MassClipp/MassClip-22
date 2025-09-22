@@ -34,56 +34,33 @@ async function handleDownloadPurchase(session: Stripe.Checkout.Session, debugTra
   debugTrace.push(`Adding ${downloadsToAdd} downloads to user ${buyerUid}`)
 
   try {
-    // Check if user is a member first
-    const memberDoc = await adminDb.collection("memberships").doc(buyerUid).get()
+    const freeUserDoc = await adminDb.collection("freeUsers").doc(buyerUid).get()
 
-    if (memberDoc.exists) {
-      const currentData = memberDoc.data()
-      const currentDownloads = currentData?.monthlyDownloads || 0
-      debugTrace.push(`Member found - current downloads: ${currentDownloads}`)
-
-      await adminDb
-        .collection("memberships")
-        .doc(buyerUid)
-        .update({
-          monthlyDownloads: currentDownloads + downloadsToAdd,
-          lastDownloadPurchase: new Date(),
-        })
-
+    if (freeUserDoc.exists) {
+      const currentData = freeUserDoc.data()
+      const currentLimit = currentData?.downloadLimit || 15 // Default limit is 15
+      const newLimit = currentLimit + downloadsToAdd
       debugTrace.push(
-        `Updated member ${buyerUid} from ${currentDownloads} to ${currentDownloads + downloadsToAdd} downloads`,
+        `Free user found - current limit: ${currentLimit}, adding: ${downloadsToAdd}, new limit: ${newLimit}`,
       )
+
+      await adminDb.collection("freeUsers").doc(buyerUid).update({
+        downloadLimit: newLimit,
+        lastDownloadPurchase: new Date(),
+      })
+
+      debugTrace.push(`Updated user ${buyerUid} downloadLimit from ${currentLimit} to ${newLimit}`)
     } else {
-      // Check if user is a free user
-      const freeUserDoc = await adminDb.collection("freeUsers").doc(buyerUid).get()
+      // Create new free user record with increased limit
+      const newLimit = 15 + downloadsToAdd // Base 15 + purchased amount
+      await adminDb.collection("freeUsers").doc(buyerUid).set({
+        email: buyerEmail,
+        downloadLimit: newLimit,
+        lastDownloadPurchase: new Date(),
+        createdAt: new Date(),
+      })
 
-      if (freeUserDoc.exists) {
-        const currentData = freeUserDoc.data()
-        const currentDownloads = currentData?.monthlyDownloads || 0
-        debugTrace.push(`Free user found - current downloads: ${currentDownloads}`)
-
-        await adminDb
-          .collection("freeUsers")
-          .doc(buyerUid)
-          .update({
-            monthlyDownloads: currentDownloads + downloadsToAdd,
-            lastDownloadPurchase: new Date(),
-          })
-
-        debugTrace.push(
-          `Updated free user ${buyerUid} from ${currentDownloads} to ${currentDownloads + downloadsToAdd} downloads`,
-        )
-      } else {
-        // Create new free user record
-        await adminDb.collection("freeUsers").doc(buyerUid).set({
-          email: buyerEmail,
-          monthlyDownloads: downloadsToAdd,
-          lastDownloadPurchase: new Date(),
-          createdAt: new Date(),
-        })
-
-        debugTrace.push(`Created new user ${buyerUid} with ${downloadsToAdd} downloads`)
-      }
+      debugTrace.push(`Created new user ${buyerUid} with downloadLimit: ${newLimit}`)
     }
 
     // Record the purchase
