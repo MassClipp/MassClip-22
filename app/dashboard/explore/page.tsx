@@ -1471,7 +1471,7 @@ export default function ExplorePage() {
     },
   ]
 
-  const { remainingDownloads, isProUser: isPro, hasReachedLimit } = useDownloadLimit()
+  const { remainingDownloads, isProUser: isPro, hasReachedLimit, downloadsUsed, totalDownloads } = useDownloadLimit()
 
   return (
     <div className="space-y-8">
@@ -1493,7 +1493,9 @@ export default function ExplorePage() {
               }`}
             >
               <Download className="h-3 w-3" />
-              <span>{remainingDownloads}/15</span>
+              <span>
+                {downloadsUsed}/{totalDownloads}
+              </span>
             </div>
           )}
 

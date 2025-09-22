@@ -8,6 +8,8 @@ import { useAuth } from "@/contexts/auth-context"
 interface DownloadLimitContextType {
   hasReachedLimit: boolean
   remainingDownloads: number
+  downloadsUsed: number
+  totalDownloads: number
   isProUser: boolean
   forceRefresh: () => void
   loading: boolean
@@ -16,6 +18,8 @@ interface DownloadLimitContextType {
 const DownloadLimitContext = createContext<DownloadLimitContextType>({
   hasReachedLimit: false,
   remainingDownloads: 15,
+  downloadsUsed: 0,
+  totalDownloads: 15,
   isProUser: false,
   forceRefresh: () => {},
   loading: true,
@@ -25,6 +29,8 @@ export function DownloadLimitProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const [hasReachedLimit, setHasReachedLimit] = useState(false)
   const [remainingDownloads, setRemainingDownloads] = useState(15)
+  const [downloadsUsed, setDownloadsUsed] = useState(0)
+  const [totalDownloads, setTotalDownloads] = useState(15)
   const [isProUser, setIsProUser] = useState(false)
   const [refreshCounter, setRefreshCounter] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -37,6 +43,8 @@ export function DownloadLimitProvider({ children }: { children: ReactNode }) {
     if (!user) {
       setHasReachedLimit(false)
       setRemainingDownloads(15)
+      setDownloadsUsed(0)
+      setTotalDownloads(15)
       setIsProUser(false)
       setLoading(false)
       return
@@ -56,7 +64,6 @@ export function DownloadLimitProvider({ children }: { children: ReactNode }) {
 
         if (membershipResponse.ok) {
           const membershipData = await membershipResponse.json()
-          // Simple check - if membership is active, user is pro
           isPro = membershipData.isActive
         }
 
@@ -65,19 +72,24 @@ export function DownloadLimitProvider({ children }: { children: ReactNode }) {
         if (isPro) {
           setRemainingDownloads(Number.POSITIVE_INFINITY)
           setHasReachedLimit(false)
+          setDownloadsUsed(0)
+          setTotalDownloads(Number.POSITIVE_INFINITY)
         } else {
           const freeUserDocRef = doc(db, "freeUsers", user.uid)
           const freeUserDoc = await getDoc(freeUserDocRef)
 
           if (freeUserDoc.exists()) {
             const freeUserData = freeUserDoc.data()
-            const downloadsUsed = freeUserData.downloadsUsed || 0
-            const downloadsLimit = freeUserData.downloadsLimit || 15
+            const used = freeUserData.downloadsUsed || 0
+            const limit = freeUserData.downloadsLimit || 15
 
-            setRemainingDownloads(Math.max(0, downloadsLimit - downloadsUsed))
-            setHasReachedLimit(downloadsUsed >= downloadsLimit)
+            setDownloadsUsed(used)
+            setTotalDownloads(limit)
+            setRemainingDownloads(Math.max(0, limit - used))
+            setHasReachedLimit(used >= limit)
           } else {
-            // Default values if no freeUser document exists
+            setDownloadsUsed(0)
+            setTotalDownloads(15)
             setRemainingDownloads(15)
             setHasReachedLimit(false)
           }
@@ -113,6 +125,8 @@ export function DownloadLimitProvider({ children }: { children: ReactNode }) {
       value={{
         hasReachedLimit,
         remainingDownloads,
+        downloadsUsed,
+        totalDownloads,
         isProUser,
         forceRefresh,
         loading,
