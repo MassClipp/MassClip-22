@@ -38,29 +38,29 @@ async function handleDownloadPurchase(session: Stripe.Checkout.Session, debugTra
 
     if (freeUserDoc.exists) {
       const currentData = freeUserDoc.data()
-      const currentLimit = currentData?.downloadLimit || 15 // Default limit is 15
+      const currentLimit = currentData?.downloadsLimit || 15 // Default limit is 15
       const newLimit = currentLimit + downloadsToAdd
       debugTrace.push(
         `Free user found - current limit: ${currentLimit}, adding: ${downloadsToAdd}, new limit: ${newLimit}`,
       )
 
       await adminDb.collection("freeUsers").doc(buyerUid).update({
-        downloadLimit: newLimit,
+        downloadsLimit: newLimit, // Update the correct field name
         lastDownloadPurchase: new Date(),
       })
 
-      debugTrace.push(`Updated user ${buyerUid} downloadLimit from ${currentLimit} to ${newLimit}`)
+      debugTrace.push(`Updated user ${buyerUid} downloadsLimit from ${currentLimit} to ${newLimit}`)
     } else {
       // Create new free user record with increased limit
       const newLimit = 15 + downloadsToAdd // Base 15 + purchased amount
       await adminDb.collection("freeUsers").doc(buyerUid).set({
         email: buyerEmail,
-        downloadLimit: newLimit,
+        downloadsLimit: newLimit, // Use correct field name
         lastDownloadPurchase: new Date(),
         createdAt: new Date(),
       })
 
-      debugTrace.push(`Created new user ${buyerUid} with downloadLimit: ${newLimit}`)
+      debugTrace.push(`Created new user ${buyerUid} with downloadsLimit: ${newLimit}`)
     }
 
     // Record the purchase
