@@ -16,6 +16,8 @@ async function handleDownloadPurchase(session: Stripe.Checkout.Session, debugTra
   debugTrace.push(`Handling download purchase: ${session.id}`)
 
   const metadata = session.metadata || {}
+  debugTrace.push(`Session metadata: ${JSON.stringify(metadata)}`)
+
   const { buyerUid, buyerEmail, downloadCount } = metadata
 
   if (!buyerUid) {
@@ -38,6 +40,7 @@ async function handleDownloadPurchase(session: Stripe.Checkout.Session, debugTra
     if (memberDoc.exists) {
       const currentData = memberDoc.data()
       const currentDownloads = currentData?.monthlyDownloads || 0
+      debugTrace.push(`Member found - current downloads: ${currentDownloads}`)
 
       await adminDb
         .collection("memberships")
@@ -47,7 +50,9 @@ async function handleDownloadPurchase(session: Stripe.Checkout.Session, debugTra
           lastDownloadPurchase: new Date(),
         })
 
-      debugTrace.push(`Added ${downloadsToAdd} downloads to member ${buyerUid}`)
+      debugTrace.push(
+        `Updated member ${buyerUid} from ${currentDownloads} to ${currentDownloads + downloadsToAdd} downloads`,
+      )
     } else {
       // Check if user is a free user
       const freeUserDoc = await adminDb.collection("freeUsers").doc(buyerUid).get()
@@ -55,6 +60,7 @@ async function handleDownloadPurchase(session: Stripe.Checkout.Session, debugTra
       if (freeUserDoc.exists) {
         const currentData = freeUserDoc.data()
         const currentDownloads = currentData?.monthlyDownloads || 0
+        debugTrace.push(`Free user found - current downloads: ${currentDownloads}`)
 
         await adminDb
           .collection("freeUsers")
@@ -64,7 +70,9 @@ async function handleDownloadPurchase(session: Stripe.Checkout.Session, debugTra
             lastDownloadPurchase: new Date(),
           })
 
-        debugTrace.push(`Added ${downloadsToAdd} downloads to free user ${buyerUid}`)
+        debugTrace.push(
+          `Updated free user ${buyerUid} from ${currentDownloads} to ${currentDownloads + downloadsToAdd} downloads`,
+        )
       } else {
         // Create new free user record
         await adminDb.collection("freeUsers").doc(buyerUid).set({
@@ -155,6 +163,7 @@ export async function POST(request: Request) {
       case "checkout.session.completed":
         const session = event.data.object as Stripe.Checkout.Session
         const metadata = session.metadata || {}
+        debugTrace.push(`Session ${session.id} metadata: ${JSON.stringify(metadata)}`)
 
         // Only process download purchases
         if (metadata.contentType === "download_purchase") {
