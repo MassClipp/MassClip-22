@@ -201,7 +201,7 @@ export default function UpgradePage() {
               className={`px-6 py-2 rounded-xl transition-all duration-300 ${
                 !showingDownloads
                   ? "bg-gradient-to-r from-cyan-500 to-blue-500 text-white"
-                  : "border-zinc-600 text-zinc-300 hover:border-zinc-500 hover:text-zinc-200"
+                  : "border-zinc-600 text-zinc-300 hover:border-zinc-500 hover:text-zinc-200 hover:bg-transparent"
               }`}
             >
               Bundle Offers
@@ -213,7 +213,7 @@ export default function UpgradePage() {
               className={`px-6 py-2 rounded-xl transition-all duration-300 ${
                 showingDownloads
                   ? "bg-gradient-to-r from-cyan-500 to-blue-500 text-white"
-                  : "border-zinc-600 text-zinc-300 hover:border-zinc-500 hover:text-zinc-200"
+                  : "border-zinc-600 text-zinc-300 hover:border-zinc-500 hover:text-zinc-200 hover:bg-transparent"
               }`}
             >
               Download Offers
