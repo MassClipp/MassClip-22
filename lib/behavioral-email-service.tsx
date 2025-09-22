@@ -171,12 +171,6 @@ export class BehavioralEmailService {
   }
 
   static async checkAndSendBehavioralEmails(): Promise<void> {
-    // Check if behavioral emails are globally disabled
-    if (process.env.BEHAVIORAL_EMAILS_ENABLED !== "true") {
-      console.log("🚫 Behavioral emails are disabled via BEHAVIORAL_EMAILS_ENABLED environment variable")
-      return
-    }
-
     try {
       // Get all users who haven't unsubscribed
       const behavioralSnapshot = await adminDb.collection("behavioralEmails").where("unsubscribed", "==", false).get()

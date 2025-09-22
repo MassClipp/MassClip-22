@@ -5,6 +5,15 @@ export async function POST(request: NextRequest) {
   try {
     console.log("🔄 Starting behavioral email check...")
 
+    if (process.env.PAUSE_BEHAVIORAL_EMAILS === "true") {
+      console.log("⏸️ Behavioral emails are paused via PAUSE_BEHAVIORAL_EMAILS environment variable")
+      return NextResponse.json({
+        success: true,
+        message: "Behavioral emails are currently paused",
+        paused: true,
+      })
+    }
+
     await BehavioralEmailService.checkAndSendBehavioralEmails()
 
     console.log("✅ Behavioral email check completed")
