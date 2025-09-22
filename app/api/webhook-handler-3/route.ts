@@ -7,7 +7,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2023-10-16",
 })
 
-const webhookSecret = process.env.WEBHOOK_SECRET_KEY_2!
+const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || process.env.WEBHOOK_SECRET_KEY_2!
 
 async function processDownloadPurchase(session: Stripe.Checkout.Session) {
   console.log(`🛒 [Download Webhook] Processing download purchase: ${session.id}`)
@@ -115,6 +115,12 @@ export async function POST(request: Request) {
   console.log(`🔍 [Download Webhook] Signature present: ${!!sig}`)
   console.log(`🔍 [Download Webhook] Body length: ${body.length}`)
   console.log(`🔍 [Download Webhook] Webhook secret configured: ${!!webhookSecret}`)
+  console.log(`🔍 [Download Webhook] Available webhook secrets:`, {
+    STRIPE_WEBHOOK_SECRET: !!process.env.STRIPE_WEBHOOK_SECRET,
+    WEBHOOK_SECRET_KEY_2: !!process.env.WEBHOOK_SECRET_KEY_2,
+    STRIPE_WEBHOOK_SECRET_LIVE: !!process.env.STRIPE_WEBHOOK_SECRET_LIVE,
+    STRIPE_WEBHOOK_SECRET_TEST: !!process.env.STRIPE_WEBHOOK_SECRET_TEST,
+  })
 
   if (!sig) {
     console.error("❌ [Download Webhook] Missing signature.")
@@ -125,8 +131,30 @@ export async function POST(request: Request) {
 
   try {
     if (webhookSecret) {
-      event = stripe.webhooks.constructEvent(body, sig, webhookSecret)
-      console.log(`✅ [Download Webhook] Event constructed successfully: ${event.type}`)
+      let constructionError: any
+      const secretsToTry = [
+        process.env.STRIPE_WEBHOOK_SECRET,
+        process.env.WEBHOOK_SECRET_KEY_2,
+        process.env.STRIPE_WEBHOOK_SECRET_LIVE,
+        process.env.STRIPE_WEBHOOK_SECRET_TEST,
+      ].filter(Boolean)
+
+      for (const secret of secretsToTry) {
+        try {
+          event = stripe.webhooks.constructEvent(body, sig, secret!)
+          console.log(
+            `✅ [Download Webhook] Event constructed successfully with secret: ${secret?.substring(0, 10)}...`,
+          )
+          break
+        } catch (err: any) {
+          constructionError = err
+          console.log(`❌ [Download Webhook] Failed with secret ${secret?.substring(0, 10)}...: ${err.message}`)
+        }
+      }
+
+      if (!event!) {
+        throw constructionError || new Error("No valid webhook secret found")
+      }
     } else {
       throw new Error("No webhook secret configured")
     }
