@@ -24,83 +24,84 @@ export interface BehavioralEmailTemplate {
 const BEHAVIORAL_EMAIL_TEMPLATES: BehavioralEmailTemplate[] = [
   {
     type: "stripe",
-    subject: "Set up your payments",
+    subject: "Let's get you paid! 💰",
     resendAfterDays: 7,
     html: `
       <!DOCTYPE html>
       <html lang="en">
         <head>
           <meta charset="UTF-8" />
-          <title>Set up your payments</title>
+          <title>Let's get you paid!</title>
         </head>
         <body style="font-family: Arial, sans-serif; font-size: 16px; line-height: 1.5; color: #000;">
-          <p>Hi there,</p>
-          <p>We noticed your Stripe account is not connected. Without Stripe, MassClip cannot send payouts when people purchase your content.</p>
-          <p>It only takes a couple of minutes to finish this step. Once it is connected, you will be ready to receive payments directly.</p>
-          <p><a href="https://www.massclip.pro/dashboard/earnings" style="color: #007BFF; text-decoration: underline;">You can connect your Stripe account here</a>.</p>
-          <p>Best,<br>MassClip</p>
+          <p>Hey there!</p>
+          <p>We want you to get paid! 🎉 Your Stripe account isn't connected yet, which means you're missing out on earning money when people buy your amazing content.</p>
+          <p>The good news? It only takes 2 minutes to set up, and then you'll be ready to start making money from day one!</p>
+          <p><a href="https://www.massclip.pro/dashboard/earnings" style="color: #007BFF; text-decoration: underline;">Connect your Stripe account here and start earning!</a></p>
+          <p>Can't wait to see your first sale! 🚀<br>The MassClip Team</p>
         </body>
       </html>
     `,
   },
   {
     type: "bundles",
-    subject: "Create your first bundle",
+    subject: "Your first bundle is waiting! 📦",
     resendAfterDays: 7,
     html: `
       <!DOCTYPE html>
       <html lang="en">
         <head>
           <meta charset="UTF-8" />
-          <title>Create your first bundle</title>
+          <title>Your first bundle is waiting!</title>
         </head>
         <body style="font-family: Arial, sans-serif; font-size: 16px; line-height: 1.5; color: #000;">
-          <p>Hi there,</p>
-          <p>We noticed you have not created a bundle yet. Bundles are how your content is organized and displayed to buyers.</p>
-          <p>Once you add your first bundle, your storefront will begin to take shape and people will have something to purchase.</p>
-          <p><a href="https://www.massclip.pro/dashboard/bundles" style="color: #007BFF; text-decoration: underline;">You can create your first bundle here</a>.</p>
-          <p>Best,<br>MassClip</p>
+          <p>Hey there!</p>
+          <p>You're so close to having an awesome storefront! 🎯 All you need is your first bundle to get things rolling.</p>
+          <p>Think of bundles as your product packages - they're what people will see and want to buy. Once you create one, your storefront comes to life and customers have something exciting to purchase!</p>
+          <p><a href="https://www.massclip.pro/dashboard/bundles" style="color: #007BFF; text-decoration: underline;">Create your first bundle here - it's easier than you think!</a></p>
+          <p>You've got this! 💪<br>The MassClip Team</p>
         </body>
       </html>
     `,
   },
   {
     type: "free-content",
-    subject: "Upload free content to build trust",
+    subject: "People want to see your work! 👀",
     resendAfterDays: 7,
     html: `
       <!DOCTYPE html>
       <html lang="en">
         <head>
           <meta charset="UTF-8" />
-          <title>Upload free content to build trust</title>
+          <title>People want to see your work!</title>
         </head>
         <body style="font-family: Arial, sans-serif; font-size: 16px; line-height: 1.5; color: #000;">
-          <p>Hi there,</p>
-          <p>We noticed you have not uploaded any free content yet. Free content gives potential buyers a preview of your work and helps them feel confident about purchasing.</p>
-          <p>Even one free upload can make a difference.</p>
-          <p><a href="https://www.massclip.pro/dashboard/free-content" style="color: #007BFF; text-decoration: underline;">You can upload free content here</a>.</p>
-          <p>Best,<br>MassClip</p>
+          <p>Hey there!</p>
+          <p>People want to see your content! 🔥 Free content is like giving potential buyers a taste of your amazing work - and trust us, they're going to want more.</p>
+          <p>Even just one free upload can make all the difference. It shows people what you're capable of and gets them excited to buy your premium stuff!</p>
+          <p><a href="https://www.massclip.pro/dashboard/free-content" style="color: #007BFF; text-decoration: underline;">Upload some free content and watch the magic happen!</a></p>
+          <p>Your audience is waiting! ✨<br>The MassClip Team</p>
         </body>
       </html>
     `,
   },
   {
     type: "content",
-    subject: "Upload your first piece of content",
+    subject: "Time to share your awesome content! 🎬",
     resendAfterDays: 7,
     html: `
       <!DOCTYPE html>
       <html lang="en">
         <head>
           <meta charset="UTF-8" />
-          <title>Upload your first piece of content</title>
+          <title>Time to share your awesome content!</title>
         </head>
         <body style="font-family: Arial, sans-serif; font-size: 16px; line-height: 1.5; color: #000;">
-          <p>Hi there,</p>
-          <p>It looks like you have not uploaded any content yet. Uploading is the first step toward creating bundles, sharing free previews, and making your storefront active.</p>
-          <p><a href="https://www.massclip.pro/dashboard" style="color: #007BFF; text-decoration: underline;">You can upload your content here</a>.</p>
-          <p>Best,<br>MassClip</p>
+          <p>Hey there!</p>
+          <p>Your content is waiting to shine! 🌟 Uploading your first piece is the exciting first step toward building bundles, sharing previews, and creating a storefront that people will love.</p>
+          <p>We know you've got amazing content to share - let's get it out there for the world to see!</p>
+          <p><a href="https://www.massclip.pro/dashboard" style="color: #007BFF; text-decoration: underline;">Upload your content here and get started!</a></p>
+          <p>The world needs to see what you've created! 🚀<br>The MassClip Team</p>
         </body>
       </html>
     `,
