@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { CheckCircle2, Crown, Shield, Package, Download, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -72,60 +72,11 @@ const downloadOptions = [
 
 export default function UpgradePage() {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const { user } = useAuth()
   const { isProUser, loading } = useUserPlan()
   const [purchasingBundle, setPurchasingBundle] = useState<string | null>(null)
   const [purchasingDownload, setPurchasingDownload] = useState<string | null>(null)
   const [showingDownloads, setShowingDownloads] = useState(false)
-  const [processingSuccess, setProcessingSuccess] = useState(false)
-  const [successMessage, setSuccessMessage] = useState<string | null>(null)
-
-  useEffect(() => {
-    const sessionId = searchParams?.get("session_id")
-    const success = searchParams?.get("success")
-    const type = searchParams?.get("type")
-
-    if (sessionId && success === "true" && type === "downloads" && user && !processingSuccess) {
-      processDownloadSuccess(sessionId)
-    }
-  }, [searchParams, user, processingSuccess])
-
-  const processDownloadSuccess = async (sessionId: string) => {
-    try {
-      setProcessingSuccess(true)
-      console.log("[Upgrade] Processing download purchase success:", sessionId)
-
-      const idToken = await user?.getIdToken?.()
-      const response = await fetch("/api/purchase/process-download-success", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          sessionId,
-          idToken,
-        }),
-      })
-
-      const result = await response.json()
-
-      if (response.ok && result.success) {
-        setSuccessMessage(`Success! ${result.downloadsAdded} downloads have been added to your account.`)
-        const newUrl = new URL(window.location.href)
-        newUrl.searchParams.delete("session_id")
-        newUrl.searchParams.delete("success")
-        newUrl.searchParams.delete("type")
-        window.history.replaceState({}, "", newUrl.toString())
-      } else {
-        console.error("[Upgrade] Download success processing failed:", result.error)
-      }
-    } catch (error) {
-      console.error("[Upgrade] Error processing download success:", error)
-    } finally {
-      setProcessingSuccess(false)
-    }
-  }
 
   const handleBundlePurchase = async (bundleId: string) => {
     try {
@@ -228,21 +179,6 @@ export default function UpgradePage() {
 
   return (
     <div className="space-y-12 px-4 py-8 sm:px-6 md:px-8">
-      {successMessage && (
-        <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4 text-center">
-          <div className="text-green-400 font-medium">{successMessage}</div>
-        </div>
-      )}
-
-      {processingSuccess && (
-        <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 text-center">
-          <div className="flex items-center justify-center gap-2 text-blue-400">
-            <div className="w-4 h-4 border-2 border-blue-400/30 border-t-blue-400 rounded-full animate-spin" />
-            Processing your purchase...
-          </div>
-        </div>
-      )}
-
       <div className="text-center space-y-4">
         <h1 className="text-5xl lg:text-6xl font-thin text-white leading-tight">
           Choose Your{" "}

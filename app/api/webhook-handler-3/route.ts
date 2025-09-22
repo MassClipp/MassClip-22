@@ -10,6 +10,8 @@ function getStripe(): Stripe {
   return new Stripe(key, { apiVersion: "2023-10-16" })
 }
 
+const webhookSecret = process.env.WEBHOOK_SECRET_KEY_2!
+
 async function handleDownloadPurchase(session: Stripe.Checkout.Session, debugTrace: DebugTrace) {
   debugTrace.push(`Handling download purchase: ${session.id}`)
 
@@ -102,8 +104,8 @@ export async function POST(request: Request) {
   const debugTrace: DebugTrace = []
 
   try {
-    if (!process.env.STRIPE_WEBHOOK_SECRET) {
-      debugTrace.push("Missing STRIPE_WEBHOOK_SECRET")
+    if (!webhookSecret) {
+      debugTrace.push("Missing WEBHOOK_SECRET_KEY_2")
       return NextResponse.json({ error: "Server configuration error", debugTrace }, { status: 500 })
     }
 
@@ -126,7 +128,7 @@ export async function POST(request: Request) {
 
     let event: Stripe.Event
     try {
-      event = stripe.webhooks.constructEvent(payload, sig, process.env.STRIPE_WEBHOOK_SECRET)
+      event = stripe.webhooks.constructEvent(payload, sig, webhookSecret)
       debugTrace.push(`Verified signature for event ${event.id} (${event.type})`)
     } catch (err: any) {
       debugTrace.push(`Signature verification failed: ${err.message}`)
