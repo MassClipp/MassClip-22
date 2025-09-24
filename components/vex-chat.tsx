@@ -58,7 +58,7 @@ export function VexChat() {
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: data.message,
+        content: data.message.content,
       }
 
       setMessages((prev) => [...prev, assistantMessage])
