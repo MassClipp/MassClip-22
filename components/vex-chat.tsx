@@ -1,11 +1,12 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Send } from "lucide-react"
+import { useAuth } from "@/contexts/auth-context"
 
 interface Message {
   id: string
@@ -13,10 +14,20 @@ interface Message {
   content: string
 }
 
+interface ContentAnalysis {
+  totalUploads: number
+  categories: string[]
+  recommendations: string[]
+  summary: string
+}
+
 export function VexChat() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [contentAnalysis, setContentAnalysis] = useState<ContentAnalysis | null>(null)
+  const [hasAnalyzed, setHasAnalyzed] = useState(false)
+  const { user } = useAuth()
 
   const suggestions = [
     "Help me create a beginner photography bundle",
@@ -24,6 +35,38 @@ export function VexChat() {
     "Build a bundle for social media templates",
     "Create a free lead magnet bundle",
   ]
+
+  useEffect(() => {
+    const analyzeUserContent = async () => {
+      if (!user || hasAnalyzed) return
+
+      console.log("[v0] Starting auto-analysis of user content...")
+
+      try {
+        const token = await user.getIdToken()
+        const response = await fetch("/api/vex/analyze-uploads", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          console.log("[v0] Content analysis completed:", data.analysis)
+          setContentAnalysis(data.analysis)
+          setHasAnalyzed(true)
+        } else {
+          console.log("[v0] Content analysis failed:", response.status)
+        }
+      } catch (error) {
+        console.error("[v0] Error analyzing content:", error)
+      }
+    }
+
+    analyzeUserContent()
+  }, [user, hasAnalyzed])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -45,6 +88,7 @@ export function VexChat() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: [...messages, userMessage],
+          contentAnalysis: contentAnalysis, // Pass analysis to chat API
         }),
       })
 
@@ -93,6 +137,20 @@ export function VexChat() {
                 <p className="text-muted-foreground mb-8 max-w-md mx-auto leading-relaxed">
                   I'll help you create profitable bundles, set optimal pricing, and build compelling storefront content.
                 </p>
+
+                {contentAnalysis && (
+                  <div className="mb-8 p-4 rounded-lg bg-muted/50 max-w-md mx-auto">
+                    <p className="text-sm text-muted-foreground mb-2">
+                      ✅ Analyzed {contentAnalysis.totalUploads} uploads
+                    </p>
+                    {contentAnalysis.categories.length > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        Found: {contentAnalysis.categories.slice(0, 3).join(", ")}
+                        {contentAnalysis.categories.length > 3 && ` +${contentAnalysis.categories.length - 3} more`}
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-2xl mx-auto">
                   {suggestions.map((suggestion, index) => (
