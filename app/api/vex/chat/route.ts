@@ -1,80 +1,32 @@
-import { streamText, tool } from "ai"
-import { groq } from "@/lib/groq"
-import { z } from "zod/v4"
-import type { NextRequest } from "next/server"
+import { NextResponse } from "next/server"
+import OpenAI from "openai"
 
 export const maxDuration = 30
 
-// Tools that Vex can use to help build bundles
-const createBundleTool = tool({
-  description: "Create a new bundle with the specified content, pricing, and metadata",
-  inputSchema: z.object({
-    title: z.string().describe("The bundle title"),
-    description: z.string().describe("The bundle description"),
-    price: z.number().describe("The bundle price in dollars"),
-    freeContent: z.array(z.string()).describe("List of content that should be free"),
-    paidContent: z.array(z.string()).describe("List of content that should be paid"),
-    category: z.string().describe("The bundle category"),
-    tags: z.array(z.string()).describe("Relevant tags for the bundle"),
-  }),
-  async *execute({ title, description, price, freeContent, paidContent, category, tags }) {
-    yield { state: "creating" as const }
+export async function POST(request: Request) {
+  try {
+    const { messages } = await request.json()
 
-    // Simulate bundle creation process
-    await new Promise((resolve) => setTimeout(resolve, 1500))
-
-    yield {
-      state: "ready" as const,
-      bundleId: `bundle_${Date.now()}`,
-      title,
-      description,
-      price,
-      freeContent,
-      paidContent,
-      category,
-      tags,
+    // Check for OpenAI API key
+    if (!process.env.OPENAI_API_KEY) {
+      return NextResponse.json({ error: "OpenAI API key not configured" }, { status: 500 })
     }
-  },
-})
 
-const analyzePricingTool = tool({
-  description: "Analyze and suggest optimal pricing for a bundle based on content type and market research",
-  inputSchema: z.object({
-    contentTypes: z.array(z.string()).describe("Types of content in the bundle"),
-    contentCount: z.number().describe("Number of items in the bundle"),
-    targetAudience: z.string().describe("Target audience for the bundle"),
-  }),
-  async *execute({ contentTypes, contentCount, targetAudience }) {
-    yield { state: "analyzing" as const }
+    // Initialize OpenAI client
+    const openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    })
 
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    // Get the latest user message
+    const userMessage = messages[messages.length - 1]?.content || ""
 
-    // Simple pricing logic based on content
-    const basePrice = contentCount * 2
-    const multiplier = contentTypes.includes("video") ? 1.5 : 1.2
-    const suggestedPrice = Math.round(basePrice * multiplier)
-
-    yield {
-      state: "ready" as const,
-      suggestedPrice,
-      reasoning: `Based on ${contentCount} ${contentTypes.join(", ")} items for ${targetAudience}, I recommend $${suggestedPrice}. This accounts for content complexity and market positioning.`,
-    }
-  },
-})
-
-const tools = {
-  createBundle: createBundleTool,
-  analyzePricing: analyzePricingTool,
-} as const
-
-export async function POST(req: NextRequest) {
-  const { messages } = await req.json()
-
-  const result = streamText({
-    model: groq("llama-3.1-70b-versatile"),
-    messages,
-    tools,
-    system: `You are Vex, an AI assistant specialized in helping content creators build and optimize their digital product bundles. You're friendly, knowledgeable, and focused on helping users create profitable bundles.
+    // Call OpenAI API
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: `You are Vex, an AI assistant specialized in helping content creators build and optimize their digital product bundles. You're friendly, knowledgeable, and focused on helping users create profitable bundles.
 
 Your capabilities:
 - Analyze content and suggest bundle compositions
@@ -100,9 +52,32 @@ When creating bundles, focus on:
 - Strategic pricing that maximizes revenue
 - Compelling titles that drive sales
 - Descriptions that highlight transformation/outcomes
-- Smart use of free content to build trust and drive conversions`,
-    temperature: 0.7,
-  })
+- Smart use of free content to build trust and drive conversions
 
-  return result.toDataStreamResponse()
+If the user asks you to create a bundle, provide a detailed response with:
+1. Bundle title
+2. Description
+3. Suggested price with reasoning
+4. List of what should be free vs paid content
+5. Marketing positioning advice`,
+        },
+        ...messages.map((msg: any) => ({
+          role: msg.role,
+          content: msg.content,
+        })),
+      ],
+      temperature: 0.7,
+      max_tokens: 1000,
+    })
+
+    const assistantMessage = response.choices[0]?.message?.content || ""
+
+    return NextResponse.json({
+      message: assistantMessage,
+      usage: response.usage,
+    })
+  } catch (error) {
+    console.error("❌ Vex chat error:", error)
+    return NextResponse.json({ error: "Failed to process chat message" }, { status: 500 })
+  }
 }

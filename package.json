@@ -9,7 +9,7 @@
     "start": "next start"
   },
   "dependencies": {
-    "@ai-sdk/react": "latest",
+    "@ai-sdk/react": "2.0.51",
     "@auth/core": "latest",
     "@auth/firebase-adapter": "latest",
     "@aws-sdk/client-s3": "latest",
@@ -49,7 +49,7 @@
     "@radix-ui/react-tooltip": "latest",
     "@react-email/render": "latest",
     "@tanstack/react-query": "latest",
-    "ai": "latest",
+    "ai": "5.0.51",
     "autoprefixer": "^10.4.20",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
