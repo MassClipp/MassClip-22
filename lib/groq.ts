@@ -1,8 +1,3 @@
-import { generateText } from "ai"
-import { groq } from "@ai-sdk/groq"
-
-export { groq }
-
 // AI Bundling helper functions
 export interface ContentAnalysis {
   title: string
@@ -21,6 +16,39 @@ export interface BundleSuggestion {
   category: string
   tags: string[]
   reasoning: string
+}
+
+export const groq = {
+  chat: {
+    completions: {
+      create: async (options: {
+        messages: Array<{ role: string; content: string }>
+        model: string
+        temperature?: number
+        max_tokens?: number
+      }) => {
+        const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: options.model,
+            messages: options.messages,
+            temperature: options.temperature || 0.7,
+            max_tokens: options.max_tokens || 1000,
+          }),
+        })
+
+        if (!response.ok) {
+          throw new Error(`Groq API error: ${response.status} ${response.statusText}`)
+        }
+
+        return await response.json()
+      },
+    },
+  },
 }
 
 export async function analyzeContentForBundling(contentItems: any[]): Promise<BundleSuggestion[]> {
@@ -64,15 +92,21 @@ Guidelines:
 Respond with a JSON array of bundle suggestions.
 `
 
-    const { text } = await generateText({
-      model: "groq/llama3-70b-8192",
-      prompt,
-      temperature: 0.7,
-      maxOutputTokens: 2000,
+    const response = await groq.chat.completions.create({
+      messages: [
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+      model: "llama3-groq-70b-8192-tool-use-preview",
+      max_tokens: 2000,
     })
 
+    const text = response.choices[0]?.message?.content
+
     if (!text) {
-      throw new Error("No response from AI SDK")
+      throw new Error("No response from Groq API")
     }
 
     // Parse the JSON response
@@ -119,15 +153,21 @@ Respond with JSON format:
 }
 `
 
-    const { text } = await generateText({
-      model: "groq/llama3-70b-8192",
-      prompt,
-      temperature: 0.7,
-      maxOutputTokens: 1000,
+    const response = await groq.chat.completions.create({
+      messages: [
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+      model: "llama3-groq-70b-8192-tool-use-preview",
+      max_tokens: 1000,
     })
 
+    const text = response.choices[0]?.message?.content
+
     if (!text) {
-      throw new Error("No response from AI SDK")
+      throw new Error("No response from Groq API")
     }
 
     return JSON.parse(text) as ContentAnalysis

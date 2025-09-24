@@ -1,21 +1,32 @@
-import { streamText, convertToModelMessages, type UIMessage } from "ai"
 import { NextResponse } from "next/server"
 
 export const maxDuration = 30
 
 export async function POST(request: Request) {
   try {
-    const { messages }: { messages: UIMessage[] } = await request.json()
+    const { messages } = await request.json()
 
-    console.log("[v0] Processing chat with AI SDK")
+    console.log("[v0] Processing chat with raw Groq API")
 
-    // Convert UI messages to model format
-    const modelMessages = convertToModelMessages(messages)
+    // Get the last message from the user
+    const lastMessage = messages[messages.length - 1]
 
-    // Add system message for Vex personality
-    const systemMessage = {
-      role: "system" as const,
-      content: `You are Vex, an AI assistant specialized in helping content creators build and optimize their digital product bundles. You're friendly, knowledgeable, and focused on helping users create profitable bundles.
+    if (!lastMessage || !lastMessage.content) {
+      return NextResponse.json({ error: "No message content provided" }, { status: 400 })
+    }
+
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "llama3-groq-70b-8192-tool-use-preview",
+        messages: [
+          {
+            role: "system",
+            content: `You are Vex, an AI assistant specialized in helping content creators build and optimize their digital product bundles. You're friendly, knowledgeable, and focused on helping users create profitable bundles.
 
 Your capabilities:
 - Analyze content and suggest bundle compositions
@@ -49,25 +60,38 @@ If the user asks you to create a bundle, provide a detailed response with:
 3. Suggested price with reasoning
 4. List of what should be free vs paid content
 5. Marketing positioning advice`,
-    }
-
-    const result = streamText({
-      model: "groq/llama3-70b-8192",
-      messages: [systemMessage, ...modelMessages],
-      temperature: 0.7,
-      maxOutputTokens: 1000,
-      abortSignal: request.signal,
+          },
+          {
+            role: "user",
+            content: lastMessage.content,
+          },
+        ],
+        temperature: 0.7,
+        max_tokens: 1000,
+        stream: false,
+      }),
     })
 
-    console.log("[v0] Streaming response with AI SDK")
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error("❌ Groq API error:", response.status, errorText)
+      return NextResponse.json({ error: "Failed to process chat message" }, { status: 500 })
+    }
 
-    return result.toUIMessageStreamResponse({
-      onFinish: async ({ isAborted, usage }) => {
-        if (isAborted) {
-          console.log("[v0] Chat stream aborted")
-        } else {
-          console.log("[v0] Chat completed, usage:", usage)
-        }
+    const data = await response.json()
+    const assistantMessage = data.choices[0]?.message?.content
+
+    if (!assistantMessage) {
+      console.error("❌ No response from Groq API")
+      return NextResponse.json({ error: "No response from AI" }, { status: 500 })
+    }
+
+    console.log("[v0] Chat completed successfully")
+
+    return NextResponse.json({
+      message: {
+        role: "assistant",
+        content: assistantMessage,
       },
     })
   } catch (error) {
