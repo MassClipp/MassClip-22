@@ -1,23 +1,21 @@
+import { streamText, convertToModelMessages, type UIMessage } from "ai"
 import { NextResponse } from "next/server"
-import { groq } from "@/lib/groq"
 
 export const maxDuration = 30
 
 export async function POST(request: Request) {
   try {
-    const { messages } = await request.json()
+    const { messages }: { messages: UIMessage[] } = await request.json()
 
-    // Get the latest user message
-    const userMessage = messages[messages.length - 1]?.content || ""
-    console.log("[v0] User message:", userMessage)
+    console.log("[v0] Processing chat with AI SDK")
 
-    console.log("[v0] Making Groq API request")
-    const response = await groq.chat.completions.create({
-      model: "llama3-70b-8192", // Fixed incorrect model name from llama-3.1-70b-versatile
-      messages: [
-        {
-          role: "system",
-          content: `You are Vex, an AI assistant specialized in helping content creators build and optimize their digital product bundles. You're friendly, knowledgeable, and focused on helping users create profitable bundles.
+    // Convert UI messages to model format
+    const modelMessages = convertToModelMessages(messages)
+
+    // Add system message for Vex personality
+    const systemMessage = {
+      role: "system" as const,
+      content: `You are Vex, an AI assistant specialized in helping content creators build and optimize their digital product bundles. You're friendly, knowledgeable, and focused on helping users create profitable bundles.
 
 Your capabilities:
 - Analyze content and suggest bundle compositions
@@ -51,22 +49,26 @@ If the user asks you to create a bundle, provide a detailed response with:
 3. Suggested price with reasoning
 4. List of what should be free vs paid content
 5. Marketing positioning advice`,
-        },
-        ...messages.map((msg: any) => ({
-          role: msg.role,
-          content: msg.content,
-        })),
-      ],
+    }
+
+    const result = streamText({
+      model: "groq/llama3-70b-8192",
+      messages: [systemMessage, ...modelMessages],
       temperature: 0.7,
-      max_tokens: 1000,
+      maxOutputTokens: 1000,
+      abortSignal: request.signal,
     })
 
-    console.log("[v0] Groq API response received")
-    const assistantMessage = response.choices[0]?.message?.content || ""
+    console.log("[v0] Streaming response with AI SDK")
 
-    return NextResponse.json({
-      message: assistantMessage,
-      usage: response.usage,
+    return result.toUIMessageStreamResponse({
+      onFinish: async ({ isAborted, usage }) => {
+        if (isAborted) {
+          console.log("[v0] Chat stream aborted")
+        } else {
+          console.log("[v0] Chat completed, usage:", usage)
+        }
+      },
     })
   } catch (error) {
     console.error("❌ Vex chat error:", error)

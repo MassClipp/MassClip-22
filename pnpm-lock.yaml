@@ -129,7 +129,7 @@ importers:
         specifier: latest
         version: 5.90.2(react@19.0.0)
       ai:
-        specifier: 5.0.51
+        specifier: latest
         version: 5.0.51(zod@3.24.1)
       autoprefixer:
         specifier: ^10.4.20
@@ -165,7 +165,7 @@ importers:
         specifier: latest
         version: 0.0.1-security
       groq-sdk:
-        specifier: latest
+        specifier: 0.32.0
         version: 0.32.0
       input-otp:
         specifier: latest

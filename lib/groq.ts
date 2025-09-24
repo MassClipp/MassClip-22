@@ -1,12 +1,4 @@
-import Groq from "groq-sdk"
-
-if (!process.env.GROQ_API) {
-  throw new Error("GROQ_API environment variable is required")
-}
-
-export const groq = new Groq({
-  apiKey: process.env.GROQ_API,
-})
+import { generateText } from "ai"
 
 // AI Bundling helper functions
 export interface ContentAnalysis {
@@ -69,25 +61,19 @@ Guidelines:
 Respond with a JSON array of bundle suggestions.
 `
 
-    const completion = await groq.chat.completions.create({
-      messages: [
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
-      model: "llama3-70b-8192",
+    const { text } = await generateText({
+      model: "groq/llama3-70b-8192",
+      prompt,
       temperature: 0.7,
-      max_tokens: 2000,
+      maxOutputTokens: 2000,
     })
 
-    const response = completion.choices[0]?.message?.content
-    if (!response) {
-      throw new Error("No response from Groq API")
+    if (!text) {
+      throw new Error("No response from AI SDK")
     }
 
     // Parse the JSON response
-    const suggestions = JSON.parse(response) as BundleSuggestion[]
+    const suggestions = JSON.parse(text) as BundleSuggestion[]
     return suggestions
   } catch (error) {
     console.error("Error analyzing content for bundling:", error)
@@ -130,24 +116,18 @@ Respond with JSON format:
 }
 `
 
-    const completion = await groq.chat.completions.create({
-      messages: [
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
-      model: "llama3-70b-8192",
+    const { text } = await generateText({
+      model: "groq/llama3-70b-8192",
+      prompt,
       temperature: 0.7,
-      max_tokens: 1000,
+      maxOutputTokens: 1000,
     })
 
-    const response = completion.choices[0]?.message?.content
-    if (!response) {
-      throw new Error("No response from Groq API")
+    if (!text) {
+      throw new Error("No response from AI SDK")
     }
 
-    return JSON.parse(response) as ContentAnalysis
+    return JSON.parse(text) as ContentAnalysis
   } catch (error) {
     console.error("Error generating bundle metadata:", error)
     throw new Error("Failed to generate bundle metadata")
