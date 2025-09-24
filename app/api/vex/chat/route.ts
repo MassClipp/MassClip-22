@@ -1,4 +1,9 @@
 import { NextResponse } from "next/server"
+import { initializeFirebaseAdmin, db } from "@/lib/firebase/firebaseAdmin"
+import { getAuth } from "firebase-admin/auth"
+
+// Initialize Firebase Admin
+initializeFirebaseAdmin()
 
 export const maxDuration = 30
 
@@ -6,7 +11,50 @@ export async function POST(request: Request) {
   try {
     const { messages } = await request.json()
 
-    console.log("[v0] Processing chat with raw Groq API")
+    console.log("[v0] Processing chat with content context")
+
+    // Get authorization header for user context
+    const authHeader = request.headers.get("authorization")
+    let userContentContext = ""
+
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      try {
+        const token = authHeader.split("Bearer ")[1]
+        const decodedToken = await getAuth().verifyIdToken(token)
+        const userId = decodedToken.uid
+
+        const analysisDoc = await db.collection("vex_content_analysis").doc(userId).get()
+
+        if (analysisDoc.exists) {
+          const analysisData = analysisDoc.data()
+
+          // Create detailed content context for AI
+          userContentContext = `
+USER'S CONTENT LIBRARY:
+Total Uploads: ${analysisData?.totalUploads || 0}
+Categories Found: ${(analysisData?.categories || []).join(", ")}
+
+DETAILED CONTENT BREAKDOWN:
+${JSON.stringify(analysisData?.contentByCategory || {}, null, 2)}
+
+INDIVIDUAL CONTENT ANALYSIS:
+${JSON.stringify(analysisData?.detailedAnalysis || [], null, 2)}
+
+RECENT UPLOADS:
+${(analysisData?.uploads || [])
+  .slice(0, 10)
+  .map((upload: any) => `- ${upload.title} (${upload.contentType}) - ${upload.description || "No description"}`)
+  .join("\n")}
+
+This user has ${analysisData?.totalUploads || 0} pieces of content. When they ask about their content, reference specific titles, categories, and provide detailed information about what they have.
+`
+
+          console.log("[v0] Loaded user content context for chat")
+        }
+      } catch (authError) {
+        console.log("[v0] Could not load user content context:", authError)
+      }
+    }
 
     // Get the last message from the user
     const lastMessage = messages[messages.length - 1]
@@ -28,12 +76,15 @@ export async function POST(request: Request) {
             role: "system",
             content: `You are Vex, an AI assistant specialized in helping content creators build and optimize their digital product bundles. You're friendly, knowledgeable, and focused on helping users create profitable bundles.
 
+${userContentContext}
+
 Your capabilities:
 - Analyze content and suggest bundle compositions
 - Generate compelling titles and descriptions
 - Recommend optimal pricing strategies
 - Decide what content should be free vs paid
 - Provide marketing insights and positioning advice
+- Reference specific user content by title and provide detailed information
 
 Personality:
 - Friendly and approachable
@@ -41,8 +92,14 @@ Personality:
 - Creative with naming and descriptions
 - Data-driven with pricing recommendations
 
+When users ask about their content:
+- Reference specific titles and filenames from their library
+- Mention categories and content types they have
+- Provide detailed breakdowns of what content fits different bundle themes
+- Suggest specific combinations based on their actual uploads
+
 Always ask clarifying questions to understand:
-- What type of content they have
+- What type of content they have (you already know this from their library)
 - Who their target audience is
 - Their pricing goals and strategy
 - Whether they want to include free content as lead magnets
@@ -58,7 +115,7 @@ If the user asks you to create a bundle, provide a detailed response with:
 1. Bundle title
 2. Description
 3. Suggested price with reasoning
-4. List of what should be free vs paid content
+4. List of what should be free vs paid content (reference their actual content)
 5. Marketing positioning advice`,
           },
           {
@@ -86,7 +143,7 @@ If the user asks you to create a bundle, provide a detailed response with:
       return NextResponse.json({ error: "No response from AI" }, { status: 500 })
     }
 
-    console.log("[v0] Chat completed successfully")
+    console.log("[v0] Chat completed successfully with content context")
 
     return NextResponse.json({
       message: {

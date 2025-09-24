@@ -83,12 +83,16 @@ export function VexChat() {
     setIsLoading(true)
 
     try {
+      const token = user ? await user.getIdToken() : null
+
       const response = await fetch("/api/vex/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
         body: JSON.stringify({
           messages: [...messages, userMessage],
-          contentAnalysis: contentAnalysis, // Pass analysis to chat API
         }),
       })
 

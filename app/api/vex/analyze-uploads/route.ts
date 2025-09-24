@@ -50,6 +50,9 @@ export async function POST(request: NextRequest) {
                 contentType: determineContentType(data.mimeType || data.type || ""),
                 collection: collectionName,
                 createdAt: data.createdAt || data.addedAt || new Date(),
+                fileSize: data.fileSize || 0,
+                duration: data.duration || null,
+                url: data.url || data.downloadURL || null,
               }
             })
 
@@ -93,12 +96,13 @@ export async function POST(request: NextRequest) {
         type: upload.contentType,
         description: upload.description,
         tags: upload.tags,
+        filename: upload.filename,
       }))
 
       // Use AI to analyze and categorize uploads
       const { text } = await generateText({
         model: groq("llama-3.3-70b-versatile"),
-        prompt: `You are Vex, an AI bundle assistant. Analyze this user's content uploads and provide bundle categorization suggestions.
+        prompt: `You are Vex, an AI bundle assistant. Analyze this user's content uploads and provide detailed bundle categorization.
 
 Content to analyze:
 ${JSON.stringify(contentSummary, null, 2)}
@@ -107,6 +111,8 @@ Please provide a JSON response with:
 1. "categories" - Array of suggested bundle categories based on content themes/keywords
 2. "recommendations" - Array of specific bundle ideas with titles and descriptions
 3. "summary" - Brief overview of the user's content library and potential
+4. "contentByCategory" - Object mapping categories to arrays of content titles that fit each category
+5. "detailedAnalysis" - Array of objects with individual content analysis including suggested category, value assessment, and bundle potential
 
 Focus on profitable bundle categories like:
 - Photography (portraits, landscapes, wedding, etc.)
@@ -114,6 +120,9 @@ Focus on profitable bundle categories like:
 - Social media (templates, graphics, content packs)
 - Design assets (fonts, graphics, mockups)
 - Educational content (tutorials, courses, guides)
+- Motivation/Inspiration content
+- Fitness/Health content
+- Business/Marketing content
 
 Format as valid JSON only, no markdown or extra text.`,
       })
@@ -128,8 +137,32 @@ Format as valid JSON only, no markdown or extra text.`,
           categories: ["Mixed Content"],
           recommendations: ["Create a starter bundle with your best content"],
           summary: "Content analysis completed. Consider organizing your uploads into themed bundles.",
+          contentByCategory: { "Mixed Content": uniqueUploads.map((u) => u.title) },
+          detailedAnalysis: uniqueUploads.map((u) => ({
+            title: u.title,
+            category: "Mixed Content",
+            value: "Medium",
+            bundlePotential: "Good for starter bundle",
+          })),
         }
       }
+
+      const analysisData = {
+        userId,
+        totalUploads: uniqueUploads.length,
+        categories: analysis.categories || [],
+        recommendations: analysis.recommendations || [],
+        summary: analysis.summary || "Analysis completed successfully.",
+        contentByCategory: analysis.contentByCategory || {},
+        detailedAnalysis: analysis.detailedAnalysis || [],
+        uploads: uniqueUploads, // Store full upload details
+        analyzedAt: new Date(),
+        lastUpdated: new Date(),
+      }
+
+      // Save to vex_content_analysis collection
+      await db.collection("vex_content_analysis").doc(userId).set(analysisData)
+      console.log("✅ [Vex Analyze] Stored detailed analysis for chat access")
 
       console.log("✅ [Vex Analyze] Analysis completed successfully")
 
