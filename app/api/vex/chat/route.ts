@@ -7,17 +7,21 @@ export async function POST(request: Request) {
   try {
     const { messages } = await request.json()
 
-    if (!process.env.GROQ_API_KEY) {
+    if (!process.env.GROQ_API) {
+      console.log("[v0] GROQ_API environment variable not found")
       return NextResponse.json({ error: "Groq API key not configured" }, { status: 500 })
     }
 
+    console.log("[v0] Initializing Groq client")
     const groq = new Groq({
-      apiKey: process.env.GROQ_API_KEY,
+      apiKey: process.env.GROQ_API,
     })
 
     // Get the latest user message
     const userMessage = messages[messages.length - 1]?.content || ""
+    console.log("[v0] User message:", userMessage)
 
+    console.log("[v0] Making Groq API request")
     const response = await groq.chat.completions.create({
       model: "llama-3.1-70b-versatile",
       messages: [
@@ -67,6 +71,7 @@ If the user asks you to create a bundle, provide a detailed response with:
       max_tokens: 1000,
     })
 
+    console.log("[v0] Groq API response received")
     const assistantMessage = response.choices[0]?.message?.content || ""
 
     return NextResponse.json({
