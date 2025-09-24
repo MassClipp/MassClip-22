@@ -13,7 +13,7 @@ export async function POST(request: Request) {
 
     console.log("[v0] Making Groq API request")
     const response = await groq.chat.completions.create({
-      model: "llama-3.1-70b-versatile",
+      model: "llama3-70b-8192", // Fixed incorrect model name from llama-3.1-70b-versatile
       messages: [
         {
           role: "system",

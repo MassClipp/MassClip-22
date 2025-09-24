@@ -76,7 +76,7 @@ Respond with a JSON array of bundle suggestions.
           content: prompt,
         },
       ],
-      model: "llama-3.1-70b-versatile",
+      model: "llama3-70b-8192",
       temperature: 0.7,
       max_tokens: 2000,
     })
@@ -137,7 +137,7 @@ Respond with JSON format:
           content: prompt,
         },
       ],
-      model: "llama-3.1-70b-versatile",
+      model: "llama3-70b-8192",
       temperature: 0.7,
       max_tokens: 1000,
     })
