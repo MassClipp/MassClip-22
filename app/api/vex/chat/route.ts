@@ -1,21 +1,11 @@
 import { NextResponse } from "next/server"
-import Groq from "groq-sdk"
+import { groq } from "@/lib/groq"
 
 export const maxDuration = 30
 
 export async function POST(request: Request) {
   try {
     const { messages } = await request.json()
-
-    if (!process.env.GROQ_API) {
-      console.log("[v0] GROQ_API environment variable not found")
-      return NextResponse.json({ error: "Groq API key not configured" }, { status: 500 })
-    }
-
-    console.log("[v0] Initializing Groq client")
-    const groq = new Groq({
-      apiKey: process.env.GROQ_API,
-    })
 
     // Get the latest user message
     const userMessage = messages[messages.length - 1]?.content || ""
