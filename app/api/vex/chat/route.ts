@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import OpenAI from "openai"
+import Groq from "groq-sdk"
 
 export const maxDuration = 30
 
@@ -7,22 +7,19 @@ export async function POST(request: Request) {
   try {
     const { messages } = await request.json()
 
-    // Check for OpenAI API key
-    if (!process.env.OPENAI_API_KEY) {
-      return NextResponse.json({ error: "OpenAI API key not configured" }, { status: 500 })
+    if (!process.env.GROQ_API_KEY) {
+      return NextResponse.json({ error: "Groq API key not configured" }, { status: 500 })
     }
 
-    // Initialize OpenAI client
-    const openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
+    const groq = new Groq({
+      apiKey: process.env.GROQ_API_KEY,
     })
 
     // Get the latest user message
     const userMessage = messages[messages.length - 1]?.content || ""
 
-    // Call OpenAI API
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
+    const response = await groq.chat.completions.create({
+      model: "llama-3.1-70b-versatile",
       messages: [
         {
           role: "system",
