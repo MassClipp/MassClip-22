@@ -21,6 +21,7 @@ import {
   User,
   Shield,
   ChevronDown,
+  Bot,
 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { useUserPlan } from "@/hooks/use-user-plan"
@@ -45,6 +46,7 @@ const navigationSections: NavSection[] = [
     items: [
       { title: "Dashboard", href: "/dashboard", icon: Home },
       { title: "Explore", href: "/dashboard/explore", icon: Search },
+      { title: "Vex AI Assistant", href: "/dashboard/vex", icon: Bot }, // Added Vex AI Assistant to main navigation
       { title: "Upgrade", href: "/dashboard/upgrade", icon: Crown },
     ],
   },
