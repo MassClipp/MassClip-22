@@ -7,40 +7,43 @@
 
 @layer base {
   :root {
-    --background: 0 0% 3%;
-    --foreground: 0 0% 98%;
+    --background: 0 0% 7%;
+    --foreground: 0 0% 95%;
 
-    --card: 0 0% 5%;
-    --card-foreground: 0 0% 98%;
+    --card: 0 0% 9%;
+    --card-foreground: 0 0% 95%;
 
-    --popover: 0 0% 3%;
-    --popover-foreground: 0 0% 98%;
+    --popover: 0 0% 9%;
+    --popover-foreground: 0 0% 95%;
 
-    --primary: 348 83% 47%;
-    --primary-foreground: 0 0% 98%;
+    --primary: 0 0% 95%;
+    --primary-foreground: 0 0% 7%;
 
-    --secondary: 0 0% 9%;
-    --secondary-foreground: 0 0% 98%;
+    --secondary: 0 0% 12%;
+    --secondary-foreground: 0 0% 95%;
 
-    --muted: 0 0% 12%;
-    --muted-foreground: 0 0% 63.9%;
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 65%;
 
-    --accent: 348 83% 47%;
-    --accent-foreground: 0 0% 98%;
+    --accent: 0 0% 15%;
+    --accent-foreground: 0 0% 95%;
 
     --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive-foreground: 0 0% 95%;
 
-    --border: 0 0% 12%;
+    --border: 0 0% 15%;
     --input: 0 0% 12%;
-    --ring: 348 83% 47%;
+    --ring: 0 0% 20%;
 
     --radius: 0.5rem;
 
-    /* Custom colors */
-    --crimson: 348 83% 47%;
-    --crimson-dark: 348 83% 37%;
-    --crimson-light: 348 83% 67%;
+    /* Modern chat-specific colors */
+    --chat-background: 0 0% 7%;
+    --chat-sidebar: 0 0% 4%;
+    --chat-message-user: 0 0% 15%;
+    --chat-message-assistant: 0 0% 9%;
+    --chat-input: 0 0% 12%;
+    --chat-border: 0 0% 20%;
   }
 
   .dark {
@@ -911,5 +914,92 @@
     transition: none;
     opacity: 1;
     transform: none;
+  }
+}
+
+/* Modern chat interface styles */
+.chat-container {
+  background-color: hsl(var(--chat-background));
+  color: hsl(var(--foreground));
+}
+
+.chat-sidebar {
+  background-color: hsl(var(--chat-sidebar));
+  border-right: 1px solid hsl(var(--chat-border));
+}
+
+.chat-message-user {
+  background-color: hsl(var(--chat-message-user));
+  color: hsl(var(--foreground));
+}
+
+.chat-message-assistant {
+  background-color: hsl(var(--chat-message-assistant));
+  color: hsl(var(--foreground));
+}
+
+.chat-input-container {
+  background-color: hsl(var(--chat-input));
+  border: 1px solid hsl(var(--chat-border));
+}
+
+.chat-suggestion {
+  background-color: transparent;
+  border: 1px solid hsl(var(--chat-border));
+  color: hsl(var(--muted-foreground));
+  transition: all 0.2s ease;
+}
+
+.chat-suggestion:hover {
+  background-color: hsl(var(--chat-message-assistant));
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--ring));
+}
+
+/* Typography improvements for chat */
+.chat-typography {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  line-height: 1.6;
+  letter-spacing: -0.01em;
+}
+
+.chat-title {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.chat-subtitle {
+  font-weight: 400;
+  color: hsl(var(--muted-foreground));
+}
+
+/* Smooth animations for modern feel */
+.chat-fade-in {
+  animation: chatFadeIn 0.3s ease-out;
+}
+
+@keyframes chatFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.chat-slide-up {
+  animation: chatSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes chatSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }

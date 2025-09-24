@@ -1,13 +1,11 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Send, User } from "lucide-react"
+import { Send } from "lucide-react"
 
 interface Message {
   id: string
@@ -21,10 +19,10 @@ export function VexChat() {
   const [isLoading, setIsLoading] = useState(false)
 
   const suggestions = [
-    "Analyze market demand for photography bundle pricing strategies",
-    "Generate optimal pricing matrix for video editing software packages",
-    "Build comprehensive social media template bundle architecture",
-    "Design lead magnet funnel with conversion optimization metrics",
+    "Help me create a beginner photography bundle",
+    "What should I price my video editing pack?",
+    "Build a bundle for social media templates",
+    "Create a free lead magnet bundle",
   ]
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -79,162 +77,97 @@ export function VexChat() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-black text-green-400 font-mono">
-      {/* Technical Header */}
-      <div className="border-b border-green-800/50 bg-black/90 backdrop-blur-sm">
-        <div className="flex items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-              <span className="text-green-400 font-bold tracking-wider">VEX_AI_SYSTEM</span>
-            </div>
-            <div className="text-green-600 text-sm">[BUNDLE_OPTIMIZATION_MODULE_v2.1.3]</div>
-          </div>
-          <div className="text-green-600 text-sm font-mono">STATUS: ONLINE | LATENCY: 12ms | UPTIME: 99.97%</div>
+    <div className="flex flex-col h-screen chat-container chat-typography">
+      <div className="flex-shrink-0 border-b border-chat-border px-6 py-4">
+        <div className="max-w-3xl mx-auto">
+          <h1 className="text-xl font-semibold chat-title">Vex</h1>
+          <p className="text-sm chat-subtitle mt-1">AI bundle assistant</p>
         </div>
       </div>
 
-      {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col bg-gradient-to-b from-black via-gray-950 to-black">
-        <ScrollArea className="flex-1 px-6 py-4">
-          <div className="space-y-6 max-w-6xl mx-auto">
+      <div className="flex-1 flex flex-col min-h-0">
+        <ScrollArea className="flex-1 px-6">
+          <div className="max-w-3xl mx-auto py-6">
             {messages.length === 0 && (
-              <div className="py-12">
-                {/* Technical Welcome Interface */}
-                <div className="border border-green-800/30 bg-green-950/10 rounded-lg p-8 mb-8">
-                  <div className="text-center mb-6">
-                    <div className="text-green-400 text-2xl font-bold tracking-wider mb-2">
-                      VEX AI BUNDLE STRATEGIST
-                    </div>
-                    <div className="text-green-600 text-sm font-mono">
-                      ADVANCED REVENUE OPTIMIZATION & CONTENT STRATEGY ENGINE
-                    </div>
-                  </div>
+              <div className="text-center py-12 chat-fade-in">
+                <h2 className="text-2xl font-semibold mb-3 chat-title">Hi! I'm Vex, your AI bundle assistant</h2>
+                <p className="text-muted-foreground mb-8 max-w-md mx-auto leading-relaxed">
+                  I'll help you create profitable bundles, set optimal pricing, and build compelling storefront content.
+                </p>
 
-                  <div className="grid grid-cols-3 gap-6 text-center text-sm">
-                    <div className="border border-green-800/30 rounded p-3">
-                      <div className="text-green-400 font-bold">PRICING ANALYSIS</div>
-                      <div className="text-green-600 mt-1">Market-driven optimization</div>
-                    </div>
-                    <div className="border border-green-800/30 rounded p-3">
-                      <div className="text-green-400 font-bold">BUNDLE ARCHITECTURE</div>
-                      <div className="text-green-600 mt-1">Strategic content grouping</div>
-                    </div>
-                    <div className="border border-green-800/30 rounded p-3">
-                      <div className="text-green-400 font-bold">CONVERSION METRICS</div>
-                      <div className="text-green-600 mt-1">Performance tracking</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Command Suggestions */}
-                <div className="space-y-3">
-                  <div className="text-green-400 text-sm font-bold tracking-wider mb-4">AVAILABLE COMMANDS:</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-2xl mx-auto">
                   {suggestions.map((suggestion, index) => (
-                    <Button
+                    <button
                       key={index}
-                      variant="outline"
-                      className="w-full text-left justify-start h-auto p-4 border-green-800/50 hover:border-green-400/50 hover:bg-green-950/20 bg-transparent text-green-300 hover:text-green-200 font-mono text-sm"
+                      className="chat-suggestion text-left p-4 rounded-lg transition-all duration-200 text-sm"
                       onClick={() => handleSuggestionClick(suggestion)}
                     >
-                      <span className="text-green-600 mr-3">#{String(index + 1).padStart(2, "0")}</span>
                       {suggestion}
-                    </Button>
+                    </button>
                   ))}
                 </div>
               </div>
             )}
 
-            {messages.map((message) => (
-              <div
-                key={message.id}
-                className={`flex gap-4 ${message.role === "user" ? "justify-end" : "justify-start"}`}
-              >
-                {message.role === "assistant" && (
-                  <Avatar className="h-10 w-10 bg-green-900 border border-green-700">
-                    <AvatarFallback className="bg-transparent text-green-400 text-xs font-bold font-mono">
-                      VEX
-                    </AvatarFallback>
-                  </Avatar>
-                )}
-
+            <div className="space-y-6">
+              {messages.map((message) => (
                 <div
-                  className={`max-w-[70%] rounded-lg p-4 font-mono text-sm ${
-                    message.role === "user"
-                      ? "bg-green-900/30 border border-green-700/50 text-green-200"
-                      : "bg-gray-900/50 border border-green-800/30 text-green-300"
-                  }`}
+                  key={message.id}
+                  className={`chat-slide-up ${message.role === "user" ? "flex justify-end" : "flex justify-start"}`}
                 >
-                  {message.role === "assistant" && (
-                    <div className="text-green-600 text-xs mb-2 font-bold">
-                      [VEX_RESPONSE] {new Date().toLocaleTimeString()}
-                    </div>
-                  )}
-                  <div className="whitespace-pre-wrap leading-relaxed">{message.content}</div>
-                </div>
-
-                {message.role === "user" && (
-                  <Avatar className="h-10 w-10 bg-gray-800 border border-green-700">
-                    <AvatarFallback className="bg-transparent text-green-400">
-                      <User className="h-5 w-5" />
-                    </AvatarFallback>
-                  </Avatar>
-                )}
-              </div>
-            ))}
-
-            {isLoading && (
-              <div className="flex gap-4 justify-start">
-                <Avatar className="h-10 w-10 bg-green-900 border border-green-700">
-                  <AvatarFallback className="bg-transparent text-green-400 text-xs font-bold font-mono">
-                    VEX
-                  </AvatarFallback>
-                </Avatar>
-                <div className="bg-gray-900/50 border border-green-800/30 rounded-lg p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="flex gap-1">
-                      <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                      <div
-                        className="w-2 h-2 bg-green-400 rounded-full animate-pulse"
-                        style={{ animationDelay: "0.2s" }}
-                      ></div>
-                      <div
-                        className="w-2 h-2 bg-green-400 rounded-full animate-pulse"
-                        style={{ animationDelay: "0.4s" }}
-                      ></div>
-                    </div>
-                    <span className="text-green-400 text-sm font-mono">PROCESSING_REQUEST...</span>
+                  <div
+                    className={`max-w-[80%] rounded-lg px-4 py-3 ${
+                      message.role === "user" ? "chat-message-user ml-auto" : "chat-message-assistant"
+                    }`}
+                  >
+                    <div className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</div>
                   </div>
                 </div>
-              </div>
-            )}
+              ))}
+
+              {isLoading && (
+                <div className="flex justify-start chat-slide-up">
+                  <div className="chat-message-assistant rounded-lg px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <div className="flex space-x-1">
+                        <div className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse"></div>
+                        <div
+                          className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse"
+                          style={{ animationDelay: "0.2s" }}
+                        ></div>
+                        <div
+                          className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse"
+                          style={{ animationDelay: "0.4s" }}
+                        ></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </ScrollArea>
 
-        {/* Command Input */}
-        <div className="border-t border-green-800/50 bg-black/90 backdrop-blur-sm p-6">
-          <div className="max-w-6xl mx-auto">
+        <div className="flex-shrink-0 border-t border-chat-border px-6 py-4">
+          <div className="max-w-3xl mx-auto">
             <form onSubmit={handleSubmit} className="flex gap-3">
               <div className="flex-1 relative">
-                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-green-600 font-mono text-sm">
-                  $
-                </span>
                 <Input
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder="Enter command or query..."
-                  className="pl-8 bg-gray-900/50 border-green-800/50 focus:border-green-400 text-green-300 font-mono placeholder:text-green-700"
+                  placeholder="Message Vex..."
+                  className="chat-input-container border-0 bg-transparent text-sm py-3 px-4 pr-12 resize-none focus:ring-1 focus:ring-ring"
                   disabled={isLoading}
                 />
+                <Button
+                  type="submit"
+                  disabled={isLoading || !input.trim()}
+                  size="sm"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 p-0 bg-foreground text-background hover:bg-foreground/90"
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
               </div>
-              <Button
-                type="submit"
-                disabled={isLoading || !input.trim()}
-                className="bg-green-900 hover:bg-green-800 border border-green-700 text-green-200 font-mono px-6"
-              >
-                <Send className="h-4 w-4 mr-2" />
-                EXECUTE
-              </Button>
             </form>
           </div>
         </div>
