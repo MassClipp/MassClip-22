@@ -22,7 +22,16 @@ export default function GroqDebugPage() {
       })
 
       console.log(`[v0] Response status: ${response.status}`)
-      const data = await response.text()
+
+      let data
+      const contentType = response.headers.get("content-type")
+
+      if (contentType && contentType.includes("application/json")) {
+        data = await response.json()
+      } else {
+        data = await response.text()
+      }
+
       console.log(`[v0] Response data:`, data)
 
       setResults((prev) => ({
