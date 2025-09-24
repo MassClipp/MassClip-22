@@ -99,7 +99,7 @@ Respond with a JSON array of bundle suggestions.
           content: prompt,
         },
       ],
-      model: "llama3-groq-70b-8192-tool-use-preview",
+      model: "llama-3.3-70b-versatile",
       max_tokens: 2000,
     })
 
@@ -160,7 +160,7 @@ Respond with JSON format:
           content: prompt,
         },
       ],
-      model: "llama3-groq-70b-8192-tool-use-preview",
+      model: "llama-3.3-70b-versatile",
       max_tokens: 1000,
     })
 

@@ -12,7 +12,7 @@ export async function GET() {
           content: 'Hello! Please respond with "Groq connection successful" to confirm the API is working.',
         },
       ],
-      model: "llama3-70b-8192",
+      model: "llama-3.3-70b-versatile",
       temperature: 0.1,
       max_tokens: 50,
     })
@@ -23,7 +23,7 @@ export async function GET() {
     return NextResponse.json({
       success: true,
       response,
-      model: "llama3-70b-8192",
+      model: "llama-3.3-70b-versatile",
       timestamp: new Date().toISOString(),
     })
   } catch (error) {
