@@ -124,23 +124,56 @@ Focus on profitable bundle categories like:
 - Fitness/Health content
 - Business/Marketing content
 
-Format as valid JSON only, no markdown or extra text.`,
+IMPORTANT: Return ONLY valid JSON. No markdown formatting, no code blocks, no extra text. Just pure JSON.`,
       })
 
       let analysis
       try {
-        analysis = JSON.parse(text)
+        let cleanedText = text.trim()
+
+        // Remove markdown code blocks if present
+        if (cleanedText.startsWith("```json")) {
+          cleanedText = cleanedText.replace(/^```json\s*/, "").replace(/\s*```$/, "")
+        } else if (cleanedText.startsWith("```")) {
+          cleanedText = cleanedText.replace(/^```\s*/, "").replace(/\s*```$/, "")
+        }
+
+        // Remove any leading/trailing whitespace and newlines
+        cleanedText = cleanedText.trim()
+
+        console.log("[v0] Attempting to parse cleaned AI response:", cleanedText.substring(0, 200) + "...")
+
+        analysis = JSON.parse(cleanedText)
+        console.log("✅ [Vex Analyze] Successfully parsed AI response")
       } catch (parseError) {
         console.error("❌ [Vex Analyze] Failed to parse AI response:", parseError)
-        // Fallback analysis
+        console.error("❌ [Vex Analyze] Raw AI response:", text)
+
+        const contentTypes = uniqueUploads.map((u) => u.contentType)
+        const hasVideos = contentTypes.includes("video")
+        const hasImages = contentTypes.includes("image")
+        const hasAudio = contentTypes.includes("audio")
+
+        const suggestedCategories = []
+        if (hasVideos) suggestedCategories.push("Video Content")
+        if (hasImages) suggestedCategories.push("Visual Assets")
+        if (hasAudio) suggestedCategories.push("Audio Content")
+        if (suggestedCategories.length === 0) suggestedCategories.push("Mixed Content")
+
         analysis = {
-          categories: ["Mixed Content"],
-          recommendations: ["Create a starter bundle with your best content"],
-          summary: "Content analysis completed. Consider organizing your uploads into themed bundles.",
-          contentByCategory: { "Mixed Content": uniqueUploads.map((u) => u.title) },
-          detailedAnalysis: uniqueUploads.map((u) => ({
+          categories: suggestedCategories,
+          recommendations: [
+            "Create a starter bundle with your best content",
+            "Consider organizing content by type (video, image, audio)",
+            "Group similar themed content together for better value",
+          ],
+          summary: `Content analysis completed. Found ${uniqueUploads.length} uploads across ${suggestedCategories.length} categories. Consider organizing your uploads into themed bundles.`,
+          contentByCategory: {
+            [suggestedCategories[0]]: uniqueUploads.slice(0, 10).map((u) => u.title),
+          },
+          detailedAnalysis: uniqueUploads.slice(0, 20).map((u) => ({
             title: u.title,
-            category: "Mixed Content",
+            category: suggestedCategories[0],
             value: "Medium",
             bundlePotential: "Good for starter bundle",
           })),

@@ -176,11 +176,33 @@ When creating bundles, focus on:
 
     if (assistantMessage.includes("BUNDLE_CREATION_REQUEST:")) {
       try {
-        const bundleRequestMatch = assistantMessage.match(/BUNDLE_CREATION_REQUEST:\s*(\{[\s\S]*?\})/)
+        const bundleRequestMatch = assistantMessage.match(/BUNDLE_CREATION_REQUEST:\s*([\s\S]*?)(?=\n\n|\n$|$)/)
+
         if (bundleRequestMatch) {
-          const bundleRequest = JSON.parse(bundleRequestMatch[1])
+          let bundleRequestText = bundleRequestMatch[1].trim()
+
+          // Clean up the JSON text
+          if (bundleRequestText.startsWith("```json")) {
+            bundleRequestText = bundleRequestText.replace(/^```json\s*/, "").replace(/\s*```$/, "")
+          } else if (bundleRequestText.startsWith("```")) {
+            bundleRequestText = bundleRequestText.replace(/^```\s*/, "").replace(/\s*```$/, "")
+          }
+
+          // Remove any trailing text after the JSON object
+          const jsonMatch = bundleRequestText.match(/\{[\s\S]*\}/)
+          if (jsonMatch) {
+            bundleRequestText = jsonMatch[0]
+          }
+
+          console.log("[v0] Attempting to parse bundle request:", bundleRequestText)
+
+          const bundleRequest = JSON.parse(bundleRequestText)
 
           console.log("[v0] Vex is creating a bundle:", bundleRequest)
+
+          if (!bundleRequest.title || !bundleRequest.description || !bundleRequest.price) {
+            throw new Error("Missing required bundle fields (title, description, or price)")
+          }
 
           // Call the bundle creation API
           const bundleResponse = await fetch(
@@ -198,7 +220,7 @@ When creating bundles, focus on:
           if (bundleResponse.ok) {
             const bundleResult = await bundleResponse.json()
             assistantMessage = assistantMessage.replace(
-              /BUNDLE_CREATION_REQUEST:[\s\S]*?\}/,
+              /BUNDLE_CREATION_REQUEST:[\s\S]*?(?=\n\n|\n$|$)/,
               `✅ **Bundle Created Successfully!**
 
 I've created your "${bundleResult.bundle.title}" bundle with ${bundleResult.bundle.contentItems} pieces of content, priced at $${bundleResult.bundle.price}.
@@ -214,16 +236,23 @@ Your bundle is now live and ready for customers! You can view and manage it in y
             )
           } else {
             const error = await bundleResponse.json()
+            console.error("[v0] Bundle creation API error:", error)
             assistantMessage = assistantMessage.replace(
-              /BUNDLE_CREATION_REQUEST:[\s\S]*?\}/,
+              /BUNDLE_CREATION_REQUEST:[\s\S]*?(?=\n\n|\n$|$)/,
               `❌ I encountered an issue creating your bundle: ${error.error}. ${error.code === "STRIPE_ACCOUNT_REQUIRED" ? "Please connect your Stripe account first." : "Please try again or contact support if the issue persists."}`,
             )
           }
         }
       } catch (error) {
         console.error("[v0] Error processing bundle creation:", error)
+        console.error("[v0] Bundle creation error details:", {
+          message: error instanceof Error ? error.message : "Unknown error",
+          stack: error instanceof Error ? error.stack : undefined,
+          assistantMessage: assistantMessage.substring(0, 500),
+        })
+
         assistantMessage = assistantMessage.replace(
-          /BUNDLE_CREATION_REQUEST:[\s\S]*?\}/,
+          /BUNDLE_CREATION_REQUEST:[\s\S]*?(?=\n\n|\n$|$)/,
           "❌ I encountered an error while creating your bundle. Please try again.",
         )
       }
