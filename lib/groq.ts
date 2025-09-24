@@ -1,4 +1,8 @@
 import { generateText } from "ai"
+import { groq } from "@ai-sdk/groq"
+
+// Export the groq provider for use in other files
+export { groq }
 
 // AI Bundling helper functions
 export interface ContentAnalysis {
