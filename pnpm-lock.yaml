@@ -10,10 +10,10 @@ importers:
     dependencies:
       '@ai-sdk/groq':
         specifier: latest
-        version: 2.0.21(zod@3.24.1)
+        version: 2.0.21(zod@4.0.0)
       '@ai-sdk/react':
         specifier: 2.0.51
-        version: 2.0.51(react@19.0.0)(zod@3.24.1)
+        version: 2.0.51(react@19.0.0)(zod@4.0.0)
       '@auth/core':
         specifier: latest
         version: 0.40.0(nodemailer@7.0.6)
@@ -133,7 +133,7 @@ importers:
         version: 5.90.2(react@19.0.0)
       ai:
         specifier: latest
-        version: 5.0.51(zod@3.24.1)
+        version: 5.0.51(zod@4.0.0)
       autoprefixer:
         specifier: ^10.4.20
         version: 10.4.20(postcss@8.5.0)
@@ -190,7 +190,7 @@ importers:
         version: 7.0.6
       openai:
         specifier: latest
-        version: 5.23.0(ws@8.18.3)(zod@3.24.1)
+        version: 5.23.0(ws@8.18.3)(zod@4.0.0)
       path:
         specifier: latest
         version: 0.12.7
@@ -249,8 +249,8 @@ importers:
         specifier: latest
         version: 8.18.3
       zod:
-        specifier: ^3.24.1
-        version: 3.24.1
+        specifier: ^4.0.0
+        version: 4.0.0
     devDependencies:
       '@types/node':
         specifier: ^22
@@ -4040,43 +4040,43 @@ packages:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}
     engines: {node: '>=10'}
 
-  zod@3.24.1:
-    resolution: {integrity: sha512-muH7gBL9sI1nciMZV67X5fTKKBLtwpZ5VBp1vsOQzj1MhrBZ4wlVCm3gedKZWLp0Oyel8sIGfeiz54Su+OVT+A==}
+  zod@4.0.0:
+    resolution: {integrity: sha512-9diLdTPc/L7w/5jI4C3gHYNiGHDV9IZYxo1e5LSD8cabi65WVTWWb+g2BGPEpUUCOxR4D+6O5B0AzyMdUAXwrw==}
 
 snapshots:
 
-  '@ai-sdk/gateway@1.0.28(zod@3.24.1)':
+  '@ai-sdk/gateway@1.0.28(zod@4.0.0)':
     dependencies:
       '@ai-sdk/provider': 2.0.0
-      '@ai-sdk/provider-utils': 3.0.9(zod@3.24.1)
-      zod: 3.24.1
+      '@ai-sdk/provider-utils': 3.0.9(zod@4.0.0)
+      zod: 4.0.0
 
-  '@ai-sdk/groq@2.0.21(zod@3.24.1)':
+  '@ai-sdk/groq@2.0.21(zod@4.0.0)':
     dependencies:
       '@ai-sdk/provider': 2.0.0
-      '@ai-sdk/provider-utils': 3.0.9(zod@3.24.1)
-      zod: 3.24.1
+      '@ai-sdk/provider-utils': 3.0.9(zod@4.0.0)
+      zod: 4.0.0
 
-  '@ai-sdk/provider-utils@3.0.9(zod@3.24.1)':
+  '@ai-sdk/provider-utils@3.0.9(zod@4.0.0)':
     dependencies:
       '@ai-sdk/provider': 2.0.0
       '@standard-schema/spec': 1.0.0
       eventsource-parser: 3.0.6
-      zod: 3.24.1
+      zod: 4.0.0
 
   '@ai-sdk/provider@2.0.0':
     dependencies:
       json-schema: 0.4.0
 
-  '@ai-sdk/react@2.0.51(react@19.0.0)(zod@3.24.1)':
+  '@ai-sdk/react@2.0.51(react@19.0.0)(zod@4.0.0)':
     dependencies:
-      '@ai-sdk/provider-utils': 3.0.9(zod@3.24.1)
-      ai: 5.0.51(zod@3.24.1)
+      '@ai-sdk/provider-utils': 3.0.9(zod@4.0.0)
+      ai: 5.0.51(zod@4.0.0)
       react: 19.0.0
       swr: 2.3.6(react@19.0.0)
       throttleit: 2.1.0
     optionalDependencies:
-      zod: 3.24.1
+      zod: 4.0.0
 
   '@alloc/quick-lru@5.2.0': {}
 
@@ -7124,13 +7124,13 @@ snapshots:
     dependencies:
       humanize-ms: 1.2.1
 
-  ai@5.0.51(zod@3.24.1):
+  ai@5.0.51(zod@4.0.0):
     dependencies:
-      '@ai-sdk/gateway': 1.0.28(zod@3.24.1)
+      '@ai-sdk/gateway': 1.0.28(zod@4.0.0)
       '@ai-sdk/provider': 2.0.0
-      '@ai-sdk/provider-utils': 3.0.9(zod@3.24.1)
+      '@ai-sdk/provider-utils': 3.0.9(zod@4.0.0)
       '@opentelemetry/api': 1.9.0
-      zod: 3.24.1
+      zod: 4.0.0
 
   ansi-regex@5.0.1: {}
 
@@ -8162,10 +8162,10 @@ snapshots:
       wrappy: 1.0.2
     optional: true
 
-  openai@5.23.0(ws@8.18.3)(zod@3.24.1):
+  openai@5.23.0(ws@8.18.3)(zod@4.0.0):
     optionalDependencies:
       ws: 8.18.3
-      zod: 3.24.1
+      zod: 4.0.0
 
   openid-client@5.7.1:
     dependencies:
@@ -8878,4 +8878,4 @@ snapshots:
   yocto-queue@0.1.0:
     optional: true
 
-  zod@3.24.1: {}
+  zod@4.0.0: {}

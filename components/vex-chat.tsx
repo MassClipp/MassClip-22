@@ -89,7 +89,7 @@ export function VexChat() {
           <div className="max-w-3xl mx-auto py-6">
             {messages.length === 0 && (
               <div className="text-center py-12 chat-fade-in">
-                <h2 className="text-2xl font-semibold mb-3 chat-title">Hi! I'm Vex, your AI bundle assistant</h2>
+                <h2 className="text-2xl font-semibold mb-3 chat-title">Hi! I'm Vex</h2>
                 <p className="text-muted-foreground mb-8 max-w-md mx-auto leading-relaxed">
                   I'll help you create profitable bundles, set optimal pricing, and build compelling storefront content.
                 </p>
