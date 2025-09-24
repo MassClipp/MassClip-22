@@ -9,7 +9,7 @@
     "start": "next start"
   },
   "dependencies": {
-    "@ai-sdk/groq": "2.0.21",
+    "@ai-sdk/groq": "latest",
     "@ai-sdk/react": "2.0.51",
     "@auth/core": "latest",
     "@auth/firebase-adapter": "latest",
@@ -50,7 +50,7 @@
     "@radix-ui/react-tooltip": "latest",
     "@react-email/render": "latest",
     "@tanstack/react-query": "latest",
-    "ai": "5.0.51",
+    "ai": "latest",
     "autoprefixer": "^10.4.20",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
