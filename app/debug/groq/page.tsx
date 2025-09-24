@@ -146,14 +146,14 @@ export default function GroqDebugPage() {
                     <div className="text-xs text-muted-foreground">{result.timestamp}</div>
 
                     {result.error && (
-                      <div className="text-sm text-red-600 bg-red-50 p-2 rounded">
+                      <div className="text-sm text-red-400 bg-black p-2 rounded border border-red-500">
                         <strong>Error:</strong> {result.error}
                       </div>
                     )}
 
                     {result.data && (
-                      <div className="text-xs bg-gray-50 p-2 rounded overflow-x-auto">
-                        <pre>
+                      <div className="text-xs bg-black text-green-400 p-2 rounded overflow-x-auto border border-gray-600">
+                        <pre className="text-green-400">
                           {typeof result.data === "string" ? result.data : JSON.stringify(result.data, null, 2)}
                         </pre>
                       </div>
