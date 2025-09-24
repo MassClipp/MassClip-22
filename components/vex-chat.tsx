@@ -77,8 +77,8 @@ export function VexChat() {
   }
 
   return (
-    <div className="flex flex-col h-screen chat-container chat-typography">
-      <div className="flex-shrink-0 border-b border-chat-border px-6 py-4">
+    <div className="flex flex-col min-h-screen chat-typography">
+      <div className="flex-shrink-0 px-6 py-4">
         <div className="max-w-3xl mx-auto">
           <h1 className="text-xl font-semibold chat-title">Vex</h1>
           <p className="text-sm chat-subtitle mt-1">AI bundle assistant</p>
@@ -148,7 +148,7 @@ export function VexChat() {
           </div>
         </ScrollArea>
 
-        <div className="flex-shrink-0 border-t border-chat-border px-6 py-4">
+        <div className="flex-shrink-0 px-6 py-4">
           <div className="max-w-3xl mx-auto">
             <form onSubmit={handleSubmit} className="flex gap-3">
               <div className="flex-1 relative">
