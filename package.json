@@ -9,6 +9,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@ai-sdk/react": "latest",
     "@auth/core": "latest",
     "@auth/firebase-adapter": "latest",
     "@aws-sdk/client-s3": "latest",

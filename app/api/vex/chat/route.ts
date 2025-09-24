@@ -1,6 +1,6 @@
 import { streamText, tool } from "ai"
 import { groq } from "@/lib/groq"
-import { z } from "zod"
+import { z } from "zod/v4"
 import type { NextRequest } from "next/server"
 
 export const maxDuration = 30
