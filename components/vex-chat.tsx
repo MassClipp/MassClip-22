@@ -5,7 +5,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Send, Plus, MessageSquare, Trash2, Menu, X } from "lucide-react"
+import { Send, Plus, MessageSquare, Trash2 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 
 interface Message {
@@ -37,7 +37,6 @@ export function VexChat() {
   const [hasAnalyzed, setHasAnalyzed] = useState(false)
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([])
   const [currentChatId, setCurrentChatId] = useState<string | null>(null)
-  const [sidebarOpen, setSidebarOpen] = useState(false)
   const { user } = useAuth()
 
   const suggestions = [
@@ -84,7 +83,6 @@ export function VexChat() {
         const chat = await response.json()
         setMessages(chat.messages || [])
         setCurrentChatId(chatId)
-        setSidebarOpen(false)
       }
     } catch (error) {
       console.error("Error loading chat:", error)
@@ -111,7 +109,6 @@ export function VexChat() {
         setChatSessions((prev) => [newChat, ...prev])
         setMessages([])
         setCurrentChatId(newChat.id)
-        setSidebarOpen(false)
       }
     } catch (error) {
       console.error("Error creating new chat:", error)
@@ -321,45 +318,46 @@ export function VexChat() {
 
   return (
     <div className="flex h-screen">
-      <div
-        className={`${sidebarOpen ? "w-64" : "w-0"} transition-all duration-200 bg-black border-r border-gray-800 overflow-hidden flex flex-col`}
-      >
-        <div className="p-4 border-b border-gray-800">
-          <h2 className="text-white font-semibold text-lg">Vex</h2>
+      <div className="fixed left-0 top-0 h-full w-64 bg-zinc-950 border-r border-zinc-800 flex flex-col z-50">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-zinc-800">
+          <h1 className="text-xl font-semibold text-white">Vex</h1>
         </div>
 
-        <div className="flex-1 p-4 space-y-4">
+        {/* New Chat Button */}
+        <div className="p-4">
           <Button
             onClick={createNewChat}
-            className="w-full justify-start gap-2 bg-gray-800 hover:bg-gray-700 text-white border-gray-700"
+            className="w-full justify-start gap-3 bg-zinc-900 hover:bg-zinc-800 text-white border-zinc-700 h-10"
             variant="outline"
           >
             <Plus className="h-4 w-4" />
             New Chat
           </Button>
+        </div>
 
+        {/* Chat History */}
+        <div className="flex-1 px-4 pb-4">
           <ScrollArea className="h-full">
-            <div className="space-y-2">
+            <div className="space-y-1">
               {chatSessions.map((chat) => (
-                <div key={chat.id} className="group flex items-center gap-2">
+                <div key={chat.id} className="group relative">
                   <button
                     onClick={() => loadChat(chat.id)}
-                    className={`flex-1 text-left p-2 rounded text-sm transition-colors ${
+                    className={`w-full text-left p-3 rounded-lg text-sm transition-all duration-200 flex items-center gap-3 ${
                       currentChatId === chat.id
-                        ? "bg-gray-700 text-white"
-                        : "text-gray-300 hover:bg-gray-800 hover:text-white"
+                        ? "bg-zinc-800 text-white"
+                        : "text-zinc-400 hover:bg-zinc-900/50 hover:text-white"
                     }`}
                   >
-                    <div className="flex items-center gap-2">
-                      <MessageSquare className="h-3 w-3 flex-shrink-0" />
-                      <span className="truncate">{chat.title}</span>
-                    </div>
+                    <MessageSquare className="h-4 w-4 flex-shrink-0" />
+                    <span className="truncate flex-1">{chat.title}</span>
                   </button>
                   <Button
                     onClick={() => deleteChat(chat.id)}
                     size="sm"
                     variant="ghost"
-                    className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-gray-400 hover:text-white hover:bg-gray-700"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-zinc-500 hover:text-red-400 hover:bg-zinc-800 transition-all duration-200"
                   >
                     <Trash2 className="h-3 w-3" />
                   </Button>
@@ -370,13 +368,10 @@ export function VexChat() {
         </div>
       </div>
 
-      <div className="flex flex-col flex-1 min-h-0">
-        <div className="flex-shrink-0 px-6 py-4 border-b">
+      <div className="flex flex-col flex-1 min-h-0 ml-64">
+        <div className="flex-shrink-0 px-6 py-4 border-b border-zinc-200 dark:border-zinc-800">
           <div className="flex items-center gap-3">
-            <Button onClick={() => setSidebarOpen(!sidebarOpen)} size="sm" variant="ghost" className="h-8 w-8 p-0">
-              {sidebarOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
-            </Button>
-            <h1 className="text-xl font-semibold chat-title">Vex</h1>
+            <h1 className="text-xl font-semibold">Vex</h1>
           </div>
         </div>
 
@@ -384,15 +379,15 @@ export function VexChat() {
           <ScrollArea className="flex-1 px-6">
             <div className="max-w-3xl mx-auto py-6">
               {messages.length === 0 && (
-                <div className="text-center py-12 chat-fade-in">
-                  <h2 className="text-2xl font-semibold mb-3 chat-title">Hi! I'm Vex</h2>
+                <div className="text-center py-12">
+                  <h2 className="text-2xl font-semibold mb-3">Hi! I'm Vex</h2>
                   <p className="text-muted-foreground mb-8 max-w-md mx-auto leading-relaxed">
                     I'll help you create profitable bundles, set optimal pricing, and build compelling storefront
                     content.
                   </p>
 
                   {contentAnalysis && (
-                    <div className="mb-8 p-4 rounded-lg bg-muted/50 max-w-md mx-auto">
+                    <div className="mb-8 p-4 rounded-lg bg-muted/30 max-w-md mx-auto border border-zinc-200 dark:border-zinc-800">
                       <p className="text-sm text-muted-foreground mb-2">
                         Analyzed {contentAnalysis.totalUploads} uploads
                       </p>
@@ -409,7 +404,7 @@ export function VexChat() {
                     {suggestions.map((suggestion, index) => (
                       <button
                         key={index}
-                        className="chat-suggestion text-left p-4 rounded-lg transition-all duration-200 text-sm"
+                        className="text-left p-4 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-all duration-200 text-sm"
                         onClick={() => handleSuggestionClick(suggestion)}
                       >
                         {suggestion}
