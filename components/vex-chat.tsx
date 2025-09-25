@@ -318,7 +318,7 @@ export function VexChat() {
 
   return (
     <div className="flex h-screen">
-      <div className="fixed left-0 top-0 h-full w-64 bg-zinc-950 border-r border-zinc-800 flex flex-col z-50">
+      <div className="fixed left-0 top-16 h-[calc(100vh-4rem)] w-64 bg-zinc-950 border-r border-zinc-800 flex flex-col z-40">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-zinc-800">
           <h1 className="text-xl font-semibold text-white">Vex</h1>
@@ -387,7 +387,7 @@ export function VexChat() {
                   </p>
 
                   {contentAnalysis && (
-                    <div className="mb-8 p-4 rounded-lg bg-muted/30 max-w-md mx-auto border border-zinc-200 dark:border-zinc-800">
+                    <div className="mb-8 p-4 rounded-lg bg-zinc-100 dark:bg-zinc-900 max-w-md mx-auto border border-zinc-300 dark:border-zinc-700">
                       <p className="text-sm text-muted-foreground mb-2">
                         Analyzed {contentAnalysis.totalUploads} uploads
                       </p>
@@ -404,7 +404,7 @@ export function VexChat() {
                     {suggestions.map((suggestion, index) => (
                       <button
                         key={index}
-                        className="text-left p-4 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-all duration-200 text-sm"
+                        className="text-left p-4 rounded-lg bg-zinc-100 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-all duration-200 text-sm"
                         onClick={() => handleSuggestionClick(suggestion)}
                       >
                         {suggestion}
