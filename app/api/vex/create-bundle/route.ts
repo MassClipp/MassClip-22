@@ -379,7 +379,9 @@ export async function POST(request: NextRequest) {
       contentItems: processedContentItems.length,
     })
 
-    return NextResponse.json({
+    console.log("[v0] Preparing response data...")
+
+    const responseData = {
       success: true,
       message: "Bundle created successfully by Vex AI",
       bundleId,
@@ -394,7 +396,25 @@ export async function POST(request: NextRequest) {
         totalSize: contentMetadata.totalSizeFormatted,
         createdBy: "vex_ai",
       },
-    })
+    }
+
+    console.log("[v0] Response data prepared:", JSON.stringify(responseData, null, 2))
+
+    try {
+      console.log("[v0] Creating NextResponse.json...")
+      const response = NextResponse.json(responseData)
+      console.log("[v0] NextResponse created successfully, returning...")
+      return response
+    } catch (responseError) {
+      console.error("[v0] Failed to create response:", responseError)
+      return NextResponse.json(
+        {
+          error: "Failed to create response",
+          details: responseError instanceof Error ? responseError.message : "Unknown response error",
+        },
+        { status: 500 },
+      )
+    }
   } catch (error: any) {
     console.error("❌ [Vex Bundle Creation] Unexpected error:", error)
     console.error("❌ [Vex Bundle Creation] Error stack:", error.stack)
