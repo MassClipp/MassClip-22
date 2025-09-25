@@ -168,12 +168,8 @@ Be helpful, natural, and focus on their success. When creating bundles, use the 
           const bundleApiUrl = "/api/vex/create-bundle"
           console.log("[v0] Calling bundle API:", bundleApiUrl)
 
-          const protocol = request.headers.get("x-forwarded-proto") || "https"
-          const host = request.headers.get("host") || request.headers.get("x-forwarded-host")
-          const absoluteBundleUrl = `${protocol}://${host}${bundleApiUrl}`
-          console.log("[v0] Absolute bundle URL:", absoluteBundleUrl)
-
-          const bundleResponse = await fetch(absoluteBundleUrl, {
+          // Use relative URL for internal API calls within the same application
+          const bundleResponse = await fetch(bundleApiUrl, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -182,7 +178,7 @@ Be helpful, natural, and focus on their success. When creating bundles, use the 
             body: JSON.stringify(bundleData),
           })
 
-          console.log("[v0] Bundle creation failed:", bundleResponse.status)
+          console.log("[v0] Bundle creation response status:", bundleResponse.status)
 
           if (bundleResponse.ok) {
             const bundleResult = await bundleResponse.json()
