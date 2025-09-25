@@ -12,22 +12,30 @@ export async function POST(request: Request) {
     const { messages } = await request.json()
 
     console.log("[v0] Processing chat with content context")
+    console.log("[v0] Messages received:", messages?.length || 0)
 
     // Get authorization header for user context
     const authHeader = request.headers.get("authorization")
+    console.log("[v0] Auth header present:", !!authHeader)
+
     let userContentContext = ""
     let userId = ""
 
     if (authHeader && authHeader.startsWith("Bearer ")) {
       try {
         const token = authHeader.split("Bearer ")[1]
+        console.log("[v0] Token extracted, length:", token?.length)
+
+        console.log("[v0] Verifying Firebase ID token...")
         const decodedToken = await getAuth().verifyIdToken(token)
         userId = decodedToken.uid
+        console.log("[v0] Token verified for user:", userId)
 
         const analysisDoc = await db.collection("vex_content_analysis").doc(userId).get()
 
         if (analysisDoc.exists) {
           const analysisData = analysisDoc.data()
+          console.log("[v0] Found content analysis for user")
 
           // Create detailed content context for AI
           userContentContext = `
@@ -51,17 +59,39 @@ This user has ${analysisData?.totalUploads || 0} pieces of content. When they as
 `
 
           console.log("[v0] Loaded user content context for chat")
+        } else {
+          console.log("[v0] No content analysis found for user")
         }
       } catch (authError) {
-        console.log("[v0] Could not load user content context:", authError)
+        console.log("[v0] Could not load user content context:", {
+          error: authError instanceof Error ? authError.message : "Unknown error",
+          hasAuthHeader: !!authHeader,
+          authHeaderFormat: authHeader?.substring(0, 20) + "...",
+        })
       }
+    } else {
+      console.log("[v0] No valid auth header provided")
     }
 
     // Get the last message from the user
     const lastMessage = messages[messages.length - 1]
 
     if (!lastMessage || !lastMessage.content) {
+      console.log("[v0] No message content provided")
       return NextResponse.json({ error: "No message content provided" }, { status: 400 })
+    }
+
+    console.log("[v0] Processing message:", lastMessage.content.substring(0, 100) + "...")
+
+    if (!process.env.GROQ_API_KEY) {
+      console.error("❌ [Vex Chat] GROQ_API_KEY environment variable is missing")
+      return NextResponse.json(
+        {
+          error: "Server configuration error",
+          details: "AI service not configured",
+        },
+        { status: 500 },
+      )
     }
 
     const userMessage = lastMessage.content.toLowerCase()
@@ -76,6 +106,7 @@ This user has ${analysisData?.totalUploads || 0} pieces of content. When they as
     ]
 
     const wantsBundleCreation = bundleCreationKeywords.some((keyword) => userMessage.includes(keyword))
+    console.log("[v0] Bundle creation requested:", wantsBundleCreation)
 
     const systemPrompt = `You are Vex, an AI assistant specialized in helping content creators build and optimize their digital product bundles. You're friendly, knowledgeable, and focused on helping users create profitable bundles.
 
@@ -136,34 +167,54 @@ When creating bundles, focus on:
 - Descriptions that highlight transformation/outcomes
 - Smart use of free content to build trust and drive conversions`
 
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
-        messages: [
-          {
-            role: "system",
-            content: systemPrompt,
-          },
-          {
-            role: "user",
-            content: lastMessage.content,
-          },
-        ],
-        temperature: 0.7,
-        max_tokens: 1000,
-        stream: false,
-      }),
-    })
+    let response
+    try {
+      console.log("[v0] Making request to Groq API...")
+      response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "llama-3.3-70b-versatile",
+          messages: [
+            {
+              role: "system",
+              content: systemPrompt,
+            },
+            {
+              role: "user",
+              content: lastMessage.content,
+            },
+          ],
+          temperature: 0.7,
+          max_tokens: 1000,
+          stream: false,
+        }),
+      })
+      console.log("[v0] Groq API response status:", response.status)
+    } catch (fetchError) {
+      console.error("❌ [Vex Chat] Failed to connect to Groq API:", fetchError)
+      return NextResponse.json(
+        {
+          error: "Failed to process chat message",
+          details: "AI service unavailable",
+        },
+        { status: 500 },
+      )
+    }
 
     if (!response.ok) {
       const errorText = await response.text()
       console.error("❌ Groq API error:", response.status, errorText)
-      return NextResponse.json({ error: "Failed to process chat message" }, { status: 500 })
+      return NextResponse.json(
+        {
+          error: "Failed to process chat message",
+          details: `AI service error: ${response.status}`,
+        },
+        { status: 500 },
+      )
     }
 
     const data = await response.json()
@@ -173,6 +224,8 @@ When creating bundles, focus on:
       console.error("❌ No response from Groq API")
       return NextResponse.json({ error: "No response from AI" }, { status: 500 })
     }
+
+    console.log("[v0] Received AI response, length:", assistantMessage.length)
 
     if (assistantMessage.includes("BUNDLE_CREATION_REQUEST:")) {
       try {
@@ -300,6 +353,13 @@ Your bundle is now live and ready for customers! You can view and manage it in y
     })
   } catch (error) {
     console.error("❌ Vex chat error:", error)
-    return NextResponse.json({ error: "Failed to process chat message" }, { status: 500 })
+    console.error("❌ Vex chat error stack:", error instanceof Error ? error.stack : "No stack trace")
+    return NextResponse.json(
+      {
+        error: "Failed to process chat message",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }

@@ -13,19 +13,33 @@ export async function POST(request: NextRequest) {
 
     // Get authorization header
     const authHeader = request.headers.get("authorization")
+    console.log("[v0] Auth header present:", !!authHeader)
+    console.log("[v0] Auth header format:", authHeader?.substring(0, 20) + "...")
+
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       console.log("❌ [Vex Analyze] No valid authorization header")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const token = authHeader.split("Bearer ")[1]
+    console.log("[v0] Token extracted, length:", token?.length)
 
     try {
-      // Verify the Firebase ID token
+      console.log("[v0] Attempting to verify Firebase ID token...")
       const decodedToken = await getAuth().verifyIdToken(token)
       const userId = decodedToken.uid
-
       console.log("✅ [Vex Analyze] Authenticated user:", userId)
+
+      if (!process.env.GROQ_API_KEY) {
+        console.error("❌ [Vex Analyze] GROQ_API_KEY environment variable is missing")
+        return NextResponse.json(
+          {
+            error: "Server configuration error",
+            details: "AI service not configured",
+          },
+          { status: 500 },
+        )
+      }
 
       // Query multiple collections for uploads
       const collections = ["uploads", "free_content", "videos", "content"]
@@ -99,10 +113,12 @@ export async function POST(request: NextRequest) {
         filename: upload.filename,
       }))
 
-      // Use AI to analyze and categorize uploads
-      const { text } = await generateText({
-        model: groq("llama-3.3-70b-versatile"),
-        prompt: `You are Vex, an AI bundle assistant. Analyze this user's content uploads and provide detailed bundle categorization.
+      let analysis
+      try {
+        console.log("[v0] Starting AI analysis with Groq...")
+        const { text } = await generateText({
+          model: groq("llama-3.3-70b-versatile"),
+          prompt: `You are Vex, an AI bundle assistant. Analyze this user's content uploads and provide detailed bundle categorization.
 
 Content to analyze:
 ${JSON.stringify(contentSummary, null, 2)}
@@ -125,10 +141,10 @@ Focus on profitable bundle categories like:
 - Business/Marketing content
 
 IMPORTANT: Return ONLY valid JSON. No markdown formatting, no code blocks, no extra text. Just pure JSON.`,
-      })
+        })
 
-      let analysis
-      try {
+        console.log("[v0] AI analysis completed, parsing response...")
+
         let cleanedText = text.trim()
 
         // Remove markdown code blocks if present
@@ -145,9 +161,8 @@ IMPORTANT: Return ONLY valid JSON. No markdown formatting, no code blocks, no ex
 
         analysis = JSON.parse(cleanedText)
         console.log("✅ [Vex Analyze] Successfully parsed AI response")
-      } catch (parseError) {
-        console.error("❌ [Vex Analyze] Failed to parse AI response:", parseError)
-        console.error("❌ [Vex Analyze] Raw AI response:", text)
+      } catch (aiError) {
+        console.error("❌ [Vex Analyze] AI analysis failed:", aiError)
 
         const contentTypes = uniqueUploads.map((u) => u.contentType)
         const hasVideos = contentTypes.includes("video")
@@ -210,11 +225,23 @@ IMPORTANT: Return ONLY valid JSON. No markdown formatting, no code blocks, no ex
         uploads: uniqueUploads.slice(0, 20), // Return first 20 for reference
       })
     } catch (authError) {
-      console.error("❌ [Vex Analyze] Auth error:", authError)
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 })
+      console.error("❌ [Vex Analyze] Auth error details:", {
+        error: authError,
+        message: authError instanceof Error ? authError.message : "Unknown auth error",
+        tokenLength: token?.length,
+        hasToken: !!token,
+      })
+      return NextResponse.json(
+        {
+          error: "Invalid token",
+          details: authError instanceof Error ? authError.message : "Authentication failed",
+        },
+        { status: 401 },
+      )
     }
   } catch (error) {
     console.error("❌ [Vex Analyze] General error:", error)
+    console.error("❌ [Vex Analyze] Error stack:", error instanceof Error ? error.stack : "No stack trace")
     return NextResponse.json(
       {
         error: "Failed to analyze uploads",

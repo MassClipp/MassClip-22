@@ -43,7 +43,9 @@ export function VexChat() {
       console.log("[v0] Starting auto-analysis of user content...")
 
       try {
-        const token = await user.getIdToken()
+        const token = await user.getIdToken(true) // Force refresh
+        console.log("[v0] Got fresh ID token for analysis")
+
         const response = await fetch("/api/vex/analyze-uploads", {
           method: "POST",
           headers: {
@@ -52,13 +54,16 @@ export function VexChat() {
           },
         })
 
+        console.log("[v0] Analysis response status:", response.status)
+
         if (response.ok) {
           const data = await response.json()
           console.log("[v0] Content analysis completed:", data.analysis)
           setContentAnalysis(data.analysis)
           setHasAnalyzed(true)
         } else {
-          console.log("[v0] Content analysis failed:", response.status)
+          const errorData = await response.json().catch(() => ({}))
+          console.log("[v0] Content analysis failed:", response.status, errorData)
         }
       } catch (error) {
         console.error("[v0] Error analyzing content:", error)
@@ -83,7 +88,8 @@ export function VexChat() {
     setIsLoading(true)
 
     try {
-      const token = user ? await user.getIdToken() : null
+      const token = user ? await user.getIdToken(true) : null // Force refresh
+      console.log("[v0] Got token for chat:", !!token)
 
       const response = await fetch("/api/vex/chat", {
         method: "POST",
@@ -96,7 +102,13 @@ export function VexChat() {
         }),
       })
 
-      if (!response.ok) throw new Error("Failed to get response")
+      console.log("[v0] Chat response status:", response.status)
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        console.error("[v0] Chat API error:", response.status, errorData)
+        throw new Error(`Chat failed: ${response.status} - ${errorData.details || errorData.error || "Unknown error"}`)
+      }
 
       const data = await response.json()
 
@@ -112,7 +124,7 @@ export function VexChat() {
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: "Sorry, I encountered an error. Please try again.",
+        content: `Sorry, I encountered an error: ${error instanceof Error ? error.message : "Please try again."}`,
       }
       setMessages((prev) => [...prev, errorMessage])
     } finally {
