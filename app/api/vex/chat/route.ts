@@ -224,6 +224,20 @@ When creating bundles, focus on:
       lastMessage: messages[messages.length - 1]?.content?.substring(0, 100),
     })
 
+    const apiMessages = [
+      {
+        role: "system",
+        content: systemPrompt,
+      },
+      ...messages,
+    ]
+
+    console.log("[v0] Sending messages to API:", {
+      totalMessages: apiMessages.length,
+      hasSystemPrompt: apiMessages[0]?.role === "system",
+      systemPromptLength: systemPrompt.length,
+    })
+
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -232,7 +246,7 @@ When creating bundles, focus on:
       },
       body: JSON.stringify({
         model: "llama-3.1-8b-instant",
-        messages,
+        messages: apiMessages, // Use the properly formatted messages array
         max_tokens: 1000,
         temperature: 0.7,
       }),
