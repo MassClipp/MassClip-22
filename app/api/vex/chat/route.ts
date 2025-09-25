@@ -147,24 +147,36 @@ Be helpful, natural, and focus on their success. When creating bundles, use the 
     if (assistantMessage.includes("CREATE_BUNDLE:") && userId) {
       try {
         console.log("[v0] Vex wants to create a bundle, processing...")
+        console.log("[v0] Original message:", assistantMessage)
 
-        // Show loading message to user first
-        assistantMessage = assistantMessage.replace(/CREATE_BUNDLE:\s*{.*?}/s, "🔄 **Creating your bundle...**").trim()
-
-        // Extract bundle data from the message
+        // Extract bundle data BEFORE modifying the message
         const bundleMatch = assistantMessage.match(/CREATE_BUNDLE:\s*({.*?})/s)
+        console.log("[v0] Bundle match found:", !!bundleMatch)
+
         if (bundleMatch) {
+          console.log("[v0] Bundle data string:", bundleMatch[1])
           const bundleData = JSON.parse(bundleMatch[1])
+          console.log("[v0] Parsed bundle data:", bundleData)
+
+          // Show loading message to user
+          assistantMessage = assistantMessage
+            .replace(/CREATE_BUNDLE:\s*{.*?}/s, "🔄 **Creating your bundle...**")
+            .trim()
 
           // Call the bundle creation API
-          const bundleResponse = await fetch(`${request.url.replace("/chat", "/create-bundle")}`, {
+          const bundleApiUrl = request.url.replace("/chat", "/create-bundle")
+          console.log("[v0] Calling bundle API:", bundleApiUrl)
+
+          const bundleResponse = await fetch(bundleApiUrl, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Authorization: authHeader,
+              Authorization: authHeader || "",
             },
             body: JSON.stringify(bundleData),
           })
+
+          console.log("[v0] Bundle API response status:", bundleResponse.status)
 
           if (bundleResponse.ok) {
             const bundleResult = await bundleResponse.json()
@@ -179,17 +191,22 @@ Be helpful, natural, and focus on their success. When creating bundles, use the 
 
             console.log("[v0] Bundle created successfully:", bundleId)
           } else {
+            const errorText = await bundleResponse.text()
+            console.error("[v0] Bundle creation failed:", bundleResponse.status, errorText)
+
             // Replace loading message with error
             assistantMessage = assistantMessage.replace(
               "🔄 **Creating your bundle...**",
               "❌ I had trouble creating the bundle. Let me try a different approach or you can create it manually in your dashboard.",
             )
           }
+        } else {
+          console.log("[v0] No valid bundle data found in CREATE_BUNDLE instruction")
         }
       } catch (error) {
         console.error("[v0] Failed to create bundle:", error)
         assistantMessage = assistantMessage.replace(
-          "🔄 **Creating your bundle...**",
+          /🔄 \*\*Creating your bundle\.\.\.\*\*/,
           "❌ I encountered an error while creating the bundle. Please try again or create it manually in your dashboard.",
         )
       }
