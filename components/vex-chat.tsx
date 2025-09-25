@@ -322,22 +322,32 @@ export function VexChat() {
   return (
     <div className="flex h-screen">
       <div
-        className={`${sidebarOpen ? "w-64" : "w-0"} transition-all duration-200 bg-muted/30 border-r overflow-hidden`}
+        className={`${sidebarOpen ? "w-64" : "w-0"} transition-all duration-200 bg-black border-r border-gray-800 overflow-hidden flex flex-col`}
       >
-        <div className="p-4 space-y-4">
-          <Button onClick={createNewChat} className="w-full justify-start gap-2 bg-transparent" variant="outline">
+        <div className="p-4 border-b border-gray-800">
+          <h2 className="text-white font-semibold text-lg">Vex</h2>
+        </div>
+
+        <div className="flex-1 p-4 space-y-4">
+          <Button
+            onClick={createNewChat}
+            className="w-full justify-start gap-2 bg-gray-800 hover:bg-gray-700 text-white border-gray-700"
+            variant="outline"
+          >
             <Plus className="h-4 w-4" />
             New Chat
           </Button>
 
-          <ScrollArea className="h-[calc(100vh-120px)]">
+          <ScrollArea className="h-full">
             <div className="space-y-2">
               {chatSessions.map((chat) => (
                 <div key={chat.id} className="group flex items-center gap-2">
                   <button
                     onClick={() => loadChat(chat.id)}
-                    className={`flex-1 text-left p-2 rounded text-sm hover:bg-muted/50 transition-colors ${
-                      currentChatId === chat.id ? "bg-muted" : ""
+                    className={`flex-1 text-left p-2 rounded text-sm transition-colors ${
+                      currentChatId === chat.id
+                        ? "bg-gray-700 text-white"
+                        : "text-gray-300 hover:bg-gray-800 hover:text-white"
                     }`}
                   >
                     <div className="flex items-center gap-2">
@@ -349,7 +359,7 @@ export function VexChat() {
                     onClick={() => deleteChat(chat.id)}
                     size="sm"
                     variant="ghost"
-                    className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0"
+                    className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-gray-400 hover:text-white hover:bg-gray-700"
                   >
                     <Trash2 className="h-3 w-3" />
                   </Button>
