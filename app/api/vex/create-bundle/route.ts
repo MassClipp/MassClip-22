@@ -34,12 +34,18 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 })
 
 export async function POST(request: NextRequest) {
+  console.log("🚀 [Vex Bundle Creation] POST method called - route is working!")
+  console.log("🚀 [Vex Bundle Creation] Request method:", request.method)
+  console.log("🚀 [Vex Bundle Creation] Request URL:", request.url)
+  console.log("🚀 [Vex Bundle Creation] Request headers:", Object.fromEntries(request.headers.entries()))
+
   try {
     console.log("🤖 [Vex Bundle Creation] Starting AI-powered bundle creation...")
 
     let body
     try {
       body = await request.json()
+      console.log("📦 [Vex Bundle Creation] Request body parsed successfully:", body)
     } catch (error) {
       console.error("❌ [Vex Bundle Creation] Failed to parse request body:", error)
       return NextResponse.json({ error: "Invalid JSON in request body" }, { status: 400 })
