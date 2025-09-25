@@ -181,22 +181,34 @@ When creating bundles, focus on:
         if (bundleRequestMatch) {
           let bundleRequestText = bundleRequestMatch[1].trim()
 
-          // Clean up the JSON text
-          if (bundleRequestText.startsWith("```json")) {
-            bundleRequestText = bundleRequestText.replace(/^```json\s*/, "").replace(/\s*```$/, "")
-          } else if (bundleRequestText.startsWith("```")) {
-            bundleRequestText = bundleRequestText.replace(/^```\s*/, "").replace(/\s*```$/, "")
+          console.log("[v0] Raw bundle request text before processing:", bundleRequestText)
+
+          // Clean up the text first
+          bundleRequestText = bundleRequestText.trim()
+
+          if (!bundleRequestText) {
+            throw new Error("Bundle request text is empty")
           }
 
           // Remove any trailing text after the JSON object
           const jsonMatch = bundleRequestText.match(/\{[\s\S]*\}/)
           if (jsonMatch) {
             bundleRequestText = jsonMatch[0]
+          } else {
+            console.log("[v0] No JSON object found in bundle request text")
+            throw new Error("No valid JSON object found in bundle request")
           }
 
           console.log("[v0] Attempting to parse bundle request:", bundleRequestText)
 
-          const bundleRequest = JSON.parse(bundleRequestText)
+          let bundleRequest
+          try {
+            bundleRequest = JSON.parse(bundleRequestText)
+          } catch (parseError) {
+            console.log("[v0] JSON parse error:", parseError)
+            console.log("[v0] Failed to parse text:", bundleRequestText)
+            throw new Error(`Failed to parse bundle request JSON: ${parseError.message}`)
+          }
 
           console.log("[v0] Vex is creating a bundle:", bundleRequest)
 
