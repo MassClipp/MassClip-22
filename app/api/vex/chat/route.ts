@@ -17,7 +17,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No messages provided" }, { status: 400 })
     }
 
-    if (!process.env.GROQ_API_KEY) {
+    if (!process.env.GROQ_API) {
       console.log("[v0] Groq API key missing")
       return NextResponse.json({ error: "AI service not configured" }, { status: 500 })
     }
@@ -110,7 +110,7 @@ Be helpful, natural, and focus on their success. When creating bundles, use the 
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+        Authorization: `Bearer ${process.env.GROQ_API}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -168,8 +168,9 @@ Be helpful, natural, and focus on their success. When creating bundles, use the 
           const bundleApiUrl = "/api/vex/create-bundle"
           console.log("[v0] Calling bundle API:", bundleApiUrl)
 
-          const requestUrl = new URL(request.url)
-          const absoluteBundleUrl = new URL(bundleApiUrl, requestUrl.origin).toString()
+          const protocol = request.headers.get("x-forwarded-proto") || "https"
+          const host = request.headers.get("host") || request.headers.get("x-forwarded-host")
+          const absoluteBundleUrl = `${protocol}://${host}${bundleApiUrl}`
           console.log("[v0] Absolute bundle URL:", absoluteBundleUrl)
 
           const bundleResponse = await fetch(absoluteBundleUrl, {
@@ -181,7 +182,7 @@ Be helpful, natural, and focus on their success. When creating bundles, use the 
             body: JSON.stringify(bundleData),
           })
 
-          console.log("[v0] Bundle API response status:", bundleResponse.status)
+          console.log("[v0] Bundle creation failed:", bundleResponse.status)
 
           if (bundleResponse.ok) {
             const bundleResult = await bundleResponse.json()
