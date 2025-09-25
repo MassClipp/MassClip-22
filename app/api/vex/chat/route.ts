@@ -188,17 +188,27 @@ When creating bundles, focus on:
             const bundleRequest = JSON.parse(bundleRequestText)
             console.log("[v0] Vex is creating a bundle:", bundleRequest)
 
-            const bundleResponse = await fetch(
-              `${process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"}/api/vex/create-bundle`,
-              {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: authHeader || "",
-                },
-                body: JSON.stringify(bundleRequest),
+            const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"
+            const bundleApiUrl = `${baseUrl}/api/vex/create-bundle`
+
+            console.log("[v0] Bundle API URL construction:")
+            console.log("[v0] - NEXT_PUBLIC_BASE_URL:", process.env.NEXT_PUBLIC_BASE_URL)
+            console.log("[v0] - Base URL used:", baseUrl)
+            console.log("[v0] - Final bundle API URL:", bundleApiUrl)
+            console.log("[v0] - Request method: POST")
+            console.log("[v0] - Request headers:", {
+              "Content-Type": "application/json",
+              Authorization: authHeader ? "Bearer [TOKEN]" : "None",
+            })
+
+            const bundleResponse = await fetch(bundleApiUrl, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: authHeader || "",
               },
-            )
+              body: JSON.stringify(bundleRequest),
+            })
 
             const responseText = await bundleResponse.text()
             console.log("[v0] Bundle API response status:", bundleResponse.status)
