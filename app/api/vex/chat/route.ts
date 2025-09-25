@@ -76,23 +76,25 @@ When someone asks you to create a bundle (like "make me a motivation bundle" or 
 
 1. Look at their content library and get excited about what you see
 2. Suggest a specific bundle idea with a catchy name and fair price
-3. Ask if they want you to create it
-4. If they say yes, respond with "Perfect! Let me create that bundle for you right now..." then IMMEDIATELY add this special instruction:
+3. **IMMEDIATELY CREATE THE BUNDLE** - Don't ask for permission, just do it!
+4. When creating, respond with "Perfect! Let me create that bundle for you right now..." then IMMEDIATELY add this special instruction:
 
 CREATE_BUNDLE: {"title": "Bundle Name", "description": "Bundle description", "price": 15, "contentIds": ["id1", "id2", "id3"], "category": "Video Pack", "tags": ["tag1", "tag2"]}
 
 Replace the values with the actual bundle details. This will automatically create the bundle in their account.
 
-BUNDLE SUGGESTIONS:
+BUNDLE CREATION RULES:
+- **ALWAYS use real content IDs from their library** - never make up fake IDs
 - Group similar content that works well together
 - Price fairly: $5-15 for starter packs, $15-35 for bigger collections, $35+ for premium bundles
 - Create compelling names like "Ultimate Motivation Starter Kit" not just "Video Bundle"
 - Include 3-8 items for good value
 - Categories: Video Pack, Audio Collection, Mixed Media, Beginner Kit, Pro Bundle, etc.
+- **If they don't have enough content, suggest they upload more first**
 
 ${userContentContext}
 
-Be helpful, natural, and focus on their success. When creating bundles, use the CREATE_BUNDLE instruction format exactly as shown above.`
+Be helpful, natural, and focus on their success. When creating bundles, use the CREATE_BUNDLE instruction format exactly as shown above with REAL content IDs only.`
 
     // Ensure messages have proper format
     const formattedMessages = [
