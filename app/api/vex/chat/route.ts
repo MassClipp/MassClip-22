@@ -189,7 +189,7 @@ When creating bundles, focus on:
             console.log("[v0] Vex is creating a bundle:", bundleRequest)
 
             const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"
-            const bundleApiUrl = `${baseUrl}/api/vex/create-bundle`
+            const bundleApiUrl = `${baseUrl}/api/vex/create-bundle-v2`
 
             console.log("[v0] Bundle API URL construction:")
             console.log("[v0] - NEXT_PUBLIC_BASE_URL:", process.env.NEXT_PUBLIC_BASE_URL)
