@@ -77,7 +77,11 @@ When someone asks you to create a bundle (like "make me a motivation bundle" or 
 1. Look at their content library and get excited about what you see
 2. Suggest a specific bundle idea with a catchy name and fair price
 3. Ask if they want you to create it
-4. If they say yes, just create it seamlessly (no need to explain how)
+4. If they say yes, respond with "Perfect! Let me create that bundle for you right now..." then IMMEDIATELY add this special instruction:
+
+CREATE_BUNDLE: {"title": "Bundle Name", "description": "Bundle description", "price": 15, "contentIds": ["id1", "id2", "id3"], "category": "Video Pack", "tags": ["tag1", "tag2"]}
+
+Replace the values with the actual bundle details. This will automatically create the bundle in their account.
 
 BUNDLE SUGGESTIONS:
 - Group similar content that works well together
@@ -88,7 +92,7 @@ BUNDLE SUGGESTIONS:
 
 ${userContentContext}
 
-Be helpful, natural, and focus on their success. Never mention technical details - just get things done!`
+Be helpful, natural, and focus on their success. When creating bundles, use the CREATE_BUNDLE instruction format exactly as shown above.`
 
     // Ensure messages have proper format
     const formattedMessages = [
@@ -144,8 +148,11 @@ Be helpful, natural, and focus on their success. Never mention technical details
       try {
         console.log("[v0] Vex wants to create a bundle, processing...")
 
+        // Show loading message to user first
+        assistantMessage = assistantMessage.replace(/CREATE_BUNDLE:\\s*{.*?}/s, "🔄 **Creating your bundle...**").trim()
+
         // Extract bundle data from the message
-        const bundleMatch = assistantMessage.match(/CREATE_BUNDLE:\s*({.*?})/s)
+        const bundleMatch = assistantMessage.match(/CREATE_BUNDLE:\\s*({.*?})/s)
         if (bundleMatch) {
           const bundleData = JSON.parse(bundleMatch[1])
 
@@ -164,17 +171,27 @@ Be helpful, natural, and focus on their success. Never mention technical details
             bundleCreated = true
             bundleId = bundleResult.bundleId
 
-            // Remove the CREATE_BUNDLE instruction from the message
-            assistantMessage = assistantMessage.replace(/CREATE_BUNDLE:\s*{.*?}/s, "").trim()
-            assistantMessage += `\n\n✅ **Bundle Created Successfully!**\nBundle ID: ${bundleId}\nYou can view and manage your new bundle in your dashboard.`
+            // Replace loading message with success
+            assistantMessage = assistantMessage.replace(
+              "🔄 **Creating your bundle...**",
+              `🎉 **Your bundle is ready!** I've created "${bundleData.title}" and it's now live in your storefront. You can view it in your dashboard or start sharing it with your audience!`,
+            )
 
             console.log("[v0] Bundle created successfully:", bundleId)
+          } else {
+            // Replace loading message with error
+            assistantMessage = assistantMessage.replace(
+              "🔄 **Creating your bundle...**",
+              "❌ I had trouble creating the bundle. Let me try a different approach or you can create it manually in your dashboard.",
+            )
           }
         }
       } catch (error) {
         console.error("[v0] Failed to create bundle:", error)
-        assistantMessage +=
-          "\n\n❌ I encountered an error while creating the bundle. Please try again or create it manually in your dashboard."
+        assistantMessage = assistantMessage.replace(
+          "🔄 **Creating your bundle...**",
+          "❌ I encountered an error while creating the bundle. Please try again or create it manually in your dashboard.",
+        )
       }
     }
 
