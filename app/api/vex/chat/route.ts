@@ -9,15 +9,20 @@ export const maxDuration = 30
 
 export async function POST(request: Request) {
   try {
+    console.log("[v0] Chat API called")
     const { messages } = await request.json()
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      console.log("[v0] No messages provided")
       return NextResponse.json({ error: "No messages provided" }, { status: 400 })
     }
 
     if (!process.env.GROQ_API_KEY) {
+      console.log("[v0] Groq API key missing")
       return NextResponse.json({ error: "AI service not configured" }, { status: 500 })
     }
+
+    console.log("[v0] Processing", messages.length, "messages")
 
     // Get user context if authenticated
     let userContentContext = ""
@@ -28,6 +33,7 @@ export async function POST(request: Request) {
         const token = authHeader.split("Bearer ")[1]
         const decodedToken = await getAuth().verifyIdToken(token)
         const userId = decodedToken.uid
+        console.log("[v0] User authenticated:", userId)
 
         const analysisDoc = await db.collection("vex_content_analysis").doc(userId).get()
         if (analysisDoc.exists) {
@@ -38,20 +44,25 @@ export async function POST(request: Request) {
             .slice(0, 5)
             .map((upload: any) => upload.title)
             .join(", ")}\n`
+          console.log("[v0] User context loaded")
         }
       } catch (error) {
-        // Continue without user context if auth fails
-        console.log("Auth failed, continuing without user context")
+        console.log("[v0] Auth failed, continuing without user context:", error)
       }
     }
 
-    // Simple system prompt
-    const systemPrompt = `You are Vex, an AI assistant that helps content creators with their digital products and bundles. You're friendly and knowledgeable about content creation, pricing, and marketing.${userContentContext}
+    const systemPrompt = `You are Vex, an AI assistant for content creators. Help with digital products, bundles, pricing, and marketing.${userContentContext}`
 
-Keep responses helpful and concise. When users ask about their content, reference what they have uploaded. Help them with bundle ideas, pricing strategies, and content organization.`
+    // Ensure messages have proper format
+    const formattedMessages = [
+      { role: "system", content: systemPrompt },
+      ...messages.map((msg: any) => ({
+        role: msg.role || "user",
+        content: String(msg.content || msg.message || ""),
+      })),
+    ]
 
-    // Prepare messages for API
-    const apiMessages = [{ role: "system", content: systemPrompt }, ...messages]
+    console.log("[v0] Calling Groq API with", formattedMessages.length, "messages")
 
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
@@ -61,24 +72,17 @@ Keep responses helpful and concise. When users ask about their content, referenc
       },
       body: JSON.stringify({
         model: "llama-3.1-8b-instant",
-        messages: apiMessages,
+        messages: formattedMessages,
         max_tokens: 1000,
         temperature: 0.7,
       }),
     })
 
+    console.log("[v0] Groq API response status:", response.status)
+
     if (!response.ok) {
       const errorText = await response.text()
-      console.error("Groq API error:", response.status, errorText)
-
-      if (response.status === 429) {
-        return NextResponse.json({
-          message: {
-            role: "assistant",
-            content: "I'm getting a lot of requests right now! Please wait a moment and try again.",
-          },
-        })
-      }
+      console.error("[v0] Groq API error:", response.status, errorText)
 
       return NextResponse.json(
         { error: "Failed to process chat message", details: `AI service error: ${response.status}` },
@@ -87,12 +91,16 @@ Keep responses helpful and concise. When users ask about their content, referenc
     }
 
     const data = await response.json()
-    const assistantMessage = data.choices[0]?.message?.content
+    console.log("[v0] Groq API success, got response")
+
+    const assistantMessage = data.choices?.[0]?.message?.content
 
     if (!assistantMessage) {
+      console.log("[v0] No assistant message in response")
       return NextResponse.json({ error: "No response from AI" }, { status: 500 })
     }
 
+    console.log("[v0] Returning successful response")
     return NextResponse.json({
       message: {
         role: "assistant",
@@ -100,7 +108,7 @@ Keep responses helpful and concise. When users ask about their content, referenc
       },
     })
   } catch (error) {
-    console.error("Chat API error:", error)
+    console.error("[v0] Chat API error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
