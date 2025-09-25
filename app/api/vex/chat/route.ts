@@ -9,20 +9,6 @@ export const maxDuration = 30
 
 export async function POST(request: Request) {
   try {
-    const url = new URL(request.url)
-    if (url.pathname.includes("create-bundle") || url.searchParams.get("action") === "create-bundle") {
-      console.log("🚀 [Bundle] Handling bundle creation in chat route")
-
-      const body = await request.json()
-      console.log("🚀 [Bundle] Request body:", body)
-
-      return NextResponse.json({
-        success: true,
-        message: "Bundle creation handled in chat route",
-        receivedData: body,
-      })
-    }
-
     const { messages } = await request.json()
 
     console.log("[v0] Processing chat with content context")
