@@ -7,6 +7,55 @@ initializeFirebaseAdmin()
 
 export const maxDuration = 30
 
+async function makeGroqRequest(requestBody: any, retries = 3): Promise<Response> {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      console.log(`[v0] Making Groq API request (attempt ${attempt}/${retries})...`)
+
+      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+      })
+
+      console.log(`[v0] Groq API response status: ${response.status}`)
+
+      // If successful, return immediately
+      if (response.ok) {
+        return response
+      }
+
+      // If rate limited (429), wait and retry
+      if (response.status === 429 && attempt < retries) {
+        const waitTime = Math.pow(2, attempt) * 1000 // Exponential backoff: 2s, 4s, 8s
+        console.log(`[v0] Rate limited (429), waiting ${waitTime}ms before retry...`)
+        await new Promise((resolve) => setTimeout(resolve, waitTime))
+        continue
+      }
+
+      // For other errors or final attempt, return the response
+      return response
+    } catch (error) {
+      console.error(`[v0] Groq API request failed (attempt ${attempt}):`, error)
+
+      // If this is the last attempt, throw the error
+      if (attempt === retries) {
+        throw error
+      }
+
+      // Wait before retrying
+      const waitTime = Math.pow(2, attempt) * 1000
+      console.log(`[v0] Waiting ${waitTime}ms before retry...`)
+      await new Promise((resolve) => setTimeout(resolve, waitTime))
+    }
+  }
+
+  throw new Error("All retry attempts failed")
+}
+
 export async function POST(request: Request) {
   try {
     const { messages } = await request.json()
@@ -169,45 +218,50 @@ When creating bundles, focus on:
 
     let response
     try {
-      console.log("[v0] Making request to Groq API...")
-      response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "llama-3.3-70b-versatile",
-          messages: [
-            {
-              role: "system",
-              content: systemPrompt,
-            },
-            {
-              role: "user",
-              content: lastMessage.content,
-            },
-          ],
-          temperature: 0.7,
-          max_tokens: 1000,
-          stream: false,
-        }),
-      })
-      console.log("[v0] Groq API response status:", response.status)
+      const requestBody = {
+        model: "llama-3.3-70b-versatile",
+        messages: [
+          {
+            role: "system",
+            content: systemPrompt,
+          },
+          {
+            role: "user",
+            content: lastMessage.content,
+          },
+        ],
+        temperature: 0.7,
+        max_tokens: 1000,
+        stream: false,
+      }
+
+      response = await makeGroqRequest(requestBody)
     } catch (fetchError) {
-      console.error("❌ [Vex Chat] Failed to connect to Groq API:", fetchError)
-      return NextResponse.json(
-        {
-          error: "Failed to process chat message",
-          details: "AI service unavailable",
+      console.error("❌ [Vex Chat] Failed to connect to Groq API after retries:", fetchError)
+
+      return NextResponse.json({
+        message: {
+          role: "assistant",
+          content:
+            "I'm experiencing high demand right now and need to take a quick break. Please try your message again in a few moments! In the meantime, I can still help you analyze your content and plan your bundles - just give me a moment to catch up. 🤖✨",
         },
-        { status: 500 },
-      )
+      })
     }
 
     if (!response.ok) {
       const errorText = await response.text()
       console.error("❌ Groq API error:", response.status, errorText)
+
+      if (response.status === 429) {
+        return NextResponse.json({
+          message: {
+            role: "assistant",
+            content:
+              "I'm getting a lot of requests right now! Please wait a moment and try again. I'll be ready to help you with your bundles shortly! 🚀",
+          },
+        })
+      }
+
       return NextResponse.json(
         {
           error: "Failed to process chat message",
