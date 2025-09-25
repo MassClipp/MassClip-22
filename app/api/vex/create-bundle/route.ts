@@ -37,7 +37,14 @@ export async function POST(request: NextRequest) {
   try {
     console.log("🤖 [Vex Bundle Creation] Starting AI-powered bundle creation...")
 
-    const body = await request.json()
+    let body
+    try {
+      body = await request.json()
+    } catch (error) {
+      console.error("❌ [Vex Bundle Creation] Failed to parse request body:", error)
+      return NextResponse.json({ error: "Invalid JSON in request body" }, { status: 400 })
+    }
+
     const { title, description, price, contentIds, bundleType } = body
 
     console.log("📝 [Vex Bundle Creation] Request data:", {
@@ -51,6 +58,7 @@ export async function POST(request: NextRequest) {
     // Get authorization header
     const authHeader = request.headers.get("authorization")
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      console.error("❌ [Vex Bundle Creation] Missing or invalid authorization header")
       return NextResponse.json({ error: "Authentication required" }, { status: 401 })
     }
 
@@ -68,9 +76,41 @@ export async function POST(request: NextRequest) {
     const userId = decodedToken.uid
     console.log("✅ [Vex Bundle Creation] User authenticated:", userId)
 
+    const requiredEnvVars = [
+      "FIREBASE_PROJECT_ID",
+      "FIREBASE_PRIVATE_KEY",
+      "FIREBASE_CLIENT_EMAIL",
+      "STRIPE_SECRET_KEY",
+    ]
+
+    for (const envVar of requiredEnvVars) {
+      if (!process.env[envVar]) {
+        console.error(`❌ [Vex Bundle Creation] Missing environment variable: ${envVar}`)
+        return NextResponse.json(
+          {
+            error: "Server configuration error",
+            details: `Missing required environment variable: ${envVar}`,
+          },
+          { status: 500 },
+        )
+      }
+    }
+
     // Check bundle limits
     console.log("🔍 [Vex Bundle Creation] Checking bundle limits...")
-    const tierInfo = await getUserTierInfo(userId)
+    let tierInfo
+    try {
+      tierInfo = await getUserTierInfo(userId)
+    } catch (error) {
+      console.error("❌ [Vex Bundle Creation] Failed to get user tier info:", error)
+      return NextResponse.json(
+        {
+          error: "Failed to check user tier information",
+          details: error instanceof Error ? error.message : "Unknown error",
+        },
+        { status: 500 },
+      )
+    }
 
     if (tierInfo.reachedBundleLimit) {
       console.warn("❌ [Vex Bundle Creation] Bundle limit reached")
@@ -85,8 +125,22 @@ export async function POST(request: NextRequest) {
     }
 
     // Get connected Stripe account
-    const connectedAccount = await ConnectedStripeAccountsService.getAccount(userId)
+    let connectedAccount
+    try {
+      connectedAccount = await ConnectedStripeAccountsService.getAccount(userId)
+    } catch (error) {
+      console.error("❌ [Vex Bundle Creation] Failed to get connected Stripe account:", error)
+      return NextResponse.json(
+        {
+          error: "Failed to retrieve Stripe account information",
+          details: error instanceof Error ? error.message : "Unknown error",
+        },
+        { status: 500 },
+      )
+    }
+
     if (!connectedAccount || !ConnectedStripeAccountsService.isAccountFullySetup(connectedAccount)) {
+      console.error("❌ [Vex Bundle Creation] Stripe account not connected or not fully setup")
       return NextResponse.json(
         {
           error: "Please connect and complete your Stripe account setup before creating bundles",
@@ -100,11 +154,25 @@ export async function POST(request: NextRequest) {
 
     // Validate required fields
     if (!title || !price) {
+      console.error("❌ [Vex Bundle Creation] Missing required fields:", { title: !!title, price: !!price })
       return NextResponse.json({ error: "Missing required fields: title and price are required" }, { status: 400 })
     }
 
     // Get user's content analysis to find the specified content
-    const analysisDoc = await db.collection("vex_content_analysis").doc(userId).get()
+    let analysisDoc
+    try {
+      analysisDoc = await db.collection("vex_content_analysis").doc(userId).get()
+    } catch (error) {
+      console.error("❌ [Vex Bundle Creation] Failed to get content analysis:", error)
+      return NextResponse.json(
+        {
+          error: "Failed to retrieve content analysis",
+          details: error instanceof Error ? error.message : "Unknown error",
+        },
+        { status: 500 },
+      )
+    }
+
     let selectedContent: any[] = []
 
     if (analysisDoc.exists() && contentIds && contentIds.length > 0) {
@@ -114,6 +182,10 @@ export async function POST(request: NextRequest) {
       // Find content by IDs
       selectedContent = allContent.filter(
         (content: any) => contentIds.includes(content.id) || contentIds.includes(content.title),
+      )
+
+      console.log(
+        `📋 [Vex Bundle Creation] Found ${selectedContent.length} content items out of ${contentIds.length} requested`,
       )
     }
 
@@ -161,35 +233,59 @@ export async function POST(request: NextRequest) {
 
     // Create Stripe product
     console.log("🏪 [Vex Bundle Creation] Creating Stripe product...")
-    const product = await stripe.products.create(
-      {
-        name: title,
-        description: description || undefined,
-        metadata: {
-          bundleType: bundleType || "ai_created",
-          creatorId: userId,
-          contentCount: processedContentItems.length.toString(),
-          createdBy: "vex_ai",
+    let product
+    try {
+      product = await stripe.products.create(
+        {
+          name: title,
+          description: description || undefined,
+          metadata: {
+            bundleType: bundleType || "ai_created",
+            creatorId: userId,
+            contentCount: processedContentItems.length.toString(),
+            createdBy: "vex_ai",
+          },
         },
-      },
-      { stripeAccount: stripeAccountId },
-    )
+        { stripeAccount: stripeAccountId },
+      )
+    } catch (error) {
+      console.error("❌ [Vex Bundle Creation] Failed to create Stripe product:", error)
+      return NextResponse.json(
+        {
+          error: "Failed to create Stripe product",
+          details: error instanceof Error ? error.message : "Unknown error",
+        },
+        { status: 500 },
+      )
+    }
 
     // Create Stripe price
     console.log("💰 [Vex Bundle Creation] Creating Stripe price...")
-    const stripePrice = await stripe.prices.create(
-      {
-        product: product.id,
-        unit_amount: Math.round(price * 100),
-        currency: "usd",
-        metadata: {
-          bundleType: bundleType || "ai_created",
-          creatorId: userId,
-          createdBy: "vex_ai",
+    let stripePrice
+    try {
+      stripePrice = await stripe.prices.create(
+        {
+          product: product.id,
+          unit_amount: Math.round(price * 100),
+          currency: "usd",
+          metadata: {
+            bundleType: bundleType || "ai_created",
+            creatorId: userId,
+            createdBy: "vex_ai",
+          },
         },
-      },
-      { stripeAccount: stripeAccountId },
-    )
+        { stripeAccount: stripeAccountId },
+      )
+    } catch (error) {
+      console.error("❌ [Vex Bundle Creation] Failed to create Stripe price:", error)
+      return NextResponse.json(
+        {
+          error: "Failed to create Stripe price",
+          details: error instanceof Error ? error.message : "Unknown error",
+        },
+        { status: 500 },
+      )
+    }
 
     // Create bundle document
     const bundleId = db.collection("bundles").doc().id
@@ -248,11 +344,27 @@ export async function POST(request: NextRequest) {
     }
 
     console.log("💾 [Vex Bundle Creation] Saving bundle to Firestore...")
-    await db.collection("bundles").doc(bundleId).set(bundleData)
+    try {
+      await db.collection("bundles").doc(bundleId).set(bundleData)
+    } catch (error) {
+      console.error("❌ [Vex Bundle Creation] Failed to save bundle to Firestore:", error)
+      return NextResponse.json(
+        {
+          error: "Failed to save bundle to database",
+          details: error instanceof Error ? error.message : "Unknown error",
+        },
+        { status: 500 },
+      )
+    }
 
     // Increment user bundle count
     console.log("📊 [Vex Bundle Creation] Incrementing user bundle count...")
-    await incrementUserBundles(userId)
+    try {
+      await incrementUserBundles(userId)
+    } catch (error) {
+      console.error("❌ [Vex Bundle Creation] Failed to increment user bundle count:", error)
+      // Don't fail the entire request for this, just log the error
+    }
 
     console.log("✅ [Vex Bundle Creation] AI bundle created successfully:", {
       bundleId,
@@ -278,7 +390,8 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error: any) {
-    console.error("❌ [Vex Bundle Creation] Error:", error)
+    console.error("❌ [Vex Bundle Creation] Unexpected error:", error)
+    console.error("❌ [Vex Bundle Creation] Error stack:", error.stack)
 
     if (error instanceof Stripe.errors.StripeError) {
       return NextResponse.json(
@@ -286,15 +399,30 @@ export async function POST(request: NextRequest) {
           error: "Stripe error occurred",
           details: error.message,
           code: error.code,
+          type: error.type,
         },
         { status: 400 },
       )
     }
 
+    // Handle Firebase errors
+    if (error.code && error.code.startsWith("auth/")) {
+      return NextResponse.json(
+        {
+          error: "Authentication error",
+          details: error.message,
+          code: error.code,
+        },
+        { status: 401 },
+      )
+    }
+
+    // Handle other known error types
     return NextResponse.json(
       {
         error: "Failed to create bundle",
-        details: error.message,
+        details: error.message || "An unexpected error occurred",
+        type: error.constructor.name,
       },
       { status: 500 },
     )
