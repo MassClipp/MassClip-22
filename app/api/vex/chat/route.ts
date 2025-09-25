@@ -149,10 +149,10 @@ Be helpful, natural, and focus on their success. When creating bundles, use the 
         console.log("[v0] Vex wants to create a bundle, processing...")
 
         // Show loading message to user first
-        assistantMessage = assistantMessage.replace(/CREATE_BUNDLE:\\s*{.*?}/s, "🔄 **Creating your bundle...**").trim()
+        assistantMessage = assistantMessage.replace(/CREATE_BUNDLE:\s*{.*?}/s, "🔄 **Creating your bundle...**").trim()
 
         // Extract bundle data from the message
-        const bundleMatch = assistantMessage.match(/CREATE_BUNDLE:\\s*({.*?})/s)
+        const bundleMatch = assistantMessage.match(/CREATE_BUNDLE:\s*({.*?})/s)
         if (bundleMatch) {
           const bundleData = JSON.parse(bundleMatch[1])
 
