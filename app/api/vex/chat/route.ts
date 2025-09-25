@@ -165,8 +165,9 @@ Be helpful, natural, and focus on their success. When creating bundles, use the 
             .replace(/CREATE_BUNDLE:\s*{.*?}/s, "🔄 **Creating your bundle...**")
             .trim()
 
-          // Call the bundle creation API
-          const bundleApiUrl = request.url.replace("/chat", "/create-bundle")
+          const baseUrl =
+            process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_VERCEL_URL || "http://localhost:3000"
+          const bundleApiUrl = `${baseUrl}/api/vex/create-bundle`
           console.log("[v0] Calling bundle API:", bundleApiUrl)
 
           const bundleResponse = await fetch(bundleApiUrl, {
