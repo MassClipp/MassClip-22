@@ -256,7 +256,7 @@ When creating bundles, focus on:
             message: {
               role: "assistant",
               content:
-                "I'm getting a lot of requests right now! Please wait a moment and try again. I'll be ready to help you with your bundles shortly! 🚀",
+                "I'm getting a lot of requests right now! Please wait a moment and try again. I'll be ready to help you with your bundles shortly!",
             },
           })
         }
@@ -410,7 +410,7 @@ Your bundle is now live and ready for customers! You can view and manage it in y
       return NextResponse.json({
         message: {
           role: "assistant",
-          content: "I'm experiencing a temporary connection issue. Please try your message again in a moment! 🤖✨",
+          content: "I'm experiencing a temporary connection issue. Please try your message again in a moment!",
         },
       })
     }
