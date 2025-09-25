@@ -58,6 +58,8 @@ async function makeGroqRequest(requestBody: any, retries = 3): Promise<Response>
 
 export async function POST(request: Request) {
   try {
+    console.log("[v0] === VEX CHAT API CALLED ===")
+
     const { messages } = await request.json()
 
     console.log("[v0] Processing chat with content context")
@@ -216,123 +218,118 @@ When creating bundles, focus on:
 - Descriptions that highlight transformation/outcomes
 - Smart use of free content to build trust and drive conversions`
 
-    try {
-      console.log("[v0] Making Groq API request...")
+    console.log("[v0] About to call Groq API with:", {
+      model: "llama-3.1-8b-instant",
+      messagesCount: messages.length,
+      lastMessage: messages[messages.length - 1]?.content?.substring(0, 100),
+    })
 
-      const requestBody = {
-        model: "llama-3.3-70b-versatile",
-        messages: [
-          {
-            role: "system",
-            content: systemPrompt,
-          },
-          {
-            role: "user",
-            content: lastMessage.content,
-          },
-        ],
-        temperature: 0.7,
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "llama-3.1-8b-instant",
+        messages,
         max_tokens: 1000,
-        stream: false,
-      }
+        temperature: 0.7,
+      }),
+    })
 
-      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(requestBody),
-      })
+    console.log("[v0] Groq API response status:", response.status)
+    console.log("[v0] Groq API response ok:", response.ok)
 
-      console.log(`[v0] Groq API response status: ${response.status}`)
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error("❌ Groq API error:", response.status, errorText)
 
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error("❌ Groq API error:", response.status, errorText)
-
-        if (response.status === 429) {
-          return NextResponse.json({
-            message: {
-              role: "assistant",
-              content:
-                "I'm getting a lot of requests right now! Please wait a moment and try again. I'll be ready to help you with your bundles shortly!",
-            },
-          })
-        }
-
-        return NextResponse.json(
-          {
-            error: "Failed to process chat message",
-            details: `AI service error: ${response.status}`,
+      if (response.status === 429) {
+        console.log("[v0] Returning 429 rate limit message")
+        return NextResponse.json({
+          message: {
+            role: "assistant",
+            content:
+              "I'm getting a lot of requests right now! Please wait a moment and try again. I'll be ready to help you with your bundles shortly!",
           },
-          { status: 500 },
-        )
+        })
       }
 
-      const data = await response.json()
-      let assistantMessage = data.choices[0]?.message?.content
+      return NextResponse.json(
+        {
+          error: "Failed to process chat message",
+          details: `AI service error: ${response.status}`,
+        },
+        { status: 500 },
+      )
+    }
 
-      if (!assistantMessage) {
-        console.error("❌ No response from Groq API")
-        return NextResponse.json({ error: "No response from AI" }, { status: 500 })
-      }
+    const data = await response.json()
+    let assistantMessage = data.choices[0]?.message?.content
 
-      console.log("[v0] Received AI response, length:", assistantMessage.length)
+    console.log("[v0] Raw AI response:", assistantMessage?.substring(0, 200))
 
-      if (assistantMessage.includes("BUNDLE_CREATION_REQUEST:")) {
-        try {
-          const bundleRequestMatch = assistantMessage.match(/BUNDLE_CREATION_REQUEST:\s*([\s\S]*?)(?=\n\n|\n$|$)/)
+    if (!assistantMessage) {
+      console.error("❌ No response from Groq API")
+      return NextResponse.json({ error: "No response from AI" }, { status: 500 })
+    }
 
-          if (bundleRequestMatch) {
-            const bundleRequestText = bundleRequestMatch[1].trim()
+    console.log("[v0] Received AI response, length:", assistantMessage.length)
 
-            console.log("[v0] Raw bundle request text before processing:", bundleRequestText)
-            console.log("[v0] Attempting to parse bundle request:", bundleRequestText)
+    if (assistantMessage.includes("BUNDLE_CREATION_REQUEST:")) {
+      try {
+        const bundleRequestMatch = assistantMessage.match(/BUNDLE_CREATION_REQUEST:\s*([\s\S]*?)(?=\n\n|\n$|$)/)
 
-            try {
-              const bundleRequest = JSON.parse(bundleRequestText)
-              console.log("[v0] Vex is creating a bundle:", bundleRequest)
+        if (bundleRequestMatch) {
+          const bundleRequestText = bundleRequestMatch[1].trim()
 
-              const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"
-              const bundleApiUrl = `${baseUrl}/api/vex/create-bundle-v2`
+          console.log("[v0] Raw bundle request text before processing:", bundleRequestText)
+          console.log("[v0] Attempting to parse bundle request:", bundleRequestText)
 
-              console.log("[v0] Bundle API URL construction:")
-              console.log("[v0] - NEXT_PUBLIC_BASE_URL:", process.env.NEXT_PUBLIC_BASE_URL)
-              console.log("[v0] - Base URL used:", baseUrl)
-              console.log("[v0] - Final bundle API URL:", bundleApiUrl)
-              console.log("[v0] - Request method: POST")
-              console.log("[v0] - Request headers:", {
+          try {
+            const bundleRequest = JSON.parse(bundleRequestText)
+            console.log("[v0] Vex is creating a bundle:", bundleRequest)
+
+            const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"
+            const bundleApiUrl = `${baseUrl}/api/vex/create-bundle-v2`
+
+            console.log("[v0] Bundle API URL construction:")
+            console.log("[v0] - NEXT_PUBLIC_BASE_URL:", process.env.NEXT_PUBLIC_BASE_URL)
+            console.log("[v0] - Base URL used:", baseUrl)
+            console.log("[v0] - Final bundle API URL:", bundleApiUrl)
+            console.log("[v0] - Request method: POST")
+            console.log("[v0] - Request headers:", {
+              "Content-Type": "application/json",
+              Authorization: authHeader ? "Bearer [TOKEN]" : "None",
+            })
+
+            const bundleResponse = await fetch(bundleApiUrl, {
+              method: "POST",
+              headers: {
                 "Content-Type": "application/json",
-                Authorization: authHeader ? "Bearer [TOKEN]" : "None",
-              })
+                Authorization: authHeader || "",
+              },
+              body: JSON.stringify(bundleRequest),
+            })
 
-              const bundleResponse = await fetch(bundleApiUrl, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: authHeader || "",
-                },
-                body: JSON.stringify(bundleRequest),
-              })
+            const responseText = await bundleResponse.text()
+            console.log("[v0] Bundle API response status:", bundleResponse.status)
+            console.log("[v0] Bundle API response text:", responseText)
 
-              const responseText = await bundleResponse.text()
-              console.log("[v0] Bundle API response status:", bundleResponse.status)
-              console.log("[v0] Bundle API response text:", responseText)
+            if (bundleResponse.ok) {
+              let bundleResult
+              try {
+                bundleResult = JSON.parse(responseText)
+              } catch (parseError) {
+                console.error("[v0] Failed to parse success response JSON:", parseError)
+                console.error("[v0] Response text was:", responseText)
+                throw new Error(`Invalid JSON in success response: ${parseError.message}`)
+              }
 
-              if (bundleResponse.ok) {
-                let bundleResult
-                try {
-                  bundleResult = JSON.parse(responseText)
-                } catch (parseError) {
-                  console.error("[v0] Failed to parse success response JSON:", parseError)
-                  console.error("[v0] Response text was:", responseText)
-                  throw new Error(`Invalid JSON in success response: ${parseError.message}`)
-                }
-
-                assistantMessage = assistantMessage.replace(
-                  /BUNDLE_CREATION_REQUEST:[\s\S]*?(?=\n\n|\n$|$)/,
-                  `✅ **Bundle Created Successfully!**
+              assistantMessage = assistantMessage.replace(
+                /BUNDLE_CREATION_REQUEST:[\s\S]*?(?=\n\n|\n$|$)/,
+                `✅ **Bundle Created Successfully!**
 
 I've created your "${bundleResult.bundle.title}" bundle with ${bundleResult.bundle.contentItems} pieces of content, priced at $${bundleResult.bundle.price}.
 
@@ -344,84 +341,70 @@ I've created your "${bundleResult.bundle.title}" bundle with ${bundleResult.bund
 - **Bundle ID:** ${bundleResult.bundleId}
 
 Your bundle is now live and ready for customers! You can view and manage it in your creator dashboard.`,
-                )
-              } else {
-                let error
-                try {
-                  error = responseText
-                    ? JSON.parse(responseText)
-                    : { error: "Unknown error", details: "No response body" }
-                } catch (parseError) {
-                  console.error("[v0] Failed to parse error response JSON:", parseError)
-                  console.error("[v0] Error response text was:", responseText)
-                  error = {
-                    error: "API Error",
-                    details: `HTTP ${bundleResponse.status}: ${responseText || "No response body"}`,
-                    code: "PARSE_ERROR",
-                  }
+              )
+            } else {
+              let error
+              try {
+                error = responseText
+                  ? JSON.parse(responseText)
+                  : { error: "Unknown error", details: "No response body" }
+              } catch (parseError) {
+                console.error("[v0] Failed to parse error response JSON:", parseError)
+                console.error("[v0] Error response text was:", responseText)
+                error = {
+                  error: "API Error",
+                  details: `HTTP ${bundleResponse.status}: ${responseText || "No response body"}`,
+                  code: "PARSE_ERROR",
                 }
-
-                console.error("[v0] Bundle creation API error:", error)
-                assistantMessage = assistantMessage.replace(
-                  /BUNDLE_CREATION_REQUEST:[\s\S]*?(?=\n\n|\n$|$)/,
-                  `❌ I encountered an issue creating your bundle: ${error.error}. ${error.code === "STRIPE_ACCOUNT_REQUIRED" ? "Please connect your Stripe account first." : "Please try again or contact support if the issue persists."}`,
-                )
               }
-            } catch (error: any) {
-              console.error("[v0] Error processing bundle creation:", error)
-              console.error("[v0] Bundle creation error details:", {
-                message: error.message,
-                stack: error.stack,
-                assistantMessage: assistantMessage.substring(0, 200) + "...",
-              })
 
+              console.error("[v0] Bundle creation API error:", error)
               assistantMessage = assistantMessage.replace(
                 /BUNDLE_CREATION_REQUEST:[\s\S]*?(?=\n\n|\n$|$)/,
-                `❌ I encountered an error while creating your bundle. Please try again.`,
+                `❌ I encountered an issue creating your bundle: ${error.error}. ${error.code === "STRIPE_ACCOUNT_REQUIRED" ? "Please connect your Stripe account first." : "Please try again or contact support if the issue persists."}`,
               )
             }
+          } catch (error: any) {
+            console.error("[v0] Error processing bundle creation:", error)
+            console.error("[v0] Bundle creation error details:", {
+              message: error.message,
+              stack: error.stack,
+              assistantMessage: assistantMessage.substring(0, 200) + "...",
+            })
+
+            assistantMessage = assistantMessage.replace(
+              /BUNDLE_CREATION_REQUEST:[\s\S]*?(?=\n\n|\n$|$)/,
+              `❌ I encountered an error while creating your bundle. Please try again.`,
+            )
           }
-        } catch (error) {
-          console.error("[v0] Error processing bundle creation:", error)
-          console.error("[v0] Bundle creation error details:", {
-            message: error instanceof Error ? error.message : "Unknown error",
-            stack: error instanceof Error ? error.stack : undefined,
-            assistantMessage: assistantMessage.substring(0, 500),
-          })
-
-          assistantMessage = assistantMessage.replace(
-            /BUNDLE_CREATION_REQUEST:[\s\S]*?(?=\n\n|\n$|$)/,
-            "❌ I encountered an error while creating your bundle. Please try again.",
-          )
         }
+      } catch (error) {
+        console.error("[v0] Error processing bundle creation:", error)
+        console.error("[v0] Bundle creation error details:", {
+          message: error instanceof Error ? error.message : "Unknown error",
+          stack: error instanceof Error ? error.stack : undefined,
+          assistantMessage: assistantMessage.substring(0, 500),
+        })
+
+        assistantMessage = assistantMessage.replace(
+          /BUNDLE_CREATION_REQUEST:[\s\S]*?(?=\n\n|\n$|$)/,
+          "❌ I encountered an error while creating your bundle. Please try again.",
+        )
       }
-
-      console.log("[v0] Chat completed successfully with content context")
-
-      return NextResponse.json({
-        message: {
-          role: "assistant",
-          content: assistantMessage,
-        },
-      })
-    } catch (fetchError) {
-      console.error("❌ [Vex Chat] Failed to connect to Groq API:", fetchError)
-
-      return NextResponse.json({
-        message: {
-          role: "assistant",
-          content: "I'm experiencing a temporary connection issue. Please try your message again in a moment!",
-        },
-      })
     }
-  } catch (error) {
-    console.error("❌ Vex chat error:", error)
-    console.error("❌ Vex chat error stack:", error instanceof Error ? error.stack : "No stack trace")
-    return NextResponse.json(
-      {
-        error: "Failed to process chat message",
-        details: error instanceof Error ? error.message : "Unknown error",
+
+    console.log("[v0] Returning final response with message:", assistantMessage.substring(0, 100))
+
+    return NextResponse.json({
+      message: {
+        role: "assistant",
+        content: assistantMessage,
       },
+    })
+  } catch (error) {
+    console.error("[v0] ❌ Chat API error:", error)
+    return NextResponse.json(
+      { error: "Internal server error", details: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 },
     )
   }
