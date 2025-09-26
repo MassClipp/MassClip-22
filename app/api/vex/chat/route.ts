@@ -165,13 +165,19 @@ Be helpful, natural, and focus on their success. When creating bundles, use the 
             .replace(/CREATE_BUNDLE:\s*{.*?}/s, "🔄 **Creating your bundle...**")
             .trim()
 
-          const baseUrl = process.env.NEXT_PUBLIC_VERCEL_URL
-            ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`
-            : process.env.NEXT_PUBLIC_SITE_URL
+          let baseUrl = "http://localhost:3000" // Default fallback
+
+          if (process.env.NEXT_PUBLIC_VERCEL_URL) {
+            baseUrl = `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`
+          } else if (process.env.NEXT_PUBLIC_SITE_URL) {
+            baseUrl = process.env.NEXT_PUBLIC_SITE_URL.startsWith("http")
               ? process.env.NEXT_PUBLIC_SITE_URL
-              : process.env.NEXT_PUBLIC_BASE_URL
-                ? process.env.NEXT_PUBLIC_BASE_URL
-                : "http://localhost:3000"
+              : `https://${process.env.NEXT_PUBLIC_SITE_URL}`
+          } else if (process.env.NEXT_PUBLIC_BASE_URL) {
+            baseUrl = process.env.NEXT_PUBLIC_BASE_URL.startsWith("http")
+              ? process.env.NEXT_PUBLIC_BASE_URL
+              : `https://${process.env.NEXT_PUBLIC_BASE_URL}`
+          }
 
           const bundleApiUrl = `${baseUrl}/api/vex/create-bundle`
           console.log("[v0] Calling bundle API:", bundleApiUrl)
