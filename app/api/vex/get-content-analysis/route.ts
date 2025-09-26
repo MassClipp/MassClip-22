@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
     console.log("✅ [Vex Debug] User authenticated:", userId)
 
     // Get stored content analysis
-    const analysisDoc = await db.collection("vexContentAnalysis").doc(userId).get()
+    const analysisDoc = await db.collection("vex_content_analysis").doc(userId).get()
 
     if (!analysisDoc.exists) {
       return NextResponse.json({
@@ -64,9 +64,9 @@ export async function GET(request: NextRequest) {
     const analysisData = analysisDoc.data()
 
     console.log("✅ [Vex Debug] Content analysis found:", {
-      contentCount: analysisData?.contentItems?.length || 0,
+      contentCount: analysisData?.uploads?.length || 0,
       lastUpdated: analysisData?.lastUpdated,
-      categories: Object.keys(analysisData?.categories || {}),
+      categories: analysisData?.categories || [],
     })
 
     return NextResponse.json({
@@ -74,8 +74,8 @@ export async function GET(request: NextRequest) {
       analysis: {
         id: analysisDoc.id,
         ...analysisData,
-        contentItems: analysisData?.contentItems || [],
-        categories: analysisData?.categories || {},
+        contentItems: analysisData?.uploads || [],
+        categories: analysisData?.categories || [],
         lastUpdated: analysisData?.lastUpdated,
       },
     })
