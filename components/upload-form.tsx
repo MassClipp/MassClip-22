@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils"
 import { auth, db } from "@/lib/firebase"
 import { collection, addDoc, serverTimestamp } from "firebase/firestore"
 import { v4 as uuidv4 } from "uuid"
+import FolderSelector from "./folder-selector"
 
 export default function UploadForm() {
   const router = useRouter()
@@ -16,6 +17,7 @@ export default function UploadForm() {
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [isPremium, setIsPremium] = useState(false)
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [filePreview, setFilePreview] = useState<string | null>(null)
   const [isUploading, setIsUploading] = useState(false)
@@ -115,15 +117,16 @@ export default function UploadForm() {
     try {
       console.log(`Starting upload to R2: ${file.name} (${file.type})`)
 
-      // Get pre-signed URL from your API
       const response = await fetch("/api/get-upload-url", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${await auth.currentUser?.getIdToken()}`,
         },
         body: JSON.stringify({
           fileName: `${uuidv4()}-${file.name}`,
           fileType: file.type,
+          folderId: selectedFolderId,
         }),
       })
 
@@ -137,7 +140,6 @@ export default function UploadForm() {
       console.log("Got upload URL:", uploadUrl)
       console.log("Public URL will be:", publicUrl)
 
-      // Upload to R2 using the pre-signed URL
       const uploadResponse = await fetch(uploadUrl, {
         method: "PUT",
         body: file,
@@ -174,7 +176,6 @@ export default function UploadForm() {
       setError(null)
       setUploadProgress(0)
 
-      // Get current user
       const user = auth.currentUser
       if (!user) {
         throw new Error("You must be logged in to upload videos")
@@ -182,13 +183,11 @@ export default function UploadForm() {
 
       console.log(`Starting upload process for ${isPremium ? "PREMIUM" : "FREE"} video: ${title}`)
 
-      // 1. Generate and upload thumbnail
       console.log("Generating thumbnail...")
       const thumbnailUrl = await generateThumbnail(selectedFile)
       setThumbnailUrl(thumbnailUrl)
       console.log("Thumbnail generated and uploaded:", thumbnailUrl)
 
-      // 2. Upload video file to R2
       console.log("Uploading video file...")
       setUploadProgress(20)
       const videoUrl = await uploadFileToR2(selectedFile)
@@ -196,14 +195,13 @@ export default function UploadForm() {
       console.log("Video uploaded successfully:", videoUrl)
       setUploadProgress(80)
 
-      // 3. Save video metadata to Firestore
       console.log("Saving video metadata to Firestore...")
       console.log(`Video type: ${isPremium ? "premium" : "free"}`)
 
       const videoData = {
         title: title.trim(),
         description: description.trim(),
-        type: isPremium ? "premium" : "free", // This is the critical field!
+        type: isPremium ? "premium" : "free",
         status: "active",
         isPublic: true,
         url: videoUrl,
@@ -211,14 +209,14 @@ export default function UploadForm() {
         uid: user.uid,
         username: user.displayName || "unknown",
         email: user.email,
+        folderId: selectedFolderId,
         createdAt: serverTimestamp(),
         views: 0,
         likes: 0,
         fileSize: selectedFile.size,
-        duration: 0, // You could extract this if needed
+        duration: 0,
       }
 
-      // Log the exact data being saved
       console.log("Saving to Firestore with data:", JSON.stringify(videoData, null, 2))
 
       const docRef = await addDoc(collection(db, "videos"), videoData)
@@ -226,14 +224,13 @@ export default function UploadForm() {
 
       setUploadProgress(100)
 
-      // Reset form
       setSelectedFile(null)
       setFilePreview(null)
       setTitle("")
       setDescription("")
       setIsPremium(false)
+      setSelectedFolderId(null)
 
-      // Redirect to dashboard
       router.push("/dashboard")
     } catch (error) {
       console.error("Error uploading video:", error)
@@ -243,7 +240,6 @@ export default function UploadForm() {
     }
   }
 
-  // Add cleanup for the preview URL when component unmounts
   useEffect(() => {
     return () => {
       if (filePreview) {
@@ -277,7 +273,6 @@ export default function UploadForm() {
         )}
 
         <form onSubmit={handleSubmit} className="p-6">
-          {/* Content Type Toggle */}
           <div className="mb-6">
             <div className="flex justify-center space-x-2 w-full">
               <button
@@ -314,7 +309,10 @@ export default function UploadForm() {
             )}
           </div>
 
-          {/* Video File */}
+          <div className="mb-6">
+            <FolderSelector selectedFolderId={selectedFolderId} onFolderSelect={setSelectedFolderId} />
+          </div>
+
           <div className="mb-6">
             <label className="block text-white mb-2">Video File</label>
             <div
@@ -361,7 +359,6 @@ export default function UploadForm() {
             )}
           </div>
 
-          {/* Title */}
           <div className="mb-6">
             <label htmlFor="title" className="block text-white mb-2">
               Title
@@ -377,7 +374,6 @@ export default function UploadForm() {
             />
           </div>
 
-          {/* Description */}
           <div className="mb-6">
             <label htmlFor="description" className="block text-white mb-2">
               Description (Optional)
@@ -392,7 +388,6 @@ export default function UploadForm() {
             />
           </div>
 
-          {/* Upload Progress */}
           {isUploading && (
             <div className="mb-6">
               <div className="w-full bg-zinc-800 rounded-full h-2.5 mb-2">
@@ -405,7 +400,6 @@ export default function UploadForm() {
             </div>
           )}
 
-          {/* Submit Button */}
           <button
             type="submit"
             disabled={isUploading || !selectedFile || !title.trim()}

@@ -5,7 +5,6 @@ import { doc, getDoc, updateDoc, setDoc, Timestamp, increment } from "firebase/f
 import { db } from "@/lib/firebase"
 import { useAuth } from "@/contexts/auth-context"
 
-// Define plan types
 export type UserPlan = "free" | "creator_pro"
 
 export interface UserPlanData {
@@ -21,7 +20,6 @@ export function useUserPlan() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Fetch user plan data
   useEffect(() => {
     const fetchUserPlan = async () => {
       if (!user) {
@@ -32,47 +30,69 @@ export function useUserPlan() {
 
       try {
         setLoading(true)
-        const userDocRef = doc(db, "users", user.uid)
-        const userDoc = await getDoc(userDocRef)
 
-        if (userDoc.exists()) {
-          const userData = userDoc.data()
-          // Handle legacy "pro" plan values
-          const userPlan = userData.plan === "pro" ? "creator_pro" : userData.plan || "free"
+        const membershipResponse = await fetch("/api/membership-status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: user.uid }),
+        })
 
+        let finalPlan: UserPlan = "free"
+
+        if (membershipResponse.ok) {
+          const membershipData = await membershipResponse.json()
+          // Simple check - if membership is active, user is pro
+          if (membershipData.isActive) {
+            finalPlan = "creator_pro"
+          }
+        }
+
+        if (finalPlan === "creator_pro") {
           setPlanData({
-            plan: userPlan,
-            downloads: userData.downloads || 0,
-            downloadsLimit: userPlan === "creator_pro" ? Number.POSITIVE_INFINITY : 25,
-            lastReset: userData.lastReset ? userData.lastReset.toDate() : null,
+            plan: finalPlan,
+            downloads: 0,
+            downloadsLimit: Number.POSITIVE_INFINITY,
+            lastReset: null,
           })
         } else {
-          // Create a user document if it doesn't exist
-          const defaultUserData = {
-            plan: "free",
-            downloads: 0,
-            lastReset: Timestamp.now(),
-            createdAt: Timestamp.now(),
-            email: user.email,
-            displayName: user.displayName,
+          // Free user - get download tracking from user document
+          const userDocRef = doc(db, "users", user.uid)
+          const userDoc = await getDoc(userDocRef)
+
+          if (userDoc.exists()) {
+            const userData = userDoc.data()
+            setPlanData({
+              plan: "free",
+              downloads: userData.downloads || 0,
+              downloadsLimit: 25,
+              lastReset: userData.lastReset ? userData.lastReset.toDate() : null,
+            })
+          } else {
+            // Create default user document
+            const defaultUserData = {
+              plan: "free",
+              downloads: 0,
+              lastReset: Timestamp.now(),
+              createdAt: Timestamp.now(),
+              email: user.email,
+              displayName: user.displayName,
+            }
+
+            await setDoc(userDocRef, defaultUserData)
+
+            setPlanData({
+              plan: "free",
+              downloads: 0,
+              downloadsLimit: 25,
+              lastReset: new Date(),
+            })
           }
-
-          await setDoc(userDocRef, defaultUserData)
-
-          // Default to a plan object
-          setPlanData({
-            plan: "free",
-            downloads: 0,
-            downloadsLimit: 25,
-            lastReset: new Date(),
-          })
         }
 
         setError(null)
       } catch (err) {
         console.error("Error fetching user plan:", err)
         setError("Failed to load user plan data")
-        // Default to a plan object even on error
         setPlanData({
           plan: "free",
           downloads: 0,
@@ -87,18 +107,14 @@ export function useUserPlan() {
     fetchUserPlan()
   }, [user])
 
-  // Calculate if user has reached their download limit - this is used by all components
   const hasReachedLimit = !!(planData && planData.plan === "free" && planData.downloads >= planData.downloadsLimit)
 
-  // Function to increment download count and handle resets
   const recordDownload = useCallback(async () => {
     if (!user || !planData) return { success: false, message: "User not authenticated" }
 
-    // Creator Pro users don't need to track downloads
     if (planData.plan === "creator_pro") return { success: true }
 
     try {
-      // CRITICAL: Check if user has reached their limit BEFORE incrementing
       if (planData.downloads >= planData.downloadsLimit) {
         return {
           success: false,
@@ -107,38 +123,27 @@ export function useUserPlan() {
       }
 
       const userDocRef = doc(db, "users", user.uid)
-
-      // Check if we need to reset downloads (new month)
       const now = new Date()
       const lastReset = planData.lastReset
 
       if (lastReset && (lastReset.getMonth() !== now.getMonth() || lastReset.getFullYear() !== now.getFullYear())) {
-        // Reset for new month
         await updateDoc(userDocRef, {
-          downloads: 1, // Set to 1 because we're counting this download
+          downloads: 1,
           lastReset: Timestamp.now(),
         })
 
-        // Update local state immediately
         setPlanData((prev) => (prev ? { ...prev, downloads: 1, lastReset: now } : null))
-
         return { success: true }
       }
 
-      // Increment download count
       await updateDoc(userDocRef, {
         downloads: increment(1),
       })
 
-      // Update local state immediately to prevent race conditions
       setPlanData((prev) => {
         if (!prev) return null
-
         const newDownloads = prev.downloads + 1
-        return {
-          ...prev,
-          downloads: newDownloads,
-        }
+        return { ...prev, downloads: newDownloads }
       })
 
       return { success: true }
@@ -158,6 +163,6 @@ export function useUserPlan() {
     isProUser: planData?.plan === "creator_pro",
     recordDownload,
     remainingDownloads: planData ? Math.max(0, planData.downloadsLimit - planData.downloads) : 0,
-    hasReachedLimit, // Export this value for all components to use
+    hasReachedLimit,
   }
 }

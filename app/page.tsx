@@ -1,256 +1,297 @@
 "use client"
-
-import { useRef } from "react"
-import type React from "react"
-import { useState } from "react"
-import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { motion } from "framer-motion"
-import { Upload, Share2, DollarSign, StoreIcon as Storefront, Download, EyeOff } from "lucide-react"
-import LandingHeader from "@/components/landing-header"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { useEffect, useRef } from "react"
 
-export default function LandingPage() {
+const LandingPage = () => {
   const router = useRouter()
-  const [searchQuery, setSearchQuery] = useState("")
-  const heroRef = useRef<HTMLDivElement>(null)
+  const observerRef = useRef<IntersectionObserver | null>(null)
 
-  // Enhanced search functionality
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (searchQuery.trim()) {
-      localStorage.setItem("lastSearchQuery", searchQuery.trim())
-      router.push(`/dashboard?search=${encodeURIComponent(searchQuery.trim())}`)
-    }
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      // Pre-warm router for better UX
+      router.prefetch("/signup")
+      router.prefetch("/dashboard/explore")
+      router.prefetch("/dashboard/upgrade")
+    }, 100)
+
+    return () => clearTimeout(timer)
+  }, [router])
+
+  useEffect(() => {
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("animate-in")
+          }
+        })
+      },
+      { threshold: 0.1, rootMargin: "50px" },
+    )
+
+    const elements = document.querySelectorAll(".scroll-animate")
+    elements.forEach((el) => observerRef.current?.observe(el))
+
+    return () => observerRef.current?.disconnect()
+  }, [])
+
+  const handleGetStarted = () => {
+    router.push("/signup")
   }
 
-  const handleStartSelling = () => {
-    router.push("/dashboard/earnings")
-  }
-
-  const handleExploreFreeClips = () => {
+  const handleExplore = () => {
     router.push("/dashboard/explore")
   }
 
-  const scrollToContent = () => {
-    const contentSection = document.getElementById("content-section")
-    if (contentSection) {
-      contentSection.scrollIntoView({ behavior: "smooth" })
-    }
-  }
-
   return (
-    <div className="relative min-h-screen">
-      {/* Background */}
-      <div className="fixed inset-0 z-0 premium-gradient"></div>
-      <div className="fixed inset-0 z-0 bg-[url('/noise.png')] opacity-[0.03]"></div>
-      <div className="fixed inset-0 z-0 bg-gradient-to-b from-transparent to-black/50"></div>
+    <div className="min-h-screen bg-black relative overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-to-tl from-cyan-200/20 via-white/10 to-transparent opacity-70" />
+      <div className="absolute bottom-0 right-0 w-1/2 h-1/2 bg-gradient-radial from-cyan-100/15 to-transparent opacity-90" />
+      <div className="absolute top-0 left-0 w-1/3 h-1/3 bg-gradient-radial from-slate-300/10 to-transparent opacity-60" />
 
-      {/* Header */}
-      <LandingHeader />
-
-      {/* Main Content */}
-      <main className="relative z-10">
-        {/* Hero Section */}
-        <section
-          ref={heroRef}
-          className="relative min-h-screen flex flex-col justify-center items-center px-4 pt-20 pb-16"
-        >
-          <div className="container mx-auto max-w-6xl">
-            <div className="flex flex-col items-center text-center mb-12">
-              <motion.h1
-                className="text-4xl md:text-7xl lg:text-8xl font-light text-white mb-6 max-w-5xl leading-tight"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.8, delay: 0.2 }}
-              >
-                Create. Sell. <span className="text-gradient-accent">Monetize.</span>
-              </motion.h1>
-
-              <motion.p
-                className="text-lg md:text-2xl font-light text-white/70 mb-8 md:mb-12 max-w-3xl"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.8, delay: 0.4 }}
-              >
-                We take selling content seriously. You should too.
-              </motion.p>
-
-              {/* CTA Buttons */}
-              <motion.div
-                className="flex flex-col sm:flex-row gap-4 w-full max-w-lg mb-12"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.8, delay: 0.6 }}
-              >
-                <Button
-                  onClick={handleStartSelling}
-                  className="flex-1 py-3 sm:py-6 bg-crimson hover:bg-crimson-dark text-white text-sm sm:text-lg premium-button"
-                >
-                  START SELLING
-                </Button>
-                <Button
-                  onClick={handleExploreFreeClips}
-                  className="flex-1 py-3 sm:py-6 bg-white/5 hover:bg-white/10 text-white text-sm sm:text-lg border border-white/10 premium-button"
-                >
-                  EXPLORE FREE CLIPS
-                </Button>
-              </motion.div>
-
-              {/* Benefits Icons */}
-              <motion.div
-                className="flex flex-wrap justify-center gap-8 text-white/60 text-xs uppercase tracking-widest"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.8, delay: 0.8 }}
-              >
-                <div className="flex items-center gap-2">
-                  <EyeOff className="h-4 w-4" />
-                  <span>Effortless Discoverability</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Storefront className="h-4 w-4" />
-                  <span>Built-in Storefront</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Download className="h-4 w-4" />
-                  <span>Direct Downloads</span>
-                </div>
-              </motion.div>
-            </div>
+      <header className="relative z-10 px-6 py-6">
+        <nav className="flex items-center justify-between max-w-7xl mx-auto">
+          <div className="text-white font-light text-2xl">
+            Mass
+            <span className="gradient-text">Clip</span>
           </div>
 
-          {/* Scroll Indicator */}
-          <motion.div
-            className="scroll-indicator cursor-pointer"
-            onClick={scrollToContent}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.8, delay: 1.2 }}
-          >
-            <span className="text-xs uppercase tracking-widest text-white/50">How it works</span>
-            <div className="scroll-indicator-line"></div>
-          </motion.div>
-        </section>
+          <div className="hidden md:flex items-center space-x-8">
+            <Link href="/dashboard/upgrade" className="text-white/80 hover:text-white transition-colors font-light">
+              Upgrade
+            </Link>
+            <Link href="/dashboard/explore" className="text-white/80 hover:text-white transition-colors font-light">
+              Explore
+            </Link>
+            <Link href="/about" className="text-white/80 hover:text-white transition-colors font-light">
+              About Us
+            </Link>
+          </div>
 
-        {/* How It Works Section */}
-        <section id="content-section" className="py-20 md:py-32">
-          <div className="container mx-auto max-w-6xl px-4">
-            {/* How It Works */}
-            <div className="mb-32">
-              <motion.div
-                className="text-center mb-16"
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6 }}
-                viewport={{ once: true, margin: "-100px" }}
-              >
-                <h2 className="text-3xl md:text-4xl font-light text-white mb-4">Three Steps to Digital Income</h2>
-                <p className="text-white/70 max-w-2xl mx-auto">
-                  Build your anonymous creator business in minutes, not months.
+          <Link href="/login" className="text-white/80 hover:text-white transition-colors font-light">
+            Login
+          </Link>
+        </nav>
+      </header>
+
+      <main className="relative z-10 flex items-center justify-start min-h-[calc(100vh-120px)] px-6">
+        <div className="max-w-7xl mx-auto w-full">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+            <div className="max-w-3xl">
+              <div className="space-y-6">
+                <h1 className="hero-text text-5xl lg:text-7xl font-thin text-white/80 leading-tight">
+                  Monetize Your <span className="gradient-text">Faceless</span> Content
+                </h1>
+
+                <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
+                  Welcome to a smarter way to monetize, sell, and get paid for your faceless content.
                 </p>
-              </motion.div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
-                <motion.div
-                  className="premium-card p-8 text-center"
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6 }}
-                  viewport={{ once: true, margin: "-100px" }}
-                >
-                  <div className="mb-6 p-4 bg-crimson/10 inline-block rounded-full">
-                    <Upload className="h-8 w-8 text-crimson" />
-                  </div>
-                  <h3 className="text-xl font-light text-white mb-4">1. Upload Your Content</h3>
-                  <p className="text-white/70 text-sm">
-                    Upload free clips to build your audience, or premium content to start earning immediately. No face
-                    required.
-                  </p>
-                </motion.div>
+                <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                  <Button
+                    onClick={handleGetStarted}
+                    className="px-8 py-4 bg-white text-black hover:bg-white/90 font-light rounded-full text-lg transition-all duration-200"
+                  >
+                    Get Started
+                  </Button>
 
-                <motion.div
-                  className="premium-card p-8 text-center"
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6, delay: 0.2 }}
-                  viewport={{ once: true, margin: "-100px" }}
-                >
-                  <div className="mb-6 p-4 bg-crimson/10 inline-block rounded-full">
-                    <Share2 className="h-8 w-8 text-crimson" />
-                  </div>
-                  <h3 className="text-xl font-light text-white mb-4">2. Share Your Store Link</h3>
-                  <p className="text-white/70 text-sm">
-                    Get your personalized storefront link. Share it anywhere — bio links, Discord, Twitter, wherever
-                    your audience is.
-                  </p>
-                </motion.div>
+                  <Button
+                    onClick={handleExplore}
+                    variant="outline"
+                    className="px-8 py-4 border-2 border-white/30 text-white hover:bg-white/10 font-light rounded-full text-lg transition-all duration-200 bg-transparent"
+                  >
+                    Explore
+                  </Button>
+                </div>
+              </div>
+            </div>
 
-                <motion.div
-                  className="premium-card p-8 text-center"
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6, delay: 0.4 }}
-                  viewport={{ once: true, margin: "-100px" }}
-                >
-                  <div className="mb-6 p-4 bg-crimson/10 inline-block rounded-full">
-                    <DollarSign className="h-8 w-8 text-crimson" />
+            <div className="hidden lg:flex flex-col items-center justify-center space-y-6 h-full">
+              <div className="text-center slide-in-right">
+                <div className="text-8xl xl:text-9xl font-extralight leading-none tracking-tight">
+                  <div className="gradient-text drop-shadow-[0_8px_16px_rgba(255,255,255,0.3)]">
+                    <div className="mb-2">Capitalize</div>
+                    <div className="mb-2">Sell</div>
+                    <div>Monetize</div>
                   </div>
-                  <h3 className="text-xl font-light text-white mb-4">3. Create Content Bundles</h3>
-                  <p className="text-white/70 text-sm">
-                    Package your best content into bundles and sell them to your audience who already enjoy your
-                    content. Turn your existing fans into paying customers.
-                  </p>
-                </motion.div>
+                </div>
               </div>
             </div>
           </div>
-        </section>
+        </div>
       </main>
 
-      {/* Footer */}
-      <footer className="relative z-10 py-12 border-t border-white/10">
-        <div className="container mx-auto px-4">
-          <div className="flex flex-col md:flex-row justify-between items-center">
-            <div className="mb-6 md:mb-0">
-              <Link href="/" className="text-xl font-medium tracking-tighter">
-                <span className="text-crimson">MASS</span>
-                <span className="text-white">CLIP</span>
-              </Link>
+      <section className="relative z-10 py-20 px-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="scroll-animate space-y-8">
+            <h2 className="text-4xl lg:text-5xl font-thin text-white">Earning Money As A Faceless Creator</h2>
+
+            <div className="max-w-4xl">
+              <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
+                If you run a faceless page, you already create content that other creators need. Whether it is
+                motivation, memes, sports, trending topics, or cinema, your posts can be packaged and sold. Creators are
+                constantly looking for ready-to-use content that saves them time and effort, and you can turn what you
+                are already making into a new source of income.
+              </p>
+
+              <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light mt-6">
+                We provide you with a profile style storefront where you can showcase your work. Share free downloads to
+                grow your audience and offer premium content for purchase, giving creators exactly what they want while
+                you build a steady stream of revenue.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="relative z-10 py-20 px-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="scroll-animate grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+            <div className="order-2 lg:order-1">
+              <img
+                src="/images/folder-structure-interface.png"
+                alt="HD Folder Structure Interface"
+                className="w-full max-w-md mx-auto rounded-lg shadow-2xl"
+              />
             </div>
 
-            <div className="flex flex-wrap justify-center gap-8 text-sm text-white/50">
-              <Link href="/terms" className="hover:text-white transition-colors">
-                TERMS
-              </Link>
-              <Link href="/privacy" className="hover:text-white transition-colors">
-                PRIVACY
-              </Link>
-              <a href="mailto:john@massclip.pro" className="hover:text-white transition-colors">
-                john@massclip.pro
-              </a>
+            <div className="order-1 lg:order-2 space-y-6">
+              <h2 className="text-4xl lg:text-5xl font-thin text-white">HD Folders</h2>
+
+              <div className="space-y-4">
+                <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
+                  Create organized, specific folders for all your content uploads in crystal-clear HD quality. No more
+                  dealing with messy raw files or complicated file management.
+                </p>
+
+                <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
+                  Say goodbye to selling chaotic zip folders to your audience. MassClip handles all file storage and
+                  organization automatically, ensuring everything stays in HD and perfectly organized.
+                </p>
+
+                <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
+                  Your customers get clean, professional access to high-quality content without the frustration of
+                  downloading and extracting messy zip files. Everything is streamlined, organized, and ready to use.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="relative z-10 py-20 px-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="scroll-animate space-y-12">
+            <h2 className="text-4xl lg:text-5xl font-thin text-white">What You Can Sell</h2>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+              <div
+                className="scroll-animate bg-white p-8 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
+                style={{ animationDelay: "0.1s" }}
+              >
+                <h3 className="text-xl font-light text-black mb-4">B-Roll Content</h3>
+                <p className="text-gray-600 font-light leading-relaxed">
+                  High-quality background footage that creators can use to enhance their videos and storytelling.
+                </p>
+              </div>
+
+              <div
+                className="scroll-animate bg-white p-8 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
+                style={{ animationDelay: "0.2s" }}
+              >
+                <h3 className="text-xl font-light text-black mb-4">Background Videos</h3>
+                <p className="text-gray-600 font-light leading-relaxed">
+                  Looping video backgrounds perfect for social media posts, presentations, and content creation.
+                </p>
+              </div>
+
+              <div
+                className="scroll-animate bg-white p-8 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
+                style={{ animationDelay: "0.3s" }}
+              >
+                <h3 className="text-xl font-light text-black mb-4">Audio Tracks</h3>
+                <p className="text-gray-600 font-light leading-relaxed">
+                  Music, sound effects, and audio clips that creators can use to enhance their content.
+                </p>
+              </div>
+
+              <div
+                className="scroll-animate bg-white p-8 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
+                style={{ animationDelay: "0.4s" }}
+              >
+                <h3 className="text-xl font-light text-black mb-4">Carousels</h3>
+                <p className="text-gray-600 font-light leading-relaxed">
+                  Ready-made carousel posts and slide templates for Instagram, LinkedIn, and other platforms.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <footer className="relative z-10 bg-white py-4 px-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div>
+              <h3 className="text-black font-light text-lg mb-4">Resources</h3>
+              <div className="space-y-3">
+                <Link
+                  href="/resources/free-content"
+                  className="block text-gray-600 hover:text-black transition-colors font-light"
+                >
+                  How to use free content
+                </Link>
+                <Link
+                  href="/resources/optimize-storefront"
+                  className="block text-gray-600 hover:text-black transition-colors font-light"
+                >
+                  How to optimize your storefront
+                </Link>
+                <Link
+                  href="/resources/organize-bundles"
+                  className="block text-gray-600 hover:text-black transition-colors font-light"
+                >
+                  How to organize your bundles
+                </Link>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-black font-light text-lg mb-4">Company</h3>
+              <div className="space-y-3">
+                <Link href="/about" className="block text-gray-600 hover:text-black transition-colors font-light">
+                  About Us
+                </Link>
+                <a
+                  href="mailto:contact@massclip.pro"
+                  className="block text-gray-600 hover:text-black transition-colors font-light"
+                >
+                  contact@massclip.pro
+                </a>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-black font-light text-lg mb-4">Legal</h3>
+              <div className="space-y-3">
+                <Link href="/terms" className="block text-gray-600 hover:text-black transition-colors font-light">
+                  Terms of Service
+                </Link>
+                <Link href="/privacy" className="block text-gray-600 hover:text-black transition-colors font-light">
+                  Privacy Policy
+                </Link>
+              </div>
             </div>
           </div>
 
-          <div className="mt-8 pt-8 border-t border-white/10 flex flex-col md:flex-row justify-between items-center">
-            <p className="text-white/30 text-sm mb-4 md:mb-0">
-              © {new Date().getFullYear()} MassClip. All rights reserved.
-            </p>
-            <div className="flex gap-4">
-              <a
-                href="https://www.instagram.com/massclip.official"
-                className="text-white/30 hover:text-white transition-colors"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path
-                    fillRule="evenodd"
-                    d="M12.315 2c2.43 0 2.784.013 3.808.06 1.064.049 1.791.218 2.427.465a4.902 4.902 0 011.772 1.153 4.902 4.902 0 011.153 1.772c.247.636.416 1.363.465 2.427.048 1.067.06 1.407.06 4.123v.08c0 2.643-.012 2.987-.06 4.043-.049 1.064-.218 1.791-.465 2.427a4.902 4.902 0 01-1.153 1.772 4.902 4.902 0 01-1.772 1.153c-.636.247-1.363.416-2.427.465-1.067.048-1.407.06-4.123.06h-.63zm-.081 1.802h-.468c-2.456 0-2.784.011-3.807.058-.975.045-1.504.207-1.857.344-.467.182-.8.398-1.15.748-.35.35-.566.683-.748 1.15-.137.353-.3.882-.344 1.857-.047 1.023-.058 1.351-.058 3.807v.468c0 2.456.011 2.784.058 3.807.045.975.207 1.504.344 1.857.182.466.399.8.748 1.15.35.35.683.566 1.15.748.353.137.882.3 1.857.344 1.054.048 1.37.058 4.041.058h.08c2.597 0 2.917-.01 3.96-.058.976-.045 1.505-.207 1.858-.344.466-.182.8-.398 1.15-.748.35-.35.566-.683.748-1.15.137-.353.3-.882.344-1.857.048-1.055.058-1.37.058-4.041v-.08c0-2.597-.01-2.917-.058-3.96-.045-.976-.207-1.505-.344-1.858a3.097 3.097 0 00-.748-1.15 3.098 3.098 0 00-1.15-.748c-.353-.137-.882-.3-.1857-.344-1.023-.047-1.351-.058-3.807-.058zM12 6.865a5.135 5.135 0 110 10.27 5.135 5.135 0 010-10.27zm0 1.802a3.333 3.333 0 100 6.666 3.333 3.333 0 000-6.666zm5.338-3.205a1.2 1.2 0 110 2.4 1.2 1.2 0 010-2.4z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-              </a>
+          <div className="border-t border-gray-200 mt-6 pt-4">
+            <div className="flex flex-col md:flex-row justify-between items-center">
+              <div className="text-gray-600 font-light">© 2025 MassClip. All rights reserved.</div>
+              <div className="text-black font-light text-xl mt-4 md:mt-0">
+                Mass<span className="bg-gradient-to-br from-black to-black/60 bg-clip-text text-transparent">Clip</span>
+              </div>
             </div>
           </div>
         </div>
@@ -258,3 +299,5 @@ export default function LandingPage() {
     </div>
   )
 }
+
+export default LandingPage

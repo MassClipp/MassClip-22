@@ -4,7 +4,6 @@ import type React from "react"
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/components/ui/use-toast"
@@ -19,7 +18,6 @@ import {
   Music,
   ImageIcon,
   File,
-  Filter,
   RefreshCw,
   MoreVertical,
   Eye,
@@ -35,7 +33,6 @@ import {
 } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { motion, AnimatePresence } from "framer-motion"
 import { formatDistanceToNow } from "date-fns"
@@ -44,6 +41,9 @@ import ProfileSetup from "@/components/profile-setup"
 import { VideoPreviewPlayer } from "@/components/video-preview-player"
 import { chunkedUploadService } from "@/lib/chunked-upload-service"
 import { uploadQueueManager, type QueuedUpload } from "@/lib/upload-queue-manager"
+import { CreateFolderDialog } from "@/components/create-folder-dialog"
+import FolderSidebar from "@/components/folder-sidebar"
+import { Menu } from "lucide-react"
 
 interface UploadType {
   id: string
@@ -54,6 +54,16 @@ interface UploadType {
   type: "video" | "audio" | "image" | "document" | "other"
   size?: number
   mimeType?: string
+  createdAt: Date
+  updatedAt: Date
+}
+
+interface FolderType {
+  id: string
+  name: string
+  path: string
+  parentId: string | null
+  userId: string
   createdAt: Date
   updatedAt: Date
 }
@@ -94,6 +104,7 @@ export default function UploadPage() {
   const { user, loading: authLoading } = useFirebaseAuth()
   const { toast } = useToast()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false) // Declare isSidebarOpen
 
   // State
   const [uploads, setUploads] = useState<UploadType[]>([])
@@ -118,6 +129,10 @@ export default function UploadPage() {
     error: 0,
     paused: 0,
   })
+  const [folders, setFolders] = useState<FolderType[]>([])
+  const [selectedFolderId, setSelectedFolderId] = useState<string>("main") // Default to main instead of root
+  const [isCreateFolderDialogOpen, setIsCreateFolderDialogOpen] = useState(false)
+  const [loadingFolders, setLoadingFolders] = useState(false)
 
   // Initialize upload services
   useEffect(() => {
@@ -189,6 +204,10 @@ export default function UploadPage() {
       if (filterType !== "all") params.append("type", filterType)
       if (searchTerm) params.append("search", searchTerm)
 
+      params.append("folder", selectedFolderId)
+
+      console.log(`[v0] Fetching uploads for folder: ${selectedFolderId}`)
+
       const response = await fetch(`/api/uploads?${params}`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -213,6 +232,8 @@ export default function UploadPage() {
       }
 
       const data = await response.json()
+      console.log(`[v0] Received ${data.uploads.length} uploads for folder: ${selectedFolderId}`)
+
       setUploads(
         data.uploads.map((upload: any) => ({
           ...upload,
@@ -230,7 +251,7 @@ export default function UploadPage() {
     } finally {
       setLoading(false)
     }
-  }, [user, filterType, searchTerm, toast])
+  }, [user, filterType, searchTerm, selectedFolderId, toast]) // Add selectedFolderId dependency
 
   useEffect(() => {
     if (user && hasUserProfile) {
@@ -238,16 +259,98 @@ export default function UploadPage() {
     }
   }, [user, hasUserProfile, fetchUploads])
 
+  // Fetch folders
+  const fetchFolders = useCallback(async () => {
+    if (!user) {
+      console.log("[v0] No user available for fetching folders")
+      return
+    }
+
+    try {
+      console.log("[v0] Fetching folders for user:", user.uid)
+      console.log("[v0] User object:", { uid: user.uid, email: user.email, emailVerified: user.emailVerified })
+
+      setLoadingFolders(true)
+
+      console.log("[v0] Getting ID token...")
+      const token = await user.getIdToken()
+      console.log("[v0] Got ID token, length:", token?.length)
+      console.log("[v0] Token preview:", token?.substring(0, 50) + "...")
+
+      const response = await fetch("/api/folders", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      })
+
+      console.log("[v0] Folders API response status:", response.status)
+      console.log("[v0] Response headers:", Object.fromEntries(response.headers.entries()))
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log("[v0] Folders API response data:", data)
+        setFolders(
+          data.folders.map((folder: any) => ({
+            ...folder,
+            createdAt: new Date(folder.createdAt),
+            updatedAt: new Date(folder.updatedAt),
+          })),
+        )
+        console.log("[v0] Set folders state with", data.folders.length, "folders")
+      } else {
+        const errorData = await response.json()
+        console.error("[v0] Folders API error:", errorData)
+        console.error("[v0] Full response:", response)
+      }
+    } catch (error) {
+      console.error("[v0] Error fetching folders:", error)
+      if (error instanceof Error) {
+        console.error("[v0] Error name:", error.name)
+        console.error("[v0] Error message:", error.message)
+        console.error("[v0] Error stack:", error.stack)
+      }
+    } finally {
+      setLoadingFolders(false)
+    }
+  }, [user])
+
+  useEffect(() => {
+    if (user && hasUserProfile) {
+      fetchFolders()
+    }
+  }, [user, hasUserProfile, fetchFolders])
+
   // Handle file upload with chunked upload service
   const handleFileUpload = async (files: FileList) => {
     if (!user || files.length === 0 || !hasUserProfile) return
 
-    console.log(`🔍 [Chunked Upload] Starting upload for ${files.length} files`)
+    console.log(`🔍 [v0] Starting upload for ${files.length} files`)
+    console.log(`📁 [v0] Selected folder ID: ${selectedFolderId}`)
+    console.log(
+      `📂 [v0] Available folders:`,
+      folders.map((f) => ({ id: f.id, name: f.name, path: f.path })),
+    )
 
-    // Add files to upload queue
+    // Get folder path for the selected folder
+    const selectedFolder = folders.find((f) => f.id === selectedFolderId)
+    const folderPath = selectedFolder?.path || null
+
+    console.log(`🎯 [v0] Selected folder object:`, selectedFolder)
+    console.log(`🛤️ [v0] Resolved folder path:`, folderPath)
+
+    const finalFolderId = selectedFolderId === "main" ? undefined : selectedFolderId
+    console.log(`✅ [v0] Final folder ID to pass to queue:`, finalFolderId)
+
+    // Add files to upload queue with folder information
     Array.from(files).forEach((file, index) => {
       const priority = file.size < 50 * 1024 * 1024 ? 1 : 0 // Prioritize smaller files
-      const queueId = uploadQueueManager.addToQueue(file, priority)
+
+      console.log(
+        `📤 [v0] Adding file ${file.name} to queue with folderId: ${finalFolderId}, folderPath: ${folderPath}`,
+      )
+
+      const queueId = uploadQueueManager.addToQueue(file, priority, finalFolderId, folderPath)
 
       // Set up individual progress callback
       uploadQueueManager.setProgressCallback(queueId, (queuedUpload) => {
@@ -270,7 +373,7 @@ export default function UploadPage() {
 
     toast({
       title: "Files Added to Queue",
-      description: `${files.length} file(s) added to upload queue`,
+      description: `${files.length} file(s) added to upload queue${selectedFolder ? ` in "${selectedFolder.name}"` : ""}`,
     })
   }
 
@@ -485,6 +588,21 @@ export default function UploadPage() {
     fetchUploads()
   }
 
+  // Handle folder creation
+  const handleFolderCreated = () => {
+    console.log("[v0] Folder created, refreshing folder list...")
+    fetchFolders()
+    toast({
+      title: "Success!",
+      description: "Folder created successfully",
+    })
+  }
+
+  const handleFolderSelect = (folderId: string) => {
+    console.log(`[v0] Folder selected: ${folderId}`)
+    setSelectedFolderId(folderId)
+  }
+
   if (loading || authLoading) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
@@ -515,30 +633,55 @@ export default function UploadPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
+      {/* Folder Sidebar */}
+      <FolderSidebar
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+        selectedFolderId={selectedFolderId}
+        onFolderSelect={handleFolderSelect}
+        onFolderCreated={handleFolderCreated}
+      />
+
+      {/* Overlay when sidebar is open */}
+      {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setIsSidebarOpen(false)} />}
+
       {/* Index Setup Helper */}
       {hasIndexError && <FirestoreIndexHelper />}
 
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">My Uploads</h1>
-          <p className="text-zinc-400 mt-1">Manage your content library with advanced chunked uploads</p>
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 pb-6 border-b border-zinc-800/50">
+        <div className="space-y-2">
+          <h1 className="text-2xl font-semibold text-white tracking-tight">Content Library</h1>
           {username && (
-            <p className="text-sm text-zinc-500 mt-1">
-              Files will be uploaded to your creator folder: <span className="text-zinc-300">creators/{username}/</span>
-            </p>
+            <div className="flex items-center gap-2 text-xs text-zinc-500">
+              <div className="w-1.5 h-1.5 bg-zinc-500 rounded-full"></div>
+              <span>Storage path: creators/{username}/</span>
+            </div>
           )}
         </div>
 
         <div className="flex items-center gap-3">
-          <Button variant="outline" onClick={() => fetchUploads()} className="border-zinc-700 hover:bg-zinc-800">
+          {/* Sidebar toggle button */}
+          <Button
+            variant="outline"
+            onClick={() => setIsSidebarOpen(true)}
+            className="border-zinc-700/50 bg-zinc-900/50 hover:bg-zinc-800/50 text-zinc-300"
+          >
+            <Menu className="h-4 w-4 mr-2" />
+            Folders
+          </Button>
+
+          <Button
+            variant="outline"
+            onClick={() => fetchUploads()}
+            className="border-zinc-700/50 bg-zinc-900/50 hover:bg-zinc-800/50 text-zinc-300"
+          >
             <RefreshCw className="h-4 w-4" />
           </Button>
 
           <Button
             onClick={() => fileInputRef.current?.click()}
-            className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800"
+            className="bg-white text-black hover:bg-zinc-100 font-medium px-6"
           >
             <Upload className="h-4 w-4 mr-2" />
             Upload Files
@@ -554,125 +697,109 @@ export default function UploadPage() {
         </div>
       </div>
 
-      {/* Upload Queue */}
       {uploadQueue.length > 0 && (
-        <Card className="bg-zinc-900/60 border-zinc-800/50">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-lg">Upload Queue ({queueStats.total})</CardTitle>
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="text-xs">
-                {queueStats.uploading} uploading
-              </Badge>
-              <Badge variant="outline" className="text-xs">
-                {queueStats.queued} queued
-              </Badge>
-              {queueStats.completed > 0 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={clearCompletedUploads}
-                  className="border-zinc-700 bg-transparent"
-                >
-                  Clear Completed
-                </Button>
-              )}
+        <div className="bg-zinc-900/30 border border-zinc-800/30 rounded-lg">
+          <div className="flex items-center justify-between p-4 border-b border-zinc-800/30">
+            <div className="flex items-center gap-3">
+              <h3 className="font-medium text-white">Upload Progress</h3>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-zinc-400">{queueStats.total} files</span>
+                <div className="w-1 h-1 bg-zinc-600 rounded-full"></div>
+                <span className="text-xs text-zinc-400">{queueStats.uploading} active</span>
+              </div>
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4 max-h-96 overflow-y-auto">
+            {queueStats.completed > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearCompletedUploads}
+                className="text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 text-xs transition-colors"
+              >
+                Clear Completed
+              </Button>
+            )}
+          </div>
+          <div className="p-4">
+            <div className="space-y-3 max-h-80 overflow-y-auto">
               {uploadQueue.map((queuedUpload) => {
                 const StatusIcon = STATUS_ICONS[queuedUpload.status]
-                const statusColor = STATUS_COLORS[queuedUpload.status]
                 const progress = queuedUpload.progress
 
                 return (
-                  <div key={queuedUpload.id} className="space-y-2 p-3 bg-zinc-800/30 rounded-lg">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <StatusIcon
-                          className={`h-4 w-4 ${statusColor} ${queuedUpload.status === "uploading" ? "animate-spin" : ""}`}
-                        />
-                        <div>
-                          <span className="text-sm font-medium text-white">{queuedUpload.file.name}</span>
-                          <div className="text-xs text-zinc-400">
-                            {formatFileSize(queuedUpload.file.size)}
-                            {progress && progress.speed > 0 && (
-                              <span>
-                                {" "}
-                                • {formatSpeed(progress.speed)} • ETA: {formatTime(progress.eta)}
-                              </span>
-                            )}
+                  <div key={queuedUpload.id} className="flex items-center gap-4 p-3 bg-zinc-800/20 rounded-md">
+                    <StatusIcon
+                      className={`h-4 w-4 text-zinc-400 ${queuedUpload.status === "uploading" ? "animate-spin" : ""}`}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm font-medium text-white truncate">{queuedUpload.file.name}</span>
+                        <span className="text-xs text-zinc-400">{formatFileSize(queuedUpload.file.size)}</span>
+                      </div>
+                      {progress && (
+                        <div className="space-y-1">
+                          <Progress value={progress.percentage} className="h-2 bg-zinc-800/60" />
+                          <div className="flex justify-between text-xs text-zinc-500">
+                            <span>{Math.round(progress.percentage)}%</span>
+                            {progress.speed > 0 && <span>{formatSpeed(progress.speed)}</span>}
                           </div>
                         </div>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        {queuedUpload.status === "uploading" && (
-                          <Button size="sm" variant="ghost" onClick={() => pauseUpload(queuedUpload.id)}>
-                            <Pause className="h-4 w-4" />
-                          </Button>
-                        )}
-                        {queuedUpload.status === "paused" && (
-                          <Button size="sm" variant="ghost" onClick={() => resumeUpload(queuedUpload.id)}>
-                            <Play className="h-4 w-4" />
-                          </Button>
-                        )}
-                        {queuedUpload.status === "error" && (
-                          <Button size="sm" variant="ghost" onClick={() => retryUpload(queuedUpload.id)}>
-                            <RefreshCw className="h-4 w-4" />
-                          </Button>
-                        )}
-                        <Button size="sm" variant="ghost" onClick={() => removeFromQueue(queuedUpload.id)}>
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
+                      )}
                     </div>
-
-                    {progress && (
-                      <div className="space-y-2">
-                        <Progress
-                          value={(progress.uploadedBytes / progress.fileSize) * 100}
-                          className="h-1.5 bg-zinc-800/60 border-zinc-700/50"
-                        />
-                        <div className="flex justify-between text-xs text-zinc-400">
-                          <span className="font-medium">
-                            {Math.round((progress.uploadedBytes / progress.fileSize) * 100)}%
-                          </span>
-                          <span>
-                            {progress.completedChunks}/{progress.totalChunks} chunks
-                          </span>
-                        </div>
-                      </div>
-                    )}
-
-                    {queuedUpload.error && <p className="text-sm text-red-400">{queuedUpload.error}</p>}
+                    <div className="flex items-center gap-2">
+                      {queuedUpload.status === "uploading" && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => uploadQueueManager.pauseUpload(queuedUpload.id)}
+                          className="h-8 w-8 p-0"
+                        >
+                          <Pause className="h-3 w-3" />
+                        </Button>
+                      )}
+                      {queuedUpload.status === "paused" && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => uploadQueueManager.resumeUpload(queuedUpload.id)}
+                          className="h-8 w-8 p-0"
+                        >
+                          <Play className="h-3 w-3" />
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => uploadQueueManager.cancelUpload(queuedUpload.id)}
+                        className="h-8 w-8 p-0 text-zinc-500 hover:text-red-400"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
                   </div>
                 )
               })}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
-      {/* Drag and Drop Area */}
-      <Card
-        className="bg-zinc-900/60 border-zinc-800/50 border-2 border-dashed hover:border-zinc-700 transition-colors cursor-pointer"
+      <div
+        className="border-2 border-dashed border-zinc-700/50 rounded-lg bg-zinc-900/20 hover:border-zinc-600/50 hover:bg-zinc-900/30 transition-all duration-200 cursor-pointer"
         onDragOver={handleDragOver}
         onDrop={handleDrop}
         onClick={() => fileInputRef.current?.click()}
       >
-        <CardContent className="flex flex-col items-center justify-center py-12">
-          <Upload className="h-12 w-12 text-zinc-500 mb-4" />
-          <h3 className="text-lg font-medium text-white mb-2">Drop files here or click to upload</h3>
-          <p className="text-zinc-400 text-center">
-            Advanced chunked uploads with parallel processing
-            <br />
-            <span className="text-sm text-zinc-500">
-              Supports large files, resume capability, and real-time progress
-            </span>
+        <div className="flex flex-col items-center justify-center py-12 px-6">
+          <div className="w-12 h-12 bg-zinc-800/50 rounded-lg flex items-center justify-center mb-4">
+            <Upload className="h-6 w-6 text-zinc-400" />
+          </div>
+          <h3 className="text-lg font-medium text-white mb-2">Upload your files</h3>
+          <p className="text-zinc-400 text-center text-sm max-w-md">
+            Drag and drop files here, or click to browse. Advanced chunked upload technology ensures reliable transfers
+            for large files.
           </p>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Selected Items Actions */}
       {selectedUploads.length > 0 && (
@@ -702,65 +829,37 @@ export default function UploadPage() {
         </div>
       )}
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-        <Card className="bg-zinc-900/60 border-zinc-800/50">
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-white">{stats.total}</div>
-            <div className="text-sm text-zinc-400">Total Files</div>
-          </CardContent>
-        </Card>
-        <Card className="bg-zinc-900/60 border-zinc-800/50">
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-blue-500">{stats.video}</div>
-            <div className="text-sm text-zinc-400">Videos</div>
-          </CardContent>
-        </Card>
-        <Card className="bg-zinc-900/60 border-zinc-800/50">
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-green-500">{stats.audio}</div>
-            <div className="text-sm text-zinc-400">Audio</div>
-          </CardContent>
-        </Card>
-        <Card className="bg-zinc-900/60 border-zinc-800/50">
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-purple-500">{stats.image}</div>
-            <div className="text-sm text-zinc-400">Images</div>
-          </CardContent>
-        </Card>
-        <Card className="bg-zinc-900/60 border-zinc-800/50">
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-orange-500">{stats.document}</div>
-            <div className="text-sm text-zinc-400">Documents</div>
-          </CardContent>
-        </Card>
-        <Card className="bg-zinc-900/60 border-zinc-800/50">
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-gray-500">{stats.other}</div>
-            <div className="text-sm text-zinc-400">Other</div>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { label: "Total Files", value: stats.total, color: "text-white" },
+          { label: "Videos", value: stats.video, color: "text-white" },
+          { label: "Audio", value: stats.audio, color: "text-white" },
+          { label: "Images", value: stats.image, color: "text-white" },
+        ].map((stat, index) => (
+          <div key={index} className="bg-zinc-900/30 border border-zinc-800/30 rounded-lg p-4">
+            <div className={`text-2xl font-semibold ${stat.color} mb-1`}>{stat.value}</div>
+            <div className="text-xs text-white uppercase tracking-wide">{stat.label}</div>
+          </div>
+        ))}
       </div>
 
-      {/* Filters and Search */}
       <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
         <div className="flex items-center gap-4 w-full md:w-auto">
           <div className="relative flex-1 md:w-80">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-400 h-4 w-4" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-500 h-4 w-4" />
             <Input
-              placeholder="Search uploads..."
+              placeholder="Search files..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 bg-zinc-800 border-zinc-700"
+              className="pl-10 bg-zinc-900/30 border-zinc-800/30 text-white placeholder:text-zinc-500"
             />
           </div>
 
           <Select value={filterType} onValueChange={setFilterType}>
-            <SelectTrigger className="w-32 bg-zinc-800 border-zinc-700">
-              <Filter className="h-4 w-4 mr-2" />
+            <SelectTrigger className="w-36 bg-zinc-900/30 border-zinc-800/30 text-white">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent className="bg-zinc-800 border-zinc-700">
+            <SelectContent className="bg-zinc-900 border-zinc-800">
               <SelectItem value="all">All Types</SelectItem>
               <SelectItem value="video">Videos</SelectItem>
               <SelectItem value="audio">Audio</SelectItem>
@@ -771,20 +870,20 @@ export default function UploadPage() {
           </Select>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 bg-zinc-900/30 border border-zinc-800/30 rounded-md p-1">
           <Button
-            variant={viewMode === "grid" ? "default" : "outline"}
+            variant={viewMode === "grid" ? "default" : "ghost"}
             size="sm"
             onClick={() => setViewMode("grid")}
-            className="border-zinc-700"
+            className={viewMode === "grid" ? "bg-white text-black" : "text-zinc-400 hover:text-white"}
           >
             <Grid3X3 className="h-4 w-4" />
           </Button>
           <Button
-            variant={viewMode === "list" ? "default" : "outline"}
+            variant={viewMode === "list" ? "default" : "ghost"}
             size="sm"
             onClick={() => setViewMode("list")}
-            className="border-zinc-700"
+            className={viewMode === "list" ? "bg-white text-black" : "text-zinc-400 hover:text-white"}
           >
             <List className="h-4 w-4" />
           </Button>
@@ -793,23 +892,21 @@ export default function UploadPage() {
 
       {/* Content */}
       {uploads.length === 0 ? (
-        <Card className="bg-zinc-900/60 border-zinc-800/50">
-          <CardContent className="flex flex-col items-center justify-center py-16">
-            <Upload className="h-12 w-12 text-zinc-600 mb-4" />
-            <h3 className="text-xl font-medium text-white mb-2">No uploads yet</h3>
-            <p className="text-zinc-400 text-center mb-6 max-w-md">
-              Upload your first file to start building your content library. Advanced chunked uploads ensure fast and
-              reliable transfers.
+        <div className="bg-zinc-900/20 border border-zinc-800/30 rounded-lg">
+          <div className="flex flex-col items-center justify-center py-16 px-6">
+            <div className="w-16 h-16 bg-zinc-800/50 rounded-lg flex items-center justify-center mb-6">
+              <Upload className="h-8 w-8 text-zinc-500" />
+            </div>
+            <h3 className="text-xl font-medium text-white mb-2">
+              {selectedFolderId === "main" ? "No content yet" : "No content in this folder"}
+            </h3>
+            <p className="text-zinc-400 text-center mb-8 max-w-md text-sm">
+              {selectedFolderId === "main"
+                ? "Upload files to get started with your content library."
+                : "Upload files to this folder to organize your content."}
             </p>
-            <Button
-              onClick={() => fileInputRef.current?.click()}
-              className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800"
-            >
-              <Upload className="h-4 w-4 mr-2" />
-              Upload Your First File
-            </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       ) : (
         <AnimatePresence>
           {viewMode === "grid" ? (
@@ -825,20 +922,20 @@ export default function UploadPage() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -20 }}
-                    transition={{ duration: 0.3, delay: index * 0.05 }}
+                    transition={{ duration: 0.2, delay: index * 0.02 }}
                   >
-                    <Card
-                      className={`bg-zinc-900/60 border-zinc-800/50 hover:border-zinc-700/50 transition-all duration-300 group ${
-                        isSelected ? "ring-2 ring-red-500" : ""
+                    <div
+                      className={`bg-zinc-900/30 border border-zinc-800/30 rounded-lg hover:border-zinc-700/50 transition-all duration-200 cursor-pointer group ${
+                        isSelected ? "ring-2 ring-white/20 border-white/20" : ""
                       }`}
                       onClick={() => toggleUploadSelection(upload.id)}
                     >
-                      <CardContent className="p-3">
-                        <div className="mb-2 relative">
+                      <div className="p-3">
+                        <div className="mb-3 relative">
                           {upload.type === "video" ? (
                             <VideoPreviewPlayer videoUrl={upload.fileUrl} title={upload.title} />
                           ) : upload.type === "image" ? (
-                            <div className="aspect-square bg-zinc-800 rounded-lg flex items-center justify-center relative overflow-hidden">
+                            <div className="aspect-square bg-zinc-800/50 rounded-md flex items-center justify-center relative overflow-hidden">
                               <img
                                 src={upload.fileUrl || "/placeholder.svg"}
                                 alt={upload.title}
@@ -849,231 +946,50 @@ export default function UploadPage() {
                                   target.nextElementSibling?.classList.remove("hidden")
                                 }}
                               />
-                              <div className="hidden w-full h-full flex items-center justify-center">
+                              <div className="hidden absolute inset-0 flex items-center justify-center">
                                 <IconComponent className={`h-8 w-8 ${colorClass}`} />
                               </div>
                             </div>
                           ) : (
-                            <div className="aspect-square bg-zinc-800 rounded-lg flex items-center justify-center">
+                            <div className="aspect-square bg-zinc-800/50 rounded-md flex items-center justify-center">
                               <IconComponent className={`h-8 w-8 ${colorClass}`} />
-                            </div>
-                          )}
-
-                          {/* Selection indicator */}
-                          {isSelected && (
-                            <div className="absolute top-2 left-2 bg-red-500 rounded-full w-5 h-5 flex items-center justify-center">
-                              <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                className="h-3 w-3 text-white"
-                                viewBox="0 0 20 20"
-                                fill="currentColor"
-                              >
-                                <path
-                                  fillRule="evenodd"
-                                  d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                                  clipRule="evenodd"
-                                />
-                              </svg>
-                            </div>
-                          )}
-
-                          {/* Action buttons overlay - only show for non-video types */}
-                          {upload.type !== "video" && (
-                            <div className="absolute inset-0 bg-black bg-opacity-60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  window.open(upload.fileUrl, "_blank")
-                                }}
-                              >
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button size="sm" variant="secondary" onClick={(e) => e.stopPropagation()}>
-                                    <MoreVertical className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent className="bg-zinc-800 border-zinc-700">
-                                  <DropdownMenuItem
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      setSelectedUpload(upload)
-                                      setNewTitle(upload.title)
-                                      setIsRenameDialogOpen(true)
-                                    }}
-                                  >
-                                    <Edit2 className="h-4 w-4 mr-2" />
-                                    Rename
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      copyToClipboard(upload.fileUrl)
-                                    }}
-                                  >
-                                    <Copy className="h-4 w-4 mr-2" />
-                                    Copy URL
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      handleDelete(upload)
-                                    }}
-                                    className="text-red-400"
-                                  >
-                                    <Trash2 className="h-4 w-4 mr-2" />
-                                    Delete
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
                             </div>
                           )}
                         </div>
 
                         <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <h3 className="font-medium text-white truncate">{upload.title}</h3>
-                            <Badge variant="outline" className="text-xs border-zinc-700">
-                              {upload.type}
-                            </Badge>
-                          </div>
-
-                          <div className="text-xs text-zinc-400 space-y-1">
-                            <div>{formatFileSize(upload.size)}</div>
-                            <div>{formatDistanceToNow(upload.createdAt, { addSuffix: true })}</div>
-                          </div>
-
-                          {/* Action buttons for videos - show below the video */}
-                          {upload.type === "video" && (
-                            <div className="flex items-center gap-2 mt-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="w-full bg-transparent"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  copyToClipboard(upload.fileUrl)
-                                }}
-                              >
-                                <Copy className="h-3 w-3 mr-1" /> Copy URL
-                              </Button>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="px-2 bg-transparent"
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    <MoreVertical className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent className="bg-zinc-800 border-zinc-700">
-                                  <DropdownMenuItem
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      setSelectedUpload(upload)
-                                      setNewTitle(upload.title)
-                                      setIsRenameDialogOpen(true)
-                                    }}
-                                  >
-                                    <Edit2 className="h-4 w-4 mr-2" />
-                                    Rename
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      handleDelete(upload)
-                                    }}
-                                    className="text-red-400"
-                                  >
-                                    <Trash2 className="h-4 w-4 mr-2" />
-                                    Delete
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                )
-              })}
-            </div>
-          ) : (
-            // List view
-            <Card className="bg-zinc-900/60 border-zinc-800/50">
-              <CardContent className="p-0">
-                <div className="divide-y divide-zinc-800">
-                  {uploads.map((upload, index) => {
-                    const IconComponent = FILE_TYPE_ICONS[upload.type]
-                    const colorClass = FILE_TYPE_COLORS[upload.type]
-                    const isSelected = selectedUploads.includes(upload.id)
-
-                    return (
-                      <motion.div
-                        key={upload.id}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: 20 }}
-                        transition={{ duration: 0.3, delay: index * 0.02 }}
-                        className={`flex items-center gap-4 p-4 hover:bg-zinc-800/30 transition-colors cursor-pointer ${
-                          isSelected ? "bg-zinc-800/50" : ""
-                        }`}
-                        onClick={() => toggleUploadSelection(upload.id)}
-                      >
-                        <div className="w-10 h-10 bg-zinc-800 rounded-lg flex items-center justify-center">
-                          {isSelected ? (
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              className="h-5 w-5 text-red-500"
-                              viewBox="0 0 20 20"
-                              fill="currentColor"
-                            >
-                              <path
-                                fillRule="evenodd"
-                                d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                                clipRule="evenodd"
-                              />
-                            </svg>
-                          ) : (
-                            <IconComponent className={`h-5 w-5 ${colorClass}`} />
-                          )}
-                        </div>
-
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-medium text-white truncate">{upload.title}</h3>
-                          <div className="flex items-center gap-4 text-xs text-zinc-400 mt-1">
-                            <Badge variant="outline" className="text-xs border-zinc-700">
-                              {upload.type}
-                            </Badge>
+                          <h3 className="font-medium text-white text-sm truncate">{upload.title}</h3>
+                          <div className="flex items-center justify-between text-xs text-zinc-500">
+                            <span className="uppercase tracking-wide">{upload.type}</span>
                             <span>{formatFileSize(upload.size)}</span>
-                            <span>{formatDistanceToNow(upload.createdAt, { addSuffix: true })}</span>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              window.open(upload.fileUrl, "_blank")
-                            }}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
+                        <div className="flex items-center justify-between mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <span className="text-xs text-zinc-500">
+                            {formatDistanceToNow(upload.createdAt, { addSuffix: true })}
+                          </span>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button size="sm" variant="ghost" onClick={(e) => e.stopPropagation()}>
-                                <MoreVertical className="h-4 w-4" />
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 w-6 p-0"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <MoreVertical className="h-3 w-3" />
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent className="bg-zinc-800 border-zinc-700">
+                            <DropdownMenuContent className="bg-zinc-900 border-zinc-800">
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  window.open(upload.fileUrl, "_blank")
+                                }}
+                              >
+                                <Eye className="h-4 w-4 mr-2" />
+                                View
+                              </DropdownMenuItem>
                               <DropdownMenuItem
                                 onClick={(e) => {
                                   e.stopPropagation()
@@ -1107,49 +1023,137 @@ export default function UploadPage() {
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
-                      </motion.div>
-                    )
-                  })}
-                </div>
-              </CardContent>
-            </Card>
+                      </div>
+                    </div>
+                  </motion.div>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="bg-zinc-900/30 border border-zinc-800/30 rounded-lg">
+              <div className="divide-y divide-zinc-800/30">
+                {uploads.map((upload, index) => {
+                  const IconComponent = FILE_TYPE_ICONS[upload.type]
+                  const colorClass = FILE_TYPE_COLORS[upload.type]
+                  const isSelected = selectedUploads.includes(upload.id)
+
+                  return (
+                    <motion.div
+                      key={upload.id}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 20 }}
+                      transition={{ duration: 0.2, delay: index * 0.01 }}
+                      className={`flex items-center gap-4 p-4 hover:bg-zinc-800/20 transition-colors cursor-pointer ${
+                        isSelected ? "bg-zinc-800/30" : ""
+                      }`}
+                      onClick={() => toggleUploadSelection(upload.id)}
+                    >
+                      <div className="w-10 h-10 bg-zinc-800/50 rounded-md flex items-center justify-center">
+                        {isSelected ? (
+                          <CheckCircle className="h-5 w-5 text-white" />
+                        ) : (
+                          <IconComponent className={`h-5 w-5 ${colorClass}`} />
+                        )}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium text-white truncate">{upload.title}</h3>
+                        <div className="flex items-center gap-4 text-xs text-zinc-500 mt-1">
+                          <span className="uppercase tracking-wide">{upload.type}</span>
+                          <span>{formatFileSize(upload.size)}</span>
+                          <span>{formatDistanceToNow(upload.createdAt, { addSuffix: true })}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            window.open(upload.fileUrl, "_blank")
+                          }}
+                          className="text-zinc-400 hover:text-white"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-zinc-400 hover:text-white"
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent className="bg-zinc-900 border-zinc-800">
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setSelectedUpload(upload)
+                                setNewTitle(upload.title)
+                                setIsRenameDialogOpen(true)
+                              }}
+                            >
+                              <Edit2 className="h-4 w-4 mr-2" />
+                              Rename
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                copyToClipboard(upload.fileUrl)
+                              }}
+                            >
+                              <Copy className="h-4 w-4 mr-2" />
+                              Copy URL
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleDelete(upload)
+                              }}
+                              className="text-red-400"
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </motion.div>
+                  )
+                })}
+              </div>
+            </div>
           )}
         </AnimatePresence>
       )}
 
-      {/* Rename Dialog */}
       <Dialog open={isRenameDialogOpen} onOpenChange={setIsRenameDialogOpen}>
         <DialogContent className="bg-zinc-900 border-zinc-800">
           <DialogHeader>
-            <DialogTitle>Rename Upload</DialogTitle>
-            <DialogDescription>Change the display name for this upload</DialogDescription>
+            <DialogTitle className="text-white">Rename Upload</DialogTitle>
+            <DialogDescription className="text-zinc-400">Enter a new title for this upload.</DialogDescription>
           </DialogHeader>
-
           <div className="space-y-4">
             <Input
               value={newTitle}
               onChange={(e) => setNewTitle(e.target.value)}
-              placeholder="Enter new title"
-              className="bg-zinc-800 border-zinc-700"
+              placeholder="Enter new title..."
+              className="bg-zinc-800/50 border-zinc-700 text-white"
             />
-
-            <div className="flex justify-end gap-3">
+            <div className="flex justify-end gap-2">
               <Button
                 variant="outline"
-                onClick={() => {
-                  setIsRenameDialogOpen(false)
-                  setSelectedUpload(null)
-                  setNewTitle("")
-                }}
-                className="border-zinc-700"
+                onClick={() => setIsRenameDialogOpen(false)}
+                className="border-zinc-700 text-zinc-300"
               >
                 Cancel
               </Button>
-              <Button
-                onClick={handleRename}
-                disabled={!newTitle.trim()}
-                className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800"
-              >
+              <Button onClick={handleRename} className="bg-white text-black">
                 Rename
               </Button>
             </div>
@@ -1157,44 +1161,42 @@ export default function UploadPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Add to Free Content Dialog */}
       <Dialog open={showAddToFreeContentDialog} onOpenChange={setShowAddToFreeContentDialog}>
         <DialogContent className="bg-zinc-900 border-zinc-800">
           <DialogHeader>
-            <DialogTitle>Add to Free Content</DialogTitle>
-            <DialogDescription>
-              Add selected items to your free content section. These will be visible to all visitors on your profile.
+            <DialogTitle className="text-white">Add to Free Content</DialogTitle>
+            <DialogDescription className="text-zinc-400">
+              Add {selectedUploads.length} selected item(s) to your free content library?
             </DialogDescription>
           </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="bg-zinc-800/50 p-4 rounded-lg">
-              <h4 className="font-medium text-white mb-2">Selected Items: {selectedUploads.length}</h4>
-              <p className="text-sm text-zinc-400">
-                These items will be added to your free content section. You can manage them from the Free Content page.
-              </p>
-            </div>
-
-            <div className="flex justify-end gap-3">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowAddToFreeContentDialog(false)
-                }}
-                className="border-zinc-700"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={addToFreeContent}
-                className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800"
-              >
-                Add to Free Content
-              </Button>
-            </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowAddToFreeContentDialog(false)}
+              className="border-zinc-700 text-zinc-300"
+            >
+              Cancel
+            </Button>
+            <Button onClick={addToFreeContent} className="bg-white text-black">
+              Add to Free Content
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
+
+      <CreateFolderDialog
+        isOpen={isCreateFolderDialogOpen}
+        onClose={() => setIsCreateFolderDialogOpen(false)}
+        parentFolderId={selectedFolderId || null}
+        onFolderCreated={() => {
+          console.log("[v0] Folder created, refreshing folder list...")
+          fetchFolders()
+          toast({
+            title: "Success!",
+            description: "Folder created successfully",
+          })
+        }}
+      />
     </div>
   )
 }

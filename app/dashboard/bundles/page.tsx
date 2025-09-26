@@ -4,7 +4,20 @@ import { useRef } from "react"
 
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Plus, Edit, Eye, EyeOff, Loader2, AlertCircle, Upload, X, Check, Trash2, ImageIcon } from "lucide-react"
+import {
+  Plus,
+  Edit,
+  Eye,
+  EyeOff,
+  Loader2,
+  AlertCircle,
+  Upload,
+  X,
+  Check,
+  Trash2,
+  ImageIcon,
+  ArrowRight,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -19,6 +32,8 @@ import { db } from "@/lib/firebase"
 import { useAuth } from "@/contexts/auth-context"
 import { useUserPlan } from "@/hooks/use-user-plan"
 import { useRouter } from "next/navigation"
+import { useFreeTierLimits } from "@/hooks/use-free-tier-limits"
+import NewFolderSelector from "@/components/new-folder-selector"
 
 interface ContentItem {
   id: string
@@ -32,6 +47,8 @@ interface ContentItem {
   filename: string
   createdAt?: any
   type?: string
+  folderId?: string
+  folder?: string
 }
 
 interface ProductBox {
@@ -65,6 +82,9 @@ interface EditBundleForm {
   coverImage: string
 }
 
+const CONTENT_LIMIT_FREE = 10
+const BUNDLE_DISPLAY_LIMIT = 6
+
 export default function BundlesPage() {
   const { user } = useAuth()
   const [productBoxes, setProductBoxes] = useState<ProductBox[]>([])
@@ -85,10 +105,10 @@ export default function BundlesPage() {
   const { toast, toast: customToast } = useToast()
   const router = useRouter()
 
-  // Bundle limit logic for free users
+  const { limits: freeTierLimits, loading: limitsLoading } = useFreeTierLimits()
   const { planData, isProUser } = useUserPlan()
-  const CONTENT_LIMIT_FREE = 10
-  const bundleLimit = isProUser ? Number.POSITIVE_INFINITY : 2
+
+  const bundleLimit = isProUser ? Number.POSITIVE_INFINITY : freeTierLimits?.bundlesLimit || 2
   const isAtBundleLimit = !isProUser && productBoxes.length >= bundleLimit
 
   const [availableUploads, setAvailableUploads] = useState<ContentItem[]>([])
@@ -96,6 +116,7 @@ export default function BundlesPage() {
   const [selectedContentIds, setSelectedContentIds] = useState<string[]>([])
   const [addContentLoading, setAddContentLoading] = useState(false)
   const [uploadsLoading, setUploadsLoading] = useState(false)
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
 
   // Edit bundle states
   const [showEditModal, setShowEditModal] = useState<string | null>(null)
@@ -176,6 +197,7 @@ export default function BundlesPage() {
         updatedAt: bundle.updatedAt,
         productId: bundle.productId,
         priceId: bundle.priceId,
+        detailedContentItems: bundle.detailedContentItems || [], // Ensure detailedContentItems is mapped
       }))
 
       setProductBoxes(boxes)
@@ -283,6 +305,8 @@ export default function BundlesPage() {
                 filename: uploadData.filename || uploadData.originalFileName || `${uploadId}.file`,
                 createdAt: uploadData.createdAt || uploadData.uploadedAt,
                 type: uploadData.type,
+                folderId: uploadData.folderId,
+                folder: uploadData.folder,
               }
 
               if (item.fileUrl && item.fileUrl.startsWith("http")) {
@@ -664,6 +688,15 @@ export default function BundlesPage() {
       const currentBundle = productBoxes.find((box) => box.id === productBoxId)
       const priceChanged = currentBundle && Number.parseFloat(editForm.price) !== currentBundle.price
 
+      const requestData = {
+        title: editForm.title.trim(),
+        description: editForm.description.trim(),
+        price: Number.parseFloat(editForm.price),
+        coverImage: editForm.coverImage || null,
+      }
+
+      console.log("[v0] Submitting bundle edit with data:", requestData)
+
       const idToken = await user?.getIdToken()
       const response = await fetch(`/api/creator/bundles/${productBoxId}`, {
         method: "PUT",
@@ -671,20 +704,17 @@ export default function BundlesPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${idToken}`,
         },
-        body: JSON.stringify({
-          title: editForm.title.trim(),
-          description: editForm.description.trim(),
-          price: Number.parseFloat(editForm.price),
-          coverImage: editForm.coverImage || null,
-        }),
+        body: JSON.stringify(requestData),
       })
 
       if (!response.ok) {
         const errorData = await response.json()
+        console.error("[v0] Bundle update failed:", errorData)
         throw new Error(errorData.message || "Failed to update bundle")
       }
 
       const data = await response.json()
+      console.log("[v0] Bundle update response:", data)
 
       // Update local state
       setProductBoxes((prev) =>
@@ -710,7 +740,7 @@ export default function BundlesPage() {
 
       setShowEditModal(null)
     } catch (error) {
-      console.error("Error updating bundle:", error)
+      console.error("[v0] Error updating bundle:", error)
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to update bundle",
@@ -812,6 +842,8 @@ export default function BundlesPage() {
           duration: upload.duration,
           createdAt: upload.createdAt || upload.addedAt || upload.timestamp,
           type: upload.type || upload.mimeType?.split("/")[0] || "document",
+          folderId: upload.folderId,
+          folder: upload.folder,
         }))
 
       setAvailableUploads(availableUploads)
@@ -827,6 +859,11 @@ export default function BundlesPage() {
       setUploadsLoading(false)
     }
   }
+
+  const filteredUploads = availableUploads.filter((upload) => {
+    if (!selectedFolderId) return true // Show all if no folder selected
+    return upload.folderId === selectedFolderId || upload.folder === selectedFolderId
+  })
 
   // Handle adding content to bundle with detailed metadata storage - ENHANCED VERSION
   async function handleAddContentToBundle(productBoxId: string) {
@@ -1054,34 +1091,29 @@ export default function BundlesPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
           <h1 className="text-2xl sm:text-3xl font-light text-white mb-2">
-            Bundles <span className="text-zinc-500 text-lg font-normal">{productBoxes.length}/2</span>
+            Bundles{" "}
+            <span className="text-zinc-500 text-lg font-normal">
+              {productBoxes.length}/{isProUser ? "∞" : bundleLimit}
+            </span>
           </h1>
           <p className="text-zinc-400 text-sm">Create and manage premium content packages for your audience</p>
         </div>
 
         <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
           <DialogTrigger asChild>
+            {/* Make the Create Bundle button clickable and redirect to upgrade when at limit */}
             <Button
-              variant="outline"
-              className={`border-white/20 text-white hover:bg-white/5 hover:border-white/40 transition-all duration-200 ${
-                isAtBundleLimit ? "opacity-60 cursor-not-allowed" : ""
-              }`}
-              disabled={isAtBundleLimit}
               onClick={() => {
-                if (isAtBundleLimit) {
-                  toast({
-                    title: "Bundle Limit Reached",
-                    description: "Free users can create up to 2 bundles. Upgrade to Creator Pro for unlimited bundles.",
-                    variant: "destructive",
-                  })
-                  return
+                if (productBoxes.length >= bundleLimit) {
+                  router.push("/dashboard/upgrade")
+                } else {
+                  setShowCreateModal(true)
                 }
-                setShowCreateModal(true)
               }}
+              className={`bg-white text-black hover:bg-zinc-100 font-medium px-6`}
             >
               <Plus className="h-4 w-4 mr-2" />
-              Create Bundle
-              {isAtBundleLimit && " (Limit Reached)"}
+              {productBoxes.length >= bundleLimit ? "Want more bundles?" : "Create Bundle"}
             </Button>
           </DialogTrigger>
           <DialogContent className="bg-zinc-900 border-zinc-800 text-white">
@@ -1259,23 +1291,19 @@ export default function BundlesPage() {
           <div className="text-6xl mb-4">📦</div>
           <h3 className="text-xl font-medium text-white mb-2">No Bundles Yet</h3>
           <p className="text-zinc-400 mb-4">Create your first premium content bundle to get started</p>
+          {/* Update the empty state button to redirect to upgrade when at limit */}
           <Button
-            className="bg-red-600 hover:bg-red-700"
-            disabled={isAtBundleLimit}
             onClick={() => {
-              if (isAtBundleLimit) {
-                toast({
-                  title: "Bundle Limit Reached",
-                  description: "Free users can create up to 2 bundles. Upgrade to Creator Pro for unlimited bundles.",
-                  variant: "destructive",
-                })
-                return
+              if (productBoxes.length >= bundleLimit) {
+                router.push("/dashboard/upgrade")
+              } else {
+                setShowCreateModal(true)
               }
-              setShowCreateModal(true)
             }}
+            className="bg-red-600 hover:bg-red-700"
           >
             <Plus className="h-4 w-4 mr-2" />
-            Create Your First Bundle
+            {productBoxes.length >= bundleLimit ? "Want more bundles?" : "Create Your First Bundle"}
           </Button>
         </div>
       ) : (
@@ -1358,78 +1386,94 @@ export default function BundlesPage() {
                               <span className="ml-2 text-sm text-zinc-400">Loading content...</span>
                             </div>
                           ) : boxContent.length > 0 ? (
-                            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-                              {boxContent.map((item) => (
-                                <div key={item.id} className="group relative">
-                                  <div className="relative aspect-[9/16] bg-zinc-900 rounded-lg overflow-hidden shadow-md border border-transparent hover:border-white/20 transition-all duration-300">
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        handleRemoveContentFromBundle(productBox.id, item.id)
-                                      }}
-                                      className="absolute top-2 right-2 z-30 w-6 h-6 bg-black/80 hover:bg-black rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 shadow-lg"
-                                      title="Remove from bundle"
-                                    >
-                                      <X className="w-3 h-3 text-white" />
-                                    </button>
+                            <>
+                              <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+                                {boxContent.slice(0, BUNDLE_DISPLAY_LIMIT).map((item) => (
+                                  <div key={item.id} className="group relative">
+                                    <div className="relative aspect-[9/16] bg-zinc-900 rounded-lg overflow-hidden shadow-md border border-transparent hover:border-white/20 transition-all duration-300">
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          handleRemoveContentFromBundle(productBox.id, item.id)
+                                        }}
+                                        className="absolute top-2 right-2 z-30 w-6 h-6 bg-black/80 hover:bg-black rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 shadow-lg"
+                                        title="Remove from bundle"
+                                      >
+                                        <X className="w-3 h-3 text-white" />
+                                      </button>
 
-                                    {item.contentType === "video" ? (
-                                      <video
-                                        src={item.fileUrl}
-                                        className="w-full h-full object-cover cursor-pointer"
-                                        muted
-                                        preload="metadata"
-                                        poster={item.thumbnailUrl}
-                                        onMouseEnter={(e) => {
-                                          const video = e.target as HTMLVideoElement
-                                          video.play().catch(() => {})
-                                        }}
-                                        onMouseLeave={(e) => {
-                                          const video = e.target as HTMLVideoElement
-                                          video.pause()
-                                          video.currentTime = 0
-                                        }}
-                                        onClick={() => window.open(item.fileUrl, "_blank")}
-                                      />
-                                    ) : (
-                                      <div className="w-full h-full flex items-center justify-center cursor-pointer bg-zinc-800">
-                                        <div className="text-center">
-                                          <div className="text-2xl mb-1">
-                                            {item.contentType === "audio"
-                                              ? "🎵"
-                                              : item.contentType === "image"
-                                                ? "🖼️"
-                                                : "📄"}
+                                      {item.contentType === "video" ? (
+                                        <video
+                                          src={item.fileUrl}
+                                          className="w-full h-full object-cover cursor-pointer"
+                                          muted
+                                          preload="metadata"
+                                          poster={item.thumbnailUrl}
+                                          onMouseEnter={(e) => {
+                                            const video = e.target as HTMLVideoElement
+                                            video.play().catch(() => {})
+                                          }}
+                                          onMouseLeave={(e) => {
+                                            const video = e.target as HTMLVideoElement
+                                            video.pause()
+                                            video.currentTime = 0
+                                          }}
+                                          onClick={() => window.open(item.fileUrl, "_blank")}
+                                        />
+                                      ) : (
+                                        <div className="w-full h-full flex items-center justify-center cursor-pointer bg-zinc-800">
+                                          <div className="text-center">
+                                            <div className="text-2xl mb-1">
+                                              {item.contentType === "audio"
+                                                ? "🎵"
+                                                : item.contentType === "image"
+                                                  ? "🖼️"
+                                                  : "📄"}
+                                            </div>
                                           </div>
                                         </div>
-                                      </div>
-                                    )}
+                                      )}
 
-                                    {/* Play overlay for videos */}
-                                    {item.contentType === "video" && (
-                                      <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
-                                    )}
-                                  </div>
+                                      {/* Play overlay for videos */}
+                                      {item.contentType === "video" && (
+                                        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
+                                      )}
+                                    </div>
 
-                                  {/* File info */}
-                                  <div className="mt-2">
-                                    <p className="text-xs text-zinc-300 truncate font-light">{item.title}</p>
+                                    {/* File info */}
+                                    <div className="mt-2">
+                                      <p className="text-xs text-zinc-300 truncate font-light">{item.title}</p>
+                                    </div>
                                   </div>
+                                ))}
+
+                                {/* Add Content Placeholder - Only show when there's existing content */}
+                                <div
+                                  className="aspect-[9/16] bg-zinc-800/50 rounded-lg border-2 border-dashed border-zinc-700 flex flex-col items-center justify-center cursor-pointer hover:border-zinc-600 hover:bg-zinc-800/70 transition-all duration-200"
+                                  onClick={() => {
+                                    fetchUserUploads()
+                                    setShowAddContentModal(productBox.id)
+                                  }}
+                                >
+                                  <Plus className="w-6 h-6 text-zinc-500 mb-1" />
+                                  <p className="text-xs text-zinc-500 text-center px-1">Add Content</p>
                                 </div>
-                              ))}
-
-                              {/* Add Content Placeholder - Only show when there's existing content */}
-                              <div
-                                className="aspect-[9/16] bg-zinc-800/50 rounded-lg border-2 border-dashed border-zinc-700 flex flex-col items-center justify-center cursor-pointer hover:border-zinc-600 hover:bg-zinc-800/70 transition-all duration-200"
-                                onClick={() => {
-                                  fetchUserUploads()
-                                  setShowAddContentModal(productBox.id)
-                                }}
-                              >
-                                <Plus className="w-6 h-6 text-zinc-500 mb-1" />
-                                <p className="text-xs text-zinc-500 text-center px-1">Add Content</p>
                               </div>
-                            </div>
+
+                              {boxContent.length > BUNDLE_DISPLAY_LIMIT && (
+                                <div className="flex justify-center pt-4">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="border-zinc-700 text-zinc-300 bg-transparent hover:bg-zinc-800"
+                                    onClick={() => router.push(`/dashboard/bundles/${productBox.id}/content`)}
+                                  >
+                                    See all {boxContent.length} items
+                                    <ArrowRight className="h-3 w-3 ml-1" />
+                                  </Button>
+                                </div>
+                              )}
+                            </>
                           ) : (
                             // Empty state - Show centered Add Content button
                             <div className="text-center py-8">
@@ -1497,11 +1541,11 @@ export default function BundlesPage() {
 
       {/* Edit Bundle Modal */}
       <Dialog open={!!showEditModal} onOpenChange={() => setShowEditModal(null)}>
-        <DialogContent className="bg-zinc-900 border-zinc-800 text-white max-w-2xl">
-          <DialogHeader>
+        <DialogContent className="bg-zinc-900 border-zinc-800 text-white max-w-2xl max-h-[90vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle>Edit Bundle</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-4 overflow-y-auto flex-1 pr-2">
             <div>
               <Label htmlFor="edit-title">Title *</Label>
               <Input
@@ -1535,13 +1579,8 @@ export default function BundlesPage() {
                 onChange={(e) => setEditForm((prev) => ({ ...prev, price: e.target.value }))}
                 placeholder="9.99"
                 className="bg-zinc-800 border-zinc-700"
+                required
               />
-              <div className="mt-2 p-3 bg-amber-900/20 border border-amber-700/50 rounded-md">
-                <p className="text-xs text-amber-200">
-                  <strong>Note:</strong> Changing the price will create a new Stripe price automatically. However, you
-                  may need to manually update the price in your Stripe Product Catalog if there are any sync issues.
-                </p>
-              </div>
             </div>
 
             {/* Thumbnail Upload Section */}
@@ -1587,7 +1626,7 @@ export default function BundlesPage() {
                         const file = e.target.files?.[0]
                         if (file && showEditModal) {
                           // Validate file type
-                          const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"]
+                          const allowedTypes = ["image/jpeg", "image/jpg,image/png", "image/webp"]
                           if (!allowedTypes.includes(file.type)) {
                             toast({
                               title: "Invalid File Type",
@@ -1686,19 +1725,43 @@ export default function BundlesPage() {
               Select content from your uploads to add to this bundle:
             </p>
 
+            <div className="flex-shrink-0">
+              <NewFolderSelector
+                selectedFolderId={selectedFolderId}
+                onFolderSelect={setSelectedFolderId}
+                className="w-full"
+              />
+            </div>
+
             {uploadsLoading ? (
               <div className="flex items-center justify-center py-8 flex-1">
                 <Loader2 className="h-5 w-5 text-zinc-500 animate-spin" />
                 <span className="ml-2 text-sm text-zinc-400">Loading uploads...</span>
               </div>
-            ) : availableUploads.length === 0 ? (
+            ) : filteredUploads.length === 0 ? (
               <div className="text-center py-8 flex-1 flex items-center justify-center">
-                <p className="text-zinc-500">No uploads available. Upload some content first.</p>
+                <div className="space-y-2">
+                  <p className="text-zinc-500">
+                    {selectedFolderId
+                      ? "No uploads in selected folder."
+                      : "No uploads available. Upload some content first."}
+                  </p>
+                  {selectedFolderId && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSelectedFolderId(null)}
+                      className="border-zinc-700 text-zinc-300"
+                    >
+                      Show All Folders
+                    </Button>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="flex-1 overflow-y-auto">
                 <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-3 pb-4">
-                  {availableUploads.map((item) => (
+                  {filteredUploads.map((item) => (
                     <div key={item.id} className="group relative">
                       <div
                         className={`relative aspect-[9/16] bg-zinc-800 rounded-lg overflow-hidden cursor-pointer border-2 transition-all duration-200 ${

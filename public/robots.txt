@@ -1,0 +1,18 @@
+User-agent: *
+Allow: /
+Allow: /creator/*
+Allow: /api/og/*
+
+# Block private/admin areas
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /api/
+Disallow: /login
+Disallow: /signup
+Disallow: /debug
+
+# Allow specific API endpoints for SEO
+Allow: /api/og/
+Allow: /api/sitemap
+
+Sitemap: https://massclip.pro/sitemap.xml

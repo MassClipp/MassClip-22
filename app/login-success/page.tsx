@@ -20,8 +20,31 @@ export default function LoginSuccessPage() {
         console.log("📋 Session check result:", sessionData)
 
         if (sessionData.hasSession) {
-          console.log("✅ Session confirmed, redirecting to dashboard")
-          // Use window.location for a hard redirect
+          console.log("✅ Session confirmed, checking if first-time user")
+
+          try {
+            // Get the user's ID token for the API call
+            const user = sessionData.user
+            if (user) {
+              const idToken = await user.getIdToken()
+              const userProfileCheck = await fetch("/api/user/check-first-time", {
+                headers: {
+                  Authorization: `Bearer ${idToken}`,
+                },
+              })
+              const profileData = await userProfileCheck.json()
+
+              if (profileData.isFirstTime) {
+                console.log("🆕 First-time user detected, redirecting to membership page")
+                window.location.href = "/membership-plans"
+                return
+              }
+            }
+          } catch (error) {
+            console.log("⚠️ Could not check first-time status, proceeding to dashboard:", error)
+          }
+
+          console.log("✅ Returning user, redirecting to dashboard")
           window.location.href = "/dashboard"
         } else {
           console.log("❌ No session found, retrying...")

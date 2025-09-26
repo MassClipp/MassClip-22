@@ -4,6 +4,7 @@ import type React from "react"
 import { useState, useRef } from "react"
 import { Play, Pause, Download, Lock } from "lucide-react"
 import { formatFileSize } from "@/lib/utils"
+import Image from "next/image"
 
 interface PremiumVideoCardProps {
   id: string
@@ -95,10 +96,13 @@ export default function PremiumVideoCard({
             <source src={fileUrl} type="video/mp4" />
           </video>
         ) : (
-          <img
+          <Image
             src={thumbnailUrl || "/placeholder.svg?height=400&width=225&query=video thumbnail"}
             alt={title}
-            className="w-full h-full object-cover"
+            fill
+            className="object-cover"
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+            priority={false}
           />
         )}
 

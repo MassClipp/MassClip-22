@@ -1,7 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  serverExternalPackages: ["firebase-admin"],
   experimental: {
-    serverComponentsExternalPackages: ["firebase-admin"],
+    optimizePackageImports: ['lucide-react', '@radix-ui/react-icons'],
   },
   eslint: {
     ignoreDuringBuilds: true,
@@ -16,8 +17,20 @@ const nextConfig = {
       "storage.googleapis.com",
       "pub-3626123a908346a7a8be8d9295f44e26.r2.dev",
     ],
-    unoptimized: true,
+    unoptimized: false, // Enable Next.js image optimization
+    formats: ['image/webp', 'image/avif'],
   },
+  compress: true,
+  ...(process.env.ANALYZE === 'true' && {
+    webpack: (config) => {
+      config.plugins.push(
+        new (require('@next/bundle-analyzer')({
+          enabled: true,
+        }))()
+      )
+      return config
+    },
+  }),
   async headers() {
     return [
       {

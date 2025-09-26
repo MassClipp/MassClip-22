@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { initializeFirebaseAdmin } from "@/lib/firebase-admin"
-import { getMembership } from "@/lib/memberships-service"
+import { getStripeSubscriptionStatus } from "@/lib/stripe-subscription-service"
 
 export async function POST(request: Request) {
   try {
@@ -13,32 +13,40 @@ export async function POST(request: Request) {
     // Initialize Firebase Admin
     initializeFirebaseAdmin()
 
-    // Get membership data from the memberships collection
-    const membership = await getMembership(userId)
+    const stripeStatus = await getStripeSubscriptionStatus(userId)
 
-    if (!membership) {
+    if (!stripeStatus.isActive) {
       return NextResponse.json({
         plan: "free",
         isActive: false,
+        status: "inactive",
         features: {
           unlimitedDownloads: false,
           premiumContent: false,
           noWatermark: false,
           prioritySupport: false,
+          platformFeePercentage: 20,
+          maxVideosPerBundle: 10,
+          maxBundles: 2,
         },
       })
     }
 
     return NextResponse.json({
-      plan: membership.plan,
-      isActive: membership.isActive,
-      status: membership.status,
-      features: membership.features,
-      stripeCustomerId: membership.stripeCustomerId,
-      stripeSubscriptionId: membership.stripeSubscriptionId,
-      currentPeriodEnd: membership.currentPeriodEnd,
-      downloadsUsed: membership.downloadsUsed,
-      bundlesCreated: membership.bundlesCreated,
+      plan: stripeStatus.plan,
+      isActive: stripeStatus.isActive,
+      status: stripeStatus.status,
+      currentPeriodEnd: stripeStatus.currentPeriodEnd,
+      cancelAtPeriodEnd: stripeStatus.cancelAtPeriodEnd,
+      features: {
+        unlimitedDownloads: true,
+        premiumContent: true,
+        noWatermark: true,
+        prioritySupport: true,
+        platformFeePercentage: 10,
+        maxVideosPerBundle: null,
+        maxBundles: null,
+      },
     })
   } catch (error) {
     console.error("Error fetching membership status:", error)

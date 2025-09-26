@@ -4,12 +4,14 @@ import type React from "react"
 
 import { useState, useEffect } from "react"
 import { useRouter, usePathname } from "next/navigation"
-import { Menu, X, Heart, Search } from "lucide-react"
+import { Menu, X, Heart, Search, Upload, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import UserDropdown from "@/components/user-dropdown"
 import Logo from "@/components/logo"
 import { useAuth } from "@/contexts/auth-context"
 import { useUserPlan } from "@/hooks/use-user-plan"
+import { doc, getDoc } from "firebase/firestore"
+import { db } from "@/lib/firebase"
 
 interface DashboardHeaderProps {
   initialSearchQuery?: string
@@ -21,6 +23,7 @@ export default function DashboardHeader({ initialSearchQuery = "" }: DashboardHe
   const pathname = usePathname()
   const { user } = useAuth()
   const { isProUser } = useUserPlan()
+  const [username, setUsername] = useState<string | null>(null)
 
   // Only show search on explore page
   const showSearch = pathname === "/dashboard/explore"
@@ -30,6 +33,24 @@ export default function DashboardHeader({ initialSearchQuery = "" }: DashboardHe
   useEffect(() => {
     setSearchQuery(initialSearchQuery)
   }, [initialSearchQuery])
+
+  useEffect(() => {
+    const fetchUserData = async () => {
+      if (user) {
+        try {
+          const userDoc = await getDoc(doc(db, "users", user.uid))
+          if (userDoc.exists()) {
+            const userData = userDoc.data()
+            setUsername(userData.username || null)
+          }
+        } catch (error) {
+          console.error("Error fetching user data:", error)
+        }
+      }
+    }
+
+    fetchUserData()
+  }, [user])
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
@@ -49,38 +70,22 @@ export default function DashboardHeader({ initialSearchQuery = "" }: DashboardHe
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-zinc-800/50 bg-black/80 backdrop-blur-sm">
-      {isProUser && (
-        <div className="absolute top-2 left-4 z-50">
-          <div className="relative">
-            {/* Diamond shape with gradient */}
-            <div className="w-6 h-6 bg-gradient-to-br from-yellow-400 via-orange-500 to-red-500 transform rotate-45 shadow-lg border border-yellow-300/50"></div>
-            {/* Inner diamond for depth */}
-            <div className="absolute top-1 left-1 w-4 h-4 bg-gradient-to-br from-yellow-300 to-orange-400 transform rotate-45"></div>
-            {/* Sparkle effect */}
-            <div className="absolute -top-1 -right-1 w-2 h-2 bg-white rounded-full opacity-80 animate-pulse"></div>
-          </div>
-        </div>
-      )}
-
       <div className="container mx-auto px-4">
         <div className="flex h-16 items-center justify-between">
-          {/* Logo */}
-          <div className="flex items-center gap-4">
-            {isProUser && (
-              <div className="relative">
-                <div className="absolute -top-2 -left-2 z-10">
-                  <div className="relative">
-                    {/* Diamond shape with gradient */}
-                    <div className="w-6 h-6 bg-gradient-to-br from-yellow-400 via-orange-500 to-red-500 transform rotate-45 shadow-lg border border-yellow-300/50"></div>
-                    {/* Inner diamond for depth */}
-                    <div className="absolute top-1 left-1 w-4 h-4 bg-gradient-to-br from-yellow-300 to-orange-400 transform rotate-45"></div>
-                    {/* Sparkle effect */}
-                    <div className="absolute -top-1 -right-1 w-2 h-2 bg-white rounded-full opacity-80 animate-pulse"></div>
-                  </div>
-                </div>
-              </div>
-            )}
-            <Logo href="/dashboard" size="sm" />
+          {/* Left Section - Logo without PRO badge */}
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="lg:hidden"
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            >
+              {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </Button>
+
+            <div className="flex items-center gap-2">
+              <Logo href="/dashboard" size="sm" className="scale-75 md:scale-100" />
+            </div>
           </div>
 
           {/* Search Bar - Desktop (only on explore page) */}
@@ -123,21 +128,64 @@ export default function DashboardHeader({ initialSearchQuery = "" }: DashboardHe
           )}
 
           {/* Right Section */}
-          <div className="flex items-center gap-4">
-            {/* User Dropdown - Desktop */}
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 md:hidden">
+              <Button
+                onClick={() => router.push("/dashboard/upload")}
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-900/50"
+                title="Upload"
+              >
+                <Upload className="h-4 w-4" />
+              </Button>
+
+              {username && (
+                <Button
+                  onClick={() => window.open(`/creator/${username}`, "_blank")}
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-900/50"
+                  title="View Profile"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+
+            {/* Desktop buttons */}
+            <div className="hidden md:flex items-center gap-3">
+              <Button
+                onClick={() => router.push("/dashboard/upload")}
+                className="bg-white text-black hover:bg-zinc-100 font-medium"
+                size="sm"
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                Upload
+              </Button>
+
+              {username && (
+                <Button
+                  variant="outline"
+                  onClick={() => window.open(`/creator/${username}`, "_blank")}
+                  className="border-zinc-700 hover:bg-zinc-800"
+                  size="sm"
+                >
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  View Profile
+                </Button>
+              )}
+            </div>
+
+            {/* User Dropdown */}
             <div className="hidden md:block">
               <UserDropdown />
             </div>
 
-            {/* Mobile Menu Button */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="md:hidden"
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            >
-              {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-            </Button>
+            {/* Mobile user avatar */}
+            <div className="md:hidden">
+              <UserDropdown />
+            </div>
           </div>
         </div>
 
@@ -174,7 +222,7 @@ export default function DashboardHeader({ initialSearchQuery = "" }: DashboardHe
               variant="ghost"
               className="w-full text-zinc-400 hover:text-white hover:bg-zinc-900/50 rounded-lg px-4 py-2 transition-all duration-300 flex items-center justify-center gap-2"
             >
-              <Heart className="h-4 w-4" />
+              <Heart className="h-4 w-4 mr-2" />
               Favorites
             </Button>
           </div>
@@ -185,7 +233,76 @@ export default function DashboardHeader({ initialSearchQuery = "" }: DashboardHe
       {isMobileMenuOpen && (
         <div className="md:hidden border-t border-zinc-800/50">
           <div className="container mx-auto px-4 py-4">
-            <UserDropdown />
+            <div className="mb-4 space-y-3">
+              {/* PRO Badge - rectangular with curved ends */}
+              {isProUser && (
+                <div className="flex justify-center">
+                  <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-black px-4 py-1.5 rounded-full text-sm font-bold tracking-wide shadow-lg">
+                    PRO
+                  </div>
+                </div>
+              )}
+
+              {/* View Profile Button */}
+              {username && (
+                <Button
+                  onClick={() => {
+                    window.open(`/creator/${username}`, "_blank")
+                    setIsMobileMenuOpen(false)
+                  }}
+                  variant="outline"
+                  className="w-full border-zinc-700 hover:bg-zinc-800 text-white"
+                >
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  View Profile
+                </Button>
+              )}
+            </div>
+
+            <nav className="space-y-2">
+              <Button
+                onClick={() => {
+                  router.push("/dashboard")
+                  setIsMobileMenuOpen(false)
+                }}
+                variant="ghost"
+                className="w-full justify-start text-zinc-400 hover:text-white hover:bg-zinc-900/50"
+              >
+                Dashboard
+              </Button>
+              <Button
+                onClick={() => {
+                  router.push("/dashboard/explore")
+                  setIsMobileMenuOpen(false)
+                }}
+                variant="ghost"
+                className="w-full justify-start text-zinc-400 hover:text-white hover:bg-zinc-900/50"
+              >
+                Explore
+              </Button>
+              <Button
+                onClick={() => {
+                  router.push("/dashboard/favorites")
+                  setIsMobileMenuOpen(false)
+                }}
+                variant="ghost"
+                className="w-full justify-start text-zinc-400 hover:text-white hover:bg-zinc-900/50"
+              >
+                <Heart className="h-4 w-4 mr-2" />
+                Favorites
+              </Button>
+              <Button
+                onClick={() => {
+                  router.push("/dashboard/upload")
+                  setIsMobileMenuOpen(false)
+                }}
+                variant="ghost"
+                className="w-full justify-start text-zinc-400 hover:text-white hover:bg-zinc-900/50"
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                Upload
+              </Button>
+            </nav>
           </div>
         </div>
       )}

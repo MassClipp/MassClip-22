@@ -29,6 +29,16 @@ console.log("   Collection: videos")
 console.log("   Fields: uid (ASC), type (ASC), createdAt (DESC)")
 console.log("")
 
+console.log("4. Folders - User + Parent + Deleted + Created Date")
+console.log("   Collection: folders")
+console.log("   Fields: userId (ASC), parentId (ASC), isDeleted (ASC), createdAt (DESC)")
+console.log("")
+
+console.log("5. Folders - User + Deleted + Created Date")
+console.log("   Collection: folders")
+console.log("   Fields: userId (ASC), isDeleted (ASC), createdAt (DESC)")
+console.log("")
+
 console.log("🚀 How to create these indexes:")
 console.log("")
 console.log("Option 1: Automatic (Recommended)")

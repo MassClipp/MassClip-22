@@ -5,7 +5,7 @@ import type React from "react"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
-import { Bell, Search, User, Upload, ExternalLink } from "lucide-react"
+import { Search, User, Upload, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -26,27 +26,42 @@ export default function DashboardHeader() {
   const { user, signOut } = useAuth()
   const [searchQuery, setSearchQuery] = useState("")
   const [userData, setUserData] = useState<any>(null)
-  const [notifications, setNotifications] = useState<any[]>([])
+  const [isProUser, setIsProUser] = useState(false)
 
-  // Fetch user data
   useEffect(() => {
     const fetchUserData = async () => {
       if (!user) return
 
       try {
-        const userDoc = await getDoc(doc(db, "users", user.uid))
+        const [userDoc, membershipResponse] = await Promise.all([
+          getDoc(doc(db, "users", user.uid)),
+          fetch("/api/membership-status", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId: user.uid }),
+          }).catch(() => null),
+        ])
+
         if (userDoc.exists()) {
           setUserData(userDoc.data())
         }
+
+        let isPro = false
+        if (membershipResponse?.ok) {
+          const membershipData = await membershipResponse.json()
+          isPro = membershipData.isActive
+        }
+
+        setIsProUser(isPro)
       } catch (error) {
         console.error("Error fetching user data:", error)
+        setIsProUser(false)
       }
     }
 
     fetchUserData()
   }, [user])
 
-  // Handle search
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
     if (searchQuery.trim()) {
@@ -54,7 +69,6 @@ export default function DashboardHeader() {
     }
   }
 
-  // Handle sign out
   const handleSignOut = async () => {
     try {
       await signOut()
@@ -69,7 +83,16 @@ export default function DashboardHeader() {
       <div className="container flex h-16 items-center justify-between px-4">
         <div className="flex items-center gap-4">
           <NavDropdown />
-          <Logo href="/dashboard" size="sm" />
+          <div className="flex items-center gap-2">
+            <Logo href="/dashboard" size="sm" />
+            {isProUser && (
+              <div className="relative">
+                <div className="w-7 h-7 bg-gradient-to-br from-blue-500 to-white rounded-full shadow-lg border border-blue-200/30 flex items-center justify-center">
+                  <span className="text-[9px] font-bold text-white leading-none">PRO</span>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center gap-3">
@@ -86,7 +109,7 @@ export default function DashboardHeader() {
 
           <Button
             onClick={() => router.push("/dashboard/upload")}
-            className="hidden md:flex bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 border-none"
+            className="hidden md:flex bg-white text-black hover:bg-zinc-100 font-medium"
             size="sm"
           >
             <Upload className="h-4 w-4 mr-2" />
@@ -106,28 +129,6 @@ export default function DashboardHeader() {
               View Profile
             </Button>
           )}
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="relative">
-                <Bell className="h-5 w-5 text-zinc-400" />
-                {notifications.length > 0 && (
-                  <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500"></span>
-                )}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80 bg-zinc-900 border-zinc-800">
-              <DropdownMenuLabel>Notifications</DropdownMenuLabel>
-              <DropdownMenuSeparator className="bg-zinc-800" />
-              {notifications.length > 0 ? (
-                notifications.map((notification, index) => (
-                  <DropdownMenuItem key={index}>{notification.message}</DropdownMenuItem>
-                ))
-              ) : (
-                <div className="py-4 text-center text-sm text-zinc-500">No new notifications</div>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

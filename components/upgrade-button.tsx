@@ -34,7 +34,7 @@ export default function UpgradeButton({ children, className, onClick, navigateOn
 
     // If navigateOnly is true, just navigate to the membership plans page
     if (navigateOnly) {
-      router.push("/membership-plans")
+      router.push("/dashboard/pricing")
       return
     }
 
@@ -64,7 +64,7 @@ export default function UpgradeButton({ children, className, onClick, navigateOn
       }
 
       // Create checkout session using the membership endpoint for consistency
-      const response = await fetch("/api/stripe/checkout/membership", {
+      const response = await fetch("/api/stripe/checkout/pricing", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -86,7 +86,7 @@ export default function UpgradeButton({ children, className, onClick, navigateOn
     } catch (error) {
       console.error("Error creating checkout session:", error)
       // If there's an error, redirect to the membership plans page as a fallback
-      router.push("/membership-plans")
+      router.push("/dashboard/pricing")
     } finally {
       setIsLoading(false)
     }

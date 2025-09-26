@@ -15,92 +15,153 @@ export interface BehavioralEmailUser {
 }
 
 export interface BehavioralEmailTemplate {
-  type: "stripe" | "bundles" | "free-content" | "content"
+  type: "stripe" | "bundles" | "free-content" | "content" | "stripe-connected" | "bundle-purchased" | "bundle-sold"
   subject: string
   html: string
-  resendAfterDays: number
+  resendAfterDays?: number // Optional for one-time emails
 }
 
 const BEHAVIORAL_EMAIL_TEMPLATES: BehavioralEmailTemplate[] = [
   {
     type: "stripe",
-    subject: "Set up your payments",
+    subject: "Let's get you paid! 💰",
     resendAfterDays: 7,
     html: `
       <!DOCTYPE html>
       <html lang="en">
         <head>
           <meta charset="UTF-8" />
-          <title>Set up your payments</title>
+          <title>Let's get you paid!</title>
         </head>
         <body style="font-family: Arial, sans-serif; font-size: 16px; line-height: 1.5; color: #000;">
-          <p>Hi there,</p>
-          <p>We noticed your Stripe account is not connected. Without Stripe, MassClip cannot send payouts when people purchase your content.</p>
-          <p>It only takes a couple of minutes to finish this step. Once it is connected, you will be ready to receive payments directly.</p>
-          <p><a href="https://www.massclip.pro/dashboard/earnings" style="color: #007BFF; text-decoration: underline;">You can connect your Stripe account here</a>.</p>
-          <p>Best,<br>MassClip</p>
+          <p>Hey there!</p>
+          <p>We want you to get paid! 💰 Your Stripe account isn't connected yet, which means you're missing out on earning money when people buy your amazing content.</p>
+          <p>The good news? It only takes 2 minutes to set up, and then you'll be ready to start making money from day one!</p>
+          <p><a href="https://www.massclip.pro/dashboard/earnings" style="color: #007BFF; text-decoration: underline;">Connect your Stripe account here and start earning!</a></p>
+          <p>Can't wait to see your first sale!<br>The MassClip Team</p>
         </body>
       </html>
     `,
   },
   {
     type: "bundles",
-    subject: "Create your first bundle",
+    subject: "Your first bundle is waiting! 📦",
     resendAfterDays: 7,
     html: `
       <!DOCTYPE html>
       <html lang="en">
         <head>
           <meta charset="UTF-8" />
-          <title>Create your first bundle</title>
+          <title>Your first bundle is waiting!</title>
         </head>
         <body style="font-family: Arial, sans-serif; font-size: 16px; line-height: 1.5; color: #000;">
-          <p>Hi there,</p>
-          <p>We noticed you have not created a bundle yet. Bundles are how your content is organized and displayed to buyers.</p>
-          <p>Once you add your first bundle, your storefront will begin to take shape and people will have something to purchase.</p>
-          <p><a href="https://www.massclip.pro/dashboard/bundles" style="color: #007BFF; text-decoration: underline;">You can create your first bundle here</a>.</p>
-          <p>Best,<br>MassClip</p>
+          <p>Hey there!</p>
+          <p>You're so close to having an awesome storefront! 📦 All you need is your first bundle to get things rolling.</p>
+          <p>Think of bundles as your product packages - they're what people will see and want to buy. Once you create one, your storefront comes to life and customers have something exciting to purchase!</p>
+          <p><a href="https://www.massclip.pro/dashboard/bundles" style="color: #007BFF; text-decoration: underline;">Create your first bundle here - it's easier than you think!</a></p>
+          <p>You've got this!<br>The MassClip Team</p>
         </body>
       </html>
     `,
   },
   {
     type: "free-content",
-    subject: "Upload free content to build trust",
+    subject: "People want to see your work! 👀",
     resendAfterDays: 7,
     html: `
       <!DOCTYPE html>
       <html lang="en">
         <head>
           <meta charset="UTF-8" />
-          <title>Upload free content to build trust</title>
+          <title>People want to see your work!</title>
         </head>
         <body style="font-family: Arial, sans-serif; font-size: 16px; line-height: 1.5; color: #000;">
-          <p>Hi there,</p>
-          <p>We noticed you have not uploaded any free content yet. Free content gives potential buyers a preview of your work and helps them feel confident about purchasing.</p>
-          <p>Even one free upload can make a difference.</p>
-          <p><a href="https://www.massclip.pro/dashboard/free-content" style="color: #007BFF; text-decoration: underline;">You can upload free content here</a>.</p>
-          <p>Best,<br>MassClip</p>
+          <p>Hey there!</p>
+          <p>People want to see your content! 👀 Free content is like giving potential buyers a taste of your amazing work - and trust us, they're going to want more.</p>
+          <p>Even just one free upload can make all the difference. It shows people what you're capable of and gets them excited to buy your premium stuff!</p>
+          <p><a href="https://www.massclip.pro/dashboard/free-content" style="color: #007BFF; text-decoration: underline;">Upload some free content and watch the magic happen!</a></p>
+          <p>Your audience is waiting!<br>The MassClip Team</p>
         </body>
       </html>
     `,
   },
   {
     type: "content",
-    subject: "Upload your first piece of content",
+    subject: "Time to share your awesome content! 🎬",
     resendAfterDays: 7,
     html: `
       <!DOCTYPE html>
       <html lang="en">
         <head>
           <meta charset="UTF-8" />
-          <title>Upload your first piece of content</title>
+          <title>Time to share your awesome content!</title>
         </head>
         <body style="font-family: Arial, sans-serif; font-size: 16px; line-height: 1.5; color: #000;">
-          <p>Hi there,</p>
-          <p>It looks like you have not uploaded any content yet. Uploading is the first step toward creating bundles, sharing free previews, and making your storefront active.</p>
-          <p><a href="https://www.massclip.pro/dashboard" style="color: #007BFF; text-decoration: underline;">You can upload your content here</a>.</p>
-          <p>Best,<br>MassClip</p>
+          <p>Hey there!</p>
+          <p>Your content is waiting to shine! 🎬 Uploading your first piece is the exciting first step toward building bundles, sharing previews, and creating a storefront that people will love.</p>
+          <p>We know you've got amazing content to share - let's get it out there for the world to see!</p>
+          <p><a href="https://www.massclip.pro/dashboard" style="color: #007BFF; text-decoration: underline;">Upload your content here and get started!</a></p>
+          <p>The world needs to see what you've created!<br>The MassClip Team</p>
+        </body>
+      </html>
+    `,
+  },
+  {
+    type: "stripe-connected",
+    subject: "You're ready to start selling! 🚀",
+    html: `
+      <!DOCTYPE html>
+      <html lang="en">
+        <head>
+          <meta charset="UTF-8" />
+          <title>You're ready to start selling!</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; font-size: 16px; line-height: 1.5; color: #000;">
+          <p>Hey there!</p>
+          <p>Congratulations! Your Stripe account is now connected and you're officially ready to start selling! 🚀</p>
+          <p>This is huge - you can now accept payments, track your earnings, and watch your business grow. Every bundle you create and every piece of content you upload can now turn into real money in your pocket.</p>
+          <p><a href="https://www.massclip.pro/dashboard/earnings" style="color: #007BFF; text-decoration: underline;">Check out your earnings dashboard and start making money!</a></p>
+          <p>Here's to your first sale!<br>The MassClip Team</p>
+        </body>
+      </html>
+    `,
+  },
+  {
+    type: "bundle-purchased",
+    subject: "Thanks for your purchase! 🎉",
+    html: `
+      <!DOCTYPE html>
+      <html lang="en">
+        <head>
+          <meta charset="UTF-8" />
+          <title>Thanks for your purchase!</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; font-size: 16px; line-height: 1.5; color: #000;">
+          <p>Hey there!</p>
+          <p>Thank you so much for your purchase! 🎉 You've just supported an amazing creator and got some incredible content in return.</p>
+          <p>Your bundle is ready for download and we know you're going to love what's inside. The creator put their heart into making this content just for people like you!</p>
+          <p><a href="https://www.massclip.pro/dashboard/purchases" style="color: #007BFF; text-decoration: underline;">Access your purchased content here</a></p>
+          <p>Enjoy your new content!<br>The MassClip Team</p>
+        </body>
+      </html>
+    `,
+  },
+  {
+    type: "bundle-sold",
+    subject: "You made a sale! 💸",
+    html: `
+      <!DOCTYPE html>
+      <html lang="en">
+        <head>
+          <meta charset="UTF-8" />
+          <title>You made a sale!</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; font-size: 16px; line-height: 1.5; color: #000;">
+          <p>Hey there!</p>
+          <p>Congratulations! Someone just bought your bundle! 💸 This is what it's all about - your hard work and creativity just turned into real money.</p>
+          <p>Your earnings have been updated and the payment is on its way to your connected Stripe account. Keep creating amazing content because people clearly love what you're doing!</p>
+          <p><a href="https://www.massclip.pro/dashboard/earnings" style="color: #007BFF; text-decoration: underline;">Check your earnings and celebrate this win!</a></p>
+          <p>Here's to many more sales!<br>The MassClip Team</p>
         </body>
       </html>
     `,
@@ -175,10 +236,24 @@ export class BehavioralEmailService {
       // Get all users who haven't unsubscribed
       const behavioralSnapshot = await adminDb.collection("behavioralEmails").where("unsubscribed", "==", false).get()
 
-      for (const doc of behavioralSnapshot.docs) {
-        const user = doc.data() as BehavioralEmailUser
+      const users = behavioralSnapshot.docs.map((doc) => doc.data() as BehavioralEmailUser)
+      console.log(`🔄 Processing ${users.length} users for behavioral emails...`)
+
+      for (let i = 0; i < users.length; i++) {
+        const user = users[i]
+        console.log(`📧 Processing user ${i + 1}/${users.length}: ${user.email}`)
+
         await this.checkUserAndSendEmails(user)
+
+        // Add delay between users to prevent rate limiting
+        // Wait 1 second between each user to be safe (allows up to 4 emails per user if needed)
+        if (i < users.length - 1) {
+          console.log(`⏳ Waiting 1 second before processing next user...`)
+          await new Promise((resolve) => setTimeout(resolve, 1000))
+        }
       }
+
+      console.log(`✅ Completed processing all ${users.length} users`)
     } catch (error) {
       console.error("❌ Error in checkAndSendBehavioralEmails:", error)
     }
@@ -189,28 +264,47 @@ export class BehavioralEmailService {
       const now = new Date()
       const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
 
+      const emailsToSend: BehavioralEmailTemplate["type"][] = []
+
       // Check Stripe connection
       const hasStripe = await this.hasStripeConnected(user.uid)
       if (!hasStripe && (!user.lastStripeEmailSent || user.lastStripeEmailSent < sevenDaysAgo)) {
-        await this.sendBehavioralEmail(user, "stripe")
+        emailsToSend.push("stripe")
       }
 
       // Check bundle count
       const bundleCount = await this.getBundleCount(user.uid)
       if (bundleCount === 0 && (!user.lastBundleEmailSent || user.lastBundleEmailSent < sevenDaysAgo)) {
-        await this.sendBehavioralEmail(user, "bundles")
+        emailsToSend.push("bundles")
       }
 
       // Check free content
       const freeContentCount = await this.getFreeContentCount(user.uid)
       if (freeContentCount === 0 && (!user.lastFreeContentEmailSent || user.lastFreeContentEmailSent < sevenDaysAgo)) {
-        await this.sendBehavioralEmail(user, "free-content")
+        emailsToSend.push("free-content")
       }
 
       // Check total content
       const totalContentCount = await this.getTotalContentCount(user.uid)
       if (totalContentCount === 0 && (!user.lastContentEmailSent || user.lastContentEmailSent < sevenDaysAgo)) {
-        await this.sendBehavioralEmail(user, "content")
+        emailsToSend.push("content")
+      }
+
+      // Send emails with delays between each one
+      for (let i = 0; i < emailsToSend.length; i++) {
+        const emailType = emailsToSend[i]
+        console.log(`📤 Sending ${emailType} email to ${user.email}`)
+
+        await this.sendBehavioralEmail(user, emailType)
+
+        // Wait 500ms between emails for the same user (2 requests per second = 500ms apart)
+        if (i < emailsToSend.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 500))
+        }
+      }
+
+      if (emailsToSend.length > 0) {
+        console.log(`✅ Sent ${emailsToSend.length} emails to ${user.email}`)
       }
     } catch (error) {
       console.error(`❌ Error checking user ${user.email}:`, error)
@@ -283,6 +377,36 @@ export class BehavioralEmailService {
       }
     } catch (error) {
       console.error(`❌ Failed to unsubscribe user from behavioral emails: ${email}`, error)
+    }
+  }
+
+  static async sendStripeConnectedEmail(uid: string, email: string, displayName?: string): Promise<void> {
+    try {
+      const user: BehavioralEmailUser = { uid, email, displayName, unsubscribed: false }
+      await this.sendBehavioralEmail(user, "stripe-connected")
+      console.log(`✅ Sent Stripe connected email to ${email}`)
+    } catch (error) {
+      console.error(`❌ Failed to send Stripe connected email to ${email}:`, error)
+    }
+  }
+
+  static async sendBundlePurchasedEmail(buyerEmail: string, bundleTitle: string): Promise<void> {
+    try {
+      const user: BehavioralEmailUser = { uid: "", email: buyerEmail, unsubscribed: false }
+      await this.sendBehavioralEmail(user, "bundle-purchased")
+      console.log(`✅ Sent bundle purchased email to ${buyerEmail}`)
+    } catch (error) {
+      console.error(`❌ Failed to send bundle purchased email to ${buyerEmail}:`, error)
+    }
+  }
+
+  static async sendBundleSoldEmail(sellerUid: string, sellerEmail: string, bundleTitle: string): Promise<void> {
+    try {
+      const user: BehavioralEmailUser = { uid: sellerUid, email: sellerEmail, unsubscribed: false }
+      await this.sendBehavioralEmail(user, "bundle-sold")
+      console.log(`✅ Sent bundle sold email to ${sellerEmail}`)
+    } catch (error) {
+      console.error(`❌ Failed to send bundle sold email to ${sellerEmail}:`, error)
     }
   }
 }

@@ -62,8 +62,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse request body
-    const { fileName, fileType } = await request.json()
-    console.log("🔍 [R2 Upload] Request data:", { fileName, fileType })
+    const { fileName, fileType, folderId } = await request.json()
+    console.log("🔍 [R2 Upload] Request data:", { fileName, fileType, folderId })
 
     if (!fileName || !fileType) {
       console.error("❌ [R2 Upload] Missing required fields")
@@ -89,17 +89,45 @@ export async function POST(request: NextRequest) {
       console.error("❌ [R2 Upload] Error fetching user profile:", error)
     }
 
-    // Create username-based file path
+    let folderPath = ""
+    if (folderId) {
+      try {
+        console.log("🔍 [R2 Upload] Building folder path for:", folderId)
+        const folderDocRef = db.collection("folders").doc(folderId)
+        const folderDoc = await folderDocRef.get()
+
+        if (folderDoc && folderDoc.exists) {
+          const folderData = folderDoc.data() || {}
+          // Verify folder belongs to user
+          if (folderData.uid === user.uid) {
+            folderPath = folderData.path || ""
+            console.log("✅ [R2 Upload] Using folder path:", folderPath)
+          } else {
+            console.warn("⚠️ [R2 Upload] Folder access denied for user:", user.uid)
+          }
+        }
+      } catch (error) {
+        console.error("❌ [R2 Upload] Error fetching folder:", error)
+      }
+    }
+
+    // Create username-based file path with folder support
     const timestamp = Date.now()
     const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, "_") // Sanitize filename
     let fileKey: string
 
     if (username) {
-      // Store in creators/username/ folder
-      fileKey = `creators/${username}/${timestamp}-${sanitizedFileName}`
+      // Store in creators/username/[folder-path]/ folder
+      const basePath = `creators/${username}`
+      fileKey = folderPath
+        ? `${basePath}/${folderPath}/${timestamp}-${sanitizedFileName}`
+        : `${basePath}/${timestamp}-${sanitizedFileName}`
     } else {
       // Fallback to user ID folder
-      fileKey = `users/${user.uid}/${timestamp}-${sanitizedFileName}`
+      const basePath = `users/${user.uid}`
+      fileKey = folderPath
+        ? `${basePath}/${folderPath}/${timestamp}-${sanitizedFileName}`
+        : `${basePath}/${timestamp}-${sanitizedFileName}`
     }
 
     console.log("🔍 [R2 Upload] Generated file key:", fileKey)
@@ -153,6 +181,8 @@ export async function POST(request: NextRequest) {
       publicUrl: publicUrl,
       key: fileKey,
       username: username,
+      folderId: folderId || null,
+      folderPath: folderPath || null,
     })
   } catch (error) {
     console.error("❌ [R2 Upload] Error generating upload URL:", error)

@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react"
 import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
 import {
   Loader2,
   Trash2,
@@ -16,16 +15,17 @@ import {
   Music,
   ImageIcon,
   File,
+  Video,
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/use-toast"
-import UploadSelector from "@/components/upload-selector"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
 import { VideoPreviewPlayer } from "@/components/video-preview-player"
 import { motion, AnimatePresence } from "framer-motion"
 import { safelyConvertToDate, safelyFormatRelativeTime } from "@/lib/date-utils"
+import NewFolderSelector from "@/components/new-folder-selector"
 
 interface FreeContentItem {
   id: string
@@ -34,6 +34,17 @@ interface FreeContentItem {
   type: string
   size?: number
   addedAt: any // Can be various date formats
+}
+
+interface Upload {
+  id: string
+  title: string
+  fileUrl: string
+  type: string
+  size?: number
+  thumbnailUrl?: string
+  folder?: string // Added folder property
+  folderId?: string // Include folderId for proper filtering
 }
 
 const FILE_TYPE_ICONS = {
@@ -45,11 +56,11 @@ const FILE_TYPE_ICONS = {
 }
 
 const FILE_TYPE_COLORS = {
-  video: "text-blue-500",
-  audio: "text-green-500",
-  image: "text-purple-500",
-  document: "text-orange-500",
-  other: "text-gray-500",
+  video: "text-white",
+  audio: "text-white",
+  image: "text-white",
+  document: "text-white",
+  other: "text-white",
 }
 
 export default function FreeContentPage() {
@@ -59,8 +70,11 @@ export default function FreeContentPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [showAddContentDialog, setShowAddContentDialog] = useState(false)
+  const [uploads, setUploads] = useState<Upload[]>([])
+  const [selectedUploadIds, setSelectedUploadIds] = useState<string[]>([])
+  const [uploadsLoading, setUploadsLoading] = useState(false)
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
 
-  // Fetch free content
   const fetchFreeContent = async () => {
     if (!user) return
 
@@ -80,18 +94,11 @@ export default function FreeContentPage() {
 
       const data = await response.json()
 
-      // Add logging after API response
-      console.log("✅ [Free Content] Raw API Response:", data)
-      console.log("✅ [Free Content] Free content array:", data.freeContent)
-
-      // Safely process the data with proper date handling
       const processedContent = (data.freeContent || []).map((item: any) => ({
         ...item,
-        addedAt: safelyConvertToDate(item.addedAt), // Convert to safe Date object
+        addedAt: safelyConvertToDate(item.addedAt),
       }))
 
-      // Add logging before setting the state
-      console.log(`✅ [Free Content] Setting ${processedContent.length} items to state`)
       setFreeContent(processedContent)
     } catch (error) {
       console.error("Error fetching free content:", error)
@@ -105,13 +112,89 @@ export default function FreeContentPage() {
     }
   }
 
+  const fetchUploads = async () => {
+    if (!user) return
+
+    try {
+      setUploadsLoading(true)
+      const token = await user.getIdToken()
+
+      let response = await fetch("/api/creator/uploads", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      })
+
+      let data
+      if (response.ok) {
+        data = await response.json()
+        console.log("✅ [Free Content] Creator uploads API Response:", data)
+      } else {
+        console.log("⚠️ [Free Content] Creator uploads failed, trying uploads API")
+        response = await fetch("/api/uploads", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (response.ok) {
+          data = await response.json()
+          console.log("✅ [Free Content] Uploads API Response:", data)
+        } else {
+          throw new Error(`HTTP ${response.status}: Failed to fetch uploads`)
+        }
+      }
+
+      const uploadsData = Array.isArray(data.uploads)
+        ? data.uploads
+        : Array.isArray(data.videos)
+          ? data.videos
+          : Array.isArray(data)
+            ? data
+            : []
+
+      const freeContentIds = freeContent.map((item) => item.id)
+      const availableUploads = uploadsData
+        .filter((upload: any) => !freeContentIds.includes(upload.id))
+        .map((upload: any) => ({
+          id: upload.id,
+          title: upload.title || upload.filename || upload.name || "Untitled",
+          fileUrl: upload.fileUrl,
+          type: upload.type || upload.mimeType?.split("/")[0] || "document",
+          size: upload.size || upload.fileSize,
+          thumbnailUrl: upload.thumbnailUrl,
+          folder: upload.folder,
+          folderId: upload.folderId,
+        }))
+
+      setUploads(availableUploads)
+      console.log(`✅ [Free Content] Loaded ${availableUploads.length} available uploads`)
+    } catch (error) {
+      console.error("Error fetching uploads:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load uploads",
+        variant: "destructive",
+      })
+    } finally {
+      setUploadsLoading(false)
+    }
+  }
+
   useEffect(() => {
     if (user) {
       fetchFreeContent()
     }
   }, [user])
 
-  // Remove from free content
+  useEffect(() => {
+    if (showAddContentDialog && user) {
+      fetchUploads()
+    }
+  }, [showAddContentDialog, user, freeContent])
+
   const removeFromFreeContent = async (id: string) => {
     if (!user) return
 
@@ -133,21 +216,19 @@ export default function FreeContentPage() {
         description: "Item removed from free content",
       })
 
-      // Update the list
       setFreeContent(freeContent.filter((item) => item.id !== id))
     } catch (error) {
       console.error("Error removing from free content:", error)
       toast({
         title: "Error",
-        description: "Failed to remove item from free content",
+        description: error instanceof Error ? error.message : "Failed to remove item from free content",
         variant: "destructive",
       })
     }
   }
 
-  // Add selected content to free content
-  const handleAddSelectedContent = async (uploadIds: string[]) => {
-    if (!user || uploadIds.length === 0) return
+  const handleAddToLibrary = async () => {
+    if (!user || selectedUploadIds.length === 0) return
 
     try {
       const token = await user.getIdToken()
@@ -157,7 +238,7 @@ export default function FreeContentPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ uploadIds }),
+        body: JSON.stringify({ uploadIds: selectedUploadIds }),
       })
 
       if (!response.ok) {
@@ -167,11 +248,12 @@ export default function FreeContentPage() {
 
       toast({
         title: "Success!",
-        description: `${uploadIds.length} item(s) added to free content`,
+        description: `${selectedUploadIds.length} item(s) added to free content`,
       })
 
       setShowAddContentDialog(false)
-      fetchFreeContent() // Refresh the list
+      setSelectedUploadIds([])
+      fetchFreeContent()
     } catch (error) {
       console.error("Error adding content:", error)
       toast({
@@ -182,7 +264,12 @@ export default function FreeContentPage() {
     }
   }
 
-  // Copy URL to clipboard
+  const toggleUploadSelection = (uploadId: string) => {
+    setSelectedUploadIds((prev) =>
+      prev.includes(uploadId) ? prev.filter((id) => id !== uploadId) : [...prev, uploadId],
+    )
+  }
+
   const copyToClipboard = async (url: string) => {
     try {
       await navigator.clipboard.writeText(url)
@@ -199,7 +286,6 @@ export default function FreeContentPage() {
     }
   }
 
-  // Format file size
   const formatFileSize = (bytes?: number) => {
     if (!bytes) return "Unknown size"
     const sizes = ["Bytes", "KB", "MB", "GB"]
@@ -207,8 +293,12 @@ export default function FreeContentPage() {
     return Math.round((bytes / Math.pow(1024, i)) * 100) / 100 + " " + sizes[i]
   }
 
-  // Filter content based on search term
   const filteredContent = freeContent.filter((item) => item.title.toLowerCase().includes(searchTerm.toLowerCase()))
+
+  const filteredUploads = uploads.filter((upload) => {
+    if (!selectedFolderId) return true
+    return upload.folderId === selectedFolderId || upload.folder === selectedFolderId
+  })
 
   if (loading || authLoading) {
     return (
@@ -230,111 +320,92 @@ export default function FreeContentPage() {
   }
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Free Content</h1>
-          <p className="text-zinc-400 mt-1">Manage content that appears in the free section of your creator profile</p>
+    <div className="space-y-6">
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 pb-6 border-b border-zinc-800/50">
+        <div className="space-y-2">
+          <h1 className="text-2xl font-semibold text-white tracking-tight">Content Library</h1>
+          <p className="text-zinc-400 text-sm">
+            Manage and organize content that appears in the public section of your creator profile
+          </p>
         </div>
 
         <div className="flex items-center gap-3">
           <Button
+            variant="outline"
+            onClick={fetchFreeContent}
+            className="border-zinc-700/50 bg-zinc-900/50 hover:bg-zinc-800/50 text-zinc-300"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+
+          <Button
             onClick={() => setShowAddContentDialog(true)}
-            className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800"
+            className="bg-white text-black hover:bg-zinc-100 font-medium px-6"
           >
             <PlusCircle className="h-4 w-4 mr-2" />
             Add Content
           </Button>
-          <Button
-            variant="outline"
-            onClick={fetchFreeContent}
-            className="border-zinc-700 hover:bg-zinc-800 bg-transparent"
-          >
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Refresh
-          </Button>
         </div>
       </div>
 
-      {/* Stats Cards */}
       <div className="grid grid-cols-3 gap-4">
-        <Card className="bg-zinc-900/60 border-zinc-800/50">
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-white">{freeContent.length}</div>
-            <div className="text-sm text-zinc-400">Total Items</div>
-          </CardContent>
-        </Card>
-        <Card className="bg-zinc-900/60 border-zinc-800/50">
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-blue-500">
-              {freeContent.filter((item) => item.type === "video").length}
-            </div>
-            <div className="text-sm text-zinc-400">Videos</div>
-          </CardContent>
-        </Card>
-        <Card className="bg-zinc-900/60 border-zinc-800/50">
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-purple-500">
-              {freeContent.filter((item) => item.type === "image").length}
-            </div>
-            <div className="text-sm text-zinc-400">Images</div>
-          </CardContent>
-        </Card>
+        <div className="bg-zinc-900/30 border border-zinc-800/30 rounded-lg p-4">
+          <div className="text-2xl font-semibold text-white mb-1">{freeContent.length}</div>
+          <div className="text-xs text-white uppercase tracking-wide">Total Items</div>
+        </div>
+        <div className="bg-zinc-900/30 border border-zinc-800/30 rounded-lg p-4">
+          <div className="text-2xl font-semibold text-white mb-1">
+            {freeContent.filter((item) => item.type === "video").length}
+          </div>
+          <div className="text-xs text-white uppercase tracking-wide">Videos</div>
+        </div>
+        <div className="bg-zinc-900/30 border border-zinc-800/30 rounded-lg p-4">
+          <div className="text-2xl font-semibold text-white mb-1">
+            {freeContent.filter((item) => item.type === "image").length}
+          </div>
+          <div className="text-xs text-white uppercase tracking-wide">Images</div>
+        </div>
       </div>
 
-      {/* Search */}
       <div className="relative w-full md:w-96">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-400 h-4 w-4" />
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-500 h-4 w-4" />
         <Input
-          placeholder="Search free content..."
+          placeholder="Search content..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10 bg-zinc-800 border-zinc-700"
+          className="pl-10 bg-zinc-900/30 border-zinc-800/30 text-white placeholder:text-zinc-500"
         />
       </div>
 
-      {/* Content Grid */}
       {filteredContent.length === 0 ? (
-        <Card className="bg-zinc-900/60 border-zinc-800/50">
-          <CardContent className="flex flex-col items-center justify-center py-16">
-            <div className="w-16 h-16 rounded-full bg-zinc-800 flex items-center justify-center mb-4">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-8 w-8 text-zinc-500"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
-                />
-              </svg>
+        <div className="bg-zinc-900/20 border border-zinc-800/30 rounded-lg">
+          <div className="flex flex-col items-center justify-center py-16 px-6">
+            <div className="w-16 h-16 bg-zinc-800/50 rounded-lg flex items-center justify-center mb-6">
+              <Video className="h-8 w-8 text-zinc-500" />
             </div>
-            <h3 className="text-xl font-medium text-white mb-2">No Free Content Yet</h3>
-            <p className="text-zinc-400 text-center mb-6 max-w-md">
+            <h3 className="text-xl font-medium text-white mb-2">
+              {searchTerm ? "No matching content" : "No content available"}
+            </h3>
+            <p className="text-zinc-400 text-center mb-8 max-w-md text-sm">
               {searchTerm
-                ? "No items match your search. Try a different search term."
-                : "Add content from your uploads to showcase in the free section of your creator profile."}
+                ? "No items match your search criteria. Try adjusting your search terms."
+                : "Add content from your uploads to showcase in the public section of your creator profile."}
             </p>
             <Button
               onClick={() => setShowAddContentDialog(true)}
-              className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800"
+              className="bg-white text-black hover:bg-zinc-100 font-medium px-6"
             >
               <PlusCircle className="h-4 w-4 mr-2" />
-              Add Your First Content
+              Add Content
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       ) : (
         <AnimatePresence>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-5 gap-4">
             {filteredContent.map((item, index) => {
               const IconComponent = FILE_TYPE_ICONS[item.type as keyof typeof FILE_TYPE_ICONS] || File
-              const colorClass = FILE_TYPE_COLORS[item.type as keyof typeof FILE_TYPE_COLORS] || "text-gray-500"
+              const colorClass = FILE_TYPE_COLORS[item.type as keyof typeof FILE_TYPE_COLORS] || "text-white"
 
               return (
                 <motion.div
@@ -342,17 +413,17 @@ export default function FreeContentPage() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.3, delay: index * 0.05 }}
+                  transition={{ duration: 0.2, delay: index * 0.02 }}
                 >
-                  <Card className="bg-zinc-900/60 border-zinc-800/50 hover:border-zinc-700/50 transition-all duration-300 group">
-                    <CardContent className="p-3">
-                      <div className="mb-2 relative">
+                  <div className="bg-zinc-900/30 border border-zinc-800/30 rounded-lg hover:border-zinc-700/50 transition-all duration-200 group">
+                    <div className="p-3">
+                      <div className="mb-3 relative">
                         {item.type === "video" ? (
                           <div className="aspect-[9/16]">
                             <VideoPreviewPlayer videoUrl={item.fileUrl} title={item.title} />
                           </div>
                         ) : item.type === "image" ? (
-                          <div className="aspect-[9/16] bg-zinc-800 rounded-lg flex items-center justify-center relative overflow-hidden">
+                          <div className="aspect-[9/16] bg-zinc-800/50 rounded-md flex items-center justify-center relative overflow-hidden">
                             <img
                               src={item.fileUrl || "/placeholder.svg"}
                               alt={item.title}
@@ -363,19 +434,18 @@ export default function FreeContentPage() {
                                 target.nextElementSibling?.classList.remove("hidden")
                               }}
                             />
-                            <div className="hidden w-full h-full flex items-center justify-center absolute inset-0 bg-zinc-800">
+                            <div className="hidden w-full h-full flex items-center justify-center absolute inset-0 bg-zinc-800/50">
                               <IconComponent className={`h-8 w-8 ${colorClass}`} />
                             </div>
                           </div>
                         ) : (
-                          <div className="aspect-[9/16] bg-zinc-800 rounded-lg flex items-center justify-center">
+                          <div className="aspect-[9/16] bg-zinc-800/50 rounded-md flex items-center justify-center">
                             <IconComponent className={`h-8 w-8 ${colorClass}`} />
                           </div>
                         )}
 
-                        {/* Action buttons overlay - only show for non-video types */}
                         {item.type !== "video" && (
-                          <div className="absolute inset-0 bg-black bg-opacity-60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                             <Button
                               size="sm"
                               variant="secondary"
@@ -383,16 +453,22 @@ export default function FreeContentPage() {
                                 e.stopPropagation()
                                 window.open(item.fileUrl, "_blank")
                               }}
+                              className="bg-white/20 hover:bg-white/30 text-white border-white/20"
                             >
                               <Search className="h-4 w-4" />
                             </Button>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button size="sm" variant="secondary" onClick={(e) => e.stopPropagation()}>
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="bg-white/20 hover:bg-white/30 text-white border-white/20"
+                                >
                                   <MoreVertical className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent className="bg-zinc-800 border-zinc-700">
+                              <DropdownMenuContent className="bg-zinc-900 border-zinc-800">
                                 <DropdownMenuItem
                                   onClick={(e) => {
                                     e.stopPropagation()
@@ -420,29 +496,23 @@ export default function FreeContentPage() {
 
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
-                          <h3 className="font-medium text-white truncate">{item.title}</h3>
-                          <Badge variant="outline" className="text-xs border-zinc-700">
+                          <h3 className="font-medium text-white text-sm truncate">{item.title}</h3>
+                          <Badge variant="outline" className="text-xs border-zinc-700/50 text-zinc-300 bg-zinc-800/30">
                             {item.type}
                           </Badge>
                         </div>
 
-                        <div className="text-xs text-zinc-400 space-y-1">
-                          <div>{formatFileSize(item.size)}</div>
-                          <div>{safelyFormatRelativeTime(item.addedAt)}</div>
-                          {item.type === "video" && (
-                            <div className="text-xs text-blue-400 truncate" title={item.fileUrl}>
-                              {item.fileUrl}
-                            </div>
-                          )}
+                        <div className="flex items-center justify-between text-xs text-zinc-400">
+                          <span>{formatFileSize(item.size)}</span>
+                          <span>{safelyFormatRelativeTime(item.addedAt)}</span>
                         </div>
 
-                        {/* Action buttons for videos - show below the video */}
                         {item.type === "video" && (
-                          <div className="flex items-center gap-2 mt-2">
+                          <div className="flex items-center gap-2 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
                             <Button
                               size="sm"
                               variant="outline"
-                              className="w-full bg-transparent"
+                              className="flex-1 bg-zinc-800/50 border-zinc-700/50 text-zinc-300 hover:bg-zinc-700/50 hover:text-white text-xs"
                               onClick={(e) => {
                                 e.stopPropagation()
                                 copyToClipboard(item.fileUrl)
@@ -455,13 +525,13 @@ export default function FreeContentPage() {
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  className="px-2 bg-transparent"
+                                  className="px-2 bg-zinc-800/50 border-zinc-700/50 text-zinc-300 hover:bg-zinc-700/50 hover:text-white"
                                   onClick={(e) => e.stopPropagation()}
                                 >
                                   <MoreVertical className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent className="bg-zinc-800 border-zinc-700">
+                              <DropdownMenuContent className="bg-zinc-900 border-zinc-800">
                                 <DropdownMenuItem
                                   onClick={(e) => {
                                     e.stopPropagation()
@@ -477,8 +547,8 @@ export default function FreeContentPage() {
                           </div>
                         )}
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                 </motion.div>
               )
             })}
@@ -486,24 +556,149 @@ export default function FreeContentPage() {
         </AnimatePresence>
       )}
 
-      {/* Add Content Dialog */}
       <Dialog open={showAddContentDialog} onOpenChange={setShowAddContentDialog}>
-        <DialogContent className="bg-zinc-900 border-zinc-800 max-w-4xl max-h-[80vh] overflow-hidden">
-          <DialogHeader>
-            <DialogTitle>Add Content to Free Section</DialogTitle>
-            <DialogDescription>
-              Select uploads to add to your free content section. These will be visible to all visitors on your profile.
+        <DialogContent className="bg-zinc-900/95 backdrop-blur-xl border-zinc-800/50 max-w-5xl max-h-[90vh] overflow-hidden">
+          <DialogHeader className="pb-4">
+            <DialogTitle className="text-white text-xl font-semibold">Add Content to Library</DialogTitle>
+            <DialogDescription className="text-zinc-400">
+              Select uploads to add to your public content library. These will be visible to all visitors on your
+              profile.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="overflow-y-auto">
-            <UploadSelector
-              excludeIds={freeContent.map((item) => item.id)}
-              onSelect={handleAddSelectedContent}
-              onCancel={() => setShowAddContentDialog(false)}
-              loading={false}
-              aspectRatio="portrait"
+          <div className="flex items-center justify-between mb-4 p-4 bg-zinc-800/30 rounded-lg border border-zinc-700/50">
+            <div className="text-sm text-zinc-300">
+              {selectedUploadIds.length > 0 && `${selectedUploadIds.length} item(s) selected`}
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={handleAddToLibrary}
+                disabled={selectedUploadIds.length === 0}
+                className="bg-white text-black hover:bg-zinc-100 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Add {selectedUploadIds.length > 0 ? `${selectedUploadIds.length} ` : ""}Items to Library
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex-shrink-0 px-4">
+            <NewFolderSelector
+              selectedFolderId={selectedFolderId}
+              onFolderSelect={setSelectedFolderId}
+              className="w-full"
             />
+          </div>
+
+          <div className="flex-1 overflow-y-auto max-h-[60vh]">
+            {uploadsLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 text-zinc-500 animate-spin" />
+              </div>
+            ) : uploads.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12">
+                <Video className="h-12 w-12 text-zinc-500 mb-4" />
+                <p className="text-zinc-400 text-center">No uploads available to add</p>
+              </div>
+            ) : filteredUploads.length === 0 ? (
+              <div className="text-center py-8 flex-1 flex items-center justify-center">
+                <div className="space-y-2">
+                  <p className="text-zinc-500">
+                    {selectedFolderId
+                      ? "No uploads in selected folder."
+                      : "No uploads available. Upload some content first."}
+                  </p>
+                  {selectedFolderId && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSelectedFolderId(null)}
+                      className="border-zinc-700 text-zinc-300"
+                    >
+                      Show All Folders
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-4">
+                {filteredUploads.map((upload) => {
+                  const isSelected = selectedUploadIds.includes(upload.id)
+                  const IconComponent = FILE_TYPE_ICONS[upload.type as keyof typeof FILE_TYPE_ICONS] || File
+
+                  return (
+                    <div
+                      key={upload.id}
+                      onClick={() => toggleUploadSelection(upload.id)}
+                      className={`relative cursor-pointer rounded-lg border-2 transition-all duration-200 ${
+                        isSelected
+                          ? "border-white bg-zinc-800/50"
+                          : "border-zinc-700/50 hover:border-zinc-600/50 bg-zinc-900/30"
+                      }`}
+                    >
+                      <div className="p-3">
+                        <div className="aspect-[9/16] mb-3 relative">
+                          {upload.type === "video" ? (
+                            <div className="w-full h-full bg-zinc-800/50 rounded-md flex items-center justify-center overflow-hidden">
+                              <video
+                                src={upload.fileUrl}
+                                className="w-full h-full object-cover rounded-md"
+                                muted
+                                playsInline
+                                preload="metadata"
+                                onError={(e) => {
+                                  const target = e.target as HTMLVideoElement
+                                  target.style.display = "none"
+                                  target.nextElementSibling?.classList.remove("hidden")
+                                }}
+                              />
+                              <div className="hidden w-full h-full flex items-center justify-center absolute inset-0 bg-zinc-800/50">
+                                <Film className="h-8 w-8 text-white" />
+                              </div>
+                            </div>
+                          ) : upload.type === "image" ? (
+                            <img
+                              src={upload.fileUrl || "/placeholder.svg"}
+                              alt={upload.title}
+                              className="w-full h-full object-cover rounded-md"
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement
+                                target.style.display = "none"
+                                target.nextElementSibling?.classList.remove("hidden")
+                              }}
+                            />
+                          ) : (
+                            <div className="w-full h-full bg-zinc-800/50 rounded-md flex items-center justify-center">
+                              <IconComponent className="h-8 w-8 text-white" />
+                            </div>
+                          )}
+
+                          <div
+                            className={`absolute top-2 right-2 w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                              isSelected ? "bg-white border-white" : "border-white/50 bg-transparent"
+                            }`}
+                          >
+                            {isSelected && <div className="w-3 h-3 bg-black rounded-full" />}
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <h3 className="font-medium text-white text-sm truncate">{upload.title}</h3>
+                          <div className="flex items-center justify-between text-xs text-zinc-400">
+                            <Badge
+                              variant="outline"
+                              className="text-xs border-zinc-700/50 text-zinc-300 bg-zinc-800/30"
+                            >
+                              {upload.type}
+                            </Badge>
+                            <span>{formatFileSize(upload.size)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>

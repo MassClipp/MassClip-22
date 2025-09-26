@@ -2,6 +2,7 @@ import { notFound } from "next/navigation"
 import type { Metadata } from "next"
 import { initializeFirebaseAdmin, db } from "@/lib/firebase-admin"
 import CreatorProfileMinimal from "@/components/creator-profile-minimal"
+import ProfileViewTracker from "@/components/profile-view-tracker"
 
 // Helper function to convert Firestore data to plain objects
 function serializeData(data: any) {
@@ -81,6 +82,9 @@ export async function generateMetadata({ params }: { params: { username: string 
         ],
         locale: "en_US",
         type: "website",
+      },
+      alternates: {
+        canonical: `https://massclip.pro/creator/${username}`,
       },
     }
   } catch (error) {
@@ -227,7 +231,12 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
       }),
     )
 
-    return <CreatorProfileMinimal creator={creatorData} />
+    return (
+      <>
+        <ProfileViewTracker profileUserId={uid} />
+        <CreatorProfileMinimal creator={creatorData} />
+      </>
+    )
   } catch (error) {
     console.error(`[Page] Error fetching creator profile for ${username}:`, error)
     notFound()

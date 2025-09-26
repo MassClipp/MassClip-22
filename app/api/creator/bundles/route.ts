@@ -4,6 +4,7 @@ import { getFirestore } from "firebase-admin/firestore"
 import { initializeApp, getApps, cert } from "firebase-admin/app"
 import Stripe from "stripe"
 import { ConnectedStripeAccountsService } from "@/lib/connected-stripe-accounts-service"
+import { getUserTierInfo, incrementUserBundles } from "@/lib/user-tier-service"
 
 // Initialize Firebase Admin
 if (!getApps().length) {
@@ -70,6 +71,7 @@ export async function GET(request: NextRequest) {
         title: data.title,
         description: data.description || "",
         price: data.price || 0,
+        comparePrice: data.comparePrice || null,
         currency: data.currency || "usd",
         coverImage: data.coverImage || data.thumbnailUrl || data.coverImageUrl || "",
         active: data.active !== false, // Default to true if not specified
@@ -117,12 +119,13 @@ export async function POST(request: NextRequest) {
     console.log("🚀 [Bundle Creation] Starting bundle creation...")
 
     const body = await request.json()
-    const { title, description, price, billingType, thumbnailUrl, contentItems } = body
+    const { title, description, price, comparePrice, billingType, thumbnailUrl, contentItems } = body
 
     console.log("📝 [Bundle Creation] Request data:", {
       title,
       description,
       price,
+      comparePrice,
       billingType,
       thumbnailUrl,
       contentItemsCount: contentItems?.length || 0,
@@ -147,6 +150,39 @@ export async function POST(request: NextRequest) {
 
     const userId = decodedToken.uid
     console.log("✅ [Bundle Creation] User authenticated:", userId)
+
+    console.log("🔍 [Bundle Creation] Checking bundle limits...")
+    const tierInfo = await getUserTierInfo(userId)
+
+    if (tierInfo.reachedBundleLimit) {
+      console.warn("❌ [Bundle Creation] Bundle limit reached:", {
+        bundlesCreated: tierInfo.bundlesCreated,
+        bundlesLimit: tierInfo.bundlesLimit,
+        tier: tierInfo.tier,
+      })
+
+      return NextResponse.json(
+        {
+          error: "Bundle limit reached",
+          details: `You've reached your limit of ${tierInfo.bundlesLimit} bundles. ${
+            tierInfo.tier === "free"
+              ? "Upgrade to Creator Pro for unlimited bundles or purchase extra bundle slots."
+              : "Please contact support if you need additional bundles."
+          }`,
+          code: "BUNDLE_LIMIT_REACHED",
+          currentCount: tierInfo.bundlesCreated,
+          maxAllowed: tierInfo.bundlesLimit,
+          tier: tierInfo.tier,
+        },
+        { status: 403 },
+      )
+    }
+
+    console.log("✅ [Bundle Creation] Bundle limit check passed:", {
+      bundlesCreated: tierInfo.bundlesCreated,
+      bundlesLimit: tierInfo.bundlesLimit,
+      tier: tierInfo.tier,
+    })
 
     const connectedAccount = await ConnectedStripeAccountsService.getAccount(userId)
     console.log("🔍 [Bundle Creation] Stripe account lookup result:", {
@@ -296,6 +332,7 @@ export async function POST(request: NextRequest) {
       title,
       description: description || "",
       price,
+      comparePrice: comparePrice ? Number.parseFloat(comparePrice) : null,
       currency: "usd",
       billingType: billingType || "one_time",
       type: "one_time",
@@ -342,6 +379,21 @@ export async function POST(request: NextRequest) {
     console.log("💾 [Bundle Creation] Saving bundle to Firestore...")
     await db.collection("bundles").doc(bundleId).set(bundleData)
 
+    console.log("📊 [Bundle Creation] Incrementing user bundle count...")
+    const incrementResult = await incrementUserBundles(userId)
+
+    if (!incrementResult.success) {
+      console.warn("⚠️ [Bundle Creation] Failed to increment bundle count:", incrementResult.reason)
+      // Bundle was created but count wasn't incremented - log for manual review
+      console.error("🚨 [Bundle Creation] CRITICAL: Bundle created but count not incremented", {
+        bundleId,
+        userId,
+        reason: incrementResult.reason,
+      })
+    } else {
+      console.log("✅ [Bundle Creation] Bundle count incremented successfully")
+    }
+
     console.log("✅ [Bundle Creation] Bundle created successfully:", {
       bundleId,
       title,
@@ -361,6 +413,7 @@ export async function POST(request: NextRequest) {
         title,
         description,
         price,
+        comparePrice: comparePrice ? Number.parseFloat(comparePrice) : null,
         stripeProductId: product.id,
         stripePriceId: stripePrice.id,
         contentItems: processedContentItems.length,
@@ -385,6 +438,245 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: "Failed to create bundle",
+        details: error.message,
+      },
+      { status: 500 },
+    )
+  }
+}
+
+// PUT method to update existing bundles
+export async function PUT(request: NextRequest) {
+  try {
+    console.log("🔄 [Bundle Update] Starting bundle update...")
+
+    const body = await request.json()
+    const { bundleId, title, description, price, comparePrice, billingType, thumbnailUrl, contentItems } = body
+
+    console.log("📝 [Bundle Update] Request data:", {
+      bundleId,
+      title,
+      description,
+      price,
+      comparePrice,
+      billingType,
+      thumbnailUrl,
+      contentItemsCount: contentItems?.length || 0,
+    })
+
+    // Get authorization header
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
+    }
+
+    const idToken = authHeader.replace("Bearer ", "")
+
+    // Verify authentication
+    let decodedToken
+    try {
+      decodedToken = await auth.verifyIdToken(idToken)
+    } catch (error) {
+      console.error("❌ [Bundle Update] Token verification failed:", error)
+      return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
+    }
+
+    const userId = decodedToken.uid
+    console.log("✅ [Bundle Update] User authenticated:", userId)
+
+    // Validate required fields
+    if (!bundleId || !title || !price) {
+      return NextResponse.json(
+        {
+          error: "Missing required fields: bundleId, title and price are required",
+        },
+        { status: 400 },
+      )
+    }
+
+    // Get existing bundle to verify ownership
+    const bundleRef = db.collection("bundles").doc(bundleId)
+    const bundleDoc = await bundleRef.get()
+
+    if (!bundleDoc.exists) {
+      return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
+    }
+
+    const existingBundle = bundleDoc.data()
+    if (existingBundle?.creatorId !== userId) {
+      return NextResponse.json({ error: "Unauthorized to update this bundle" }, { status: 403 })
+    }
+
+    console.log("✅ [Bundle Update] Bundle ownership verified")
+
+    // Get connected Stripe account
+    const connectedAccount = await ConnectedStripeAccountsService.getAccount(userId)
+    if (!connectedAccount || !ConnectedStripeAccountsService.isAccountFullySetup(connectedAccount)) {
+      return NextResponse.json({ error: "Stripe account not properly configured" }, { status: 400 })
+    }
+
+    const stripeAccountId = connectedAccount.stripe_user_id || connectedAccount.stripeAccountId
+
+    // Update Stripe product if needed
+    if (title !== existingBundle.title || description !== existingBundle.description) {
+      console.log("🏪 [Bundle Update] Updating Stripe product...")
+      const productData: any = {
+        name: title,
+        metadata: {
+          bundleType: "content_bundle",
+          creatorId: userId,
+          contentCount: (contentItems?.length || 0).toString(),
+        },
+      }
+
+      if (description && description.trim() && description !== "Describe your bundle") {
+        productData.description = description.trim()
+      }
+
+      await stripe.products.update(existingBundle.stripeProductId, productData, {
+        stripeAccount: stripeAccountId,
+      })
+      console.log("✅ [Bundle Update] Stripe product updated")
+    }
+
+    // Update Stripe price if price changed
+    let newPriceId = existingBundle.stripePriceId
+    if (price !== existingBundle.price) {
+      console.log("💰 [Bundle Update] Creating new Stripe price...")
+      const stripePrice = await stripe.prices.create(
+        {
+          product: existingBundle.stripeProductId,
+          unit_amount: Math.round(price * 100),
+          currency: "usd",
+          metadata: {
+            bundleType: "content_bundle",
+            creatorId: userId,
+          },
+        },
+        {
+          stripeAccount: stripeAccountId,
+        },
+      )
+      newPriceId = stripePrice.id
+      console.log("✅ [Bundle Update] New Stripe price created:", newPriceId)
+    }
+
+    // Process content items if provided
+    let processedContentItems = existingBundle.detailedContentItems || []
+    let contentMetadata = existingBundle.contentMetadata || {}
+
+    if (contentItems && contentItems.length > 0) {
+      processedContentItems = contentItems.map((item: any, index: number) => ({
+        id: item.id || `content_${index}`,
+        title: item.title || `Content ${index + 1}`,
+        description: item.description || "",
+        fileUrl: item.fileUrl || item.downloadUrl || "",
+        downloadUrl: item.downloadUrl || item.fileUrl || "",
+        publicUrl: item.publicUrl || item.fileUrl || "",
+        thumbnailUrl: item.thumbnailUrl || "",
+        fileSize: item.fileSize || 0,
+        fileSizeFormatted: item.fileSizeFormatted || formatFileSize(item.fileSize || 0),
+        duration: item.duration || 0,
+        durationFormatted: item.durationFormatted || "0:00",
+        mimeType: item.mimeType || "video/mp4",
+        format: item.format || "mp4",
+        quality: item.quality || "HD",
+        tags: item.tags || [],
+        contentType: item.contentType || "video",
+        createdAt: item.createdAt || new Date().toISOString(),
+        uploadedAt: item.uploadedAt || new Date().toISOString(),
+      }))
+
+      // Recalculate content metadata
+      const totalSize = processedContentItems.reduce((sum, item) => sum + (item.fileSize || 0), 0)
+      const totalDuration = processedContentItems.reduce((sum, item) => sum + (item.duration || 0), 0)
+
+      contentMetadata = {
+        totalItems: processedContentItems.length,
+        totalSize: totalSize,
+        totalSizeFormatted: formatFileSize(totalSize),
+        totalDuration: totalDuration,
+        totalDurationFormatted: formatDuration(totalDuration),
+        formats: [...new Set(processedContentItems.map((item) => item.format))],
+        qualities: [...new Set(processedContentItems.map((item) => item.quality))],
+        contentBreakdown: {
+          videos: processedContentItems.filter((item) => item.contentType === "video").length,
+          audios: processedContentItems.filter((item) => item.contentType === "audio").length,
+          images: processedContentItems.filter((item) => item.contentType === "image").length,
+          documents: processedContentItems.filter((item) => item.contentType === "document").length,
+        },
+      }
+    }
+
+    const updateData = {
+      title,
+      description: description || "",
+      price,
+      comparePrice: comparePrice ? Number.parseFloat(comparePrice) : null,
+      billingType: billingType || "one_time",
+      stripePriceId: newPriceId,
+      priceId: newPriceId,
+      detailedContentItems: processedContentItems,
+      contentItems: processedContentItems.map((item) => item.id),
+      contentMetadata,
+      contentTitles: processedContentItems.map((item) => item.title),
+      contentDescriptions: processedContentItems.map((item) => item.description),
+      contentTags: processedContentItems.flatMap((item) => item.tags || []),
+      contentThumbnails: processedContentItems.map((item) => item.thumbnailUrl).filter(Boolean),
+      contentUrls: processedContentItems.map((item) => item.fileUrl).filter(Boolean),
+      thumbnailUrl: thumbnailUrl || processedContentItems[0]?.thumbnailUrl || existingBundle.thumbnailUrl || "",
+      coverImage: thumbnailUrl || processedContentItems[0]?.thumbnailUrl || existingBundle.coverImage || "",
+      coverImageUrl: thumbnailUrl || existingBundle.coverImageUrl || "",
+      customPreviewThumbnail: thumbnailUrl || existingBundle.customPreviewThumbnail || "",
+      updatedAt: new Date(),
+      contentLastUpdated: new Date(),
+    }
+
+    console.log("💾 [Bundle Update] Updating bundle in Firestore with compare price:", updateData.comparePrice)
+    await bundleRef.update(updateData)
+
+    console.log("✅ [Bundle Update] Bundle updated successfully:", {
+      bundleId,
+      title,
+      price,
+      comparePrice: updateData.comparePrice,
+      stripePriceId: newPriceId,
+      contentItems: processedContentItems.length,
+    })
+
+    return NextResponse.json({
+      success: true,
+      message: "Bundle updated successfully",
+      bundleId,
+      bundle: {
+        id: bundleId,
+        title,
+        description,
+        price,
+        comparePrice: updateData.comparePrice,
+        stripeProductId: existingBundle.stripeProductId,
+        stripePriceId: newPriceId,
+        contentItems: processedContentItems.length,
+        thumbnailUrl: updateData.thumbnailUrl,
+      },
+    })
+  } catch (error: any) {
+    console.error("❌ [Bundle Update] Error:", error)
+
+    if (error instanceof Stripe.errors.StripeError) {
+      return NextResponse.json(
+        {
+          error: "Stripe error occurred",
+          details: error.message,
+          code: error.code,
+        },
+        { status: 400 },
+      )
+    }
+
+    return NextResponse.json(
+      {
+        error: "Failed to update bundle",
         details: error.message,
       },
       { status: 500 },

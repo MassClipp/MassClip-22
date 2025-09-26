@@ -5,7 +5,7 @@ import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
-import { doc, getDoc, setDoc, serverTimestamp, updateDoc } from "firebase/firestore"
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -24,13 +24,37 @@ import {
   Save,
   CheckCircle,
   ExternalLink,
-  Crown,
   RefreshCw,
 } from "lucide-react"
 import ReactCrop, { type Crop, centerCrop, makeAspectCrop } from "react-image-crop"
 import "react-image-crop/dist/ReactCrop.css"
 import CancelSubscriptionButton from "@/components/cancel-subscription-button"
 import { Badge } from "@/components/ui/badge"
+import { safelyFormatDate } from "@/lib/date-utils"
+import { fetchSubscriptionData } from "@/lib/subscription-utils"
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      delayChildren: 0.3,
+      staggerChildren: 0.2,
+    },
+  },
+}
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.5,
+      ease: "easeInOut",
+    },
+  },
+}
 
 export default function ProfilePage() {
   const { user } = useAuth()
@@ -42,18 +66,20 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
 
-  // Profile state
-  const [displayName, setDisplayName] = useState("")
-  const [username, setUsername] = useState("")
-  const [bio, setBio] = useState("")
-  const [profilePic, setProfilePic] = useState<string | null>(null)
+  const [profileData, setProfileData] = useState({
+    displayName: "",
+    username: "",
+    bio: "",
+    profilePic: null as string | null,
+    socialLinks: {
+      instagram: "",
+      twitter: "",
+      website: "",
+    },
+  })
+
   const [newProfilePic, setNewProfilePic] = useState<File | null>(null)
   const [profilePicPreview, setProfilePicPreview] = useState<string | null>(null)
-
-  // Social links
-  const [instagramHandle, setInstagramHandle] = useState("")
-  const [twitterHandle, setTwitterHandle] = useState("")
-  const [websiteUrl, setWebsiteUrl] = useState("")
 
   const [crop, setCrop] = useState<Crop>()
   const [completedCrop, setCompletedCrop] = useState<Crop>()
@@ -66,6 +92,8 @@ export default function ProfilePage() {
 
   const [subscriptionData, setSubscriptionData] = useState<any>(null)
   const [loadingSubscription, setLoadingSubscription] = useState(false)
+
+  const isProUser = subscriptionData?.plan === "creator_pro" && subscriptionData?.isActive
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true)
@@ -80,89 +108,144 @@ export default function ProfilePage() {
     }
   }, [])
 
-  // Fetch user profile
-  useEffect(() => {
-    const fetchUserProfile = async () => {
-      if (!user) return
+  const fetchProfile = async () => {
+    if (!user) return
 
-      try {
-        setLoading(true)
-        console.log("🔍 Fetching user profile for:", user.uid)
+    try {
+      setLoading(true)
+      console.log("[v0] Fetching profile for user:", user.uid)
 
-        const userDoc = await getDoc(doc(db, "users", user.uid))
+      const userDoc = await getDoc(doc(db, "users", user.uid))
 
-        if (userDoc.exists()) {
-          const userData = userDoc.data()
-          console.log("✅ User data loaded:", userData)
+      if (userDoc.exists()) {
+        const data = userDoc.data()
+        console.log("[v0] Profile data from database:", data)
 
-          setDisplayName(userData.displayName || "")
-          setUsername(userData.username || "")
-          setBio(userData.bio || "")
-
-          // Handle profile picture
-          const profilePicUrl = userData.profilePic
-          if (profilePicUrl) {
-            const cacheBustedUrl = profilePicUrl.includes("?")
-              ? `${profilePicUrl}&cb=${Date.now()}`
-              : `${profilePicUrl}?cb=${Date.now()}`
-            setProfilePic(cacheBustedUrl)
-          } else {
-            setProfilePic(null)
-          }
-
-          // Social links - handle both old and new structure
-          const socialLinks = userData.socialLinks || {}
-          setInstagramHandle(socialLinks.instagram || userData.instagramHandle || "")
-          setTwitterHandle(socialLinks.twitter || userData.twitterHandle || "")
-          setWebsiteUrl(socialLinks.website || userData.websiteUrl || "")
-        } else {
-          console.log("❌ No user document found, creating one...")
-          // Create initial user document
-          const initialData = {
-            uid: user.uid,
-            email: user.email,
-            displayName: user.displayName || "",
-            username: "",
-            bio: "",
-            profilePic: user.photoURL || null,
-            socialLinks: {
-              instagram: "",
-              twitter: "",
-              website: "",
-            },
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          }
-
-          await setDoc(doc(db, "users", user.uid), initialData)
-          console.log("✅ Initial user document created")
-
-          // Set the state with initial data
-          setDisplayName(initialData.displayName)
-          setUsername(initialData.username)
-          setBio(initialData.bio)
-          setProfilePic(initialData.profilePic)
-        }
-      } catch (error) {
-        console.error("❌ Error fetching user profile:", error)
-        toast({
-          title: "Error",
-          description: "Failed to load profile data. Please try again.",
-          variant: "destructive",
+        setProfileData({
+          displayName: data.displayName || "",
+          username: data.username || "",
+          bio: data.bio || "",
+          profilePic: data.profilePic || null,
+          socialLinks: {
+            instagram: data.socialLinks?.instagram || "",
+            twitter: data.socialLinks?.twitter || "",
+            website: data.socialLinks?.website || "",
+          },
         })
-      } finally {
-        setLoading(false)
-      }
-    }
+      } else {
+        // Create initial profile
+        const initialData = {
+          uid: user.uid,
+          email: user.email,
+          displayName: user.displayName || "",
+          username: "",
+          bio: "",
+          profilePic: user.photoURL || null,
+          socialLinks: {
+            instagram: "",
+            twitter: "",
+            website: "",
+          },
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }
 
-    fetchUserProfile()
-  }, [user, toast])
+        await setDoc(doc(db, "users", user.uid), initialData)
+
+        setProfileData({
+          displayName: initialData.displayName,
+          username: initialData.username,
+          bio: initialData.bio,
+          profilePic: initialData.profilePic,
+          socialLinks: initialData.socialLinks,
+        })
+      }
+    } catch (error) {
+      console.error("[v0] Error fetching profile:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load profile data. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchProfile()
+  }, [user])
 
   useEffect(() => {
     if (user) {
-      fetchSubscriptionData()
+      fetchSubscriptionData(user, setSubscriptionData, setLoadingSubscription)
     }
   }, [user])
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!user) return
+
+    setSaving(true)
+    setSaveSuccess(false)
+
+    try {
+      console.log("[v0] Saving profile data:", profileData)
+
+      const updateData = {
+        displayName: profileData.displayName.trim(),
+        username: profileData.username.toLowerCase().trim(),
+        bio: profileData.bio.trim(),
+        socialLinks: {
+          instagram: profileData.socialLinks.instagram.trim(),
+          twitter: profileData.socialLinks.twitter.trim(),
+          website: profileData.socialLinks.website.trim(),
+        },
+        updatedAt: serverTimestamp(),
+      }
+
+      await setDoc(doc(db, "users", user.uid), updateData, { merge: true })
+      console.log("[v0] Profile saved successfully")
+
+      // Refresh data from database
+      await fetchProfile()
+
+      setSaveSuccess(true)
+      setTimeout(() => setSaveSuccess(false), 3000)
+
+      toast({
+        title: "Success",
+        description: "Profile updated successfully!",
+      })
+    } catch (error) {
+      console.error("[v0] Error saving profile:", error)
+      toast({
+        title: "Error",
+        description: "Failed to save profile. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const updateProfileData = (field: string, value: string) => {
+    if (field.includes(".")) {
+      const [parent, child] = field.split(".")
+      setProfileData((prev) => ({
+        ...prev,
+        [parent]: {
+          ...prev[parent as keyof typeof prev],
+          [child]: value,
+        },
+      }))
+    } else {
+      setProfileData((prev) => ({
+        ...prev,
+        [field]: value,
+      }))
+    }
+  }
 
   const handleProfilePicChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -216,271 +299,47 @@ export default function ProfilePage() {
     setCrop(crop)
   }
 
-  const getCroppedImg = (image: HTMLImageElement, crop: Crop): Promise<Blob> => {
+  const handleCropComplete = async (
+    crop: Crop | undefined,
+    setImageToCrop: any,
+    setShowCropModal: any,
+    setProfilePicPreview: any,
+    setNewProfilePic: any,
+  ) => {
+    if (!crop || !imgRef.current) return
+
     const canvas = document.createElement("canvas")
+    const scaleX = imgRef.current.naturalWidth / imgRef.current.width
+    const scaleY = imgRef.current.naturalHeight / imgRef.current.height
     const ctx = canvas.getContext("2d")
 
-    if (!ctx) {
-      throw new Error("No 2d context")
-    }
+    canvas.width = crop.width * scaleX
+    canvas.height = crop.height * scaleY
 
-    const scaleX = image.naturalWidth / image.width
-    const scaleY = image.naturalHeight / image.height
-    const pixelRatio = window.devicePixelRatio
-
-    canvas.width = crop.width * pixelRatio * scaleX
-    canvas.height = crop.height * pixelRatio * scaleY
-
-    ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0)
-    ctx.imageSmoothingQuality = "high"
-
-    ctx.drawImage(
-      image,
-      crop.x * scaleX,
-      crop.y * scaleY,
-      crop.width * scaleX,
-      crop.height * scaleY,
-      0,
-      0,
-      crop.width * scaleX,
-      crop.height * scaleY,
-    )
-
-    return new Promise((resolve) => {
-      canvas.toBlob(
-        (blob) => {
-          if (blob) {
-            resolve(blob)
-          }
-        },
-        "image/jpeg",
-        0.9,
+    if (ctx) {
+      ctx.drawImage(
+        imgRef.current,
+        crop.x * scaleX,
+        crop.y * scaleY,
+        crop.width * scaleX,
+        crop.height * scaleY,
+        0,
+        0,
+        crop.width * scaleX,
+        crop.height * scaleY,
       )
+    }
+
+    const croppedImageBlob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve)
     })
-  }
 
-  const handleCropComplete = async () => {
-    if (!imgRef.current || !completedCrop) return
-
-    try {
-      const croppedBlob = await getCroppedImg(imgRef.current, completedCrop)
-      setCroppedImageBlob(croppedBlob)
-
-      // Create preview URL
-      const previewUrl = URL.createObjectURL(croppedBlob)
-      setProfilePicPreview(previewUrl)
-
-      setShowCropModal(false)
-      setImageToCrop(null)
-    } catch (error) {
-      console.error("Error cropping image:", error)
-      toast({
-        title: "Cropping failed",
-        description: "Failed to crop image. Please try again.",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-
-    if (!user) {
-      toast({
-        title: "Authentication required",
-        description: "Please log in to update your profile.",
-        variant: "destructive",
-      })
-      return
+    if (croppedImageBlob) {
+      setProfilePicPreview(URL.createObjectURL(croppedImageBlob))
+      setNewProfilePic(croppedImageBlob)
     }
 
-    if (!isOnline) {
-      toast({
-        title: "No internet connection",
-        description: "Please check your connection and try again.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    try {
-      setSaving(true)
-      console.log("🔄 Starting profile update for user:", user.uid)
-
-      let profilePicUrl = profilePic
-
-      // Upload new profile pic if cropped
-      if (croppedImageBlob) {
-        console.log("📸 Uploading new profile picture...")
-
-        try {
-          // Get fresh auth token
-          const idToken = await user.getIdToken(true)
-
-          const formData = new FormData()
-          formData.append("file", croppedImageBlob, "profile.jpg")
-          formData.append("userId", user.uid)
-
-          const uploadResponse = await fetch("/api/upload-profile-pic", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${idToken}`,
-            },
-            body: formData,
-          })
-
-          if (!uploadResponse.ok) {
-            const errorText = await uploadResponse.text()
-            throw new Error(`Upload failed: ${errorText}`)
-          }
-
-          const uploadResult = await uploadResponse.json()
-          profilePicUrl = uploadResult.url
-          console.log("✅ Profile picture uploaded:", profilePicUrl)
-        } catch (uploadError) {
-          console.error("❌ Profile picture upload failed:", uploadError)
-          toast({
-            title: "Upload failed",
-            description: "Failed to upload profile picture. Continuing with other updates.",
-            variant: "destructive",
-          })
-          // Continue with other updates even if image upload fails
-        }
-      }
-
-      // Prepare profile data
-      const profileData = {
-        displayName: displayName.trim(),
-        username: username.toLowerCase().trim(),
-        bio: bio.trim(),
-        profilePic: profilePicUrl,
-        socialLinks: {
-          instagram: instagramHandle.trim(),
-          twitter: twitterHandle.trim(),
-          website: websiteUrl.trim(),
-        },
-        email: user.email,
-        updatedAt: serverTimestamp(),
-      }
-
-      console.log("💾 Updating user profile with data:", profileData)
-
-      // Update user profile in Firestore
-      const userDocRef = doc(db, "users", user.uid)
-
-      // Check if document exists first
-      const userDoc = await getDoc(userDocRef)
-
-      if (userDoc.exists()) {
-        // Update existing document
-        await updateDoc(userDocRef, profileData)
-        console.log("✅ User profile updated successfully")
-      } else {
-        // Create new document with createdAt timestamp
-        await setDoc(userDocRef, {
-          ...profileData,
-          uid: user.uid,
-          createdAt: serverTimestamp(),
-        })
-        console.log("✅ User profile created successfully")
-      }
-
-      // Also update the creators collection if username exists
-      if (username.trim()) {
-        try {
-          const creatorDocRef = doc(db, "creators", username.toLowerCase().trim())
-          const creatorData = {
-            uid: user.uid,
-            username: username.toLowerCase().trim(),
-            displayName: displayName.trim(),
-            bio: bio.trim(),
-            profilePic: profilePicUrl,
-            email: user.email,
-            updatedAt: serverTimestamp(),
-          }
-
-          const creatorDoc = await getDoc(creatorDocRef)
-
-          if (creatorDoc.exists()) {
-            await updateDoc(creatorDocRef, creatorData)
-          } else {
-            await setDoc(creatorDocRef, {
-              ...creatorData,
-              totalVideos: 0,
-              totalDownloads: 0,
-              totalEarnings: 0,
-              isVerified: false,
-              createdAt: serverTimestamp(),
-            })
-          }
-
-          console.log("✅ Creator profile updated successfully")
-        } catch (creatorError) {
-          console.error("⚠️ Creator profile update failed:", creatorError)
-          // Don't fail the whole operation if creator update fails
-        }
-      }
-
-      // Clear the cropped image blob after successful upload
-      setCroppedImageBlob(null)
-      setProfilePicPreview(null)
-
-      // Update the profile pic state with the new URL
-      setProfilePic(profilePicUrl)
-
-      // Show success message
-      setSaveSuccess(true)
-      setTimeout(() => setSaveSuccess(false), 3000)
-
-      toast({
-        title: "Profile updated",
-        description: "Your profile has been updated successfully",
-      })
-
-      // Refresh the page data
-      setTimeout(() => {
-        window.location.reload()
-      }, 1500)
-    } catch (error) {
-      console.error("❌ Error updating profile:", error)
-      toast({
-        title: "Update failed",
-        description: error instanceof Error ? error.message : "Failed to update profile. Please try again.",
-        variant: "destructive",
-      })
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleViewProfile = () => {
-    if (username) {
-      window.open(`/creator/${username}?updated=true`, "_blank")
-    }
-  }
-
-  const fetchSubscriptionData = async () => {
-    if (!user) return
-
-    setLoadingSubscription(true)
-    try {
-      const response = await fetch("/api/membership-status", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ userId: user.uid }),
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        setSubscriptionData(data)
-      }
-    } catch (error) {
-      console.error("Error fetching subscription data:", error)
-    } finally {
-      setLoadingSubscription(false)
-    }
+    setShowCropModal(false)
   }
 
   if (loading) {
@@ -502,6 +361,7 @@ export default function ProfilePage() {
         <TabsList className="bg-zinc-800/50 border border-zinc-700/50">
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="membership">Membership</TabsTrigger>
+          <TabsTrigger value="security">Security</TabsTrigger>
         </TabsList>
 
         <TabsContent value="profile">
@@ -514,7 +374,7 @@ export default function ProfilePage() {
                   </p>
                 </div>
               )}
-              <form onSubmit={handleSubmit}>
+              <form onSubmit={handleSave}>
                 <CardHeader>
                   <CardTitle>Profile Information</CardTitle>
                   <CardDescription>Update your profile details and social links</CardDescription>
@@ -527,20 +387,24 @@ export default function ProfilePage() {
                       className="relative w-24 h-24 rounded-full overflow-hidden bg-zinc-800 cursor-pointer group"
                       onClick={() => fileInputRef.current?.click()}
                     >
-                      {profilePicPreview || profilePic ? (
+                      {profilePicPreview || profileData.profilePic ? (
                         <img
-                          src={profilePicPreview || profilePic || ""}
-                          alt={displayName || "Profile"}
+                          src={profilePicPreview || profileData.profilePic || ""}
+                          alt={profileData.displayName || "Profile"}
                           className="w-full h-full object-cover"
-                          key={profilePicPreview || profilePic}
+                          key={profilePicPreview || profileData.profilePic}
                           onError={(e) => {
                             console.error("Failed to load profile image:", e)
-                            setProfilePic(null)
+                            setProfileData((prev) => ({ ...prev, profilePic: null }))
                           }}
                         />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center bg-zinc-800 text-zinc-400 text-4xl font-light">
-                          {displayName ? displayName.charAt(0).toUpperCase() : <User className="h-8 w-8" />}
+                          {profileData.displayName ? (
+                            profileData.displayName.charAt(0).toUpperCase()
+                          ) : (
+                            <User className="h-8 w-8" />
+                          )}
                         </div>
                       )}
 
@@ -564,8 +428,8 @@ export default function ProfilePage() {
                     <Label htmlFor="displayName">Display Name</Label>
                     <Input
                       id="displayName"
-                      value={displayName}
-                      onChange={(e) => setDisplayName(e.target.value)}
+                      value={profileData.displayName}
+                      onChange={(e) => updateProfileData("displayName", e.target.value)}
                       className="bg-zinc-800/50 border-zinc-700 focus:border-red-500 text-white mt-1.5"
                       placeholder="Your display name"
                       required
@@ -577,14 +441,16 @@ export default function ProfilePage() {
                     <Label htmlFor="username">Username</Label>
                     <Input
                       id="username"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
+                      value={profileData.username}
+                      onChange={(e) =>
+                        updateProfileData("username", e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))
+                      }
                       className="bg-zinc-800/50 border-zinc-700 focus:border-red-500 text-white mt-1.5"
                       placeholder="username"
                       required
                     />
                     <p className="text-xs text-zinc-500 mt-1.5">
-                      This will be your profile URL: massclip.pro/creator/{username || "username"}
+                      This will be your profile URL: massclip.pro/creator/{profileData.username || "username"}
                     </p>
                   </div>
 
@@ -593,8 +459,8 @@ export default function ProfilePage() {
                     <Label htmlFor="bio">Bio</Label>
                     <Textarea
                       id="bio"
-                      value={bio}
-                      onChange={(e) => setBio(e.target.value)}
+                      value={profileData.bio}
+                      onChange={(e) => updateProfileData("bio", e.target.value)}
                       className="bg-zinc-800/50 border-zinc-700 focus:border-red-500 text-white mt-1.5 resize-none"
                       placeholder="Tell viewers about yourself"
                       rows={4}
@@ -614,8 +480,10 @@ export default function ProfilePage() {
                         <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-500">@</span>
                         <Input
                           id="instagram"
-                          value={instagramHandle}
-                          onChange={(e) => setInstagramHandle(e.target.value.replace(/[^a-zA-Z0-9_.]/g, ""))}
+                          value={profileData.socialLinks.instagram}
+                          onChange={(e) =>
+                            updateProfileData("socialLinks.instagram", e.target.value.replace(/[^a-zA-Z0-9_.]/g, ""))
+                          }
                           className="bg-zinc-800/50 border-zinc-700 focus:border-red-500 text-white pl-8"
                           placeholder="username"
                         />
@@ -631,8 +499,10 @@ export default function ProfilePage() {
                         <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-500">@</span>
                         <Input
                           id="twitter"
-                          value={twitterHandle}
-                          onChange={(e) => setTwitterHandle(e.target.value.replace(/[^a-zA-Z0-9_]/g, ""))}
+                          value={profileData.socialLinks.twitter}
+                          onChange={(e) =>
+                            updateProfileData("socialLinks.twitter", e.target.value.replace(/[^a-zA-Z0-9_]/g, ""))
+                          }
                           className="bg-zinc-800/50 border-zinc-700 focus:border-red-500 text-white pl-8"
                           placeholder="username"
                         />
@@ -646,8 +516,8 @@ export default function ProfilePage() {
                       </Label>
                       <Input
                         id="website"
-                        value={websiteUrl}
-                        onChange={(e) => setWebsiteUrl(e.target.value)}
+                        value={profileData.socialLinks.website}
+                        onChange={(e) => updateProfileData("socialLinks.website", e.target.value)}
                         className="bg-zinc-800/50 border-zinc-700 focus:border-red-500 text-white mt-1.5"
                         placeholder="https://example.com"
                       />
@@ -658,8 +528,8 @@ export default function ProfilePage() {
                 <CardFooter className="border-t border-zinc-800/50 pt-6">
                   <Button
                     type="submit"
-                    disabled={saving || !displayName.trim() || !username.trim()}
-                    className="ml-auto bg-red-600 hover:bg-red-700"
+                    disabled={saving || !profileData.displayName.trim() || !profileData.username.trim()}
+                    className="ml-auto bg-white hover:bg-gray-100 text-black"
                   >
                     {saving ? (
                       <>
@@ -691,43 +561,47 @@ export default function ProfilePage() {
               <CardContent>
                 <div className="flex flex-col items-center text-center">
                   <div className="w-20 h-20 rounded-full overflow-hidden bg-zinc-800 mb-4">
-                    {profilePicPreview || profilePic ? (
+                    {profilePicPreview || profileData.profilePic ? (
                       <img
-                        src={profilePicPreview || profilePic || ""}
-                        alt={displayName || "Profile"}
+                        src={profilePicPreview || profileData.profilePic || ""}
+                        alt={profileData.displayName || "Profile"}
                         className="w-full h-full object-cover"
-                        key={profilePicPreview || profilePic}
+                        key={profilePicPreview || profileData.profilePic}
                         onError={(e) => {
                           console.error("Failed to load preview image:", e)
                         }}
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-zinc-800 text-zinc-400 text-3xl font-light">
-                        {displayName ? displayName.charAt(0).toUpperCase() : <User className="h-6 w-6" />}
+                        {profileData.displayName ? (
+                          profileData.displayName.charAt(0).toUpperCase()
+                        ) : (
+                          <User className="h-6 w-6" />
+                        )}
                       </div>
                     )}
                   </div>
 
-                  <h3 className="text-lg font-medium text-white">{displayName || "Your Name"}</h3>
+                  <h3 className="text-lg font-medium text-white">{profileData.displayName || "Your Name"}</h3>
 
-                  <p className="text-sm text-zinc-400 mb-4">@{username || "username"}</p>
+                  <p className="text-sm text-zinc-400 mb-4">@{profileData.username || "username"}</p>
 
-                  {bio && <p className="text-sm text-zinc-300 mb-4 line-clamp-4">{bio}</p>}
+                  {profileData.bio && <p className="text-sm text-zinc-300 mb-4 line-clamp-4">{profileData.bio}</p>}
 
                   <div className="flex gap-2 mt-2">
-                    {instagramHandle && (
+                    {profileData.socialLinks.instagram && (
                       <div className="p-2 rounded-full bg-zinc-800">
                         <Instagram className="h-4 w-4 text-zinc-400" />
                       </div>
                     )}
 
-                    {twitterHandle && (
+                    {profileData.socialLinks.twitter && (
                       <div className="p-2 rounded-full bg-zinc-800">
                         <Twitter className="h-4 w-4 text-zinc-400" />
                       </div>
                     )}
 
-                    {websiteUrl && (
+                    {profileData.socialLinks.website && (
                       <div className="p-2 rounded-full bg-zinc-800">
                         <Globe className="h-4 w-4 text-zinc-400" />
                       </div>
@@ -735,11 +609,11 @@ export default function ProfilePage() {
                   </div>
                 </div>
 
-                {username && (
+                {profileData.username && (
                   <Button
                     variant="outline"
                     className="w-full mt-6 border-zinc-700 hover:bg-zinc-800 bg-transparent"
-                    onClick={handleViewProfile}
+                    onClick={() => router.push(`/creator/${profileData.username}`)}
                   >
                     <ExternalLink className="h-4 w-4 mr-2" />
                     View Public Profile
@@ -753,146 +627,211 @@ export default function ProfilePage() {
         <TabsContent value="membership">
           <Card className="bg-zinc-900/60 border-zinc-800/50 backdrop-blur-sm">
             <CardHeader>
-              <CardTitle>Membership & Billing</CardTitle>
+              <CardTitle className="text-xl font-semibold">Membership & Billing</CardTitle>
               <CardDescription>Manage your subscription and billing information</CardDescription>
             </CardHeader>
 
-            <CardContent className="space-y-6">
+            <CardContent className="space-y-8">
               {loadingSubscription ? (
-                <div className="flex items-center justify-center p-8">
-                  <Loader2 className="h-6 w-6 animate-spin mr-2" />
-                  <span>Loading subscription data...</span>
+                <div className="flex items-center justify-center p-12">
+                  <Loader2 className="h-6 w-6 animate-spin mr-3 text-zinc-400" />
+                  <span className="text-zinc-400">Loading subscription data...</span>
                 </div>
               ) : (
-                <div className="space-y-6">
-                  {/* Current Plan */}
-                  <div className="p-4 rounded-lg border border-zinc-700/50 bg-zinc-800/30">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-lg font-medium">Current Plan</h3>
+                <div className="space-y-8">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-medium text-white">Current Plan</h3>
                       <Badge
                         variant={subscriptionData?.isActive ? "default" : "secondary"}
-                        className={subscriptionData?.isActive ? "bg-green-600" : "bg-zinc-600"}
+                        className={`px-3 py-1 font-medium ${
+                          subscriptionData?.isActive
+                            ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                            : "bg-zinc-600 hover:bg-zinc-700 text-zinc-200"
+                        }`}
                       >
-                        {subscriptionData?.plan === "creator_pro" ? "Creator Pro" : "Free"}
+                        {subscriptionData?.plan === "creator_pro" && subscriptionData?.isActive
+                          ? "Creator Pro"
+                          : "Free"}
                       </Badge>
                     </div>
 
-                    {subscriptionData?.isActive && subscriptionData?.currentPeriodEnd && (
-                      <div className="flex justify-between">
-                        <span className="text-zinc-400">
-                          {subscriptionData?.status === "canceled" ? "Subscription Ends:" : "Next Billing:"}
-                        </span>
-                        <span className={subscriptionData?.status === "canceled" ? "text-orange-400" : ""}>
-                          {new Date(
-                            subscriptionData.currentPeriodEnd.seconds
-                              ? subscriptionData.currentPeriodEnd.seconds * 1000
-                              : subscriptionData.currentPeriodEnd,
-                          ).toLocaleDateString()}
-                        </span>
+                    {subscriptionData?.currentPeriodEnd && (
+                      <div className="p-4 rounded-lg border border-zinc-700/50 bg-zinc-800/20">
+                        <div className="flex justify-between items-center mb-3">
+                          <span className="text-sm font-medium text-zinc-300">
+                            {subscriptionData?.cancelAtPeriodEnd || subscriptionData?.status === "canceled"
+                              ? "Access Ends"
+                              : "Next Billing"}
+                          </span>
+                          <span className="text-sm font-mono text-white">
+                            {safelyFormatDate(subscriptionData.currentPeriodEnd)}
+                          </span>
+                        </div>
+
+                        {subscriptionData?.cancelAtPeriodEnd || subscriptionData?.status === "canceled" ? (
+                          <div className="p-3 rounded-md bg-amber-900/20 border border-amber-500/30">
+                            <div className="flex items-start gap-3">
+                              <div className="w-2 h-2 rounded-full bg-amber-500 mt-2 flex-shrink-0"></div>
+                              <div>
+                                <p className="text-amber-200 text-sm font-medium mb-1">Subscription Canceled</p>
+                                <p className="text-amber-300/80 text-xs leading-relaxed">
+                                  Your Pro access continues until {safelyFormatDate(subscriptionData.currentPeriodEnd)}.
+                                  After this date, your account will automatically switch to the Free plan.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ) : subscriptionData?.isActive ? (
+                          <div className="p-3 rounded-md bg-emerald-900/20 border border-emerald-500/30">
+                            <div className="flex items-start gap-3">
+                              <div className="w-2 h-2 rounded-full bg-emerald-500 mt-2 flex-shrink-0"></div>
+                              <div>
+                                <p className="text-emerald-200 text-sm font-medium mb-1">Active Subscription</p>
+                                <p className="text-emerald-300/80 text-xs leading-relaxed">
+                                  Your subscription will automatically renew on{" "}
+                                  {safelyFormatDate(subscriptionData.currentPeriodEnd)}.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                     )}
                   </div>
 
-                  {/* Plan Features */}
-                  <div className="p-4 rounded-lg border border-zinc-700/50 bg-zinc-800/30">
-                    <h3 className="text-lg font-medium mb-4">Plan Features</h3>
-                    <div className="grid grid-cols-2 gap-4">
-                      {subscriptionData?.plan === "creator_pro" ? (
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-medium text-white">Plan Features</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {subscriptionData?.plan === "creator_pro" && subscriptionData?.isActive ? (
                         <>
-                          <div className="flex items-center gap-2">
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                            <span className="text-sm">Unlimited Downloads</span>
+                          <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                            <span className="text-sm text-zinc-200">Unlimited Downloads</span>
                           </div>
-
-                          <div className="flex items-center gap-2">
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                            <span className="text-sm">Unlimited Bundles</span>
+                          <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                            <span className="text-sm text-zinc-200">Unlimited Bundles</span>
                           </div>
-
-                          <div className="flex items-center gap-2">
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                            <span className="text-sm">Unlimited Videos per Bundle</span>
+                          <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                            <span className="text-sm text-zinc-200">Unlimited Videos per Bundle</span>
                           </div>
-
-                          <div className="flex items-center gap-2">
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                            <span className="text-sm">Access to All Clips</span>
+                          <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                            <span className="text-sm text-zinc-200">Access to All Clips</span>
                           </div>
-
-                          <div className="flex items-center gap-2">
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                            <span className="text-sm">No Watermark</span>
+                          <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                            <span className="text-sm text-zinc-200">No Watermark</span>
                           </div>
-
-                          <div className="flex items-center gap-2">
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                            <span className="text-sm">Only 10% Platform Fee</span>
+                          <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                            <span className="text-sm text-zinc-200">Only 10% Platform Fee</span>
                           </div>
                         </>
                       ) : (
                         <>
-                          <div className="flex items-center gap-2">
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                            <span className="text-sm">5 Downloads per Month</span>
+                          <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
+                            <div className="w-1.5 h-1.5 rounded-full bg-zinc-500"></div>
+                            <span className="text-sm text-zinc-300">15 downloads per month</span>
                           </div>
-
-                          <div className="flex items-center gap-2">
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                            <span className="text-sm">3 Bundles Maximum</span>
+                          <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
+                            <div className="w-1.5 h-1.5 rounded-full bg-zinc-500"></div>
+                            <span className="text-sm text-zinc-300">2 bundles max on storefront</span>
                           </div>
-
-                          <div className="flex items-center gap-2">
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                            <span className="text-sm">5 Videos per Bundle</span>
+                          <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
+                            <div className="w-1.5 h-1.5 rounded-full bg-zinc-500"></div>
+                            <span className="text-sm text-zinc-300">10 videos per bundle limit</span>
                           </div>
-
-                          <div className="flex items-center gap-2">
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                            <span className="text-sm">Access to Free Content</span>
+                          <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
+                            <div className="w-1.5 h-1.5 rounded-full bg-zinc-500"></div>
+                            <span className="text-sm text-zinc-300">Access to Free Content</span>
                           </div>
-
-                          <div className="flex items-center gap-2">
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                            <span className="text-sm">MassClip Watermark</span>
+                          <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
+                            <div className="w-1.5 h-1.5 rounded-full bg-zinc-500"></div>
+                            <span className="text-sm text-zinc-300">Limited organization features</span>
                           </div>
-
-                          <div className="flex items-center gap-2">
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                            <span className="text-sm">20% Platform Fee</span>
+                          <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
+                            <div className="w-1.5 h-1.5 rounded-full bg-zinc-500"></div>
+                            <span className="text-sm text-zinc-300">20% Platform Fee</span>
                           </div>
                         </>
                       )}
                     </div>
                   </div>
 
-                  {/* Actions */}
-                  <div className="flex gap-4">
+                  <div className="flex flex-wrap gap-3 pt-4 border-t border-zinc-800/50">
                     {subscriptionData?.plan !== "creator_pro" || !subscriptionData?.isActive ? (
                       <Button
-                        onClick={() => router.push("/dashboard/membership")}
-                        className="bg-red-600 hover:bg-red-700"
+                        onClick={() => router.push("/dashboard/upgrade")}
+                        className="bg-white hover:bg-gray-100 text-black font-medium px-6"
                       >
-                        <Crown className="h-4 w-4 mr-2" />
                         Upgrade to Pro
                       </Button>
                     ) : (
-                      <div className="flex gap-4">
+                      <>
                         <Button
                           variant="outline"
-                          onClick={fetchSubscriptionData}
+                          onClick={() => fetchSubscriptionData(user, setSubscriptionData, setLoadingSubscription)}
                           disabled={loadingSubscription}
-                          className="border-zinc-700 hover:bg-zinc-800 bg-transparent"
+                          className="border-zinc-600 hover:bg-zinc-800 bg-transparent text-zinc-200 font-medium"
                         >
                           <RefreshCw className={`h-4 w-4 mr-2 ${loadingSubscription ? "animate-spin" : ""}`} />
                           Refresh Status
                         </Button>
 
-                        <CancelSubscriptionButton />
-                      </div>
+                        {subscriptionData?.cancelAtPeriodEnd || subscriptionData?.status === "canceled" ? (
+                          <Button
+                            onClick={() => router.push("/dashboard/upgrade")}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-6"
+                          >
+                            Reactivate Subscription
+                          </Button>
+                        ) : (
+                          <CancelSubscriptionButton />
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="security">
+          <Card className="bg-zinc-900/60 border-zinc-800/50 backdrop-blur-sm">
+            <CardHeader>
+              <CardTitle className="text-xl font-semibold">Security Settings</CardTitle>
+              <CardDescription>Manage your account security and password</CardDescription>
+            </CardHeader>
+
+            <CardContent className="space-y-6">
+              <div className="text-center py-8">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-zinc-800/50 flex items-center justify-center">
+                  <svg className="w-8 h-8 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                    />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-medium text-white mb-2">Security Center</h3>
+                <p className="text-zinc-400 mb-6">
+                  Access comprehensive security settings including password management, account protection, and security
+                  tips.
+                </p>
+
+                <Button
+                  onClick={() => router.push("/dashboard/security")}
+                  className="bg-white hover:bg-gray-100 text-black font-medium px-6"
+                >
+                  Go to Security Settings
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -933,7 +872,19 @@ export default function ProfilePage() {
               >
                 Cancel
               </Button>
-              <Button onClick={handleCropComplete} className="bg-red-600 hover:bg-red-700" disabled={!completedCrop}>
+              <Button
+                onClick={() =>
+                  handleCropComplete(
+                    completedCrop,
+                    setImageToCrop,
+                    setShowCropModal,
+                    setProfilePicPreview,
+                    setNewProfilePic,
+                  )
+                }
+                className="bg-red-600 hover:bg-red-700"
+                disabled={!completedCrop}
+              >
                 Apply Crop
               </Button>
             </div>

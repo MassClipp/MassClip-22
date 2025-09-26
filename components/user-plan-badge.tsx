@@ -1,7 +1,6 @@
 "use client"
 
 import { useUserPlan } from "@/hooks/use-user-plan"
-import { Crown } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 interface UserPlanBadgeProps {
@@ -19,9 +18,8 @@ export default function UserPlanBadge({ showTooltip = true, className = "" }: Us
   const badge = (
     <div className={`flex items-center ${className}`}>
       {isProUser && (
-        <span className="flex items-center text-xs bg-gradient-to-r from-yellow-600 to-yellow-400 text-black px-2 py-0.5 rounded-full font-medium">
-          <Crown className="h-3 w-3 mr-1" />
-          CREATOR PRO
+        <span className="flex items-center text-xs bg-gradient-to-r from-blue-500 to-blue-600 text-white px-2 py-0.5 rounded-full font-medium">
+          PRO
         </span>
       )}
     </div>

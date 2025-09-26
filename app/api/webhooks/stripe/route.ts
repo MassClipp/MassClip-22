@@ -115,7 +115,7 @@ async function processBundlePurchase(session: Stripe.Checkout.Session) {
   }
 
   // Get creator details
-  let creatorData = { name: "Unknown Creator", username: "unknown" }
+  let creatorData = { name: "Unknown Creator", username: "unknown", email: "" }
   if (creatorId) {
     const creatorDoc = await adminDb.collection("users").doc(creatorId).get()
     if (creatorDoc.exists) {
@@ -123,6 +123,7 @@ async function processBundlePurchase(session: Stripe.Checkout.Session) {
       creatorData = {
         name: creator.displayName || creator.name || creator.username || "Unknown Creator",
         username: creator.username || "unknown",
+        email: creator.email || "",
       }
     }
   }
@@ -196,8 +197,107 @@ async function processBundlePurchase(session: Stripe.Checkout.Session) {
   // Store in bundlePurchases collection
   await adminDb.collection("bundlePurchases").doc(session.id).set(purchaseData)
 
+  // if (creatorId && creatorData.email && finalPrice > 0) {
+  //   try {
+  //     await NotificationService.createPurchaseNotification(
+  //       creatorId,
+  //       bundleData.title || "Untitled Bundle",
+  //       finalPrice,
+  //       buyerUid,
+  //     )
+  //     console.log(`✅ [Bundle Webhook] Purchase notifications sent to creator: ${creatorData.email}`)
+  //   } catch (notificationError) {
+  //     console.error(`❌ [Bundle Webhook] Failed to send purchase notifications:`, notificationError)
+  //     // Don't fail the entire webhook if notifications fail
+  //   }
+  // }
+
   console.log(
     `✅ [Bundle Webhook] Bundle purchase created: ${session.id} for user ${buyerUid} with ${bundleContents.length} content items at $${finalPrice}`,
+  )
+}
+
+async function processDownloadPurchase(session: Stripe.Checkout.Session) {
+  console.log(`💾 [Download Webhook] Processing download purchase: ${session.id}`)
+
+  const metadata = session.metadata || {}
+  const { buyerUid, buyerEmail, buyerName, downloadId, downloadCount, downloadPrice } = metadata
+
+  if (!buyerUid || !downloadCount) {
+    throw new Error("Missing required download purchase metadata")
+  }
+
+  // Create download purchase record
+  const purchaseData = {
+    id: session.id,
+    buyerUid: buyerUid,
+    userId: buyerUid,
+    buyerEmail: buyerEmail || "",
+    buyerName: buyerName || "Anonymous User",
+
+    downloadId: downloadId,
+    downloadCount: Number.parseInt(downloadCount),
+    downloadPrice: Number.parseFloat(downloadPrice || "0"),
+
+    // Stripe details
+    sessionId: session.id,
+    paymentIntentId: session.payment_intent,
+    stripeCustomerId: session.customer,
+
+    amount: session.amount_total ? session.amount_total / 100 : 0,
+    currency: session.currency || "usd",
+    status: "completed",
+
+    // Timestamps
+    createdAt: new Date().toISOString(),
+    completedAt: new Date().toISOString(),
+    purchasedAt: new Date().toISOString(),
+    timestamp: new Date(),
+
+    // Access control
+    accessToken: `download_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    source: "stripe_webhook",
+    webhookProcessed: true,
+    contentType: "download_purchase",
+  }
+
+  // Store in downloadPurchases collection
+  await adminDb.collection("downloadPurchases").doc(session.id).set(purchaseData)
+
+  // Update user's download count in their membership/profile
+  try {
+    const userRef = adminDb.collection("memberships").doc(buyerUid)
+    const userDoc = await userRef.get()
+
+    if (userDoc.exists) {
+      const currentData = userDoc.data()!
+      const currentDownloads = currentData.additionalDownloads || 0
+      await userRef.update({
+        additionalDownloads: currentDownloads + Number.parseInt(downloadCount),
+        updatedAt: new Date().toISOString(),
+      })
+      console.log(`✅ [Download Webhook] Added ${downloadCount} downloads to user ${buyerUid}`)
+    } else {
+      // User might be in freeUsers collection
+      const freeUserRef = adminDb.collection("freeUsers").doc(buyerUid)
+      const freeUserDoc = await freeUserRef.get()
+
+      if (freeUserDoc.exists) {
+        const currentData = freeUserDoc.data()!
+        const currentDownloads = currentData.additionalDownloads || 0
+        await freeUserRef.update({
+          additionalDownloads: currentDownloads + Number.parseInt(downloadCount),
+          updatedAt: new Date().toISOString(),
+        })
+        console.log(`✅ [Download Webhook] Added ${downloadCount} downloads to free user ${buyerUid}`)
+      }
+    }
+  } catch (error) {
+    console.error(`❌ [Download Webhook] Failed to update user downloads:`, error)
+  }
+
+  console.log(
+    `✅ [Download Webhook] Download purchase created: ${session.id} for user ${buyerUid} with ${downloadCount} downloads`,
   )
 }
 
@@ -263,7 +363,9 @@ export async function POST(request: Request) {
         const contentType = metadata.contentType
         const bundleId = metadata.bundleId || metadata.productBoxId
 
-        if (contentType === "bundle" || bundleId) {
+        if (contentType === "download_purchase") {
+          await processDownloadPurchase(session)
+        } else if (contentType === "bundle" || bundleId) {
           // Handle bundle purchase
           await processBundlePurchase(session)
         } else {

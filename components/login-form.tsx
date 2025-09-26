@@ -10,7 +10,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, Eye, EyeOff } from "lucide-react"
 import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from "firebase/auth"
 import { auth } from "@/lib/firebase"
-import Logo from "@/components/logo"
+import Link from "next/link"
 
 export function LoginForm({ className, ...props }: React.ComponentProps<"div">) {
   const [email, setEmail] = useState("")
@@ -87,12 +87,8 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
       console.error("Google login error:", error)
       if (error.code === "auth/popup-closed-by-user") {
         setError("Sign-in was cancelled")
-      } else if (error.code === "auth/popup-blocked") {
-        setError("Popup was blocked. Please allow popups and try again.")
-      } else if (error.code === "auth/unauthorized-domain") {
-        setError("This domain is not authorized for Google sign-in. Please contact support.")
       } else {
-        setError("Failed to sign in with Google. Please try again.")
+        setError("Unable to sign in with Google. Please try again.")
       }
     } finally {
       setGoogleLoading(false)
@@ -101,22 +97,24 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
 
   return (
     <div className={cn("min-h-screen bg-black flex flex-col relative overflow-hidden", className)} {...props}>
-      {/* Gradient Background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-white/10" />
-      <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-transparent" />
-      <div className="absolute top-0 left-1/4 w-96 h-96 bg-white/10 rounded-full blur-3xl opacity-20" />
-      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-white/10 rounded-full blur-3xl opacity-20" />
+      <div className="absolute inset-0 bg-gradient-to-tl from-white/8 via-white/3 to-transparent" />
+      <div className="absolute inset-0 bg-gradient-to-br from-transparent via-white/2 to-white/6" />
+      <div className="absolute inset-0 bg-gradient-radial from-white/10 via-white/4 to-transparent" />
+      <div className="absolute top-0 left-1/4 w-96 h-96 bg-white/8 rounded-full blur-3xl opacity-20" />
+      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-white/8 rounded-full blur-3xl opacity-20" />
 
       {/* Content */}
       <div className="relative z-10 flex flex-col min-h-screen">
         {/* Header with Logo */}
         <div className="absolute top-6 left-6 z-20">
-          <Logo
-            href="/"
-            size="md"
-            className="cursor-pointer transition-transform hover:scale-105"
-            linkClassName="inline-block"
-          />
+          <Link href="/" className="inline-block cursor-pointer transition-transform hover:scale-105">
+            <span className="text-2xl font-thin">
+              <span className="text-white">Mass</span>
+              <span className="bg-gradient-to-br from-slate-300 via-cyan-200 via-blue-100 to-white bg-clip-text text-transparent">
+                Clip
+              </span>
+            </span>
+          </Link>
         </div>
 
         {/* Main Content */}
@@ -124,7 +122,9 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
           <div className="w-full max-w-md space-y-8">
             {/* Header */}
             <div className="text-center space-y-4">
-              <h1 className="text-4xl font-bold text-white">Welcome back</h1>
+              <h1 className="text-4xl font-thin bg-gradient-to-br from-slate-300 via-cyan-200 via-blue-100 to-white bg-clip-text text-transparent">
+                Welcome back
+              </h1>
               <p className="text-gray-400 text-lg">Sign in to your MassClip account</p>
             </div>
 
@@ -168,7 +168,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                     />
                     <path
                       fill="#FBBC05"
-                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
                     />
                     <path
                       fill="#EA4335"
@@ -176,7 +176,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                     />
                   </svg>
                 )}
-                <span>{googleLoading ? "Signing in..." : "Continue with Google"}</span>
+                <span>{googleLoading ? "Signing in..." : "Sign in with Google"}</span>
               </Button>
 
               {/* Divider */}
@@ -205,7 +205,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                     placeholder="Enter your email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="h-12 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-red-500 focus:ring-red-500 backdrop-blur-sm"
+                    className="h-12 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-gray-600 focus:ring-0 backdrop-blur-sm"
                     required
                   />
 
@@ -216,7 +216,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                       placeholder="Enter your password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="h-12 pr-10 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-red-500 focus:ring-red-500 backdrop-blur-sm"
+                      className="h-12 pr-10 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-gray-600 focus:ring-0 backdrop-blur-sm"
                       required
                     />
                     <Button
@@ -241,10 +241,9 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                     </Alert>
                   )}
 
-                  {/* Sign In Button */}
                   <Button
                     type="submit"
-                    className="w-full h-12 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-all duration-200"
+                    className="w-full h-12 bg-gradient-to-br from-slate-300 via-cyan-200 via-blue-100 to-white text-black font-medium rounded-lg transition-all duration-200 hover:opacity-90"
                     disabled={loading || googleLoading}
                   >
                     {loading ? (
@@ -279,7 +278,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
               <Button
                 variant="link"
                 size="sm"
-                className="h-auto p-0 text-sm text-red-500 hover:text-red-400 font-medium"
+                className="h-auto p-0 text-sm bg-gradient-to-br from-slate-300 via-cyan-200 via-blue-100 to-white bg-clip-text text-transparent hover:opacity-80 font-medium"
                 onClick={() => router.push(`/signup${redirect ? `?redirect=${redirect}` : ""}`)}
                 type="button"
               >
@@ -291,12 +290,12 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
 
         {/* Footer */}
         <div className="pb-8 px-8">
-          <div className="text-center text-sm text-gray-500">
+          <div className="text-center text-sm text-gray-400">
             By continuing, you agree to our{" "}
             <Button
               variant="link"
               size="sm"
-              className="h-auto p-0 text-sm text-gray-500 hover:text-gray-400 underline"
+              className="h-auto p-0 text-sm text-gray-300 hover:text-white underline"
               onClick={() => router.push("/terms")}
               type="button"
             >
@@ -306,7 +305,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
             <Button
               variant="link"
               size="sm"
-              className="h-auto p-0 text-sm text-gray-500 hover:text-gray-400 underline"
+              className="h-auto p-0 text-sm text-gray-300 hover:text-white underline"
               onClick={() => router.push("/privacy")}
               type="button"
             >

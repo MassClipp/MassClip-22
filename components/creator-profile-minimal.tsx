@@ -4,15 +4,30 @@ import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Share2, Play, Calendar, Users, Heart, Check, Package, Download, Pause, Lock, ChevronDown } from "lucide-react"
+import {
+  Share2,
+  Play,
+  Calendar,
+  Users,
+  Heart,
+  Check,
+  Package,
+  Download,
+  Pause,
+  Lock,
+  ChevronDown,
+  Instagram,
+  Twitter,
+  Globe,
+} from "lucide-react"
 import { useAuthState } from "react-firebase-hooks/auth"
 import { auth, db } from "@/lib/firebase"
-import { UnlockButton } from "@/components/unlock-button"
 import { doc, updateDoc, increment } from "firebase/firestore"
 import { useToast } from "@/hooks/use-toast"
 import { useDownloadLimit } from "@/contexts/download-limit-context"
 import ImageCard from "@/components/image-card"
 import AudioCard from "@/components/audio-card"
+import BundleCard from "@/components/bundle-card" // Assuming BundleCard is defined elsewhere
 
 interface CreatorData {
   uid: string
@@ -21,6 +36,11 @@ interface CreatorData {
   bio?: string
   profilePic?: string
   createdAt?: string
+  socialLinks?: {
+    instagram?: string
+    twitter?: string
+    website?: string
+  }
 }
 
 interface CreatorProfileMinimalProps {
@@ -257,6 +277,42 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
               {/* Bio */}
               {creator.bio && <p className="text-zinc-400 text-sm max-w-sm leading-relaxed">{creator.bio}</p>}
 
+              {/* Social Links */}
+              {creator.socialLinks && Object.keys(creator.socialLinks).length > 0 && (
+                <div className="flex gap-2 justify-center">
+                  {creator.socialLinks.instagram && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                      onClick={() => window.open(`https://instagram.com/${creator.socialLinks!.instagram}`, "_blank")}
+                    >
+                      <Instagram className="w-4 h-4" />
+                    </Button>
+                  )}
+                  {creator.socialLinks.twitter && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                      onClick={() => window.open(`https://twitter.com/${creator.socialLinks!.twitter}`, "_blank")}
+                    >
+                      <Twitter className="w-4 h-4" />
+                    </Button>
+                  )}
+                  {creator.socialLinks.website && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                      onClick={() => window.open(creator.socialLinks!.website, "_blank")}
+                    >
+                      <Globe className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
+              )}
+
               {/* Share Button */}
               <Button
                 variant="ghost"
@@ -292,6 +348,42 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
                 </div>
 
                 {creator.bio && <p className="text-zinc-400 text-sm max-w-md leading-relaxed">{creator.bio}</p>}
+
+                {/* Social Links */}
+                {creator.socialLinks && Object.keys(creator.socialLinks).length > 0 && (
+                  <div className="flex gap-2">
+                    {creator.socialLinks.instagram && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                        onClick={() => window.open(`https://instagram.com/${creator.socialLinks!.instagram}`, "_blank")}
+                      >
+                        <Instagram className="w-4 h-4" />
+                      </Button>
+                    )}
+                    {creator.socialLinks.twitter && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                        onClick={() => window.open(`https://twitter.com/${creator.socialLinks!.twitter}`, "_blank")}
+                      >
+                        <Twitter className="w-4 h-4" />
+                      </Button>
+                    )}
+                    {creator.socialLinks.website && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                        onClick={() => window.open(creator.socialLinks!.website, "_blank")}
+                      >
+                        <Globe className="w-4 h-4" />
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -493,43 +585,30 @@ function VideoContentCard({ item }: { item: ContentItem }) {
   const [user] = useAuthState(auth)
   const [isHovered, setIsHovered] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
-  const [thumbnailError, setThumbnailError] = useState(false)
-  const [videoError, setVideoError] = useState(false)
-  const [videoLoaded, setVideoLoaded] = useState(false)
   const [isDownloading, setIsDownloading] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const { toast } = useToast()
   const { hasReachedLimit, isProUser, forceRefresh } = useDownloadLimit()
 
-  const getProxiedVideoUrl = (originalUrl: string) => {
-    if (!originalUrl) return ""
-    return `/api/proxy-video?url=${encodeURIComponent(originalUrl)}`
-  }
-
-  const proxiedVideoUrl = getProxiedVideoUrl(item.fileUrl)
+  const videoUrl = item.fileUrl
 
   console.log("🎥 ContentCard rendering with:", {
     id: item.id,
     title: item.title,
-    originalFileUrl: item.fileUrl,
-    proxiedVideoUrl: proxiedVideoUrl,
+    fileUrl: item.fileUrl,
     thumbnailUrl: item.thumbnailUrl,
   })
 
   const recordDownload = async () => {
-    if (!user) return { success: true } // Allow guest downloads without recording
-
+    if (!user) return { success: true }
     if (isProUser) return { success: true }
 
     try {
       const userDocRef = doc(db, "users", user.uid)
-
       await updateDoc(userDocRef, {
         downloads: increment(1),
       })
-
       forceRefresh()
-
       return { success: true }
     } catch (err) {
       console.error("Error recording download:", err)
@@ -546,7 +625,6 @@ function VideoContentCard({ item }: { item: ContentItem }) {
       if (!response.ok) throw new Error("Network response was not ok")
 
       const blob = await response.blob()
-
       const objectUrl = URL.createObjectURL(blob)
 
       const link = document.createElement("a")
@@ -569,68 +647,27 @@ function VideoContentCard({ item }: { item: ContentItem }) {
     }
   }
 
-  useEffect(() => {
-    const videoElement = videoRef.current
-    if (!videoElement || !proxiedVideoUrl) return
-
-    const handleLoadedMetadata = () => {
-      console.log("✅ Video metadata loaded for:", item.title)
-      setVideoLoaded(true)
-      setVideoError(false)
-      videoElement.currentTime = 0.1
-    }
-
-    const handleLoadedData = () => {
-      console.log("✅ Video data loaded for:", item.title)
-      setVideoLoaded(true)
-    }
-
-    const handleError = (e: Event) => {
-      console.error("❌ Video loading error:", e)
-      setVideoError(true)
-      setVideoLoaded(false)
-    }
-
-    const handleCanPlay = () => {
-      console.log("✅ Video can play:", item.title)
-      setVideoLoaded(true)
-    }
-
-    videoElement.addEventListener("loadedmetadata", handleLoadedMetadata)
-    videoElement.addEventListener("loadeddata", handleLoadedData)
-    videoElement.addEventListener("error", handleError)
-    videoElement.addEventListener("canplay", handleCanPlay)
-
-    videoElement.load()
-
-    return () => {
-      videoElement.removeEventListener("loadedmetadata", handleLoadedMetadata)
-      videoElement.removeEventListener("loadeddata", handleLoadedData)
-      videoElement.removeEventListener("error", handleError)
-      videoElement.removeEventListener("canplay", handleCanPlay)
-    }
-  }, [proxiedVideoUrl, item.title])
-
   const handlePlayPause = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
 
-    if (!videoRef.current || !proxiedVideoUrl) {
-      console.error("❌ No video element or proxied URL available")
+    if (!videoRef.current || !videoUrl) {
+      console.error("❌ No video element or URL available")
       return
     }
 
-    console.log("🎬 Attempting to play video:", proxiedVideoUrl)
+    console.log("🎬 Attempting to play video:", videoUrl)
 
     if (isPlaying) {
       videoRef.current.pause()
-      videoRef.current.currentTime = 0.1
+      videoRef.current.currentTime = 0
       setIsPlaying(false)
     } else {
+      // Pause all other videos
       document.querySelectorAll("video").forEach((v) => {
         if (v !== videoRef.current) {
           v.pause()
-          v.currentTime = 0.1
+          v.currentTime = 0
         }
       })
 
@@ -643,7 +680,6 @@ function VideoContentCard({ item }: { item: ContentItem }) {
         })
         .catch((error) => {
           console.error("❌ Error playing video:", error)
-          setVideoError(true)
         })
     }
   }
@@ -651,14 +687,8 @@ function VideoContentCard({ item }: { item: ContentItem }) {
   const handleVideoEnd = () => {
     setIsPlaying(false)
     if (videoRef.current) {
-      videoRef.current.currentTime = 0.1
+      videoRef.current.currentTime = 0
     }
-  }
-
-  const handleVideoError = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
-    console.error("❌ Video error:", e.currentTarget.error)
-    setVideoError(true)
-    setVideoLoaded(false)
   }
 
   const handleDownload = async (e: React.MouseEvent) => {
@@ -666,7 +696,6 @@ function VideoContentCard({ item }: { item: ContentItem }) {
     e.stopPropagation()
 
     if (isDownloading) return
-
     setIsDownloading(true)
 
     try {
@@ -702,12 +731,11 @@ function VideoContentCard({ item }: { item: ContentItem }) {
       }
 
       const filename = `${item.title?.replace(/[^\w\s]/gi, "") || "video"}.mp4`
-
-      const success = await startDirectDownload(proxiedVideoUrl, filename)
+      const success = await startDirectDownload(videoUrl, filename)
 
       if (!success) {
         const link = document.createElement("a")
-        link.href = proxiedVideoUrl
+        link.href = videoUrl
         link.download = filename
         link.target = "_blank"
         link.style.display = "none"
@@ -723,7 +751,6 @@ function VideoContentCard({ item }: { item: ContentItem }) {
       })
     } catch (error) {
       console.error("Download failed:", error)
-
       toast({
         title: "Download Error",
         description: "There was an issue starting your download. Please try again.",
@@ -732,10 +759,6 @@ function VideoContentCard({ item }: { item: ContentItem }) {
     } finally {
       setIsDownloading(false)
     }
-  }
-
-  const handleThumbnailError = () => {
-    setThumbnailError(true)
   }
 
   useEffect(() => {
@@ -763,40 +786,22 @@ function VideoContentCard({ item }: { item: ContentItem }) {
       onMouseLeave={() => setIsHovered(false)}
     >
       <div
-        className={`relative aspect-[9/16] bg-zinc-900 rounded-lg overflow-hidden mb-2 transition-all duration-300 ${
+        className={`relative aspect-[9/16] rounded-lg overflow-hidden mb-2 transition-all duration-300 ${
           isHovered ? "border border-white/50" : "border border-transparent"
         }`}
       >
-        {proxiedVideoUrl && !videoError ? (
+        {videoUrl && (
           <video
             ref={videoRef}
-            className="w-full h-full object-cover"
-            preload="metadata"
+            className="w-full h-full object-cover bg-black"
+            preload="auto"
             muted
             playsInline
             controls={false}
-            onError={handleVideoError}
-            style={{ display: videoLoaded ? "block" : "none" }}
           >
-            <source src={proxiedVideoUrl} type="video/mp4" />
+            <source src={videoUrl} type="video/mp4" />
             Your browser does not support the video tag.
           </video>
-        ) : null}
-
-        {(!videoLoaded || videoError) && (
-          <div className="absolute inset-0 bg-zinc-800 flex items-center justify-center">
-            {!videoError ? (
-              <div className="text-center">
-                <div className="w-4 h-4 border border-zinc-600 border-t-white rounded-full animate-spin mx-auto mb-2" />
-                <p className="text-xs text-zinc-500">Loading...</p>
-              </div>
-            ) : (
-              <div className="text-center">
-                <Play className="w-8 h-8 text-zinc-600 mx-auto mb-2" />
-                <p className="text-xs text-zinc-500">Video unavailable</p>
-              </div>
-            )}
-          </div>
         )}
 
         <div
@@ -806,7 +811,7 @@ function VideoContentCard({ item }: { item: ContentItem }) {
         >
           <button
             onClick={handlePlayPause}
-            disabled={!proxiedVideoUrl || videoError || !videoLoaded}
+            disabled={!videoUrl}
             className="bg-white/20 backdrop-blur-sm rounded-full p-2 transition-transform duration-300 hover:scale-110 disabled:opacity-50"
             aria-label={isPlaying ? "Pause video" : "Play video"}
           >
@@ -818,7 +823,7 @@ function VideoContentCard({ item }: { item: ContentItem }) {
           </button>
         </div>
 
-        {proxiedVideoUrl && !videoError && videoLoaded && (
+        {videoUrl && (
           <button
             onClick={handleDownload}
             disabled={isDownloading || (user && hasReachedLimit && !isProUser)}
@@ -851,96 +856,6 @@ function VideoContentCard({ item }: { item: ContentItem }) {
         <h3 className="text-white text-xs sm:text-sm font-medium line-clamp-2 leading-tight" title={item.title}>
           {item.title}
         </h3>
-      </div>
-    </div>
-  )
-}
-
-function BundleCard({ item, user, creatorId }: { item: ContentItem; user: any; creatorId: string }) {
-  const [isThumbnailHovered, setIsThumbnailHovered] = useState(false)
-  const [imageError, setImageError] = useState(false)
-
-  console.log("🎯 BundleCard rendering with item:", {
-    id: item.id,
-    title: item.title,
-    thumbnailUrl: item.thumbnailUrl,
-    stripePriceId: item.stripePriceId,
-    stripeProductId: item.stripeProductId,
-    price: item.price,
-    contentCount: item.contentCount,
-    creatorId,
-    currentUserId: user?.uid,
-  })
-
-  const handleImageError = () => {
-    console.log("❌ Image failed to load:", item.thumbnailUrl)
-    setImageError(true)
-  }
-
-  const handleImageLoad = () => {
-    console.log("✅ Image loaded successfully:", item.thumbnailUrl)
-    setImageError(false)
-  }
-
-  const formatPrice = (price: number | undefined | null): string => {
-    console.log("🔢 Formatting price:", price, typeof price)
-    if (typeof price === "number" && !isNaN(price) && isFinite(price)) {
-      return price.toFixed(2)
-    }
-    return "0.00"
-  }
-
-  const formattedPrice = formatPrice(item.price)
-  console.log("💰 Final formatted price:", formattedPrice)
-
-  return (
-    <div className="bg-zinc-900 rounded-lg overflow-hidden border border-zinc-700/30 hover:border-zinc-600/40 transition-all duration-300 w-full max-w-[340px] sm:max-w-[320px] relative">
-      <div
-        className="relative aspect-square bg-zinc-800 overflow-hidden"
-        onMouseEnter={() => setIsThumbnailHovered(true)}
-        onMouseLeave={() => setIsThumbnailHovered(false)}
-      >
-        {item.thumbnailUrl && !imageError ? (
-          <img
-            src={item.thumbnailUrl || "/placeholder.svg"}
-            alt={item.title}
-            className={`w-full h-full object-cover transition-transform duration-500 ${isThumbnailHovered ? "scale-110" : "scale-100"}`}
-            onError={handleImageError}
-            onLoad={handleImageLoad}
-          />
-        ) : (
-          <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
-            <Package className="w-12 h-12 sm:w-16 sm:h-16 text-zinc-600" />
-          </div>
-        )}
-
-        <div className="absolute top-2 right-2 sm:top-4 sm:right-4 bg-black/80 backdrop-blur-sm px-2 py-1 sm:px-3 sm:py-1.5 rounded-full text-xs text-white font-semibold">
-          {item.contentCount || 0} items
-        </div>
-      </div>
-
-      <div className="p-3 sm:p-4 space-y-2 bg-gradient-to-br from-black via-black to-zinc-800/30 relative">
-        <div className="space-y-1">
-          <h3 className="text-white text-base sm:text-lg font-bold line-clamp-1" title={item.title}>
-            {item.title}
-          </h3>
-          <p className="text-zinc-400 text-sm line-clamp-1">{item.description || "Premium content bundle"}</p>
-        </div>
-
-        <div className="flex items-center justify-between pt-1">
-          <span className="text-white text-xl sm:text-2xl font-light">${formattedPrice}</span>
-
-          <UnlockButton
-            stripePriceId={item.stripePriceId}
-            bundleId={item.id}
-            user={user}
-            creatorId={creatorId}
-            price={item.price || 0}
-            title={item.title}
-            variant="outline"
-            className="border-white/20 text-white hover:bg-white/5 rounded-md font-light text-sm px-4 py-2"
-          />
-        </div>
       </div>
     </div>
   )

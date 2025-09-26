@@ -28,6 +28,7 @@ import {
   Copy,
   Loader2,
   PlusCircle,
+  Move,
 } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -41,8 +42,11 @@ import ProfileSetup from "@/components/profile-setup"
 import { VideoPreviewPlayer } from "@/components/video-preview-player"
 import AudioCard from "@/components/audio-card"
 import { useSession } from "next-auth/react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useQueryClient } from "@tanstack/react-query"
+import FolderNavigation from "@/components/folder-navigation"
+import CreateFolderDialog from "@/components/create-folder-dialog"
+import MoveFilesDialog from "@/components/move-files-dialog"
 
 interface UploadType {
   id: string
@@ -53,6 +57,7 @@ interface UploadType {
   type: "video" | "audio" | "image" | "document" | "other"
   size?: number
   mimeType?: string
+  folderId?: string | null
   createdAt: Date
   updatedAt: Date
 }
@@ -100,6 +105,7 @@ const UploadsPage = () => {
   const { data: session } = useSession()
   const router = useRouter()
   const queryClient = useQueryClient()
+  const searchParams = useSearchParams()
 
   const { user, loading: authLoading } = useFirebaseAuth()
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -119,6 +125,9 @@ const UploadsPage = () => {
   const [username, setUsername] = useState<string | null>(null)
   const [selectedUploads, setSelectedUploads] = useState<string[]>([])
   const [showAddToFreeContentDialog, setShowAddToFreeContentDialog] = useState(false)
+  const [showCreateFolderDialog, setShowCreateFolderDialog] = useState(false)
+  const [showMoveFilesDialog, setShowMoveFilesDialog] = useState(false)
+  const [currentFolderId, setCurrentFolderId] = useState<string | null>(searchParams.get("folder") || null)
 
   // Check if user has a profile
   const checkUserProfile = useCallback(async () => {
@@ -173,6 +182,7 @@ const UploadsPage = () => {
       const params = new URLSearchParams()
       if (filterType !== "all") params.append("type", filterType)
       if (searchTerm) params.append("search", searchTerm)
+      if (currentFolderId) params.append("folder", currentFolderId)
 
       console.log("🔍 Fetching uploads with token:", token.substring(0, 20) + "...")
 
@@ -218,7 +228,7 @@ const UploadsPage = () => {
     } finally {
       setLoading(false)
     }
-  }, [user, filterType, searchTerm, toast])
+  }, [user, filterType, searchTerm, currentFolderId, toast])
 
   useEffect(() => {
     if (user && hasUserProfile) {
@@ -326,6 +336,7 @@ const UploadsPage = () => {
             title: uploadItem.file.name.split(".")[0], // Remove extension for title
             size: uploadItem.file.size,
             mimeType: uploadItem.file.type,
+            folderId: currentFolderId,
           }),
         })
 
@@ -479,9 +490,20 @@ const UploadsPage = () => {
     const matchesSearchTerm =
       titleLower.includes(searchTermLower) || upload.filename.toLowerCase().includes(searchTermLower)
     const matchesFilterType = filterType === "all" || upload.type === filterType
+    const matchesFolder = upload.folderId === currentFolderId
 
-    return matchesSearchTerm && matchesFilterType
+    return matchesSearchTerm && matchesFilterType && matchesFolder
   })
+
+  const handleFolderChange = (folderId: string | null) => {
+    setCurrentFolderId(folderId)
+    setSelectedUploads([]) // Clear selection when changing folders
+  }
+
+  const handleMoveComplete = () => {
+    setSelectedUploads([])
+    fetchUploads() // Refresh the uploads list
+  }
 
   const handleAddToFreeContent = async () => {
     if (!user || selectedUploads.length === 0) return
@@ -537,10 +559,18 @@ const UploadsPage = () => {
         </Card>
       )}
 
+      <div className="mb-6">
+        <FolderNavigation
+          currentFolderId={currentFolderId}
+          onFolderChange={handleFolderChange}
+          onCreateFolder={() => setShowCreateFolderDialog(true)}
+        />
+      </div>
+
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center space-x-2">
           <h1 className="text-2xl font-bold">Your Uploads</h1>
-          <Badge variant="secondary">{uploads.length}</Badge>
+          <Badge variant="secondary">{filteredUploads.length}</Badge>
         </div>
 
         <div className="flex items-center space-x-2">
@@ -551,6 +581,18 @@ const UploadsPage = () => {
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-64"
           />
+          <Select
+            value={currentFolderId || "root"}
+            onValueChange={(value) => handleFolderChange(value === "root" ? null : value)}
+          >
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Select folder" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="root">📁 Root Folder</SelectItem>
+              {/* TODO: Add dynamic folder options here */}
+            </SelectContent>
+          </Select>
           <Select value={filterType} onValueChange={setFilterType}>
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Filter by type" />
@@ -564,6 +606,9 @@ const UploadsPage = () => {
               <SelectItem value="other">Other</SelectItem>
             </SelectContent>
           </Select>
+          <Button variant="outline" onClick={() => setShowCreateFolderDialog(true)}>
+            <PlusCircle className="h-4 w-4" />
+          </Button>
           <Button variant="outline" onClick={() => fetchUploads()}>
             <RefreshCw className="mr-2 h-4 w-4" />
             Refresh
@@ -600,31 +645,19 @@ const UploadsPage = () => {
           </Button>
 
           {selectedUploads.length > 0 && (
-            <Button variant="destructive" onClick={() => setShowAddToFreeContentDialog(true)}>
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Add to Free Content ({selectedUploads.length})
-            </Button>
+            <div className="flex items-center space-x-2">
+              <Button variant="outline" onClick={() => setShowMoveFilesDialog(true)}>
+                <Move className="mr-2 h-4 w-4" />
+                Move ({selectedUploads.length})
+              </Button>
+              <Button variant="destructive" onClick={() => setShowAddToFreeContentDialog(true)}>
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Add to Free Content ({selectedUploads.length})
+              </Button>
+            </div>
           )}
         </div>
       </div>
-
-      <Dialog open={showAddToFreeContentDialog} onOpenChange={setShowAddToFreeContentDialog}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Add to Free Content</DialogTitle>
-            <DialogDescription>Are you sure you want to add these uploads to free content?</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <p>You are about to add {selectedUploads.length} uploads to free content.</p>
-          </div>
-          <div className="flex justify-end space-x-2">
-            <Button variant="secondary" onClick={() => setShowAddToFreeContentDialog(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleAddToFreeContent}>Add to Free Content</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       <div
         className="border-dashed border-2 border-gray-400 rounded-md p-4 text-center cursor-pointer"
@@ -683,7 +716,11 @@ const UploadsPage = () => {
                   ) : upload.type === "audio" ? (
                     <AudioCard fileUrl={upload.fileUrl} />
                   ) : upload.type === "image" ? (
-                    <img src={upload.fileUrl} alt={upload.title} className="w-full h-32 object-cover rounded-md" />
+                    <img
+                      src={upload.fileUrl || "/placeholder.svg"}
+                      alt={upload.title}
+                      className="w-full h-32 object-cover rounded-md"
+                    />
                   ) : (
                     <div className="w-full h-32 flex items-center justify-center bg-gray-100 rounded-md">
                       <File className="h-12 w-12 text-gray-500" />
@@ -853,6 +890,23 @@ const UploadsPage = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      <CreateFolderDialog
+        open={showCreateFolderDialog}
+        onOpenChange={setShowCreateFolderDialog}
+        parentFolderId={currentFolderId}
+        onFolderCreated={(folderId) => {
+          // Optionally navigate to the new folder
+          setCurrentFolderId(folderId)
+        }}
+      />
+
+      <MoveFilesDialog
+        open={showMoveFilesDialog}
+        onOpenChange={setShowMoveFilesDialog}
+        selectedFileIds={selectedUploads}
+        onMoveComplete={handleMoveComplete}
+      />
     </div>
   )
 }

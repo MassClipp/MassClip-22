@@ -53,13 +53,35 @@ const PRO_FEATURES: MembershipFeatures = {
 export async function getMembership(uid: string): Promise<MembershipDoc | null> {
   try {
     console.log("🔄 Getting membership for uid:", uid.substring(0, 8) + "...")
+
+    const { getStripeSubscriptionStatus } = await import("./stripe-subscription-service")
+    const stripeStatus = await getStripeSubscriptionStatus(uid)
+
+    // If Stripe says the subscription is inactive, return null (free user)
+    if (!stripeStatus.isActive) {
+      console.log("ℹ️ Stripe subscription inactive - user is free tier")
+      return null
+    }
+
     const docRef = adminDb.collection("memberships").doc(uid)
     const docSnap = await docRef.get()
 
     if (docSnap.exists) {
       const data = docSnap.data() as MembershipDoc
-      console.log("✅ Found existing membership:", { plan: data.plan, status: data.status })
-      return data
+
+      const updatedData = {
+        ...data,
+        status: stripeStatus.status as MembershipStatus,
+        isActive: stripeStatus.isActive,
+        currentPeriodEnd: stripeStatus.currentPeriodEnd,
+      }
+
+      console.log("✅ Found existing membership with Stripe validation:", {
+        plan: updatedData.plan,
+        status: updatedData.status,
+        isActive: updatedData.isActive,
+      })
+      return updatedData
     }
 
     console.log("ℹ️ No membership found - user is free tier")

@@ -84,6 +84,14 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     const bundleId = params.id
     const body = await request.json()
 
+    console.log("[v0] Bundle update request received:", {
+      bundleId,
+      userId,
+      requestBody: body,
+      comparePrice: body.comparePrice,
+      comparePriceType: typeof body.comparePrice,
+    })
+
     const bundleDoc = await db.collection("bundles").doc(bundleId).get()
 
     if (!bundleDoc.exists) {
@@ -103,14 +111,62 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     if (body.title !== undefined) updateData.title = body.title.trim()
     if (body.description !== undefined) updateData.description = body.description.trim()
     if (body.price !== undefined) updateData.price = Number(body.price)
+    if (body.comparePrice !== undefined) {
+      console.log("[v0] DETAILED comparePrice processing:", {
+        rawValue: body.comparePrice,
+        valueType: typeof body.comparePrice,
+        isEmptyString: body.comparePrice === "",
+        isNull: body.comparePrice === null,
+        isUndefined: body.comparePrice === undefined,
+        stringLength: typeof body.comparePrice === "string" ? body.comparePrice.length : "N/A",
+      })
+
+      if (body.comparePrice === "" || body.comparePrice === null || body.comparePrice === undefined) {
+        updateData.comparePrice = null
+        console.log("[v0] Setting comparePrice to null (empty/null/undefined)")
+      } else {
+        const parsedValue = Number.parseFloat(body.comparePrice)
+        updateData.comparePrice = isNaN(parsedValue) ? null : parsedValue
+        console.log("[v0] Parsed comparePrice:", {
+          originalValue: body.comparePrice,
+          parsedValue: parsedValue,
+          isNaN: isNaN(parsedValue),
+          finalValue: updateData.comparePrice,
+        })
+      }
+    }
     if (body.coverImage !== undefined) updateData.coverImage = body.coverImage
     if (body.active !== undefined) updateData.active = body.active
 
+    console.log("[v0] Final update data being saved:", updateData)
+
     await db.collection("bundles").doc(bundleId).update(updateData)
+
+    const updatedDoc = await db.collection("bundles").doc(bundleId).get()
+    const updatedData = updatedDoc.data()
+
+    console.log("[v0] Bundle update successful - verification:", {
+      bundleId,
+      savedComparePrice: updatedData?.comparePrice,
+      savedComparePriceType: typeof updatedData?.comparePrice,
+      updateSuccess: true,
+      fullSavedData: {
+        title: updatedData?.title,
+        price: updatedData?.price,
+        comparePrice: updatedData?.comparePrice,
+      },
+    })
 
     return NextResponse.json({
       success: true,
       message: "Bundle updated successfully",
+      comparePrice: updatedData?.comparePrice,
+      bundle: {
+        id: bundleId,
+        title: updatedData?.title,
+        price: updatedData?.price,
+        comparePrice: updatedData?.comparePrice,
+      },
     })
   } catch (error) {
     console.error("❌ [Bundle API] Error updating:", error)

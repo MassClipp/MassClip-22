@@ -32,9 +32,10 @@ function Logo({ className, href, linkClassName, size = "md" }: LogoProps) {
             size === "lg" && "text-3xl md:text-4xl",
           )}
         >
-          <span className="text-crimson font-normal">Mass</span>
-          <span className="text-white">Clip</span>
-          <span className="text-crimson text-xs align-super ml-0.5">™</span>
+          <span className="text-white">Mass</span>
+          <span className="bg-gradient-to-br from-slate-300 via-cyan-200 via-blue-100 to-white bg-clip-text text-transparent">
+            Clip
+          </span>
         </span>
       </div>
     </div>

@@ -17,8 +17,8 @@ export default function ForgotPasswordPage() {
           <p className="text-white/80 text-sm">
             We are currently working on stabilizing the password reset system. If you encounter any issues, please
             contact us at{" "}
-            <a href="mailto:John@massclip.pro" className="text-amber-400 hover:text-amber-300">
-              John@massclip.pro
+            <a href="mailto:contact@massclip.pro" className="text-amber-400 hover:text-amber-300">
+              contact@massclip.pro
             </a>
           </p>
         </div>

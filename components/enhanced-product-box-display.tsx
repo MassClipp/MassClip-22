@@ -29,6 +29,7 @@ interface ProductBox {
   title: string
   description: string
   price: number
+  comparePrice?: number | null // Added compare price to interface
   coverImageUrl?: string
   isActive: boolean
   contentItems?: string[]
@@ -189,7 +190,17 @@ export default function EnhancedProductBoxDisplay({
                 </Badge>
               </div>
               <p className="text-sm text-zinc-400 mb-2">{productBox.description}</p>
-              <p className="text-xl font-bold text-green-400">${productBox.price.toFixed(2)}</p>
+              <div className="flex items-center gap-2">
+                {productBox.comparePrice && productBox.comparePrice > productBox.price && (
+                  <span className="text-sm text-zinc-400 line-through">${productBox.comparePrice.toFixed(2)}</span>
+                )}
+                <p className="text-xl font-bold text-green-400">${productBox.price.toFixed(2)}</p>
+                {productBox.comparePrice && productBox.comparePrice > productBox.price && (
+                  <Badge variant="secondary" className="bg-green-900/20 text-green-400 border-green-700/50">
+                    {Math.round(((productBox.comparePrice - productBox.price) / productBox.comparePrice) * 100)}% OFF
+                  </Badge>
+                )}
+              </div>
             </div>
 
             <div className="flex items-center gap-2">
@@ -357,7 +368,11 @@ export default function EnhancedProductBoxDisplay({
 
           {/* Add Content Button */}
           <div className="mt-4">
-            <Button variant="outline" size="sm" className="w-full border-zinc-700 text-zinc-300 hover:bg-zinc-800">
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-transparent"
+            >
               + Add Content
             </Button>
           </div>

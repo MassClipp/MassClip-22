@@ -13,13 +13,12 @@ export default function ProfileViewTracker({ profileUserId }: ProfileViewTracker
   useEffect(() => {
     const trackView = async () => {
       try {
-        // Don't track self-views
         if (user?.uid === profileUserId) {
-          console.log("Skipping self-view tracking")
+          console.log("[v0] Skipping self-view tracking")
           return
         }
 
-        console.log(`🔍 [ProfileViewTracker] Tracking view for profile: ${profileUserId}`)
+        console.log(`[v0] Tracking profile view for: ${profileUserId}`)
 
         const response = await fetch("/api/track-profile-view", {
           method: "POST",
@@ -35,22 +34,20 @@ export default function ProfileViewTracker({ profileUserId }: ProfileViewTracker
         const data = await response.json()
 
         if (data.success) {
-          console.log(`✅ [ProfileViewTracker] Successfully tracked view`)
+          console.log(`[v0] Successfully tracked profile view`)
         } else {
-          console.error(`❌ [ProfileViewTracker] Failed to track view:`, data.error)
+          console.error(`[v0] Failed to track profile view:`, data.error)
         }
       } catch (error) {
-        console.error("❌ [ProfileViewTracker] Error tracking profile view:", error)
+        console.error("[v0] Error tracking profile view:", error)
       }
     }
 
     if (profileUserId) {
-      // Add a small delay to ensure the page has loaded
-      const timer = setTimeout(trackView, 1000)
+      const timer = setTimeout(trackView, 500)
       return () => clearTimeout(timer)
     }
   }, [profileUserId, user?.uid])
 
-  // This component doesn't render anything
   return null
 }

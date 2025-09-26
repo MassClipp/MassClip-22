@@ -2,8 +2,7 @@ import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
 export function middleware(request: NextRequest) {
-  // Skip middleware entirely for Stripe webhooks
-  if (request.nextUrl.pathname === "/api/webhooks/stripe") {
+  if (request.nextUrl.pathname === "/api/webhooks/stripe" || request.nextUrl.pathname === "/api/webhook-handler-2") {
     return NextResponse.next()
   }
 
@@ -11,8 +10,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    // Exclude webhook routes from middleware processing
-    "/((?!api/webhooks/stripe).*)",
-  ],
+  matcher: ["/api/webhooks/stripe", "/api/webhook-handler-2"],
 }

@@ -68,8 +68,10 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const type = searchParams.get("type")
     const search = searchParams.get("search")
+    const folder = searchParams.get("folder")
 
     console.log(`🔍 [Uploads API] Fetching uploads for user: ${user.uid}`)
+    console.log(`🔍 [Uploads API] Folder filter: ${folder}`)
 
     try {
       // Simple query by UID only to avoid index requirements
@@ -87,6 +89,21 @@ export async function GET(request: NextRequest) {
           createdAt: data.createdAt?.toDate?.() || data.createdAt,
         }
       })
+
+      if (folder === "main") {
+        // Main folder: only show files without folder assignment
+        uploads = uploads.filter(
+          (upload) => !upload.folderId || upload.folderId === null || upload.folderId === undefined,
+        )
+        console.log(`🔍 [Uploads API] Main folder: ${uploads.length} uploads without folder assignment`)
+      } else if (folder && folder !== "main") {
+        // Specific folder: only show files with exact folder ID match
+        uploads = uploads.filter((upload) => upload.folderId === folder)
+        console.log(`🔍 [Uploads API] Folder ${folder}: ${uploads.length} uploads with matching folderId`)
+      } else {
+        // No folder specified: show all uploads (fallback)
+        console.log(`🔍 [Uploads API] No folder filter: showing all ${uploads.length} uploads`)
+      }
 
       // Apply client-side filtering
       if (type && type !== "all") {
@@ -108,7 +125,7 @@ export async function GET(request: NextRequest) {
         return dateB - dateA
       })
 
-      console.log(`✅ [Uploads API] Returning ${uploads.length} uploads`)
+      console.log(`✅ [Uploads API] Returning ${uploads.length} uploads after all filtering`)
       return NextResponse.json({ uploads })
     } catch (firestoreError) {
       console.error("❌ [Uploads API] Firestore error:", firestoreError)
@@ -157,8 +174,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid JSON in request body" }, { status: 400 })
     }
 
-    const { fileUrl, filename, title, size, mimeType, r2Key, thumbnailUrl } = body
-    console.log("🔍 [Uploads API] Upload data:", { fileUrl, filename, title, size, mimeType, r2Key })
+    const { fileUrl, filename, title, size, mimeType, r2Key, thumbnailUrl, folderId, folderPath } = body
+    console.log("🔍 [Uploads API] Upload data:", {
+      fileUrl,
+      filename,
+      title,
+      size,
+      mimeType,
+      r2Key,
+      folderId,
+      folderPath,
+    })
 
     if (!filename) {
       return NextResponse.json({ error: "Missing required field: filename" }, { status: 400 })
@@ -176,7 +202,7 @@ export async function POST(request: NextRequest) {
       else if (mimeType.includes("pdf") || mimeType.includes("document")) contentType = "document"
     }
 
-    // Create comprehensive metadata object
+    // Create comprehensive metadata object with folder information
     const metadata = {
       uid: user.uid,
 
@@ -187,6 +213,9 @@ export async function POST(request: NextRequest) {
       fileSize: size || 0,
       mimeType: mimeType || "application/octet-stream",
       contentType,
+
+      // Folder assignment - only set if not main folder
+      ...(folderId && folderId !== "main" ? { folderId, folderPath } : {}),
 
       // Optional fields
       thumbnailUrl: thumbnailUrl || null,
