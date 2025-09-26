@@ -1,9 +1,17 @@
 import { NextResponse } from "next/server"
 import { initializeFirebaseAdmin, db } from "@/lib/firebase/firebaseAdmin"
 import { getAuth } from "firebase-admin/auth"
+import { FieldValue } from "firebase-admin/firestore"
+import Stripe from "stripe"
+import { ConnectedStripeAccountsService } from "@/lib/connected-stripe-accounts-service"
+import { getUserTierInfo, incrementUserBundles } from "@/lib/user-tier-service"
 
 // Initialize Firebase Admin
 initializeFirebaseAdmin()
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2024-06-20",
+})
 
 export const maxDuration = 30
 
@@ -143,69 +151,46 @@ Be helpful, natural, and focus on their success. When creating bundles, use the 
       return NextResponse.json({ error: "No response from AI" }, { status: 500 })
     }
 
-    let bundleJobId = null
-
     if (assistantMessage.includes("CREATE_BUNDLE:") && userId) {
       try {
-        console.log("[v0] Vex wants to create a bundle, starting background job...")
-        console.log("[v0] Original message:", assistantMessage)
+        console.log("[v0] Vex wants to create a bundle, starting direct creation...")
 
-        // Extract bundle data BEFORE modifying the message
+        // Extract bundle data
         const bundleMatch = assistantMessage.match(/CREATE_BUNDLE:\s*({.*?})/s)
-        console.log("[v0] Bundle match found:", !!bundleMatch)
+        if (!bundleMatch) {
+          throw new Error("No valid bundle data found")
+        }
 
-        if (bundleMatch) {
-          console.log("[v0] Bundle data string:", bundleMatch[1])
-          const bundleData = JSON.parse(bundleMatch[1])
-          console.log("[v0] Parsed bundle data:", bundleData)
+        const bundleData = JSON.parse(bundleMatch[1])
+        console.log("[v0] Parsed bundle data:", bundleData)
 
-          // Show initial message to user
-          assistantMessage = assistantMessage
-            .replace(
-              /CREATE_BUNDLE:\s*{.*?}/s,
-              "🚀 **Starting bundle creation...** I'll keep you updated on the progress!",
-            )
-            .trim()
+        // Show progress message
+        assistantMessage = assistantMessage.replace(
+          /CREATE_BUNDLE:\s*{.*?}/s,
+          "🚀 **Creating your bundle now...** This will just take a moment!",
+        )
 
-          // Create background job instead of direct API call
-          const baseUrl = process.env.NEXT_PUBLIC_VERCEL_URL
-            ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`
-            : process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || "http://localhost:3000"
+        // Direct bundle creation with detailed progress
+        const result = await createBundleDirectly(userId, bundleData)
 
-          const jobResponse = await fetch(`${baseUrl}/api/vex/bundle-jobs`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: authHeader || "",
-            },
-            body: JSON.stringify(bundleData),
-          })
-
-          console.log("[v0] Bundle job creation response status:", jobResponse.status)
-
-          if (jobResponse.ok) {
-            const jobResult = await jobResponse.json()
-            bundleJobId = jobResult.jobId
-
-            console.log("[v0] Bundle job created successfully:", bundleJobId)
-          } else {
-            const errorText = await jobResponse.text()
-            console.error("[v0] Bundle job creation failed:", jobResponse.status, errorText)
-
-            // Replace message with error
-            assistantMessage = assistantMessage.replace(
-              "🚀 **Starting bundle creation...** I'll keep you updated on the progress!",
-              "❌ I had trouble starting the bundle creation. Let me try a different approach or you can create it manually in your dashboard.",
-            )
-          }
+        if (result.success) {
+          // Replace with success message
+          assistantMessage = assistantMessage.replace(
+            "🚀 **Creating your bundle now...** This will just take a moment!",
+            `✅ **Bundle created successfully!** Your "${result.bundle.title}" bundle is now live in your dashboard. You can view it at your storefront or share it with customers right away!`,
+          )
         } else {
-          console.log("[v0] No valid bundle data found in CREATE_BUNDLE instruction")
+          // Replace with specific error message
+          assistantMessage = assistantMessage.replace(
+            "🚀 **Creating your bundle now...** This will just take a moment!",
+            `❌ ${result.error || "I encountered an issue creating your bundle. Please try again or create it manually in your dashboard."}`,
+          )
         }
       } catch (error) {
-        console.error("[v0] Failed to create bundle job:", error)
+        console.error("[v0] Bundle creation failed:", error)
         assistantMessage = assistantMessage.replace(
-          /🚀 \*\*Starting bundle creation\.\.\.\*\* I'll keep you updated on the progress!/,
-          "❌ I encountered an error while starting bundle creation. Please try again or create it manually in your dashboard.",
+          /🚀 \*\*Creating your bundle now\.\.\.\*\* This will just take a moment!/,
+          "❌ I encountered an error while creating your bundle. Please try again or create it manually in your dashboard.",
         )
       }
     }
@@ -216,10 +201,259 @@ Be helpful, natural, and focus on their success. When creating bundles, use the 
         role: "assistant",
         content: assistantMessage,
       },
-      bundleJobId, // Return job ID for status tracking
     })
   } catch (error) {
     console.error("[v0] Chat API error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
+}
+
+async function createBundleDirectly(userId: string, bundleData: any) {
+  try {
+    const { title, description, price, contentIds, category, tags } = bundleData
+
+    if (!title || !description || !price || !contentIds || !Array.isArray(contentIds)) {
+      return { success: false, error: "Missing required bundle information. Please try again." }
+    }
+
+    console.log("[v0] Checking bundle limits...")
+    // Check bundle limits
+    const tierInfo = await getUserTierInfo(userId)
+    if (tierInfo.reachedBundleLimit) {
+      return {
+        success: false,
+        error: `You've reached your limit of ${tierInfo.bundlesLimit} bundles. Please upgrade your plan to create more bundles.`,
+      }
+    }
+
+    console.log("[v0] Checking Stripe account...")
+    // Get connected Stripe account
+    const connectedAccount = await ConnectedStripeAccountsService.getAccount(userId)
+    if (!connectedAccount || !ConnectedStripeAccountsService.isAccountFullySetup(connectedAccount)) {
+      return {
+        success: false,
+        error: "Please connect your Stripe account in Settings before creating bundles.",
+      }
+    }
+
+    const stripeAccountId = connectedAccount.stripe_user_id || connectedAccount.stripeAccountId
+
+    console.log("[v0] Processing content items...")
+    // Process content items
+    const contentItems = []
+    for (const contentId of contentIds) {
+      try {
+        const contentDoc = await db.collection("uploads").doc(contentId).get()
+        if (contentDoc.exists && contentDoc.data()?.userId === userId) {
+          const contentData = contentDoc.data()!
+          contentItems.push({
+            id: contentId,
+            title: contentData.title || contentData.filename || `Content ${contentItems.length + 1}`,
+            description: contentData.description || "",
+            fileUrl: contentData.url || contentData.downloadUrl || "",
+            downloadUrl: contentData.downloadUrl || contentData.url || "",
+            publicUrl: contentData.publicUrl || contentData.url || "",
+            thumbnailUrl: contentData.thumbnailUrl || "",
+            fileSize: contentData.size || 0,
+            fileSizeFormatted: formatFileSize(contentData.size || 0),
+            duration: contentData.duration || 0,
+            durationFormatted: formatDuration(contentData.duration || 0),
+            mimeType: contentData.mimeType || contentData.fileType || "video/mp4",
+            format: contentData.format || getFormatFromMimeType(contentData.mimeType || contentData.fileType),
+            quality: contentData.quality || "HD",
+            tags: contentData.tags || [],
+            contentType: getContentTypeFromMimeType(contentData.mimeType || contentData.fileType),
+            createdAt: contentData.createdAt || contentData.uploadedAt || new Date().toISOString(),
+            uploadedAt: contentData.uploadedAt || contentData.createdAt || new Date().toISOString(),
+          })
+        }
+      } catch (error) {
+        console.warn(`Failed to fetch content ${contentId}:`, error)
+      }
+    }
+
+    if (contentItems.length === 0) {
+      return { success: false, error: "No valid content items found. Please check your content library." }
+    }
+
+    console.log("[v0] Creating Stripe product...")
+    // Create Stripe product
+    const product = await stripe.products.create(
+      {
+        name: title,
+        description: description.trim(),
+        metadata: {
+          bundleType: "content_bundle",
+          creatorId: userId,
+          contentCount: contentItems.length.toString(),
+          createdBy: "vex-ai",
+        },
+      },
+      {
+        stripeAccount: stripeAccountId,
+      },
+    )
+
+    console.log("[v0] Creating Stripe price...")
+    // Create Stripe price
+    const stripePrice = await stripe.prices.create(
+      {
+        product: product.id,
+        unit_amount: Math.round(price * 100),
+        currency: "usd",
+        metadata: {
+          bundleType: "content_bundle",
+          creatorId: userId,
+          createdBy: "vex-ai",
+        },
+      },
+      {
+        stripeAccount: stripeAccountId,
+      },
+    )
+
+    console.log("[v0] Saving bundle to database...")
+    // Create bundle metadata
+    const totalSize = contentItems.reduce((sum, item) => sum + (item.fileSize || 0), 0)
+    const totalDuration = contentItems.reduce((sum, item) => sum + (item.duration || 0), 0)
+
+    const contentMetadata = {
+      totalItems: contentItems.length,
+      totalSize: totalSize,
+      totalSizeFormatted: formatFileSize(totalSize),
+      totalDuration: totalDuration,
+      totalDurationFormatted: formatDuration(totalDuration),
+      formats: [...new Set(contentItems.map((item) => item.format))],
+      qualities: [...new Set(contentItems.map((item) => item.quality))],
+      contentBreakdown: {
+        videos: contentItems.filter((item) => item.contentType === "video").length,
+        audios: contentItems.filter((item) => item.contentType === "audio").length,
+        images: contentItems.filter((item) => item.contentType === "image").length,
+        documents: contentItems.filter((item) => item.contentType === "document").length,
+      },
+    }
+
+    // Save bundle to database
+    const bundleRef = db.collection("bundles").doc()
+    const bundleId = bundleRef.id
+
+    const bundleDoc = {
+      id: bundleId,
+      title,
+      description: description || "",
+      price: Number(price),
+      comparePrice: null,
+      currency: "usd",
+      billingType: "one_time",
+      type: "one_time",
+
+      // Creator info
+      creatorId: userId,
+      stripeAccountId: stripeAccountId,
+
+      // Stripe product info
+      stripeProductId: product.id,
+      productId: product.id,
+      stripePriceId: stripePrice.id,
+      priceId: stripePrice.id,
+
+      // Content
+      detailedContentItems: contentItems,
+      contentItems: contentItems.map((item) => item.id),
+      contentMetadata,
+
+      // Quick access arrays
+      contentTitles: contentItems.map((item) => item.title),
+      contentDescriptions: contentItems.map((item) => item.description),
+      contentTags: contentItems.flatMap((item) => item.tags || []),
+      contentThumbnails: contentItems.map((item) => item.thumbnailUrl).filter(Boolean),
+      contentUrls: contentItems.map((item) => item.fileUrl).filter(Boolean),
+
+      // Visual
+      thumbnailUrl: contentItems[0]?.thumbnailUrl || "",
+      coverImage: contentItems[0]?.thumbnailUrl || "",
+      coverImageUrl: contentItems[0]?.thumbnailUrl || "",
+      customPreviewThumbnail: contentItems[0]?.thumbnailUrl || "",
+
+      // Status
+      status: "active",
+      active: true,
+      isPublic: true,
+
+      // Timestamps
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+      contentLastUpdated: FieldValue.serverTimestamp(),
+
+      // Vex specific
+      createdBy: "vex-ai",
+      category: category || "Mixed Media",
+      tags: tags || [],
+      totalSales: 0,
+      totalRevenue: 0,
+    }
+
+    await bundleRef.set(bundleDoc)
+
+    console.log("[v0] Updating user bundle count...")
+    // Update user bundle count
+    await incrementUserBundles(userId)
+
+    console.log("[v0] Bundle created successfully:", bundleId)
+    return {
+      success: true,
+      bundle: {
+        id: bundleId,
+        title,
+        description,
+        price,
+        stripeProductId: product.id,
+        stripePriceId: stripePrice.id,
+        contentItems: contentItems.length,
+        totalSize: contentMetadata.totalSizeFormatted,
+        thumbnailUrl: bundleDoc.thumbnailUrl,
+      },
+    }
+  } catch (error) {
+    console.error("[v0] Bundle creation error:", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "An unexpected error occurred while creating your bundle.",
+    }
+  }
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes === 0) return "0 MB"
+  const k = 1024
+  const sizes = ["Bytes", "KB", "MB", "GB"]
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
+}
+
+function formatDuration(seconds: number): string {
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  const secs = Math.floor(seconds % 60)
+
+  if (hours > 0) {
+    return `${hours}:${minutes.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
+  }
+  return `${minutes}:${secs.toString().padStart(2, "0")}`
+}
+
+function getFormatFromMimeType(mimeType: string): string {
+  if (!mimeType) return "mp4"
+  if (mimeType.includes("video")) return mimeType.split("/")[1] || "mp4"
+  if (mimeType.includes("audio")) return mimeType.split("/")[1] || "mp3"
+  if (mimeType.includes("image")) return mimeType.split("/")[1] || "jpg"
+  return "file"
+}
+
+function getContentTypeFromMimeType(mimeType: string): string {
+  if (!mimeType) return "video"
+  if (mimeType.startsWith("video/")) return "video"
+  if (mimeType.startsWith("audio/")) return "audio"
+  if (mimeType.startsWith("image/")) return "image"
+  return "document"
 }
