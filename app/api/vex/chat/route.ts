@@ -168,17 +168,18 @@ Be helpful, natural, and focus on their success. When creating bundles, use the 
             .trim()
 
           // Create background job instead of direct API call
-          const jobResponse = await fetch(
-            `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/api/vex/bundle-jobs`,
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: authHeader || "",
-              },
-              body: JSON.stringify(bundleData),
+          const baseUrl = process.env.NEXT_PUBLIC_VERCEL_URL
+            ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`
+            : process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || "http://localhost:3000"
+
+          const jobResponse = await fetch(`${baseUrl}/api/vex/bundle-jobs`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: authHeader || "",
             },
-          )
+            body: JSON.stringify(bundleData),
+          })
 
           console.log("[v0] Bundle job creation response status:", jobResponse.status)
 
