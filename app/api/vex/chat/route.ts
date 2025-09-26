@@ -258,6 +258,13 @@ async function createBundleDirectly(userId: string, bundleData: any) {
       }
     }
 
+    if (tierInfo.tier === "free" && contentIds.length > tierInfo.maxVideosPerBundle!) {
+      return {
+        success: false,
+        error: `Free users can only include up to ${tierInfo.maxVideosPerBundle} videos per bundle. This bundle has ${contentIds.length} items. Please upgrade to Creator Pro for unlimited videos per bundle.`,
+      }
+    }
+
     console.log("[v0] Checking Stripe account...")
     // Get connected Stripe account
     const connectedAccount = await ConnectedStripeAccountsService.getAccount(userId)
