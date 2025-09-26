@@ -49,14 +49,17 @@ export async function GET(request: NextRequest) {
     const userId = decodedToken.uid
     console.log("✅ [Vex Debug] User authenticated:", userId)
 
-    // Get user tier information
+    console.log("🔍 [Vex Debug] Calling getUserTierInfo...")
     const tierInfo = await getUserTierInfo(userId)
+
+    console.log("🔍 [Vex Debug] Raw tierInfo response:", JSON.stringify(tierInfo, null, 2))
 
     console.log("✅ [Vex Debug] Bundle limits found:", {
       bundlesCreated: tierInfo.bundlesCreated,
       bundlesLimit: tierInfo.bundlesLimit,
       reachedBundleLimit: tierInfo.reachedBundleLimit,
       tier: tierInfo.tier,
+      maxVideosPerBundle: tierInfo.maxVideosPerBundle,
     })
 
     return NextResponse.json({
