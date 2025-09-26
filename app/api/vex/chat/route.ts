@@ -165,10 +165,18 @@ Be helpful, natural, and focus on their success. When creating bundles, use the 
             .replace(/CREATE_BUNDLE:\s*{.*?}/s, "🔄 **Creating your bundle...**")
             .trim()
 
-          const bundleApiUrl = "/api/vex/create-bundle"
+          const baseUrl = process.env.NEXT_PUBLIC_VERCEL_URL
+            ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`
+            : process.env.NEXT_PUBLIC_SITE_URL
+              ? process.env.NEXT_PUBLIC_SITE_URL
+              : process.env.NEXT_PUBLIC_BASE_URL
+                ? process.env.NEXT_PUBLIC_BASE_URL
+                : "http://localhost:3000"
+
+          const bundleApiUrl = `${baseUrl}/api/vex/create-bundle`
           console.log("[v0] Calling bundle API:", bundleApiUrl)
 
-          // Use relative URL for internal API calls within the same application
+          // Use full URL for internal API calls to avoid URL parsing errors
           const bundleResponse = await fetch(bundleApiUrl, {
             method: "POST",
             headers: {
