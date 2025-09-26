@@ -143,12 +143,11 @@ Be helpful, natural, and focus on their success. When creating bundles, use the 
       return NextResponse.json({ error: "No response from AI" }, { status: 500 })
     }
 
-    let bundleCreated = false
-    let bundleId = null
+    let bundleJobId = null
 
     if (assistantMessage.includes("CREATE_BUNDLE:") && userId) {
       try {
-        console.log("[v0] Vex wants to create a bundle, processing...")
+        console.log("[v0] Vex wants to create a bundle, starting background job...")
         console.log("[v0] Original message:", assistantMessage)
 
         // Extract bundle data BEFORE modifying the message
@@ -160,70 +159,52 @@ Be helpful, natural, and focus on their success. When creating bundles, use the 
           const bundleData = JSON.parse(bundleMatch[1])
           console.log("[v0] Parsed bundle data:", bundleData)
 
-          // Show loading message to user
+          // Show initial message to user
           assistantMessage = assistantMessage
-            .replace(/CREATE_BUNDLE:\s*{.*?}/s, "🔄 **Creating your bundle...**")
+            .replace(
+              /CREATE_BUNDLE:\s*{.*?}/s,
+              "🚀 **Starting bundle creation...** I'll keep you updated on the progress!",
+            )
             .trim()
 
-          let baseUrl = "http://localhost:3000" // Default fallback
-
-          if (process.env.NEXT_PUBLIC_VERCEL_URL) {
-            baseUrl = `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`
-          } else if (process.env.NEXT_PUBLIC_SITE_URL) {
-            baseUrl = process.env.NEXT_PUBLIC_SITE_URL.startsWith("http")
-              ? process.env.NEXT_PUBLIC_SITE_URL
-              : `https://${process.env.NEXT_PUBLIC_SITE_URL}`
-          } else if (process.env.NEXT_PUBLIC_BASE_URL) {
-            baseUrl = process.env.NEXT_PUBLIC_BASE_URL.startsWith("http")
-              ? process.env.NEXT_PUBLIC_BASE_URL
-              : `https://${process.env.NEXT_PUBLIC_BASE_URL}`
-          }
-
-          const bundleApiUrl = `${baseUrl}/api/vex/create-bundle`
-          console.log("[v0] Calling bundle API:", bundleApiUrl)
-
-          // Use full URL for internal API calls to avoid URL parsing errors
-          const bundleResponse = await fetch(bundleApiUrl, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: authHeader || "",
+          // Create background job instead of direct API call
+          const jobResponse = await fetch(
+            `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/api/vex/bundle-jobs`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: authHeader || "",
+              },
+              body: JSON.stringify(bundleData),
             },
-            body: JSON.stringify(bundleData),
-          })
+          )
 
-          console.log("[v0] Bundle creation response status:", bundleResponse.status)
+          console.log("[v0] Bundle job creation response status:", jobResponse.status)
 
-          if (bundleResponse.ok) {
-            const bundleResult = await bundleResponse.json()
-            bundleCreated = true
-            bundleId = bundleResult.bundleId
+          if (jobResponse.ok) {
+            const jobResult = await jobResponse.json()
+            bundleJobId = jobResult.jobId
 
-            // Replace loading message with success
-            assistantMessage = assistantMessage.replace(
-              "🔄 **Creating your bundle...**",
-              `🎉 **Your bundle is ready!** I've created "${bundleData.title}" and it's now live in your storefront. You can view it in your dashboard or start sharing it with your audience!`,
-            )
-
-            console.log("[v0] Bundle created successfully:", bundleId)
+            console.log("[v0] Bundle job created successfully:", bundleJobId)
           } else {
-            const errorText = await bundleResponse.text()
-            console.error("[v0] Bundle creation failed:", bundleResponse.status, errorText)
+            const errorText = await jobResponse.text()
+            console.error("[v0] Bundle job creation failed:", jobResponse.status, errorText)
 
-            // Replace loading message with error
+            // Replace message with error
             assistantMessage = assistantMessage.replace(
-              "🔄 **Creating your bundle...**",
-              "❌ I had trouble creating the bundle. Let me try a different approach or you can create it manually in your dashboard.",
+              "🚀 **Starting bundle creation...** I'll keep you updated on the progress!",
+              "❌ I had trouble starting the bundle creation. Let me try a different approach or you can create it manually in your dashboard.",
             )
           }
         } else {
           console.log("[v0] No valid bundle data found in CREATE_BUNDLE instruction")
         }
       } catch (error) {
-        console.error("[v0] Failed to create bundle:", error)
+        console.error("[v0] Failed to create bundle job:", error)
         assistantMessage = assistantMessage.replace(
-          /🔄 \*\*Creating your bundle\.\.\.\*\*/,
-          "❌ I encountered an error while creating the bundle. Please try again or create it manually in your dashboard.",
+          /🚀 \*\*Starting bundle creation\.\.\.\*\* I'll keep you updated on the progress!/,
+          "❌ I encountered an error while starting bundle creation. Please try again or create it manually in your dashboard.",
         )
       }
     }
@@ -234,8 +215,7 @@ Be helpful, natural, and focus on their success. When creating bundles, use the 
         role: "assistant",
         content: assistantMessage,
       },
-      bundleCreated,
-      bundleId,
+      bundleJobId, // Return job ID for status tracking
     })
   } catch (error) {
     console.error("[v0] Chat API error:", error)

@@ -12,6 +12,7 @@ interface Message {
   id: string
   role: "user" | "assistant"
   content: string
+  bundleJobId?: string // Add job tracking to messages
 }
 
 interface ChatSession {
@@ -37,6 +38,7 @@ export function VexChat() {
   const [hasAnalyzed, setHasAnalyzed] = useState(false)
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([])
   const [currentChatId, setCurrentChatId] = useState<string | null>(null)
+  const [bundleJobs, setBundleJobs] = useState<{ [jobId: string]: any }>({})
   const { user } = useAuth()
 
   const suggestions = [
@@ -215,6 +217,77 @@ export function VexChat() {
     analyzeUserContent()
   }, [user, hasAnalyzed])
 
+  useEffect(() => {
+    const pollBundleJobs = async () => {
+      if (!user) return
+
+      const activeJobs = Object.keys(bundleJobs).filter((jobId) => {
+        const job = bundleJobs[jobId]
+        return job && !["completed", "failed"].includes(job.status)
+      })
+
+      if (activeJobs.length === 0) return
+
+      try {
+        const token = await user.getIdToken()
+
+        for (const jobId of activeJobs) {
+          const response = await fetch(`/api/vex/bundle-jobs?jobId=${jobId}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+
+          if (response.ok) {
+            const data = await response.json()
+            setBundleJobs((prev) => ({
+              ...prev,
+              [jobId]: data.job,
+            }))
+
+            // Update message content with progress
+            setMessages((prev) =>
+              prev.map((msg) => {
+                if (msg.bundleJobId === jobId) {
+                  const job = data.job
+                  let updatedContent = msg.content
+
+                  if (job.status === "processing" || job.status === "retrying") {
+                    updatedContent = `🔄 **Creating your bundle...** 
+
+**Progress:** ${job.progress}%
+**Current Step:** ${job.currentStep}
+
+${job.retryCount > 0 ? `*Retry ${job.retryCount}/${job.maxRetries}*` : ""}`
+                  } else if (job.status === "completed" && job.bundleId) {
+                    updatedContent = `🎉 **Your bundle is ready!** 
+
+I've successfully created your bundle and it's now live in your storefront. You can view it in your dashboard or start sharing it with your audience!
+
+**Bundle ID:** ${job.bundleId}`
+                  } else if (job.status === "failed") {
+                    updatedContent = `❌ **Bundle creation failed** 
+
+${job.error || "An unexpected error occurred"}
+
+${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can try again or create the bundle manually in your dashboard.`
+                  }
+
+                  return { ...msg, content: updatedContent }
+                }
+                return msg
+              }),
+            )
+          }
+        }
+      } catch (error) {
+        console.error("Error polling bundle jobs:", error)
+      }
+    }
+
+    // Poll every 2 seconds for active jobs
+    const interval = setInterval(pollBundleJobs, 2000)
+    return () => clearInterval(interval)
+  }, [user, bundleJobs])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!input.trim() || isLoading) return
@@ -285,6 +358,19 @@ export function VexChat() {
         id: (Date.now() + 1).toString(),
         role: "assistant",
         content: data.message.content,
+        bundleJobId: data.bundleJobId || undefined,
+      }
+
+      if (data.bundleJobId) {
+        setBundleJobs((prev) => ({
+          ...prev,
+          [data.bundleJobId]: {
+            id: data.bundleJobId,
+            status: "queued",
+            progress: 0,
+            currentStep: "Initializing...",
+          },
+        }))
       }
 
       const finalMessages = [...newMessages, assistantMessage]
