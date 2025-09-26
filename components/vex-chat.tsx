@@ -320,9 +320,7 @@ export function VexChat() {
     <div className="flex h-screen">
       <div className="fixed left-0 top-16 h-[calc(100vh-4rem)] w-64 bg-zinc-950 border-r border-zinc-800 flex flex-col z-40">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-zinc-800">
-          <h1 className="text-xl font-semibold text-white">Vex</h1>
-        </div>
+        <div className="flex items-center justify-between p-4 border-b border-zinc-800"></div>
 
         {/* New Chat Button */}
         <div className="p-4">
@@ -369,25 +367,19 @@ export function VexChat() {
       </div>
 
       <div className="flex flex-col flex-1 min-h-0 ml-64">
-        <div className="flex-shrink-0 px-6 py-4 border-b border-zinc-200 dark:border-zinc-800">
-          <div className="flex items-center gap-3">
-            <h1 className="text-xl font-semibold">Vex</h1>
-          </div>
-        </div>
-
         <div className="flex-1 flex flex-col min-h-0">
           <ScrollArea className="flex-1 px-6">
             <div className="max-w-3xl mx-auto py-6">
               {messages.length === 0 && (
                 <div className="text-center py-12">
-                  <h2 className="text-2xl font-semibold mb-3">Hi! I'm Vex</h2>
+                  <h2 className="text-2xl font-semibold mb-3">Hi! I'm your AI assistant</h2>
                   <p className="text-muted-foreground mb-8 max-w-md mx-auto leading-relaxed">
                     I'll help you create profitable bundles, set optimal pricing, and build compelling storefront
                     content.
                   </p>
 
                   {contentAnalysis && (
-                    <div className="mb-8 p-4 rounded-lg bg-zinc-100 dark:bg-zinc-900 max-w-md mx-auto border border-zinc-300 dark:border-zinc-700">
+                    <div className="mb-8 p-4 rounded-lg bg-transparent max-w-md mx-auto border border-zinc-700/50">
                       <p className="text-sm text-muted-foreground mb-2">
                         Analyzed {contentAnalysis.totalUploads} uploads
                       </p>
@@ -404,7 +396,7 @@ export function VexChat() {
                     {suggestions.map((suggestion, index) => (
                       <button
                         key={index}
-                        className="text-left p-4 rounded-lg bg-zinc-100 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-all duration-200 text-sm"
+                        className="text-left p-4 rounded-lg bg-transparent border border-zinc-700/50 hover:bg-zinc-800/30 hover:border-zinc-600/50 transition-all duration-200 text-sm"
                         onClick={() => handleSuggestionClick(suggestion)}
                       >
                         {suggestion}
@@ -460,7 +452,7 @@ export function VexChat() {
                   <Input
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
-                    placeholder="Message Vex..."
+                    placeholder="Message AI assistant..."
                     className="chat-input-container border-0 bg-transparent text-sm py-3 px-4 pr-12 resize-none focus:ring-1 focus:ring-ring"
                     disabled={isLoading}
                   />
