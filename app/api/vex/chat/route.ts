@@ -39,28 +39,39 @@ export async function POST(request: Request) {
 
     if (authHeader && authHeader.startsWith("Bearer ")) {
       try {
-        const token = authHeader.split("Bearer ")[1]
-        const decodedToken = await getAuth().verifyIdToken(token)
-        userId = decodedToken.uid
-        console.log("[v0] User authenticated:", userId)
+        const tokenParts = authHeader.split("Bearer ")
+        if (tokenParts.length !== 2 || !tokenParts[1] || !tokenParts[1].trim()) {
+          console.error("[v0] Invalid authorization header format")
+        } else {
+          const token = tokenParts[1].trim()
 
-        const analysisDoc = await db.collection("vex_content_analysis").doc(userId).get()
-        if (analysisDoc.exists) {
-          const analysisData = analysisDoc.data()
-          userContentContext = `
+          // Validate token format (JWT should have 3 parts separated by dots)
+          if (token.split(".").length === 3) {
+            const decodedToken = await getAuth().verifyIdToken(token)
+            userId = decodedToken.uid
+            console.log("[v0] User authenticated:", userId)
+
+            const analysisDoc = await db.collection("vex_content_analysis").doc(userId).get()
+            if (analysisDoc.exists) {
+              const analysisData = analysisDoc.data()
+              userContentContext = `
 
 USER'S CONTENT LIBRARY:
 Total Uploads: ${analysisData?.totalUploads || 0}
 Categories: ${(analysisData?.categories || []).join(", ")}
 
 Recent uploads: ${(analysisData?.uploads || [])
-            .slice(0, 10)
-            .map((upload: any) => `- ${upload.title} (${upload.contentType})`)
-            .join("\n")}
+                .slice(0, 10)
+                .map((upload: any) => `- ${upload.title} (${upload.contentType})`)
+                .join("\n")}
 
 Available content IDs for bundling: ${(analysisData?.uploads || []).map((upload: any) => upload.id).join(", ")}
 `
-          console.log("[v0] User context loaded")
+              console.log("[v0] User context loaded")
+            }
+          } else {
+            console.error("[v0] Invalid token format")
+          }
         }
       } catch (error) {
         console.log("[v0] Auth failed, continuing without user context:", error)
