@@ -320,7 +320,9 @@ export function VexChat() {
     <div className="flex h-screen">
       <div className="fixed left-0 top-16 h-[calc(100vh-4rem)] w-64 bg-zinc-950 border-r border-zinc-800 flex flex-col z-40">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-zinc-800"></div>
+        <div className="flex items-center justify-between p-4 border-b border-zinc-800">
+          <h2 className="text-lg font-semibold text-white">Vex</h2>
+        </div>
 
         {/* New Chat Button */}
         <div className="p-4">
@@ -372,7 +374,7 @@ export function VexChat() {
             <div className="max-w-3xl mx-auto py-6">
               {messages.length === 0 && (
                 <div className="text-center py-12">
-                  <h2 className="text-2xl font-semibold mb-3">Hi! I'm your AI assistant</h2>
+                  <h2 className="text-2xl font-semibold mb-3">Hi! I'm Vex</h2>
                   <p className="text-muted-foreground mb-8 max-w-md mx-auto leading-relaxed">
                     I'll help you create profitable bundles, set optimal pricing, and build compelling storefront
                     content.
