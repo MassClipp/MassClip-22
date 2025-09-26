@@ -238,43 +238,85 @@ async function createBundleDirectly(userId: string, bundleData: any) {
 
     const stripeAccountId = connectedAccount.stripe_user_id || connectedAccount.stripeAccountId
 
-    console.log("[v0] Processing content items...")
-    // Process content items
+    console.log("[v0] Getting user's content analysis...")
+    const analysisDoc = await db.collection("vex_content_analysis").doc(userId).get()
+    if (!analysisDoc.exists) {
+      return { success: false, error: "Please run content analysis first before creating bundles." }
+    }
+
+    const analysisData = analysisDoc.data()!
+    const availableUploads = analysisData.uploads || []
+
+    console.log("[v0] Processing content items with proper ID mapping...")
     const contentItems = []
-    for (const contentId of contentIds) {
+    for (const contentIdentifier of contentIds) {
       try {
-        const contentDoc = await db.collection("uploads").doc(contentId).get()
-        if (contentDoc.exists && contentDoc.data()?.userId === userId) {
-          const contentData = contentDoc.data()!
-          contentItems.push({
-            id: contentId,
-            title: contentData.title || contentData.filename || `Content ${contentItems.length + 1}`,
-            description: contentData.description || "",
-            fileUrl: contentData.url || contentData.downloadUrl || "",
-            downloadUrl: contentData.downloadUrl || contentData.url || "",
-            publicUrl: contentData.publicUrl || contentData.url || "",
-            thumbnailUrl: contentData.thumbnailUrl || "",
-            fileSize: contentData.size || 0,
-            fileSizeFormatted: formatFileSize(contentData.size || 0),
-            duration: contentData.duration || 0,
-            durationFormatted: formatDuration(contentData.duration || 0),
-            mimeType: contentData.mimeType || contentData.fileType || "video/mp4",
-            format: contentData.format || getFormatFromMimeType(contentData.mimeType || contentData.fileType),
-            quality: contentData.quality || "HD",
-            tags: contentData.tags || [],
-            contentType: getContentTypeFromMimeType(contentData.mimeType || contentData.fileType),
-            createdAt: contentData.createdAt || contentData.uploadedAt || new Date().toISOString(),
-            uploadedAt: contentData.uploadedAt || contentData.createdAt || new Date().toISOString(),
-          })
+        // First, try to find by exact document ID
+        let matchedUpload = availableUploads.find((upload: any) => upload.id === contentIdentifier)
+
+        // If not found by ID, try to match by title or filename
+        if (!matchedUpload) {
+          matchedUpload = availableUploads.find(
+            (upload: any) =>
+              upload.title === contentIdentifier ||
+              upload.filename === contentIdentifier ||
+              upload.title.toLowerCase().includes(contentIdentifier.toLowerCase()) ||
+              contentIdentifier.toLowerCase().includes(upload.title.toLowerCase()),
+          )
+        }
+
+        if (matchedUpload) {
+          // Fetch the actual document from the correct collection
+          const contentDoc = await db.collection(matchedUpload.collection).doc(matchedUpload.id).get()
+          if (contentDoc.exists) {
+            const contentData = contentDoc.data()!
+
+            // Verify this content belongs to the user
+            if (contentData.uid === userId || contentData.userId === userId) {
+              contentItems.push({
+                id: matchedUpload.id,
+                title: contentData.title || contentData.filename || `Content ${contentItems.length + 1}`,
+                description: contentData.description || "",
+                fileUrl: contentData.url || contentData.downloadUrl || contentData.downloadURL || "",
+                downloadUrl: contentData.downloadUrl || contentData.url || contentData.downloadURL || "",
+                publicUrl: contentData.publicUrl || contentData.url || contentData.downloadURL || "",
+                thumbnailUrl: contentData.thumbnailUrl || "",
+                fileSize: contentData.fileSize || contentData.size || 0,
+                fileSizeFormatted: formatFileSize(contentData.fileSize || contentData.size || 0),
+                duration: contentData.duration || 0,
+                durationFormatted: formatDuration(contentData.duration || 0),
+                mimeType: contentData.mimeType || contentData.type || "video/mp4",
+                format: contentData.format || getFormatFromMimeType(contentData.mimeType || contentData.type),
+                quality: contentData.quality || "HD",
+                tags: contentData.tags || [],
+                contentType: getContentTypeFromMimeType(contentData.mimeType || contentData.type),
+                createdAt: contentData.createdAt || contentData.addedAt || new Date().toISOString(),
+                uploadedAt:
+                  contentData.uploadedAt || contentData.createdAt || contentData.addedAt || new Date().toISOString(),
+                collection: matchedUpload.collection,
+              })
+              console.log(
+                `[v0] Successfully mapped "${contentIdentifier}" to document ${matchedUpload.id} from ${matchedUpload.collection}`,
+              )
+            }
+          }
+        } else {
+          console.warn(`[v0] Could not find content for identifier: "${contentIdentifier}"`)
         }
       } catch (error) {
-        console.warn(`Failed to fetch content ${contentId}:`, error)
+        console.warn(`[v0] Failed to process content "${contentIdentifier}":`, error)
       }
     }
 
     if (contentItems.length === 0) {
-      return { success: false, error: "No valid content items found. Please check your content library." }
+      return {
+        success: false,
+        error:
+          "No valid content items found. The content you referenced may not exist or may not belong to your account.",
+      }
     }
+
+    console.log(`[v0] Successfully processed ${contentItems.length} content items`)
 
     console.log("[v0] Creating Stripe product...")
     // Create Stripe product
