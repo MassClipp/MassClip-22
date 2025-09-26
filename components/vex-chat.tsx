@@ -387,12 +387,10 @@ export function VexChat() {
                   </p>
 
                   {contentAnalysis && (
-                    <div className="mb-8 p-4 rounded-lg border border-zinc-300 dark:border-zinc-700 max-w-md mx-auto">
-                      <p className="text-sm text-muted-foreground mb-2">
-                        Analyzed {contentAnalysis.totalUploads} uploads
-                      </p>
+                    <div className="mb-8 p-4 rounded-lg bg-transparent border border-zinc-600 max-w-md mx-auto">
+                      <p className="text-sm text-white mb-2">Analyzed {contentAnalysis.totalUploads} uploads</p>
                       {contentAnalysis.categories.length > 0 && (
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-zinc-300">
                           Found: {contentAnalysis.categories.slice(0, 3).join(", ")}
                           {contentAnalysis.categories.length > 3 && ` +${contentAnalysis.categories.length - 3} more`}
                         </p>
@@ -404,7 +402,7 @@ export function VexChat() {
                     {suggestions.map((suggestion, index) => (
                       <button
                         key={index}
-                        className="text-left p-4 rounded-lg border border-zinc-300 dark:border-zinc-700 transition-colors duration-200 text-sm"
+                        className="text-left p-4 rounded-lg bg-transparent border border-zinc-600 text-white text-sm"
                         onClick={() => handleSuggestionClick(suggestion)}
                       >
                         {suggestion}
