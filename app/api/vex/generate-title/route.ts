@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server"
-import { verifyIdToken } from "@/lib/auth-utils"
+import { verifyIdTokenFromRequest } from "@/lib/auth-utils"
 
 export async function POST(request: Request) {
   try {
-    const authResult = await verifyIdToken(request)
-    if (!authResult.success) {
+    const decodedToken = await verifyIdTokenFromRequest(request)
+    if (!decodedToken) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 

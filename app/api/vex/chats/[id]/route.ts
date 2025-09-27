@@ -1,15 +1,15 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { adminDb } from "@/lib/firebase-admin"
-import { verifyIdToken } from "@/lib/auth-utils"
+import { verifyIdTokenFromRequest } from "@/lib/auth-utils"
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const authResult = await verifyIdToken(request)
-    if (!authResult.success) {
+    const decodedToken = await verifyIdTokenFromRequest(request)
+    if (!decodedToken) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const userId = authResult.uid
+    const userId = decodedToken.uid
     const chatId = params.id
 
     const doc = await adminDb.collection("vex_chats").doc(chatId).get()
@@ -37,12 +37,12 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const authResult = await verifyIdToken(request)
-    if (!authResult.success) {
+    const decodedToken = await verifyIdTokenFromRequest(request)
+    if (!decodedToken) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const userId = authResult.uid
+    const userId = decodedToken.uid
     const chatId = params.id
     const { title, messages } = await request.json()
 
@@ -76,12 +76,12 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const authResult = await verifyIdToken(request)
-    if (!authResult.success) {
+    const decodedToken = await verifyIdTokenFromRequest(request)
+    if (!decodedToken) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const userId = authResult.uid
+    const userId = decodedToken.uid
     const chatId = params.id
 
     const docRef = adminDb.collection("vex_chats").doc(chatId)

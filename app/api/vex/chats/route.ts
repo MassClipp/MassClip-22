@@ -1,15 +1,15 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { adminDb } from "@/lib/firebase-admin"
-import { verifyIdToken } from "@/lib/auth-utils"
+import { verifyIdTokenFromRequest } from "@/lib/auth-utils"
 
 export async function GET(request: NextRequest) {
   try {
-    const authResult = await verifyIdToken(request)
-    if (!authResult.success) {
+    const decodedToken = await verifyIdTokenFromRequest(request)
+    if (!decodedToken) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const userId = authResult.uid
+    const userId = decodedToken.uid
 
     // Get user's chat sessions
     const chatsRef = adminDb.collection("vex_chats")
@@ -31,12 +31,12 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const authResult = await verifyIdToken(request)
-    if (!authResult.success) {
+    const decodedToken = await verifyIdTokenFromRequest(request)
+    if (!decodedToken) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const userId = authResult.uid
+    const userId = decodedToken.uid
     const { title, messages } = await request.json()
 
     // Create new chat session
