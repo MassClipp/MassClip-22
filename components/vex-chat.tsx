@@ -63,7 +63,7 @@ interface ContentAnalysis {
   summary: string
 }
 
-export function VexChat() {
+function VexChat() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -76,9 +76,9 @@ export function VexChat() {
   const [isLoadingCurrentChat, setIsLoadingCurrentChat] = useState(false)
   const { user } = useAuth()
   const isMobile = useIsMobile()
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const router = useRouter()
   const [username, setUsername] = useState<string | null>(null)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false) // Declare isSidebarOpen
 
   const suggestions = [
     "Help me create a beginner photography bundle",
@@ -638,7 +638,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
           variant="ghost"
           size="sm"
-          className="fixed top-4 left-4 z-50 h-10 w-10 p-0 bg-zinc-900/90 backdrop-blur-sm border border-zinc-700 hover:bg-zinc-800"
+          className="fixed top-4 left-4 z-50 h-10 w-10 p-0 bg-zinc-950/90 backdrop-blur-sm border border-zinc-700 hover:bg-zinc-800"
         >
           {isSidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </Button>
@@ -667,7 +667,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
             <Logo href="/dashboard/vex" size="sm" className="scale-75" />
             <div className="flex flex-col">
               <span className="text-lg font-semibold text-white">MassClip</span>
-              <span className="text-xs text-zinc-400">AI Assistant</span>
+              <span className="text-xs text-blue-400 font-medium">Vex AI Assistant</span>
             </div>
           </div>
           {isMobile && (
@@ -962,3 +962,5 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
     </div>
   )
 }
+
+export default VexChat
