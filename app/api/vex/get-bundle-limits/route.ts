@@ -62,16 +62,29 @@ export async function GET(request: NextRequest) {
       downloadsLimit: tierInfo.downloadsLimit,
     })
 
+    const baseBundleLimit = tierInfo.tier === "free" ? 2 : null
+    const totalBundleLimit = tierInfo.bundlesLimit || baseBundleLimit
+    const extraBundleSlots = tierInfo.tier === "free" && totalBundleLimit ? totalBundleLimit - 2 : 0
+    const bundlesCreated = tierInfo.bundlesCreated || 0
+    const bundlesRemaining = totalBundleLimit ? totalBundleLimit - bundlesCreated : null
+
     const bundleLimits = {
-      bundlesCreated: tierInfo.bundlesCreated || 0,
-      bundlesLimit: tierInfo.bundlesLimit || (tierInfo.tier === "free" ? 2 : null),
+      bundlesCreated,
+      bundlesLimit: totalBundleLimit,
+      baseBundleLimit, // Base free tier limit (2) or null for pro
+      extraBundleSlots, // Additional purchased slots
+      bundlesRemaining,
       maxVideosPerBundle: tierInfo.maxVideosPerBundle || (tierInfo.tier === "free" ? 10 : null),
       reachedBundleLimit: tierInfo.reachedBundleLimit || false,
       tier: tierInfo.tier,
       canCreateBundle: !tierInfo.reachedBundleLimit,
       upgradeMessage: tierInfo.reachedBundleLimit
-        ? `You've reached your limit of ${tierInfo.bundlesLimit || 2} bundles. ${tierInfo.tier === "free" ? "Upgrade to Creator Pro for unlimited bundles or purchase extra bundle slots." : "Please contact support."}`
+        ? `You've reached your limit of ${totalBundleLimit || 2} bundles. ${tierInfo.tier === "free" ? "Upgrade to Creator Pro for unlimited bundles or purchase extra bundle slots." : "Please contact support."}`
         : null,
+      limitBreakdown:
+        tierInfo.tier === "free"
+          ? `Free tier: ${baseBundleLimit} bundles${extraBundleSlots > 0 ? ` + ${extraBundleSlots} purchased extra slots = ${totalBundleLimit} total` : ""}`
+          : "Creator Pro: Unlimited bundles",
     }
 
     console.log("✅ [Vex Debug] Final bundle limits response:", bundleLimits)

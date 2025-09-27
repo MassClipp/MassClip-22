@@ -1,6 +1,6 @@
 import { getFreeUser, createFreeUser, incrementFreeUserDownloads, incrementFreeUserBundles } from "./free-users-service"
 import { getMembership, incrementDownloads, incrementBundles, toTierInfo } from "./memberships-service"
-import { getUserBundleSlots, consumeBundleSlot } from "./bundle-slots-service"
+import { consumeBundleSlot } from "./bundle-slots-service"
 
 export type UserTier = "free" | "creator_pro"
 
@@ -47,26 +47,22 @@ export async function getUserTierInfo(uid: string): Promise<TierInfo> {
     freeUser = await createFreeUser(uid, "")
   }
 
-  const bundleSlots = await getUserBundleSlots(uid)
-  const extraBundleSlots = bundleSlots ? bundleSlots.availableSlots : 0
-  const totalBundleLimit = freeUser.bundlesLimit + extraBundleSlots
-
   const tierInfo: TierInfo = {
     tier: "free",
     downloadsUsed: freeUser.downloadsUsed,
     downloadsLimit: freeUser.downloadsLimit,
     bundlesCreated: freeUser.bundlesCreated,
-    bundlesLimit: totalBundleLimit,
+    bundlesLimit: freeUser.bundlesLimit, // This already includes base (2) + purchased slots
     maxVideosPerBundle: freeUser.maxVideosPerBundle,
     platformFeePercentage: freeUser.platformFeePercentage,
     reachedDownloadLimit: freeUser.downloadsUsed >= freeUser.downloadsLimit,
-    reachedBundleLimit: freeUser.bundlesCreated >= totalBundleLimit,
+    reachedBundleLimit: freeUser.bundlesCreated >= freeUser.bundlesLimit,
   }
 
-  console.log("✅ Returning free tier info with bundle slots:", {
-    ...tierInfo,
-    extraBundleSlots,
-    baseBundleLimit: freeUser.bundlesLimit,
+  console.log("✅ Returning free tier info:", {
+    bundlesCreated: tierInfo.bundlesCreated,
+    bundlesLimit: tierInfo.bundlesLimit,
+    maxVideosPerBundle: tierInfo.maxVideosPerBundle,
   })
   return tierInfo
 }
