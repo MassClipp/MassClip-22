@@ -504,9 +504,9 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                           : "text-zinc-400 hover:bg-zinc-900/50 hover:text-white"
                       }`}
                     >
-                      <div className="flex items-center gap-3">
-                        <MessageSquare className="h-4 w-4 flex-shrink-0" />
-                        <span className="truncate flex-1 font-medium">{chat.title}</span>
+                      <div className="flex items-start gap-3 pr-8">
+                        <MessageSquare className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                        <span className="flex-1 font-medium leading-tight text-balance break-words">{chat.title}</span>
                       </div>
                       <div className="flex items-center justify-between text-xs text-zinc-500 ml-7">
                         <span>
@@ -526,13 +526,15 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                     <Button
                       onClick={(e) => {
                         e.stopPropagation()
-                        deleteChat(chat.id)
+                        if (confirm("Are you sure you want to delete this chat?")) {
+                          deleteChat(chat.id)
+                        }
                       }}
                       size="sm"
                       variant="ghost"
-                      className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-zinc-500 hover:text-red-400 hover:bg-zinc-800 transition-all duration-200"
+                      className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 h-7 w-7 p-0 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200 rounded-md"
                     >
-                      <Trash2 className="h-3 w-3" />
+                      <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
                 ))
