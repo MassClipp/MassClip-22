@@ -593,9 +593,9 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
           )}
 
           <ScrollArea className="flex-1 px-6">
-            <div className="max-w-3xl mx-auto py-6">
+            <div className="max-w-3xl mx-auto py-6 min-h-full flex flex-col">
               {messages.length === 0 && (
-                <div className="text-center py-12">
+                <div className="text-center py-12 flex-1 flex flex-col justify-center">
                   <h2 className="text-2xl font-semibold mb-3">Hi! I'm Vex</h2>
                   <p className="text-muted-foreground mb-8 max-w-md mx-auto leading-relaxed">
                     I'll help you create profitable bundles, set optimal pricing, and build compelling storefront
@@ -630,42 +630,44 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                 </div>
               )}
 
-              <div className="space-y-6">
-                {messages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`chat-slide-up ${message.role === "user" ? "flex justify-end" : "flex justify-start"}`}
-                  >
+              {messages.length > 0 && (
+                <div className="space-y-6 flex-1">
+                  {messages.map((message) => (
                     <div
-                      className={`max-w-[80%] rounded-lg px-4 py-3 ${
-                        message.role === "user" ? "chat-message-user ml-auto" : "chat-message-assistant"
-                      }`}
+                      key={message.id}
+                      className={`chat-slide-up ${message.role === "user" ? "flex justify-end" : "flex justify-start"}`}
                     >
-                      <div className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</div>
+                      <div
+                        className={`max-w-[80%] rounded-lg px-4 py-3 ${
+                          message.role === "user" ? "chat-message-user ml-auto" : "chat-message-assistant"
+                        }`}
+                      >
+                        <div className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
 
-                {isLoading && (
-                  <div className="flex justify-start chat-slide-up">
-                    <div className="chat-message-assistant rounded-lg px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="flex space-x-1">
-                          <div className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse"></div>
-                          <div
-                            className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse"
-                            style={{ animationDelay: "0.2s" }}
-                          ></div>
-                          <div
-                            className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse"
-                            style={{ animationDelay: "0.4s" }}
-                          ></div>
+                  {isLoading && (
+                    <div className="flex justify-start chat-slide-up">
+                      <div className="chat-message-assistant rounded-lg px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="flex space-x-1">
+                            <div className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse"></div>
+                            <div
+                              className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse"
+                              style={{ animationDelay: "0.2s" }}
+                            ></div>
+                            <div
+                              className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse"
+                              style={{ animationDelay: "0.4s" }}
+                            ></div>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
             </div>
           </ScrollArea>
 
@@ -676,7 +678,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                   <Input
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
-                    placeholder="Message AI assistant..."
+                    placeholder="Message Vex"
                     className="chat-input-container border-0 bg-transparent text-sm py-3 px-4 pr-12 resize-none focus:ring-1 focus:ring-ring"
                     disabled={isLoading}
                   />
