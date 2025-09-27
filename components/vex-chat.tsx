@@ -91,47 +91,80 @@ export function VexChat() {
     }
   }
 
-  // Create new chat
   const createNewChat = async () => {
-    if (!user) return
+    if (!user) {
+      console.error("User not authenticated")
+      return
+    }
 
     try {
       const token = await user.getIdToken()
+      console.log("[v0] Creating new chat with token")
+
       const response = await fetch("/api/vex/chats", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ title: "New Chat", messages: [] }),
+        body: JSON.stringify({
+          title: "New Chat",
+          messages: [],
+        }),
       })
+
+      console.log("[v0] New chat response status:", response.status)
 
       if (response.ok) {
         const newChat = await response.json()
+        console.log("[v0] New chat created:", newChat.id)
         setChatSessions((prev) => [newChat, ...prev])
         setMessages([])
         setCurrentChatId(newChat.id)
+      } else {
+        const errorData = await response.json().catch(() => ({}))
+        console.error("[v0] Failed to create new chat:", response.status, errorData)
+        throw new Error(`Failed to create chat: ${response.status}`)
       }
     } catch (error) {
       console.error("Error creating new chat:", error)
+      // Show user-friendly error message
+      alert("Failed to create new chat. Please try again.")
     }
   }
 
-  // Save current chat
   const saveCurrentChat = async (newMessages: Message[]) => {
     if (!user || !currentChatId) return
 
     try {
       const token = await user.getIdToken()
-
-      // Generate title from first user message if no title exists
       const currentChat = chatSessions.find((c) => c.id === currentChatId)
       let title = currentChat?.title || "New Chat"
 
-      if (title === "New Chat" && newMessages.length > 0) {
-        const firstUserMessage = newMessages.find((m) => m.role === "user")
-        if (firstUserMessage) {
-          title = firstUserMessage.content.slice(0, 50) + (firstUserMessage.content.length > 50 ? "..." : "")
+      // Generate AI title if it's still "New Chat" and we have messages
+      if (title === "New Chat" && newMessages.length >= 2) {
+        try {
+          const titleResponse = await fetch("/api/vex/generate-title", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ messages: newMessages }),
+          })
+
+          if (titleResponse.ok) {
+            const titleData = await titleResponse.json()
+            title = titleData.title || title
+            console.log("[v0] Generated AI title:", title)
+          }
+        } catch (titleError) {
+          console.log("[v0] Title generation failed, using fallback:", titleError)
+          // Fallback to first user message
+          const firstUserMessage = newMessages.find((m) => m.role === "user")
+          if (firstUserMessage) {
+            title = firstUserMessage.content.slice(0, 50) + (firstUserMessage.content.length > 50 ? "..." : "")
+          }
         }
       }
 
@@ -307,14 +340,39 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
     if (!currentChatId) {
       try {
         const token = user ? await user.getIdToken() : null
+        if (!token) {
+          throw new Error("User not authenticated")
+        }
+
+        // Generate AI title for the new chat
+        let chatTitle = "New Chat"
+        try {
+          const titleResponse = await fetch("/api/vex/generate-title", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ messages: [userMessage] }),
+          })
+
+          if (titleResponse.ok) {
+            const titleData = await titleResponse.json()
+            chatTitle = titleData.title || chatTitle
+          }
+        } catch (titleError) {
+          console.log("[v0] Title generation failed, using fallback")
+          chatTitle = input.slice(0, 50) + (input.length > 50 ? "..." : "")
+        }
+
         const response = await fetch("/api/vex/chats", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            ...(token && { Authorization: `Bearer ${token}` }),
+            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            title: input.slice(0, 50) + (input.length > 50 ? "..." : ""),
+            title: chatTitle,
             messages: newMessages,
           }),
         })
@@ -323,9 +381,13 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
           const newChat = await response.json()
           setChatSessions((prev) => [newChat, ...prev])
           setCurrentChatId(newChat.id)
+          console.log("[v0] Created new chat with AI title:", chatTitle)
+        } else {
+          throw new Error(`Failed to create chat: ${response.status}`)
         }
       } catch (error) {
         console.error("Error creating chat:", error)
+        // Continue with the message even if chat creation fails
       }
     }
 
@@ -387,7 +449,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
         role: "assistant",
         content: `Sorry, I encountered an error: ${error instanceof Error ? error.message : "Please try again."}`,
       }
-      const finalMessages = [...newMessages, errorMessage]
+      const finalMessages = [...messages, errorMessage]
       setMessages(finalMessages)
 
       if (currentChatId) {
@@ -422,33 +484,59 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
           </Button>
         </div>
 
-        {/* Chat History */}
         <div className="flex-1 px-4 pb-4">
           <ScrollArea className="h-full">
             <div className="space-y-1">
-              {chatSessions.map((chat) => (
-                <div key={chat.id} className="group relative">
-                  <button
-                    onClick={() => loadChat(chat.id)}
-                    className={`w-full text-left p-3 rounded-lg text-sm transition-all duration-200 flex items-center gap-3 ${
-                      currentChatId === chat.id
-                        ? "bg-zinc-800 text-white"
-                        : "text-zinc-400 hover:bg-zinc-900/50 hover:text-white"
-                    }`}
-                  >
-                    <MessageSquare className="h-4 w-4 flex-shrink-0" />
-                    <span className="truncate flex-1">{chat.title}</span>
-                  </button>
-                  <Button
-                    onClick={() => deleteChat(chat.id)}
-                    size="sm"
-                    variant="ghost"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-zinc-500 hover:text-red-400 hover:bg-zinc-800 transition-all duration-200"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
+              {chatSessions.length === 0 ? (
+                <div className="text-center py-8 text-zinc-500">
+                  <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No chat history yet</p>
+                  <p className="text-xs mt-1">Start a conversation to see your chats here</p>
                 </div>
-              ))}
+              ) : (
+                chatSessions.map((chat) => (
+                  <div key={chat.id} className="group relative">
+                    <button
+                      onClick={() => loadChat(chat.id)}
+                      className={`w-full text-left p-3 rounded-lg text-sm transition-all duration-200 flex flex-col gap-1 ${
+                        currentChatId === chat.id
+                          ? "bg-zinc-800 text-white border border-zinc-700"
+                          : "text-zinc-400 hover:bg-zinc-900/50 hover:text-white"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <MessageSquare className="h-4 w-4 flex-shrink-0" />
+                        <span className="truncate flex-1 font-medium">{chat.title}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-zinc-500 ml-7">
+                        <span>
+                          {chat.messages?.length || 0} message{(chat.messages?.length || 0) !== 1 ? "s" : ""}
+                        </span>
+                        <span>
+                          {new Date(chat.updatedAt).toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            ...(new Date(chat.updatedAt).getFullYear() !== new Date().getFullYear() && {
+                              year: "numeric",
+                            }),
+                          })}
+                        </span>
+                      </div>
+                    </button>
+                    <Button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        deleteChat(chat.id)
+                      }}
+                      size="sm"
+                      variant="ghost"
+                      className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-zinc-500 hover:text-red-400 hover:bg-zinc-800 transition-all duration-200"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ))
+              )}
             </div>
           </ScrollArea>
         </div>
