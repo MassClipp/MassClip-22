@@ -56,13 +56,13 @@ export async function POST(request: Request) {
             bundleLimitsContext = `
 
 BUNDLE LIMITS:
-Current bundles: ${tierInfo.bundlesCreated}
-Bundle limit: ${tierInfo.bundlesLimit === null ? "unlimited" : tierInfo.bundlesLimit}
+Current bundles: ${tierInfo.bundlesCreated || 0}
+Bundle limit: ${tierInfo.bundlesLimit === null ? "unlimited" : tierInfo.bundlesLimit || 2}
 Can create bundles: ${!tierInfo.reachedBundleLimit ? "YES" : "NO"}
-User tier: ${tierInfo.tier}
-Max videos per bundle: ${tierInfo.maxVideosPerBundle === null ? "unlimited" : tierInfo.maxVideosPerBundle}
+User tier: ${tierInfo.tier || "free"}
+Max videos per bundle: ${tierInfo.maxVideosPerBundle === null ? "unlimited" : tierInfo.maxVideosPerBundle || 10}
 
-${tierInfo.reachedBundleLimit ? `⚠️ BUNDLE LIMIT REACHED: User has reached their limit of ${tierInfo.bundlesLimit} bundles. ${tierInfo.tier === "free" ? "They need to upgrade to Creator Pro for unlimited bundles or purchase extra bundle slots." : "They should contact support."}` : ""}
+${tierInfo.reachedBundleLimit ? `⚠️ BUNDLE LIMIT REACHED: User has reached their limit of ${tierInfo.bundlesLimit || 2} bundles. ${(tierInfo.tier || "free") === "free" ? "They need to upgrade to Creator Pro for unlimited bundles or purchase extra bundle slots." : "They should contact support."}` : ""}
 `
 
             const analysisDoc = await db.collection("vex_content_analysis").doc(userId).get()
@@ -108,10 +108,11 @@ WHAT YOU DO:
 When someone asks you to create a bundle (like "make me a motivation bundle" or "create a photography pack"):
 
 1. **FIRST CHECK BUNDLE LIMITS** - If they've reached their bundle limit, politely explain they need to upgrade or purchase extra slots
-2. Look at their content library and get excited about what you see
-3. Suggest a specific bundle idea with a catchy name and fair price
-4. **ONLY CREATE IF WITHIN LIMITS** - Don't ask for permission, just do it!
-5. When creating, respond with "Perfect! Let me create that bundle for you right now..." then IMMEDIATELY add this special instruction:
+2. **CHECK VIDEO COUNT LIMITS** - If they're on free tier and want more than 10 videos in a bundle, explain the limit and suggest upgrading
+3. Look at their content library and get excited about what you see
+4. Suggest a specific bundle idea with a catchy name and fair price
+5. **ONLY CREATE IF WITHIN ALL LIMITS** - Don't ask for permission, just do it!
+6. When creating, respond with "Perfect! Let me create that bundle for you right now..." then IMMEDIATELY add this special instruction:
 
 CREATE_BUNDLE: {"title": "Bundle Name", "description": "Bundle description", "price": 15, "contentIds": ["id1", "id2", "id3"], "category": "Video Pack", "tags": ["tag1", "tag2"]}
 
@@ -119,17 +120,19 @@ Replace the values with the actual bundle details. This will automatically creat
 
 BUNDLE CREATION RULES:
 - **ALWAYS check bundle limits first** - Never create if they've reached their limit
+- **ALWAYS check video count limits for free users** - Max 10 videos per bundle for free tier
 - **ALWAYS use real content IDs from their library** - never make up fake IDs
 - Group similar content that works well together
 - Price fairly: $5-15 for starter packs, $15-35 for bigger collections, $35+ for premium bundles
 - Create compelling names like "Ultimate Motivation Starter Kit" not just "Video Bundle"
-- Include 3-8 items for good value
+- Include 3-8 items for good value (max 10 for free users)
 - Categories: Video Pack, Audio Collection, Mixed Media, Beginner Kit, Pro Bundle, etc.
 - **If they don't have enough content, suggest they upload more first**
 
 BUNDLE LIMIT RESPONSES:
 - If they can create bundles, be enthusiastic and helpful
-- If they've reached their limit, be understanding and suggest upgrading: "I can see you've reached your bundle limit (X/X bundles). To create more amazing bundles, you can upgrade to Creator Pro for unlimited bundles or purchase extra bundle slots in your settings!"
+- If they've reached their bundle limit, be understanding and suggest upgrading: "I can see you've reached your bundle limit (X/X bundles). To create more amazing bundles, you can upgrade to Creator Pro for unlimited bundles or purchase extra bundle slots in your settings!"
+- If they're free tier and want more than 10 videos: "Free users can include up to 10 videos per bundle. For unlimited videos per bundle, upgrade to Creator Pro! Would you like me to create a bundle with your top 10 videos instead?"
 - Always mention their current bundle count when relevant
 
 ${userContentContext}${bundleLimitsContext}
@@ -254,14 +257,15 @@ async function createBundleDirectly(userId: string, bundleData: any) {
     if (tierInfo.reachedBundleLimit) {
       return {
         success: false,
-        error: `You've reached your limit of ${tierInfo.bundlesLimit} bundles. Please upgrade your plan to create more bundles.`,
+        error: `You've reached your limit of ${tierInfo.bundlesLimit || 2} bundles. Please upgrade your plan to create more bundles.`,
       }
     }
 
-    if (tierInfo.tier === "free" && contentIds.length > tierInfo.maxVideosPerBundle!) {
+    const maxVideosPerBundle = tierInfo.maxVideosPerBundle || (tierInfo.tier === "free" ? 10 : null)
+    if (tierInfo.tier === "free" && maxVideosPerBundle && contentIds.length > maxVideosPerBundle) {
       return {
         success: false,
-        error: `Free users can only include up to ${tierInfo.maxVideosPerBundle} videos per bundle. This bundle has ${contentIds.length} items. Please upgrade to Creator Pro for unlimited videos per bundle.`,
+        error: `Free users can only include up to ${maxVideosPerBundle} videos per bundle. This bundle has ${contentIds.length} items. Please upgrade to Creator Pro for unlimited videos per bundle.`,
       }
     }
 

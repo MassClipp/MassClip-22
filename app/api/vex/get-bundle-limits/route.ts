@@ -49,32 +49,36 @@ export async function GET(request: NextRequest) {
     const userId = decodedToken.uid
     console.log("✅ [Vex Debug] User authenticated:", userId)
 
-    console.log("🔍 [Vex Debug] Calling getUserTierInfo...")
+    console.log("🔍 [Vex Debug] Getting user tier info...")
     const tierInfo = await getUserTierInfo(userId)
 
-    console.log("🔍 [Vex Debug] Raw tierInfo response:", JSON.stringify(tierInfo, null, 2))
-
-    console.log("✅ [Vex Debug] Bundle limits found:", {
+    console.log("🔍 [Vex Debug] Raw tier info received:", {
+      tier: tierInfo.tier,
       bundlesCreated: tierInfo.bundlesCreated,
       bundlesLimit: tierInfo.bundlesLimit,
-      reachedBundleLimit: tierInfo.reachedBundleLimit,
-      tier: tierInfo.tier,
       maxVideosPerBundle: tierInfo.maxVideosPerBundle,
+      reachedBundleLimit: tierInfo.reachedBundleLimit,
+      downloadsUsed: tierInfo.downloadsUsed,
+      downloadsLimit: tierInfo.downloadsLimit,
     })
+
+    const bundleLimits = {
+      bundlesCreated: tierInfo.bundlesCreated || 0,
+      bundlesLimit: tierInfo.bundlesLimit || (tierInfo.tier === "free" ? 2 : null),
+      maxVideosPerBundle: tierInfo.maxVideosPerBundle || (tierInfo.tier === "free" ? 10 : null),
+      reachedBundleLimit: tierInfo.reachedBundleLimit || false,
+      tier: tierInfo.tier,
+      canCreateBundle: !tierInfo.reachedBundleLimit,
+      upgradeMessage: tierInfo.reachedBundleLimit
+        ? `You've reached your limit of ${tierInfo.bundlesLimit || 2} bundles. ${tierInfo.tier === "free" ? "Upgrade to Creator Pro for unlimited bundles or purchase extra bundle slots." : "Please contact support."}`
+        : null,
+    }
+
+    console.log("✅ [Vex Debug] Final bundle limits response:", bundleLimits)
 
     return NextResponse.json({
       success: true,
-      bundleLimits: {
-        bundlesCreated: tierInfo.bundlesCreated,
-        bundlesLimit: tierInfo.bundlesLimit,
-        reachedBundleLimit: tierInfo.reachedBundleLimit,
-        tier: tierInfo.tier,
-        maxVideosPerBundle: tierInfo.maxVideosPerBundle,
-        canCreateBundle: !tierInfo.reachedBundleLimit,
-        upgradeMessage: tierInfo.reachedBundleLimit
-          ? `You've reached your limit of ${tierInfo.bundlesLimit} bundles. ${tierInfo.tier === "free" ? "Upgrade to Creator Pro for unlimited bundles or purchase extra bundle slots." : "Please contact support."}`
-          : null,
-      },
+      bundleLimits,
     })
   } catch (error: any) {
     console.error("❌ [Vex Debug] Error getting bundle limits:", error)
