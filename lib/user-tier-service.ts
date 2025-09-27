@@ -47,22 +47,37 @@ export async function getUserTierInfo(uid: string): Promise<TierInfo> {
     freeUser = await createFreeUser(uid, "")
   }
 
+  console.log("🔄 Getting real-time bundle count...")
+  const { getFirestore } = await import("firebase-admin/firestore")
+  const db = getFirestore()
+
+  const bundlesQuery = db.collection("bundles").where("creatorId", "==", uid)
+  const bundlesSnapshot = await bundlesQuery.get()
+  const actualBundlesCreated = bundlesSnapshot.size
+
+  console.log("📊 Bundle count comparison:", {
+    storedBundlesCreated: freeUser.bundlesCreated,
+    actualBundlesCreated: actualBundlesCreated,
+    bundlesLimit: freeUser.bundlesLimit,
+  })
+
   const tierInfo: TierInfo = {
     tier: "free",
     downloadsUsed: freeUser.downloadsUsed,
     downloadsLimit: freeUser.downloadsLimit,
-    bundlesCreated: freeUser.bundlesCreated,
+    bundlesCreated: actualBundlesCreated, // Use real-time count
     bundlesLimit: freeUser.bundlesLimit, // This already includes base (2) + purchased slots
     maxVideosPerBundle: freeUser.maxVideosPerBundle,
     platformFeePercentage: freeUser.platformFeePercentage,
     reachedDownloadLimit: freeUser.downloadsUsed >= freeUser.downloadsLimit,
-    reachedBundleLimit: freeUser.bundlesCreated >= freeUser.bundlesLimit,
+    reachedBundleLimit: actualBundlesCreated >= freeUser.bundlesLimit, // Use real-time count
   }
 
   console.log("✅ Returning free tier info:", {
     bundlesCreated: tierInfo.bundlesCreated,
     bundlesLimit: tierInfo.bundlesLimit,
     maxVideosPerBundle: tierInfo.maxVideosPerBundle,
+    reachedBundleLimit: tierInfo.reachedBundleLimit,
   })
   return tierInfo
 }

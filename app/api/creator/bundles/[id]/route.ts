@@ -267,6 +267,22 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     // Delete the bundle
     batch.delete(db.collection("bundles").doc(bundleId))
 
+    const freeUserDoc = db.collection("freeUsers").doc(userId)
+    const freeUserSnapshot = await freeUserDoc.get()
+
+    if (freeUserSnapshot.exists) {
+      const freeUserData = freeUserSnapshot.data()
+      const currentBundlesCreated = freeUserData?.bundlesCreated || 0
+
+      if (currentBundlesCreated > 0) {
+        batch.update(freeUserDoc, {
+          bundlesCreated: currentBundlesCreated - 1,
+          updatedAt: new Date(),
+        })
+        console.log("📉 Decremented bundlesCreated count for user:", userId.substring(0, 8) + "...")
+      }
+    }
+
     await batch.commit()
 
     return NextResponse.json({
