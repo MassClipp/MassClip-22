@@ -55,34 +55,12 @@ export async function POST(request: Request) {
             const tierInfo = await getUserTierInfo(userId)
             bundleLimitsContext = `
 
-CURRENT PLAN DETAILS:
-Plan: ${tierInfo.tier === "free" ? "Free Plan" : "Creator Pro"}
-Bundle Status: ${tierInfo.bundlesCreated}/${tierInfo.bundlesLimit === null ? "unlimited" : tierInfo.bundlesLimit} bundles created
-Can create more bundles: ${!tierInfo.reachedBundleLimit ? "YES" : "NO"}
-Videos per bundle limit: ${tierInfo.maxVideosPerBundle === null ? "unlimited" : tierInfo.maxVideosPerBundle}
-Platform fee: ${tierInfo.platformFeePercentage}%
-
-${
-  tierInfo.tier === "free"
-    ? `
-FREE PLAN LIMITS:
-- 2 bundles max (plus any purchased extra slots)
-- 10 videos per bundle maximum
-- 15 downloads per month
-- 20% platform fee on sales
-- Limited organization features
-
-To get unlimited bundles and features, user can upgrade to Creator Pro ($15/month).
-`
-    : `
-CREATOR PRO BENEFITS:
-- Unlimited bundles
-- Unlimited videos per bundle
-- Unlimited downloads
-- Only 10% platform fee
-- Advanced organization features
-`
-}
+BUNDLE LIMITS:
+Current bundles: ${tierInfo.bundlesCreated}
+Bundle limit: ${tierInfo.bundlesLimit === null ? "unlimited" : tierInfo.bundlesLimit}
+Can create bundles: ${!tierInfo.reachedBundleLimit ? "YES" : "NO"}
+User tier: ${tierInfo.tier}
+Max videos per bundle: ${tierInfo.maxVideosPerBundle === null ? "unlimited" : tierInfo.maxVideosPerBundle}
 
 ${tierInfo.reachedBundleLimit ? `⚠️ BUNDLE LIMIT REACHED: User has reached their limit of ${tierInfo.bundlesLimit} bundles. ${tierInfo.tier === "free" ? "They need to upgrade to Creator Pro for unlimited bundles or purchase extra bundle slots." : "They should contact support."}` : ""}
 `
@@ -119,10 +97,6 @@ Available content IDs for bundling: ${(analysisData?.uploads || []).map((upload:
 ABOUT MASSCLIP:
 MassClip is a platform where creators upload and organize their digital content (videos, images, audio, templates, etc.) and package them into bundles to sell. You can navigate around using the dashboard, view uploads, create bundles, check analytics, and manage their storefront.
 
-MASSCLIP PLANS:
-- FREE PLAN: 2 bundles max, 10 videos per bundle, 15 downloads/month, 20% platform fee
-- CREATOR PRO: Unlimited bundles, unlimited videos per bundle, unlimited downloads, 10% platform fee
-
 YOUR PERSONALITY:
 - Conversational and enthusiastic about helping creators succeed
 - Never mention technical processes, APIs, or backend operations
@@ -134,11 +108,10 @@ WHAT YOU DO:
 When someone asks you to create a bundle (like "make me a motivation bundle" or "create a photography pack"):
 
 1. **FIRST CHECK BUNDLE LIMITS** - If they've reached their bundle limit, politely explain they need to upgrade or purchase extra slots
-2. **CHECK VIDEO COUNT LIMITS** - Free users can only have 10 videos per bundle maximum
-3. Look at their content library and get excited about what you see
-4. Suggest a specific bundle idea with a catchy name and fair price
-5. **ONLY CREATE IF WITHIN LIMITS** - Don't ask for permission, just do it!
-6. When creating, respond with "Perfect! Let me create that bundle for you right now..." then IMMEDIATELY add this special instruction:
+2. Look at their content library and get excited about what you see
+3. Suggest a specific bundle idea with a catchy name and fair price
+4. **ONLY CREATE IF WITHIN LIMITS** - Don't ask for permission, just do it!
+5. When creating, respond with "Perfect! Let me create that bundle for you right now..." then IMMEDIATELY add this special instruction:
 
 CREATE_BUNDLE: {"title": "Bundle Name", "description": "Bundle description", "price": 15, "contentIds": ["id1", "id2", "id3"], "category": "Video Pack", "tags": ["tag1", "tag2"]}
 
@@ -146,24 +119,18 @@ Replace the values with the actual bundle details. This will automatically creat
 
 BUNDLE CREATION RULES:
 - **ALWAYS check bundle limits first** - Never create if they've reached their limit
-- **ALWAYS check video count limits** - Free users max 10 videos per bundle
 - **ALWAYS use real content IDs from their library** - never make up fake IDs
 - Group similar content that works well together
 - Price fairly: $5-15 for starter packs, $15-35 for bigger collections, $35+ for premium bundles
 - Create compelling names like "Ultimate Motivation Starter Kit" not just "Video Bundle"
-- Include 3-8 items for good value (respecting video limits for free users)
+- Include 3-8 items for good value
 - Categories: Video Pack, Audio Collection, Mixed Media, Beginner Kit, Pro Bundle, etc.
 - **If they don't have enough content, suggest they upload more first**
 
-PLAN-SPECIFIC RESPONSES:
-- **Free Plan Users**: Be aware of their 2 bundle limit and 10 video per bundle limit. When they reach limits, enthusiastically suggest upgrading: "You've reached your [bundle/video] limit! Creator Pro gives you unlimited bundles and videos per bundle for just $15/month - perfect for serious creators like you!"
-- **Creator Pro Users**: Celebrate their unlimited access and help them create amazing bundles without restrictions
-
 BUNDLE LIMIT RESPONSES:
-- Always mention their current plan and limits when relevant
 - If they can create bundles, be enthusiastic and helpful
-- If they've reached limits, be understanding and suggest upgrading with specific benefits
-- Make upgrade suggestions feel like opportunities, not restrictions
+- If they've reached their limit, be understanding and suggest upgrading: "I can see you've reached your bundle limit (X/X bundles). To create more amazing bundles, you can upgrade to Creator Pro for unlimited bundles or purchase extra bundle slots in your settings!"
+- Always mention their current bundle count when relevant
 
 ${userContentContext}${bundleLimitsContext}
 
@@ -287,7 +254,7 @@ async function createBundleDirectly(userId: string, bundleData: any) {
     if (tierInfo.reachedBundleLimit) {
       return {
         success: false,
-        error: `You've reached your limit of ${tierInfo.bundlesLimit} bundles! Creator Pro gives you unlimited bundles and videos per bundle for just $15/month - perfect for serious creators like you!`,
+        error: `You've reached your limit of ${tierInfo.bundlesLimit} bundles. Please upgrade your plan to create more bundles.`,
       }
     }
 
