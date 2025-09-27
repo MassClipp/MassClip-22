@@ -5,7 +5,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Send, Plus, MessageSquare, Trash2 } from "lucide-react"
+import { Send, Plus, MessageSquare, Trash2, Loader2 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 
 interface Message {
@@ -39,6 +39,8 @@ export function VexChat() {
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([])
   const [currentChatId, setCurrentChatId] = useState<string | null>(null)
   const [bundleJobs, setBundleJobs] = useState<{ [jobId: string]: any }>({})
+  const [isLoadingChats, setIsLoadingChats] = useState(true)
+  const [isLoadingCurrentChat, setIsLoadingCurrentChat] = useState(false)
   const { user } = useAuth()
 
   const suggestions = [
@@ -51,7 +53,13 @@ export function VexChat() {
   // Load chat sessions
   useEffect(() => {
     const loadChatSessions = async () => {
-      if (!user) return
+      if (!user) {
+        setIsLoadingChats(false)
+        return
+      }
+
+      console.log("[v0] Loading chat sessions for user:", user.uid)
+      setIsLoadingChats(true)
 
       try {
         const token = await user.getIdToken()
@@ -61,10 +69,21 @@ export function VexChat() {
 
         if (response.ok) {
           const data = await response.json()
+          console.log("[v0] Loaded", data.chats.length, "chat sessions")
           setChatSessions(data.chats)
+
+          const lastChatId = localStorage.getItem("vex-last-chat-id")
+          if (lastChatId && data.chats.some((chat: ChatSession) => chat.id === lastChatId)) {
+            console.log("[v0] Restoring last active chat:", lastChatId)
+            await loadChat(lastChatId)
+          }
+        } else {
+          console.error("[v0] Failed to load chats:", response.status)
         }
       } catch (error) {
-        console.error("Error loading chat sessions:", error)
+        console.error("[v0] Error loading chat sessions:", error)
+      } finally {
+        setIsLoadingChats(false)
       }
     }
 
@@ -75,6 +94,9 @@ export function VexChat() {
   const loadChat = async (chatId: string) => {
     if (!user) return
 
+    console.log("[v0] Loading chat:", chatId)
+    setIsLoadingCurrentChat(true)
+
     try {
       const token = await user.getIdToken()
       const response = await fetch(`/api/vex/chats/${chatId}`, {
@@ -83,11 +105,17 @@ export function VexChat() {
 
       if (response.ok) {
         const chat = await response.json()
+        console.log("[v0] Loaded chat with", chat.messages?.length || 0, "messages")
         setMessages(chat.messages || [])
         setCurrentChatId(chatId)
+        localStorage.setItem("vex-last-chat-id", chatId)
+      } else {
+        console.error("[v0] Failed to load chat:", response.status)
       }
     } catch (error) {
-      console.error("Error loading chat:", error)
+      console.error("[v0] Error loading chat:", error)
+    } finally {
+      setIsLoadingCurrentChat(false)
     }
   }
 
@@ -121,6 +149,7 @@ export function VexChat() {
         setChatSessions((prev) => [newChat, ...prev])
         setMessages([])
         setCurrentChatId(newChat.id)
+        localStorage.setItem("vex-last-chat-id", newChat.id)
       } else {
         const errorData = await response.json().catch(() => ({}))
         console.error("[v0] Failed to create new chat:", response.status, errorData)
@@ -128,7 +157,6 @@ export function VexChat() {
       }
     } catch (error) {
       console.error("Error creating new chat:", error)
-      // Show user-friendly error message
       alert("Failed to create new chat. Please try again.")
     }
   }
@@ -206,7 +234,9 @@ export function VexChat() {
         if (currentChatId === chatId) {
           setMessages([])
           setCurrentChatId(null)
+          localStorage.removeItem("vex-last-chat-id")
         }
+        console.log("[v0] Deleted chat:", chatId)
       }
     } catch (error) {
       console.error("Error deleting chat:", error)
@@ -377,11 +407,14 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
           }),
         })
 
+        console.log("[v0] New chat response status:", response.status)
+
         if (response.ok) {
           const newChat = await response.json()
+          console.log("[v0] New chat created:", newChat.id)
           setChatSessions((prev) => [newChat, ...prev])
           setCurrentChatId(newChat.id)
-          console.log("[v0] Created new chat with AI title:", chatTitle)
+          localStorage.setItem("vex-last-chat-id", newChat.id)
         } else {
           throw new Error(`Failed to create chat: ${response.status}`)
         }
@@ -487,7 +520,12 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
         <div className="flex-1 px-4 pb-4">
           <ScrollArea className="h-full">
             <div className="space-y-1">
-              {chatSessions.length === 0 ? (
+              {isLoadingChats ? (
+                <div className="text-center py-8 text-zinc-500">
+                  <Loader2 className="h-6 w-6 mx-auto mb-2 animate-spin" />
+                  <p className="text-sm">Loading chat history...</p>
+                </div>
+              ) : chatSessions.length === 0 ? (
                 <div className="text-center py-8 text-zinc-500">
                   <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-50" />
                   <p className="text-sm">No chat history yet</p>
@@ -498,11 +536,12 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                   <div key={chat.id} className="group relative">
                     <button
                       onClick={() => loadChat(chat.id)}
+                      disabled={isLoadingCurrentChat}
                       className={`w-full text-left p-3 rounded-lg text-sm transition-all duration-200 flex flex-col gap-1 ${
                         currentChatId === chat.id
                           ? "bg-zinc-800 text-white border border-zinc-700"
                           : "text-zinc-400 hover:bg-zinc-900/50 hover:text-white"
-                      }`}
+                      } ${isLoadingCurrentChat ? "opacity-50" : ""}`}
                     >
                       <div className="flex items-start gap-3 pr-8">
                         <MessageSquare className="h-4 w-4 flex-shrink-0 mt-0.5" />
@@ -546,6 +585,13 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
 
       <div className="flex flex-col flex-1 min-h-0 ml-64">
         <div className="flex-1 flex flex-col min-h-0">
+          {isLoadingCurrentChat && (
+            <div className="flex items-center justify-center py-4 border-b border-zinc-800">
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              <span className="text-sm text-muted-foreground">Loading chat...</span>
+            </div>
+          )}
+
           <ScrollArea className="flex-1 px-6">
             <div className="max-w-3xl mx-auto py-6">
               {messages.length === 0 && (
