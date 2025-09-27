@@ -5,8 +5,9 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Send, Plus, MessageSquare, Trash2, Loader2 } from "lucide-react"
+import { Send, Plus, MessageSquare, Trash2, Loader2, Menu, X } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 interface Message {
   id: string
@@ -42,6 +43,8 @@ export function VexChat() {
   const [isLoadingChats, setIsLoadingChats] = useState(true)
   const [isLoadingCurrentChat, setIsLoadingCurrentChat] = useState(false)
   const { user } = useAuth()
+  const isMobile = useIsMobile()
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
   const suggestions = [
     "Help me create a beginner photography bundle",
@@ -97,6 +100,11 @@ export function VexChat() {
     console.log("[v0] Loading chat:", chatId)
     setIsLoadingCurrentChat(true)
 
+    // Close sidebar on mobile when selecting a chat
+    if (isMobile) {
+      setIsSidebarOpen(false)
+    }
+
     try {
       const token = await user.getIdToken()
       const response = await fetch(`/api/vex/chats/${chatId}`, {
@@ -123,6 +131,10 @@ export function VexChat() {
     if (!user) {
       console.error("User not authenticated")
       return
+    }
+
+    if (isMobile) {
+      setIsSidebarOpen(false)
     }
 
     try {
@@ -497,12 +509,80 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
     setInput(suggestion)
   }
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (isMobile && isSidebarOpen) {
+        const sidebar = document.getElementById("vex-sidebar")
+        const menuButton = document.getElementById("mobile-menu-button")
+
+        if (
+          sidebar &&
+          !sidebar.contains(event.target as Node) &&
+          menuButton &&
+          !menuButton.contains(event.target as Node)
+        ) {
+          setIsSidebarOpen(false)
+        }
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [isMobile, isSidebarOpen])
+
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && isSidebarOpen) {
+        setIsSidebarOpen(false)
+      }
+    }
+
+    document.addEventListener("keydown", handleEscape)
+    return () => document.removeEventListener("keydown", handleEscape)
+  }, [isSidebarOpen])
+
   return (
-    <div className="flex h-screen">
-      <div className="fixed left-0 top-16 h-[calc(100vh-4rem)] w-64 bg-zinc-950 border-r border-zinc-800 flex flex-col z-40">
+    <div className="flex h-screen relative">
+      {isMobile && (
+        <Button
+          id="mobile-menu-button"
+          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+          variant="ghost"
+          size="sm"
+          className="fixed top-4 left-4 z-50 h-10 w-10 p-0 bg-zinc-900/90 backdrop-blur-sm border border-zinc-700 hover:bg-zinc-800"
+        >
+          {isSidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+        </Button>
+      )}
+
+      {isMobile && isSidebarOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-30" onClick={() => setIsSidebarOpen(false)} />
+      )}
+
+      <div
+        id="vex-sidebar"
+        className={`
+          ${isMobile ? "fixed" : "fixed"} 
+          left-0 top-16 h-[calc(100vh-4rem)] 
+          ${isMobile ? "w-80" : "w-64"} 
+          bg-zinc-950 border-r border-zinc-800 flex flex-col z-40
+          ${isMobile ? (isSidebarOpen ? "translate-x-0" : "-translate-x-full") : "translate-x-0"}
+          transition-transform duration-300 ease-in-out
+        `}
+      >
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-zinc-800">
           <h2 className="text-lg font-semibold text-white">Vex</h2>
+          {isMobile && (
+            <Button
+              onClick={() => setIsSidebarOpen(false)}
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0 text-zinc-400 hover:text-white"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
         </div>
 
         {/* New Chat Button */}
@@ -583,7 +663,9 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
         </div>
       </div>
 
-      <div className="flex flex-col flex-1 min-h-0 ml-64">
+      <div
+        className={`flex flex-col flex-1 min-h-0 ${isMobile ? "ml-0" : "ml-64"} ${isMobile && isSidebarOpen ? "blur-sm pointer-events-none" : ""} transition-all duration-300`}
+      >
         <div className="flex-1 flex flex-col min-h-0">
           {isLoadingCurrentChat && (
             <div className="flex items-center justify-center py-4 border-b border-zinc-800">
@@ -592,18 +674,22 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
             </div>
           )}
 
-          <ScrollArea className="flex-1 px-6">
-            <div className="max-w-3xl mx-auto py-6 min-h-full flex flex-col">
+          <ScrollArea className={`flex-1 ${isMobile ? "px-4" : "px-6"}`}>
+            <div className={`${isMobile ? "max-w-full" : "max-w-3xl mx-auto"} py-6 min-h-full flex flex-col`}>
               {messages.length === 0 && (
                 <div className="text-center py-12 flex-1 flex flex-col justify-center">
-                  <h2 className="text-2xl font-semibold mb-3">Hi! I'm Vex</h2>
-                  <p className="text-muted-foreground mb-8 max-w-md mx-auto leading-relaxed">
+                  <h2 className={`${isMobile ? "text-xl" : "text-2xl"} font-semibold mb-3`}>Hi! I'm Vex</h2>
+                  <p
+                    className={`text-muted-foreground mb-8 ${isMobile ? "max-w-sm" : "max-w-md"} mx-auto leading-relaxed`}
+                  >
                     I'll help you create profitable bundles, set optimal pricing, and build compelling storefront
                     content.
                   </p>
 
                   {contentAnalysis && (
-                    <div className="mb-8 p-4 rounded-lg bg-transparent max-w-md mx-auto border border-zinc-700/50">
+                    <div
+                      className={`mb-8 p-4 rounded-lg bg-transparent ${isMobile ? "max-w-sm" : "max-w-md"} mx-auto border border-zinc-700/50`}
+                    >
                       <p className="text-sm text-muted-foreground mb-2">
                         Analyzed {contentAnalysis.totalUploads} uploads
                       </p>
@@ -616,11 +702,13 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                     </div>
                   )}
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-2xl mx-auto">
+                  <div
+                    className={`grid ${isMobile ? "grid-cols-1 gap-2" : "grid-cols-1 md:grid-cols-2 gap-3"} ${isMobile ? "max-w-sm" : "max-w-2xl"} mx-auto`}
+                  >
                     {suggestions.map((suggestion, index) => (
                       <button
                         key={index}
-                        className="text-left p-4 rounded-lg bg-transparent border border-zinc-700/50 hover:bg-zinc-800/30 hover:border-zinc-600/50 transition-all duration-200 text-sm"
+                        className={`text-left ${isMobile ? "p-3" : "p-4"} rounded-lg bg-transparent border border-zinc-700/50 hover:bg-zinc-800/30 hover:border-zinc-600/50 transition-all duration-200 text-sm`}
                         onClick={() => handleSuggestionClick(suggestion)}
                       >
                         {suggestion}
@@ -638,7 +726,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                       className={`chat-slide-up ${message.role === "user" ? "flex justify-end" : "flex justify-start"}`}
                     >
                       <div
-                        className={`max-w-[80%] rounded-lg px-4 py-3 ${
+                        className={`${isMobile ? "max-w-[90%]" : "max-w-[80%]"} rounded-lg px-4 py-3 ${
                           message.role === "user" ? "chat-message-user ml-auto" : "chat-message-assistant"
                         }`}
                       >
@@ -671,8 +759,8 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
             </div>
           </ScrollArea>
 
-          <div className="flex-shrink-0 px-6 py-4">
-            <div className="max-w-3xl mx-auto">
+          <div className={`flex-shrink-0 ${isMobile ? "px-4" : "px-6"} py-4`}>
+            <div className={`${isMobile ? "max-w-full" : "max-w-3xl mx-auto"}`}>
               <form onSubmit={handleSubmit} className="flex gap-3">
                 <div className="flex-1 relative">
                   <Input
