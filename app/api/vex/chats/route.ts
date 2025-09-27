@@ -4,27 +4,41 @@ import { verifyIdTokenFromRequest } from "@/lib/auth-utils"
 
 export async function GET(request: NextRequest) {
   try {
+    console.log("[v0] Starting chat fetch request")
     const decodedToken = await verifyIdTokenFromRequest(request)
     if (!decodedToken) {
+      console.log("[v0] No valid token found")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const userId = decodedToken.uid
+    console.log("[v0] Fetching chats for user:", userId)
 
-    // Get user's chat sessions
+    // Get user's chat sessions - simplified query without orderBy to avoid index issues
     const chatsRef = adminDb.collection("vex_chats")
-    const snapshot = await chatsRef.where("userId", "==", userId).orderBy("updatedAt", "desc").limit(50).get()
+    console.log("[v0] Querying Firestore collection: vex_chats")
 
-    const chats = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-      createdAt: doc.data().createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-      updatedAt: doc.data().updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-    }))
+    const snapshot = await chatsRef.where("userId", "==", userId).limit(50).get()
+    console.log("[v0] Found", snapshot.docs.length, "chat documents")
 
+    const chats = snapshot.docs.map((doc) => {
+      const data = doc.data()
+      console.log("[v0] Processing chat document:", doc.id, "with data keys:", Object.keys(data))
+
+      return {
+        id: doc.id,
+        ...data,
+        createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+        updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+      }
+    })
+
+    chats.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+
+    console.log("[v0] Returning", chats.length, "processed chats")
     return NextResponse.json({ chats })
   } catch (error) {
-    console.error("Error fetching chats:", error)
+    console.error("[v0] Error fetching chats:", error)
     return NextResponse.json({ error: "Failed to fetch chats" }, { status: 500 })
   }
 }
