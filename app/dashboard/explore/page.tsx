@@ -1546,17 +1546,17 @@ export default function ExplorePage() {
       {!searchQuery && !isLoadingData && (
         <motion.div variants={containerVariants} initial="hidden" animate="visible">
           <motion.div variants={itemVariants} className="mb-8">
-            <div className="px-6 mb-4 flex items-center justify-between">
-              <h2 className="text-2xl font-extralight tracking-wider text-white">Featured Clips</h2>
+            <div className="px-4 md:px-6 mb-4 flex items-center justify-between">
+              <h2 className="text-xl md:text-2xl font-extralight tracking-wider text-white">Featured Clips</h2>
               <Link
                 href="/dashboard/upgrade"
-                className="text-zinc-400 hover:text-white flex items-center group bg-zinc-900/30 hover:bg-zinc-900/50 px-3 py-1 rounded-full transition-all duration-300"
+                className="text-zinc-400 hover:text-white flex items-center group bg-zinc-900/30 hover:bg-zinc-900/50 px-2 md:px-3 py-1 rounded-full transition-all duration-300"
               >
-                <span className="mr-1 text-sm">Upgrade</span>
-                <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+                <span className="mr-1 text-xs md:text-sm">Upgrade</span>
+                <ArrowRight className="h-3 w-3 md:h-3.5 md:w-3.5 transition-transform group-hover:translate-x-0.5" />
               </Link>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 px-6">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 md:gap-4 px-4 md:px-6">
               {featuredVideos.map((video, index) => (
                 <motion.div
                   key={video.uri || index}

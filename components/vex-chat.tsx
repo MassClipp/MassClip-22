@@ -1171,7 +1171,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                     placeholder="Message Vex"
                     className="chat-input-container border-0 bg-transparent text-sm py-2 px-3 pr-10 resize-none focus:ring-1 focus:ring-ring"
                     disabled={isLoading}
-                    style={{ fontSize: isMobile ? "16px" : "14px" }} // Prevent zoom on iOS
+                    style={{ fontSize: "16px" }} // Set font size to 16px to prevent iOS Safari zoom
                   />
                   <Button
                     type="submit"
