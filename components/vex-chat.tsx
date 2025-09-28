@@ -21,10 +21,7 @@ import {
   Search,
   User,
   Settings,
-  ExternalLink,
   Gift,
-  History,
-  Folder,
   CreditCard,
   LogOut,
 } from "lucide-react"
@@ -94,8 +91,8 @@ function VexChat() {
     { icon: Package, label: "Bundles", href: "/dashboard/bundles" },
     { icon: DollarSign, label: "Earnings", href: "/dashboard/earnings" },
     { icon: Heart, label: "Favorites", href: "/dashboard/favorites" },
-    { icon: History, label: "History", href: "/dashboard/history" },
-    { icon: Folder, label: "Categories", href: "/dashboard/categories" },
+    { icon: CreditCard, label: "Upgrade", href: "/membership-plans" },
+    { icon: Package, label: "My Purchases", href: "/dashboard/purchases" },
     { icon: Gift, label: "Free Content", href: "/dashboard/free-content" },
   ]
 
@@ -667,7 +664,6 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
             <Logo href="/dashboard/vex" size="sm" className="scale-75" />
             <div className="flex flex-col">
               <span className="text-lg font-semibold text-white">MassClip</span>
-              <span className="text-xs text-blue-400 font-medium">Vex AI Assistant</span>
             </div>
           </div>
           {isMobile && (
@@ -784,59 +780,49 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
 
           {/* Action Buttons */}
           <div className="grid grid-cols-2 gap-2">
-            <Button
-              onClick={() => handleNavigation("/dashboard/upload")}
-              size="sm"
-              className="bg-white text-black hover:bg-zinc-100 font-medium"
-            >
-              <Upload className="h-3 w-3 mr-1" />
-              Upload
-            </Button>
-
             {username && (
               <Button
                 onClick={() => window.open(`/creator/${username}`, "_blank")}
-                variant="outline"
                 size="sm"
-                className="border-zinc-700 hover:bg-zinc-800 text-xs"
+                className="bg-white text-black hover:bg-zinc-100 font-medium"
               >
-                <ExternalLink className="h-3 w-3 mr-1" />
-                Profile
+                <User className="h-3 w-3 mr-1" />
+                View Profile
               </Button>
             )}
-          </div>
 
-          {/* Settings Dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                className="w-full justify-start gap-3 text-zinc-300 hover:text-white hover:bg-zinc-800/50"
-              >
-                <Settings className="h-4 w-4" />
-                Settings
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48 bg-zinc-900 border-zinc-700">
-              <DropdownMenuItem onClick={() => handleNavigation("/dashboard/profile")}>
-                <User className="h-4 w-4 mr-2" />
-                Edit Profile
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleNavigation("/dashboard/earnings")}>
-                <CreditCard className="h-4 w-4 mr-2" />
-                Billing
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleNavigation("/dashboard/security")}>
-                <Settings className="h-4 w-4 mr-2" />
-                Security
-              </DropdownMenuItem>
-              <DropdownMenuSeparator className="bg-zinc-700" />
-              <DropdownMenuItem onClick={handleLogout} className="text-red-400 focus:text-red-300">
-                <LogOut className="h-4 w-4 mr-2" />
-                Sign Out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-zinc-700 hover:bg-zinc-800 text-xs bg-transparent"
+                >
+                  <Settings className="h-3 w-3 mr-1" />
+                  Settings
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48 bg-zinc-900 border-zinc-700">
+                <DropdownMenuItem onClick={() => handleNavigation("/dashboard/user")}>
+                  <User className="h-4 w-4 mr-2" />
+                  Edit Profile
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleNavigation("/dashboard/earnings")}>
+                  <CreditCard className="h-4 w-4 mr-2" />
+                  Billing
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleNavigation("/dashboard/password")}>
+                  <Settings className="h-4 w-4 mr-2" />
+                  Security
+                </DropdownMenuItem>
+                <DropdownMenuSeparator className="bg-zinc-700" />
+                <DropdownMenuItem onClick={handleLogout} className="text-red-400 focus:text-red-300">
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Sign Out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </div>
 
@@ -879,7 +865,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                 )}
 
                 <div
-                  className={`grid ${isMobile ? "grid-cols-1 gap-2" : "grid-cols-1 md:grid-cols-2 gap-3"} ${isMobile ? "max-w-sm" : "max-w-2xl"} mx-auto`}
+                  className={`grid ${isMobile ? "grid-cols-1 gap-2" : "grid-cols-1 md:grid-cols-2 gap-3"} ${isMobile ? "max-w-full" : "max-w-2xl"} mx-auto`}
                 >
                   {suggestions.map((suggestion, index) => (
                     <button
