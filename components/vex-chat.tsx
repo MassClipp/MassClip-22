@@ -97,7 +97,7 @@ function VexChat({ children }: VexChatProps) {
     { icon: Package, label: "Bundles", href: "/dashboard/bundles" },
     { icon: DollarSign, label: "Earnings", href: "/dashboard/earnings" },
     { icon: Heart, label: "Favorites", href: "/dashboard/favorites" },
-    { icon: CreditCard, label: "Upgrade", href: "/dashboard/upgrade" }, // Fixed upgrade URL
+    { icon: CreditCard, label: "Upgrade", href: "/dashboard/upgrade" },
     { icon: Package, label: "My Purchases", href: "/dashboard/purchases" },
     { icon: Gift, label: "Free Content", href: "/dashboard/free-content" },
   ]
