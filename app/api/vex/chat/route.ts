@@ -103,10 +103,14 @@ When organizing files, use the folder names exactly as shown above.
 USER'S CONTENT LIBRARY:
 Total Uploads: ${analysisData?.totalUploads || 0}
 Categories: ${(analysisData?.categories || []).join(", ")}
+User Folders: ${(analysisData?.userFolders || []).map((f: any) => f.name).join(", ")}
 
 Recent uploads: ${(analysisData?.uploads || [])
                 .slice(0, 10)
-                .map((upload: any) => `- ${upload.title} (${upload.contentType})`)
+                .map(
+                  (upload: any) =>
+                    `- ${upload.title} (${upload.contentType}) ${upload.folderName ? `[in "${upload.folderName}"]` : "[no folder]"}`,
+                )
                 .join("\n")}
 
 Available content IDs for bundling: ${(analysisData?.uploads || []).map((upload: any) => upload.id).join(", ")}
