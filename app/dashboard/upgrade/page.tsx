@@ -179,13 +179,6 @@ export default function UpgradePage() {
 
   return (
     <div className="space-y-12 px-4 py-8 sm:px-6 md:px-8">
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 pb-6 border-b border-zinc-800/50">
-        <div className="space-y-2">
-          <h1 className="text-2xl font-semibold text-white tracking-tight">Upgrade Plan</h1>
-          <p className="text-zinc-400">Choose the perfect plan for your content creation needs</p>
-        </div>
-      </div>
-
       <div className="text-center space-y-4">
         <h2 className="text-5xl lg:text-6xl font-thin text-white leading-tight">
           Choose Your{" "}
