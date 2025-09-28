@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { CheckCircle2, Crown, Shield, Package, Download, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -72,11 +72,29 @@ const downloadOptions = [
 
 export default function UpgradePage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { user } = useAuth()
   const { isProUser, loading } = useUserPlan()
   const [purchasingBundle, setPurchasingBundle] = useState<string | null>(null)
   const [purchasingDownload, setPurchasingDownload] = useState<string | null>(null)
   const [showingDownloads, setShowingDownloads] = useState(false)
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false)
+
+  useEffect(() => {
+    const success = searchParams.get("success")
+    const sessionId = searchParams.get("session_id")
+    const type = searchParams.get("type")
+
+    if (success === "true" && sessionId) {
+      setShowSuccessMessage(true)
+      const newUrl = window.location.pathname
+      window.history.replaceState({}, "", newUrl)
+
+      setTimeout(() => {
+        setShowSuccessMessage(false)
+      }, 5000)
+    }
+  }, [searchParams])
 
   const handleBundlePurchase = async (bundleId: string) => {
     try {
@@ -179,7 +197,20 @@ export default function UpgradePage() {
 
   return (
     <div className="space-y-8">
-      {/* Header */}
+      {showSuccessMessage && (
+        <div className="bg-gradient-to-r from-green-500/20 to-emerald-500/20 border border-green-400/30 rounded-lg p-4 mb-6">
+          <div className="flex items-center gap-3">
+            <CheckCircle2 className="h-5 w-5 text-green-400" />
+            <div>
+              <h3 className="text-green-300 font-medium">Purchase Successful!</h3>
+              <p className="text-green-200/80 text-sm">
+                Your purchase has been processed and your account has been updated.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="text-center space-y-3">
         <h1 className="text-4xl font-light text-white">
           Choose Your{" "}
@@ -193,7 +224,6 @@ export default function UpgradePage() {
         </p>
       </div>
 
-      {/* Toggle Buttons */}
       <div className="flex items-center justify-center gap-3">
         <Button
           onClick={() => setShowingDownloads(false)}
@@ -220,7 +250,6 @@ export default function UpgradePage() {
         </Button>
       </div>
 
-      {/* Section Header */}
       <div className="text-center space-y-2">
         <h2 className="text-2xl font-light text-white">
           {showingDownloads ? "One-Time Download Purchases" : "One-Time Bundle Purchases"}
@@ -308,7 +337,6 @@ export default function UpgradePage() {
         })}
       </div>
 
-      {/* Unlimited Section */}
       <div className="text-center py-6">
         <div className="inline-block p-1 bg-gradient-to-r from-cyan-500/20 to-blue-500/20 rounded-xl">
           <div className="bg-zinc-900 rounded-lg p-6">
@@ -319,7 +347,6 @@ export default function UpgradePage() {
       </div>
 
       <div className="space-y-6">
-        {/* Free Plan */}
         <Card className="relative overflow-hidden border border-zinc-700/50 bg-gradient-to-br from-zinc-900/90 to-black/90">
           {!isProUser && !loading && (
             <div className="absolute right-0 top-0 bg-gradient-to-r from-slate-400 to-cyan-400 px-3 py-1 text-xs font-medium text-black">
@@ -372,7 +399,6 @@ export default function UpgradePage() {
           </div>
         </Card>
 
-        {/* Creator Pro Plan */}
         <Card className="relative overflow-hidden border border-zinc-700/50 bg-gradient-to-br from-zinc-900/90 to-black/90">
           {!loading && (
             <div className="absolute right-0 top-0 bg-gradient-to-r from-cyan-400 to-blue-400 px-3 py-1 text-xs font-bold text-black">
