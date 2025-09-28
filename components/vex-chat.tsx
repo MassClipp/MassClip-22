@@ -14,7 +14,6 @@ import {
   Package,
   DollarSign,
   Heart,
-  Search,
   User,
   Settings,
   Gift,
@@ -127,7 +126,6 @@ function VexChat({ children }: VexChatProps) {
   ]
 
   const navigationItems = [
-    { icon: Search, label: "Explore", href: "/dashboard/explore" },
     { icon: Upload, label: "Upload", href: "/dashboard/upload" },
     { icon: Package, label: "Bundles", href: "/dashboard/bundles" },
     { icon: DollarSign, label: "Earnings", href: "/dashboard/earnings" },
@@ -1222,11 +1220,40 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
         <div
           className={`flex-1 min-h-screen pt-16 ${isMobile ? "ml-0" : isSidebarCollapsed ? "ml-16" : "ml-60"} ${isMobile && isSidebarOpen ? "blur-sm pointer-events-none" : ""} transition-all duration-300 relative z-10`}
         >
-          <div
-            className={`h-full ${isSidebarCollapsed ? "px-3 sm:px-4 lg:px-6" : "max-w-6xl mx-auto px-3 sm:px-4 lg:px-6"} py-4`}
-          >
-            {children}
-          </div>
+          {pathname === "/dashboard/upload" ? (
+            // Upload page gets full width when sidebar is collapsed
+            <div
+              className={`h-full ${isSidebarCollapsed ? "px-2 sm:px-3 lg:px-4" : "max-w-7xl mx-auto px-3 sm:px-4 lg:px-6"} py-4`}
+            >
+              {!isMobile && isSidebarCollapsed && (
+                <div className="flex items-center justify-between mb-6 pb-4 border-b border-zinc-800/50">
+                  <h1 className="text-2xl font-semibold text-white tracking-tight">Upload</h1>
+                  <div className="flex items-center gap-2">
+                    {navigationItems.slice(0, 6).map((item) => (
+                      <Button
+                        key={item.href}
+                        onClick={() => handleNavigation(item.href)}
+                        variant="ghost"
+                        size="sm"
+                        className="h-9 w-9 p-0 text-zinc-400 hover:text-white hover:bg-zinc-800/50"
+                        title={item.label}
+                      >
+                        <item.icon className="h-4 w-4" />
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {children}
+            </div>
+          ) : (
+            // All other pages use standard layout
+            <div
+              className={`h-full ${isSidebarCollapsed ? "px-3 sm:px-4 lg:px-6" : "max-w-6xl mx-auto px-3 sm:px-4 lg:px-6"} py-4`}
+            >
+              {children}
+            </div>
+          )}
         </div>
       )}
     </div>
