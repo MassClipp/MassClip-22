@@ -36,6 +36,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { doc, getDoc } from "firebase/firestore"
+import { db } from "@/lib/firebase"
 
 interface Message {
   id: string
@@ -580,14 +582,11 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
       if (!user) return
 
       try {
-        const token = await user.getIdToken()
-        const response = await fetch("/api/auth/session", {
-          headers: { Authorization: `Bearer ${token}` },
-        })
+        const userDoc = await getDoc(doc(db, "users", user.uid))
 
-        if (response.ok) {
-          const data = await response.json()
-          setUsername(data.user?.username || null)
+        if (userDoc.exists()) {
+          const data = userDoc.data()
+          setUsername(data.username || null)
         }
       } catch (error) {
         console.error("Error fetching username:", error)
@@ -652,7 +651,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
           onClick={() => setIsSidebarCollapsed(false)}
           variant="ghost"
           size="sm"
-          className="fixed top-1/2 left-2 z-50 h-8 w-8 p-0 bg-zinc-950/90 backdrop-blur-sm border border-zinc-700 hover:bg-zinc-800 -translate-y-1/2"
+          className="fixed top-1/2 left-2 z-50 h-8 w-8 p-0 bg-zinc-950/90 backdrop-blur-sm border border-zinc-700 hover:bg-zinc-800"
         >
           <ChevronRight className="h-4 w-4" />
         </Button>
@@ -842,8 +841,12 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
 
                 <Button
                   onClick={() => {
-                    const profileUsername = username || user?.email?.split("@")[0] || "user"
-                    window.open(`/creator/${profileUsername}`, "_blank")
+                    if (username) {
+                      window.open(`/creator/${username}`, "_blank")
+                    } else {
+                      // Fallback to profile settings if no username set
+                      router.push("/dashboard/profile")
+                    }
                   }}
                   size="sm"
                   className="w-full bg-white text-black hover:bg-zinc-100 font-medium text-xs h-8"
