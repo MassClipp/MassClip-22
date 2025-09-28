@@ -7,13 +7,11 @@ import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Send,
-  Plus,
   MessageSquare,
   Trash2,
   Loader2,
   Menu,
   X,
-  Home,
   Upload,
   Package,
   DollarSign,
@@ -94,7 +92,6 @@ function VexChat({ children }: VexChatProps) {
   ]
 
   const navigationItems = [
-    { icon: Home, label: "Dashboard", href: "/dashboard" },
     { icon: Search, label: "Explore", href: "/dashboard/explore" },
     { icon: Upload, label: "Upload", href: "/dashboard/upload" },
     { icon: Package, label: "Bundles", href: "/dashboard/bundles" },
@@ -710,18 +707,16 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
           <div className="flex flex-col h-full">
             {/* Vex Chat Section */}
             <div className="p-3 border-b border-zinc-800">
-              <div className="flex items-center gap-2 mb-2">
+              <button
+                onClick={() => {
+                  createNewChat()
+                  router.push("/dashboard/vex")
+                }}
+                className="flex items-center gap-2 mb-2 w-full text-left hover:bg-zinc-800/50 p-2 rounded-lg transition-colors"
+              >
                 <MessageSquare className="h-4 w-4 text-blue-400" />
                 <span className="text-sm font-medium text-white">Vex AI</span>
-              </div>
-
-              <Button
-                onClick={createNewChat}
-                className="w-full justify-start gap-3 bg-blue-600 hover:bg-blue-700 text-white h-9 mb-2"
-              >
-                <Plus className="h-4 w-4" />
-                New Chat
-              </Button>
+              </button>
 
               {/* Chat History */}
               <div className="max-h-40 overflow-hidden">
@@ -813,17 +808,6 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
 
               {/* Action Buttons */}
               <div className="space-y-2">
-                {username && (
-                  <Button
-                    onClick={() => window.open(`/creator/${username}`, "_blank")}
-                    size="sm"
-                    className="w-full bg-white text-black hover:bg-zinc-100 font-medium text-xs h-8"
-                  >
-                    <User className="h-3 w-3 mr-1" />
-                    View Profile
-                  </Button>
-                )}
-
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
@@ -855,6 +839,17 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
+
+                {username && (
+                  <Button
+                    onClick={() => window.open(`/creator/${username}`, "_blank")}
+                    size="sm"
+                    className="w-full bg-white text-black hover:bg-zinc-100 font-medium text-xs h-8"
+                  >
+                    <User className="h-3 w-3 mr-1" />
+                    View Profile
+                  </Button>
+                )}
               </div>
             </div>
           </div>
@@ -876,7 +871,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
           <ScrollArea className={`flex-1 ${isMobile ? "px-3" : "px-4"}`}>
             <div className={`${isMobile ? "max-w-full" : "max-w-4xl mx-auto"} py-4 min-h-full flex flex-col`}>
               {messages.length === 0 && (
-                <div className="text-center py-8 flex-1 flex flex-col justify-center">
+                <div className="text-center flex-1 flex flex-col justify-center items-center min-h-[60vh]">
                   <h2 className={`${isMobile ? "text-xl" : "text-2xl"} font-semibold mb-2`}>Hi! I'm Vex</h2>
                   <p
                     className={`text-muted-foreground mb-6 ${isMobile ? "max-w-sm" : "max-w-md"} mx-auto leading-relaxed`}
@@ -987,7 +982,11 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
         <div
           className={`flex-1 min-h-0 ${isMobile ? "ml-0" : isSidebarCollapsed ? "ml-0" : "ml-60"} ${isMobile && isSidebarOpen ? "blur-sm pointer-events-none" : ""} transition-all duration-300 relative z-10`}
         >
-          <div className="h-full max-w-6xl mx-auto px-3 sm:px-4 lg:px-6 py-4">{children}</div>
+          <div
+            className={`h-full ${isSidebarCollapsed ? "px-3 sm:px-4 lg:px-6" : "max-w-6xl mx-auto px-3 sm:px-4 lg:px-6"} py-4`}
+          >
+            {children}
+          </div>
         </div>
       )}
     </div>
