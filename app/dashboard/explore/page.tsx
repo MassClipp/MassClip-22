@@ -1474,19 +1474,18 @@ export default function ExplorePage() {
   const { remainingDownloads, isProUser: isPro, hasReachedLimit, downloadsUsed, totalDownloads } = useDownloadLimit()
 
   return (
-    <div className="space-y-8 min-h-screen">
-      {/* Page Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 px-4 md:px-0">
+    <div className="space-y-6">
+      <div className="space-y-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Explore Content</h1>
-          <p className="text-zinc-400 mt-1 text-sm md:text-base">Discover amazing content from creators</p>
+          <h1 className="text-2xl font-light text-white">Explore Content</h1>
+          <p className="text-zinc-400 text-sm">Discover amazing content from creators</p>
         </div>
 
-        <div className="flex items-center gap-2 md:gap-4 w-full md:w-auto">
-          {/* Minimal Download Counter */}
+        <div className="flex items-center gap-3">
+          {/* Download Counter */}
           {!isPro && (
             <div
-              className={`flex items-center gap-1.5 px-2 md:px-2.5 py-1 rounded-full text-xs font-medium ${
+              className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${
                 hasReachedLimit
                   ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
                   : "bg-zinc-800/50 text-zinc-300 border border-zinc-700/50"
@@ -1509,7 +1508,7 @@ export default function ExplorePage() {
                 router.push(`/dashboard/explore?search=${encodeURIComponent(query.trim())}`)
               }
             }}
-            className="flex-1 md:w-96"
+            className="flex-1"
           >
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-400" size={16} />
@@ -1518,145 +1517,131 @@ export default function ExplorePage() {
                 name="search"
                 placeholder="Search videos..."
                 defaultValue={searchQuery}
-                className={`w-full py-2 md:py-2.5 pl-9 md:pl-10 pr-4 bg-zinc-900/60 border border-zinc-800 rounded-lg text-white placeholder-zinc-500 focus:outline-none transition-all text-sm md:text-base ${"focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/50"}`}
-                style={{ fontSize: "16px" }} // Prevent iOS zoom
+                className="w-full py-2 pl-9 pr-4 bg-zinc-900/60 border border-zinc-800 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/50 transition-all text-sm"
+                style={{ fontSize: "16px" }}
               />
             </div>
           </form>
         </div>
       </div>
 
-      {/* Search Results Header (if searching) */}
+      {/* Search Results Header */}
       {searchQuery && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-          <div className="bg-zinc-900/30 backdrop-blur-sm border border-zinc-800/50 rounded-xl p-4 md:p-6 shadow-xl">
-            <h2 className="text-xl md:text-2xl font-light tracking-wider text-white mb-2 flex items-center">
-              <Search className="h-4 w-4 md:h-5 md:w-5 mr-2 text-zinc-400" />
-              Results for "{searchQuery}"
-            </h2>
-            <p className="text-sm md:text-base text-zinc-400">
-              {hasSearchResults
-                ? `Found results in ${Object.keys(filteredShowcaseVideos).length} categories`
-                : "No results found. Try a different search term."}
-            </p>
-          </div>
-        </motion.div>
-      )}
-
-      {/* Featured Section (if not searching) */}
-      {!searchQuery && !isLoadingData && (
-        <motion.div variants={containerVariants} initial="hidden" animate="visible">
-          <motion.div variants={itemVariants} className="mb-8">
-            <div className="px-4 md:px-6 mb-4 flex items-center justify-between">
-              <h2 className="text-xl md:text-2xl font-extralight tracking-wider text-white">Featured Clips</h2>
-              <Link
-                href="/dashboard/upgrade"
-                className="text-zinc-400 hover:text-white flex items-center group bg-zinc-900/30 hover:bg-zinc-900/50 px-2 md:px-3 py-1 rounded-full transition-all duration-300"
-              >
-                <span className="mr-1 text-xs md:text-sm">Upgrade</span>
-                <ArrowRight className="h-3 w-3 md:h-3.5 md:w-3.5 transition-transform group-hover:translate-x-0.5" />
-              </Link>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 md:gap-4 px-4 md:px-6 min-w-0">
-              {featuredVideos.map((video, index) => (
-                <motion.div
-                  key={video.uri || index}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5, delay: index * 0.1 }}
-                  className="min-w-0" // Prevent overflow
-                >
-                  <InlineVimeoCard video={video} />
-                </motion.div>
-              ))}
-            </div>
-          </motion.div>
-
-          <motion.div variants={itemVariants} className="mb-12">
-            <div className="h-px bg-gradient-to-r from-transparent via-zinc-800 to-transparent" />
-          </motion.div>
-        </motion.div>
-      )}
-
-      {/* Error state */}
-      {error && (
-        <div className="py-10 text-center">
-          <p className="text-red-500">Error loading videos: {error}</p>
+        <div className="bg-zinc-900/30 border border-zinc-800/50 rounded-lg p-4">
+          <h2 className="text-lg font-light text-white mb-1 flex items-center">
+            <Search className="h-4 w-4 mr-2 text-zinc-400" />
+            Results for "{searchQuery}"
+          </h2>
+          <p className="text-sm text-zinc-400">
+            {hasSearchResults
+              ? `Found results in ${Object.keys(filteredShowcaseVideos).length} categories`
+              : "No results found. Try a different search term."}
+          </p>
         </div>
       )}
 
-      {/* Loading state (initial) */}
-      {isLoadingData && (
-        <div>
-          <div className="h-8 w-48 bg-zinc-900/50 rounded-md animate-pulse mb-8"></div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 md:gap-4 min-w-0">
+      {/* Featured Section */}
+      {!searchQuery && !isLoading && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-light text-white">Featured Clips</h2>
+            <Link
+              href="/dashboard/upgrade"
+              className="text-zinc-400 hover:text-white flex items-center group bg-zinc-900/30 hover:bg-zinc-900/50 px-3 py-1 rounded-full transition-all duration-300"
+            >
+              <span className="mr-1 text-sm">Upgrade</span>
+              <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            {featuredVideos.slice(0, 6).map((video, index) => (
+              <div key={video.uri || index} className="aspect-[9/16] bg-zinc-900/50 rounded-lg overflow-hidden">
+                <InlineVimeoCard video={video} />
+              </div>
+            ))}
+          </div>
+
+          <div className="h-px bg-gradient-to-r from-transparent via-zinc-800 to-transparent" />
+        </div>
+      )}
+
+      {/* Error state */}
+      {showcaseError && (
+        <div className="py-8 text-center">
+          <p className="text-red-500">Error loading videos: {showcaseError}</p>
+        </div>
+      )}
+
+      {/* Loading state */}
+      {isLoading && (
+        <div className="space-y-4">
+          <div className="h-6 w-48 bg-zinc-900/50 rounded animate-pulse"></div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
             {Array.from({ length: 6 }).map((_, index) => (
-              <div
-                key={`skeleton-${index}`}
-                className="aspect-[9/16] rounded-xl bg-zinc-900/50 animate-pulse min-w-0"
-              ></div>
+              <div key={`skeleton-${index}`} className="aspect-[9/16] rounded-lg bg-zinc-900/50 animate-pulse"></div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Creator Uploads Row */}
-      {!creatorUploadsLoading && (
-        <motion.div variants={containerVariants} initial="hidden" animate="visible">
-          <motion.div variants={itemVariants}>
-            {creatorUploads && creatorUploads.length > 0 ? (
-              <InlineVideoRow
-                title="Creator Uploads"
-                videos={creatorUploads}
-                isCreatorUploads={true}
-                limit={creatorUploads.length}
-              />
-            ) : (
-              <div className="px-6 py-4 bg-zinc-900/30 rounded-xl">
-                <h3 className="text-lg font-light text-white mb-2">Creator Uploads</h3>
-                <p className="text-zinc-400 text-sm">
-                  No creator uploads found.{" "}
-                  {creatorUploads ? `Found ${creatorUploads.length} videos` : "No data loaded"}
-                </p>
-              </div>
-            )}
-          </motion.div>
-        </motion.div>
-      )}
+      {/* Creator Uploads */}
+      {!creatorUploadsLoading && creatorUploads && creatorUploads.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-light text-white">Creator Uploads</h2>
+            <Button
+              onClick={refetchCreatorUploads}
+              variant="ghost"
+              size="sm"
+              className="text-zinc-400 hover:text-white hover:bg-zinc-900/50 rounded-full px-3 py-1"
+            >
+              <RefreshCw className="h-3.5 w-3.5 mr-1" />
+              Refresh
+            </Button>
+          </div>
 
-      {/* Loading state for Creator Uploads */}
-      {creatorUploadsLoading && (
-        <div className="px-6 py-4 bg-zinc-900/30 rounded-xl">
-          <h3 className="text-lg font-light text-white mb-2">Creator Uploads</h3>
-          <p className="text-zinc-400 text-sm">Loading creator uploads...</p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            {creatorUploads.slice(0, 12).map((video, index) => (
+              <div key={video.id || index} className="aspect-[9/16] bg-zinc-900/50 rounded-lg overflow-hidden">
+                <InlineCreatorUploadCard video={video} />
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
-      {/* Showcase-based categories */}
-      {showcaseNames.length > 0 && (
-        <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-12">
-          {showcaseNames.map((showcaseName, index) => {
-            const videosToShow = searchQuery
-              ? filteredShowcaseVideos[showcaseName]
-              : (showcaseVideos || {})[showcaseName]
-            return (
-              <motion.div key={`showcase-${showcaseName}`} variants={itemVariants}>
-                <InlineVideoRow
-                  title={showcaseName}
-                  videos={videosToShow || []}
-                  limit={10}
-                  isShowcase={true}
-                  showcaseId={(showcaseIds || {})[showcaseName]}
-                />
-              </motion.div>
-            )
-          })}
-        </motion.div>
+      {/* Showcase Categories */}
+      {Object.keys(filteredShowcaseVideos).length > 0 && (
+        <div className="space-y-6">
+          {Object.entries(filteredShowcaseVideos).map(([showcaseName, videos]) => (
+            <div key={showcaseName} className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-light text-white">{showcaseName}</h2>
+                <Link
+                  href={`/showcase/${(showcaseIds || {})[showcaseName] || showcaseName.toLowerCase().replace(/\s+/g, "-")}`}
+                  className="text-zinc-400 hover:text-white flex items-center group bg-zinc-900/30 hover:bg-zinc-900/50 px-3 py-1 rounded-full transition-all duration-300"
+                >
+                  <span className="mr-1 text-sm">See all</span>
+                  <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+                </Link>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                {videos.slice(0, 12).map((video, index) => (
+                  <div key={video.uri || index} className="aspect-[9/16] bg-zinc-900/50 rounded-lg overflow-hidden">
+                    <InlineVimeoCard video={video} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
       {/* No videos state */}
-      {!isLoadingData && showcaseNames.length === 0 && (
-        <div className="py-10 text-center">
+      {!isLoading && Object.keys(filteredShowcaseVideos).length === 0 && (
+        <div className="py-8 text-center">
           {searchQuery ? (
             <p className="text-zinc-400">No videos found matching "{searchQuery}". Try a different search term.</p>
           ) : (

@@ -16,7 +16,6 @@ import {
   Grid3X3,
   FolderOpen,
   Tags,
-  MessageSquare,
 } from "lucide-react"
 import { NavDropdown } from "./nav-dropdown"
 
@@ -25,11 +24,6 @@ const navItems = [
     title: "Dashboard",
     href: "/dashboard",
     icon: LayoutDashboard,
-  },
-  {
-    title: "Vex AI Assistant",
-    href: "/dashboard/vex",
-    icon: MessageSquare,
   },
   {
     title: "Explore",
