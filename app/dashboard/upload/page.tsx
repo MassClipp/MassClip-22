@@ -43,6 +43,7 @@ import { chunkedUploadService } from "@/lib/chunked-upload-service"
 import { uploadQueueManager, type QueuedUpload } from "@/lib/upload-queue-manager"
 import { CreateFolderDialog } from "@/components/create-folder-dialog"
 import FolderSidebar from "@/components/folder-sidebar"
+import { VexFolderOrganizer } from "@/components/vex-folder-organizer"
 import { Menu } from "lucide-react"
 
 interface UploadType {
@@ -133,12 +134,14 @@ export default function UploadPage() {
   const [selectedFolderId, setSelectedFolderId] = useState<string>("main") // Default to main instead of root
   const [isCreateFolderDialogOpen, setIsCreateFolderDialogOpen] = useState(false)
   const [loadingFolders, setLoadingFolders] = useState(false)
+  const [userToken, setUserToken] = useState<string>("")
 
   // Initialize upload services
   useEffect(() => {
     if (user) {
       // Set auth token for chunked upload service
       user.getIdToken().then((token) => {
+        setUserToken(token)
         chunkedUploadService.setAuthToken(token)
       })
 
@@ -603,6 +606,15 @@ export default function UploadPage() {
     setSelectedFolderId(folderId)
   }
 
+  const handleVexOrganizeComplete = () => {
+    fetchUploads()
+    setSelectedUploads([])
+    toast({
+      title: "Organization Complete",
+      description: "Vex has successfully organized your files",
+    })
+  }
+
   if (loading || authLoading) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
@@ -804,28 +816,39 @@ export default function UploadPage() {
 
       {/* Selected Items Actions */}
       {selectedUploads.length > 0 && (
-        <div className="flex items-center justify-between bg-zinc-900/80 border border-zinc-800 rounded-lg p-4">
-          <div className="text-sm text-zinc-300">
-            <span className="font-medium">{selectedUploads.length}</span> item(s) selected
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-zinc-700 bg-transparent"
-              onClick={() => setSelectedUploads([])}
-            >
-              Clear Selection
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-zinc-700 bg-transparent"
-              onClick={() => setShowAddToFreeContentDialog(true)}
-            >
-              <PlusCircle className="h-4 w-4 mr-2" />
-              Add to Free Content
-            </Button>
+        <div className="space-y-4">
+          {/* Vex Folder Organizer */}
+          {userToken && (
+            <VexFolderOrganizer
+              selectedFiles={selectedUploads}
+              onOrganizeComplete={handleVexOrganizeComplete}
+              userToken={userToken}
+            />
+          )}
+
+          <div className="flex items-center justify-between bg-zinc-900/80 border border-zinc-800 rounded-lg p-4">
+            <div className="text-sm text-zinc-300">
+              <span className="font-medium">{selectedUploads.length}</span> item(s) selected
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-zinc-700 bg-transparent"
+                onClick={() => setSelectedUploads([])}
+              >
+                Clear Selection
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-zinc-700 bg-transparent"
+                onClick={() => setShowAddToFreeContentDialog(true)}
+              >
+                <PlusCircle className="h-4 w-4 mr-2" />
+                Add to Free Content
+              </Button>
+            </div>
           </div>
         </div>
       )}
