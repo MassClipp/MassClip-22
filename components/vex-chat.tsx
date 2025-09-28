@@ -85,6 +85,48 @@ function VexChat({ children }: VexChatProps) {
 
   const isVexChatPage = pathname === "/dashboard/vex"
 
+  const allSuggestions = [
+    "Make me 3 motivation bundles",
+    "Make me a meme template bundle",
+    "What's the best way to bundle my content for sale?",
+    "Help me create a beginner photography bundle",
+    "What should I price my video editing pack?",
+    "Build a bundle for social media templates",
+    "Create a free lead magnet bundle",
+    "How do I package my fitness content?",
+    "Make me a bundle for entrepreneurs",
+    "What's trending in content bundles right now?",
+    "Help me create a seasonal content pack",
+    "How should I price my design templates?",
+    "Create a bundle for small business owners",
+    "What content performs best in bundles?",
+    "Help me organize my content library",
+    "Make me a productivity bundle",
+    "How do I create urgency in my bundles?",
+    "What's the ideal bundle size?",
+    "Help me write compelling bundle descriptions",
+    "Create a bundle for content creators",
+  ]
+
+  const [currentSuggestions, setCurrentSuggestions] = useState<string[]>([])
+
+  useEffect(() => {
+    const getRandomSuggestions = () => {
+      const shuffled = [...allSuggestions].sort(() => 0.5 - Math.random())
+      return shuffled.slice(0, 4)
+    }
+
+    // Set initial suggestions
+    setCurrentSuggestions(getRandomSuggestions())
+
+    // Rotate suggestions every 10 seconds
+    const interval = setInterval(() => {
+      setCurrentSuggestions(getRandomSuggestions())
+    }, 10000)
+
+    return () => clearInterval(interval)
+  }, [])
+
   const suggestions = [
     "Help me create a beginner photography bundle",
     "What should I price my video editing pack?",
@@ -376,20 +418,20 @@ function VexChat({ children }: VexChatProps) {
                   let updatedContent = msg.content
 
                   if (job.status === "processing" || job.status === "retrying") {
-                    updatedContent = `🔄 **Creating your bundle...** 
+                    updatedContent = `🔄 **Creating your bundle...**
 
 **Progress:** ${job.progress}%
 **Current Step:** ${job.currentStep}
 
 ${job.retryCount > 0 ? `*Retry ${job.retryCount}/${job.maxRetries}*` : ""}`
                   } else if (job.status === "completed" && job.bundleId) {
-                    updatedContent = `🎉 **Your bundle is ready!** 
+                    updatedContent = `🎉 **Your bundle is ready!**
 
 I've successfully created your bundle and it's now live in your storefront. You can view it in your dashboard or start sharing it with your audience!
 
 **Bundle ID:** ${job.bundleId}`
                   } else if (job.status === "failed") {
-                    updatedContent = `❌ **Bundle creation failed** 
+                    updatedContent = `❌ **Bundle creation failed**
 
 ${job.error || "An unexpected error occurred"}
 
@@ -1105,11 +1147,11 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                   )}
 
                   <div
-                    className={`grid ${isMobile ? "grid-cols-1 gap-2" : "grid-cols-1 md:grid-cols-2 gap-2"} ${isMobile ? "max-w-full" : "max-w-2xl"} mx-auto`}
+                    className={`grid ${isMobile ? "grid-cols-1 gap-2" : "grid-cols-1 md:grid-cols-2 gap-2"} ${isMobile ? "max-w-full" : "max-w-2xl"} mx-auto mb-4`}
                   >
-                    {suggestions.map((suggestion, index) => (
+                    {currentSuggestions.map((suggestion, index) => (
                       <button
-                        key={index}
+                        key={`${suggestion}-${index}`}
                         className={`text-left ${isMobile ? "p-3" : "p-3"} rounded-lg bg-transparent border border-zinc-700/50 hover:bg-zinc-800/30 hover:border-zinc-600/50 transition-all duration-200 text-sm`}
                         onClick={() => handleSuggestionClick(suggestion)}
                       >
@@ -1117,6 +1159,10 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                       </button>
                     ))}
                   </div>
+
+                  <p className="text-xs text-zinc-500 max-w-md mx-auto text-center">
+                    💡 Vex works best with detailed prompts
+                  </p>
                 </div>
               )}
 
