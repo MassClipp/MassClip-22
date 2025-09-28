@@ -24,6 +24,8 @@ import {
   Gift,
   CreditCard,
   LogOut,
+  ChevronRight,
+  ChevronLeft,
 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -80,6 +82,7 @@ function VexChat({ children }: VexChatProps) {
   const pathname = usePathname() // Added pathname to detect current route
   const [username, setUsername] = useState<string | null>(null)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
 
   const isVexChatPage = pathname === "/dashboard/vex"
 
@@ -647,6 +650,17 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
         </Button>
       )}
 
+      {!isMobile && isSidebarCollapsed && (
+        <Button
+          onClick={() => setIsSidebarCollapsed(false)}
+          variant="ghost"
+          size="sm"
+          className="fixed top-1/2 left-2 z-50 h-8 w-8 p-0 bg-zinc-950/90 backdrop-blur-sm border border-zinc-700 hover:bg-zinc-800 -translate-y-1/2"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      )}
+
       {/* Mobile backdrop */}
       {isMobile && isSidebarOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-30" onClick={() => setIsSidebarOpen(false)} />
@@ -658,10 +672,10 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
         className={`
           ${isMobile ? "fixed" : "fixed"} 
           left-0 top-0 h-full 
-          ${isMobile ? "w-80" : "w-60"} 
+          ${isMobile ? "w-80" : isSidebarCollapsed ? "w-0" : "w-60"} 
           bg-zinc-950/95 backdrop-blur-sm border-r border-zinc-800 flex flex-col z-40
           ${isMobile ? (isSidebarOpen ? "translate-x-0" : "-translate-x-full") : "translate-x-0"}
-          transition-transform duration-300 ease-in-out
+          transition-all duration-300 ease-in-out overflow-hidden
         `}
       >
         {/* Header with Logo */}
@@ -671,7 +685,16 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
               <span className="text-lg font-semibold text-white">MassClip</span>
             </div>
           </div>
-          {isMobile && (
+          {!isMobile ? (
+            <Button
+              onClick={() => setIsSidebarCollapsed(true)}
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0 text-zinc-400 hover:text-white"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+          ) : (
             <Button
               onClick={() => setIsSidebarOpen(false)}
               variant="ghost"
@@ -723,7 +746,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                               router.push("/dashboard/vex")
                             }}
                             disabled={isLoadingCurrentChat}
-                            className={`w-full text-left p-2 rounded-md text-xs transition-all duration-200 flex items-center gap-2 ${
+                            className={`w-full text-left p-2 rounded-md text-xs transition-all duration-200 flex items-center gap-2 pr-8 ${
                               currentChatId === chat.id
                                 ? "bg-blue-600/20 text-blue-300 border border-blue-600/30"
                                 : "text-zinc-400 hover:bg-zinc-800/50 hover:text-white"
@@ -741,7 +764,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                             }}
                             size="sm"
                             variant="ghost"
-                            className="absolute right-1 top-1 opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-zinc-500 hover:text-red-400 hover:bg-red-500/10"
+                            className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-zinc-500 hover:text-red-400 hover:bg-red-500/10"
                           >
                             <Trash2 className="h-3 w-3" />
                           </Button>
@@ -841,7 +864,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
       {isVexChatPage ? (
         /* Main Chat Area - Only show on /dashboard/vex */
         <div
-          className={`flex flex-col flex-1 min-h-0 ${isMobile ? "ml-0" : "ml-60"} ${isMobile && isSidebarOpen ? "blur-sm pointer-events-none" : ""} transition-all duration-300 relative z-10`}
+          className={`flex flex-col flex-1 min-h-0 ${isMobile ? "ml-0" : isSidebarCollapsed ? "ml-0" : "ml-60"} ${isMobile && isSidebarOpen ? "blur-sm pointer-events-none" : ""} transition-all duration-300 relative z-10`}
         >
           {isLoadingCurrentChat && (
             <div className="flex items-center justify-center py-4 border-b border-zinc-800">
@@ -962,7 +985,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
       ) : (
         /* Page Content Area - Show for all other dashboard pages */
         <div
-          className={`flex-1 min-h-0 ${isMobile ? "ml-0" : "ml-60"} ${isMobile && isSidebarOpen ? "blur-sm pointer-events-none" : ""} transition-all duration-300 relative z-10`}
+          className={`flex-1 min-h-0 ${isMobile ? "ml-0" : isSidebarCollapsed ? "ml-0" : "ml-60"} ${isMobile && isSidebarOpen ? "blur-sm pointer-events-none" : ""} transition-all duration-300 relative z-10`}
         >
           <div className="h-full max-w-6xl mx-auto px-3 sm:px-4 lg:px-6 py-4">{children}</div>
         </div>
