@@ -840,16 +840,17 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                   </DropdownMenuContent>
                 </DropdownMenu>
 
-                {username && (
-                  <Button
-                    onClick={() => window.open(`/creator/${username}`, "_blank")}
-                    size="sm"
-                    className="w-full bg-white text-black hover:bg-zinc-100 font-medium text-xs h-8"
-                  >
-                    <User className="h-3 w-3 mr-1" />
-                    View Profile
-                  </Button>
-                )}
+                <Button
+                  onClick={() => {
+                    const profileUsername = username || user?.email?.split("@")[0] || "user"
+                    window.open(`/creator/${profileUsername}`, "_blank")
+                  }}
+                  size="sm"
+                  className="w-full bg-white text-black hover:bg-zinc-100 font-medium text-xs h-8"
+                >
+                  <User className="h-3 w-3 mr-1" />
+                  View Profile
+                </Button>
               </div>
             </div>
           </div>
