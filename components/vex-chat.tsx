@@ -964,3 +964,4 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
 }
 
 export default VexChat
+export { VexChat }
