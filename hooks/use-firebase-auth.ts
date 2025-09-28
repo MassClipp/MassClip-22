@@ -191,18 +191,59 @@ export function useFirebaseAuth() {
     }
 
     try {
-      await firebaseSignOut(auth)
+      console.log("[v0] Starting comprehensive logout process...")
 
-      // Clear session cookie
+      // 1. Clear Firebase auth state first
+      await firebaseSignOut(auth)
+      console.log("[v0] Firebase signOut completed")
+
+      // 2. Clear session cookie via API
       try {
         await fetch("/api/auth/logout", {
           method: "POST",
           credentials: "include",
         })
+        console.log("[v0] Session cookies cleared")
       } catch (error) {
         console.error("Error clearing session:", error)
       }
 
+      // 3. Clear all localStorage and sessionStorage
+      try {
+        // Clear Firebase-specific storage
+        const firebaseKeys = Object.keys(localStorage).filter(
+          (key) =>
+            key.includes("firebase") ||
+            key.includes("Firebase") ||
+            key.includes("auth") ||
+            key.includes("user") ||
+            key.includes("vex-last-chat-id"),
+        )
+
+        firebaseKeys.forEach((key) => {
+          localStorage.removeItem(key)
+          console.log(`[v0] Cleared localStorage key: ${key}`)
+        })
+
+        // Clear sessionStorage as well
+        const sessionKeys = Object.keys(sessionStorage).filter(
+          (key) => key.includes("firebase") || key.includes("Firebase") || key.includes("auth") || key.includes("user"),
+        )
+
+        sessionKeys.forEach((key) => {
+          sessionStorage.removeItem(key)
+          console.log(`[v0] Cleared sessionStorage key: ${key}`)
+        })
+
+        console.log("[v0] Browser storage cleared")
+      } catch (error) {
+        console.error("Error clearing browser storage:", error)
+      }
+
+      // 4. Force a small delay to ensure cleanup completes
+      await new Promise((resolve) => setTimeout(resolve, 100))
+
+      console.log("[v0] Logout process completed successfully")
       return { success: true }
     } catch (error: any) {
       console.error("Sign out error:", error)
