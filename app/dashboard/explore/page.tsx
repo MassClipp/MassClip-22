@@ -1474,7 +1474,7 @@ export default function ExplorePage() {
   const { remainingDownloads, isProUser: isPro, hasReachedLimit, downloadsUsed, totalDownloads } = useDownloadLimit()
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 min-h-screen">
       {/* Page Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 px-4 md:px-0">
         <div>
@@ -1557,13 +1557,14 @@ export default function ExplorePage() {
                 <ArrowRight className="h-3 w-3 md:h-3.5 md:w-3.5 transition-transform group-hover:translate-x-0.5" />
               </Link>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 md:gap-4 px-4 md:px-6">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 md:gap-4 px-4 md:px-6 min-w-0">
               {featuredVideos.map((video, index) => (
                 <motion.div
                   key={video.uri || index}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.5, delay: index * 0.1 }}
+                  className="min-w-0" // Prevent overflow
                 >
                   <InlineVimeoCard video={video} />
                 </motion.div>
@@ -1588,9 +1589,12 @@ export default function ExplorePage() {
       {isLoadingData && (
         <div>
           <div className="h-8 w-48 bg-zinc-900/50 rounded-md animate-pulse mb-8"></div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 md:gap-4 min-w-0">
             {Array.from({ length: 6 }).map((_, index) => (
-              <div key={`skeleton-${index}`} className="aspect-[9/16] rounded-xl bg-zinc-900/50 animate-pulse"></div>
+              <div
+                key={`skeleton-${index}`}
+                className="aspect-[9/16] rounded-xl bg-zinc-900/50 animate-pulse min-w-0"
+              ></div>
             ))}
           </div>
         </div>

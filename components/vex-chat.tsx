@@ -662,7 +662,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
   }, [isSidebarOpen])
 
   return (
-    <div className="flex h-screen relative bg-gradient-to-br from-black via-zinc-900 to-black">
+    <div className="flex min-h-screen relative bg-gradient-to-br from-black via-zinc-900 to-black">
       {/* Fixed noise overlay */}
       <div className="fixed inset-0 bg-[url('/noise.png')] opacity-[0.03] mix-blend-soft-light pointer-events-none z-0"></div>
 
@@ -1093,7 +1093,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
       {isVexChatPage ? (
         /* Main Chat Area - Only show on /dashboard/vex */
         <div
-          className={`flex flex-col flex-1 min-h-0 pt-16 ${isMobile ? "ml-0" : isSidebarCollapsed ? "ml-16" : "ml-60"} ${isMobile && isSidebarOpen ? "blur-sm pointer-events-none" : ""} transition-all duration-300 relative z-10`}
+          className={`flex flex-col flex-1 min-h-screen pt-16 ${isMobile ? "ml-0" : isSidebarCollapsed ? "ml-16" : "ml-60"} ${isMobile && isSidebarOpen ? "blur-sm pointer-events-none" : ""} transition-all duration-300 relative z-10`}
         >
           {isLoadingCurrentChat && (
             <div className="flex items-center justify-center py-4 border-b border-zinc-800">
@@ -1105,10 +1105,10 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
           <ScrollArea className={`flex-1 ${isMobile ? "px-3" : "px-4"}`}>
             <div className={`${isMobile ? "max-w-full" : "max-w-4xl mx-auto"} py-4 min-h-full flex flex-col`}>
               {messages.length === 0 && (
-                <div className="text-center flex-1 flex flex-col justify-center items-center min-h-[60vh]">
+                <div className="text-center flex-1 flex flex-col justify-center items-center min-h-[60vh] px-2">
                   <h2 className={`${isMobile ? "text-xl" : "text-2xl"} font-semibold mb-2`}>Hi! I'm Vex</h2>
                   <p
-                    className={`text-muted-foreground mb-6 ${isMobile ? "max-w-sm" : "max-w-md"} mx-auto leading-relaxed`}
+                    className={`text-muted-foreground mb-6 ${isMobile ? "max-w-sm text-sm" : "max-w-md"} mx-auto leading-relaxed`}
                   >
                     I'll help you create profitable bundles, set optimal pricing, and build compelling storefront
                     content.
@@ -1131,13 +1131,14 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                   )}
 
                   <div
-                    className={`grid ${isMobile ? "grid-cols-1 gap-2" : "grid-cols-1 md:grid-cols-2 gap-2"} ${isMobile ? "max-w-full" : "max-w-2xl"} mx-auto mb-4`}
+                    className={`grid ${isMobile ? "grid-cols-1 gap-2 max-w-full" : "grid-cols-1 md:grid-cols-2 gap-2 max-w-2xl"} mx-auto mb-4`}
                   >
                     {currentSuggestions.map((suggestion, index) => (
                       <button
                         key={`${suggestion}-${index}`}
-                        className={`text-left ${isMobile ? "p-3" : "p-3"} rounded-lg bg-transparent border border-zinc-700/50 hover:bg-zinc-800/30 hover:border-zinc-600/50 transition-all duration-200 text-sm`}
+                        className={`text-left ${isMobile ? "p-3 text-sm" : "p-3 text-sm"} rounded-lg bg-transparent border border-zinc-700/50 hover:bg-zinc-800/30 hover:border-zinc-600/50 transition-all duration-200`}
                         onClick={() => handleSuggestionClick(suggestion)}
+                        style={{ fontSize: "16px" }} // Prevent iOS zoom
                       >
                         {suggestion}
                       </button>
@@ -1219,7 +1220,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
       ) : (
         /* Page Content Area - Show for all other dashboard pages */
         <div
-          className={`flex-1 min-h-0 pt-16 ${isMobile ? "ml-0" : isSidebarCollapsed ? "ml-16" : "ml-60"} ${isMobile && isSidebarOpen ? "blur-sm pointer-events-none" : ""} transition-all duration-300 relative z-10`}
+          className={`flex-1 min-h-screen pt-16 ${isMobile ? "ml-0" : isSidebarCollapsed ? "ml-16" : "ml-60"} ${isMobile && isSidebarOpen ? "blur-sm pointer-events-none" : ""} transition-all duration-300 relative z-10`}
         >
           <div
             className={`h-full ${isSidebarCollapsed ? "px-3 sm:px-4 lg:px-6" : "max-w-6xl mx-auto px-3 sm:px-4 lg:px-6"} py-4`}
