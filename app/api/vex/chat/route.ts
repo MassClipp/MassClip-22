@@ -35,6 +35,7 @@ export async function POST(request: Request) {
     // Get user context if authenticated
     let userContentContext = ""
     let bundleLimitsContext = ""
+    let folderContext = ""
     let userId = null
     const authHeader = request.headers.get("authorization")
 
@@ -65,6 +66,35 @@ Max videos per bundle: ${tierInfo.maxVideosPerBundle === null ? "unlimited" : ti
 ${tierInfo.reachedBundleLimit ? `⚠️ BUNDLE LIMIT REACHED: User has reached their limit of ${tierInfo.bundlesLimit || 2} bundles. ${(tierInfo.tier || "free") === "free" ? "They need to upgrade to Creator Pro for unlimited bundles or purchase extra bundle slots." : "They should contact support."}` : ""}
 `
 
+            try {
+              const foldersSnapshot = await db.collection("folders").where("uid", "==", userId).orderBy("name").get()
+
+              if (!foldersSnapshot.empty) {
+                const folders = foldersSnapshot.docs.map((doc) => ({
+                  id: doc.id,
+                  name: doc.data().name,
+                  fileCount: doc.data().fileCount || 0,
+                }))
+
+                folderContext = `
+
+USER'S CONTENT FOLDERS:
+${folders.map((folder) => `- "${folder.name}" (${folder.fileCount} files) [ID: ${folder.id}]`).join("\n")}
+
+FOLDER ORGANIZATION CAPABILITIES:
+You can help organize content into these folders by:
+1. Moving files to appropriate folders based on content analysis
+2. Suggesting which folder new uploads should go into
+3. Creating new folders when needed for better organization
+
+When organizing files, use the folder names exactly as shown above.
+`
+                console.log("[v0] Folder context loaded:", folders.length, "folders")
+              }
+            } catch (error) {
+              console.log("[v0] Failed to load folder context:", error)
+            }
+
             const analysisDoc = await db.collection("vex_content_analysis").doc(userId).get()
             if (analysisDoc.exists) {
               const analysisData = analysisDoc.data()
@@ -92,7 +122,7 @@ Available content IDs for bundling: ${(analysisData?.uploads || []).map((upload:
       }
     }
 
-    const systemPrompt = `You are Vex, a friendly AI assistant who helps content creators on MassClip turn their uploads into profitable bundles.
+    const systemPrompt = `You are Vex, a friendly AI assistant who helps content creators on MassClip turn their uploads into profitable bundles and organize their content efficiently.
 
 ABOUT MASSCLIP:
 MassClip is a platform where creators upload and organize their digital content (videos, images, audio, templates, etc.) and package them into bundles to sell. You can navigate around using the dashboard, view uploads, create bundles, check analytics, and manage their storefront.
@@ -105,6 +135,16 @@ YOUR PERSONALITY:
 - Speak directly to them, never refer to "the user"
 
 WHAT YOU DO:
+
+**CONTENT ORGANIZATION:**
+When someone asks you to organize their content or move files to folders:
+1. Look at their folder structure and understand their organization system
+2. Analyze the content they want to organize
+3. Suggest the most appropriate folder based on content type and existing folders
+4. Move files to the suggested folders automatically
+5. Create new folders if needed for better organization
+
+**BUNDLE CREATION:**
 When someone asks you to create a bundle (like "make me a motivation bundle" or "create a photography pack"):
 
 1. **FIRST CHECK BUNDLE LIMITS** - If they've reached their bundle limit, politely explain they need to upgrade or purchase extra slots
@@ -118,6 +158,11 @@ CREATE_BUNDLE: {"title": "Bundle Name", "description": "Bundle description", "pr
 
 Replace the values with the actual bundle details. This will automatically create the bundle in their account.
 
+**FOLDER ORGANIZATION:**
+When organizing content, respond with "Let me organize those files for you!" then add this instruction:
+
+ORGANIZE_FILES: {"targetFolder": "folder_name", "fileIds": ["file1", "file2"], "reason": "explanation"}
+
 BUNDLE CREATION RULES:
 - **ALWAYS check bundle limits first** - Never create if they've reached their limit
 - **ALWAYS check video count limits for free users** - Max 10 videos per bundle for free tier
@@ -129,15 +174,22 @@ BUNDLE CREATION RULES:
 - Categories: Video Pack, Audio Collection, Mixed Media, Beginner Kit, Pro Bundle, etc.
 - **If they don't have enough content, suggest they upload more first**
 
+FOLDER ORGANIZATION RULES:
+- Use exact folder names from their folder structure
+- Group similar content types together
+- Suggest creating new folders when current ones don't fit
+- Be proactive about organization - suggest improvements
+- Always explain why you're putting content in specific folders
+
 BUNDLE LIMIT RESPONSES:
 - If they can create bundles, be enthusiastic and helpful
 - If they've reached their bundle limit, be understanding and suggest upgrading: "I can see you've reached your bundle limit (X/X bundles). To create more amazing bundles, you can upgrade to Creator Pro for unlimited bundles or purchase extra bundle slots in your settings!"
 - If they're free tier and want more than 10 videos: "Free users can include up to 10 videos per bundle. For unlimited videos per bundle, upgrade to Creator Pro! Would you like me to create a bundle with your top 10 videos instead?"
 - Always mention their current bundle count when relevant
 
-${userContentContext}${bundleLimitsContext}
+${userContentContext}${bundleLimitsContext}${folderContext}
 
-Be helpful, natural, and focus on their success. When creating bundles, use the CREATE_BUNDLE instruction format exactly as shown above with REAL content IDs only.`
+Be helpful, natural, and focus on their success. When creating bundles, use the CREATE_BUNDLE instruction format exactly as shown above with REAL content IDs only. When organizing files, use the ORGANIZE_FILES instruction format with exact folder names.`
 
     // Ensure messages have proper format
     const formattedMessages = [
@@ -184,6 +236,48 @@ Be helpful, natural, and focus on their success. When creating bundles, use the 
     if (!assistantMessage) {
       console.log("[v0] No assistant message in response")
       return NextResponse.json({ error: "No response from AI" }, { status: 500 })
+    }
+
+    if (assistantMessage.includes("ORGANIZE_FILES:") && userId) {
+      try {
+        console.log("[v0] Vex wants to organize files...")
+
+        // Extract organization data
+        const organizeMatch = assistantMessage.match(/ORGANIZE_FILES:\s*({.*?})/s)
+        if (!organizeMatch) {
+          throw new Error("No valid organization data found")
+        }
+
+        const organizeData = JSON.parse(organizeMatch[1])
+        console.log("[v0] Parsed organization data:", organizeData)
+
+        // Show progress message
+        assistantMessage = assistantMessage.replace(
+          /ORGANIZE_FILES:\s*{.*?}/s,
+          "🗂️ **Organizing your files now...** Moving them to the right folder!",
+        )
+
+        // Call the organize files API
+        const organizeResult = await organizeFilesDirectly(userId, organizeData)
+
+        if (organizeResult.success) {
+          assistantMessage = assistantMessage.replace(
+            "🗂️ **Organizing your files now...** Moving them to the right folder!",
+            `✅ **Files organized successfully!** I've moved ${organizeResult.movedCount} files to your "${organizeData.targetFolder}" folder. ${organizeData.reason}`,
+          )
+        } else {
+          assistantMessage = assistantMessage.replace(
+            "🗂️ **Organizing your files now...** Moving them to the right folder!",
+            `❌ ${organizeResult.error || "I encountered an issue organizing your files. Please try again."}`,
+          )
+        }
+      } catch (error) {
+        console.error("[v0] File organization failed:", error)
+        assistantMessage = assistantMessage.replace(
+          /🗂️ \*\*Organizing your files now\.\.\.\*\* Moving them to the right folder!/,
+          "❌ I encountered an error while organizing your files. Please try again.",
+        )
+      }
     }
 
     if (assistantMessage.includes("CREATE_BUNDLE:") && userId) {
@@ -504,6 +598,75 @@ async function createBundleDirectly(userId: string, bundleData: any) {
     return {
       success: false,
       error: error instanceof Error ? error.message : "An unexpected error occurred while creating your bundle.",
+    }
+  }
+}
+
+async function organizeFilesDirectly(userId: string, organizeData: any) {
+  try {
+    const { targetFolder, fileIds, reason } = organizeData
+
+    if (!targetFolder || !fileIds || !Array.isArray(fileIds)) {
+      return { success: false, error: "Missing required organization information." }
+    }
+
+    // Find the target folder
+    const foldersSnapshot = await db
+      .collection("folders")
+      .where("uid", "==", userId)
+      .where("name", "==", targetFolder)
+      .limit(1)
+      .get()
+
+    if (foldersSnapshot.empty) {
+      return { success: false, error: `Folder "${targetFolder}" not found. Please create it first.` }
+    }
+
+    const targetFolderId = foldersSnapshot.docs[0].id
+    console.log("[v0] Found target folder:", targetFolderId)
+
+    // Get user's content analysis to find the files
+    const analysisDoc = await db.collection("vex_content_analysis").doc(userId).get()
+    if (!analysisDoc.exists) {
+      return { success: false, error: "Content analysis not found. Please analyze your content first." }
+    }
+
+    const analysisData = analysisDoc.data()!
+    const availableUploads = analysisData.uploads || []
+
+    let movedCount = 0
+    const batch = db.batch()
+
+    for (const fileId of fileIds) {
+      // Find the file in the analysis data
+      const upload = availableUploads.find((u: any) => u.id === fileId)
+      if (upload) {
+        // Update the file's folder reference
+        const fileRef = db.collection(upload.collection).doc(fileId)
+        batch.update(fileRef, {
+          folderId: targetFolderId,
+          folderName: targetFolder,
+          updatedAt: FieldValue.serverTimestamp(),
+        })
+        movedCount++
+      }
+    }
+
+    if (movedCount > 0) {
+      await batch.commit()
+      console.log(`[v0] Successfully moved ${movedCount} files to folder "${targetFolder}"`)
+    }
+
+    return {
+      success: true,
+      movedCount,
+      targetFolder,
+    }
+  } catch (error) {
+    console.error("[v0] File organization error:", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "An unexpected error occurred while organizing files.",
     }
   }
 }
