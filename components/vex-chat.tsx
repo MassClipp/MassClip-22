@@ -10,7 +10,6 @@ import {
   MessageSquare,
   Trash2,
   Loader2,
-  Menu,
   X,
   Upload,
   Package,
@@ -633,16 +632,16 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
       {/* Fixed noise overlay */}
       <div className="fixed inset-0 bg-[url('/noise.png')] opacity-[0.03] mix-blend-soft-light pointer-events-none z-0"></div>
 
-      {/* Mobile menu button */}
+      {/* Mobile menu button - CHANGED: Replace hamburger with arrow when sidebar is closed */}
       {isMobile && (
         <Button
           id="mobile-menu-button"
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
           variant="ghost"
           size="sm"
-          className="fixed top-4 left-4 z-50 h-10 w-10 p-0 bg-zinc-950/90 backdrop-blur-sm border border-zinc-700 hover:bg-zinc-800"
+          className="fixed top-1/2 left-2 z-50 h-8 w-8 p-0 bg-zinc-950/90 backdrop-blur-sm border border-zinc-700 hover:bg-zinc-800 transform -translate-y-1/2"
         >
-          {isSidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          {isSidebarOpen ? <X className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
         </Button>
       )}
 
@@ -681,9 +680,9 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
               <span className="text-lg font-semibold text-white">MassClip</span>
             </div>
           </div>
-          {!isMobile ? (
+          {isMobile ? (
             <Button
-              onClick={() => setIsSidebarCollapsed(true)}
+              onClick={() => setIsSidebarOpen(false)}
               variant="ghost"
               size="sm"
               className="h-8 w-8 p-0 text-zinc-400 hover:text-white"
@@ -692,12 +691,12 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
             </Button>
           ) : (
             <Button
-              onClick={() => setIsSidebarOpen(false)}
+              onClick={() => setIsSidebarCollapsed(true)}
               variant="ghost"
               size="sm"
               className="h-8 w-8 p-0 text-zinc-400 hover:text-white"
             >
-              <X className="h-4 w-4" />
+              <ChevronLeft className="h-4 w-4" />
             </Button>
           )}
         </div>

@@ -180,6 +180,16 @@ export default function AIBundlerPage() {
 
   return (
     <div className="space-y-6">
+      {/* Page Header with Title */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-white">AI Bundle Assistant</h1>
+          <p className="text-zinc-400 mt-1">
+            Let AI analyze your content and suggest optimized bundles with titles, descriptions, and pricing
+          </p>
+        </div>
+      </div>
+
       {/* Header */}
       <div className="space-y-2">
         <h1 className="text-3xl font-light text-white flex items-center gap-3">

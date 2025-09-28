@@ -352,9 +352,11 @@ export default function ProfilePage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Profile Settings</h1>
-        <p className="text-zinc-400 mt-1">Manage your creator profile and settings</p>
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 pb-6 border-b border-zinc-800/50">
+        <div className="space-y-2">
+          <h1 className="text-2xl font-semibold text-white tracking-tight">Profile Settings</h1>
+          <p className="text-zinc-400">Manage your creator profile and settings</p>
+        </div>
       </div>
 
       <Tabs defaultValue="profile" className="space-y-6">

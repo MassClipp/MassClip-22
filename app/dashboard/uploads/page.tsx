@@ -559,6 +559,11 @@ const UploadsPage = () => {
         </Card>
       )}
 
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-white mb-2">Uploads</h1>
+        <p className="text-zinc-400">Upload and manage your content files</p>
+      </div>
+
       <div className="mb-6">
         <FolderNavigation
           currentFolderId={currentFolderId}

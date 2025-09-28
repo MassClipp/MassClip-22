@@ -81,7 +81,7 @@ export default function CategoriesPage() {
             animate={{ opacity: 1 }}
             transition={{ delay: 0.2, duration: 0.5 }}
           >
-            Categories
+            Browse Categories
           </motion.h1>
 
           <motion.div

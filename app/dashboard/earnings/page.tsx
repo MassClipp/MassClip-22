@@ -1,15 +1,22 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Separator } from "@/components/ui/separator"
-import { RefreshCw, DollarSign, TrendingUp, CreditCard, Users, AlertCircle, CheckCircle, XCircle, Bug, Info, Loader2, ExternalLink, Globe, Shield, ArrowRight, Zap, Lock, BarChart3 } from 'lucide-react'
-import { useAuthState } from 'react-firebase-hooks/auth'
-import { auth } from '@/lib/firebase'
-import EarningsContent from './earnings-content'
+import {
+  DollarSign,
+  CreditCard,
+  AlertCircle,
+  CheckCircle,
+  Info,
+  Loader2,
+  ExternalLink,
+  Globe,
+  Shield,
+} from "lucide-react"
+import { useAuthState } from "react-firebase-hooks/auth"
+import { auth } from "@/lib/firebase"
+import EarningsContent from "./earnings-content"
 
 // Safe formatting functions
 function formatCurrency(amount: number): string {
@@ -29,7 +36,7 @@ interface StripeConnectionStatus {
   status: string
 }
 
-export default function EarningsPage() {
+function EarningsPage() {
   const [user, loading, error] = useAuthState(auth)
   const [stripeStatus, setStripeStatus] = useState<StripeConnectionStatus | null>(null)
   const [checkingStripe, setCheckingStripe] = useState(true)
@@ -49,7 +56,7 @@ export default function EarningsPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${idToken}`,
+          Authorization: `Bearer ${idToken}`,
         },
         body: JSON.stringify({ userId: user.uid }),
       })
@@ -65,7 +72,7 @@ export default function EarningsPage() {
           chargesEnabled: false,
           payoutsEnabled: false,
           detailsSubmitted: false,
-          status: "not_connected"
+          status: "not_connected",
         })
       }
     } catch (error) {
@@ -76,7 +83,7 @@ export default function EarningsPage() {
         chargesEnabled: false,
         payoutsEnabled: false,
         detailsSubmitted: false,
-        status: "error"
+        status: "error",
       })
     } finally {
       setCheckingStripe(false)
@@ -95,9 +102,7 @@ export default function EarningsPage() {
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-white" />
-          <p className="text-gray-400">
-            {loading ? "Loading..." : "Checking Stripe connection..."}
-          </p>
+          <p className="text-gray-400">{loading ? "Loading..." : "Checking Stripe connection..."}</p>
         </div>
       </div>
     )
@@ -125,9 +130,7 @@ export default function EarningsPage() {
           <div className="inline-flex items-center justify-center w-12 h-12 md:w-16 md:h-16 bg-gradient-to-br from-blue-500 via-purple-600 to-purple-700 rounded-full mb-3 md:mb-4 shadow-lg">
             <CreditCard className="w-6 h-6 md:w-8 md:h-8 text-white" />
           </div>
-          <h1 className="text-2xl md:text-3xl font-bold text-white mb-2 md:mb-3">
-            Connect Your Stripe Account
-          </h1>
+          <h1 className="text-2xl md:text-3xl font-bold text-white mb-2 md:mb-3">Connect Your Stripe Account</h1>
           <p className="text-gray-400 mb-6 md:mb-8 text-sm md:text-base">
             Start accepting payments and track your earnings
           </p>
@@ -140,13 +143,13 @@ export default function EarningsPage() {
             <h3 className="text-sm md:text-lg font-semibold text-white mb-1 md:mb-2">Accept Payments</h3>
             <p className="text-gray-400 text-xs md:text-sm">Process payments from customers worldwide</p>
           </div>
-          
+
           <div className="border border-gray-700/50 rounded-lg text-center p-2 md:p-4 bg-transparent">
             <Globe className="w-6 h-6 md:w-8 md:h-8 text-purple-400 mx-auto mb-2 md:mb-3" />
             <h3 className="text-sm md:text-lg font-semibold text-white mb-1 md:mb-2">Global Reach</h3>
             <p className="text-gray-400 text-xs md:text-sm">Supported in 40+ countries</p>
           </div>
-          
+
           <div className="border border-gray-700/50 rounded-lg text-center p-2 md:p-4 bg-transparent">
             <Shield className="w-6 h-6 md:w-8 md:h-8 text-blue-400 mx-auto mb-2 md:mb-3" />
             <h3 className="text-sm md:text-lg font-semibold text-white mb-1 md:mb-2">Secure & Reliable</h3>
@@ -163,10 +166,13 @@ export default function EarningsPage() {
               </div>
               <div>
                 <h3 className="text-xl md:text-2xl font-semibold text-white">Connect Your Stripe Account</h3>
-                <p className="text-gray-400 text-sm md:text-base">Securely connect your Stripe account through Stripe Connect. If you don't have an account, Stripe will help you create one during the process.</p>
+                <p className="text-gray-400 text-sm md:text-base">
+                  Securely connect your Stripe account through Stripe Connect. If you don't have an account, Stripe will
+                  help you create one during the process.
+                </p>
               </div>
             </div>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 mb-6 md:mb-8">
               <div className="space-y-2 md:space-y-3">
                 <div className="flex items-center gap-2 md:gap-3">
@@ -182,7 +188,7 @@ export default function EarningsPage() {
                   <span className="text-gray-300 text-sm md:text-base">Stripe handles account verification</span>
                 </div>
               </div>
-              
+
               <div className="space-y-2 md:space-y-3">
                 <div className="flex items-center gap-2 md:gap-3">
                   <CheckCircle className="w-4 h-4 md:w-5 md:h-5 text-purple-400" />
@@ -198,17 +204,17 @@ export default function EarningsPage() {
                 </div>
               </div>
             </div>
-            
-            <Button 
+
+            <Button
               onClick={async () => {
                 try {
                   setConnectionError(null)
                   const idToken = await user.getIdToken()
                   const response = await fetch("/api/stripe/connect/oauth", {
                     method: "POST",
-                    headers: { 
+                    headers: {
                       "Content-Type": "application/json",
-                      "Authorization": `Bearer ${idToken}`,
+                      Authorization: `Bearer ${idToken}`,
                     },
                     body: JSON.stringify({ userId: user.uid }),
                   })
@@ -234,9 +240,10 @@ export default function EarningsPage() {
                 </>
               )}
             </Button>
-            
+
             <p className="text-xs md:text-sm text-gray-500 text-center mt-3 md:mt-4">
-              You'll be redirected to Stripe to complete setup. If you don't have a Stripe account, one will be created for you automatically.
+              You'll be redirected to Stripe to complete setup. If you don't have a Stripe account, one will be created
+              for you automatically.
             </p>
           </Card>
         </div>
@@ -247,7 +254,7 @@ export default function EarningsPage() {
             <Info className="w-5 h-5 md:w-6 md:h-6 text-purple-400" />
             <h2 className="text-xl md:text-2xl font-bold text-white">How It Works</h2>
           </div>
-          
+
           <div className="grid grid-cols-3 gap-4 md:gap-8 px-4 md:px-20">
             <div className="text-center">
               <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-blue-500 via-purple-600 to-purple-700 rounded-full flex items-center justify-center mx-auto mb-2 md:mb-3 text-base md:text-lg font-bold text-white shadow-lg">
@@ -256,7 +263,7 @@ export default function EarningsPage() {
               <h3 className="text-sm md:text-lg font-semibold mb-1 md:mb-2 text-white">Click Connect</h3>
               <p className="text-gray-400 text-xs md:text-sm">Start the secure connection process with Stripe</p>
             </div>
-            
+
             <div className="text-center">
               <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-blue-500 via-purple-600 to-purple-700 rounded-full flex items-center justify-center mx-auto mb-2 md:mb-3 text-base md:text-lg font-bold text-white shadow-lg">
                 2
@@ -264,7 +271,7 @@ export default function EarningsPage() {
               <h3 className="text-sm md:text-lg font-semibold mb-1 md:mb-2 text-white">Complete Setup</h3>
               <p className="text-gray-400 text-xs md:text-sm">Follow Stripe's secure onboarding process</p>
             </div>
-            
+
             <div className="text-center">
               <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-blue-500 via-purple-600 to-purple-700 rounded-full flex items-center justify-center mx-auto mb-2 md:mb-3 text-base md:text-lg font-bold text-white shadow-lg">
                 3
@@ -284,10 +291,10 @@ export default function EarningsPage() {
                   <AlertCircle className="h-5 w-5" />
                   <span className="text-sm md:text-base">Error: {connectionError}</span>
                 </div>
-                <Button 
-                  onClick={() => setConnectionError(null)} 
-                  variant="outline" 
-                  size="sm" 
+                <Button
+                  onClick={() => setConnectionError(null)}
+                  variant="outline"
+                  size="sm"
                   className="mt-3 border-red-600/50 text-red-400 hover:bg-red-900/40"
                 >
                   Dismiss
@@ -303,3 +310,19 @@ export default function EarningsPage() {
   // Show the earnings dashboard if connected and set up
   return <EarningsContent />
 }
+
+function EarningsPageWithHeader() {
+  return (
+    <div className="p-6">
+      <div className="max-w-7xl mx-auto">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-white mb-2">Earnings</h1>
+          <p className="text-zinc-400">Track your revenue and manage your Stripe account</p>
+        </div>
+        <EarningsPage />
+      </div>
+    </div>
+  )
+}
+
+export default EarningsPageWithHeader
