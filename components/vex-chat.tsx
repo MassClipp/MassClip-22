@@ -28,7 +28,6 @@ import {
 import { useAuth } from "@/contexts/auth-context"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { useRouter } from "next/navigation"
-import Logo from "@/components/logo"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   DropdownMenu,
@@ -91,7 +90,7 @@ function VexChat() {
     { icon: Package, label: "Bundles", href: "/dashboard/bundles" },
     { icon: DollarSign, label: "Earnings", href: "/dashboard/earnings" },
     { icon: Heart, label: "Favorites", href: "/dashboard/favorites" },
-    { icon: CreditCard, label: "Upgrade", href: "/membership-plans" },
+    { icon: CreditCard, label: "Upgrade", href: "/dashboard/upgrade" },
     { icon: Package, label: "My Purchases", href: "/dashboard/purchases" },
     { icon: Gift, label: "Free Content", href: "/dashboard/free-content" },
   ]
@@ -661,7 +660,6 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
         {/* Header with Logo */}
         <div className="flex items-center justify-between p-4 border-b border-zinc-800">
           <div className="flex items-center gap-3">
-            <Logo href="/dashboard/vex" size="sm" className="scale-75" />
             <div className="flex flex-col">
               <span className="text-lg font-semibold text-white">MassClip</span>
             </div>
@@ -779,31 +777,41 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
           </div>
 
           {/* Action Buttons */}
-          <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-2">
             {username && (
               <Button
                 onClick={() => window.open(`/creator/${username}`, "_blank")}
                 size="sm"
-                className="bg-white text-black hover:bg-zinc-100 font-medium"
+                className="w-full bg-white text-black hover:bg-zinc-100 font-medium"
               >
                 <User className="h-3 w-3 mr-1" />
                 View Profile
               </Button>
             )}
 
+            <Button
+              onClick={() => window.open(`/storefront/${username}`, "_blank")}
+              size="sm"
+              variant="outline"
+              className="w-full border-zinc-700 hover:bg-zinc-800 text-xs bg-transparent"
+            >
+              <Package className="h-3 w-3 mr-1" />
+              View Storefront
+            </Button>
+
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="border-zinc-700 hover:bg-zinc-800 text-xs bg-transparent"
+                  className="w-full border-zinc-700 hover:bg-zinc-800 text-xs bg-transparent"
                 >
                   <Settings className="h-3 w-3 mr-1" />
                   Settings
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48 bg-zinc-900 border-zinc-700">
-                <DropdownMenuItem onClick={() => handleNavigation("/dashboard/user")}>
+                <DropdownMenuItem onClick={() => handleNavigation("/dashboard/profile")}>
                   <User className="h-4 w-4 mr-2" />
                   Edit Profile
                 </DropdownMenuItem>
@@ -811,7 +819,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                   <CreditCard className="h-4 w-4 mr-2" />
                   Billing
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleNavigation("/dashboard/password")}>
+                <DropdownMenuItem onClick={() => handleNavigation("/dashboard/security")}>
                   <Settings className="h-4 w-4 mr-2" />
                   Security
                 </DropdownMenuItem>
