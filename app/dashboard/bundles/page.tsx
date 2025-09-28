@@ -1089,11 +1089,6 @@ export default function BundlesPage() {
     <div className="p-6">
       <div className="max-w-7xl mx-auto">
         <div className="space-y-6">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-white mb-2">Bundles</h1>
-            <p className="text-zinc-400">Create and manage premium content packages for your audience</p>
-          </div>
-
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
             <div>
