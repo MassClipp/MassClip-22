@@ -1476,17 +1476,17 @@ export default function ExplorePage() {
   return (
     <div className="space-y-8">
       {/* Page Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 px-4 md:px-0">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Explore Content</h1>
-          <p className="text-zinc-400 mt-1">Discover amazing content from creators</p>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Explore Content</h1>
+          <p className="text-zinc-400 mt-1 text-sm md:text-base">Discover amazing content from creators</p>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 md:gap-4 w-full md:w-auto">
           {/* Minimal Download Counter */}
           {!isPro && (
             <div
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+              className={`flex items-center gap-1.5 px-2 md:px-2.5 py-1 rounded-full text-xs font-medium ${
                 hasReachedLimit
                   ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
                   : "bg-zinc-800/50 text-zinc-300 border border-zinc-700/50"
@@ -1509,16 +1509,17 @@ export default function ExplorePage() {
                 router.push(`/dashboard/explore?search=${encodeURIComponent(query.trim())}`)
               }
             }}
-            className="w-full md:w-96"
+            className="flex-1 md:w-96"
           >
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-400" size={20} />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-400" size={16} />
               <input
                 type="text"
                 name="search"
                 placeholder="Search videos..."
                 defaultValue={searchQuery}
-                className={`w-full py-2.5 pl-10 pr-4 bg-zinc-900/60 border border-zinc-800 rounded-lg text-white placeholder-zinc-500 focus:outline-none transition-all ${"focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/50"}`}
+                className={`w-full py-2 md:py-2.5 pl-9 md:pl-10 pr-4 bg-zinc-900/60 border border-zinc-800 rounded-lg text-white placeholder-zinc-500 focus:outline-none transition-all text-sm md:text-base ${"focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/50"}`}
+                style={{ fontSize: "16px" }} // Prevent iOS zoom
               />
             </div>
           </form>
@@ -1528,12 +1529,12 @@ export default function ExplorePage() {
       {/* Search Results Header (if searching) */}
       {searchQuery && (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-          <div className="bg-zinc-900/30 backdrop-blur-sm border border-zinc-800/50 rounded-xl p-6 shadow-xl">
-            <h2 className="text-2xl font-light tracking-wider text-white mb-2 flex items-center">
-              <Search className="h-5 w-5 mr-2 text-zinc-400" />
+          <div className="bg-zinc-900/30 backdrop-blur-sm border border-zinc-800/50 rounded-xl p-4 md:p-6 shadow-xl">
+            <h2 className="text-xl md:text-2xl font-light tracking-wider text-white mb-2 flex items-center">
+              <Search className="h-4 w-4 md:h-5 md:w-5 mr-2 text-zinc-400" />
               Results for "{searchQuery}"
             </h2>
-            <p className="text-zinc-400">
+            <p className="text-sm md:text-base text-zinc-400">
               {hasSearchResults
                 ? `Found results in ${Object.keys(filteredShowcaseVideos).length} categories`
                 : "No results found. Try a different search term."}

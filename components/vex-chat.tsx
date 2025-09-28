@@ -116,16 +116,8 @@ function VexChat({ children }: VexChatProps) {
       return shuffled.slice(0, 4)
     }
 
-    // Set initial suggestions
     setCurrentSuggestions(getRandomSuggestions())
-
-    // Rotate suggestions every 10 seconds
-    const interval = setInterval(() => {
-      setCurrentSuggestions(getRandomSuggestions())
-    }, 10000)
-
-    return () => clearInterval(interval)
-  }, [])
+  }, []) // Remove the interval, only set on mount
 
   const suggestions = [
     "Help me create a beginner photography bundle",
@@ -871,10 +863,6 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                             <User className="h-4 w-4 mr-2" />
                             Edit Profile
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleNavigation("/dashboard/earnings")}>
-                            <CreditCard className="h-4 w-4 mr-2" />
-                            Billing
-                          </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleNavigation("/dashboard/security")}>
                             <Settings className="h-4 w-4 mr-2" />
                             Security
@@ -1068,10 +1056,6 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                           <User className="h-4 w-4 mr-2" />
                           Edit Profile
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleNavigation("/dashboard/earnings")}>
-                          <CreditCard className="h-4 w-4 mr-2" />
-                          Billing
-                        </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => handleNavigation("/dashboard/security")}>
                           <Settings className="h-4 w-4 mr-2" />
                           Security
@@ -1161,7 +1145,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                   </div>
 
                   <p className="text-xs text-zinc-500 max-w-md mx-auto text-center">
-                    💡 Vex works best with detailed prompts
+                    Vex works best with detailed prompts
                   </p>
                 </div>
               )}

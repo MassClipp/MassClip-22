@@ -390,7 +390,7 @@ export default function FolderSidebar({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-y-0 left-0 z-[70] w-80 bg-zinc-950 border-r border-zinc-800 flex flex-col">
+    <div className="fixed inset-y-0 left-0 z-[80] w-80 bg-zinc-950 border-r border-zinc-800 flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-zinc-800">
         <div className="flex items-center gap-2">
