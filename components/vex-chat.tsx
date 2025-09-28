@@ -658,14 +658,14 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
         className={`
           ${isMobile ? "fixed" : "fixed"} 
           left-0 top-0 h-full 
-          ${isMobile ? "w-80" : "w-64"} 
+          ${isMobile ? "w-80" : "w-60"} 
           bg-zinc-950/95 backdrop-blur-sm border-r border-zinc-800 flex flex-col z-40
           ${isMobile ? (isSidebarOpen ? "translate-x-0" : "-translate-x-full") : "translate-x-0"}
           transition-transform duration-300 ease-in-out
         `}
       >
         {/* Header with Logo */}
-        <div className="flex items-center justify-between p-4 border-b border-zinc-800">
+        <div className="flex items-center justify-between p-3 border-b border-zinc-800">
           <div className="flex items-center gap-3">
             <div className="flex flex-col">
               <span className="text-lg font-semibold text-white">MassClip</span>
@@ -686,32 +686,32 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
         <ScrollArea className="flex-1">
           <div className="flex flex-col h-full">
             {/* Vex Chat Section */}
-            <div className="p-4 border-b border-zinc-800">
-              <div className="flex items-center gap-2 mb-3">
+            <div className="p-3 border-b border-zinc-800">
+              <div className="flex items-center gap-2 mb-2">
                 <MessageSquare className="h-4 w-4 text-blue-400" />
                 <span className="text-sm font-medium text-white">Vex AI</span>
               </div>
 
               <Button
                 onClick={createNewChat}
-                className="w-full justify-start gap-3 bg-blue-600 hover:bg-blue-700 text-white h-10 mb-3"
+                className="w-full justify-start gap-3 bg-blue-600 hover:bg-blue-700 text-white h-9 mb-2"
               >
                 <Plus className="h-4 w-4" />
                 New Chat
               </Button>
 
               {/* Chat History */}
-              <div className="max-h-48 overflow-hidden">
+              <div className="max-h-40 overflow-hidden">
                 <ScrollArea className="h-full">
                   <div className="space-y-1">
                     {isLoadingChats ? (
-                      <div className="text-center py-4 text-zinc-500">
+                      <div className="text-center py-3 text-zinc-500">
                         <Loader2 className="h-4 w-4 mx-auto mb-1 animate-spin" />
                         <p className="text-xs">Loading chats...</p>
                       </div>
                     ) : chatSessions.length === 0 ? (
-                      <div className="text-center py-4 text-zinc-500">
-                        <MessageSquare className="h-6 w-6 mx-auto mb-1 opacity-50" />
+                      <div className="text-center py-3 text-zinc-500">
+                        <MessageSquare className="h-5 w-5 mx-auto mb-1 opacity-50" />
                         <p className="text-xs">No chats yet</p>
                       </div>
                     ) : (
@@ -754,8 +754,8 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
             </div>
 
             {/* Main Navigation */}
-            <div className="flex-1 p-4">
-              <div className="mb-3">
+            <div className="flex-1 p-3">
+              <div className="mb-2">
                 <span className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Navigation</span>
               </div>
               <nav className="space-y-1">
@@ -773,7 +773,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
             </div>
 
             {/* Footer with Profile & Settings */}
-            <div className="p-4 border-t border-zinc-800 space-y-3">
+            <div className="p-3 border-t border-zinc-800 space-y-2">
               {/* Profile Section */}
               <div className="flex items-center gap-3 p-2 rounded-lg bg-zinc-900/50">
                 <Avatar className="h-8 w-8">
@@ -792,12 +792,12 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
               <div className="space-y-2">
                 {username && (
                   <Button
-                    onClick={() => window.open(`/creator/${username}`, "_blank")} // Fixed storefront URL to use creator profile
+                    onClick={() => window.open(`/creator/${username}`, "_blank")}
                     size="sm"
-                    className="w-full bg-white text-black hover:bg-zinc-100 font-medium"
+                    className="w-full bg-white text-black hover:bg-zinc-100 font-medium text-xs h-8"
                   >
                     <User className="h-3 w-3 mr-1" />
-                    View Storefront
+                    View Profile
                   </Button>
                 )}
 
@@ -806,7 +806,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                     <Button
                       variant="outline"
                       size="sm"
-                      className="w-full border-zinc-700 hover:bg-zinc-800 text-xs bg-transparent"
+                      className="w-full border-zinc-700 hover:bg-zinc-800 text-xs bg-transparent h-8"
                     >
                       <Settings className="h-3 w-3 mr-1" />
                       Settings
@@ -841,7 +841,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
       {isVexChatPage ? (
         /* Main Chat Area - Only show on /dashboard/vex */
         <div
-          className={`flex flex-col flex-1 min-h-0 ${isMobile ? "ml-0" : "ml-64"} ${isMobile && isSidebarOpen ? "blur-sm pointer-events-none" : ""} transition-all duration-300 relative z-10`}
+          className={`flex flex-col flex-1 min-h-0 ${isMobile ? "ml-0" : "ml-60"} ${isMobile && isSidebarOpen ? "blur-sm pointer-events-none" : ""} transition-all duration-300 relative z-10`}
         >
           {isLoadingCurrentChat && (
             <div className="flex items-center justify-center py-4 border-b border-zinc-800">
@@ -850,13 +850,13 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
             </div>
           )}
 
-          <ScrollArea className={`flex-1 ${isMobile ? "px-4" : "px-6"}`}>
-            <div className={`${isMobile ? "max-w-full" : "max-w-3xl mx-auto"} py-6 min-h-full flex flex-col`}>
+          <ScrollArea className={`flex-1 ${isMobile ? "px-3" : "px-4"}`}>
+            <div className={`${isMobile ? "max-w-full" : "max-w-4xl mx-auto"} py-4 min-h-full flex flex-col`}>
               {messages.length === 0 && (
-                <div className="text-center py-12 flex-1 flex flex-col justify-center">
-                  <h2 className={`${isMobile ? "text-xl" : "text-2xl"} font-semibold mb-3`}>Hi! I'm Vex</h2>
+                <div className="text-center py-8 flex-1 flex flex-col justify-center">
+                  <h2 className={`${isMobile ? "text-xl" : "text-2xl"} font-semibold mb-2`}>Hi! I'm Vex</h2>
                   <p
-                    className={`text-muted-foreground mb-8 ${isMobile ? "max-w-sm" : "max-w-md"} mx-auto leading-relaxed`}
+                    className={`text-muted-foreground mb-6 ${isMobile ? "max-w-sm" : "max-w-md"} mx-auto leading-relaxed`}
                   >
                     I'll help you create profitable bundles, set optimal pricing, and build compelling storefront
                     content.
@@ -864,9 +864,9 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
 
                   {contentAnalysis && (
                     <div
-                      className={`mb-8 p-4 rounded-lg bg-transparent ${isMobile ? "max-w-sm" : "max-w-md"} mx-auto border border-zinc-700/50`}
+                      className={`mb-6 p-3 rounded-lg bg-transparent ${isMobile ? "max-w-sm" : "max-w-md"} mx-auto border border-zinc-700/50`}
                     >
-                      <p className="text-sm text-muted-foreground mb-2">
+                      <p className="text-sm text-muted-foreground mb-1">
                         Analyzed {contentAnalysis.totalUploads} uploads
                       </p>
                       {contentAnalysis.categories.length > 0 && (
@@ -879,12 +879,12 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                   )}
 
                   <div
-                    className={`grid ${isMobile ? "grid-cols-1 gap-2" : "grid-cols-1 md:grid-cols-2 gap-3"} ${isMobile ? "max-w-full" : "max-w-2xl"} mx-auto`}
+                    className={`grid ${isMobile ? "grid-cols-1 gap-2" : "grid-cols-1 md:grid-cols-2 gap-2"} ${isMobile ? "max-w-full" : "max-w-2xl"} mx-auto`}
                   >
                     {suggestions.map((suggestion, index) => (
                       <button
                         key={index}
-                        className={`text-left ${isMobile ? "p-3" : "p-4"} rounded-lg bg-transparent border border-zinc-700/50 hover:bg-zinc-800/30 hover:border-zinc-600/50 transition-all duration-200 text-sm`}
+                        className={`text-left ${isMobile ? "p-3" : "p-3"} rounded-lg bg-transparent border border-zinc-700/50 hover:bg-zinc-800/30 hover:border-zinc-600/50 transition-all duration-200 text-sm`}
                         onClick={() => handleSuggestionClick(suggestion)}
                       >
                         {suggestion}
@@ -895,14 +895,14 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
               )}
 
               {messages.length > 0 && (
-                <div className="space-y-6 flex-1">
+                <div className="space-y-4 flex-1">
                   {messages.map((message) => (
                     <div
                       key={message.id}
                       className={`chat-slide-up ${message.role === "user" ? "flex justify-end" : "flex justify-start"}`}
                     >
                       <div
-                        className={`${isMobile ? "max-w-[90%]" : "max-w-[80%]"} rounded-lg px-4 py-3 ${
+                        className={`${isMobile ? "max-w-[90%]" : "max-w-[80%]"} rounded-lg px-3 py-2 ${
                           message.role === "user" ? "chat-message-user ml-auto" : "chat-message-assistant"
                         }`}
                       >
@@ -913,7 +913,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
 
                   {isLoading && (
                     <div className="flex justify-start chat-slide-up">
-                      <div className="chat-message-assistant rounded-lg px-4 py-3">
+                      <div className="chat-message-assistant rounded-lg px-3 py-2">
                         <div className="flex items-center gap-2">
                           <div className="flex space-x-1">
                             <div className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse"></div>
@@ -935,24 +935,24 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
             </div>
           </ScrollArea>
 
-          <div className={`flex-shrink-0 ${isMobile ? "px-4" : "px-6"} py-4`}>
-            <div className={`${isMobile ? "max-w-full" : "max-w-3xl mx-auto"}`}>
-              <form onSubmit={handleSubmit} className="flex gap-3">
+          <div className={`flex-shrink-0 ${isMobile ? "px-3" : "px-4"} py-3`}>
+            <div className={`${isMobile ? "max-w-full" : "max-w-4xl mx-auto"}`}>
+              <form onSubmit={handleSubmit} className="flex gap-2">
                 <div className="flex-1 relative">
                   <Input
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     placeholder="Message Vex"
-                    className="chat-input-container border-0 bg-transparent text-sm py-3 px-4 pr-12 resize-none focus:ring-1 focus:ring-ring"
+                    className="chat-input-container border-0 bg-transparent text-sm py-2 px-3 pr-10 resize-none focus:ring-1 focus:ring-ring"
                     disabled={isLoading}
                   />
                   <Button
                     type="submit"
                     disabled={isLoading || !input.trim()}
                     size="sm"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 p-0 bg-foreground text-background hover:bg-foreground/90"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 p-0 bg-foreground text-background hover:bg-foreground/90"
                   >
-                    <Send className="h-4 w-4" />
+                    <Send className="h-3 w-3" />
                   </Button>
                 </div>
               </form>
@@ -962,9 +962,9 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
       ) : (
         /* Page Content Area - Show for all other dashboard pages */
         <div
-          className={`flex-1 min-h-0 ${isMobile ? "ml-0" : "ml-64"} ${isMobile && isSidebarOpen ? "blur-sm pointer-events-none" : ""} transition-all duration-300 relative z-10`}
+          className={`flex-1 min-h-0 ${isMobile ? "ml-0" : "ml-60"} ${isMobile && isSidebarOpen ? "blur-sm pointer-events-none" : ""} transition-all duration-300 relative z-10`}
         >
-          <div className="h-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">{children}</div>
+          <div className="h-full max-w-6xl mx-auto px-3 sm:px-4 lg:px-6 py-4">{children}</div>
         </div>
       )}
     </div>
