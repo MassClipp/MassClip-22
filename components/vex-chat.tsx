@@ -83,6 +83,7 @@ function VexChat({ children }: VexChatProps) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
 
   const isVexChatPage = pathname === "/dashboard/vex"
+  const isUploadPage = pathname === "/dashboard/upload"
 
   const allSuggestions = [
     "Make me 3 motivation bundles",
@@ -682,7 +683,8 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
         </Button>
       )}
 
-      {!isMobile && (
+      {/* Desktop sidebar - Hide completely on upload page when collapsed */}
+      {!isMobile && !(isUploadPage && isSidebarCollapsed) && (
         <div
           className={`fixed left-0 top-16 h-[calc(100vh-4rem)] z-40 transition-all duration-300 ${
             isSidebarCollapsed ? "w-16" : "w-60"
@@ -1218,10 +1220,11 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
       ) : (
         /* Page Content Area - Show for all other dashboard pages */
         <div
-          className={`flex-1 min-h-screen pt-16 ${isMobile ? "ml-0" : isSidebarCollapsed ? "ml-16" : "ml-60"} ${isMobile && isSidebarOpen ? "blur-sm pointer-events-none" : ""} transition-all duration-300 relative z-10`}
+          className={`flex-1 min-h-screen pt-16 ${
+            isMobile ? "ml-0" : isUploadPage && isSidebarCollapsed ? "ml-0" : isSidebarCollapsed ? "ml-16" : "ml-60"
+          } ${isMobile && isSidebarOpen ? "blur-sm pointer-events-none" : ""} transition-all duration-300 relative z-10`}
         >
           {pathname === "/dashboard/upload" ? (
-            // Upload page gets full width when sidebar is collapsed
             <div
               className={`h-full ${isSidebarCollapsed ? "px-2 sm:px-3 lg:px-4" : "max-w-7xl mx-auto px-3 sm:px-4 lg:px-6"} py-4`}
             >
@@ -1229,7 +1232,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                 <div className="flex items-center justify-between mb-6 pb-4 border-b border-zinc-800/50">
                   <h1 className="text-2xl font-semibold text-white tracking-tight">Upload</h1>
                   <div className="flex items-center gap-2">
-                    {navigationItems.slice(0, 6).map((item) => (
+                    {navigationItems.map((item) => (
                       <Button
                         key={item.href}
                         onClick={() => handleNavigation(item.href)}
