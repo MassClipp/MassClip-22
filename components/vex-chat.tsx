@@ -15,28 +15,16 @@ import {
   DollarSign,
   Heart,
   Search,
-  User,
-  Settings,
   Gift,
   CreditCard,
-  LogOut,
   ChevronRight,
   ChevronLeft,
 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { useRouter, usePathname } from "next/navigation"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { doc, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
-import { TopHeader } from "@/components/top-header"
 
 interface Message {
   id: string
@@ -662,251 +650,91 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
   }, [isSidebarOpen])
 
   return (
-    <div className="flex min-h-screen relative bg-gradient-to-br from-black via-zinc-900 to-black">
-      {/* Fixed noise overlay */}
-      <div className="fixed inset-0 bg-[url('/noise.png')] opacity-[0.03] mix-blend-soft-light pointer-events-none z-0"></div>
-
-      {/* Top Header */}
-      <div className="fixed top-0 left-0 right-0 z-50">
-        <TopHeader />
-      </div>
-
-      {/* Mobile menu button - Remove X button, only show arrow when sidebar is closed */}
+    <div className="flex min-h-[calc(100vh-8rem)] relative">
+      {/* Mobile menu button */}
       {isMobile && (
         <Button
           id="mobile-menu-button"
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
           variant="ghost"
           size="sm"
-          className="fixed top-16 left-2 z-50 h-8 w-8 p-0 bg-zinc-950/90 backdrop-blur-sm border border-zinc-700 hover:bg-zinc-800 transform"
+          className="fixed top-20 left-2 z-50 h-8 w-8 p-0 bg-zinc-950/90 backdrop-blur-sm border border-zinc-700 hover:bg-zinc-800"
         >
           {isSidebarOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
         </Button>
       )}
 
+      {/* Vex-specific sidebar for chat history */}
       {!isMobile && (
-        <div
-          className={`fixed left-0 top-16 h-[calc(100vh-4rem)] z-40 transition-all duration-300 ${
-            isSidebarCollapsed ? "w-16" : "w-60"
-          } bg-zinc-950/95 backdrop-blur-sm border-r border-zinc-800`}
-        >
-          {isSidebarCollapsed ? (
-            // Icon-only sidebar
-            <div className="flex flex-col h-full">
-              <div className="p-2 border-b border-zinc-800">
-                <Button
-                  onClick={() => setIsSidebarCollapsed(false)}
-                  variant="ghost"
-                  size="sm"
-                  className="w-full h-10 p-0 text-zinc-400 hover:text-white"
-                  title="Expand sidebar"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
+        <div className="w-60 bg-zinc-950/95 backdrop-blur-sm border-r border-zinc-800 flex flex-col">
+          {/* Chat History Section */}
+          <div className="p-3 border-b border-zinc-800">
+            <button
+              onClick={createNewChat}
+              className="flex items-center gap-2 mb-2 w-full text-left hover:bg-zinc-800/50 p-2 rounded-lg transition-colors"
+            >
+              <MessageSquare className="h-4 w-4 text-blue-400" />
+              <span className="text-sm font-medium text-white">New Chat</span>
+            </button>
 
-              <div className="flex-1 p-2 space-y-1">
-                {navigationItems.map((item) => (
-                  <Button
-                    key={item.href}
-                    onClick={() => handleNavigation(item.href)}
-                    variant="ghost"
-                    size="sm"
-                    className="w-full h-10 p-0 text-zinc-300 hover:text-white hover:bg-zinc-800/50"
-                    title={item.label}
-                  >
-                    <item.icon className="h-4 w-4" />
-                  </Button>
-                ))}
-              </div>
-            </div>
-          ) : (
-            // Full sidebar content (existing sidebar code)
-            <div className="flex flex-col h-full">
-              {/* Header with Logo */}
-              <div className="flex items-center justify-between p-3 border-b border-zinc-800">
-                <div className="flex items-center gap-3">
-                  <div className="flex flex-col">
-                    <span className="text-lg font-semibold text-white">MassClip</span>
-                  </div>
-                </div>
-                <Button
-                  onClick={() => setIsSidebarCollapsed(true)}
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-8 p-0 text-zinc-400 hover:text-white"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-              </div>
-
-              <ScrollArea className="flex-1">
-                <div className="flex flex-col h-full">
-                  {/* Vex Chat Section */}
-                  <div className="p-3 border-b border-zinc-800">
-                    <button
-                      onClick={() => {
-                        createNewChat()
-                        router.push("/dashboard/vex")
-                      }}
-                      className="flex items-center gap-2 mb-2 w-full text-left hover:bg-zinc-800/50 p-2 rounded-lg transition-colors"
-                    >
-                      <MessageSquare className="h-4 w-4 text-blue-400" />
-                      <span className="text-sm font-medium text-white">Vex AI</span>
-                    </button>
-
-                    {/* Chat History */}
-                    <div className="max-h-40 overflow-hidden">
-                      <ScrollArea className="h-full">
-                        <div className="space-y-1">
-                          {isLoadingChats ? (
-                            <div className="text-center py-3 text-zinc-500">
-                              <Loader2 className="h-4 w-4 mx-auto mb-1 animate-spin" />
-                              <p className="text-xs">Loading chats...</p>
-                            </div>
-                          ) : chatSessions.length === 0 ? (
-                            <div className="text-center py-3 text-zinc-500">
-                              <MessageSquare className="h-5 w-5 mx-auto mb-1 opacity-50" />
-                              <p className="text-xs">No chats yet</p>
-                            </div>
-                          ) : (
-                            chatSessions.slice(0, 5).map((chat) => (
-                              <div key={chat.id} className="group relative">
-                                <button
-                                  onClick={() => {
-                                    loadChat(chat.id)
-                                    router.push("/dashboard/vex")
-                                  }}
-                                  disabled={isLoadingCurrentChat}
-                                  className={`w-full text-left p-2 rounded-md text-xs transition-all duration-200 flex items-center gap-2 pr-8 ${
-                                    currentChatId === chat.id
-                                      ? "bg-blue-600/20 text-blue-300 border border-blue-600/30"
-                                      : "text-zinc-400 hover:bg-zinc-800/50 hover:text-white"
-                                  } ${isLoadingCurrentChat ? "opacity-50" : ""}`}
-                                >
-                                  <MessageSquare className="h-3 w-3 flex-shrink-0" />
-                                  <span className="flex-1 truncate font-medium">{chat.title}</span>
-                                </button>
-                                <Button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    if (confirm("Delete this chat?")) {
-                                      deleteChat(chat.id)
-                                    }
-                                  }}
-                                  size="sm"
-                                  variant="ghost"
-                                  className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-zinc-500 hover:text-red-400 hover:bg-red-500/10"
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                </Button>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </ScrollArea>
+            <div className="max-h-96 overflow-hidden">
+              <ScrollArea className="h-full">
+                <div className="space-y-1">
+                  {isLoadingChats ? (
+                    <div className="text-center py-3 text-zinc-500">
+                      <Loader2 className="h-4 w-4 mx-auto mb-1 animate-spin" />
+                      <p className="text-xs">Loading chats...</p>
                     </div>
-                  </div>
-
-                  {/* Main Navigation */}
-                  <div className="flex-1 p-3">
-                    <div className="mb-2">
-                      <span className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Navigation</span>
+                  ) : chatSessions.length === 0 ? (
+                    <div className="text-center py-3 text-zinc-500">
+                      <MessageSquare className="h-5 w-5 mx-auto mb-1 opacity-50" />
+                      <p className="text-xs">No chats yet</p>
                     </div>
-                    <nav className="space-y-1">
-                      {navigationItems.map((item) => (
+                  ) : (
+                    chatSessions.map((chat) => (
+                      <div key={chat.id} className="group relative">
                         <button
-                          key={item.href}
-                          onClick={() => handleNavigation(item.href)}
-                          className="w-full flex items-center gap-3 px-3 py-2 text-sm text-zinc-300 hover:text-white hover:bg-zinc-800/50 rounded-lg transition-all duration-200"
+                          onClick={() => loadChat(chat.id)}
+                          disabled={isLoadingCurrentChat}
+                          className={`w-full text-left p-2 rounded-md text-xs transition-all duration-200 flex items-center gap-2 pr-8 ${
+                            currentChatId === chat.id
+                              ? "bg-blue-600/20 text-blue-300 border border-blue-600/30"
+                              : "text-zinc-400 hover:bg-zinc-800/50 hover:text-white"
+                          } ${isLoadingCurrentChat ? "opacity-50" : ""}`}
                         >
-                          <item.icon className="h-4 w-4" />
-                          {item.label}
+                          <MessageSquare className="h-3 w-3 flex-shrink-0" />
+                          <span className="flex-1 truncate font-medium">{chat.title}</span>
                         </button>
-                      ))}
-                    </nav>
-                  </div>
-
-                  {/* Footer with Profile & Settings */}
-                  <div className="p-3 border-t border-zinc-800 space-y-2">
-                    {/* Profile Section */}
-                    <div className="flex items-center gap-3 p-2 rounded-lg bg-zinc-900/50">
-                      <Avatar className="h-8 w-8">
-                        <AvatarImage src={user?.photoURL || undefined} />
-                        <AvatarFallback className="bg-zinc-700 text-white text-xs">
-                          {user?.displayName?.[0] || user?.email?.[0] || "U"}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-white truncate">
-                          {user?.displayName || username || "User"}
-                        </p>
-                        <p className="text-xs text-zinc-400 truncate">{user?.email}</p>
+                        <Button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (confirm("Delete this chat?")) {
+                              deleteChat(chat.id)
+                            }
+                          }}
+                          size="sm"
+                          variant="ghost"
+                          className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-zinc-500 hover:text-red-400 hover:bg-red-500/10"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
                       </div>
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div className="space-y-2">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="w-full border-zinc-700 hover:bg-zinc-800 text-xs bg-transparent h-8"
-                          >
-                            <Settings className="h-3 w-3 mr-1" />
-                            Settings
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48 bg-zinc-900 border-zinc-700">
-                          <DropdownMenuItem onClick={() => handleNavigation("/dashboard/profile")}>
-                            <User className="h-4 w-4 mr-2" />
-                            Edit Profile
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleNavigation("/dashboard/security")}>
-                            <Settings className="h-4 w-4 mr-2" />
-                            Security
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator className="bg-zinc-700" />
-                          <DropdownMenuItem onClick={handleLogout} className="text-red-400 focus:text-red-300">
-                            <LogOut className="h-4 w-4 mr-2" />
-                            Sign Out
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-
-                      <Button
-                        onClick={() => {
-                          if (username) {
-                            window.open(`/creator/${username}`, "_blank")
-                          } else {
-                            router.push("/dashboard/profile")
-                          }
-                        }}
-                        size="sm"
-                        className="w-full bg-white text-black hover:bg-zinc-100 font-medium text-xs h-8"
-                      >
-                        <User className="h-3 w-3 mr-1" />
-                        View Profile
-                      </Button>
-                    </div>
-                  </div>
+                    ))
+                  )}
                 </div>
               </ScrollArea>
             </div>
-          )}
+          </div>
         </div>
       )}
 
       {/* Mobile sidebar */}
       {isMobile && (
         <>
-          {/* Mobile backdrop */}
           {isSidebarOpen && (
             <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-30" onClick={() => setIsSidebarOpen(false)} />
           )}
 
-          {/* Enhanced Sidebar with Full Navigation */}
           <div
             id="vex-sidebar"
             className={`
@@ -916,13 +744,8 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
               transition-all duration-300 ease-in-out overflow-hidden
             `}
           >
-            {/* Header with Logo - Remove X button, only show arrow */}
             <div className="flex items-center justify-between p-3 border-b border-zinc-800">
-              <div className="flex items-center gap-3">
-                <div className="flex flex-col">
-                  <span className="text-lg font-semibold text-white">MassClip</span>
-                </div>
-              </div>
+              <span className="text-lg font-semibold text-white">Chat History</span>
               <Button
                 onClick={() => setIsSidebarOpen(false)}
                 variant="ghost"
@@ -933,302 +756,176 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
               </Button>
             </div>
 
-            <ScrollArea className="flex-1">
-              <div className="flex flex-col h-full">
-                {/* Vex Chat Section */}
-                <div className="p-3 border-b border-zinc-800">
-                  <button
-                    onClick={() => {
-                      createNewChat()
-                      router.push("/dashboard/vex")
-                    }}
-                    className="flex items-center gap-2 mb-2 w-full text-left hover:bg-zinc-800/50 p-2 rounded-lg transition-colors"
-                  >
-                    <MessageSquare className="h-4 w-4 text-blue-400" />
-                    <span className="text-sm font-medium text-white">Vex AI</span>
-                  </button>
+            <ScrollArea className="flex-1 p-3">
+              <button
+                onClick={createNewChat}
+                className="flex items-center gap-2 mb-4 w-full text-left hover:bg-zinc-800/50 p-2 rounded-lg transition-colors"
+              >
+                <MessageSquare className="h-4 w-4 text-blue-400" />
+                <span className="text-sm font-medium text-white">New Chat</span>
+              </button>
 
-                  {/* Chat History */}
-                  <div className="max-h-40 overflow-hidden">
-                    <ScrollArea className="h-full">
-                      <div className="space-y-1">
-                        {isLoadingChats ? (
-                          <div className="text-center py-3 text-zinc-500">
-                            <Loader2 className="h-4 w-4 mx-auto mb-1 animate-spin" />
-                            <p className="text-xs">Loading chats...</p>
-                          </div>
-                        ) : chatSessions.length === 0 ? (
-                          <div className="text-center py-3 text-zinc-500">
-                            <MessageSquare className="h-5 w-5 mx-auto mb-1 opacity-50" />
-                            <p className="text-xs">No chats yet</p>
-                          </div>
-                        ) : (
-                          chatSessions.slice(0, 5).map((chat) => (
-                            <div key={chat.id} className="group relative">
-                              <button
-                                onClick={() => {
-                                  loadChat(chat.id)
-                                  router.push("/dashboard/vex")
-                                }}
-                                disabled={isLoadingCurrentChat}
-                                className={`w-full text-left p-2 rounded-md text-xs transition-all duration-200 flex items-center gap-2 pr-8 ${
-                                  currentChatId === chat.id
-                                    ? "bg-blue-600/20 text-blue-300 border border-blue-600/30"
-                                    : "text-zinc-400 hover:bg-zinc-800/50 hover:text-white"
-                                } ${isLoadingCurrentChat ? "opacity-50" : ""}`}
-                              >
-                                <MessageSquare className="h-3 w-3 flex-shrink-0" />
-                                <span className="flex-1 truncate font-medium">{chat.title}</span>
-                              </button>
-                              <Button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  if (confirm("Delete this chat?")) {
-                                    deleteChat(chat.id)
-                                  }
-                                }}
-                                size="sm"
-                                variant="ghost"
-                                className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-zinc-500 hover:text-red-400 hover:bg-red-500/10"
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </ScrollArea>
-                  </div>
-                </div>
-
-                {/* Main Navigation */}
-                <div className="flex-1 p-3">
-                  <div className="mb-2">
-                    <span className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Navigation</span>
-                  </div>
-                  <nav className="space-y-1">
-                    {navigationItems.map((item) => (
-                      <button
-                        key={item.href}
-                        onClick={() => handleNavigation(item.href)}
-                        className="w-full flex items-center gap-3 px-3 py-2 text-sm text-zinc-300 hover:text-white hover:bg-zinc-800/50 rounded-lg transition-all duration-200"
-                      >
-                        <item.icon className="h-4 w-4" />
-                        {item.label}
-                      </button>
-                    ))}
-                  </nav>
-                </div>
-
-                {/* Footer with Profile & Settings */}
-                <div className="p-3 border-t border-zinc-800 space-y-2">
-                  {/* Profile Section */}
-                  <div className="flex items-center gap-3 p-2 rounded-lg bg-zinc-900/50">
-                    <Avatar className="h-8 w-8">
-                      <AvatarImage src={user?.photoURL || undefined} />
-                      <AvatarFallback className="bg-zinc-700 text-white text-xs">
-                        {user?.displayName?.[0] || user?.email?.[0] || "U"}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-white truncate">
-                        {user?.displayName || username || "User"}
-                      </p>
-                      <p className="text-xs text-zinc-400 truncate">{user?.email}</p>
-                    </div>
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="space-y-2">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="w-full border-zinc-700 hover:bg-zinc-800 text-xs bg-transparent h-8"
-                        >
-                          <Settings className="h-3 w-3 mr-1" />
-                          Settings
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-48 bg-zinc-900 border-zinc-700">
-                        <DropdownMenuItem onClick={() => handleNavigation("/dashboard/profile")}>
-                          <User className="h-4 w-4 mr-2" />
-                          Edit Profile
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleNavigation("/dashboard/security")}>
-                          <Settings className="h-4 w-4 mr-2" />
-                          Security
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator className="bg-zinc-700" />
-                        <DropdownMenuItem onClick={handleLogout} className="text-red-400 focus:text-red-300">
-                          <LogOut className="h-4 w-4 mr-2" />
-                          Sign Out
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-
-                    <Button
+              <div className="space-y-1">
+                {chatSessions.map((chat) => (
+                  <div key={chat.id} className="group relative">
+                    <button
                       onClick={() => {
-                        if (username) {
-                          window.open(`/creator/${username}`, "_blank")
-                        } else {
-                          router.push("/dashboard/profile")
+                        loadChat(chat.id)
+                        setIsSidebarOpen(false)
+                      }}
+                      className={`w-full text-left p-2 rounded-md text-xs transition-all duration-200 flex items-center gap-2 pr-8 ${
+                        currentChatId === chat.id
+                          ? "bg-blue-600/20 text-blue-300 border border-blue-600/30"
+                          : "text-zinc-400 hover:bg-zinc-800/50 hover:text-white"
+                      }`}
+                    >
+                      <MessageSquare className="h-3 w-3 flex-shrink-0" />
+                      <span className="flex-1 truncate font-medium">{chat.title}</span>
+                    </button>
+                    <Button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (confirm("Delete this chat?")) {
+                          deleteChat(chat.id)
                         }
                       }}
                       size="sm"
-                      className="w-full bg-white text-black hover:bg-zinc-100 font-medium text-xs h-8"
+                      variant="ghost"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-zinc-500 hover:text-red-400 hover:bg-red-500/10"
                     >
-                      <User className="h-3 w-3 mr-1" />
-                      View Profile
+                      <Trash2 className="h-3 w-3" />
                     </Button>
                   </div>
-                </div>
+                ))}
               </div>
             </ScrollArea>
           </div>
         </>
       )}
 
-      {isVexChatPage ? (
-        /* Main Chat Area - Only show on /dashboard/vex */
-        <div
-          className={`flex flex-col flex-1 min-h-screen pt-16 ${isMobile ? "ml-0" : isSidebarCollapsed ? "ml-16" : "ml-60"} ${isMobile && isSidebarOpen ? "blur-sm pointer-events-none" : ""} transition-all duration-300 relative z-10`}
-        >
-          {isLoadingCurrentChat && (
-            <div className="flex items-center justify-center py-4 border-b border-zinc-800">
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              <span className="text-sm text-muted-foreground">Loading chat...</span>
-            </div>
-          )}
+      {/* Main Chat Area */}
+      <div className={`flex flex-col flex-1 ${isMobile && isSidebarOpen ? "blur-sm pointer-events-none" : ""}`}>
+        {isLoadingCurrentChat && (
+          <div className="flex items-center justify-center py-4 border-b border-zinc-800">
+            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            <span className="text-sm text-muted-foreground">Loading chat...</span>
+          </div>
+        )}
 
-          <ScrollArea className={`flex-1 ${isMobile ? "px-3" : "px-4"}`}>
-            <div className={`${isMobile ? "max-w-full" : "max-w-4xl mx-auto"} py-4 min-h-full flex flex-col`}>
-              {messages.length === 0 && (
-                <div className="text-center flex-1 flex flex-col justify-center items-center min-h-[60vh] px-2">
-                  <h2 className={`${isMobile ? "text-xl" : "text-2xl"} font-semibold mb-2`}>Hi! I'm Vex</h2>
-                  <p
-                    className={`text-muted-foreground mb-6 ${isMobile ? "max-w-sm text-sm" : "max-w-md"} mx-auto leading-relaxed`}
-                  >
-                    I'll help you create profitable bundles, set optimal pricing, and build compelling storefront
-                    content.
-                  </p>
+        <ScrollArea className={`flex-1 ${isMobile ? "px-3" : "px-4"}`}>
+          <div className={`${isMobile ? "max-w-full" : "max-w-4xl mx-auto"} py-4 min-h-full flex flex-col`}>
+            {messages.length === 0 && (
+              <div className="text-center flex-1 flex flex-col justify-center items-center min-h-[60vh] px-2">
+                <h2 className={`${isMobile ? "text-xl" : "text-2xl"} font-semibold mb-2`}>Hi! I'm Vex</h2>
+                <p
+                  className={`text-muted-foreground mb-6 ${isMobile ? "max-w-sm text-sm" : "max-w-md"} mx-auto leading-relaxed`}
+                >
+                  I'll help you create profitable bundles, set optimal pricing, and build compelling storefront content.
+                </p>
 
-                  {contentAnalysis && (
-                    <div
-                      className={`mb-6 p-3 rounded-lg bg-transparent ${isMobile ? "max-w-sm" : "max-w-md"} mx-auto border border-zinc-700/50`}
-                    >
-                      <p className="text-sm text-muted-foreground mb-1">
-                        Analyzed {contentAnalysis.totalUploads} uploads
-                      </p>
-                      {contentAnalysis.categories.length > 0 && (
-                        <p className="text-xs text-muted-foreground">
-                          Found: {contentAnalysis.categories.slice(0, 3).join(", ")}
-                          {contentAnalysis.categories.length > 3 && ` +${contentAnalysis.categories.length - 3} more`}
-                        </p>
-                      )}
-                    </div>
-                  )}
-
+                {contentAnalysis && (
                   <div
-                    className={`grid ${isMobile ? "grid-cols-1 gap-2 max-w-full" : "grid-cols-1 md:grid-cols-2 gap-2 max-w-2xl"} mx-auto mb-4`}
+                    className={`mb-6 p-3 rounded-lg bg-transparent ${isMobile ? "max-w-sm" : "max-w-md"} mx-auto border border-zinc-700/50`}
                   >
-                    {currentSuggestions.map((suggestion, index) => (
-                      <button
-                        key={`${suggestion}-${index}`}
-                        className={`text-left ${isMobile ? "p-3 text-sm" : "p-3 text-sm"} rounded-lg bg-transparent border border-zinc-700/50 hover:bg-zinc-800/30 hover:border-zinc-600/50 transition-all duration-200`}
-                        onClick={() => handleSuggestionClick(suggestion)}
-                        style={{ fontSize: "16px" }} // Prevent iOS zoom
-                      >
-                        {suggestion}
-                      </button>
-                    ))}
+                    <p className="text-sm text-muted-foreground mb-1">
+                      Analyzed {contentAnalysis.totalUploads} uploads
+                    </p>
+                    {contentAnalysis.categories.length > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        Found: {contentAnalysis.categories.slice(0, 3).join(", ")}
+                        {contentAnalysis.categories.length > 3 && ` +${contentAnalysis.categories.length - 3} more`}
+                      </p>
+                    )}
                   </div>
+                )}
 
-                  <p className="text-xs text-zinc-500 max-w-md mx-auto text-center">
-                    Vex works best with detailed prompts
-                  </p>
-                </div>
-              )}
-
-              {messages.length > 0 && (
-                <div className="space-y-4 flex-1">
-                  {messages.map((message) => (
-                    <div
-                      key={message.id}
-                      className={`chat-slide-up ${message.role === "user" ? "flex justify-end" : "flex justify-start"}`}
+                <div
+                  className={`grid ${isMobile ? "grid-cols-1 gap-2 max-w-full" : "grid-cols-1 md:grid-cols-2 gap-2 max-w-2xl"} mx-auto mb-4`}
+                >
+                  {currentSuggestions.map((suggestion, index) => (
+                    <button
+                      key={`${suggestion}-${index}`}
+                      className={`text-left ${isMobile ? "p-3 text-sm" : "p-3 text-sm"} rounded-lg bg-transparent border border-zinc-700/50 hover:bg-zinc-800/30 hover:border-zinc-600/50 transition-all duration-200`}
+                      onClick={() => handleSuggestionClick(suggestion)}
+                      style={{ fontSize: "16px" }}
                     >
-                      <div
-                        className={`${isMobile ? "max-w-[90%]" : "max-w-[80%]"} rounded-lg px-3 py-2 ${
-                          message.role === "user" ? "chat-message-user ml-auto" : "chat-message-assistant"
-                        }`}
-                      >
-                        <div className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</div>
-                      </div>
-                    </div>
+                      {suggestion}
+                    </button>
                   ))}
+                </div>
 
-                  {isLoading && (
-                    <div className="flex justify-start chat-slide-up">
-                      <div className="chat-message-assistant rounded-lg px-3 py-2">
-                        <div className="flex items-center gap-2">
-                          <div className="flex space-x-1">
-                            <div className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse"></div>
-                            <div
-                              className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse"
-                              style={{ animationDelay: "0.2s" }}
-                            ></div>
-                            <div
-                              className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse"
-                              style={{ animationDelay: "0.4s" }}
-                            ></div>
-                          </div>
+                <p className="text-xs text-zinc-500 max-w-md mx-auto text-center">
+                  Vex works best with detailed prompts
+                </p>
+              </div>
+            )}
+
+            {messages.length > 0 && (
+              <div className="space-y-4 flex-1">
+                {messages.map((message) => (
+                  <div
+                    key={message.id}
+                    className={`chat-slide-up ${message.role === "user" ? "flex justify-end" : "flex justify-start"}`}
+                  >
+                    <div
+                      className={`${isMobile ? "max-w-[90%]" : "max-w-[80%]"} rounded-lg px-3 py-2 ${
+                        message.role === "user" ? "chat-message-user ml-auto" : "chat-message-assistant"
+                      }`}
+                    >
+                      <div className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</div>
+                    </div>
+                  </div>
+                ))}
+
+                {isLoading && (
+                  <div className="flex justify-start chat-slide-up">
+                    <div className="chat-message-assistant rounded-lg px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <div className="flex space-x-1">
+                          <div className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse"></div>
+                          <div
+                            className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse"
+                            style={{ animationDelay: "0.2s" }}
+                          ></div>
+                          <div
+                            className="w-2 h-2 bg-muted-foreground rounded-full animate-pulse"
+                            style={{ animationDelay: "0.4s" }}
+                          ></div>
                         </div>
                       </div>
                     </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </ScrollArea>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </ScrollArea>
 
-          <div className={`flex-shrink-0 ${isMobile ? "px-3" : "px-4"} py-3`}>
-            <div className={`${isMobile ? "max-w-full" : "max-w-4xl mx-auto"}`}>
-              <form onSubmit={handleSubmit} className="flex gap-2">
-                <div className="flex-1 relative">
-                  <Input
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    placeholder="Message Vex"
-                    className="chat-input-container border-0 bg-transparent text-sm py-2 px-3 pr-10 resize-none focus:ring-1 focus:ring-ring"
-                    disabled={isLoading}
-                    style={{ fontSize: "16px" }} // Set font size to 16px to prevent iOS Safari zoom
-                  />
-                  <Button
-                    type="submit"
-                    disabled={isLoading || !input.trim()}
-                    size="sm"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 p-0 bg-foreground text-background hover:bg-foreground/90"
-                  >
-                    <Send className="h-3 w-3" />
-                  </Button>
-                </div>
-              </form>
-            </div>
+        <div className={`flex-shrink-0 ${isMobile ? "px-3" : "px-4"} py-3`}>
+          <div className={`${isMobile ? "max-w-full" : "max-w-4xl mx-auto"}`}>
+            <form onSubmit={handleSubmit} className="flex gap-2">
+              <div className="flex-1 relative">
+                <Input
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder="Message Vex"
+                  className="chat-input-container border-0 bg-transparent text-sm py-2 px-3 pr-10 resize-none focus:ring-1 focus:ring-ring"
+                  disabled={isLoading}
+                  style={{ fontSize: "16px" }}
+                />
+                <Button
+                  type="submit"
+                  disabled={isLoading || !input.trim()}
+                  size="sm"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 p-0 bg-foreground text-background hover:bg-foreground/90"
+                >
+                  <Send className="h-3 w-3" />
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
-      ) : (
-        /* Page Content Area - Show for all other dashboard pages */
-        <div
-          className={`flex-1 min-h-screen pt-16 ${isMobile ? "ml-0" : isSidebarCollapsed ? "ml-16" : "ml-60"} ${isMobile && isSidebarOpen ? "blur-sm pointer-events-none" : ""} transition-all duration-300 relative z-10`}
-        >
-          <div
-            className={`h-full ${isSidebarCollapsed ? "px-3 sm:px-4 lg:px-6" : "max-w-6xl mx-auto px-3 sm:px-4 lg:px-6"} py-4`}
-          >
-            {children}
-          </div>
-        </div>
-      )}
+      </div>
     </div>
   )
 }
