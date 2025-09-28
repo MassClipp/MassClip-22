@@ -796,7 +796,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                                   }}
                                   size="sm"
                                   variant="ghost"
-                                  className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-all duration-200 h-6 w-6 p-0 text-zinc-500 hover:text-red-400 hover:bg-red-500/20 hover:scale-110 z-20 border border-transparent hover:border-red-500/30"
+                                  className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-all duration-200 h-6 w-6 p-0 text-zinc-500 hover:text-red-400 hover:bg-red-500/20 hover:scale-110 z-30 border border-transparent hover:border-red-500/30 shadow-lg"
                                   title="Delete chat"
                                 >
                                   <Trash2 className="h-3 w-3" />
@@ -990,7 +990,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                                 }}
                                 size="sm"
                                 variant="ghost"
-                                className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-all duration-200 h-6 w-6 p-0 text-zinc-500 hover:text-red-400 hover:bg-red-500/20 hover:scale-110 z-20 border border-transparent hover:border-red-500/30"
+                                className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-all duration-200 h-6 w-6 p-0 text-zinc-500 hover:text-red-400 hover:bg-red-500/20 hover:scale-110 z-30 border border-transparent hover:border-red-500/30 shadow-lg"
                                 title="Delete chat"
                               >
                                 <Trash2 className="h-3 w-3" />

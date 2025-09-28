@@ -1,7 +1,7 @@
 "use client"
 
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app"
-import { getAuth, type Auth, connectAuthEmulator } from "firebase/auth"
+import { getAuth, type Auth, connectAuthEmulator, setPersistence, browserSessionPersistence } from "firebase/auth"
 import { getFirestore, type Firestore, connectFirestoreEmulator } from "firebase/firestore"
 import { getStorage, type FirebaseStorage, connectStorageEmulator } from "firebase/storage"
 import { getFirebaseConfig } from "./firebase-config"
@@ -31,6 +31,12 @@ export const initializeFirebase = () => {
       firebaseAuth = getAuth(firebaseApp)
       firebaseDb = getFirestore(firebaseApp)
       firebaseStorage = getStorage(firebaseApp)
+
+      if (firebaseAuth) {
+        setPersistence(firebaseAuth, browserSessionPersistence).catch((error) => {
+          console.error("Failed to set auth persistence:", error)
+        })
+      }
 
       // Connect to emulators in development if needed
       if (process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === "true") {

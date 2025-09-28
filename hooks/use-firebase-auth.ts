@@ -193,7 +193,28 @@ export function useFirebaseAuth() {
     try {
       console.log("[v0] Starting comprehensive logout process...")
 
-      // 1. Clear Firebase auth state first
+      try {
+        // Clear Firebase IndexedDB data
+        const databases = await indexedDB.databases()
+        const firebaseDBs = databases.filter(
+          (db) => db.name?.includes("firebase") || db.name?.includes("firebaseLocalStorageDb"),
+        )
+
+        for (const dbInfo of firebaseDBs) {
+          if (dbInfo.name) {
+            const deleteReq = indexedDB.deleteDatabase(dbInfo.name)
+            await new Promise((resolve, reject) => {
+              deleteReq.onsuccess = () => resolve(true)
+              deleteReq.onerror = () => reject(deleteReq.error)
+            })
+            console.log(`[v0] Deleted IndexedDB: ${dbInfo.name}`)
+          }
+        }
+      } catch (error) {
+        console.error("Error clearing IndexedDB:", error)
+      }
+
+      // 1. Clear Firebase auth state
       await firebaseSignOut(auth)
       console.log("[v0] Firebase signOut completed")
 
@@ -208,42 +229,24 @@ export function useFirebaseAuth() {
         console.error("Error clearing session:", error)
       }
 
-      // 3. Clear all localStorage and sessionStorage
+      // 3. Clear all browser storage
       try {
-        // Clear Firebase-specific storage
-        const firebaseKeys = Object.keys(localStorage).filter(
-          (key) =>
-            key.includes("firebase") ||
-            key.includes("Firebase") ||
-            key.includes("auth") ||
-            key.includes("user") ||
-            key.includes("vex-last-chat-id"),
-        )
+        // Clear all localStorage
+        localStorage.clear()
+        console.log("[v0] localStorage cleared")
 
-        firebaseKeys.forEach((key) => {
-          localStorage.removeItem(key)
-          console.log(`[v0] Cleared localStorage key: ${key}`)
-        })
-
-        // Clear sessionStorage as well
-        const sessionKeys = Object.keys(sessionStorage).filter(
-          (key) => key.includes("firebase") || key.includes("Firebase") || key.includes("auth") || key.includes("user"),
-        )
-
-        sessionKeys.forEach((key) => {
-          sessionStorage.removeItem(key)
-          console.log(`[v0] Cleared sessionStorage key: ${key}`)
-        })
-
-        console.log("[v0] Browser storage cleared")
+        // Clear all sessionStorage
+        sessionStorage.clear()
+        console.log("[v0] sessionStorage cleared")
       } catch (error) {
         console.error("Error clearing browser storage:", error)
       }
 
-      // 4. Force a small delay to ensure cleanup completes
-      await new Promise((resolve) => setTimeout(resolve, 100))
+      await new Promise((resolve) => setTimeout(resolve, 200))
 
-      console.log("[v0] Logout process completed successfully")
+      console.log("[v0] Logout process completed, reloading page...")
+      window.location.href = "/"
+
       return { success: true }
     } catch (error: any) {
       console.error("Sign out error:", error)
