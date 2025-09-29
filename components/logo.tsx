@@ -11,8 +11,8 @@ interface LogoProps {
 }
 
 /**
- * Logo component for MassClip
- * Displays the MassClip logo with customizable size and styling
+ * Logo component for Vex
+ * Displays the Vex logo with customizable size and styling
  * Can be rendered as a link when href is provided
  *
  * @param className - Additional classes for the logo container
@@ -26,16 +26,14 @@ function Logo({ className, href, linkClassName, size = "md" }: LogoProps) {
       <div className="flex items-center">
         <span
           className={cn(
-            "font-light tracking-tight",
+            "font-league-spartan font-bold tracking-tight text-white",
             size === "sm" && "text-xl",
             size === "md" && "text-2xl",
             size === "lg" && "text-3xl md:text-4xl",
           )}
+          style={{ fontFamily: "var(--font-league-spartan)" }}
         >
-          <span className="text-white">Mass</span>
-          <span className="bg-gradient-to-br from-slate-300 via-cyan-200 via-blue-100 to-white bg-clip-text text-transparent">
-            Clip
-          </span>
+          Vex
         </span>
       </div>
     </div>

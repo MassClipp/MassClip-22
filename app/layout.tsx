@@ -1,6 +1,6 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { Inter } from "next/font/google"
+import { Inter, League_Spartan } from "next/font/google"
 import { AuthProvider } from "@/contexts/auth-context"
 import { Toaster } from "@/components/ui/toaster"
 import Script from "next/script"
@@ -17,6 +17,12 @@ const inter = Inter({
   subsets: ["latin"],
   display: "swap",
   preload: true,
+})
+
+const leagueSpartan = League_Spartan({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-league-spartan",
 })
 
 export const metadata: Metadata = {
@@ -103,7 +109,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className="prevent-zoom">
+    <html lang="en" className={`prevent-zoom ${leagueSpartan.variable}`}>
       <head>
         <script
           type="application/ld+json"

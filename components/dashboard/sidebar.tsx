@@ -1,5 +1,4 @@
 "use client"
-import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
   LayoutDashboard,
@@ -18,6 +17,7 @@ import {
   Tags,
 } from "lucide-react"
 import { NavDropdown } from "./nav-dropdown"
+import Logo from "@/components/logo"
 
 const navItems = [
   {
@@ -132,9 +132,7 @@ export function DashboardSidebar() {
   return (
     <div className="flex h-full w-64 flex-col bg-zinc-900 border-r border-zinc-800">
       <div className="flex h-14 items-center border-b border-zinc-800 px-4">
-        <Link className="flex items-center gap-2 font-semibold" href="/dashboard">
-          <span className="text-xl">MassClip</span>
-        </Link>
+        <Logo href="/dashboard" size="sm" />
       </div>
       <div className="flex-1 overflow-auto py-2">
         <nav className="grid items-start px-2 text-sm font-medium">

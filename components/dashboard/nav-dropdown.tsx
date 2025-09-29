@@ -45,7 +45,7 @@ const navigationSections: NavSection[] = [
     title: "Main",
     items: [
       { title: "Dashboard", href: "/dashboard", icon: Home },
-      { title: "Explore", href: "/dashboard/explore", icon: Search },
+      { title: "Upload", href: "/dashboard/uploads", icon: Upload },
       { title: "Vex AI Assistant", href: "/dashboard/vex", icon: Bot }, // Added Vex AI Assistant to main navigation
       { title: "Upgrade", href: "/dashboard/upgrade", icon: Crown },
     ],
@@ -54,7 +54,7 @@ const navigationSections: NavSection[] = [
     title: "Content",
     items: [
       { title: "Free Content", href: "/dashboard/free-content", icon: Video },
-      { title: "Upload", href: "/dashboard/upload", icon: Upload },
+      { title: "Explore", href: "/dashboard/explore", icon: Search },
       { title: "Bundles", href: "/dashboard/bundles", icon: Package },
     ],
   },

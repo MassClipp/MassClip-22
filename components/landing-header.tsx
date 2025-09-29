@@ -44,7 +44,7 @@ export default function LandingHeader() {
 
   const navigationItems = [
     { name: "Home", href: "/" },
-    { name: "Explore", href: "/dashboard/explore" },
+    { name: "Upload", href: "/dashboard/uploads" },
     { name: "Pricing", href: "/dashboard/pricing" },
   ]
 

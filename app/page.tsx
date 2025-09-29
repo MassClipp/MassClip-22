@@ -17,6 +17,7 @@ const LandingPage = () => {
       router.prefetch("/signup")
       router.prefetch("/dashboard/explore")
       router.prefetch("/dashboard/upgrade")
+      router.prefetch("/dashboard/uploads")
     }, 100)
 
     return () => clearTimeout(timer)
@@ -44,8 +45,8 @@ const LandingPage = () => {
     router.push("/signup")
   }
 
-  const handleExplore = () => {
-    router.push("/dashboard/explore")
+  const handleUpload = () => {
+    router.push("/dashboard/uploads")
   }
 
   const handleInputSubmit = (e: React.FormEvent) => {
@@ -65,16 +66,17 @@ const LandingPage = () => {
       <header className="relative z-10 px-6 py-6">
         <nav className="flex items-center justify-between max-w-7xl mx-auto">
           <div className="text-white font-light text-2xl">
-            Mass
-            <span className="gradient-text">Clip</span>
+            <span className="font-league-spartan font-bold" style={{ fontFamily: "var(--font-league-spartan)" }}>
+              Vex
+            </span>
           </div>
 
           <div className="hidden md:flex items-center space-x-8">
             <Link href="/dashboard/upgrade" className="text-white/80 hover:text-white transition-colors font-light">
               Upgrade
             </Link>
-            <Link href="/dashboard/explore" className="text-white/80 hover:text-white transition-colors font-light">
-              Explore
+            <Link href="/dashboard/uploads" className="text-white/80 hover:text-white transition-colors font-light">
+              Upload
             </Link>
             <Link href="/about" className="text-white/80 hover:text-white transition-colors font-light">
               About Us
@@ -142,11 +144,11 @@ const LandingPage = () => {
               </Button>
 
               <Button
-                onClick={handleExplore}
+                onClick={handleUpload}
                 variant="outline"
                 className="px-8 py-4 border-2 border-white/30 text-white hover:bg-white/10 font-light rounded-full text-lg transition-all duration-200 bg-transparent"
               >
-                Explore
+                Upload
               </Button>
             </div>
           </div>
@@ -318,9 +320,11 @@ const LandingPage = () => {
 
           <div className="border-t border-gray-200 mt-6 pt-4">
             <div className="flex flex-col md:flex-row justify-between items-center">
-              <div className="text-gray-600 font-light">© 2025 MassClip. All rights reserved.</div>
+              <div className="text-gray-600 font-light">© 2025 Vex. All rights reserved.</div>
               <div className="text-black font-light text-xl mt-4 md:mt-0">
-                Mass<span className="bg-gradient-to-br from-black to-black/60 bg-clip-text text-transparent">Clip</span>
+                <span className="font-league-spartan font-bold" style={{ fontFamily: "var(--font-league-spartan)" }}>
+                  Vex
+                </span>
               </div>
             </div>
           </div>
