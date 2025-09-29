@@ -17,7 +17,7 @@ const LandingPage = () => {
       router.prefetch("/signup")
       router.prefetch("/dashboard/explore")
       router.prefetch("/dashboard/upgrade")
-      router.prefetch("/dashboard/uploads")
+      router.prefetch("/dashboard/upload")
     }, 100)
 
     return () => clearTimeout(timer)
@@ -46,7 +46,7 @@ const LandingPage = () => {
   }
 
   const handleUpload = () => {
-    router.push("/dashboard/uploads")
+    router.push("/dashboard/upload")
   }
 
   const handleInputSubmit = (e: React.FormEvent) => {
@@ -75,7 +75,7 @@ const LandingPage = () => {
             <Link href="/dashboard/upgrade" className="text-white/80 hover:text-white transition-colors font-light">
               Upgrade
             </Link>
-            <Link href="/dashboard/uploads" className="text-white/80 hover:text-white transition-colors font-light">
+            <Link href="/dashboard/upload" className="text-white/80 hover:text-white transition-colors font-light">
               Upload
             </Link>
             <Link href="/about" className="text-white/80 hover:text-white transition-colors font-light">
@@ -97,7 +97,9 @@ const LandingPage = () => {
             </h1>
 
             <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light max-w-2xl mx-auto text-pretty">
-              Organize and your content into sellable bundles in seconds with Vex.
+              Simply upload your content, tell Vex what kind of bundles you want to sell, and watch as Vex intelligently
+              organizes your content into professional, sellable bundles ready for market in seconds. No more manual
+              sorting, no more messy file management, just streamlined content monetization.
             </p>
 
             <div className="pt-8">
@@ -164,7 +166,7 @@ const LandingPage = () => {
               <p className="text-lg lg:text-xl text-gray-700 leading-relaxed font-light">
                 Simply upload your content, tell Vex what kind of bundles you want to sell, and watch as Vex
                 intelligently organizes your content into professional, sellable bundles ready for market in seconds. No
-                more manual sorting, no more messy file management—just streamlined content monetization.
+                more manual sorting, no more messy file management, just streamlined content monetization.
               </p>
             </div>
           </div>
@@ -251,6 +253,10 @@ const LandingPage = () => {
                   Ready-made carousel posts and slide templates for Instagram, LinkedIn, and other platforms.
                 </p>
               </div>
+            </div>
+
+            <div className="text-center mt-8">
+              <p className="text-white/70 text-lg font-light">and more</p>
             </div>
           </div>
         </div>
