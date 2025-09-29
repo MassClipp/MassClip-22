@@ -346,10 +346,25 @@ export default function UploadPage() {
     console.log(`✅ [v0] Final folder ID to pass to queue:`, finalFolderId)
 
     for (const file of Array.from(files)) {
-      const isZip =
-        file.type === "application/zip" ||
-        file.type === "application/x-zip-compressed" ||
-        file.name.toLowerCase().endsWith(".zip")
+      const fileName = file.name.toLowerCase()
+      const fileType = file.type.toLowerCase()
+
+      // Check multiple conditions for ZIP files
+      const isZipByExtension = fileName.endsWith(".zip")
+      const isZipByMimeType =
+        fileType === "application/zip" ||
+        fileType === "application/x-zip-compressed" ||
+        fileType === "application/x-zip" ||
+        (fileType === "application/octet-stream" && fileName.endsWith(".zip"))
+
+      const isZip = isZipByExtension || isZipByMimeType
+
+      console.log(`🔍 [v0] File detection for: ${file.name}`)
+      console.log(`   - File type: "${file.type}" (empty: ${file.type === ""})`)
+      console.log(`   - File extension: ${fileName.split(".").pop()}`)
+      console.log(`   - Is ZIP by extension: ${isZipByExtension}`)
+      console.log(`   - Is ZIP by MIME type: ${isZipByMimeType}`)
+      console.log(`   - Final decision: ${isZip ? "ZIP FILE" : "REGULAR FILE"}`)
 
       if (isZip) {
         console.log(`🗜️ [v0] Processing ZIP file: ${file.name}`)
@@ -364,6 +379,8 @@ export default function UploadPage() {
           if (folderPath) {
             formData.append("folderPath", folderPath)
           }
+
+          console.log(`📤 [v0] Sending ZIP to /api/uploads/zip`)
 
           const response = await fetch("/api/uploads/zip", {
             method: "POST",
@@ -430,11 +447,15 @@ export default function UploadPage() {
     }
 
     const regularFiles = Array.from(files).filter((file) => {
-      const isZip =
-        file.type === "application/zip" ||
-        file.type === "application/x-zip-compressed" ||
-        file.name.toLowerCase().endsWith(".zip")
-      return !isZip
+      const fileName = file.name.toLowerCase()
+      const fileType = file.type.toLowerCase()
+      const isZipByExtension = fileName.endsWith(".zip")
+      const isZipByMimeType =
+        fileType === "application/zip" ||
+        fileType === "application/x-zip-compressed" ||
+        fileType === "application/x-zip" ||
+        (fileType === "application/octet-stream" && fileName.endsWith(".zip"))
+      return !(isZipByExtension || isZipByMimeType)
     })
 
     if (regularFiles.length > 0) {
