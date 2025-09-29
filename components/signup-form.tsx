@@ -134,12 +134,11 @@ export function SignupForm() {
         {/* Header with Logo */}
         <div className="absolute top-6 left-6 z-20 hidden md:block">
           <Link href="/" className="inline-block cursor-pointer transition-transform hover:scale-105">
-            <span className="text-2xl font-thin">
-              <span className="text-white">Mass</span>
-              <span className="bg-gradient-to-br from-slate-300 via-cyan-200 via-blue-100 to-white bg-clip-text text-transparent">
-                Clip
+            <div className="text-white font-light text-2xl">
+              <span className="font-league-spartan font-bold" style={{ fontFamily: "var(--font-league-spartan)" }}>
+                Vex
               </span>
-            </span>
+            </div>
           </Link>
         </div>
 
@@ -151,7 +150,7 @@ export function SignupForm() {
               <h1 className="text-3xl md:text-4xl font-thin bg-gradient-to-br from-slate-300 via-cyan-200 via-blue-100 to-white bg-clip-text text-transparent">
                 Create Account
               </h1>
-              <p className="text-gray-400 text-base md:text-lg">Sign up to start using MassClip</p>
+              <p className="text-gray-400 text-base md:text-lg">Sign up to start using Vex</p>
             </div>
 
             <div className="space-y-3 md:space-y-4">
@@ -224,7 +223,7 @@ export function SignupForm() {
                   <label className="text-sm font-medium text-gray-300">Email</label>
                   <Input
                     type="email"
-                    placeholder="massclip@gmail.com"
+                    placeholder="vex@gmail.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="h-11 md:h-12 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400 focus:border-gray-600 focus:ring-0 backdrop-blur-sm"

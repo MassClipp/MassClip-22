@@ -108,12 +108,11 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
         {/* Header with Logo */}
         <div className="absolute top-6 left-6 z-20">
           <Link href="/" className="inline-block cursor-pointer transition-transform hover:scale-105">
-            <span className="text-2xl font-thin">
-              <span className="text-white">Mass</span>
-              <span className="bg-gradient-to-br from-slate-300 via-cyan-200 via-blue-100 to-white bg-clip-text text-transparent">
-                Clip
+            <div className="text-white font-light text-2xl">
+              <span className="font-league-spartan font-bold" style={{ fontFamily: "var(--font-league-spartan)" }}>
+                Vex
               </span>
-            </span>
+            </div>
           </Link>
         </div>
 
@@ -125,7 +124,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
               <h1 className="text-4xl font-thin bg-gradient-to-br from-slate-300 via-cyan-200 via-blue-100 to-white bg-clip-text text-transparent">
                 Welcome back
               </h1>
-              <p className="text-gray-400 text-lg">Sign in to your MassClip account</p>
+              <p className="text-gray-400 text-lg">Sign in to your account</p>
             </div>
 
             {/* Purchase Success Notice */}

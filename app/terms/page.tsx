@@ -1,6 +1,5 @@
 import Link from "next/link"
 import { ChevronLeft } from "lucide-react"
-import Logo from "@/components/logo"
 
 export default function TermsPage() {
   return (
@@ -11,7 +10,11 @@ export default function TermsPage() {
             <ChevronLeft className="h-5 w-5 mr-1" />
             <span>Back</span>
           </Link>
-          <Logo href="/" />
+          <div className="text-white font-light text-2xl">
+            <span className="font-league-spartan font-bold" style={{ fontFamily: "var(--font-league-spartan)" }}>
+              MassClip
+            </span>
+          </div>
         </div>
       </header>
 
@@ -24,7 +27,7 @@ export default function TermsPage() {
 
           <div className="bg-gray-50 p-8 rounded-lg mb-12">
             <p className="text-gray-700 text-lg leading-relaxed">
-              Welcome to Vex. By accessing or using our platform, you agree to be bound by the following Terms of
+              Welcome to MassClip. By accessing or using our platform, you agree to be bound by the following Terms of
               Service. If you do not agree, please do not use our platform.
             </p>
           </div>
@@ -33,7 +36,7 @@ export default function TermsPage() {
             <section>
               <h2 className="text-2xl font-light text-black mb-6 pb-2 border-b border-gray-200">1. Overview</h2>
               <p className="text-gray-700 leading-relaxed">
-                Vex is a digital platform that provides downloadable content (primarily video clips) to faceless
+                MassClip is a digital platform that provides downloadable content (primarily video clips) to faceless
                 creators, theme pages, and online brands. These clips are curated and sourced from publicly available
                 content for the purposes of commentary, education, inspiration, parody, and other transformative uses.
               </p>
@@ -42,8 +45,8 @@ export default function TermsPage() {
             <section>
               <h2 className="text-2xl font-light text-black mb-6 pb-2 border-b border-gray-200">2. User Eligibility</h2>
               <p className="text-gray-700 leading-relaxed">
-                To use Vex, you must be at least 18 years old or the age of majority in your jurisdiction. You agree to
-                provide accurate and complete registration information and to update it as needed.
+                To use MassClip, you must be at least 18 years old or the age of majority in your jurisdiction. You
+                agree to provide accurate and complete registration information and to update it as needed.
               </p>
             </section>
 
@@ -53,8 +56,8 @@ export default function TermsPage() {
               </h2>
               <div className="space-y-4">
                 <p className="text-gray-700 leading-relaxed">
-                  Vex does not claim ownership over any third-party content displayed or available for download on the
-                  platform unless explicitly stated.
+                  MassClip does not claim ownership over any third-party content displayed or available for download on
+                  the platform unless explicitly stated.
                 </p>
                 <p className="text-gray-700 leading-relaxed">
                   We operate as a distribution platform, providing access to curated clips that are believed to fall
@@ -116,12 +119,12 @@ export default function TermsPage() {
               </h2>
               <div className="space-y-4">
                 <p className="text-gray-700 leading-relaxed">
-                  If you are a content owner and believe your copyrighted material appears on Vex in violation of your
-                  rights, you may submit a takedown request under the Digital Millennium Copyright Act (DMCA).
+                  If you are a content owner and believe your copyrighted material appears on MassClip in violation of
+                  your rights, you may submit a takedown request under the Digital Millennium Copyright Act (DMCA).
                 </p>
                 <div className="bg-gray-50 p-6 rounded-lg">
                   <p className="text-gray-700 mb-2">To file a DMCA request, email:</p>
-                  <p className="text-black font-medium mb-2">contact@vex.com</p>
+                  <p className="text-black font-medium mb-2">contact@massclip.pro</p>
                   <p className="text-gray-700 mb-2">Subject: "DMCA Takedown Request"</p>
                 </div>
                 <p className="text-gray-700 leading-relaxed">Include:</p>
@@ -143,7 +146,7 @@ export default function TermsPage() {
                 8. Limitation of Liability
               </h2>
               <p className="text-gray-700 leading-relaxed">
-                Vex is provided "as-is" without warranties of any kind. We are not liable for any direct, indirect,
+                MassClip is provided "as-is" without warranties of any kind. We are not liable for any direct, indirect,
                 incidental, or consequential damages arising from your use of the platform.
               </p>
             </section>
@@ -160,7 +163,7 @@ export default function TermsPage() {
               <h2 className="text-2xl font-light text-black mb-6 pb-2 border-b border-gray-200">10. Contact</h2>
               <div className="bg-gray-50 p-6 rounded-lg">
                 <p className="text-gray-700 mb-2">For support, legal inquiries, or business questions:</p>
-                <p className="text-black font-medium">Email: contact@vex.com</p>
+                <p className="text-black font-medium">Email: contact@massclip.pro</p>
               </div>
             </section>
           </div>
@@ -169,7 +172,7 @@ export default function TermsPage() {
 
       <footer className="bg-gray-50 py-8 mt-16">
         <div className="container mx-auto px-6 text-center">
-          <p className="text-gray-600">&copy; 2025 Vex. All rights reserved.</p>
+          <p className="text-gray-600">&copy; 2025 MassClip. All rights reserved.</p>
         </div>
       </footer>
     </div>

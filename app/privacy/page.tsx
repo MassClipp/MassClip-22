@@ -1,6 +1,5 @@
 import Link from "next/link"
 import { ChevronLeft } from "lucide-react"
-import Logo from "@/components/logo"
 
 export default function PrivacyPage() {
   return (
@@ -11,7 +10,11 @@ export default function PrivacyPage() {
             <ChevronLeft className="h-5 w-5 mr-1" />
             <span>Back</span>
           </Link>
-          <Logo href="/" />
+          <div className="text-white font-light text-2xl">
+            <span className="font-league-spartan font-bold" style={{ fontFamily: "var(--font-league-spartan)" }}>
+              MassClip
+            </span>
+          </div>
         </div>
       </header>
 
@@ -24,8 +27,8 @@ export default function PrivacyPage() {
 
           <div className="bg-gray-50 p-8 rounded-lg mb-12">
             <p className="text-gray-700 text-lg leading-relaxed">
-              At Vex, your privacy is important to us. This Privacy Policy outlines how we collect, use, and protect
-              your personal information when you use our services.
+              At MassClip, your privacy is important to us. This Privacy Policy outlines how we collect, use, and
+              protect your personal information when you use our services.
             </p>
           </div>
 
@@ -36,7 +39,7 @@ export default function PrivacyPage() {
               </h2>
               <div className="space-y-6">
                 <p className="text-gray-700 leading-relaxed">
-                  When you use Vex, we may collect the following types of information:
+                  When you use MassClip, we may collect the following types of information:
                 </p>
 
                 <div>
@@ -79,7 +82,7 @@ export default function PrivacyPage() {
               <div className="space-y-4">
                 <p className="text-gray-700 leading-relaxed">We use your data strictly to:</p>
                 <ul className="list-disc pl-6 space-y-2 text-gray-700">
-                  <li>Provide access to the Vex platform</li>
+                  <li>Provide access to the MassClip platform</li>
                   <li>Manage user authentication and subscriptions</li>
                   <li>Improve the functionality and user experience</li>
                   <li>
@@ -151,8 +154,8 @@ export default function PrivacyPage() {
                 <div className="bg-gray-50 p-6 rounded-lg">
                   <p className="text-gray-700">
                     To exercise any of these rights, contact us at{" "}
-                    <a href="mailto:contact@vex.com" className="text-blue-600 hover:underline font-medium">
-                      contact@vex.com
+                    <a href="mailto:contact@massclip.pro" className="text-blue-600 hover:underline font-medium">
+                      contact@massclip.pro
                     </a>
                   </p>
                 </div>
@@ -164,8 +167,8 @@ export default function PrivacyPage() {
                 7. Children's Privacy
               </h2>
               <p className="text-gray-700 leading-relaxed">
-                Vex is not intended for users under 13. We do not knowingly collect data from children under 13. If we
-                become aware of such collection, we will delete the information immediately.
+                MassClip is not intended for users under 13. We do not knowingly collect data from children under 13. If
+                we become aware of such collection, we will delete the information immediately.
               </p>
             </section>
 
@@ -174,8 +177,9 @@ export default function PrivacyPage() {
                 8. International Users
               </h2>
               <p className="text-gray-700 leading-relaxed">
-                This service is hosted in the United States but may be accessed globally. By using Vex, you consent to
-                the processing and storage of your data in the U.S. and other countries where our services are hosted.
+                This service is hosted in the United States but may be accessed globally. By using MassClip, you consent
+                to the processing and storage of your data in the U.S. and other countries where our services are
+                hosted.
               </p>
             </section>
 
@@ -196,8 +200,8 @@ export default function PrivacyPage() {
                   If you have questions or concerns about this Privacy Policy, contact us at:
                 </p>
                 <p className="text-black font-medium">
-                  <a href="mailto:contact@vex.com" className="text-blue-600 hover:underline">
-                    contact@vex.com
+                  <a href="mailto:contact@massclip.pro" className="text-blue-600 hover:underline">
+                    contact@massclip.pro
                   </a>
                 </p>
               </div>
@@ -208,7 +212,7 @@ export default function PrivacyPage() {
 
       <footer className="bg-gray-50 py-8 mt-16">
         <div className="container mx-auto px-6 text-center">
-          <p className="text-gray-600">&copy; 2025 Vex. All rights reserved.</p>
+          <p className="text-gray-600">&copy; 2025 MassClip. All rights reserved.</p>
         </div>
       </footer>
     </div>

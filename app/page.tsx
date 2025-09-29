@@ -97,9 +97,7 @@ const LandingPage = () => {
             </h1>
 
             <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light max-w-2xl mx-auto text-pretty">
-              Simply upload your content, tell Vex what kind of bundles you want to sell, and watch as Vex intelligently
-              organizes your content into professional, sellable bundles ready for market in seconds. No more manual
-              sorting, no more messy file management, just streamlined content monetization.
+              Organize and create sellable bundles in seconds with Vex.
             </p>
 
             <div className="pt-8">
