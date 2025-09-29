@@ -1107,7 +1107,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
       {isVexChatPage ? (
         /* Main Chat Area - Only show on /dashboard/vex */
         <div
-          className={`flex-col flex-1 min-h-screen pt-16 ${isMobile ? "ml-0" : isSidebarCollapsed ? "ml-16" : "ml-60"} ${isMobile && isSidebarOpen ? "blur-sm pointer-events-none" : ""} transition-all duration-300 relative z-10`}
+          className={`flex flex-col h-screen pt-16 ${isMobile ? "ml-0" : isSidebarCollapsed ? "ml-16" : "ml-60"} ${isMobile && isSidebarOpen ? "blur-sm pointer-events-none" : ""} transition-all duration-300 relative z-10`}
         >
           {isLoadingCurrentChat && (
             <div className="flex items-center justify-center py-4 border-b border-zinc-800">
@@ -1206,7 +1206,9 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
             </div>
           </ScrollArea>
 
-          <div className={`flex-shrink-0 ${isMobile ? "px-3" : "px-4"} py-3`}>
+          <div
+            className={`sticky bottom-0 bg-gradient-to-br from-black via-zinc-900 to-black border-t border-zinc-800/50 ${isMobile ? "px-3" : "px-4"} py-3`}
+          >
             <div className={`${isMobile ? "max-w-full" : "max-w-4xl mx-auto"}`}>
               <form onSubmit={handleSubmit} className="flex gap-2">
                 <div className="flex-1 relative">
