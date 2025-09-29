@@ -193,30 +193,27 @@ export function useFirebaseAuth() {
     try {
       console.log("[v0] Starting comprehensive logout process...")
 
-      try {
-        // Clear Firebase IndexedDB data
-        const databases = await indexedDB.databases()
-        const firebaseDBs = databases.filter(
-          (db) => db.name?.includes("firebase") || db.name?.includes("firebaseLocalStorageDb"),
-        )
+      setUser(null)
+      setLoading(true)
 
-        for (const dbInfo of firebaseDBs) {
-          if (dbInfo.name) {
-            const deleteReq = indexedDB.deleteDatabase(dbInfo.name)
-            await new Promise((resolve, reject) => {
-              deleteReq.onsuccess = () => resolve(true)
-              deleteReq.onerror = () => reject(deleteReq.error)
-            })
-            console.log(`[v0] Deleted IndexedDB: ${dbInfo.name}`)
-          }
-        }
-      } catch (error) {
-        console.error("Error clearing IndexedDB:", error)
-      }
-
-      // 1. Clear Firebase auth state
+      // 1. Clear Firebase auth state FIRST
       await firebaseSignOut(auth)
       console.log("[v0] Firebase signOut completed")
+
+      await new Promise((resolve) => {
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+          if (!user) {
+            console.log("[v0] Auth state confirmed cleared")
+            unsubscribe()
+            resolve(true)
+          }
+        })
+        // Timeout after 3 seconds if auth state doesn't clear
+        setTimeout(() => {
+          unsubscribe()
+          resolve(true)
+        }, 3000)
+      })
 
       // 2. Clear session cookie via API
       try {
@@ -242,14 +239,37 @@ export function useFirebaseAuth() {
         console.error("Error clearing browser storage:", error)
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 200))
+      // 4. Clear Firebase IndexedDB data
+      try {
+        const databases = await indexedDB.databases()
+        const firebaseDBs = databases.filter(
+          (db) => db.name?.includes("firebase") || db.name?.includes("firebaseLocalStorageDb"),
+        )
+
+        for (const dbInfo of firebaseDBs) {
+          if (dbInfo.name) {
+            const deleteReq = indexedDB.deleteDatabase(dbInfo.name)
+            await new Promise((resolve, reject) => {
+              deleteReq.onsuccess = () => resolve(true)
+              deleteReq.onerror = () => reject(deleteReq.error)
+              // Timeout after 2 seconds
+              setTimeout(() => resolve(true), 2000)
+            })
+            console.log(`[v0] Deleted IndexedDB: ${dbInfo.name}`)
+          }
+        }
+      } catch (error) {
+        console.error("Error clearing IndexedDB:", error)
+      }
 
       console.log("[v0] Logout process completed, reloading page...")
-      window.location.href = "/"
+
+      window.location.replace("/")
 
       return { success: true }
     } catch (error: any) {
       console.error("Sign out error:", error)
+      setLoading(false)
       return {
         success: false,
         error: error.message || "Failed to sign out",
