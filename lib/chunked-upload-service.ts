@@ -101,11 +101,14 @@ export class ChunkedUploadService {
     console.log(`   Folder Path: ${folderPath}`)
     console.log(`   Has folder info: ${folderId ? "YES" : "NO"}`)
 
+    const fileType = file.type || "application/octet-stream"
+    console.log(`   File Type: ${fileType} (original: ${file.type || "empty"})`)
+
     const requestBody = {
       uploadId,
       fileName: file.name,
       fileSize: file.size,
-      fileType: file.type,
+      fileType: fileType,
       totalChunks: chunks.length,
       chunkSize: ChunkedUploadService.CHUNK_SIZE,
       folderId,
@@ -139,7 +142,7 @@ export class ChunkedUploadService {
         uploadId,
         fileName: file.name,
         fileSize: file.size,
-        fileType: file.type,
+        fileType: fileType, // Use the validated fileType
         totalChunks: chunks.length,
         chunkSize: ChunkedUploadService.CHUNK_SIZE,
         uploadedChunks: new Set(),

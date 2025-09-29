@@ -404,6 +404,8 @@ export default function UploadPage() {
         console.log(
           `📤 [v0] Adding file ${file.name} to queue with folderId: ${finalFolderId}, folderPath: ${folderPath}`,
         )
+        console.log(`   File type: ${file.type || "empty/unknown"}`)
+        console.log(`   File size: ${file.size} bytes`)
 
         const queueId = uploadQueueManager.addToQueue(file, priority, finalFolderId, folderPath)
 
