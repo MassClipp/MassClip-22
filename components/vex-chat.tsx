@@ -929,21 +929,13 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
               transition-all duration-300 ease-in-out overflow-hidden
             `}
           >
-            {/* Header with Logo - Remove X button, only show arrow */}
+            {/* Header with Logo - Only show branding, no close button */}
             <div className="flex items-center justify-between p-3 border-b border-zinc-800">
               <div className="flex items-center gap-3">
                 <div className="flex flex-col">
                   <span className="text-lg font-semibold text-white">MassClip</span>
                 </div>
               </div>
-              <Button
-                onClick={() => setIsSidebarOpen(false)}
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0 text-zinc-400 hover:text-white"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
             </div>
 
             <ScrollArea className="flex-1">
