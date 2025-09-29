@@ -61,7 +61,15 @@ export default function AboutPageClient() {
 
                 <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
                   Instead of selling files through messy downloads or complicated exchanges, MassClip gives you a simple
-                  storefront where others can browse, preview, and buy your content with ease.
+                  storefront where others can browse, preview, and buy your content with ease. But we know the real pain
+                  point: organizing your content for sale is tedious and time-consuming.
+                </p>
+
+                <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
+                  That's where Vex comes in. Too many creators get lazy with organizing folders or content bundles they
+                  put up for sale— they either don't organize it at all or spend hours doing manual sorting work. With
+                  Vex's AI-powered organization, you can simply tell it what content you want in which folder, what
+                  content you want in which bundle, and it does it for you in seconds.
                 </p>
               </div>
             </div>
@@ -75,13 +83,21 @@ export default function AboutPageClient() {
               <div className="space-y-6">
                 <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
                   Our mission is to put a store link in the bio of every faceless creator who wants to turn their
-                  content into income. Too many creators put in serious work but never see the financial return.
+                  content into income—without the headache of manual organization. Too many creators put in serious work
+                  but never see the financial return, often because organizing content for sale feels overwhelming.
                 </p>
 
                 <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
-                  MassClip changes that by giving you the tools to set up your own digital store and start selling your
-                  content directly to other creators who need it. You should not have to chase payments or waste time.
-                  You should be building your brand and getting paid for the content you already know how to create.
+                  MassClip changes that by giving you the tools to set up your own digital store, and Vex makes it
+                  effortless to organize everything. No more spending hours sorting files or creating bundle packs
+                  manually. Just tell Vex what you want sorted, describe the bundle packs you want to sell, and it makes
+                  it happen in a short amount of time.
+                </p>
+
+                <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
+                  You should not have to chase payments, waste time on tedious organization, or let great content sit
+                  unorganized. You should be building your brand and getting paid for the content you already know how
+                  to create—while Vex handles the busy work of keeping everything perfectly organized.
                 </p>
               </div>
             </div>
