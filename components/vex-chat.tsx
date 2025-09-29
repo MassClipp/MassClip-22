@@ -74,7 +74,7 @@ function VexChat({ children }: VexChatProps) {
   const [bundleJobs, setBundleJobs] = useState<{ [jobId: string]: any }>({})
   const [isLoadingChats, setIsLoadingChats] = useState(true)
   const [isLoadingCurrentChat, setIsLoadingCurrentChat] = useState(false)
-  const { user } = useAuth()
+  const { user, signOut } = useAuth()
   const isMobile = useIsMobile()
   const router = useRouter()
   const pathname = usePathname() // Added pathname to detect current route
@@ -601,10 +601,11 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
 
   const handleLogout = async () => {
     try {
-      await fetch("/api/auth/logout", { method: "POST" })
-      router.push("/")
+      await signOut()
     } catch (error) {
       console.error("Logout error:", error)
+      // Force redirect even on error
+      window.location.href = "/login"
     }
   }
 
