@@ -1,12 +1,15 @@
 "use client"
 import Link from "next/link"
+import type React from "react"
+
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 
 const LandingPage = () => {
   const router = useRouter()
   const observerRef = useRef<IntersectionObserver | null>(null)
+  const [inputValue, setInputValue] = useState("")
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -45,6 +48,14 @@ const LandingPage = () => {
     router.push("/dashboard/explore")
   }
 
+  const handleInputSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (inputValue.trim()) {
+      // For now, redirect to signup with the input as a query parameter
+      router.push(`/signup?content=${encodeURIComponent(inputValue)}`)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-black relative overflow-hidden">
       <div className="absolute inset-0 bg-gradient-to-tl from-cyan-200/20 via-white/10 to-transparent opacity-70" />
@@ -76,48 +87,67 @@ const LandingPage = () => {
         </nav>
       </header>
 
-      <main className="relative z-10 flex items-center justify-start min-h-[calc(100vh-120px)] px-6">
-        <div className="max-w-7xl mx-auto w-full">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
-            <div className="max-w-3xl">
-              <div className="space-y-6">
-                <h1 className="hero-text text-5xl lg:text-7xl font-thin text-white/80 leading-tight">
-                  Monetize Your <span className="gradient-text">Faceless</span> Content
-                </h1>
+      <main className="relative z-10 flex items-center justify-center min-h-[calc(100vh-120px)] px-6">
+        <div className="max-w-4xl mx-auto w-full text-center">
+          <div className="space-y-8">
+            <h1 className="text-5xl lg:text-7xl font-thin text-white leading-tight text-balance">
+              What do you want to sell?
+            </h1>
 
-                <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
-                  Welcome to a smarter way to monetize, sell, and get paid for your faceless content.
-                </p>
+            <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light max-w-2xl mx-auto text-pretty">
+              Organize and your content into sellable bundles in seconds with Vex.
+            </p>
 
-                <div className="flex flex-col sm:flex-row gap-4 pt-4">
-                  <Button
-                    onClick={handleGetStarted}
-                    className="px-8 py-4 bg-white text-black hover:bg-white/90 font-light rounded-full text-lg transition-all duration-200"
-                  >
-                    Get Started
-                  </Button>
-
-                  <Button
-                    onClick={handleExplore}
-                    variant="outline"
-                    className="px-8 py-4 border-2 border-white/30 text-white hover:bg-white/10 font-light rounded-full text-lg transition-all duration-200 bg-transparent"
-                  >
-                    Explore
-                  </Button>
-                </div>
-              </div>
-            </div>
-
-            <div className="hidden lg:flex flex-col items-center justify-center space-y-6 h-full">
-              <div className="text-center slide-in-right">
-                <div className="text-8xl xl:text-9xl font-extralight leading-none tracking-tight">
-                  <div className="gradient-text drop-shadow-[0_8px_16px_rgba(255,255,255,0.3)]">
-                    <div className="mb-2">Capitalize</div>
-                    <div className="mb-2">Sell</div>
-                    <div>Monetize</div>
+            <div className="pt-8">
+              <form onSubmit={handleInputSubmit} className="max-w-2xl mx-auto">
+                <div className="relative">
+                  <textarea
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    placeholder="Describe what you want to sell..."
+                    className="w-full min-h-[120px] p-6 bg-white/5 border border-white/10 rounded-2xl text-white placeholder-white/40 resize-none focus:outline-none focus:ring-2 focus:ring-white/20 focus:border-transparent backdrop-blur-sm text-lg leading-relaxed"
+                    rows={4}
+                  />
+                  <div className="absolute bottom-4 right-4 flex items-center gap-3">
+                    <button
+                      type="button"
+                      className="p-2 text-white/40 hover:text-white/60 transition-colors"
+                      aria-label="Add attachment"
+                    >
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M12 5v14M5 12h14" />
+                      </svg>
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={!inputValue.trim()}
+                      className="p-2 text-white/40 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                      aria-label="Submit"
+                    >
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M7 17L17 7M17 7H7M17 7V17" />
+                      </svg>
+                    </button>
                   </div>
                 </div>
-              </div>
+              </form>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
+              <Button
+                onClick={handleGetStarted}
+                className="px-8 py-4 bg-white text-black hover:bg-white/90 font-light rounded-full text-lg transition-all duration-200"
+              >
+                Get Started
+              </Button>
+
+              <Button
+                onClick={handleExplore}
+                variant="outline"
+                className="px-8 py-4 border-2 border-white/30 text-white hover:bg-white/10 font-light rounded-full text-lg transition-all duration-200 bg-transparent"
+              >
+                Explore
+              </Button>
             </div>
           </div>
         </div>
