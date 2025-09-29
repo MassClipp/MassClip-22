@@ -155,23 +155,16 @@ const LandingPage = () => {
         </div>
       </main>
 
-      <section className="relative z-10 py-20 px-6">
+      <section className="relative z-10 py-20 px-6 bg-white">
         <div className="max-w-7xl mx-auto">
-          <div className="scroll-animate space-y-8">
-            <h2 className="text-4xl lg:text-5xl font-thin text-white">Earning Money As A Faceless Creator</h2>
+          <div className="scroll-animate space-y-8 text-center">
+            <h2 className="text-4xl lg:text-5xl font-thin text-black">What Does Vex Do?</h2>
 
-            <div className="max-w-4xl">
-              <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
-                If you run a faceless page, you already create content that other creators need. Whether it is
-                motivation, memes, sports, trending topics, or cinema, your posts can be packaged and sold. Creators are
-                constantly looking for ready-to-use content that saves them time and effort, and you can turn what you
-                are already making into a new source of income.
-              </p>
-
-              <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light mt-6">
-                We provide you with a profile style storefront where you can showcase your work. Share free downloads to
-                grow your audience and offer premium content for purchase, giving creators exactly what they want while
-                you build a steady stream of revenue.
+            <div className="max-w-3xl mx-auto">
+              <p className="text-lg lg:text-xl text-gray-700 leading-relaxed font-light">
+                Simply upload your content, tell Vex what kind of bundles you want to sell, and watch as Vex
+                intelligently organizes your content into professional, sellable bundles ready for market in seconds. No
+                more manual sorting, no more messy file management—just streamlined content monetization.
               </p>
             </div>
           </div>
