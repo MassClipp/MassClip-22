@@ -253,6 +253,57 @@ const UploadsPage = () => {
 
     for (const uploadItem of newUploads) {
       try {
+        const isZip =
+          uploadItem.file.type === "application/zip" || uploadItem.file.type === "application/x-zip-compressed"
+
+        if (isZip) {
+          console.log(`🔍 [File Upload] Processing ZIP file: ${uploadItem.file.name}`)
+
+          // Update progress to show upload starting
+          setUploadProgress((prev) =>
+            prev.map((item) => (item.id === uploadItem.id ? { ...item, progress: 10 } : item)),
+          )
+
+          const formData = new FormData()
+          formData.append("zipFile", uploadItem.file)
+          if (currentFolderId) {
+            formData.append("folderId", currentFolderId)
+          }
+
+          const token = await user.getIdToken()
+          const response = await fetch("/api/uploads/zip", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            body: formData,
+          })
+
+          if (!response.ok) {
+            const errorData = await response.json()
+            console.error("❌ [File Upload] Failed to upload ZIP:", errorData)
+            throw new Error(errorData.error || "Failed to upload ZIP file")
+          }
+
+          const result = await response.json()
+          console.log(`✅ [File Upload] ZIP processed: ${result.totalFiles} files extracted`)
+
+          // Complete upload
+          setUploadProgress((prev) =>
+            prev.map((item) => (item.id === uploadItem.id ? { ...item, progress: 100, status: "completed" } : item)),
+          )
+
+          // Refresh uploads
+          queryClient.invalidateQueries({ queryKey: ["uploads"] })
+
+          toast({
+            title: "ZIP Upload Complete",
+            description: `${uploadItem.file.name} processed successfully. ${result.totalFiles} files extracted.`,
+          })
+
+          continue // Skip regular upload process for ZIP files
+        }
+
         console.log(`🔍 [File Upload] Processing: ${uploadItem.file.name}`)
         console.log(`🔍 [File Upload] File details:`, {
           name: uploadItem.file.name,
@@ -628,7 +679,7 @@ const UploadsPage = () => {
             onChange={handleFileSelect}
             ref={fileInputRef}
             style={{ display: "none" }}
-            accept="video/*, audio/*, image/*, application/pdf, text/*"
+            accept="video/*, audio/*, image/*, application/pdf, text/*, application/zip, application/x-zip-compressed"
           />
         </div>
       </div>
@@ -670,7 +721,7 @@ const UploadsPage = () => {
         onDragOver={handleDragOver}
         onClick={triggerFileInput}
       >
-        Drag and drop files here or click to select
+        Drag and drop files or ZIP archives here, or click to select
       </div>
 
       {uploadProgress.length > 0 && (

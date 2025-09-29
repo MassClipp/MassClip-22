@@ -7,7 +7,20 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/components/ui/use-toast"
-import { Upload, File, ImageIcon, Video, Music, FileText, X, CheckCircle, AlertCircle, Loader2, Eye } from 'lucide-react'
+import {
+  Upload,
+  File,
+  ImageIcon,
+  Video,
+  Music,
+  FileText,
+  X,
+  CheckCircle,
+  AlertCircle,
+  Loader2,
+  Eye,
+  Archive,
+} from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 
 interface FileUpload {
@@ -18,6 +31,8 @@ interface FileUpload {
   error?: string
   contentId?: string
   publicUrl?: string
+  isZip?: boolean
+  extractedFiles?: number
 }
 
 interface ProductBoxFileUploaderProps {
@@ -53,6 +68,9 @@ const SUPPORTED_TYPES = {
   "audio/wav": { icon: Music, label: "WAV", color: "bg-orange-100 text-orange-700" },
   "audio/mp4": { icon: Music, label: "M4A", color: "bg-orange-100 text-orange-700" },
   "audio/ogg": { icon: Music, label: "OGG", color: "bg-orange-100 text-orange-700" },
+
+  "application/zip": { icon: Archive, label: "ZIP", color: "bg-yellow-100 text-yellow-700" },
+  "application/x-zip-compressed": { icon: Archive, label: "ZIP", color: "bg-yellow-100 text-yellow-700" },
 }
 
 const MAX_FILE_SIZES = {
@@ -60,6 +78,7 @@ const MAX_FILE_SIZES = {
   image: 10 * 1024 * 1024, // 10MB
   video: 500 * 1024 * 1024, // 500MB
   audio: 50 * 1024 * 1024, // 50MB
+  zip: 200 * 1024 * 1024, // 200MB for zip files
 }
 
 export default function ProductBoxFileUploader({ productBoxId, onUploadComplete }: ProductBoxFileUploaderProps) {
@@ -79,6 +98,7 @@ export default function ProductBoxFileUploader({ productBoxId, onUploadComplete 
     if (mimeType.startsWith("image/")) return "image"
     if (mimeType.startsWith("video/")) return "video"
     if (mimeType.startsWith("audio/")) return "audio"
+    if (mimeType === "application/zip" || mimeType === "application/x-zip-compressed") return "zip"
     return "document"
   }
 
@@ -97,7 +117,85 @@ export default function ProductBoxFileUploader({ productBoxId, onUploadComplete 
     return null
   }
 
+  const uploadZipFile = async (upload: FileUpload) => {
+    try {
+      console.log(`🔍 [Zip Uploader] Starting zip upload for: ${upload.file.name}`)
+
+      // Update status to uploading
+      setUploads((prev) => prev.map((u) => (u.id === upload.id ? { ...u, status: "uploading", progress: 0 } : u)))
+
+      const formData = new FormData()
+      formData.append("zipFile", upload.file)
+      formData.append("productBoxId", productBoxId)
+
+      const response = await fetch("/api/uploads/zip", {
+        method: "POST",
+        body: formData,
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || "Failed to upload zip file")
+      }
+
+      const result = await response.json()
+      console.log(`✅ [Zip Uploader] Zip processed: ${result.totalFiles} files extracted`)
+
+      // Update upload status
+      setUploads((prev) =>
+        prev.map((u) =>
+          u.id === upload.id
+            ? {
+                ...u,
+                status: "completed",
+                progress: 100,
+                extractedFiles: result.totalFiles,
+              }
+            : u,
+        ),
+      )
+
+      toast({
+        title: "Zip Upload Complete!",
+        description: `${upload.file.name} processed successfully. ${result.totalFiles} files extracted.`,
+      })
+
+      if (onUploadComplete && result.uploadedFiles?.length > 0) {
+        // Call onUploadComplete for each extracted file
+        result.uploadedFiles.forEach((file: any) => {
+          onUploadComplete(file.id)
+        })
+      }
+
+      console.log(`✅ [Zip Uploader] Upload completed: ${upload.file.name}`)
+    } catch (error) {
+      console.error(`❌ [Zip Uploader] Upload failed:`, error)
+
+      setUploads((prev) =>
+        prev.map((u) =>
+          u.id === upload.id
+            ? {
+                ...u,
+                status: "error",
+                error: error instanceof Error ? error.message : "Zip upload failed",
+              }
+            : u,
+        ),
+      )
+
+      toast({
+        title: "Zip Upload Failed",
+        description: error instanceof Error ? error.message : "Failed to upload zip file",
+        variant: "destructive",
+      })
+    }
+  }
+
   const uploadFile = async (upload: FileUpload) => {
+    if (upload.isZip) {
+      return uploadZipFile(upload)
+    }
+
     try {
       console.log(`🔍 [File Uploader] Starting upload for: ${upload.file.name}`)
 
@@ -211,11 +309,14 @@ export default function ProductBoxFileUploader({ productBoxId, onUploadComplete 
         }
 
         const uploadId = `upload_${++uploadIdCounter.current}_${Date.now()}`
+        const isZip = file.type === "application/zip" || file.type === "application/x-zip-compressed"
+
         const newUpload: FileUpload = {
           id: uploadId,
           file,
           progress: 0,
           status: "pending",
+          isZip,
         }
 
         newUploads.push(newUpload)
@@ -270,7 +371,9 @@ export default function ProductBoxFileUploader({ productBoxId, onUploadComplete 
             <Upload className="h-5 w-5" />
             Upload Content Files
           </CardTitle>
-          <CardDescription>Add documents, images, videos, and audio files to your product box</CardDescription>
+          <CardDescription>
+            Add documents, images, videos, audio files, and ZIP archives to your product box
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div
@@ -286,7 +389,7 @@ export default function ProductBoxFileUploader({ productBoxId, onUploadComplete 
             ) : (
               <div>
                 <p className="text-gray-600 font-medium mb-2">Drag & drop files here, or click to select</p>
-                <p className="text-sm text-gray-500">Supports: PDF, DOC, Images, Videos, Audio files</p>
+                <p className="text-sm text-gray-500">Supports: PDF, DOC, Images, Videos, Audio files, ZIP archives</p>
               </div>
             )}
           </div>
@@ -301,6 +404,17 @@ export default function ProductBoxFileUploader({ productBoxId, onUploadComplete 
                 </Badge>
               ))}
             </div>
+          </div>
+
+          <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <div className="flex items-center gap-2 mb-1">
+              <Archive className="h-4 w-4 text-yellow-600" />
+              <p className="text-sm font-medium text-yellow-800">ZIP Archive Support</p>
+            </div>
+            <p className="text-xs text-yellow-700">
+              Upload ZIP files to extract and add multiple files at once. All files inside the ZIP will be automatically
+              extracted and uploaded individually.
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -332,6 +446,9 @@ export default function ProductBoxFileUploader({ productBoxId, onUploadComplete 
                             <p className="font-medium text-sm">{upload.file.name}</p>
                             <p className="text-xs text-gray-500">
                               {formatFileSize(upload.file.size)} • {typeInfo?.label}
+                              {upload.isZip && upload.extractedFiles && (
+                                <span className="ml-2 text-green-600">• {upload.extractedFiles} files extracted</span>
+                              )}
                             </p>
                           </div>
                         </div>
@@ -339,14 +456,16 @@ export default function ProductBoxFileUploader({ productBoxId, onUploadComplete 
                         <div className="flex items-center gap-2">
                           {upload.status === "completed" && (
                             <>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => window.open(upload.publicUrl, "_blank")}
-                              >
-                                <Eye className="h-4 w-4 mr-1" />
-                                View
-                              </Button>
+                              {!upload.isZip && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => window.open(upload.publicUrl, "_blank")}
+                                >
+                                  <Eye className="h-4 w-4 mr-1" />
+                                  View
+                                </Button>
+                              )}
                               <CheckCircle className="h-5 w-5 text-green-500" />
                             </>
                           )}
