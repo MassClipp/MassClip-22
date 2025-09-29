@@ -683,6 +683,18 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
         </Button>
       )}
 
+      {!isMobile && isUploadPage && isSidebarCollapsed && (
+        <Button
+          onClick={() => setIsSidebarCollapsed(false)}
+          variant="ghost"
+          size="sm"
+          className="fixed top-1/2 left-0 -translate-y-1/2 z-50 h-12 w-6 p-0 bg-zinc-950/90 backdrop-blur-sm border border-zinc-700 hover:bg-zinc-800 rounded-r-md rounded-l-none"
+          title="Open Vex sidebar"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      )}
+
       {/* Desktop sidebar - Hide completely on upload page when collapsed */}
       {!isMobile && !(isUploadPage && isSidebarCollapsed) && (
         <div
@@ -899,18 +911,6 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
         </div>
       )}
 
-      {!isMobile && isUploadPage && isSidebarCollapsed && (
-        <Button
-          onClick={() => setIsSidebarCollapsed(false)}
-          variant="ghost"
-          size="sm"
-          className="fixed left-2 top-1/2 -translate-y-1/2 z-40 h-8 w-8 p-0 bg-zinc-950/90 backdrop-blur-sm border border-zinc-700 hover:bg-zinc-800 text-zinc-400 hover:text-white"
-          title="Open Vex sidebar"
-        >
-          <ChevronRight className="h-4 w-4" />
-        </Button>
-      )}
-
       {/* Mobile sidebar */}
       {isMobile && (
         <>
@@ -1107,7 +1107,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
       {isVexChatPage ? (
         /* Main Chat Area - Only show on /dashboard/vex */
         <div
-          className={`flex flex-col h-screen pt-16 ${isMobile ? "ml-0" : isSidebarCollapsed ? "ml-16" : "ml-60"} ${isMobile && isSidebarOpen ? "blur-sm pointer-events-none" : ""} transition-all duration-300 relative z-10`}
+          className={`flex flex-col flex-1 min-h-screen pt-16 ${isMobile ? "ml-0" : isSidebarCollapsed ? "ml-16" : "ml-60"} ${isMobile && isSidebarOpen ? "blur-sm pointer-events-none" : ""} transition-all duration-300 relative z-10`}
         >
           {isLoadingCurrentChat && (
             <div className="flex items-center justify-center py-4 border-b border-zinc-800">
@@ -1206,9 +1206,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
             </div>
           </ScrollArea>
 
-          <div
-            className={`sticky bottom-0 bg-gradient-to-br from-black via-zinc-900 to-black border-t border-zinc-800/50 ${isMobile ? "px-3" : "px-4"} py-3`}
-          >
+          <div className={`flex-shrink-0 ${isMobile ? "px-3" : "px-4"} py-3`}>
             <div className={`${isMobile ? "max-w-full" : "max-w-4xl mx-auto"}`}>
               <form onSubmit={handleSubmit} className="flex gap-2">
                 <div className="flex-1 relative">

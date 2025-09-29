@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     const { uploadId, fileName, fileSize, fileType, totalChunks, chunkSize, folderId, folderPath } =
       await request.json()
 
-    if (!uploadId || !fileName || !fileSize || !fileType || !totalChunks || !chunkSize) {
+    if (!uploadId || !fileName || !fileSize || !fileType || !totalChunks) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
