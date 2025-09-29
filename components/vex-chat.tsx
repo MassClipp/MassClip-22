@@ -899,6 +899,18 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
         </div>
       )}
 
+      {!isMobile && isUploadPage && isSidebarCollapsed && (
+        <Button
+          onClick={() => setIsSidebarCollapsed(false)}
+          variant="ghost"
+          size="sm"
+          className="fixed left-2 top-1/2 -translate-y-1/2 z-40 h-8 w-8 p-0 bg-zinc-950/90 backdrop-blur-sm border border-zinc-700 hover:bg-zinc-800 text-zinc-400 hover:text-white"
+          title="Open Vex sidebar"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      )}
+
       {/* Mobile sidebar */}
       {isMobile && (
         <>
@@ -1095,7 +1107,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
       {isVexChatPage ? (
         /* Main Chat Area - Only show on /dashboard/vex */
         <div
-          className={`flex flex-col flex-1 min-h-screen pt-16 ${isMobile ? "ml-0" : isSidebarCollapsed ? "ml-16" : "ml-60"} ${isMobile && isSidebarOpen ? "blur-sm pointer-events-none" : ""} transition-all duration-300 relative z-10`}
+          className={`flex-col flex-1 min-h-screen pt-16 ${isMobile ? "ml-0" : isSidebarCollapsed ? "ml-16" : "ml-60"} ${isMobile && isSidebarOpen ? "blur-sm pointer-events-none" : ""} transition-all duration-300 relative z-10`}
         >
           {isLoadingCurrentChat && (
             <div className="flex items-center justify-center py-4 border-b border-zinc-800">
@@ -1236,25 +1248,6 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
             <div
               className={`h-full ${isSidebarCollapsed ? "px-2 sm:px-3 lg:px-4" : "max-w-7xl mx-auto px-3 sm:px-4 lg:px-6"} py-4`}
             >
-              {!isMobile && isSidebarCollapsed && (
-                <div className="flex items-center justify-between mb-6 pb-4 border-b border-zinc-800/50">
-                  <h1 className="text-2xl font-semibold text-white tracking-tight">Upload</h1>
-                  <div className="flex items-center gap-2">
-                    {navigationItems.slice(0, 6).map((item) => (
-                      <Button
-                        key={item.href}
-                        onClick={() => handleNavigation(item.href)}
-                        variant="ghost"
-                        size="sm"
-                        className="h-9 w-9 p-0 text-zinc-400 hover:text-white hover:bg-zinc-800/50"
-                        title={item.label}
-                      >
-                        <item.icon className="h-4 w-4" />
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-              )}
               {children}
             </div>
           ) : (

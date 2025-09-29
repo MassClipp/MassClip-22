@@ -30,7 +30,6 @@ import {
   CheckCircle,
   AlertCircle,
   Clock,
-  ChevronRight,
 } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -45,6 +44,7 @@ import { uploadQueueManager, type QueuedUpload } from "@/lib/upload-queue-manage
 import { CreateFolderDialog } from "@/components/create-folder-dialog"
 import FolderSidebar from "@/components/folder-sidebar"
 import { VexFolderOrganizer } from "@/components/vex-folder-organizer"
+import { Menu } from "lucide-react"
 
 interface UploadType {
   id: string
@@ -658,19 +658,6 @@ export default function UploadPage() {
       {/* Overlay when sidebar is open */}
       {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setIsSidebarOpen(false)} />}
 
-      {!isSidebarOpen && (
-        <div className="fixed left-4 top-1/2 transform -translate-y-1/2 z-30">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setIsSidebarOpen(true)}
-            className="h-10 w-6 p-0 bg-zinc-900/80 border border-zinc-700/50 hover:bg-zinc-800/80 hover:border-zinc-600/50 rounded-r-lg rounded-l-none shadow-lg backdrop-blur-sm"
-          >
-            <ChevronRight className="h-4 w-4 text-zinc-400" />
-          </Button>
-        </div>
-      )}
-
       {/* Index Setup Helper */}
       {hasIndexError && <FirestoreIndexHelper />}
 
@@ -687,6 +674,16 @@ export default function UploadPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Sidebar toggle button */}
+          <Button
+            variant="outline"
+            onClick={() => setIsSidebarOpen(true)}
+            className="border-zinc-700/50 bg-zinc-900/50 hover:bg-zinc-800/50 text-zinc-300"
+          >
+            <Menu className="h-4 w-4 mr-2" />
+            Folders
+          </Button>
+
           <Button
             variant="outline"
             onClick={() => fetchUploads()}
