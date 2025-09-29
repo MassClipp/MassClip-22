@@ -345,39 +345,102 @@ export default function UploadPage() {
     const finalFolderId = selectedFolderId === "main" ? undefined : selectedFolderId
     console.log(`✅ [v0] Final folder ID to pass to queue:`, finalFolderId)
 
-    // Add files to upload queue with folder information
-    Array.from(files).forEach((file, index) => {
-      const priority = file.size < 50 * 1024 * 1024 ? 1 : 0 // Prioritize smaller files
+    for (const file of Array.from(files)) {
+      const isZip =
+        file.type === "application/zip" ||
+        file.type === "application/x-zip-compressed" ||
+        file.name.toLowerCase().endsWith(".zip")
 
-      console.log(
-        `📤 [v0] Adding file ${file.name} to queue with folderId: ${finalFolderId}, folderPath: ${folderPath}`,
-      )
+      if (isZip) {
+        console.log(`🗜️ [v0] Processing ZIP file: ${file.name}`)
 
-      const queueId = uploadQueueManager.addToQueue(file, priority, finalFolderId, folderPath)
+        try {
+          const token = await user.getIdToken()
+          const formData = new FormData()
+          formData.append("zipFile", file)
+          if (finalFolderId) {
+            formData.append("folderId", finalFolderId)
+          }
+          if (folderPath) {
+            formData.append("folderPath", folderPath)
+          }
 
-      // Set up individual progress callback
-      uploadQueueManager.setProgressCallback(queueId, (queuedUpload) => {
-        if (queuedUpload.status === "completed") {
-          toast({
-            title: "Upload Complete!",
-            description: `${queuedUpload.file.name} has been uploaded successfully.`,
+          const response = await fetch("/api/uploads/zip", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            body: formData,
           })
-          // Refresh uploads list
-          setTimeout(() => fetchUploads(), 1000)
-        } else if (queuedUpload.status === "error") {
+
+          if (!response.ok) {
+            const errorData = await response.json()
+            console.error("❌ [v0] Failed to upload ZIP:", errorData)
+            throw new Error(errorData.error || "Failed to upload ZIP file")
+          }
+
+          const result = await response.json()
+          console.log(`✅ [v0] ZIP processed: ${result.totalFiles} files extracted`)
+
           toast({
-            title: "Upload Failed",
-            description: queuedUpload.error || `Failed to upload ${queuedUpload.file.name}`,
+            title: "ZIP Upload Complete",
+            description: `${file.name} processed successfully. ${result.totalFiles} files extracted.`,
+          })
+
+          // Refresh uploads list after ZIP processing
+          setTimeout(() => fetchUploads(), 1000)
+        } catch (error) {
+          console.error(`❌ [v0] ZIP upload failed:`, error)
+          toast({
+            title: "ZIP Upload Failed",
+            description: error instanceof Error ? error.message : "Failed to upload ZIP file",
             variant: "destructive",
           })
         }
-      })
+      } else {
+        // Handle regular files with chunked upload
+        const priority = file.size < 50 * 1024 * 1024 ? 1 : 0 // Prioritize smaller files
+
+        console.log(
+          `📤 [v0] Adding file ${file.name} to queue with folderId: ${finalFolderId}, folderPath: ${folderPath}`,
+        )
+
+        const queueId = uploadQueueManager.addToQueue(file, priority, finalFolderId, folderPath)
+
+        // Set up individual progress callback
+        uploadQueueManager.setProgressCallback(queueId, (queuedUpload) => {
+          if (queuedUpload.status === "completed") {
+            toast({
+              title: "Upload Complete!",
+              description: `${queuedUpload.file.name} has been uploaded successfully.`,
+            })
+            // Refresh uploads list
+            setTimeout(() => fetchUploads(), 1000)
+          } else if (queuedUpload.status === "error") {
+            toast({
+              title: "Upload Failed",
+              description: queuedUpload.error || `Failed to upload ${queuedUpload.file.name}`,
+              variant: "destructive",
+            })
+          }
+        })
+      }
+    }
+
+    const regularFiles = Array.from(files).filter((file) => {
+      const isZip =
+        file.type === "application/zip" ||
+        file.type === "application/x-zip-compressed" ||
+        file.name.toLowerCase().endsWith(".zip")
+      return !isZip
     })
 
-    toast({
-      title: "Files Added to Queue",
-      description: `${files.length} file(s) added to upload queue${selectedFolder ? ` in "${selectedFolder.name}"` : ""}`,
-    })
+    if (regularFiles.length > 0) {
+      toast({
+        title: "Files Added to Queue",
+        description: `${regularFiles.length} file(s) added to upload queue${selectedFolder ? ` in "${selectedFolder.name}"` : ""}`,
+      })
+    }
   }
 
   // Handle drag and drop
@@ -705,7 +768,7 @@ export default function UploadPage() {
             multiple
             onChange={(e) => e.target.files && handleFileUpload(e.target.files)}
             className="hidden"
-            accept="video/*,audio/*,image/*,.pdf,.doc,.docx,.txt"
+            accept="video/*,audio/*,image/*,.pdf,.doc,.docx,.txt,.zip,application/zip,application/x-zip-compressed"
           />
         </div>
       </div>
@@ -807,10 +870,7 @@ export default function UploadPage() {
             <Upload className="h-6 w-6 text-zinc-400" />
           </div>
           <h3 className="text-lg font-medium text-white mb-2">Upload your files</h3>
-          <p className="text-zinc-400 text-center text-sm max-w-md">
-            Drag and drop files here, or click to browse. Advanced chunked upload technology ensures reliable transfers
-            for large files.
-          </p>
+          <p className="text-zinc-400 text-center text-sm max-w-md">Drag and drop files here, or click to browse.</p>
         </div>
       </div>
 
