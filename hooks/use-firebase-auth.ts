@@ -187,7 +187,7 @@ export function useFirebaseAuth() {
 
   const signOut = useCallback(async (): Promise<AuthResult> => {
     try {
-      console.log("[v0] Starting logout process...")
+      console.log("[v0] Starting complete logout process...")
 
       // Immediately set user to null to update UI
       setUser(null)
@@ -198,26 +198,45 @@ export function useFirebaseAuth() {
         return { success: false, error: "Firebase auth not initialized" }
       }
 
-      // Sign out from Firebase
       await firebaseSignOut(auth)
       console.log("[v0] Firebase signOut completed")
 
-      // Clear application-specific storage (but keep Firebase session management intact)
       try {
-        // Only clear app-specific localStorage keys, not all localStorage
-        const keysToRemove = []
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i)
-          if (key && (key.includes("vex") || key.includes("chat") || key.includes("user"))) {
-            keysToRemove.push(key)
+        // Clear ALL localStorage (including Firebase keys)
+        localStorage.clear()
+        console.log("[v0] localStorage cleared")
+
+        // Clear sessionStorage
+        sessionStorage.clear()
+        console.log("[v0] sessionStorage cleared")
+
+        if (typeof indexedDB !== "undefined") {
+          try {
+            const databases = await indexedDB.databases()
+            for (const db of databases) {
+              if (db.name && db.name.includes("firebase")) {
+                indexedDB.deleteDatabase(db.name)
+                console.log(`[v0] Deleted IndexedDB: ${db.name}`)
+              }
+            }
+          } catch (error) {
+            console.error("[v0] Error clearing IndexedDB:", error)
           }
         }
-        keysToRemove.forEach((key) => localStorage.removeItem(key))
 
-        sessionStorage.clear()
-        console.log("[v0] App storage cleared")
+        if ("caches" in window) {
+          try {
+            const cacheNames = await caches.keys()
+            await Promise.all(cacheNames.map((name) => caches.delete(name)))
+            console.log("[v0] Service worker caches cleared")
+          } catch (error) {
+            console.error("[v0] Error clearing caches:", error)
+          }
+        }
+
+        console.log("[v0] All storage cleared")
       } catch (error) {
-        console.error("Error clearing app storage:", error)
+        console.error("Error clearing storage:", error)
       }
 
       // Clear session cookies
@@ -231,9 +250,8 @@ export function useFirebaseAuth() {
         console.error("Error clearing session:", error)
       }
 
-      // Redirect to login page to allow account selection
       console.log("[v0] Redirecting to login...")
-      window.location.href = "/auth/login"
+      window.location.href = `/auth/login?t=${Date.now()}`
 
       return { success: true }
     } catch (error: any) {
@@ -241,7 +259,7 @@ export function useFirebaseAuth() {
       setLoading(false)
 
       // Fallback redirect even if there's an error
-      window.location.href = "/auth/login"
+      window.location.href = `/auth/login?t=${Date.now()}`
 
       return {
         success: false,

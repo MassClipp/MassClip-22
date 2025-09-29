@@ -15,10 +15,6 @@ export async function POST() {
       "next-auth.session-token",
       "next-auth.csrf-token",
       "next-auth.callback-url",
-      // Add Firebase-specific cookies
-      "firebase:authUser:AIzaSyBqJQJ8QJ8QJ8QJ8QJ8QJ8QJ8QJ8QJ8QJ8:massclip-app",
-      "firebase:host:massclip-app.firebaseapp.com",
-      // Add any other potential auth cookies
       "auth-token",
       "refresh-token",
       "user-session",
@@ -28,10 +24,16 @@ export async function POST() {
       cookieStore.delete(cookieName)
     })
 
+    const allCookies = cookieStore.getAll()
+    allCookies.forEach((cookie) => {
+      if (cookie.name.includes("firebase") || cookie.name.includes("auth") || cookie.name.includes("session")) {
+        cookieStore.delete(cookie.name)
+      }
+    })
+
     const response = NextResponse.json({
       success: true,
       message: "Successfully logged out",
-      // Add timestamp to help with cache busting
       timestamp: Date.now(),
     })
 
@@ -39,6 +41,7 @@ export async function POST() {
     response.headers.set("Cache-Control", "no-cache, no-store, must-revalidate")
     response.headers.set("Pragma", "no-cache")
     response.headers.set("Expires", "0")
+    response.headers.set("Clear-Site-Data", '"cache", "cookies", "storage"')
 
     return response
   } catch (error) {
