@@ -9,9 +9,10 @@ import {
   GoogleAuthProvider,
   onAuthStateChanged,
   sendPasswordResetEmail,
+  signOut as firebaseSignOut,
 } from "firebase/auth"
 import { doc, setDoc, getDoc } from "firebase/firestore"
-import { auth, db, isFirebaseConfigured, resetFirebase } from "@/lib/firebase"
+import { auth, db, isFirebaseConfigured } from "@/lib/firebase"
 
 interface AuthResult {
   success: boolean
@@ -186,39 +187,40 @@ export function useFirebaseAuth() {
 
   const signOut = useCallback(async (): Promise<AuthResult> => {
     try {
-      console.log("[v0] Starting aggressive logout process...")
+      console.log("[v0] Starting logout process...")
 
+      // Immediately set user to null to update UI
       setUser(null)
       setLoading(true)
-      setAuthChecked(false)
 
-      try {
-        localStorage.clear()
-        sessionStorage.clear()
-        console.log("[v0] Browser storage cleared")
-      } catch (error) {
-        console.error("Error clearing browser storage:", error)
+      if (!auth) {
+        console.error("Firebase auth not initialized")
+        return { success: false, error: "Firebase auth not initialized" }
       }
 
-      try {
-        const databases = await indexedDB.databases()
-        const firebaseDBs = databases.filter(
-          (db) =>
-            db.name?.includes("firebase") ||
-            db.name?.includes("firebaseLocalStorageDb") ||
-            db.name?.includes("firestore"),
-        )
+      // Sign out from Firebase
+      await firebaseSignOut(auth)
+      console.log("[v0] Firebase signOut completed")
 
-        for (const dbInfo of firebaseDBs) {
-          if (dbInfo.name) {
-            indexedDB.deleteDatabase(dbInfo.name)
-            console.log(`[v0] Deleted IndexedDB: ${dbInfo.name}`)
+      // Clear application-specific storage (but keep Firebase session management intact)
+      try {
+        // Only clear app-specific localStorage keys, not all localStorage
+        const keysToRemove = []
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i)
+          if (key && (key.includes("vex") || key.includes("chat") || key.includes("user"))) {
+            keysToRemove.push(key)
           }
         }
+        keysToRemove.forEach((key) => localStorage.removeItem(key))
+
+        sessionStorage.clear()
+        console.log("[v0] App storage cleared")
       } catch (error) {
-        console.error("Error clearing IndexedDB:", error)
+        console.error("Error clearing app storage:", error)
       }
 
+      // Clear session cookies
       try {
         await fetch("/api/auth/logout", {
           method: "POST",
@@ -229,26 +231,17 @@ export function useFirebaseAuth() {
         console.error("Error clearing session:", error)
       }
 
-      await resetFirebase()
-
-      console.log("[v0] Forcing hard reload...")
-
-      // Clear all caches if available
-      if ("caches" in window) {
-        const cacheNames = await caches.keys()
-        await Promise.all(cacheNames.map((name) => caches.delete(name)))
-        console.log("[v0] Service worker caches cleared")
-      }
-
-      // Force hard reload that bypasses cache
-      window.location.replace(window.location.origin + "/?_t=" + Date.now())
+      // Redirect to login page to allow account selection
+      console.log("[v0] Redirecting to login...")
+      window.location.href = "/auth/login"
 
       return { success: true }
     } catch (error: any) {
       console.error("Sign out error:", error)
       setLoading(false)
 
-      window.location.replace(window.location.origin + "/?_t=" + Date.now())
+      // Fallback redirect even if there's an error
+      window.location.href = "/auth/login"
 
       return {
         success: false,
