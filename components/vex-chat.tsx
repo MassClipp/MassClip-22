@@ -671,15 +671,15 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
       </div>
 
       {/* Mobile menu button - Remove X button, only show arrow when sidebar is closed */}
-      {isMobile && (
+      {isMobile && !isSidebarOpen && (
         <Button
           id="mobile-menu-button"
-          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+          onClick={() => setIsSidebarOpen(true)}
           variant="ghost"
           size="sm"
           className="fixed top-16 left-2 z-50 h-8 w-8 p-0 bg-zinc-950/90 backdrop-blur-sm border border-zinc-700 hover:bg-zinc-800 transform"
         >
-          {isSidebarOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          <ChevronRight className="h-4 w-4" />
         </Button>
       )}
 
