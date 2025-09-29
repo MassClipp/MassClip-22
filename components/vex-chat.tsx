@@ -1228,6 +1228,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                   </Button>
                 </div>
               </form>
+              <p className="text-xs text-zinc-500 text-center mt-2">Vex can make mistakes</p>
             </div>
           </div>
         </div>
