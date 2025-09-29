@@ -1,7 +1,7 @@
 "use client"
 
-import { initializeApp, getApps, type FirebaseApp } from "firebase/app"
-import { getAuth, type Auth, connectAuthEmulator, setPersistence, browserSessionPersistence } from "firebase/auth"
+import { initializeApp, getApps, type FirebaseApp, deleteApp } from "firebase/app"
+import { getAuth, type Auth, connectAuthEmulator, setPersistence, inMemoryPersistence } from "firebase/auth"
 import { getFirestore, type Firestore, connectFirestoreEmulator } from "firebase/firestore"
 import { getStorage, type FirebaseStorage, connectStorageEmulator } from "firebase/storage"
 import { getFirebaseConfig } from "./firebase-config"
@@ -33,7 +33,7 @@ export const initializeFirebase = () => {
       firebaseStorage = getStorage(firebaseApp)
 
       if (firebaseAuth) {
-        setPersistence(firebaseAuth, browserSessionPersistence).catch((error) => {
+        setPersistence(firebaseAuth, inMemoryPersistence).catch((error) => {
           console.error("Failed to set auth persistence:", error)
         })
       }
@@ -82,6 +82,31 @@ export const isFirebaseConfigured = () => {
 
 // Export the initialization function for compatibility
 export const initializeFirebaseApp = initializeFirebase
+
+// Function to completely reset Firebase
+export const resetFirebase = async () => {
+  try {
+    console.log("[v0] Resetting Firebase completely...")
+
+    // Delete all Firebase apps
+    const apps = getApps()
+    for (const app of apps) {
+      await deleteApp(app)
+    }
+
+    // Reset singleton variables
+    firebaseApp = null
+    firebaseAuth = null
+    firebaseDb = null
+    firebaseStorage = null
+
+    console.log("[v0] Firebase reset complete")
+    return true
+  } catch (error) {
+    console.error("Error resetting Firebase:", error)
+    return false
+  }
+}
 
 // Default export
 export default firebase.app

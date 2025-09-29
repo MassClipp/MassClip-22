@@ -7,12 +7,11 @@ import {
   createUserWithEmailAndPassword,
   signInWithPopup,
   GoogleAuthProvider,
-  signOut as firebaseSignOut,
   onAuthStateChanged,
   sendPasswordResetEmail,
 } from "firebase/auth"
 import { doc, setDoc, getDoc } from "firebase/firestore"
-import { auth, db, isFirebaseConfigured } from "@/lib/firebase"
+import { auth, db, isFirebaseConfigured, resetFirebase } from "@/lib/firebase"
 
 interface AuthResult {
   success: boolean
@@ -186,36 +185,40 @@ export function useFirebaseAuth() {
   }, [])
 
   const signOut = useCallback(async (): Promise<AuthResult> => {
-    if (!auth) {
-      return { success: false, error: "Firebase auth not initialized" }
-    }
-
     try {
-      console.log("[v0] Starting comprehensive logout process...")
+      console.log("[v0] Starting aggressive logout process...")
 
       setUser(null)
       setLoading(true)
+      setAuthChecked(false)
 
-      // 1. Clear Firebase auth state FIRST
-      await firebaseSignOut(auth)
-      console.log("[v0] Firebase signOut completed")
+      try {
+        localStorage.clear()
+        sessionStorage.clear()
+        console.log("[v0] Browser storage cleared")
+      } catch (error) {
+        console.error("Error clearing browser storage:", error)
+      }
 
-      await new Promise((resolve) => {
-        const unsubscribe = onAuthStateChanged(auth, (user) => {
-          if (!user) {
-            console.log("[v0] Auth state confirmed cleared")
-            unsubscribe()
-            resolve(true)
+      try {
+        const databases = await indexedDB.databases()
+        const firebaseDBs = databases.filter(
+          (db) =>
+            db.name?.includes("firebase") ||
+            db.name?.includes("firebaseLocalStorageDb") ||
+            db.name?.includes("firestore"),
+        )
+
+        for (const dbInfo of firebaseDBs) {
+          if (dbInfo.name) {
+            indexedDB.deleteDatabase(dbInfo.name)
+            console.log(`[v0] Deleted IndexedDB: ${dbInfo.name}`)
           }
-        })
-        // Timeout after 3 seconds if auth state doesn't clear
-        setTimeout(() => {
-          unsubscribe()
-          resolve(true)
-        }, 3000)
-      })
+        }
+      } catch (error) {
+        console.error("Error clearing IndexedDB:", error)
+      }
 
-      // 2. Clear session cookie via API
       try {
         await fetch("/api/auth/logout", {
           method: "POST",
@@ -226,50 +229,27 @@ export function useFirebaseAuth() {
         console.error("Error clearing session:", error)
       }
 
-      // 3. Clear all browser storage
-      try {
-        // Clear all localStorage
-        localStorage.clear()
-        console.log("[v0] localStorage cleared")
+      await resetFirebase()
 
-        // Clear all sessionStorage
-        sessionStorage.clear()
-        console.log("[v0] sessionStorage cleared")
-      } catch (error) {
-        console.error("Error clearing browser storage:", error)
+      console.log("[v0] Forcing hard reload...")
+
+      // Clear all caches if available
+      if ("caches" in window) {
+        const cacheNames = await caches.keys()
+        await Promise.all(cacheNames.map((name) => caches.delete(name)))
+        console.log("[v0] Service worker caches cleared")
       }
 
-      // 4. Clear Firebase IndexedDB data
-      try {
-        const databases = await indexedDB.databases()
-        const firebaseDBs = databases.filter(
-          (db) => db.name?.includes("firebase") || db.name?.includes("firebaseLocalStorageDb"),
-        )
-
-        for (const dbInfo of firebaseDBs) {
-          if (dbInfo.name) {
-            const deleteReq = indexedDB.deleteDatabase(dbInfo.name)
-            await new Promise((resolve, reject) => {
-              deleteReq.onsuccess = () => resolve(true)
-              deleteReq.onerror = () => reject(deleteReq.error)
-              // Timeout after 2 seconds
-              setTimeout(() => resolve(true), 2000)
-            })
-            console.log(`[v0] Deleted IndexedDB: ${dbInfo.name}`)
-          }
-        }
-      } catch (error) {
-        console.error("Error clearing IndexedDB:", error)
-      }
-
-      console.log("[v0] Logout process completed, reloading page...")
-
-      window.location.replace("/")
+      // Force hard reload that bypasses cache
+      window.location.replace(window.location.origin + "/?_t=" + Date.now())
 
       return { success: true }
     } catch (error: any) {
       console.error("Sign out error:", error)
       setLoading(false)
+
+      window.location.replace(window.location.origin + "/?_t=" + Date.now())
+
       return {
         success: false,
         error: error.message || "Failed to sign out",
