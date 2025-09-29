@@ -38,15 +38,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
     try {
       await signInWithEmailAndPassword(auth, email, password)
 
-      // Check for stored redirect URL from purchase flow
-      const storedRedirect = localStorage.getItem("redirectAfterLogin")
-      if (storedRedirect) {
-        localStorage.removeItem("redirectAfterLogin")
-        window.location.href = storedRedirect
-        return
-      }
-
-      // Use redirect parameter or default to dashboard
+      // Simple redirect to dashboard or specified redirect
       const redirectUrl = redirect || "/dashboard"
       router.push(redirectUrl)
     } catch (error: any) {
@@ -71,15 +63,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
       if (result.user) {
         console.log("Google login successful:", result.user.email)
 
-        // Check for stored redirect URL from purchase flow
-        const storedRedirect = localStorage.getItem("redirectAfterLogin")
-        if (storedRedirect) {
-          localStorage.removeItem("redirectAfterLogin")
-          window.location.href = storedRedirect
-          return
-        }
-
-        // Use redirect parameter or default to dashboard
+        // Simple redirect to dashboard or specified redirect
         const redirectUrl = redirect || "/dashboard"
         router.push(redirectUrl)
       }

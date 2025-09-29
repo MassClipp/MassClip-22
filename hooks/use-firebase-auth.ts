@@ -187,80 +187,32 @@ export function useFirebaseAuth() {
 
   const signOut = useCallback(async (): Promise<AuthResult> => {
     try {
-      console.log("[v0] Starting complete logout process...")
-
-      // Immediately set user to null to update UI
-      setUser(null)
-      setLoading(true)
-
       if (!auth) {
         console.error("Firebase auth not initialized")
         return { success: false, error: "Firebase auth not initialized" }
       }
 
+      // Sign out from Firebase
       await firebaseSignOut(auth)
-      console.log("[v0] Firebase signOut completed")
 
-      try {
-        // Clear ALL localStorage (including Firebase keys)
-        localStorage.clear()
-        console.log("[v0] localStorage cleared")
+      // Clear basic storage
+      localStorage.clear()
+      sessionStorage.clear()
 
-        // Clear sessionStorage
-        sessionStorage.clear()
-        console.log("[v0] sessionStorage cleared")
+      // Call logout API to clear cookies
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      })
 
-        if (typeof indexedDB !== "undefined") {
-          try {
-            const databases = await indexedDB.databases()
-            for (const db of databases) {
-              if (db.name && db.name.includes("firebase")) {
-                indexedDB.deleteDatabase(db.name)
-                console.log(`[v0] Deleted IndexedDB: ${db.name}`)
-              }
-            }
-          } catch (error) {
-            console.error("[v0] Error clearing IndexedDB:", error)
-          }
-        }
-
-        if ("caches" in window) {
-          try {
-            const cacheNames = await caches.keys()
-            await Promise.all(cacheNames.map((name) => caches.delete(name)))
-            console.log("[v0] Service worker caches cleared")
-          } catch (error) {
-            console.error("[v0] Error clearing caches:", error)
-          }
-        }
-
-        console.log("[v0] All storage cleared")
-      } catch (error) {
-        console.error("Error clearing storage:", error)
-      }
-
-      // Clear session cookies
-      try {
-        await fetch("/api/auth/logout", {
-          method: "POST",
-          credentials: "include",
-        })
-        console.log("[v0] Session cookies cleared")
-      } catch (error) {
-        console.error("Error clearing session:", error)
-      }
-
-      console.log("[v0] Redirecting to login...")
-      window.location.href = `/auth/login?t=${Date.now()}`
+      // Redirect to login
+      window.location.href = "/login"
 
       return { success: true }
     } catch (error: any) {
       console.error("Sign out error:", error)
-      setLoading(false)
-
-      // Fallback redirect even if there's an error
-      window.location.href = `/auth/login?t=${Date.now()}`
-
+      // Force redirect even on error
+      window.location.href = "/login"
       return {
         success: false,
         error: error.message || "Failed to sign out",
