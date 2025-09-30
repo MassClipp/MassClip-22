@@ -190,6 +190,36 @@ CREATE_FOLDER: {"name": "Folder Name", "description": "Brief description"}
 
 Replace with the actual folder details. This will automatically create the folder.
 
+**CONTENT RENAMING:**
+When you encounter generic or unclear content titles (like "IMG_8030", "2819 Rebellion", "video_123", etc.) during organization or bundle creation:
+
+1. **IDENTIFY GENERIC TITLES** - Look for titles that don't describe the content:
+   - Generic camera names: "IMG_XXXX", "VID_XXXX", "DSC_XXXX"
+   - Random numbers: "2819 Rebellion", "1234 Video"
+   - Vague names: "Untitled", "New Video", "Content 1"
+
+2. **ASK THE USER** - When you find generic titles, ask what those items are about:
+   - "I notice you have some files with generic names like 'IMG_8030' and '2819 Rebellion'. What are these videos about? I can rename them to make organization easier!"
+   - Be specific about which files need better names
+
+3. **OFFER TO RENAME** - Once you understand what the content is:
+   - Suggest descriptive, clear titles
+   - Explain how good titles help with organization and discovery
+   - Use this format to rename:
+
+RENAME_CONTENT: {"contentId": "file_id_or_current_title", "newTitle": "Descriptive New Title", "reason": "why this name is better"}
+
+4. **EDUCATE USERS** - Explain the benefits:
+   - "Clear titles make it easier to find content later"
+   - "Descriptive names help me organize your content accurately"
+   - "Good titles make your bundles more professional"
+
+**WHEN TO SUGGEST RENAMING:**
+- During folder organization when you see generic titles
+- Before creating bundles with unclear content names
+- When users ask you to organize but you can't tell what content is
+- Anytime you're unsure what content is based on its title
+
 **CONTENT ORGANIZATION:**
 When someone asks you to organize their content or move files to folders:
 
@@ -199,39 +229,10 @@ When someone asks you to organize their content or move files to folders:
    - If they ask for "meme videos", ONLY move files with titles containing: "meme", "meme template", "funny", "comedy", "joke", etc.
    - DO NOT move files with generic titles like "IMG_8030", "2819 Rebellion", "david_goggins", etc. unless they explicitly mention those
    
-2. **USE FOLDER CONTENTS AS EXAMPLES** - If the target folder already has content, use those titles as patterns
-   - Example: If "Memes" folder has "meme template" files, look for similar patterns in unorganized content
-   - Match the style and naming conventions of existing folder content
-
-3. **LOOK FOR EXACT KEYWORDS** - Match based on clear, relevant keywords in titles:
-   - "meme videos" → titles must contain "meme", "template", "funny", "comedy"
-   - "motivation videos" → titles must contain "motivation", "motivational", "inspire", "success"
-   - "fitness content" → titles must contain "fitness", "workout", "exercise", "gym"
-   - Generic titles like "IMG_XXXX" or random names DO NOT match unless explicitly requested
-
-4. **WHEN IN DOUBT, DON'T MOVE IT** - If you're unsure whether a file matches, DO NOT include it
-   - It's better to move 5 correct files than 10 files with 3 wrong ones
-   - Ask the user if they want to include questionable files
-
-5. **EXPLAIN YOUR REASONING** - In your response, briefly explain why you're moving each file
-   - Example: "I'm moving 'meme template 1' and 'meme template 2' because they clearly contain meme content"
-
-6. **CHECK ALL CONTENT** - Look through ALL unorganized content and folder contents to find matches
-   - Don't stop at the first few matches
-   - Be thorough but precise
-
-**ORGANIZATION PROCESS:**
-1. Check if the target folder exists in their folder structure
-2. If the folder doesn't exist, CREATE IT FIRST using CREATE_FOLDER
-3. Review ALL available content (organized and unorganized)
-4. Identify ONLY the files that CLEARLY match the request using the rules above
-5. Use ORGANIZE_FILES with the specific file IDs or exact titles
-
-To organize files, respond with "Let me organize those files for you!" then add:
-
-ORGANIZE_FILES: {"targetFolder": "folder_name", "fileIds": ["exact_title_1", "exact_title_2"], "reason": "explanation"}
-
-**IMPORTANT:** Use the EXACT titles from the content library. Be specific and conservative in your selections.
+2. **IDENTIFY GENERIC TITLES** - If you encounter generic titles during organization:
+   - STOP and ask the user what those files are about
+   - Offer to rename them first before organizing
+   - Example: "I see 'IMG_8030' and '2819 Rebellion' - I can't tell if these are memes. What are they? I can rename them for you!"
 
 **BUNDLE CREATION:**
 When someone asks you to create a bundle (like "make me a motivation bundle" or "create a photography pack"):
@@ -291,7 +292,7 @@ ${userContentContext}${bundleLimitsContext}${folderContext}
 
 Be helpful, natural, and focus on their success. When creating folders, use CREATE_FOLDER. When organizing files, use ORGANIZE_FILES (create the folder first if needed). When creating bundles, use CREATE_BUNDLE with REAL content IDs only.
 
-**REMEMBER:** Be CONSERVATIVE and PRECISE with content matching. Only move or bundle content that CLEARLY matches the request. Use folder contents as examples. When in doubt, ask the user.`
+**REMEMBER:** Be CONSERVATIVE and PRECISE with content matching. Only move or bundle content that CLEARLY matches the request. Use folder contents as examples. When in doubt, ask the user. If titles are generic, ask what they are and offer to rename them!`
 
     // Ensure messages have proper format
     const formattedMessages = [
@@ -338,6 +339,48 @@ Be helpful, natural, and focus on their success. When creating folders, use CREA
     if (!assistantMessage) {
       console.log("[v0] No assistant message in response")
       return NextResponse.json({ error: "No response from AI" }, { status: 500 })
+    }
+
+    if (assistantMessage.includes("RENAME_CONTENT:") && userId) {
+      try {
+        console.log("[v0] Vex wants to rename content...")
+
+        // Extract rename data
+        const renameMatch = assistantMessage.match(/RENAME_CONTENT:\s*({.*?})/s)
+        if (!renameMatch) {
+          throw new Error("No valid rename data found")
+        }
+
+        const renameData = JSON.parse(renameMatch[1])
+        console.log("[v0] Parsed rename data:", renameData)
+
+        // Show progress message
+        assistantMessage = assistantMessage.replace(
+          /RENAME_CONTENT:\s*{.*?}/s,
+          "✏️ **Renaming content now...** Updating the title!",
+        )
+
+        // Call the rename function
+        const renameResult = await renameContentDirectly(userId, renameData)
+
+        if (renameResult.success) {
+          assistantMessage = assistantMessage.replace(
+            "✏️ **Renaming content now...** Updating the title!",
+            `✅ **Content renamed successfully!** "${renameResult.oldTitle}" is now "${renameResult.newTitle}". This will make it much easier to organize!`,
+          )
+        } else {
+          assistantMessage = assistantMessage.replace(
+            "✏️ **Renaming content now...** Updating the title!",
+            `❌ ${renameResult.error || "I encountered an issue renaming the content. Please try again."}`,
+          )
+        }
+      } catch (error) {
+        console.error("[v0] Content rename failed:", error)
+        assistantMessage = assistantMessage.replace(
+          /✏️ \*\*Renaming content now\.\.\.\*\* Updating the title!/,
+          "❌ I encountered an error while renaming the content. Please try again.",
+        )
+      }
     }
 
     if (assistantMessage.includes("ORGANIZE_FILES:") && userId) {
@@ -834,6 +877,7 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
 
             // Fuzzy match: check if identifier is in title or title is in identifier
             if (
+              title.toLowerCase() === fileIdentifier.toLowerCase() ||
               title.toLowerCase().includes(fileIdentifier.toLowerCase()) ||
               fileIdentifier.toLowerCase().includes(title.toLowerCase())
             ) {
@@ -949,6 +993,118 @@ async function createFolderDirectly(userId: string, folderData: any) {
     return {
       success: false,
       error: error instanceof Error ? error.message : "An unexpected error occurred while creating the folder.",
+    }
+  }
+}
+
+async function renameContentDirectly(userId: string, renameData: any) {
+  try {
+    const { contentId, newTitle, reason } = renameData
+
+    if (!contentId || !newTitle || typeof newTitle !== "string" || newTitle.trim().length === 0) {
+      return { success: false, error: "Content ID and new title are required." }
+    }
+
+    if (newTitle.trim().length > 200) {
+      return { success: false, error: "Title is too long (max 200 characters)." }
+    }
+
+    console.log(`[v0] Renaming content "${contentId}" to "${newTitle}"`)
+
+    const contentCollections = ["uploads", "productBoxContent", "free_content"]
+    let found = false
+    let oldTitle = contentId
+    let documentId = ""
+
+    // Try to find the content by ID or title
+    for (const collectionName of contentCollections) {
+      // First try exact ID match
+      const docRef = db.collection(collectionName).doc(contentId)
+      const docSnap = await docRef.get()
+
+      if (docSnap.exists) {
+        const docData = docSnap.data()!
+
+        // Verify ownership
+        if (docData.uid === userId || docData.userId === userId) {
+          oldTitle = docData.title || docData.filename || contentId
+          documentId = docSnap.id
+          found = true
+          console.log(`[v0] Found content by ID in ${collectionName}`)
+          break
+        }
+      }
+
+      // If not found by ID, try fuzzy matching by title/filename
+      if (!found) {
+        const querySnapshot = await db.collection(collectionName).where("userId", "==", userId).get()
+
+        for (const doc of querySnapshot.docs) {
+          const docData = doc.data()
+          const title = docData.title || docData.filename || ""
+
+          // Fuzzy match: check if identifier is in title or title is in identifier
+          if (
+            title.toLowerCase() === contentId.toLowerCase() ||
+            title.toLowerCase().includes(contentId.toLowerCase()) ||
+            contentId.toLowerCase().includes(title.toLowerCase())
+          ) {
+            oldTitle = title
+            documentId = doc.id
+            found = true
+            console.log(`[v0] Found content by fuzzy match in ${collectionName}`)
+            break
+          }
+        }
+
+        if (found) break
+      }
+    }
+
+    if (!found || !documentId) {
+      return {
+        success: false,
+        error: `Could not find content "${contentId}". Please make sure it exists in your library.`,
+      }
+    }
+
+    // Call the uploads API to rename the content
+    // This will cascade the update across all collections
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/api/uploads/${documentId}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${await getAuth().createCustomToken(userId)}`,
+        },
+        body: JSON.stringify({
+          title: newTitle.trim(),
+        }),
+      },
+    )
+
+    if (!response.ok) {
+      const errorData = await response.json()
+      return {
+        success: false,
+        error: errorData.error || "Failed to rename content.",
+      }
+    }
+
+    console.log(`[v0] Successfully renamed "${oldTitle}" to "${newTitle}"`)
+
+    return {
+      success: true,
+      oldTitle,
+      newTitle: newTitle.trim(),
+      contentId: documentId,
+    }
+  } catch (error) {
+    console.error("[v0] Content rename error:", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "An unexpected error occurred while renaming content.",
     }
   }
 }
