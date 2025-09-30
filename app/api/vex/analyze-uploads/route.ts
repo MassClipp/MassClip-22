@@ -110,6 +110,34 @@ export async function POST(request: NextRequest) {
 
       console.log(`✅ [Vex Analyze] Found ${uniqueUploads.length} unique uploads to analyze`)
 
+      const contentByFolder: Record<string, any[]> = {}
+      const unorganizedContent: any[] = []
+
+      uniqueUploads.forEach((upload) => {
+        if (upload.folderId && upload.folderName) {
+          if (!contentByFolder[upload.folderName]) {
+            contentByFolder[upload.folderName] = []
+          }
+          contentByFolder[upload.folderName].push({
+            id: upload.id,
+            title: upload.title,
+            type: upload.contentType,
+            filename: upload.filename,
+          })
+        } else {
+          unorganizedContent.push({
+            id: upload.id,
+            title: upload.title,
+            type: upload.contentType,
+            filename: upload.filename,
+          })
+        }
+      })
+
+      console.log(
+        `[v0] Organized content: ${Object.keys(contentByFolder).length} folders, ${unorganizedContent.length} unorganized`,
+      )
+
       if (uniqueUploads.length === 0) {
         return NextResponse.json({
           success: true,
@@ -140,6 +168,13 @@ export async function POST(request: NextRequest) {
           prompt: `You are Vex, an AI bundle assistant. Analyze this user's content uploads and provide detailed bundle categorization.
 
 User's existing folders: ${userFolders.map((f) => f.name).join(", ")}
+
+Content organized by folder:
+${Object.entries(contentByFolder)
+  .map(([folderName, items]) => `${folderName}: ${items.length} items - ${items.map((i: any) => i.title).join(", ")}`)
+  .join("\n")}
+
+Unorganized content: ${unorganizedContent.length} items
 
 Content to analyze:
 ${JSON.stringify(contentSummary, null, 2)}
@@ -210,6 +245,8 @@ IMPORTANT:
         detailedAnalysis: analysis.detailedAnalysis || [],
         uploads: uniqueUploads, // Store full upload details
         userFolders: userFolders,
+        contentByFolder: contentByFolder,
+        unorganizedContent: unorganizedContent,
         analyzedAt: new Date(),
         lastUpdated: new Date(),
       }

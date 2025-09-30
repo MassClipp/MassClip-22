@@ -122,24 +122,41 @@ When organizing files, use the folder names exactly as shown above.
             const analysisDoc = await db.collection("vex_content_analysis").doc(userId).get()
             if (analysisDoc.exists) {
               const analysisData = analysisDoc.data()
+
+              const contentByFolder = analysisData?.contentByFolder || {}
+              const unorganizedContent = analysisData?.unorganizedContent || []
+
+              let folderContentsContext = ""
+              if (Object.keys(contentByFolder).length > 0) {
+                folderContentsContext = "\n\nCONTENT IN EACH FOLDER:\n"
+                for (const [folderName, items] of Object.entries(contentByFolder)) {
+                  const itemsList = (items as any[]).map((item: any) => `  - ${item.title} (${item.type})`).join("\n")
+                  folderContentsContext += `\n"${folderName}" folder (${(items as any[]).length} items):\n${itemsList}\n`
+                }
+              }
+
+              if (unorganizedContent.length > 0) {
+                folderContentsContext += `\n\nUNORGANIZED CONTENT (${unorganizedContent.length} items not in any folder):\n`
+                folderContentsContext += unorganizedContent
+                  .slice(0, 10)
+                  .map((item: any) => `  - ${item.title} (${item.type})`)
+                  .join("\n")
+                if (unorganizedContent.length > 10) {
+                  folderContentsContext += `\n  ... and ${unorganizedContent.length - 10} more unorganized items`
+                }
+              }
+
               userContentContext = `
 
 USER'S CONTENT LIBRARY:
 Total Uploads: ${analysisData?.totalUploads || 0}
 Categories: ${(analysisData?.categories || []).join(", ")}
 User Folders: ${(analysisData?.userFolders || []).map((f: any) => f.name).join(", ")}
-
-Recent uploads: ${(analysisData?.uploads || [])
-                .slice(0, 10)
-                .map(
-                  (upload: any) =>
-                    `- ${upload.title} (${upload.contentType}) ${upload.folderName ? `[in "${upload.folderName}"]` : "[no folder]"}`,
-                )
-                .join("\n")}
+${folderContentsContext}
 
 Available content IDs for bundling: ${(analysisData?.uploads || []).map((upload: any) => upload.id).join(", ")}
 `
-              console.log("[v0] User context loaded")
+              console.log("[v0] User context loaded with folder contents")
             }
           } else {
             console.error("[v0] Invalid token format")
