@@ -699,7 +699,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
       {/* Desktop sidebar - Hide completely on upload page when collapsed */}
       {!isMobile && !(isUploadPage && isSidebarCollapsed) && (
         <div
-          className={`fixed left-0 top-16 h-[calc(100vh-4rem)] z-40 transition-all duration-300 ${
+          className={`fixed left-0 top-0 h-screen z-40 transition-all duration-300 ${
             isSidebarCollapsed ? "w-16" : "w-60"
           } bg-zinc-950/95 backdrop-blur-sm border-r border-zinc-800`}
         >
@@ -926,7 +926,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
           <div
             id="vex-sidebar"
             className={`
-              fixed left-0 top-16 h-[calc(100vh-4rem)] w-80
+              fixed left-0 top-0 h-screen w-80
               bg-zinc-950/95 backdrop-blur-sm border-r border-zinc-800 flex flex-col z-40
               ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}
               transition-all duration-300 ease-in-out overflow-hidden
