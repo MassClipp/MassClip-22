@@ -791,14 +791,16 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                                     router.push("/dashboard/vex")
                                   }}
                                   disabled={isLoadingCurrentChat}
-                                  className={`w-full text-left p-2 rounded-md text-xs transition-all duration-200 flex items-center gap-2 pr-8 overflow-hidden ${
+                                  className={`w-full text-left p-2 rounded-md text-xs transition-all duration-200 flex items-center gap-2 overflow-hidden ${
                                     currentChatId === chat.id
                                       ? "bg-blue-600/20 text-blue-300 border border-blue-600/30"
                                       : "text-zinc-400 hover:bg-zinc-800/50 hover:text-white"
                                   } ${isLoadingCurrentChat ? "opacity-50" : ""}`}
                                 >
                                   <MessageSquare className="h-3 w-3 flex-shrink-0" />
-                                  <span className="flex-1 truncate font-medium">{chat.title}</span>
+                                  <span className="font-medium line-clamp-2 max-w-[calc(100%-3rem)] leading-tight">
+                                    {chat.title}
+                                  </span>
                                 </button>
                                 <Button
                                   onClick={(e) => {
@@ -977,14 +979,16 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                                   router.push("/dashboard/vex")
                                 }}
                                 disabled={isLoadingCurrentChat}
-                                className={`w-full text-left p-2 rounded-md text-xs transition-all duration-200 flex items-center gap-2 pr-8 overflow-hidden ${
+                                className={`w-full text-left p-2 rounded-md text-xs transition-all duration-200 flex items-center gap-2 overflow-hidden ${
                                   currentChatId === chat.id
                                     ? "bg-blue-600/20 text-blue-300 border border-blue-600/30"
                                     : "text-zinc-400 hover:bg-zinc-800/50 hover:text-white"
                                 } ${isLoadingCurrentChat ? "opacity-50" : ""}`}
                               >
                                 <MessageSquare className="h-3 w-3 flex-shrink-0" />
-                                <span className="flex-1 truncate font-medium">{chat.title}</span>
+                                <span className="font-medium line-clamp-2 max-w-[calc(100%-3rem)] leading-tight">
+                                  {chat.title}
+                                </span>
                               </button>
                               <Button
                                 onClick={(e) => {
