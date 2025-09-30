@@ -67,6 +67,8 @@ ${tierInfo.reachedBundleLimit ? `⚠️ BUNDLE LIMIT REACHED: User has reached t
 `
 
             try {
+              console.log("[v0] Querying folders for userId:", userId)
+
               const foldersSnapshot = await db
                 .collection("folders")
                 .where("userId", "==", userId)
@@ -74,12 +76,29 @@ ${tierInfo.reachedBundleLimit ? `⚠️ BUNDLE LIMIT REACHED: User has reached t
                 .orderBy("name")
                 .get()
 
+              console.log("[v0] Folders query returned:", foldersSnapshot.size, "documents")
+
+              if (foldersSnapshot.empty) {
+                console.log("[v0] No folders found with userId, trying uid field...")
+                const foldersSnapshotUid = await db
+                  .collection("folders")
+                  .where("uid", "==", userId)
+                  .where("isDeleted", "==", false)
+                  .orderBy("name")
+                  .get()
+                console.log("[v0] Folders query with uid returned:", foldersSnapshotUid.size, "documents")
+              }
+
               if (!foldersSnapshot.empty) {
-                const folders = foldersSnapshot.docs.map((doc) => ({
-                  id: doc.id,
-                  name: doc.data().name,
-                  fileCount: doc.data().fileCount || 0,
-                }))
+                const folders = foldersSnapshot.docs.map((doc) => {
+                  const data = doc.data()
+                  console.log("[v0] Found folder:", doc.id, data.name, "userId:", data.userId, "uid:", data.uid)
+                  return {
+                    id: doc.id,
+                    name: data.name,
+                    fileCount: data.fileCount || 0,
+                  }
+                })
 
                 folderContext = `
 
