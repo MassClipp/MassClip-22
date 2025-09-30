@@ -42,13 +42,15 @@ export async function POST(request: NextRequest) {
       }
 
       console.log("🗂️ [Vex Analyze] Loading user's folder structure...")
-      const foldersSnapshot = await db.collection("folders").where("uid", "==", userId).orderBy("name").get()
+      const foldersSnapshot = await db.collection("folders").where("userId", "==", userId).get()
 
-      const userFolders = foldersSnapshot.docs.map((doc) => ({
-        id: doc.id,
-        name: doc.data().name,
-        fileCount: doc.data().fileCount || 0,
-      }))
+      const userFolders = foldersSnapshot.docs
+        .map((doc) => ({
+          id: doc.id,
+          name: doc.data().name,
+          fileCount: doc.data().fileCount || 0,
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name))
 
       console.log(
         `✅ [Vex Analyze] Found ${userFolders.length} user folders:`,
