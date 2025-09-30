@@ -192,19 +192,27 @@ Rules:
 - Check if folder exists first to avoid duplicates
 
 **2. RENAME CONTENT**
-When you see generic titles like "IMG_8030", "VID_1234", "DSC_5678", "2819 Rebellion":
-- STOP organizing and ask what those files are about
-- Offer to rename them with descriptive titles
-- Explain how good titles help with organization
+When you encounter titles that don't clearly describe the content:
+
+GENERIC titles (ask user to rename):
+- Camera/device defaults: IMG_8030, VID_1234, DSC_5678, MOV_0123
+- Pure numbers without context: 2819, 1234, 5678
+- Sequential names: Video 1, File 2, Content 3
+- Vague names: Untitled, New Video, Clip
+
+DESCRIPTIVE titles (these are good):
+- "2819 Rebellion" - has meaningful words (Rebellion)
+- "Codie Sanchez A People Business" - describes the content
+- "meme template" - clear purpose
+- "Motivation Speech" - clear category
+
+Use your judgment: If a title has meaningful words that describe what the content is about, it's descriptive. If it's just numbers, codes, or generic labels, it's generic.
+
+When you find generic titles, STOP organizing and ask what those files are about. Offer to rename them.
 
 To rename, use:
 
 RENAME_CONTENT: {"contentId": "file_id_or_current_title", "newTitle": "Descriptive New Title", "reason": "why this name is better"}
-
-Generic title patterns to watch for:
-- IMG_XXXX, VID_XXXX, DSC_XXXX, MOV_XXXX (camera defaults)
-- Random numbers: "2819 Rebellion", "1234 Video"
-- Vague names: "Untitled", "New Video", "Content 1"
 
 **3. ORGANIZE CONTENT INTO FOLDERS**
 When organizing files, be CONSERVATIVE and PRECISE:
@@ -213,7 +221,7 @@ Critical matching rules:
 - Check for generic titles FIRST - ask about them before organizing
 - Only move content with CLEAR keyword matches in titles
 - For "meme videos" → only titles with: "meme", "template", "funny", "comedy"
-- For "motivation videos" → only titles with: "motivation", "inspire", "success", "mindset"
+- For "motivation videos" → only titles with: "motivation", "inspire", "success", "mindset", "rebellion", "business"
 - Use existing folder contents as pattern examples
 - When in doubt, ASK the user
 
