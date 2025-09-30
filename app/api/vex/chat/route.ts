@@ -748,46 +748,71 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
     const targetFolderId = foldersSnapshot.docs[0].id
     console.log("[v0] Found target folder:", targetFolderId)
 
-    // Get user's content analysis to find the files
-    const analysisDoc = await db.collection("vex_content_analysis").doc(userId).get()
-    if (!analysisDoc.exists) {
-      return { success: false, error: "Content analysis not found. Please analyze your content first." }
-    }
-
-    const analysisData = analysisDoc.data()!
-    const availableUploads = analysisData.uploads || []
-
+    const contentCollections = ["uploads", "productBoxContent", "free_content"]
     let movedCount = 0
     const movedFiles: string[] = []
     const batch = db.batch()
 
     for (const fileIdentifier of fileIds) {
-      // Try to find by exact document ID first
-      let matchedUpload = availableUploads.find((u: any) => u.id === fileIdentifier)
+      let found = false
 
-      // If not found by ID, try to match by title or filename
-      if (!matchedUpload) {
-        matchedUpload = availableUploads.find(
-          (u: any) =>
-            u.title === fileIdentifier ||
-            u.filename === fileIdentifier ||
-            u.title?.toLowerCase().includes(fileIdentifier.toLowerCase()) ||
-            fileIdentifier.toLowerCase().includes(u.title?.toLowerCase() || ""),
-        )
+      // Try each collection
+      for (const collectionName of contentCollections) {
+        // First try exact ID match
+        const docRef = db.collection(collectionName).doc(fileIdentifier)
+        const docSnap = await docRef.get()
+
+        if (docSnap.exists) {
+          const docData = docSnap.data()!
+
+          // Verify ownership
+          if (docData.uid === userId || docData.userId === userId) {
+            batch.update(docRef, {
+              folderId: targetFolderId,
+              folderName: targetFolder,
+              updatedAt: FieldValue.serverTimestamp(),
+            })
+            movedFiles.push(docData.title || docData.filename || fileIdentifier)
+            movedCount++
+            found = true
+            console.log(`[v0] Matched "${fileIdentifier}" by ID in ${collectionName}`)
+            break
+          }
+        }
       }
 
-      if (matchedUpload) {
-        // Update the file's folder reference
-        const fileRef = db.collection(matchedUpload.collection).doc(matchedUpload.id)
-        batch.update(fileRef, {
-          folderId: targetFolderId,
-          folderName: targetFolder,
-          updatedAt: FieldValue.serverTimestamp(),
-        })
-        movedFiles.push(matchedUpload.title || matchedUpload.filename || fileIdentifier)
-        movedCount++
-        console.log(`[v0] Matched "${fileIdentifier}" to file: ${matchedUpload.title} (${matchedUpload.id})`)
-      } else {
+      // If not found by ID, try fuzzy matching by title/filename
+      if (!found) {
+        for (const collectionName of contentCollections) {
+          const querySnapshot = await db.collection(collectionName).where("userId", "==", userId).get()
+
+          for (const doc of querySnapshot.docs) {
+            const docData = doc.data()
+            const title = docData.title || docData.filename || ""
+
+            // Fuzzy match: check if identifier is in title or title is in identifier
+            if (
+              title.toLowerCase().includes(fileIdentifier.toLowerCase()) ||
+              fileIdentifier.toLowerCase().includes(title.toLowerCase())
+            ) {
+              batch.update(doc.ref, {
+                folderId: targetFolderId,
+                folderName: targetFolder,
+                updatedAt: FieldValue.serverTimestamp(),
+              })
+              movedFiles.push(title || fileIdentifier)
+              movedCount++
+              found = true
+              console.log(`[v0] Matched "${fileIdentifier}" to "${title}" by fuzzy match in ${collectionName}`)
+              break
+            }
+          }
+
+          if (found) break
+        }
+      }
+
+      if (!found) {
         console.warn(`[v0] Could not find file for identifier: "${fileIdentifier}"`)
       }
     }
@@ -801,7 +826,7 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
       success: true,
       movedCount,
       targetFolder,
-      movedFiles, // Return the actual file names that were moved
+      movedFiles,
     }
   } catch (error) {
     console.error("[v0] File organization error:", error)

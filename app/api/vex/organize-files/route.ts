@@ -63,44 +63,65 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Use batch to update multiple documents
+    const contentCollections = ["uploads", "productBoxContent", "free_content"]
     const batch = db.batch()
     const results = []
     const movedFiles = []
 
     for (const fileId of fileIds) {
-      const uploadRef = db.collection("uploads").doc(fileId)
-      const uploadDoc = await uploadRef.get()
+      let found = false
 
-      if (!uploadDoc.exists) {
-        results.push({ id: fileId, success: false, error: "File not found" })
-        continue
+      // Try to find the file in each collection
+      for (const collectionName of contentCollections) {
+        const docRef = db.collection(collectionName).doc(fileId)
+        const docSnap = await docRef.get()
+
+        if (docSnap.exists) {
+          const docData = docSnap.data()
+
+          // Verify ownership
+          if (docData?.uid !== user.uid && docData?.userId !== user.uid) {
+            results.push({ id: fileId, success: false, error: "Access denied" })
+            found = true
+            break
+          }
+
+          // Determine the folderId to set
+          const finalFolderId = targetFolderId === "main" ? null : targetFolderId
+
+          // Get folder name if we have a folder ID
+          let folderName = null
+          if (finalFolderId) {
+            const folderDoc = await db.collection("folders").doc(finalFolderId).get()
+            if (folderDoc.exists) {
+              folderName = folderDoc.data()?.name
+            }
+          }
+
+          batch.update(docRef, {
+            folderId: finalFolderId,
+            folderName: folderName,
+            updatedAt: new Date(),
+            vexOrganized: true,
+            vexOrganizeReason: reason || "Organized by Vex AI",
+          })
+
+          movedFiles.push({
+            id: fileId,
+            filename: docData.filename || docData.title,
+            previousFolder: docData.folderId || "main",
+            collection: collectionName,
+          })
+
+          results.push({ id: fileId, success: true, collection: collectionName })
+          found = true
+          break
+        }
       }
 
-      const uploadData = uploadDoc.data()
-      if (uploadData?.uid !== user.uid) {
-        results.push({ id: fileId, success: false, error: "Access denied" })
-        continue
+      if (!found) {
+        results.push({ id: fileId, success: false, error: "File not found in any collection" })
       }
-
-      // Determine the folderId to set
-      const finalFolderId = targetFolderId === "main" ? null : targetFolderId
-
-      batch.update(uploadRef, {
-        folderId: finalFolderId,
-        updatedAt: new Date(),
-        // Track that this was organized by Vex
-        vexOrganized: true,
-        vexOrganizeReason: reason || "Organized by Vex AI",
-      })
-
-      movedFiles.push({
-        id: fileId,
-        filename: uploadData.filename || uploadData.title,
-        previousFolder: uploadData.folderId || "main",
-      })
-
-      results.push({ id: fileId, success: true })
     }
 
     // Commit the batch
