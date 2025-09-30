@@ -140,13 +140,25 @@ YOUR PERSONALITY:
 
 WHAT YOU DO:
 
+**FOLDER CREATION:**
+When someone asks you to create a folder (like "create a folder for my fitness videos" or "make a motivation folder"):
+1. Create the folder immediately with a clear, descriptive name
+2. Respond with "Let me create that folder for you!" then add this instruction:
+
+CREATE_FOLDER: {"name": "Folder Name", "description": "Brief description"}
+
+Replace with the actual folder details. This will automatically create the folder.
+
 **CONTENT ORGANIZATION:**
 When someone asks you to organize their content or move files to folders:
-1. Look at their folder structure and understand their organization system
-2. Analyze the content they want to organize
-3. Suggest the most appropriate folder based on content type and existing folders
-4. Move files to the suggested folders automatically
-5. Create new folders if needed for better organization
+1. Check if the target folder exists in their folder structure
+2. If the folder doesn't exist, CREATE IT FIRST using CREATE_FOLDER
+3. Then organize the files using ORGANIZE_FILES
+4. You can do both in one response - create folder, then organize files into it
+
+To organize files, respond with "Let me organize those files for you!" then add:
+
+ORGANIZE_FILES: {"targetFolder": "folder_name", "fileIds": ["file1", "file2"], "reason": "explanation"}
 
 **BUNDLE CREATION:**
 When someone asks you to create a bundle (like "make me a motivation bundle" or "create a photography pack"):
@@ -162,10 +174,20 @@ CREATE_BUNDLE: {"title": "Bundle Name", "description": "Bundle description", "pr
 
 Replace the values with the actual bundle details. This will automatically create the bundle in their account.
 
-**FOLDER ORGANIZATION:**
-When organizing content, respond with "Let me organize those files for you!" then add this instruction:
+FOLDER CREATION RULES:
+- Use clear, descriptive folder names (e.g., "Fitness Videos", "Motivation Clips", "Product Photos")
+- Keep folder names concise (2-4 words max)
+- Add helpful descriptions that explain what content belongs in the folder
+- If they ask to organize content into a folder that doesn't exist, CREATE IT FIRST
+- You can create multiple folders in one response if needed
 
-ORGANIZE_FILES: {"targetFolder": "folder_name", "fileIds": ["file1", "file2"], "reason": "explanation"}
+FOLDER ORGANIZATION RULES:
+- Always check if the folder exists first
+- If it doesn't exist, use CREATE_FOLDER before ORGANIZE_FILES
+- Use exact folder names from their folder structure
+- Group similar content types together
+- Be proactive about organization - suggest improvements
+- Always explain why you're putting content in specific folders
 
 BUNDLE CREATION RULES:
 - **ALWAYS check bundle limits first** - Never create if they've reached their limit
@@ -178,13 +200,6 @@ BUNDLE CREATION RULES:
 - Categories: Video Pack, Audio Collection, Mixed Media, Beginner Kit, Pro Bundle, etc.
 - **If they don't have enough content, suggest they upload more first**
 
-FOLDER ORGANIZATION RULES:
-- Use exact folder names from their folder structure
-- Group similar content types together
-- Suggest creating new folders when current ones don't fit
-- Be proactive about organization - suggest improvements
-- Always explain why you're putting content in specific folders
-
 BUNDLE LIMIT RESPONSES:
 - If they can create bundles, be enthusiastic and helpful
 - If they've reached their bundle limit, be understanding and suggest upgrading: "I can see you've reached your bundle limit (X/X bundles). To create more amazing bundles, you can upgrade to Creator Pro for unlimited bundles or purchase extra bundle slots in your settings!"
@@ -193,7 +208,7 @@ BUNDLE LIMIT RESPONSES:
 
 ${userContentContext}${bundleLimitsContext}${folderContext}
 
-Be helpful, natural, and focus on their success. When creating bundles, use the CREATE_BUNDLE instruction format exactly as shown above with REAL content IDs only. When organizing files, use the ORGANIZE_FILES instruction format with exact folder names.`
+Be helpful, natural, and focus on their success. When creating folders, use CREATE_FOLDER. When organizing files, use ORGANIZE_FILES (create the folder first if needed). When creating bundles, use CREATE_BUNDLE with REAL content IDs only.`
 
     // Ensure messages have proper format
     const formattedMessages = [
@@ -280,6 +295,48 @@ Be helpful, natural, and focus on their success. When creating bundles, use the 
         assistantMessage = assistantMessage.replace(
           /🗂️ \*\*Organizing your files now\.\.\.\*\* Moving them to the right folder!/,
           "❌ I encountered an error while organizing your files. Please try again.",
+        )
+      }
+    }
+
+    if (assistantMessage.includes("CREATE_FOLDER:") && userId) {
+      try {
+        console.log("[v0] Vex wants to create a folder...")
+
+        // Extract folder data
+        const folderMatch = assistantMessage.match(/CREATE_FOLDER:\s*({.*?})/s)
+        if (!folderMatch) {
+          throw new Error("No valid folder data found")
+        }
+
+        const folderData = JSON.parse(folderMatch[1])
+        console.log("[v0] Parsed folder data:", folderData)
+
+        // Show progress message
+        assistantMessage = assistantMessage.replace(
+          /CREATE_FOLDER:\s*{.*?}/s,
+          "📁 **Creating folder now...** Setting up your new folder!",
+        )
+
+        // Create the folder
+        const folderResult = await createFolderDirectly(userId, folderData)
+
+        if (folderResult.success) {
+          assistantMessage = assistantMessage.replace(
+            "📁 **Creating folder now...** Setting up your new folder!",
+            `✅ **Folder created successfully!** Your "${folderResult.folderName}" folder is ready to use.`,
+          )
+        } else {
+          assistantMessage = assistantMessage.replace(
+            "📁 **Creating folder now...** Setting up your new folder!",
+            `❌ ${folderResult.error || "I encountered an issue creating the folder. Please try again."}`,
+          )
+        }
+      } catch (error) {
+        console.error("[v0] Folder creation failed:", error)
+        assistantMessage = assistantMessage.replace(
+          /📁 \*\*Creating folder now\.\.\.\*\* Setting up your new folder!/,
+          "❌ I encountered an error while creating the folder. Please try again.",
         )
       }
     }
@@ -615,15 +672,30 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
     }
 
     // Find the target folder
-    const foldersSnapshot = await db
+    let foldersSnapshot = await db
       .collection("folders")
-      .where("uid", "==", userId)
+      .where("userId", "==", userId)
       .where("name", "==", targetFolder)
+      .where("isDeleted", "==", false)
       .limit(1)
       .get()
 
+    // Try with uid field if userId didn't work
     if (foldersSnapshot.empty) {
-      return { success: false, error: `Folder "${targetFolder}" not found. Please create it first.` }
+      foldersSnapshot = await db
+        .collection("folders")
+        .where("uid", "==", userId)
+        .where("name", "==", targetFolder)
+        .where("isDeleted", "==", false)
+        .limit(1)
+        .get()
+    }
+
+    if (foldersSnapshot.empty) {
+      return {
+        success: false,
+        error: `Folder "${targetFolder}" not found. Please create it first using CREATE_FOLDER.`,
+      }
     }
 
     const targetFolderId = foldersSnapshot.docs[0].id
@@ -671,6 +743,80 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
     return {
       success: false,
       error: error instanceof Error ? error.message : "An unexpected error occurred while organizing files.",
+    }
+  }
+}
+
+async function createFolderDirectly(userId: string, folderData: any) {
+  try {
+    const { name, description, parentId } = folderData
+
+    if (!name || typeof name !== "string" || name.trim().length === 0) {
+      return { success: false, error: "Folder name is required." }
+    }
+
+    if (name.trim().length > 100) {
+      return { success: false, error: "Folder name is too long (max 100 characters)." }
+    }
+
+    console.log(`[v0] Creating folder "${name}" for user ${userId}`)
+
+    // Check for duplicate folder names
+    const duplicateQuery = db
+      .collection("folders")
+      .where("userId", "==", userId)
+      .where("name", "==", name.trim())
+      .where("isDeleted", "==", false)
+
+    const duplicateSnapshot = await duplicateQuery.get()
+    if (!duplicateSnapshot.empty) {
+      return {
+        success: false,
+        error: `A folder named "${name}" already exists. Please choose a different name.`,
+      }
+    }
+
+    // Build folder path
+    let parentPath = ""
+    if (parentId && parentId !== "root") {
+      const parentDoc = await db.collection("folders").doc(parentId).get()
+      if (parentDoc.exists) {
+        const parentData = parentDoc.data()
+        parentPath = parentData?.path || ""
+      }
+    }
+
+    const folderPath = parentPath ? `${parentPath}/${name.trim()}` : `/${name.trim()}`
+
+    // Create folder
+    const timestamp = new Date()
+    const newFolder = {
+      name: name.trim(),
+      userId,
+      uid: userId, // Add uid for compatibility with existing queries
+      parentId: parentId && parentId !== "root" ? parentId : null,
+      path: folderPath,
+      description: description?.trim() || null,
+      isDeleted: false,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      createdBy: "vex-ai",
+    }
+
+    const folderRef = await db.collection("folders").add(newFolder)
+
+    console.log(`[v0] Successfully created folder: ${folderRef.id} (${name})`)
+
+    return {
+      success: true,
+      folderId: folderRef.id,
+      folderName: name.trim(),
+    }
+  } catch (error) {
+    console.error("[v0] Folder creation error:", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "An unexpected error occurred while creating the folder.",
     }
   }
 }
