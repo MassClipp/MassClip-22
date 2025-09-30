@@ -894,6 +894,9 @@ export default function UploadPage() {
           </div>
           <h3 className="text-lg font-medium text-white mb-2">Upload your files</h3>
           <p className="text-zinc-400 text-center text-sm max-w-md">Drag and drop files here, or click to browse.</p>
+          <p className="text-zinc-500 text-center text-xs max-w-md mt-3">
+            Tip: Use descriptive titles with keywords so Vex can organize your content accurately
+          </p>
         </div>
       </div>
 
