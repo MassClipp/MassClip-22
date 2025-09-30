@@ -285,9 +285,13 @@ Be helpful, natural, and focus on their success. When creating folders, use CREA
         const organizeResult = await organizeFilesDirectly(userId, organizeData)
 
         if (organizeResult.success) {
+          const fileList = organizeResult.movedFiles?.length
+            ? `\n\n**Files moved:**\n${organizeResult.movedFiles.map((f: string) => `* ${f}`).join("\n")}`
+            : ""
+
           assistantMessage = assistantMessage.replace(
             "🗂️ **Organizing your files now...** Moving them to the right folder!",
-            `✅ **Files organized successfully!** I've moved ${organizeResult.movedCount} files to your "${organizeData.targetFolder}" folder. ${organizeData.reason}`,
+            `✅ **Files moved successfully!** Your "${organizeResult.targetFolder}" folder now contains the following files:${fileList}`,
           )
         } else {
           assistantMessage = assistantMessage.replace(
@@ -676,6 +680,8 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
       return { success: false, error: "Missing required organization information." }
     }
 
+    console.log(`[v0] Organizing ${fileIds.length} files to folder "${targetFolder}"`)
+
     // Find the target folder
     let foldersSnapshot = await db
       .collection("folders")
@@ -716,20 +722,37 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
     const availableUploads = analysisData.uploads || []
 
     let movedCount = 0
+    const movedFiles: string[] = []
     const batch = db.batch()
 
-    for (const fileId of fileIds) {
-      // Find the file in the analysis data
-      const upload = availableUploads.find((u: any) => u.id === fileId)
-      if (upload) {
+    for (const fileIdentifier of fileIds) {
+      // Try to find by exact document ID first
+      let matchedUpload = availableUploads.find((u: any) => u.id === fileIdentifier)
+
+      // If not found by ID, try to match by title or filename
+      if (!matchedUpload) {
+        matchedUpload = availableUploads.find(
+          (u: any) =>
+            u.title === fileIdentifier ||
+            u.filename === fileIdentifier ||
+            u.title?.toLowerCase().includes(fileIdentifier.toLowerCase()) ||
+            fileIdentifier.toLowerCase().includes(u.title?.toLowerCase() || ""),
+        )
+      }
+
+      if (matchedUpload) {
         // Update the file's folder reference
-        const fileRef = db.collection(upload.collection).doc(fileId)
+        const fileRef = db.collection(matchedUpload.collection).doc(matchedUpload.id)
         batch.update(fileRef, {
           folderId: targetFolderId,
           folderName: targetFolder,
           updatedAt: FieldValue.serverTimestamp(),
         })
+        movedFiles.push(matchedUpload.title || matchedUpload.filename || fileIdentifier)
         movedCount++
+        console.log(`[v0] Matched "${fileIdentifier}" to file: ${matchedUpload.title} (${matchedUpload.id})`)
+      } else {
+        console.warn(`[v0] Could not find file for identifier: "${fileIdentifier}"`)
       }
     }
 
@@ -742,6 +765,7 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
       success: true,
       movedCount,
       targetFolder,
+      movedFiles, // Return the actual file names that were moved
     }
   } catch (error) {
     console.error("[v0] File organization error:", error)
