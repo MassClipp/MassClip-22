@@ -67,7 +67,12 @@ ${tierInfo.reachedBundleLimit ? `⚠️ BUNDLE LIMIT REACHED: User has reached t
 `
 
             try {
-              const foldersSnapshot = await db.collection("folders").where("uid", "==", userId).orderBy("name").get()
+              const foldersSnapshot = await db
+                .collection("folders")
+                .where("userId", "==", userId)
+                .where("isDeleted", "==", false)
+                .orderBy("name")
+                .get()
 
               if (!foldersSnapshot.empty) {
                 const folders = foldersSnapshot.docs.map((doc) => ({
