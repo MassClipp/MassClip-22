@@ -126,6 +126,24 @@ When organizing files, use the folder names exactly as shown above.
               const contentByFolder = analysisData?.contentByFolder || {}
               const unorganizedContent = analysisData?.unorganizedContent || []
 
+              const validUnorganizedContent = unorganizedContent.filter((item: any) => {
+                const title = item.title || ""
+                // Skip generic/placeholder titles that might be test data
+                const isGenericTitle =
+                  title === "Untitled" ||
+                  title === "Unknown" ||
+                  title === "New Video" ||
+                  /^(IMG|VID|DSC|MOV)_\d+$/.test(title) ||
+                  /^\d+$/.test(title) ||
+                  /^(Clip|Video|Content)\s+\d+$/.test(title)
+
+                if (isGenericTitle) {
+                  console.log(`[v0] Filtering out potentially invalid content: "${title}"`)
+                }
+
+                return !isGenericTitle && title.length > 0
+              })
+
               let folderContentsContext = ""
               if (Object.keys(contentByFolder).length > 0) {
                 folderContentsContext = "\n\nCONTENT IN EACH FOLDER:\n"
@@ -135,14 +153,14 @@ When organizing files, use the folder names exactly as shown above.
                 }
               }
 
-              if (unorganizedContent.length > 0) {
-                folderContentsContext += `\n\nUNORGANIZED CONTENT (${unorganizedContent.length} items not in any folder):\n`
-                folderContentsContext += unorganizedContent
+              if (validUnorganizedContent.length > 0) {
+                folderContentsContext += `\n\nUNORGANIZED CONTENT (${validUnorganizedContent.length} items not in any folder):\n`
+                folderContentsContext += validUnorganizedContent
                   .slice(0, 10)
                   .map((item: any) => `  - ${item.title} (${item.type})`)
                   .join("\n")
-                if (unorganizedContent.length > 10) {
-                  folderContentsContext += `\n  ... and ${unorganizedContent.length - 10} more unorganized items`
+                if (validUnorganizedContent.length > 10) {
+                  folderContentsContext += `\n  ... and ${validUnorganizedContent.length - 10} more unorganized items`
                 }
               }
 
@@ -156,7 +174,7 @@ ${folderContentsContext}
 
 Available content IDs for bundling: ${(analysisData?.uploads || []).map((upload: any) => upload.id).join(", ")}
 `
-              console.log("[v0] User context loaded with folder contents")
+              console.log("[v0] User context loaded with folder contents (filtered for valid titles)")
             }
           } else {
             console.error("[v0] Invalid token format")

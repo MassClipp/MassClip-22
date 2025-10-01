@@ -65,31 +65,50 @@ export async function POST(request: NextRequest) {
         try {
           console.log(`🔍 [Vex Analyze] Checking collection: ${collectionName}`)
 
-          const snapshot = await db.collection(collectionName).where("uid", "==", userId).limit(100).get()
+          let snapshot = await db.collection(collectionName).where("uid", "==", userId).limit(100).get()
+
+          // Also try userId field if uid didn't return results
+          if (snapshot.empty) {
+            snapshot = await db.collection(collectionName).where("userId", "==", userId).limit(100).get()
+          }
 
           if (!snapshot.empty) {
-            const uploads = snapshot.docs.map((doc) => {
-              const data = doc.data()
-              return {
-                id: doc.id,
-                title: data.title || data.filename || "Untitled",
-                filename: data.filename || data.title || "Unknown",
-                description: data.description || "",
-                tags: data.tags || [],
-                mimeType: data.mimeType || data.type || "unknown",
-                contentType: determineContentType(data.mimeType || data.type || ""),
-                collection: collectionName,
-                createdAt: data.createdAt || data.addedAt || new Date(),
-                fileSize: data.fileSize || 0,
-                duration: data.duration || null,
-                url: data.url || data.downloadURL || null,
-                folderId: data.folderId || null,
-                folderName: data.folderName || null,
-              }
-            })
+            const uploads = snapshot.docs
+              .map((doc) => {
+                const data = doc.data()
+
+                if (data.uid !== userId && data.userId !== userId) {
+                  console.warn(`[v0] Skipping document ${doc.id} - ownership mismatch`)
+                  return null
+                }
+
+                const title = data.title || data.filename
+                if (!title || title === "Untitled" || title === "Unknown") {
+                  console.warn(`[v0] Skipping document ${doc.id} - no valid title`)
+                  return null
+                }
+
+                return {
+                  id: doc.id,
+                  title: title,
+                  filename: data.filename || data.title || "Unknown",
+                  description: data.description || "",
+                  tags: data.tags || [],
+                  mimeType: data.mimeType || data.type || "unknown",
+                  contentType: determineContentType(data.mimeType || data.type || ""),
+                  collection: collectionName,
+                  createdAt: data.createdAt || data.addedAt || new Date(),
+                  fileSize: data.fileSize || 0,
+                  duration: data.duration || null,
+                  url: data.url || data.downloadURL || null,
+                  folderId: data.folderId || null,
+                  folderName: data.folderName || null,
+                }
+              })
+              .filter(Boolean) // Remove null entries from skipped documents
 
             allUploads = [...allUploads, ...uploads]
-            console.log(`✅ [Vex Analyze] Found ${uploads.length} uploads in ${collectionName}`)
+            console.log(`✅ [Vex Analyze] Found ${uploads.length} valid uploads in ${collectionName}`)
           }
         } catch (collectionError) {
           console.log(`⚠️ [Vex Analyze] Error querying ${collectionName}:`, collectionError)
