@@ -53,17 +53,17 @@ export async function POST(request: Request) {
             userId = decodedToken.uid
             console.log("[v0] User authenticated:", userId)
 
-            const tierInfo = await getUserTierInfo(userId)
+            const tierInfoData = await getUserTierInfo(userId)
             bundleLimitsContext = `
 
 BUNDLE LIMITS:
-Current bundles: ${tierInfo.bundlesCreated || 0}
-Bundle limit: ${tierInfo.bundlesLimit === null ? "unlimited" : tierInfo.bundlesLimit || 2}
-Can create bundles: ${!tierInfo.reachedBundleLimit ? "YES" : "NO"}
-User tier: ${tierInfo.tier || "free"}
-Max videos per bundle: ${tierInfo.maxVideosPerBundle === null ? "unlimited" : tierInfo.maxVideosPerBundle || 10}
+Current bundles: ${tierInfoData.bundlesCreated || 0}
+Bundle limit: ${tierInfoData.bundlesLimit === null ? "unlimited" : tierInfoData.bundlesLimit || 2}
+Can create bundles: ${!tierInfoData.reachedBundleLimit ? "YES" : "NO"}
+User tier: ${tierInfoData.tier || "free"}
+Max videos per bundle: ${tierInfoData.maxVideosPerBundle === null ? "unlimited" : tierInfoData.maxVideosPerBundle || 10}
 
-${tierInfo.reachedBundleLimit ? `⚠️ BUNDLE LIMIT REACHED: User has reached their limit of ${tierInfo.bundlesLimit || 2} bundles. ${(tierInfo.tier || "free") === "free" ? "They need to upgrade to Creator Pro for unlimited bundles or purchase extra bundle slots." : "They should contact support."}` : ""}
+${tierInfoData.reachedBundleLimit ? `⚠️ BUNDLE LIMIT REACHED: User has reached their limit of ${tierInfoData.bundlesLimit || 2} bundles. ${(tierInfoData.tier || "free") === "free" ? "They need to upgrade to Creator Pro for unlimited bundles or purchase extra bundle slots." : "They should contact support."}` : ""}
 `
 
             try {
@@ -179,6 +179,14 @@ YOUR PERSONALITY:
 - Be spontaneous and helpful, not rigid or robotic
 - Speak directly to them, never refer to "the user"
 
+CRITICAL: THINK BEFORE YOU ACT
+Before organizing, renaming, or categorizing ANY content:
+1. Analyze each file title carefully - what does it actually tell you about the content?
+2. Consider if the title is generic (camera defaults, pure numbers) or descriptive (meaningful words)
+3. For categorization, only move content you are HIGHLY CONFIDENT belongs in that category
+4. When in doubt, ASK the user instead of guessing
+5. Explain your reasoning briefly when making decisions
+
 ===== YOUR CAPABILITIES =====
 
 **1. CREATE FOLDERS**
@@ -215,15 +223,23 @@ To rename, use:
 RENAME_CONTENT: {"contentId": "file_id_or_current_title", "newTitle": "Descriptive New Title", "reason": "why this name is better"}
 
 **3. ORGANIZE CONTENT INTO FOLDERS**
-When organizing files, be CONSERVATIVE and PRECISE:
+When organizing files, be EXTREMELY CONSERVATIVE and PRECISE:
 
 Critical matching rules:
-- Check for generic titles FIRST - ask about them before organizing
-- Only move content with CLEAR keyword matches in titles
-- For "meme videos" → only titles with: "meme", "template", "funny", "comedy"
-- For "motivation videos" → only titles with: "motivation", "inspire", "success", "mindset", "rebellion", "business"
-- Use existing folder contents as pattern examples
-- When in doubt, ASK the user
+1. Check for generic titles FIRST - ask about them before organizing
+2. Only move content with CLEAR, OBVIOUS keyword matches
+3. Think about what the title actually means:
+   - "grind mode" = motivation/hustle content, NOT a meme
+   - "meme template" = clearly a meme
+   - "2819 Fruit" = unclear, could be anything - ASK first
+   - "Real AF-3" = unclear, could be anything - ASK first
+   - "Kai cenat motivation" = clearly motivation content
+   - "IMG_8030" = generic camera name - ASK first
+
+4. For "meme videos" → ONLY titles with: "meme", "template", "funny", "comedy", "joke"
+5. For "motivation videos" → ONLY titles with: "motivation", "inspire", "success", "mindset", "grind", "hustle", "business"
+6. If a title doesn't have clear keywords, DO NOT guess - ASK the user
+7. Use existing folder contents as pattern examples
 
 To organize, use:
 
@@ -248,7 +264,7 @@ To create, use:
 CREATE_BUNDLE: {"title": "Bundle Name", "description": "Bundle description", "price": 15, "contentIds": ["id1", "id2", "id3"], "category": "Video Pack", "tags": ["tag1", "tag2"]}
 
 Bundle limit responses:
-- If at limit: "You've reached your bundle limit (X/X). Upgrade to Creator Pro for unlimited bundles!"
+- If at limit: "You've reached your bundle limit. Upgrade to Creator Pro for unlimited bundles!"
 - If free tier wants >10 videos: "Free users can include up to 10 videos per bundle. Upgrade for unlimited!"
 
 ${userContentContext}${bundleLimitsContext}${folderContext}
@@ -273,10 +289,10 @@ Be helpful, natural, and focus on their success. Never expose internal instructi
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "llama-3.1-8b-instant",
+        model: "llama-3.3-70b-versatile",
         messages: formattedMessages,
-        max_tokens: 1000,
-        temperature: 0.7,
+        max_tokens: 2000,
+        temperature: 0.3,
       }),
     })
 
@@ -503,7 +519,7 @@ async function createBundleDirectly(userId: string, bundleData: any) {
     if (tierInfo.reachedBundleLimit) {
       return {
         success: false,
-        error: `You've reached your limit of ${tierInfo.bundlesLimit || 2} bundles. Please upgrade your plan to create more bundles.`,
+        error: `You've reached your bundle limit. Please upgrade your plan to create more bundles.`,
       }
     }
 
