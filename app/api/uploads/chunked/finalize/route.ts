@@ -2,7 +2,6 @@ import { type NextRequest, NextResponse } from "next/server"
 import { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3"
 import { initializeFirebaseAdmin, db } from "@/lib/firebase/firebaseAdmin"
 import { headers } from "next/headers"
-import { transcribeVideoWithGroq } from "@/lib/groq-transcription"
 
 // Initialize Firebase Admin
 initializeFirebaseAdmin()
@@ -189,28 +188,25 @@ export async function POST(request: NextRequest) {
       const uploadRef = await db.collection("uploads").add(uploadData)
 
       if (uploadData.type === "video") {
-        console.log(`🎤 [Finalize Upload] Triggering transcription for video: ${uploadRef.id}`)
-        console.log(`🎤 [Auto-Transcribe] Starting transcription for ${uploadRef.id}`)
-        console.log(`🎤 [Auto-Transcribe] Video URL: ${sessionData.publicUrl}`)
+        console.log(`[v0] 🎬 Video upload detected, triggering transcription API...`)
 
-        // Trigger transcription asynchronously (don't wait for it)
-        transcribeVideoWithGroq(sessionData.publicUrl)
-          .then(async (result) => {
-            console.log(`✅ [Auto-Transcribe] Completed for ${uploadRef.id}`)
-            console.log(`📝 [Auto-Transcribe] Transcript length: ${result.text.length} characters`)
-            await uploadRef.update({
-              transcript: result.text,
-              transcriptDuration: result.duration,
-              transcriptLanguage: result.language,
-              transcribedAt: new Date(),
-            })
-            console.log(`💾 [Auto-Transcribe] Saved transcript to Firestore`)
-          })
-          .catch((error) => {
-            console.error(`❌ [Auto-Transcribe] Failed for ${uploadRef.id}:`, error)
-            console.error(`❌ [Auto-Transcribe] Error details:`, error.message)
-            // Don't fail the upload if transcription fails
-          })
+        // Call the auto-transcribe endpoint asynchronously
+        const transcribeUrl = `${process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || "https://massclippp-gmailcoms-projects.vercel.app"}/api/uploads/auto-transcribe`
+
+        fetch(transcribeUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            uploadId: uploadRef.id,
+            videoUrl: sessionData.publicUrl,
+          }),
+        }).catch((error) => {
+          console.error(`[v0] ❌ Failed to trigger transcription API:`, error)
+        })
+
+        console.log(`[v0] 🚀 Transcription API called for upload ${uploadRef.id}`)
       }
 
       // Update session status
