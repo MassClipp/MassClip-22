@@ -123,12 +123,41 @@ When organizing files, use the folder names exactly as shown above.
             if (analysisDoc.exists) {
               const analysisData = analysisDoc.data()
 
+              // Check if analysis is stale (older than 5 minutes)
+              const analyzedAt = analysisData?.analyzedAt?.toDate?.() || analysisData?.lastUpdated?.toDate?.()
+              const isStale = !analyzedAt || Date.now() - analyzedAt.getTime() > 5 * 60 * 1000
+
+              if (isStale) {
+                console.log("[v0] Analysis data is stale, triggering refresh...")
+                // Trigger refresh in background, don't wait for it
+                fetch(`${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/api/vex/analyze-uploads`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                  },
+                }).catch((err) => console.warn("[v0] Failed to trigger analysis refresh:", err))
+              }
+
               const contentByFolder = analysisData?.contentByFolder || {}
               const unorganizedContent = analysisData?.unorganizedContent || []
 
+              console.log("[v0] Raw contentByFolder structure:", JSON.stringify(Object.keys(contentByFolder)))
+              console.log("[v0] Raw unorganizedContent count:", unorganizedContent.length)
+
+              // Debug: Log the actual structure of contentByFolder
+              for (const [folderName, items] of Object.entries(contentByFolder)) {
+                console.log(
+                  `[v0] Folder "${folderName}" has ${Array.isArray(items) ? items.length : "non-array"} items`,
+                )
+                if (Array.isArray(items)) {
+                  console.log(`[v0] First few items in "${folderName}":`, items.slice(0, 3))
+                }
+              }
+
+              // Filter out generic/invalid titles from unorganized content
               const validUnorganizedContent = unorganizedContent.filter((item: any) => {
                 const title = item.title || ""
-                // Skip generic/placeholder titles that might be test data
                 const isGenericTitle =
                   title === "Untitled" ||
                   title === "Unknown" ||
@@ -144,14 +173,36 @@ When organizing files, use the folder names exactly as shown above.
                 return !isGenericTitle && title.length > 0
               })
 
+              // Build folder contents context with ALL items from each folder
               let folderContentsContext = ""
+              let totalFolderItems = 0
+
               if (Object.keys(contentByFolder).length > 0) {
                 folderContentsContext = "\n\nCONTENT IN EACH FOLDER:\n"
                 for (const [folderName, items] of Object.entries(contentByFolder)) {
-                  const itemsList = (items as any[]).map((item: any) => `  - ${item.title} (${item.type})`).join("\n")
-                  folderContentsContext += `\n"${folderName}" folder (${(items as any[]).length} items):\n${itemsList}\n`
+                  // Handle both array and object structures
+                  let itemsArray: any[] = []
+
+                  if (Array.isArray(items)) {
+                    itemsArray = items
+                  } else if (typeof items === "object" && items !== null) {
+                    // If it's an object with numeric keys (like {0: item, 1: item}), convert to array
+                    itemsArray = Object.values(items)
+                  }
+
+                  totalFolderItems += itemsArray.length
+                  console.log(`[v0] Folder "${folderName}" contains ${itemsArray.length} items`)
+
+                  const itemsList = itemsArray
+                    .map((item: any) => `  - ${item.title || item.filename || "Untitled"} (${item.type || "unknown"})`)
+                    .join("\n")
+
+                  folderContentsContext += `\n"${folderName}" folder (${itemsArray.length} items):\n${itemsList}\n`
                 }
               }
+
+              console.log(`[v0] Total items in folders: ${totalFolderItems}`)
+              console.log(`[v0] Total unorganized items: ${validUnorganizedContent.length}`)
 
               if (validUnorganizedContent.length > 0) {
                 folderContentsContext += `\n\nUNORGANIZED CONTENT (${validUnorganizedContent.length} items not in any folder):\n`
@@ -174,7 +225,9 @@ ${folderContentsContext}
 
 Available content IDs for bundling: ${(analysisData?.uploads || []).map((upload: any) => upload.id).join(", ")}
 `
-              console.log("[v0] User context loaded with folder contents (filtered for valid titles)")
+              console.log("[v0] User context loaded with complete folder contents")
+            } else {
+              console.log("[v0] No analysis data found, user may need to run analysis first")
             }
           } else {
             console.error("[v0] Invalid token format")
