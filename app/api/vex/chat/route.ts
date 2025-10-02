@@ -260,6 +260,13 @@ Before organizing, renaming, or categorizing ANY content:
 
 ===== YOUR CAPABILITIES =====
 
+**0. REFRESH CONTENT ANALYSIS**
+If the user asks to "refresh", "update my library", "rescan my content", or mentions that you're not seeing their latest uploads, respond with:
+
+REFRESH_ANALYSIS: true
+
+This will trigger a fresh scan of their entire content library and update your understanding of their folders and uploads.
+
 **1. CREATE FOLDERS**
 When someone asks to create a folder, respond naturally then add this instruction:
 
@@ -387,6 +394,50 @@ Be helpful, natural, and focus on their success. Never expose internal instructi
     if (!assistantMessage) {
       console.log("[v0] No assistant message in response")
       return NextResponse.json({ error: "No response from AI" }, { status: 500 })
+    }
+
+    if (assistantMessage.includes("REFRESH_ANALYSIS:") && userId) {
+      try {
+        console.log("[v0] Vex wants to refresh content analysis...")
+
+        // Show progress message
+        assistantMessage = assistantMessage.replace(
+          /REFRESH_ANALYSIS:\s*true/,
+          "🔄 **Refreshing your content analysis...** Scanning your library now!",
+        )
+
+        // Trigger analysis refresh
+        const token = authHeader?.split("Bearer ")[1]
+        const refreshResponse = await fetch(
+          `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/api/vex/analyze-uploads`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+          },
+        )
+
+        if (refreshResponse.ok) {
+          const refreshData = await refreshResponse.json()
+          assistantMessage = assistantMessage.replace(
+            "🔄 **Refreshing your content analysis...** Scanning your library now!",
+            `✅ **Content analysis refreshed!** I've updated my understanding of your library. I can now see ${refreshData.analysis?.totalUploads || 0} uploads across ${refreshData.analysis?.categories?.length || 0} categories.`,
+          )
+        } else {
+          assistantMessage = assistantMessage.replace(
+            "🔄 **Refreshing your content analysis...** Scanning your library now!",
+            "❌ I encountered an issue refreshing your content analysis. Please try the refresh button above the chat input.",
+          )
+        }
+      } catch (error) {
+        console.error("[v0] Content analysis refresh failed:", error)
+        assistantMessage = assistantMessage.replace(
+          /🔄 \*\*Refreshing your content analysis\.\.\.\*\* Scanning your library now!/,
+          "❌ I encountered an error while refreshing your content analysis. Please try the refresh button above the chat input.",
+        )
+      }
     }
 
     if (assistantMessage.includes("RENAME_CONTENT:") && userId) {

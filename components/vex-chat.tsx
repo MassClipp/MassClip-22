@@ -69,6 +69,7 @@ function VexChat({ children }: VexChatProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [contentAnalysis, setContentAnalysis] = useState<ContentAnalysis | null>(null)
   const [hasAnalyzed, setHasAnalyzed] = useState(false)
+  const [isRefreshingAnalysis, setIsRefreshingAnalysis] = useState(false)
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([])
   const [currentChatId, setCurrentChatId] = useState<string | null>(null)
   const [bundleJobs, setBundleJobs] = useState<{ [jobId: string]: any }>({})
@@ -374,6 +375,59 @@ function VexChat({ children }: VexChatProps) {
 
     analyzeUserContent()
   }, [user, hasAnalyzed])
+
+  const refreshContentAnalysis = async () => {
+    if (!user || isRefreshingAnalysis) return
+
+    console.log("[v0] Manually refreshing content analysis...")
+    setIsRefreshingAnalysis(true)
+
+    try {
+      const token = await user.getIdToken(true)
+      const response = await fetch("/api/vex/analyze-uploads", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log("[v0] Content analysis refreshed successfully:", data.analysis)
+        setContentAnalysis(data.analysis)
+
+        // Add a system message to confirm refresh
+        const refreshMessage: Message = {
+          id: Date.now().toString(),
+          role: "assistant",
+          content:
+            "✅ **Content analysis refreshed!** I've updated my understanding of your library. I can now see all your latest uploads and folder organization.",
+        }
+        setMessages((prev) => [...prev, refreshMessage])
+
+        // Save the refresh confirmation to current chat
+        if (currentChatId) {
+          await saveCurrentChat([...messages, refreshMessage])
+        }
+      } else {
+        console.error("[v0] Failed to refresh analysis:", response.status)
+        throw new Error("Failed to refresh analysis")
+      }
+    } catch (error) {
+      console.error("[v0] Error refreshing content analysis:", error)
+
+      // Add error message
+      const errorMessage: Message = {
+        id: Date.now().toString(),
+        role: "assistant",
+        content: "❌ I encountered an error while refreshing your content analysis. Please try again.",
+      }
+      setMessages((prev) => [...prev, errorMessage])
+    } finally {
+      setIsRefreshingAnalysis(false)
+    }
+  }
 
   useEffect(() => {
     const pollBundleJobs = async () => {
@@ -1205,6 +1259,30 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
 
           <div className={`flex-shrink-0 ${isMobile ? "px-3" : "px-4"} py-3`}>
             <div className={`${isMobile ? "max-w-full" : "max-w-4xl mx-auto"}`}>
+              {messages.length > 0 && (
+                <div className="flex justify-center mb-2">
+                  <Button
+                    onClick={refreshContentAnalysis}
+                    disabled={isRefreshingAnalysis}
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs text-zinc-400 hover:text-white hover:bg-zinc-800/50"
+                  >
+                    {isRefreshingAnalysis ? (
+                      <>
+                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                        Refreshing...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="h-3 w-3 mr-1" />
+                        Refresh Content Analysis
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+
               <form onSubmit={handleSubmit} className="flex gap-2">
                 <div className="flex-1 relative">
                   <Input
