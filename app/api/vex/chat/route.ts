@@ -983,18 +983,38 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
     const targetFolderId = foldersSnapshot.docs[0].id
     console.log("[v0] Found target folder:", targetFolderId)
 
-    const contentCollections = ["uploads", "productBoxContent", "free_content"]
-    let movedCount = 0
-    const movedFiles: string[] = []
+    const analysisDoc = await db.collection("vex_content_analysis").doc(userId).get()
+    if (!analysisDoc.exists) {
+      return {
+        success: false,
+        error: "Content analysis not found. Please refresh your content analysis first.",
+      }
+    }
+
+    const analysisData = analysisDoc.data()!
+    const availableUploads = analysisData.uploads || []
+    console.log(`[v0] Loaded ${availableUploads.length} uploads from analysis`)
+
     const batch = db.batch()
+    const movedFiles: string[] = []
+    const notFoundFiles: string[] = []
 
     for (const fileIdentifier of fileIds) {
-      let found = false
+      let matchedUpload = availableUploads.find((upload: any) => upload.id === fileIdentifier)
 
-      // Try each collection
-      for (const collectionName of contentCollections) {
-        // First try exact ID match
-        const docRef = db.collection(collectionName).doc(fileIdentifier)
+      if (!matchedUpload) {
+        matchedUpload = availableUploads.find(
+          (upload: any) =>
+            upload.title === fileIdentifier ||
+            upload.filename === fileIdentifier ||
+            upload.title.toLowerCase() === fileIdentifier.toLowerCase() ||
+            upload.title.toLowerCase().includes(fileIdentifier.toLowerCase()) ||
+            fileIdentifier.toLowerCase().includes(upload.title.toLowerCase()),
+        )
+      }
+
+      if (matchedUpload) {
+        const docRef = db.collection(matchedUpload.collection).doc(matchedUpload.id)
         const docSnap = await docRef.get()
 
         if (docSnap.exists) {
@@ -1006,81 +1026,55 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
               folderId: targetFolderId,
               folderName: targetFolder,
               updatedAt: FieldValue.serverTimestamp(),
+              vexOrganized: true,
+              vexOrganizeReason: reason || "Organized by Vex AI",
             })
             movedFiles.push(docData.title || docData.filename || fileIdentifier)
-            movedCount++
-            found = true
-            console.log(`[v0] Matched "${fileIdentifier}" by ID in ${collectionName}`)
-            break
+            console.log(
+              `[v0] ✅ Matched "${fileIdentifier}" to document ${matchedUpload.id} in ${matchedUpload.collection}`,
+            )
+          } else {
+            notFoundFiles.push(fileIdentifier)
+            console.warn(`[v0] ❌ Ownership mismatch for "${fileIdentifier}"`)
           }
+        } else {
+          notFoundFiles.push(fileIdentifier)
+          console.warn(`[v0] ❌ Document not found for "${fileIdentifier}"`)
         }
-      }
-
-      // If not found by ID, try fuzzy matching by title/filename
-      if (!found) {
-        for (const collectionName of contentCollections) {
-          const querySnapshot = await db.collection(collectionName).where("userId", "==", userId).get()
-
-          for (const doc of querySnapshot.docs) {
-            const docData = doc.data()
-            const title = docData.title || docData.filename || ""
-
-            // Fuzzy match: check if identifier is in title or title is in identifier
-            if (
-              title.toLowerCase() === fileIdentifier.toLowerCase() ||
-              title.toLowerCase().includes(fileIdentifier.toLowerCase()) ||
-              fileIdentifier.toLowerCase().includes(title.toLowerCase())
-            ) {
-              batch.update(doc.ref, {
-                folderId: targetFolderId,
-                folderName: targetFolder,
-                updatedAt: FieldValue.serverTimestamp(),
-              })
-              movedFiles.push(title || fileIdentifier)
-              movedCount++
-              found = true
-              console.log(`[v0] Matched "${fileIdentifier}" to "${title}" by fuzzy match in ${collectionName}`)
-              break
-            }
-          }
-
-          if (found) break
-        }
-      }
-
-      if (!found) {
-        console.warn(`[v0] Could not find file for identifier: "${fileIdentifier}"`)
+      } else {
+        notFoundFiles.push(fileIdentifier)
+        console.warn(`[v0] ❌ Could not find file for identifier: "${fileIdentifier}"`)
       }
     }
 
-    if (movedCount > 0) {
-      await batch.commit()
-      console.log(`[v0] Successfully moved ${movedCount} files to folder "${targetFolder}"`)
-
-      try {
-        await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/api/vex/analyze-uploads`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ userId }),
-        })
-        console.log("[v0] Triggered content analysis refresh after organizing files")
-      } catch (error) {
-        console.warn("[v0] Failed to trigger content analysis refresh:", error)
-      }
-    } else {
+    if (movedFiles.length === 0) {
       return {
         success: false,
-        error: `Could not find any of the specified files. Please make sure they exist in your library.`,
+        error: `Could not find any of the specified files. Please make sure they exist in your library.${notFoundFiles.length > 0 ? `\n\nFiles not found: ${notFoundFiles.join(", ")}` : ""}`,
       }
+    }
+
+    await batch.commit()
+    console.log(`[v0] Successfully moved ${movedFiles.length} files to folder "${targetFolder}"`)
+
+    try {
+      fetch(`${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/api/vex/analyze-uploads`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ userId }),
+      }).catch((err) => console.warn("[v0] Failed to trigger analysis refresh:", err))
+    } catch (error) {
+      console.warn("[v0] Failed to trigger content analysis refresh:", error)
     }
 
     return {
       success: true,
-      movedCount,
+      movedCount: movedFiles.length,
       targetFolder,
       movedFiles,
+      notFound: notFoundFiles.length > 0 ? notFoundFiles : undefined,
     }
   } catch (error) {
     console.error("[v0] File organization error:", error)
