@@ -189,13 +189,16 @@ export async function POST(request: NextRequest) {
       const uploadRef = await db.collection("uploads").add(uploadData)
 
       if (uploadData.type === "video") {
+        console.log(`[v0] 🎬 Video upload detected, preparing transcription...`)
         console.log(`🎤 [Finalize Upload] Triggering transcription for video: ${uploadRef.id}`)
         console.log(`🎤 [Auto-Transcribe] Starting transcription for ${uploadRef.id}`)
         console.log(`🎤 [Auto-Transcribe] Video URL: ${sessionData.publicUrl}`)
+        console.log(`[v0] 🔗 About to call transcribeVideoWithGroq...`)
 
         // Trigger transcription asynchronously (don't wait for it)
         transcribeVideoWithGroq(sessionData.publicUrl)
           .then(async (result) => {
+            console.log(`[v0] ✅ Transcription promise resolved!`)
             console.log(`✅ [Auto-Transcribe] Completed for ${uploadRef.id}`)
             console.log(`📝 [Auto-Transcribe] Transcript length: ${result.text.length} characters`)
             await uploadRef.update({
@@ -207,10 +210,14 @@ export async function POST(request: NextRequest) {
             console.log(`💾 [Auto-Transcribe] Saved transcript to Firestore`)
           })
           .catch((error) => {
+            console.error(`[v0] ❌ Transcription promise rejected!`)
             console.error(`❌ [Auto-Transcribe] Failed for ${uploadRef.id}:`, error)
             console.error(`❌ [Auto-Transcribe] Error details:`, error.message)
+            console.error(`[v0] ❌ Full error object:`, JSON.stringify(error, null, 2))
             // Don't fail the upload if transcription fails
           })
+
+        console.log(`[v0] 🚀 Transcription triggered (async), continuing with upload finalization...`)
       }
 
       // Update session status
