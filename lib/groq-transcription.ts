@@ -98,3 +98,5 @@ export async function transcribeVideoFile(file: File): Promise<TranscriptionResu
     throw error
   }
 }
+
+export const transcribeVideo = transcribeVideoWithGroq
