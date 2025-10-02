@@ -1,4 +1,6 @@
 import Groq from "groq-sdk"
+import { Buffer } from "buffer"
+import { File } from "form-data"
 
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
@@ -15,7 +17,7 @@ export interface TranscriptionResult {
   }>
 }
 
-export async function transcribeVideoWithGroq(videoUrl: string): Promise<TranscriptionResult> {
+export async function transcribeVideo(videoUrl: string): Promise<TranscriptionResult> {
   console.log("🎤 [Groq Transcription] Starting transcription for:", videoUrl)
 
   try {
@@ -99,4 +101,4 @@ export async function transcribeVideoFile(file: File): Promise<TranscriptionResu
   }
 }
 
-export const transcribeVideo = transcribeVideoWithGroq
+export const transcribeVideoWithGroq = transcribeVideo
