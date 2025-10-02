@@ -346,7 +346,7 @@ function VexChat({ children }: VexChatProps) {
       console.log("[v0] Starting auto-analysis of user content...")
 
       try {
-        const token = await user.getIdToken(true)
+        const token = await user.getIdToken(true) // true forces refresh
         console.log("[v0] Got fresh ID token for analysis")
 
         const response = await fetch("/api/vex/analyze-uploads", {
@@ -383,7 +383,7 @@ function VexChat({ children }: VexChatProps) {
     setIsRefreshingAnalysis(true)
 
     try {
-      const token = await user.getIdToken(true)
+      const token = await user.getIdToken(true) // true forces refresh
       const response = await fetch("/api/vex/analyze-uploads", {
         method: "POST",
         headers: {
@@ -1092,7 +1092,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                     <Avatar className="h-8 w-8">
                       <AvatarImage src={user?.photoURL || undefined} />
                       <AvatarFallback className="bg-zinc-700 text-white text-xs">
-                        {user?.displayName?.[0] || user?.email?.[0] || "U"}
+                        {user?.displayName || username?.[0] || "U"}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
