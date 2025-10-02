@@ -340,7 +340,7 @@ Before organizing, renaming, or categorizing ANY content:
    - "2819 Fruit" = unclear, could be anything = ASK
    - "whoosh_01.wav" at 2s = SFX (short audio, descriptive name)
 5. **Combine evidence** - Filename + duration + file type + keywords + cultural patterns
-6. **When uncertain = ASK** - Don't guess, ask the user for clarification
+6. **When uncertain = ASK** - Don't guess
 7. **Explain your reasoning** - "This file is called grind_speech_final.mp4, is 35 seconds long, and includes keywords like 'grind' and 'speech'. It's likely motivational content."
 
 **Example of GOOD thinking:**
@@ -1039,13 +1039,15 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
     const availableUploads = analysisData.uploads || []
     console.log(`[v0] Loaded ${availableUploads.length} uploads from analysis`)
 
-    const batch = db.batch()
     const movedFiles: string[] = []
     const notFoundFiles: string[] = []
+    const documentsToUpdate: Array<{ ref: any; title: string }> = []
 
     for (const fileIdentifier of fileIds) {
+      // Try exact ID match first
       let matchedUpload = availableUploads.find((upload: any) => upload.id === fileIdentifier)
 
+      // If not found by ID, try fuzzy matching by title/filename
       if (!matchedUpload) {
         matchedUpload = availableUploads.find(
           (upload: any) =>
@@ -1066,14 +1068,10 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
 
           // Verify ownership
           if (docData.uid === userId || docData.userId === userId) {
-            batch.update(docRef, {
-              folderId: targetFolderId,
-              folderName: targetFolder,
-              updatedAt: FieldValue.serverTimestamp(),
-              vexOrganized: true,
-              vexOrganizeReason: reason || "Organized by Vex AI",
+            documentsToUpdate.push({
+              ref: docRef,
+              title: docData.title || docData.filename || fileIdentifier,
             })
-            movedFiles.push(docData.title || docData.filename || fileIdentifier)
             console.log(
               `[v0] ✅ Matched "${fileIdentifier}" to document ${matchedUpload.id} in ${matchedUpload.collection}`,
             )
@@ -1091,14 +1089,33 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
       }
     }
 
-    if (movedFiles.length === 0) {
+    if (documentsToUpdate.length === 0) {
       return {
         success: false,
         error: `Could not find any of the specified files. Please make sure they exist in your library.${notFoundFiles.length > 0 ? `\n\nFiles not found: ${notFoundFiles.join(", ")}` : ""}`,
       }
     }
 
-    await batch.commit()
+    const batchSize = 500
+    for (let i = 0; i < documentsToUpdate.length; i += batchSize) {
+      const batch = db.batch()
+      const batchDocs = documentsToUpdate.slice(i, i + batchSize)
+
+      for (const doc of batchDocs) {
+        batch.update(doc.ref, {
+          folderId: targetFolderId,
+          folderName: targetFolder,
+          updatedAt: FieldValue.serverTimestamp(),
+          vexOrganized: true,
+          vexOrganizeReason: reason || "Organized by Vex AI",
+        })
+        movedFiles.push(doc.title)
+      }
+
+      await batch.commit()
+      console.log(`[v0] Committed batch ${Math.floor(i / batchSize) + 1}, moved ${batchDocs.length} files`)
+    }
+
     console.log(`[v0] Successfully moved ${movedFiles.length} files to folder "${targetFolder}"`)
 
     try {
