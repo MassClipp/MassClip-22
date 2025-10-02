@@ -5,7 +5,8 @@ import { useParams, useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { FullscreenWrapper } from "@/components/fullscreen-wrapper"
-import { ArrowLeft, Download, RefreshCw, Play, Pause } from "lucide-react"
+import { ArrowLeft, Download, RefreshCw, Play, Pause, Archive } from "lucide-react"
+import { toast } from "@/hooks/use-toast"
 
 interface ContentItem {
   id: string
@@ -42,6 +43,7 @@ export default function ProductBoxContentPage() {
   const [items, setItems] = useState<ContentItem[]>([])
   const [currentlyPlayingVideo, setCurrentlyPlayingVideo] = useState<string | null>(null)
   const [downloadingItems, setDownloadingItems] = useState<Set<string>>(new Set())
+  const [isDownloadingZip, setIsDownloadingZip] = useState(false)
 
   const productBoxId = params.id as string
 
@@ -66,7 +68,6 @@ export default function ProductBoxContentPage() {
 
       const idToken = await user.getIdToken()
 
-      // Check if user has access via purchases
       const purchasesResponse = await fetch("/api/user/unified-purchases", {
         headers: {
           Authorization: `Bearer ${idToken}`,
@@ -86,7 +87,6 @@ export default function ProductBoxContentPage() {
         if (matchingPurchase) {
           console.log(`✅ [Content Page] Access granted via purchase`, matchingPurchase)
 
-          // Use the bundle data from the purchase with enhanced title logging
           const bundleInfo: BundleData = {
             title: matchingPurchase.productBoxTitle || matchingPurchase.bundleTitle || "Untitled Bundle",
             description: matchingPurchase.productBoxDescription || "",
@@ -95,17 +95,14 @@ export default function ProductBoxContentPage() {
             totalItems: matchingPurchase.totalItems || matchingPurchase.items?.length || 0,
           }
 
-          // Log the bundle title for debugging
           console.log(`📝 [Content Page] Bundle title: "${bundleInfo.title}"`)
 
-          // Use the content items directly from the purchase
           let contentItems: ContentItem[] = []
 
           if (matchingPurchase.items && Array.isArray(matchingPurchase.items)) {
             console.log(`📦 [Content Page] Found ${matchingPurchase.items.length} items in purchase`)
 
             contentItems = matchingPurchase.items.map((item: any, index: number) => {
-              // Enhanced title extraction with better fallbacks
               let displayTitle =
                 item.displayTitle ||
                 item.title ||
@@ -115,10 +112,8 @@ export default function ProductBoxContentPage() {
                 item.originalTitle ||
                 `Content Item ${index + 1}`
 
-              // Clean up the title - remove file extensions and normalize
               displayTitle = displayTitle.replace(/\.(mp4|mov|avi|mkv|webm|m4v|mp3|wav|jpg|jpeg|png|gif|pdf)$/i, "")
 
-              // Log each item's title for debugging
               console.log(
                 `📝 [Content Page] Item ${index + 1} title: "${displayTitle}" (from: ${JSON.stringify({
                   displayTitle: item.displayTitle,
@@ -130,14 +125,12 @@ export default function ProductBoxContentPage() {
                 })})`,
               )
 
-              // Determine content type from mimeType or fileUrl
               let contentType: "video" | "audio" | "image" | "document" = "document"
               if (item.mimeType) {
                 if (item.mimeType.startsWith("video/")) contentType = "video"
                 else if (item.mimeType.startsWith("audio/")) contentType = "audio"
                 else if (item.mimeType.startsWith("image/")) contentType = "image"
               } else if (item.fileUrl) {
-                // Fallback: check file extension
                 const url = item.fileUrl.toLowerCase()
                 if (
                   url.includes(".mp4") ||
@@ -178,7 +171,6 @@ export default function ProductBoxContentPage() {
           } else {
             console.log(`⚠️ [Content Page] No items found in purchase, trying API fallback`)
 
-            // Fallback: try to fetch content from API
             const contentResponse = await fetch(`/api/product-box/${productBoxId}/content`, {
               headers: {
                 Authorization: `Bearer ${idToken}`,
@@ -255,7 +247,6 @@ export default function ProductBoxContentPage() {
 
       setDownloadingItems((prev) => new Set(prev).add(item.id))
 
-      // Fetch the file as a blob
       const response = await fetch(item.fileUrl)
       if (!response.ok) {
         throw new Error(`Failed to fetch file: ${response.statusText}`)
@@ -263,27 +254,21 @@ export default function ProductBoxContentPage() {
 
       const blob = await response.blob()
 
-      // Create a blob URL
       const blobUrl = URL.createObjectURL(blob)
-
-      // Create download link
       const link = document.createElement("a")
       link.href = blobUrl
       link.download = item.filename || item.displayTitle
 
-      // Append to body, click, and remove
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
 
-      // Clean up the blob URL
       URL.revokeObjectURL(blobUrl)
 
       console.log(`✅ [Download] Direct download completed for: ${item.displayTitle}`)
     } catch (error) {
       console.error(`❌ [Download] Error downloading ${item.displayTitle}:`, error)
 
-      // Fallback to original method
       try {
         const link = document.createElement("a")
         link.href = item.fileUrl
@@ -306,7 +291,6 @@ export default function ProductBoxContentPage() {
   }
 
   const handleVideoToggle = (itemId: string, videoElement: HTMLVideoElement) => {
-    // If there's a currently playing video and it's not this one, pause it
     if (currentlyPlayingVideo && currentlyPlayingVideo !== itemId) {
       const currentVideo = document.querySelector(`video[data-video-id="${currentlyPlayingVideo}"]`) as HTMLVideoElement
       if (currentVideo) {
@@ -338,7 +322,55 @@ export default function ProductBoxContentPage() {
     return title.substring(0, maxLength) + "..."
   }
 
-  // Enhanced Video Card Component with better video handling
+  const handleDownloadAllAsZip = async () => {
+    if (!user || !productBoxId) return
+
+    setIsDownloadingZip(true)
+
+    try {
+      console.log(`📦 [Download ZIP] Starting ZIP download for product box: ${productBoxId}`)
+
+      const token = await user.getIdToken()
+      const response = await fetch(`/api/product-box/${productBoxId}/download-zip`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to download ZIP")
+      }
+
+      const blob = await response.blob()
+
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `${bundleData?.title || "product-box"}.zip`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+
+      console.log(`✅ [Download ZIP] ZIP download completed`)
+
+      toast({
+        title: "Download Started",
+        description: `Downloading all content from ${bundleData?.title}`,
+      })
+    } catch (error) {
+      console.error(`❌ [Download ZIP] Error:`, error)
+      toast({
+        title: "Download Error",
+        description: error instanceof Error ? error.message : "Failed to download ZIP",
+        variant: "destructive",
+      })
+    } finally {
+      setIsDownloadingZip(false)
+    }
+  }
+
   const VideoCard = ({ item }: { item: ContentItem }) => {
     const videoRef = useRef<HTMLVideoElement>(null)
     const [videoLoaded, setVideoLoaded] = useState(false)
@@ -356,7 +388,6 @@ export default function ProductBoxContentPage() {
       setVideoLoaded(false)
     }
 
-    // Check if we have a valid video URL
     const hasValidVideoUrl = item.fileUrl && item.fileUrl.startsWith("http") && item.contentType === "video"
 
     console.log(`🎥 [Video Card] Rendering card for "${item.displayTitle}":`, {
@@ -370,7 +401,6 @@ export default function ProductBoxContentPage() {
 
     return (
       <div className="relative group cursor-pointer">
-        {/* Video Container - 9:16 Aspect Ratio */}
         <div
           className="relative bg-gray-900 rounded-lg overflow-hidden border border-transparent group-hover:border-gray-600 transition-all duration-300"
           style={{ aspectRatio: "9/16" }}
@@ -398,14 +428,12 @@ export default function ProductBoxContentPage() {
                 controls={false}
               />
 
-              {/* Loading state */}
               {!videoLoaded && !videoError && (
                 <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
                 </div>
               )}
 
-              {/* Play/Pause Button - Center - Only visible on hover */}
               <div
                 className="absolute inset-0 flex items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity duration-300"
                 onClick={(e) => {
@@ -424,7 +452,6 @@ export default function ProductBoxContentPage() {
                 </div>
               </div>
 
-              {/* Download Button - Bottom Right - Only visible on hover */}
               <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                 <Button
                   onClick={(e) => {
@@ -465,7 +492,6 @@ export default function ProductBoxContentPage() {
           )}
         </div>
 
-        {/* Title and File Size - Below Video */}
         <div className="mt-2 px-1">
           <div className="text-white text-sm font-medium mb-1" title={item.displayTitle}>
             {truncateTitle(item.displayTitle)}
@@ -517,7 +543,6 @@ export default function ProductBoxContentPage() {
 
   return (
     <FullscreenWrapper className="bg-black">
-      {/* Header */}
       <div className="p-6 border-b border-gray-800">
         <div className="flex items-center gap-4 mb-4">
           <Button
@@ -533,11 +558,32 @@ export default function ProductBoxContentPage() {
             onClick={checkAccessAndFetchContent}
             variant="ghost"
             size="sm"
-            className="text-gray-400 hover:text-white hover:bg-gray-800 ml-auto"
+            className="text-gray-400 hover:text-white hover:bg-gray-800"
           >
             <RefreshCw className="h-4 w-4 mr-2" />
             Refresh
           </Button>
+          {items.length > 0 && (
+            <Button
+              onClick={handleDownloadAllAsZip}
+              disabled={isDownloadingZip}
+              variant="ghost"
+              size="sm"
+              className="text-gray-400 hover:text-white hover:bg-gray-800 ml-auto"
+            >
+              {isDownloadingZip ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                  Creating ZIP...
+                </>
+              ) : (
+                <>
+                  <Archive className="h-4 w-4 mr-2" />
+                  Download All as ZIP
+                </>
+              )}
+            </Button>
+          )}
         </div>
 
         <div className="max-w-4xl">
@@ -548,7 +594,6 @@ export default function ProductBoxContentPage() {
         </div>
       </div>
 
-      {/* Content Grid */}
       <div className="p-6">
         {items.length > 0 ? (
           <>
@@ -558,7 +603,6 @@ export default function ProductBoxContentPage() {
               ))}
             </div>
 
-            {/* Summary */}
             <div className="text-center py-8">
               <div className="text-gray-400 text-lg">
                 You've unlocked all {items.length} premium file{items.length !== 1 ? "s" : ""}

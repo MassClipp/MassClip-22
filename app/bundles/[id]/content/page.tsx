@@ -7,7 +7,7 @@ import { useParams, useRouter } from "next/navigation"
 import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { ArrowLeft, AlertCircle, Play, Package, Volume2, VolumeX, Pause, Download, Lock } from "lucide-react"
+import { ArrowLeft, AlertCircle, Play, Package, Volume2, VolumeX, Pause, Download, Lock, Archive } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { toast } from "@/hooks/use-toast"
 import { useDownloadLimit } from "@/contexts/download-limit-context"
@@ -838,6 +838,7 @@ export default function BundleContentPage() {
   const [purchaseInfo, setPurchaseInfo] = useState<PurchaseInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [isDownloadingZip, setIsDownloadingZip] = useState(false)
 
   const bundleId = params.id as string
 
@@ -896,6 +897,57 @@ export default function BundleContentPage() {
       setError(err instanceof Error ? err.message : "Failed to fetch bundle content")
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleDownloadAllAsZip = async () => {
+    if (!user || !bundleId) return
+
+    setIsDownloadingZip(true)
+
+    try {
+      console.log(`📦 [Download ZIP] Starting ZIP download for bundle: ${bundleId}`)
+
+      const token = await user.getIdToken()
+      const response = await fetch(`/api/bundles/${bundleId}/download-zip`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to download ZIP")
+      }
+
+      // Get the ZIP file as a blob
+      const blob = await response.blob()
+
+      // Create download link
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `${bundle?.title || "bundle"}.zip`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+
+      console.log(`✅ [Download ZIP] ZIP download completed`)
+
+      toast({
+        title: "Download Started",
+        description: `Downloading all content from ${bundle?.title}`,
+      })
+    } catch (error) {
+      console.error(`❌ [Download ZIP] Error:`, error)
+      toast({
+        title: "Download Error",
+        description: error instanceof Error ? error.message : "Failed to download ZIP",
+        variant: "destructive",
+      })
+    } finally {
+      setIsDownloadingZip(false)
     }
   }
 
@@ -1014,6 +1066,29 @@ export default function BundleContentPage() {
             )}
           </div>
         </div>
+
+        {/* Download All as ZIP button */}
+        {contents.length > 0 && (
+          <div className="mb-6">
+            <Button
+              onClick={handleDownloadAllAsZip}
+              disabled={isDownloadingZip}
+              className="bg-white text-black hover:bg-gray-200 font-medium"
+            >
+              {isDownloadingZip ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-black mr-2" />
+                  Creating ZIP...
+                </>
+              ) : (
+                <>
+                  <Archive className="h-4 w-4 mr-2" />
+                  Download All as ZIP
+                </>
+              )}
+            </Button>
+          </div>
+        )}
 
         {/* Thin white border line */}
         <div className="border-t border-white/10 mb-8"></div>
