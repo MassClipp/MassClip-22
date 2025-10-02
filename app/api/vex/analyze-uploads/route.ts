@@ -1,47 +1,52 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { initializeFirebaseAdmin, db } from "@/lib/firebase/firebaseAdmin"
 import { getAuth } from "firebase-admin/auth"
-import { generateText } from "ai"
-import { groq } from "@ai-sdk/groq"
+import { analyzeContent, getNicheContext } from "@/lib/vex-intelligence"
 
 // Initialize Firebase Admin
 initializeFirebaseAdmin()
 
+interface Upload {
+  id: string
+  title: string
+  filename: string
+  description: string
+  tags: string[]
+  mimeType: string
+  contentType: "video" | "audio" | "image" | "document"
+  collection: string
+  createdAt: any
+  fileSize: number
+  duration: number | null
+  url: string | null
+  folderId: string | null
+  folderName: string | null
+  // Keyword intelligence fields
+  detectedNiche: string | null
+  suggestedFolder: string | null
+  nicheConfidence: number
+}
+
 export async function POST(request: NextRequest) {
   try {
-    console.log("🔍 [Vex Analyze] Starting upload analysis...")
+    console.log("🔍 [Vex Analyze v2] Starting comprehensive upload analysis...")
 
     // Get authorization header
     const authHeader = request.headers.get("authorization")
-    console.log("[v0] Auth header present:", !!authHeader)
-    console.log("[v0] Auth header format:", authHeader?.substring(0, 20) + "...")
 
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      console.log("❌ [Vex Analyze] No valid authorization header")
+      console.log("❌ [Vex Analyze v2] No valid authorization header")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const token = authHeader.split("Bearer ")[1]
-    console.log("[v0] Token extracted, length:", token?.length)
 
     try {
-      console.log("[v0] Attempting to verify Firebase ID token...")
       const decodedToken = await getAuth().verifyIdToken(token)
       const userId = decodedToken.uid
-      console.log("✅ [Vex Analyze] Authenticated user:", userId)
+      console.log("✅ [Vex Analyze v2] Authenticated user:", userId)
 
-      if (!process.env.GROQ_API_KEY) {
-        console.error("❌ [Vex Analyze] GROQ_API_KEY environment variable is missing")
-        return NextResponse.json(
-          {
-            error: "Server configuration error",
-            details: "AI service not configured",
-          },
-          { status: 500 },
-        )
-      }
-
-      console.log("🗂️ [Vex Analyze] Loading user's folder structure...")
+      console.log("🗂️ [Vex Analyze v2] Loading user's folder structure...")
       const foldersSnapshot = await db.collection("folders").where("userId", "==", userId).get()
 
       const userFolders = foldersSnapshot.docs
@@ -52,247 +57,240 @@ export async function POST(request: NextRequest) {
         }))
         .sort((a, b) => a.name.localeCompare(b.name))
 
-      console.log(
-        `✅ [Vex Analyze] Found ${userFolders.length} user folders:`,
-        userFolders.map((f) => f.name),
-      )
+      const existingFolderNames = userFolders.map((f) => f.name)
+      console.log(`✅ [Vex Analyze v2] Found ${userFolders.length} folders:`, existingFolderNames)
 
-      // Query multiple collections for uploads
       const collections = ["uploads", "free_content", "videos", "content"]
-      let allUploads: any[] = []
+      const uploadsByDocId = new Map<string, Upload>()
+      let totalQueriedDocs = 0
 
       for (const collectionName of collections) {
         try {
-          console.log(`🔍 [Vex Analyze] Checking collection: ${collectionName}`)
+          console.log(`🔍 [Vex Analyze v2] Querying collection: ${collectionName}`)
 
-          let snapshot = await db.collection(collectionName).where("uid", "==", userId).limit(100).get()
+          // Try both uid and userId fields
+          const uidSnapshot = await db.collection(collectionName).where("uid", "==", userId).limit(100).get()
 
-          // Also try userId field if uid didn't return results
-          if (snapshot.empty) {
-            snapshot = await db.collection(collectionName).where("userId", "==", userId).limit(100).get()
-          }
+          const userIdSnapshot = await db.collection(collectionName).where("userId", "==", userId).limit(100).get()
 
-          if (!snapshot.empty) {
-            const uploads = snapshot.docs
-              .map((doc) => {
-                const data = doc.data()
+          const allDocs = [...uidSnapshot.docs, ...userIdSnapshot.docs]
+          totalQueriedDocs += allDocs.length
 
-                if (data.uid !== userId && data.userId !== userId) {
-                  console.warn(`[v0] Skipping document ${doc.id} - ownership mismatch`)
-                  return null
-                }
+          console.log(`📊 [Vex Analyze v2] Found ${allDocs.length} docs in ${collectionName}`)
 
-                const title = data.title || data.filename
-                if (!title || title === "Untitled" || title === "Unknown") {
-                  console.warn(`[v0] Skipping document ${doc.id} - no valid title`)
-                  return null
-                }
+          for (const doc of allDocs) {
+            if (uploadsByDocId.has(doc.id)) {
+              console.log(`⏭️ [Vex Analyze v2] Skipping duplicate doc ID: ${doc.id}`)
+              continue
+            }
 
-                return {
-                  id: doc.id,
-                  title: title,
-                  filename: data.filename || data.title || "Unknown",
-                  description: data.description || "",
-                  tags: data.tags || [],
-                  mimeType: data.mimeType || data.type || "unknown",
-                  contentType: determineContentType(data.mimeType || data.type || ""),
-                  collection: collectionName,
-                  createdAt: data.createdAt || data.addedAt || new Date(),
-                  fileSize: data.fileSize || 0,
-                  duration: data.duration || null,
-                  url: data.url || data.downloadURL || null,
-                  folderId: data.folderId || null,
-                  folderName: data.folderName || null,
-                }
-              })
-              .filter(Boolean) // Remove null entries from skipped documents
+            const data = doc.data()
 
-            allUploads = [...allUploads, ...uploads]
-            console.log(`✅ [Vex Analyze] Found ${uploads.length} valid uploads in ${collectionName}`)
+            // Validate ownership
+            if (data.uid !== userId && data.userId !== userId) {
+              console.warn(`⚠️ [Vex Analyze v2] Skipping ${doc.id} - ownership mismatch`)
+              continue
+            }
+
+            // Validate title
+            const title = data.title || data.filename
+            if (!title || title === "Untitled" || title === "Unknown") {
+              console.warn(`⚠️ [Vex Analyze v2] Skipping ${doc.id} - no valid title`)
+              continue
+            }
+
+            const contentAnalysis = analyzeContent(title, existingFolderNames)
+
+            const upload: Upload = {
+              id: doc.id,
+              title: title,
+              filename: data.filename || data.title || "Unknown",
+              description: data.description || "",
+              tags: data.tags || [],
+              mimeType: data.mimeType || data.type || "unknown",
+              contentType: determineContentType(data.mimeType || data.type || ""),
+              collection: collectionName,
+              createdAt: data.createdAt || data.addedAt || new Date(),
+              fileSize: data.fileSize || 0,
+              duration: data.duration || null,
+              url: data.url || data.downloadURL || null,
+              folderId: data.folderId || null,
+              folderName: data.folderName || null,
+              detectedNiche: contentAnalysis.primaryNiche,
+              suggestedFolder: contentAnalysis.suggestedFolder,
+              nicheConfidence: contentAnalysis.confidence,
+            }
+
+            uploadsByDocId.set(doc.id, upload)
           }
         } catch (collectionError) {
-          console.log(`⚠️ [Vex Analyze] Error querying ${collectionName}:`, collectionError)
+          console.log(`⚠️ [Vex Analyze v2] Error querying ${collectionName}:`, collectionError)
         }
       }
 
-      // Remove duplicates and sort by creation date
-      const uniqueUploads = allUploads.filter(
-        (upload, index, self) =>
-          index === self.findIndex((u) => u.title === upload.title && u.filename === upload.filename),
-      )
-
-      uniqueUploads.sort((a, b) => {
+      const uniqueUploads = Array.from(uploadsByDocId.values()).sort((a, b) => {
         const dateA = new Date(a.createdAt).getTime()
         const dateB = new Date(b.createdAt).getTime()
         return dateB - dateA
       })
 
-      console.log(`✅ [Vex Analyze] Found ${uniqueUploads.length} unique uploads to analyze`)
+      console.log(`✅ [Vex Analyze v2] Deduplication complete:`)
+      console.log(`   - Total docs queried: ${totalQueriedDocs}`)
+      console.log(`   - Unique uploads: ${uniqueUploads.length}`)
+      console.log(`   - Duplicates removed: ${totalQueriedDocs - uniqueUploads.length}`)
 
-      const contentByFolder: Record<string, any[]> = {}
-      const unorganizedContent: any[] = []
+      const contentByFolder: Record<string, Upload[]> = {}
+      const contentByNiche: Record<string, Upload[]> = {}
+      const unorganizedContent: Upload[] = []
 
       uniqueUploads.forEach((upload) => {
+        // Organize by folder
         if (upload.folderId && upload.folderName) {
           if (!contentByFolder[upload.folderName]) {
             contentByFolder[upload.folderName] = []
           }
-          contentByFolder[upload.folderName].push({
-            id: upload.id,
-            title: upload.title,
-            type: upload.contentType,
-            filename: upload.filename,
-          })
+          contentByFolder[upload.folderName].push(upload)
         } else {
-          unorganizedContent.push({
-            id: upload.id,
-            title: upload.title,
-            type: upload.contentType,
-            filename: upload.filename,
-          })
+          unorganizedContent.push(upload)
+        }
+
+        if (upload.detectedNiche) {
+          if (!contentByNiche[upload.detectedNiche]) {
+            contentByNiche[upload.detectedNiche] = []
+          }
+          contentByNiche[upload.detectedNiche].push(upload)
         }
       })
 
-      console.log(
-        `[v0] Organized content: ${Object.keys(contentByFolder).length} folders, ${unorganizedContent.length} unorganized`,
-      )
+      console.log(`📊 [Vex Analyze v2] Content organization:`)
+      console.log(`   - Folders: ${Object.keys(contentByFolder).length}`)
+      console.log(`   - Detected niches: ${Object.keys(contentByNiche).length}`)
+      console.log(`   - Unorganized: ${unorganizedContent.length}`)
+
+      const detectedCategories = Object.keys(contentByNiche).map((niche) => {
+        const count = contentByNiche[niche].length
+        const context = getNicheContext(niche)
+        return {
+          name: niche.charAt(0).toUpperCase() + niche.slice(1),
+          count,
+          context,
+        }
+      })
+
+      // Combine with existing folders
+      const allCategories = [
+        ...existingFolderNames,
+        ...detectedCategories.filter((c) => !existingFolderNames.includes(c.name)).map((c) => c.name),
+      ]
+
+      console.log(`📋 [Vex Analyze v2] Categories identified:`, allCategories)
 
       if (uniqueUploads.length === 0) {
+        const emptyAnalysis = {
+          userId,
+          totalUploads: 0,
+          categories: existingFolderNames,
+          detectedNiches: {},
+          contentByFolder: {},
+          contentByNiche: {},
+          unorganizedContent: [],
+          uploads: [],
+          userFolders: userFolders,
+          analyzedAt: new Date(),
+          lastUpdated: new Date(),
+          version: 2, // Version tracking
+        }
+
+        await db.collection("vex_content_analysis").doc(userId).set(emptyAnalysis)
+
         return NextResponse.json({
           success: true,
           analysis: {
             totalUploads: 0,
-            categories: userFolders.length > 0 ? userFolders.map((f) => f.name) : [],
-            recommendations: ["Upload some content first to get personalized bundle recommendations!"],
+            categories: existingFolderNames,
             summary: "No uploads found. Start by uploading your content to get AI-powered bundle suggestions.",
           },
         })
       }
 
-      // Prepare content for AI analysis
-      const contentSummary = uniqueUploads.map((upload) => ({
-        title: upload.title,
-        type: upload.contentType,
-        description: upload.description,
-        tags: upload.tags,
-        filename: upload.filename,
-        folderName: upload.folderName,
-      }))
+      const recommendations: string[] = []
 
-      let analysis
-      try {
-        console.log("[v0] Starting AI analysis with Groq...")
-        const { text } = await generateText({
-          model: groq("llama-3.3-70b-versatile"),
-          prompt: `You are Vex, an AI bundle assistant. Analyze this user's content uploads and provide detailed bundle categorization.
-
-User's existing folders: ${userFolders.map((f) => f.name).join(", ")}
-
-Content organized by folder:
-${Object.entries(contentByFolder)
-  .map(([folderName, items]) => `${folderName}: ${items.length} items - ${items.map((i: any) => i.title).join(", ")}`)
-  .join("\n")}
-
-Unorganized content: ${unorganizedContent.length} items
-
-Content to analyze:
-${JSON.stringify(contentSummary, null, 2)}
-
-Please provide a JSON response with:
-1. "categories" - Array of suggested bundle categories. PRIORITIZE the user's existing folder names: ${userFolders.map((f) => f.name).join(", ")}. Only suggest new categories if the existing folders don't cover the content well.
-2. "recommendations" - Array of specific bundle ideas with titles and descriptions
-3. "summary" - Brief overview of the user's content library and potential
-4. "contentByCategory" - Object mapping categories to arrays of content titles that fit each category
-5. "detailedAnalysis" - Array of objects with individual content analysis including suggested category, value assessment, and bundle potential
-
-IMPORTANT: 
-- Use the user's actual folder names (${userFolders.map((f) => f.name).join(", ")}) as primary categories when possible
-- Only suggest new categories if the content doesn't fit existing folders
-- Return ONLY valid JSON. No markdown formatting, no code blocks, no extra text. Just pure JSON.`,
-        })
-
-        console.log("[v0] AI analysis completed, parsing response...")
-
-        let cleanedText = text.trim()
-
-        // Remove markdown code blocks if present
-        if (cleanedText.startsWith("```json")) {
-          cleanedText = cleanedText.replace(/^```json\s*/, "").replace(/\s*```$/, "")
-        } else if (cleanedText.startsWith("```")) {
-          cleanedText = cleanedText.replace(/^```\s*/, "").replace(/\s*```$/, "")
-        }
-
-        // Remove any leading/trailing whitespace and newlines
-        cleanedText = cleanedText.trim()
-
-        console.log("[v0] Attempting to parse cleaned AI response:", cleanedText.substring(0, 200) + "...")
-
-        analysis = JSON.parse(cleanedText)
-        console.log("✅ [Vex Analyze] Successfully parsed AI response")
-      } catch (aiError) {
-        console.error("❌ [Vex Analyze] AI analysis failed:", aiError)
-
-        const suggestedCategories = userFolders.length > 0 ? userFolders.map((f) => f.name) : ["Main", "Uncategorized"]
-
-        analysis = {
-          categories: suggestedCategories,
-          recommendations: [
-            "Create a starter bundle with your best content",
-            "Consider organizing content by your existing folders",
-            "Group similar themed content together for better value",
-          ],
-          summary: `Content analysis completed. Found ${uniqueUploads.length} uploads. Your folders: ${suggestedCategories.join(", ")}. Consider organizing your uploads into themed bundles using your existing folder structure.`,
-          contentByCategory: {
-            [suggestedCategories[0]]: uniqueUploads.slice(0, 10).map((u) => u.title),
+      // Recommend organizing unorganized content
+      if (unorganizedContent.length > 0) {
+        const nicheBreakdown = unorganizedContent.reduce(
+          (acc, upload) => {
+            if (upload.detectedNiche) {
+              acc[upload.detectedNiche] = (acc[upload.detectedNiche] || 0) + 1
+            }
+            return acc
           },
-          detailedAnalysis: uniqueUploads.slice(0, 20).map((u) => ({
-            title: u.title,
-            category: u.folderName || suggestedCategories[0],
-            value: "Medium",
-            bundlePotential: "Good for starter bundle",
-          })),
+          {} as Record<string, number>,
+        )
+
+        const topNiche = Object.entries(nicheBreakdown).sort(([, a], [, b]) => b - a)[0]
+        if (topNiche) {
+          recommendations.push(
+            `You have ${unorganizedContent.length} unorganized ${topNiche[0]} items. Consider creating a "${topNiche[0].charAt(0).toUpperCase() + topNiche[0].slice(1)}" folder.`,
+          )
         }
+      }
+
+      // Recommend bundles based on niche clusters
+      for (const [niche, items] of Object.entries(contentByNiche)) {
+        if (items.length >= 5) {
+          recommendations.push(`Create a ${niche} bundle with your ${items.length} ${niche} items for maximum value.`)
+        }
+      }
+
+      // Recommend cross-niche bundles
+      if (Object.keys(contentByNiche).length >= 2) {
+        recommendations.push(
+          `Consider creating a variety bundle combining ${Object.keys(contentByNiche).join(", ")} content.`,
+        )
       }
 
       const analysisData = {
         userId,
         totalUploads: uniqueUploads.length,
-        categories: analysis.categories || [],
-        recommendations: analysis.recommendations || [],
-        summary: analysis.summary || "Analysis completed successfully.",
-        contentByCategory: analysis.contentByCategory || {},
-        detailedAnalysis: analysis.detailedAnalysis || [],
-        uploads: uniqueUploads, // Store full upload details
+        categories: allCategories,
+        detectedNiches: detectedCategories,
+        recommendations,
+        summary: `Analyzed ${uniqueUploads.length} uploads across ${allCategories.length} categories. Detected ${Object.keys(contentByNiche).length} content niches using keyword intelligence.`,
+        contentByFolder,
+        contentByNiche, // New: organized by AI-detected niche
+        unorganizedContent: unorganizedContent.map((u) => ({
+          id: u.id,
+          title: u.title,
+          type: u.contentType,
+          detectedNiche: u.detectedNiche,
+          suggestedFolder: u.suggestedFolder,
+          confidence: u.nicheConfidence,
+        })),
+        uploads: uniqueUploads, // Store full upload details with intelligence data
         userFolders: userFolders,
-        contentByFolder: contentByFolder,
-        unorganizedContent: unorganizedContent,
         analyzedAt: new Date(),
         lastUpdated: new Date(),
+        version: 2, // Version 2 with keyword intelligence
       }
 
-      // Save to vex_content_analysis collection
       await db.collection("vex_content_analysis").doc(userId).set(analysisData)
-      console.log("✅ [Vex Analyze] Stored detailed analysis for chat access")
+      console.log("✅ [Vex Analyze v2] Analysis saved to Firestore (same document updated)")
 
-      console.log("✅ [Vex Analyze] Analysis completed successfully")
+      console.log("✅ [Vex Analyze v2] Analysis completed successfully")
 
       return NextResponse.json({
         success: true,
         analysis: {
           totalUploads: uniqueUploads.length,
-          categories: analysis.categories || [],
-          recommendations: analysis.recommendations || [],
-          summary: analysis.summary || "Analysis completed successfully.",
+          categories: allCategories,
+          detectedNiches: detectedCategories,
+          recommendations,
+          summary: analysisData.summary,
         },
         uploads: uniqueUploads.slice(0, 20), // Return first 20 for reference
       })
     } catch (authError) {
-      console.error("❌ [Vex Analyze] Auth error details:", {
-        error: authError,
-        message: authError instanceof Error ? authError.message : "Unknown auth error",
-        tokenLength: token?.length,
-        hasToken: !!token,
-      })
+      console.error("❌ [Vex Analyze v2] Auth error:", authError)
       return NextResponse.json(
         {
           error: "Invalid token",
@@ -302,8 +300,7 @@ IMPORTANT:
       )
     }
   } catch (error) {
-    console.error("❌ [Vex Analyze] General error:", error)
-    console.error("❌ [Vex Analyze] Error stack:", error instanceof Error ? error.stack : "No stack trace")
+    console.error("❌ [Vex Analyze v2] General error:", error)
     return NextResponse.json(
       {
         error: "Failed to analyze uploads",

@@ -140,9 +140,12 @@ When organizing files, use the folder names exactly as shown above.
               }
 
               const contentByFolder = analysisData?.contentByFolder || {}
+              const contentByNiche = analysisData?.contentByNiche || {}
               const unorganizedContent = analysisData?.unorganizedContent || []
+              const detectedNiches = analysisData?.detectedNiches || []
 
               console.log("[v0] Raw contentByFolder structure:", JSON.stringify(Object.keys(contentByFolder)))
+              console.log("[v0] Raw contentByNiche structure:", JSON.stringify(Object.keys(contentByNiche)))
               console.log("[v0] Raw unorganizedContent count:", unorganizedContent.length)
 
               // Debug: Log the actual structure of contentByFolder
@@ -201,6 +204,35 @@ When organizing files, use the folder names exactly as shown above.
                 }
               }
 
+              let nicheContentsContext = ""
+              if (Object.keys(contentByNiche).length > 0) {
+                nicheContentsContext = "\n\nCONTENT BY DETECTED NICHE (AI-analyzed):\n"
+                for (const [niche, items] of Object.entries(contentByNiche)) {
+                  let itemsArray: any[] = []
+
+                  if (Array.isArray(items)) {
+                    itemsArray = items
+                  } else if (typeof items === "object" && items !== null) {
+                    itemsArray = Object.values(items)
+                  }
+
+                  const itemsList = itemsArray
+                    .slice(0, 10)
+                    .map((item: any) => {
+                      const confidence = item.nicheConfidence
+                        ? ` (${Math.round(item.nicheConfidence * 100)}% confidence)`
+                        : ""
+                      return `  - ${item.title || item.filename || "Untitled"}${confidence}`
+                    })
+                    .join("\n")
+
+                  nicheContentsContext += `\n${niche.charAt(0).toUpperCase() + niche.slice(1)} (${itemsArray.length} items):\n${itemsList}\n`
+                  if (itemsArray.length > 10) {
+                    nicheContentsContext += `  ... and ${itemsArray.length - 10} more ${niche} items\n`
+                  }
+                }
+              }
+
               console.log(`[v0] Total items in folders: ${totalFolderItems}`)
               console.log(`[v0] Total unorganized items: ${validUnorganizedContent.length}`)
 
@@ -208,7 +240,11 @@ When organizing files, use the folder names exactly as shown above.
                 folderContentsContext += `\n\nUNORGANIZED CONTENT (${validUnorganizedContent.length} items not in any folder):\n`
                 folderContentsContext += validUnorganizedContent
                   .slice(0, 10)
-                  .map((item: any) => `  - ${item.title} (${item.type})`)
+                  .map((item: any) => {
+                    const nicheInfo = item.detectedNiche ? ` [Detected: ${item.detectedNiche}]` : ""
+                    const suggestedFolder = item.suggestedFolder ? ` → Suggested folder: "${item.suggestedFolder}"` : ""
+                    return `  - ${item.title} (${item.type})${nicheInfo}${suggestedFolder}`
+                  })
                   .join("\n")
                 if (validUnorganizedContent.length > 10) {
                   folderContentsContext += `\n  ... and ${validUnorganizedContent.length - 10} more unorganized items`
@@ -217,15 +253,30 @@ When organizing files, use the folder names exactly as shown above.
 
               userContentContext = `
 
-USER'S CONTENT LIBRARY:
+USER'S CONTENT LIBRARY (Analyzed with Keyword Intelligence v2):
 Total Uploads: ${analysisData?.totalUploads || 0}
 Categories: ${(analysisData?.categories || []).join(", ")}
 User Folders: ${(analysisData?.userFolders || []).map((f: any) => f.name).join(", ")}
-${folderContentsContext}
+${detectedNiches.length > 0 ? `\nDetected Content Niches: ${detectedNiches.map((n: any) => `${n.name} (${n.count} items)`).join(", ")}` : ""}
+${folderContentsContext}${nicheContentsContext}
 
 Available content IDs for bundling: ${(analysisData?.uploads || []).map((upload: any) => upload.id).join(", ")}
+
+KEYWORD INTELLIGENCE INSIGHTS:
+The content analysis uses a comprehensive keyword database covering 5 major niches:
+- Motivation (success, mindset, hustle, fitness, quotes, overcoming adversity)
+- Memes (reactions, viral trends, gaming, text/video memes)
+- SFX (sound effects, cinematic, gaming, social media, horror)
+- Voiceover (AI voices, commercial, educational, character voices, documentary)
+- Ebooks (business guides, self-help, how-to guides, templates)
+
+Each piece of content has been analyzed for niche matching with confidence scores. Use this intelligence to:
+1. Suggest better folder organization based on detected niches
+2. Create themed bundles that align with content niches
+3. Identify content that needs better categorization
+4. Recommend cross-niche bundle opportunities
 `
-              console.log("[v0] User context loaded with complete folder contents")
+              console.log("[v0] User context loaded with keyword intelligence and complete folder contents")
             } else {
               console.log("[v0] No analysis data found, user may need to run analysis first")
             }
