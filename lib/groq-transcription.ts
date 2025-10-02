@@ -101,4 +101,6 @@ export async function transcribeVideoFile(file: File): Promise<TranscriptionResu
   }
 }
 
-export const transcribeVideoWithGroq = transcribeVideo
+export async function transcribeVideoWithGroq(videoUrl: string): Promise<TranscriptionResult> {
+  return transcribeVideo(videoUrl)
+}
