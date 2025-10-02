@@ -190,11 +190,14 @@ export async function POST(request: NextRequest) {
 
       if (uploadData.type === "video") {
         console.log(`🎤 [Finalize Upload] Triggering transcription for video: ${uploadRef.id}`)
+        console.log(`🎤 [Auto-Transcribe] Starting transcription for ${uploadRef.id}`)
+        console.log(`🎤 [Auto-Transcribe] Video URL: ${sessionData.publicUrl}`)
 
         // Trigger transcription asynchronously (don't wait for it)
         transcribeVideoWithGroq(sessionData.publicUrl)
           .then(async (result) => {
             console.log(`✅ [Auto-Transcribe] Completed for ${uploadRef.id}`)
+            console.log(`📝 [Auto-Transcribe] Transcript length: ${result.text.length} characters`)
             await uploadRef.update({
               transcript: result.text,
               transcriptDuration: result.duration,
@@ -205,6 +208,7 @@ export async function POST(request: NextRequest) {
           })
           .catch((error) => {
             console.error(`❌ [Auto-Transcribe] Failed for ${uploadRef.id}:`, error)
+            console.error(`❌ [Auto-Transcribe] Error details:`, error.message)
             // Don't fail the upload if transcription fails
           })
       }
