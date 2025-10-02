@@ -11,6 +11,7 @@
  */
 
 import { analyzeContent } from "./vex-intelligence"
+import { analyzeCulturalPatterns } from "./vex-conversational-examples"
 
 export interface FileMetadata {
   filename: string
@@ -31,6 +32,8 @@ export interface MetadataReasoning {
   reasoning: string
   detectedNiche: string | null
   suggestedFolder: string | null
+  culturalMarkers?: string[]
+  conversationalTone?: string
 }
 
 /**
@@ -239,6 +242,9 @@ function analyzeFolderOrigin(folderName: string | null | undefined): {
     sfx: ["sfx", "sound", "effects", "audio", "sounds"],
     voiceover: ["voiceover", "voice", "vo", "narration", "speech"],
     ebook: ["ebook", "ebooks", "book", "books", "guide", "guides", "pdf"],
+    mindset: ["mindset", "mental", "psychology", "thinking", "philosophy"],
+    broll: ["broll", "b-roll", "footage", "cinematic", "stock"],
+    "background-videos": ["background", "backdrop", "loop", "animated background"],
   }
 
   for (const [niche, keywords] of Object.entries(nicheKeywords)) {
@@ -271,6 +277,9 @@ export function analyzeMetadata(metadata: FileMetadata, existingFolders: string[
     sfx: 0,
     voiceover: 0,
     ebook: 0,
+    mindset: 0,
+    broll: 0,
+    "background-videos": 0,
   }
 
   // 1. Analyze file extension
@@ -328,6 +337,19 @@ export function analyzeMetadata(metadata: FileMetadata, existingFolders: string[
     }
   }
 
+  const culturalAnalysis = analyzeCulturalPatterns(metadata.title)
+  if (culturalAnalysis.likelyNiche && culturalAnalysis.confidence > 30) {
+    evidence.push(
+      `💬 Conversational analysis detected "${culturalAnalysis.likelyNiche}" vibe (${Math.round(culturalAnalysis.confidence)}% confidence)`,
+    )
+    if (scores[culturalAnalysis.likelyNiche] !== undefined) {
+      scores[culturalAnalysis.likelyNiche] += (culturalAnalysis.confidence / 100) * 15
+    }
+  }
+  if (culturalAnalysis.detectedMarkers.length > 0) {
+    evidence.push(`🗣️ Cultural markers: ${culturalAnalysis.detectedMarkers.slice(0, 3).join(", ")}`)
+  }
+
   // Determine final niche based on scores
   const sortedNiches = Object.entries(scores)
     .filter(([, score]) => score > 0)
@@ -376,6 +398,8 @@ export function analyzeMetadata(metadata: FileMetadata, existingFolders: string[
     reasoning,
     detectedNiche,
     suggestedFolder: keywordAnalysis.suggestedFolder,
+    culturalMarkers: culturalAnalysis.detectedMarkers,
+    conversationalTone: culturalAnalysis.likelyNiche || undefined,
   }
 }
 
@@ -409,6 +433,14 @@ export function generateAnalysisSummary(analysis: MetadataReasoning): string {
 
   if (analysis.suggestedFolder) {
     summary += `\n**Suggested Folder:** ${analysis.suggestedFolder}`
+  }
+
+  if (analysis.culturalMarkers) {
+    summary += `\n**Cultural Markers:** ${analysis.culturalMarkers.join(", ")}` || ""
+  }
+
+  if (analysis.conversationalTone) {
+    summary += `\n**Conversational Tone:** ${analysis.conversationalTone}`
   }
 
   return summary
