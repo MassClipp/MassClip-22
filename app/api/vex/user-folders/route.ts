@@ -37,12 +37,10 @@ export async function GET(request: NextRequest) {
 
     console.log(`🔍 [Vex Folders] Fetching folders for user: ${user.uid}`)
 
-    // Get all user folders
     const foldersSnapshot = await db
       .collection("folders")
       .where("userId", "==", user.uid)
       .where("isDeleted", "==", false)
-      .orderBy("createdAt", "desc")
       .get()
 
     const folders = []
@@ -58,6 +56,7 @@ export async function GET(request: NextRequest) {
     })
 
     // Process user folders
+    const userFolders = []
     for (const doc of foldersSnapshot.docs) {
       const folderData = doc.data()
 
@@ -68,7 +67,7 @@ export async function GET(request: NextRequest) {
         .where("folderId", "==", doc.id)
         .get()
 
-      folders.push({
+      userFolders.push({
         id: doc.id,
         name: folderData.name,
         description: folderData.description || `Content folder: ${folderData.name}`,
@@ -79,6 +78,10 @@ export async function GET(request: NextRequest) {
         isDefault: false,
       })
     }
+
+    // Sort by createdAt in memory
+    userFolders.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    folders.push(...userFolders)
 
     // Count files in Main folder (files without folderId)
     const mainUploadsSnapshot = await db

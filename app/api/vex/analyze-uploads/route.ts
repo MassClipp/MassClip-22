@@ -142,10 +142,10 @@ export async function POST(request: NextRequest) {
             nicheConfidence: metadataAnalysis.confidence,
             reasoning: metadataAnalysis.reasoning,
             evidence: metadataAnalysis.evidence,
-            transcript: data.transcript || undefined,
-            transcriptDuration: data.transcriptDuration || undefined,
-            transcriptLanguage: data.transcriptLanguage || undefined,
-            transcribedAt: data.transcribedAt || undefined,
+            ...(data.transcript && { transcript: data.transcript }),
+            ...(data.transcriptDuration && { transcriptDuration: data.transcriptDuration }),
+            ...(data.transcriptLanguage && { transcriptLanguage: data.transcriptLanguage }),
+            ...(data.transcribedAt && { transcribedAt: data.transcribedAt }),
           }
 
           uploadsByDocId.set(doc.id, upload)
