@@ -138,7 +138,7 @@ importers:
         specifier: ^10.4.20
         version: 10.4.20(postcss@8.5.0)
       buffer:
-        specifier: latest
+        specifier: 6.0.3
         version: 6.0.3
       class-variance-authority:
         specifier: ^0.7.1
@@ -165,7 +165,7 @@ importers:
         specifier: latest
         version: 13.5.0
       form-data:
-        specifier: latest
+        specifier: 4.0.4
         version: 4.0.4
       framer-motion:
         specifier: latest
@@ -174,13 +174,13 @@ importers:
         specifier: latest
         version: 0.0.1-security
       groq-sdk:
-        specifier: latest
-        version: 0.33.0
+        specifier: 0.32.0
+        version: 0.32.0
       input-otp:
         specifier: latest
         version: 1.4.2(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
       jszip:
-        specifier: latest
+        specifier: 3.10.1
         version: 3.10.1
       lucide-react:
         specifier: ^0.454.0
@@ -2976,8 +2976,8 @@ packages:
     resolution: {integrity: sha512-ZUKRh6/kUFoAiTAtTYPZJ3hw9wNxx+BIBOijnlG9PnrJsCcSjs1wyyD6vJpaYtgnzDrKYRSqf3OO6Rfa93xsRg==}
     engines: {node: '>= 0.4'}
 
-  groq-sdk@0.33.0:
-    resolution: {integrity: sha512-wb7NrBq7LZDDhDPSpuAd9LpZ0MNjmWKGLfybYfjY3r63mSpfiP8+GQZQcSDJcX+jIMzSm+SwzxModDyVZ2T66Q==}
+  groq-sdk@0.32.0:
+    resolution: {integrity: sha512-KQZOzSV8UmeIbv7YEvzpZinSR9CaI/8pIGzLrVBVher6RuamklljBom5HXnNTqpekk3/L/h9Txc3Jq3ti58jug==}
 
   gtoken@7.1.0:
     resolution: {integrity: sha512-pCcEwRi+TKpMlxAQObHDQ56KawURgyAf6jtIY046fJ5tIv3zDe/LEIubckAO8fj6JnAxLdmWkUfNyulQ2iKdEw==}
@@ -7868,7 +7868,7 @@ snapshots:
 
   gopd@1.2.0: {}
 
-  groq-sdk@0.33.0:
+  groq-sdk@0.32.0:
     dependencies:
       '@types/node': 18.19.127
       '@types/node-fetch': 2.6.13
