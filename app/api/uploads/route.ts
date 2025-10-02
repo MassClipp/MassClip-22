@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { initializeFirebaseAdmin, db } from "@/lib/firebase/firebaseAdmin"
+import { transcribeVideoWithGroq } from "@/lib/groq-transcription"
 
 // Initialize Firebase Admin
 initializeFirebaseAdmin()
@@ -237,6 +238,27 @@ export async function POST(request: NextRequest) {
     try {
       const docRef = await db.collection("uploads").add(metadata)
       console.log(`✅ [Uploads API] Upload record created with ID: ${docRef.id}`)
+
+      if (contentType === "video") {
+        console.log(`🎤 [Uploads API] Triggering transcription for video: ${docRef.id}`)
+
+        // Trigger transcription asynchronously (don't wait for it)
+        transcribeVideoWithGroq(publicURL)
+          .then(async (result) => {
+            console.log(`✅ [Auto-Transcribe] Completed for ${docRef.id}`)
+            await docRef.update({
+              transcript: result.text,
+              transcriptDuration: result.duration,
+              transcriptLanguage: result.language,
+              transcribedAt: new Date(),
+            })
+            console.log(`💾 [Auto-Transcribe] Saved transcript to Firestore`)
+          })
+          .catch((error) => {
+            console.error(`❌ [Auto-Transcribe] Failed for ${docRef.id}:`, error)
+            // Don't fail the upload if transcription fails
+          })
+      }
 
       return NextResponse.json({
         id: docRef.id,

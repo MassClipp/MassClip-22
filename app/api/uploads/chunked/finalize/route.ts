@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3"
 import { initializeFirebaseAdmin, db } from "@/lib/firebase/firebaseAdmin"
 import { headers } from "next/headers"
+import { transcribeVideoWithGroq } from "@/lib/groq-transcription"
 
 // Initialize Firebase Admin
 initializeFirebaseAdmin()
@@ -186,6 +187,27 @@ export async function POST(request: NextRequest) {
       }
 
       const uploadRef = await db.collection("uploads").add(uploadData)
+
+      if (uploadData.type === "video") {
+        console.log(`🎤 [Finalize Upload] Triggering transcription for video: ${uploadRef.id}`)
+
+        // Trigger transcription asynchronously (don't wait for it)
+        transcribeVideoWithGroq(sessionData.publicUrl)
+          .then(async (result) => {
+            console.log(`✅ [Auto-Transcribe] Completed for ${uploadRef.id}`)
+            await uploadRef.update({
+              transcript: result.text,
+              transcriptDuration: result.duration,
+              transcriptLanguage: result.language,
+              transcribedAt: new Date(),
+            })
+            console.log(`💾 [Auto-Transcribe] Saved transcript to Firestore`)
+          })
+          .catch((error) => {
+            console.error(`❌ [Auto-Transcribe] Failed for ${uploadRef.id}:`, error)
+            // Don't fail the upload if transcription fails
+          })
+      }
 
       // Update session status
       await db.collection("uploadSessions").doc(uploadId).update({

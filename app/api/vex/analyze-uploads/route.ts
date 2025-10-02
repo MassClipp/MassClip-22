@@ -26,6 +26,10 @@ interface Upload {
   nicheConfidence: string // Changed to string for "very_high", "high", etc.
   reasoning: string // New: Vex's reasoning about the content
   evidence: string[] // New: List of evidence points
+  transcript?: string
+  transcriptDuration?: number
+  transcriptLanguage?: string
+  transcribedAt?: any
 }
 
 export async function POST(request: NextRequest) {
@@ -138,6 +142,10 @@ export async function POST(request: NextRequest) {
             nicheConfidence: metadataAnalysis.confidence,
             reasoning: metadataAnalysis.reasoning,
             evidence: metadataAnalysis.evidence,
+            transcript: data.transcript || undefined,
+            transcriptDuration: data.transcriptDuration || undefined,
+            transcriptLanguage: data.transcriptLanguage || undefined,
+            transcribedAt: data.transcribedAt || undefined,
           }
 
           uploadsByDocId.set(doc.id, upload)
@@ -284,6 +292,10 @@ export async function POST(request: NextRequest) {
           suggestedFolder: u.suggestedFolder,
           confidence: u.nicheConfidence,
           reasoning: u.reasoning, // Include Vex's reasoning
+          transcript: u.transcript,
+          transcriptDuration: u.transcriptDuration,
+          transcriptLanguage: u.transcriptLanguage,
+          transcribedAt: u.transcribedAt,
         })),
         uploads: uniqueUploads,
         userFolders: userFolders,
