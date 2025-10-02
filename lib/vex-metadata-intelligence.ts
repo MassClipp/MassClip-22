@@ -67,15 +67,6 @@ function analyzeFileExtension(
     }
   }
 
-  // Document formats are likely ebooks
-  if (["pdf", "epub", "mobi", "doc", "docx"].includes(ext)) {
-    return {
-      likelyNiche: "ebook",
-      evidence: `File extension .${ext} indicates document/ebook content`,
-      confidence: 0.9,
-    }
-  }
-
   // Image formats could be memes
   if (["jpg", "jpeg", "png", "gif", "webp"].includes(ext)) {
     return {
@@ -241,7 +232,6 @@ function analyzeFolderOrigin(folderName: string | null | undefined): {
     memes: ["meme", "memes", "funny", "comedy", "humor", "viral"],
     sfx: ["sfx", "sound", "effects", "audio", "sounds"],
     voiceover: ["voiceover", "voice", "vo", "narration", "speech"],
-    ebook: ["ebook", "ebooks", "book", "books", "guide", "guides", "pdf"],
     mindset: ["mindset", "mental", "psychology", "thinking", "philosophy"],
     broll: ["broll", "b-roll", "footage", "cinematic", "stock"],
     "background-videos": ["background", "backdrop", "loop", "animated background"],
@@ -276,7 +266,6 @@ export function analyzeMetadata(metadata: FileMetadata, existingFolders: string[
     memes: 0,
     sfx: 0,
     voiceover: 0,
-    ebook: 0,
     mindset: 0,
     broll: 0,
     "background-videos": 0,
