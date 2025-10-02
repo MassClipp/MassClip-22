@@ -61,86 +61,89 @@ export async function POST(request: NextRequest) {
       const existingFolderNames = userFolders.map((f) => f.name)
       console.log(`✅ [Vex Analyze v3] Found ${userFolders.length} folders:`, existingFolderNames)
 
-      const collections = ["uploads", "free_content", "videos", "content"]
       const uploadsByDocId = new Map<string, Upload>()
       let totalQueriedDocs = 0
 
-      for (const collectionName of collections) {
-        try {
-          console.log(`🔍 [Vex Analyze v3] Querying collection: ${collectionName}`)
+      try {
+        console.log(`🔍 [Vex Analyze v3] Querying uploads collection only`)
 
-          const uidSnapshot = await db.collection(collectionName).where("uid", "==", userId).limit(100).get()
+        // Query by both uid and userId to catch all uploads
+        const uidSnapshot = await db.collection("uploads").where("uid", "==", userId).limit(500).get()
 
-          const userIdSnapshot = await db.collection(collectionName).where("userId", "==", userId).limit(100).get()
+        const userIdSnapshot = await db.collection("uploads").where("userId", "==", userId).limit(500).get()
 
-          const allDocs = [...uidSnapshot.docs, ...userIdSnapshot.docs]
-          totalQueriedDocs += allDocs.length
+        const allDocs = [...uidSnapshot.docs, ...userIdSnapshot.docs]
+        totalQueriedDocs = allDocs.length
 
-          console.log(`📊 [Vex Analyze v3] Found ${allDocs.length} docs in ${collectionName}`)
+        console.log(`📊 [Vex Analyze v3] Found ${allDocs.length} docs in uploads collection`)
 
-          for (const doc of allDocs) {
-            if (uploadsByDocId.has(doc.id)) {
-              console.log(`⏭️ [Vex Analyze v3] Skipping duplicate doc ID: ${doc.id}`)
-              continue
-            }
-
-            const data = doc.data()
-
-            if (data.uid !== userId && data.userId !== userId) {
-              console.warn(`⚠️ [Vex Analyze v3] Skipping ${doc.id} - ownership mismatch`)
-              continue
-            }
-
-            const title = data.title || data.filename
-            if (!title || title === "Untitled" || title === "Unknown") {
-              console.warn(`⚠️ [Vex Analyze v3] Skipping ${doc.id} - no valid title`)
-              continue
-            }
-
-            const fileMetadata: FileMetadata = {
-              filename: data.filename || title,
-              title: title,
-              description: data.description || "",
-              mimeType: data.mimeType || data.type || "unknown",
-              contentType: determineContentType(data.mimeType || data.type || ""),
-              duration: data.duration || null,
-              fileSize: data.fileSize || 0,
-              folderId: data.folderId || null,
-              folderName: data.folderName || null,
-              tags: data.tags || [],
-            }
-
-            const metadataAnalysis = analyzeMetadata(fileMetadata, existingFolderNames)
-
-            console.log(`🧠 [Vex Analyze v3] ${doc.id}: ${metadataAnalysis.reasoning}`)
-
-            const upload: Upload = {
-              id: doc.id,
-              title: title,
-              filename: data.filename || data.title || "Unknown",
-              description: data.description || "",
-              tags: data.tags || [],
-              mimeType: data.mimeType || data.type || "unknown",
-              contentType: determineContentType(data.mimeType || data.type || ""),
-              collection: collectionName,
-              createdAt: data.createdAt || data.addedAt || new Date(),
-              fileSize: data.fileSize || 0,
-              duration: data.duration || null,
-              url: data.url || data.downloadURL || null,
-              folderId: data.folderId || null,
-              folderName: data.folderName || null,
-              detectedNiche: metadataAnalysis.detectedNiche,
-              suggestedFolder: metadataAnalysis.suggestedFolder,
-              nicheConfidence: metadataAnalysis.confidence,
-              reasoning: metadataAnalysis.reasoning,
-              evidence: metadataAnalysis.evidence,
-            }
-
-            uploadsByDocId.set(doc.id, upload)
+        for (const doc of allDocs) {
+          // Skip duplicates (same doc ID from both queries)
+          if (uploadsByDocId.has(doc.id)) {
+            console.log(`⏭️ [Vex Analyze v3] Skipping duplicate doc ID: ${doc.id}`)
+            continue
           }
-        } catch (collectionError) {
-          console.log(`⚠️ [Vex Analyze v3] Error querying ${collectionName}:`, collectionError)
+
+          const data = doc.data()
+
+          // Verify ownership
+          if (data.uid !== userId && data.userId !== userId) {
+            console.warn(`⚠️ [Vex Analyze v3] Skipping ${doc.id} - ownership mismatch`)
+            continue
+          }
+
+          // Skip items without valid titles
+          const title = data.title || data.filename
+          if (!title || title === "Untitled" || title === "Unknown") {
+            console.warn(`⚠️ [Vex Analyze v3] Skipping ${doc.id} - no valid title`)
+            continue
+          }
+
+          // Build metadata for analysis
+          const fileMetadata: FileMetadata = {
+            filename: data.filename || title,
+            title: title,
+            description: data.description || "",
+            mimeType: data.mimeType || data.type || "unknown",
+            contentType: determineContentType(data.mimeType || data.type || ""),
+            duration: data.duration || null,
+            fileSize: data.fileSize || 0,
+            folderId: data.folderId || null,
+            folderName: data.folderName || null,
+            tags: data.tags || [],
+          }
+
+          // Analyze with metadata intelligence
+          const metadataAnalysis = analyzeMetadata(fileMetadata, existingFolderNames)
+
+          console.log(`🧠 [Vex Analyze v3] ${doc.id}: ${metadataAnalysis.reasoning}`)
+
+          const upload: Upload = {
+            id: doc.id,
+            title: title,
+            filename: data.filename || data.title || "Unknown",
+            description: data.description || "",
+            tags: data.tags || [],
+            mimeType: data.mimeType || data.type || "unknown",
+            contentType: determineContentType(data.mimeType || data.type || ""),
+            collection: "uploads", // Always uploads now
+            createdAt: data.createdAt || data.addedAt || new Date(),
+            fileSize: data.fileSize || 0,
+            duration: data.duration || null,
+            url: data.url || data.downloadURL || null,
+            folderId: data.folderId || null,
+            folderName: data.folderName || null,
+            detectedNiche: metadataAnalysis.detectedNiche,
+            suggestedFolder: metadataAnalysis.suggestedFolder,
+            nicheConfidence: metadataAnalysis.confidence,
+            reasoning: metadataAnalysis.reasoning,
+            evidence: metadataAnalysis.evidence,
+          }
+
+          uploadsByDocId.set(doc.id, upload)
         }
+      } catch (collectionError) {
+        console.log(`⚠️ [Vex Analyze v3] Error querying uploads collection:`, collectionError)
       }
 
       const uniqueUploads = Array.from(uploadsByDocId.values()).sort((a, b) => {
