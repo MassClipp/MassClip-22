@@ -335,10 +335,11 @@ Before organizing, renaming, or categorizing ANY content:
 2. **Think about what the title means** - Does "2819 Rebellion" sound like a sound effect? No! It has the word "Rebellion" which is meaningful
 3. **Check for generic titles** - IMG_8030, pure numbers, "Video 1" = ASK FIRST
 4. **Use your intelligence** - You know that:
-   - "grind_speech_final.mp4" at 35s = motivation (has 'grind', 'speech', right duration)
-   - "meme template" = obviously a meme
-   - "2819 Fruit" = unclear, could be anything = ASK
-   - "whoosh_01.wav" at 2s = SFX (short audio, descriptive name)
+   - "grind mode" = has 'grind' keyword = motivation
+   - "meme template" = has 'meme' keyword = meme
+   - "2819 Fruit" = unclear = ASK
+   - "whoosh_01.wav" = short audio + 'whoosh' = SFX
+   - "IMG_8030" = camera default = ASK
 5. **Combine evidence** - Filename + duration + file type + keywords + cultural patterns
 6. **When uncertain = ASK** - Don't guess
 7. **Explain your reasoning** - "This file is called grind_speech_final.mp4, is 35 seconds long, and includes keywords like 'grind' and 'speech'. It's likely motivational content."
@@ -995,9 +996,8 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
       return { success: false, error: "Missing required organization information." }
     }
 
-    console.log(`[v0] Organizing ${fileIds.length} files to folder "${targetFolder}"`)
+    console.log(`[v0] 📂 Starting organization: ${fileIds.length} files → "${targetFolder}"`)
 
-    // Find the target folder
     let foldersSnapshot = await db
       .collection("folders")
       .where("userId", "==", userId)
@@ -1006,7 +1006,6 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
       .limit(1)
       .get()
 
-    // Try with uid field if userId didn't work
     if (foldersSnapshot.empty) {
       foldersSnapshot = await db
         .collection("folders")
@@ -1020,12 +1019,12 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
     if (foldersSnapshot.empty) {
       return {
         success: false,
-        error: `Folder "${targetFolder}" not found. Please create it first using CREATE_FOLDER.`,
+        error: `Folder "${targetFolder}" not found. Please create it first.`,
       }
     }
 
     const targetFolderId = foldersSnapshot.docs[0].id
-    console.log("[v0] Found target folder:", targetFolderId)
+    console.log(`[v0] ✅ Found folder: ${targetFolderId}`)
 
     const analysisDoc = await db.collection("vex_content_analysis").doc(userId).get()
     if (!analysisDoc.exists) {
@@ -1036,98 +1035,93 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
     }
 
     const analysisData = analysisDoc.data()!
-    const availableUploads = analysisData.uploads || []
-    console.log(`[v0] Loaded ${availableUploads.length} uploads from analysis`)
+    const uploads = analysisData.uploads || []
+    console.log(`[v0] 📊 Loaded ${uploads.length} uploads from analysis`)
 
     const movedFiles: string[] = []
     const notFoundFiles: string[] = []
-    const documentsToUpdate: Array<{ ref: any; title: string }> = []
 
     for (const fileIdentifier of fileIds) {
-      // Try exact ID match first
-      let matchedUpload = availableUploads.find((upload: any) => upload.id === fileIdentifier)
+      console.log(`[v0] 🔍 Looking for: "${fileIdentifier}"`)
 
-      // If not found by ID, try fuzzy matching by title/filename
-      if (!matchedUpload) {
-        matchedUpload = availableUploads.find(
-          (upload: any) =>
-            upload.title === fileIdentifier ||
-            upload.filename === fileIdentifier ||
-            upload.title.toLowerCase() === fileIdentifier.toLowerCase() ||
-            upload.title.toLowerCase().includes(fileIdentifier.toLowerCase()) ||
-            fileIdentifier.toLowerCase().includes(upload.title.toLowerCase()),
-        )
-      }
+      // Try to find the upload in the analysis data
+      const upload = uploads.find((u: any) => {
+        // Exact ID match
+        if (u.id === fileIdentifier) return true
 
-      if (matchedUpload) {
-        const docRef = db.collection(matchedUpload.collection).doc(matchedUpload.id)
-        const docSnap = await docRef.get()
+        // Exact title match
+        if (u.title === fileIdentifier) return true
 
-        if (docSnap.exists) {
-          const docData = docSnap.data()!
+        // Case-insensitive title match
+        if (u.title?.toLowerCase() === fileIdentifier.toLowerCase()) return true
 
-          // Verify ownership
-          if (docData.uid === userId || docData.userId === userId) {
-            documentsToUpdate.push({
-              ref: docRef,
-              title: docData.title || docData.filename || fileIdentifier,
-            })
-            console.log(
-              `[v0] ✅ Matched "${fileIdentifier}" to document ${matchedUpload.id} in ${matchedUpload.collection}`,
-            )
-          } else {
-            notFoundFiles.push(fileIdentifier)
-            console.warn(`[v0] ❌ Ownership mismatch for "${fileIdentifier}"`)
-          }
-        } else {
-          notFoundFiles.push(fileIdentifier)
-          console.warn(`[v0] ❌ Document not found for "${fileIdentifier}"`)
-        }
-      } else {
+        // Filename match
+        if (u.filename === fileIdentifier) return true
+
+        return false
+      })
+
+      if (!upload) {
+        console.log(`[v0] ❌ Not found: "${fileIdentifier}"`)
         notFoundFiles.push(fileIdentifier)
-        console.warn(`[v0] ❌ Could not find file for identifier: "${fileIdentifier}"`)
+        continue
       }
-    }
 
-    if (documentsToUpdate.length === 0) {
-      return {
-        success: false,
-        error: `Could not find any of the specified files. Please make sure they exist in your library.${notFoundFiles.length > 0 ? `\n\nFiles not found: ${notFoundFiles.join(", ")}` : ""}`,
-      }
-    }
+      console.log(`[v0] ✅ Found: ${upload.id} in collection "${upload.collection}"`)
 
-    const batchSize = 500
-    for (let i = 0; i < documentsToUpdate.length; i += batchSize) {
-      const batch = db.batch()
-      const batchDocs = documentsToUpdate.slice(i, i + batchSize)
+      try {
+        const docRef = db.collection(upload.collection).doc(upload.id)
 
-      for (const doc of batchDocs) {
-        batch.update(doc.ref, {
+        // Verify the document exists and belongs to the user
+        const docSnap = await docRef.get()
+        if (!docSnap.exists) {
+          console.log(`[v0] ❌ Document doesn't exist: ${upload.id}`)
+          notFoundFiles.push(fileIdentifier)
+          continue
+        }
+
+        const docData = docSnap.data()!
+        if (docData.uid !== userId && docData.userId !== userId) {
+          console.log(`[v0] ❌ Ownership mismatch: ${upload.id}`)
+          notFoundFiles.push(fileIdentifier)
+          continue
+        }
+
+        // Update the document
+        await docRef.update({
           folderId: targetFolderId,
           folderName: targetFolder,
           updatedAt: FieldValue.serverTimestamp(),
           vexOrganized: true,
           vexOrganizeReason: reason || "Organized by Vex AI",
         })
-        movedFiles.push(doc.title)
-      }
 
-      await batch.commit()
-      console.log(`[v0] Committed batch ${Math.floor(i / batchSize) + 1}, moved ${batchDocs.length} files`)
+        movedFiles.push(upload.title || upload.filename || fileIdentifier)
+        console.log(`[v0] ✅ Moved: "${upload.title}" to "${targetFolder}"`)
+      } catch (error) {
+        console.error(`[v0] ❌ Error moving ${upload.id}:`, error)
+        notFoundFiles.push(fileIdentifier)
+      }
     }
 
-    console.log(`[v0] Successfully moved ${movedFiles.length} files to folder "${targetFolder}"`)
+    if (movedFiles.length === 0) {
+      return {
+        success: false,
+        error: `Could not move any files. ${notFoundFiles.length > 0 ? `Not found: ${notFoundFiles.join(", ")}` : ""}`,
+      }
+    }
 
+    console.log(`[v0] 🎉 Successfully moved ${movedFiles.length} files`)
+
+    // Trigger analysis refresh in background
     try {
       fetch(`${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/api/vex/analyze-uploads`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId }),
       }).catch((err) => console.warn("[v0] Failed to trigger analysis refresh:", err))
     } catch (error) {
-      console.warn("[v0] Failed to trigger content analysis refresh:", error)
+      console.warn("[v0] Failed to trigger analysis refresh:", error)
     }
 
     return {
