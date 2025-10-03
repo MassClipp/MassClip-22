@@ -333,8 +333,9 @@ export class ChunkedUploadService {
 
       const result = await response.json()
       console.log(`[v0] Finalize success result:`, result)
+      session.firestoreDocId = result.uploadId
       console.log(`✅ [Chunked Upload] Upload completed: ${uploadId}`)
-      this.updateProgress(uploadId, "completed", undefined, result.fileUrl, result.firestoreDocId)
+      this.updateProgress(uploadId, "completed", undefined, result.fileUrl, result.uploadId)
     } catch (error) {
       console.error("❌ [Chunked Upload] Upload finalization failed:", error)
       console.error("[v0] Full error details:", error)

@@ -9,6 +9,7 @@ export interface QueuedUpload {
   error?: string
   uploadId?: string
   fileUrl?: string
+  firestoreDocId?: string
   createdAt: number
   folderId?: string
   folderPath?: string
@@ -107,7 +108,7 @@ class UploadQueueManager {
             queuedUpload.fileUrl = progress.fileUrl
           }
           if (progress.firestoreDocId) {
-            queuedUpload.uploadId = progress.firestoreDocId
+            queuedUpload.firestoreDocId = progress.firestoreDocId
           }
 
           if (progress.status === "completed") {
@@ -184,6 +185,7 @@ class UploadQueueManager {
       item.progress = undefined
       item.uploadId = undefined
       item.fileUrl = undefined
+      item.firestoreDocId = undefined
       this.notifyProgress(item)
       this.notifyGlobalProgress()
       this.processQueue()

@@ -432,9 +432,8 @@ export default function UploadPage() {
           console.log(`[v0] Status: ${queuedUpload.status}`)
           console.log(`[v0] File type: ${queuedUpload.file.type}`)
           console.log(`[v0] Upload ID: ${queuedUpload.uploadId}`)
-          console.log(`[v0] Firestore Doc ID: ${queuedUpload.firestoreDocId}`) // Added log for Firestore doc ID
+          console.log(`[v0] Firestore Doc ID: ${queuedUpload.firestoreDocId}`)
           console.log(`[v0] File URL: ${queuedUpload.fileUrl}`)
-          console.log(`[v0] Full queuedUpload object:`, queuedUpload)
 
           if (queuedUpload.status === "completed") {
             toast({
@@ -458,7 +457,7 @@ export default function UploadPage() {
                     Authorization: `Bearer ${token}`,
                   },
                   body: JSON.stringify({
-                    uploadId: queuedUpload.firestoreDocId, // Use Firestore document ID, not session ID
+                    uploadId: queuedUpload.firestoreDocId, // Use Firestore document ID
                     videoUrl: queuedUpload.fileUrl,
                     mimeType: queuedUpload.file.type,
                   }),
