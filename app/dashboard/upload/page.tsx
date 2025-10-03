@@ -432,6 +432,7 @@ export default function UploadPage() {
           console.log(`[v0] Status: ${queuedUpload.status}`)
           console.log(`[v0] File type: ${queuedUpload.file.type}`)
           console.log(`[v0] Upload ID: ${queuedUpload.uploadId}`)
+          console.log(`[v0] Firestore Doc ID: ${queuedUpload.firestoreDocId}`) // Added log for Firestore doc ID
           console.log(`[v0] File URL: ${queuedUpload.fileUrl}`)
           console.log(`[v0] Full queuedUpload object:`, queuedUpload)
 
@@ -443,8 +444,10 @@ export default function UploadPage() {
 
             const isVideo = queuedUpload.file.type.startsWith("video/")
 
-            if (isVideo && queuedUpload.uploadId && queuedUpload.fileUrl) {
-              console.log(`[v0] Video upload completed, triggering transcription for: ${queuedUpload.uploadId}`)
+            if (isVideo && queuedUpload.firestoreDocId && queuedUpload.fileUrl) {
+              console.log(
+                `[v0] Video upload completed, triggering transcription for Firestore doc: ${queuedUpload.firestoreDocId}`,
+              )
 
               try {
                 const token = await user.getIdToken()
@@ -455,14 +458,16 @@ export default function UploadPage() {
                     Authorization: `Bearer ${token}`,
                   },
                   body: JSON.stringify({
-                    uploadId: queuedUpload.uploadId, // This is now the Firestore document ID
+                    uploadId: queuedUpload.firestoreDocId, // Use Firestore document ID, not session ID
                     videoUrl: queuedUpload.fileUrl,
                     mimeType: queuedUpload.file.type,
                   }),
                 })
 
                 if (transcribeResponse.ok) {
-                  console.log(`[v0] Transcription started successfully for: ${queuedUpload.uploadId}`)
+                  console.log(
+                    `[v0] Transcription started successfully for Firestore doc: ${queuedUpload.firestoreDocId}`,
+                  )
                   toast({
                     title: "Transcription Started",
                     description: "Your video is being transcribed in the background.",
