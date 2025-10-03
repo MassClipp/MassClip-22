@@ -198,7 +198,7 @@ export async function POST(request: NextRequest) {
 
         console.log(`🌐 [Finalize] Calling transcription API at ${baseUrl}/api/uploads/auto-transcribe`)
 
-        // Call transcription endpoint
+        // Call transcription endpoint (fire-and-forget)
         fetch(`${baseUrl}/api/uploads/auto-transcribe`, {
           method: "POST",
           headers: {
