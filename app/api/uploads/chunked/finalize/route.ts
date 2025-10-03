@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3"
 import { initializeFirebaseAdmin, db } from "@/lib/firebase/firebaseAdmin"
 import { headers } from "next/headers"
+import { transcribeVideo } from "@/lib/groq-transcription"
 
 // Initialize Firebase Admin
 initializeFirebaseAdmin()
@@ -188,47 +189,25 @@ export async function POST(request: NextRequest) {
       console.log(`✅ [Finalize] Created upload record: ${uploadRef.id}`)
 
       if (uploadData.type === "video") {
-        console.log(`🎬 [Finalize] Video detected, triggering transcription`)
+        console.log(`🎬 [Finalize] Video detected, starting transcription`)
 
-        const authHeader = request.headers.get("authorization")
-        console.log(`🔑 [Finalize] Auth header for transcription: ${authHeader?.substring(0, 30)}...`)
+        // Fire-and-forget transcription (don't block the response)
+        transcribeVideo(sessionData.publicUrl)
+          .then(async (result) => {
+            console.log(`✅ [Finalize] Transcription completed (${result.text.length} chars)`)
 
-        const protocol = request.headers.get("x-forwarded-proto") || "http"
-        const host = request.headers.get("host")
-        const baseUrl = `${protocol}://${host}`
-        const transcribeUrl = `${baseUrl}/api/uploads/auto-transcribe`
+            // Save transcript to database
+            await db.collection("uploads").doc(uploadRef.id).update({
+              transcript: result.text,
+              transcriptDuration: result.duration,
+              transcriptLanguage: result.language,
+              transcribedAt: new Date(),
+            })
 
-        console.log(`🌐 [Finalize] Calling transcription API at ${transcribeUrl}`)
-
-        // Call transcription endpoint (fire-and-forget)
-        fetch(transcribeUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(authHeader && { authorization: authHeader }),
-          },
-          body: JSON.stringify({
-            uploadId: uploadRef.id,
-            videoUrl: sessionData.publicUrl,
-            mimeType: sessionData.fileType,
-          }),
-        })
-          .then(async (res) => {
-            console.log(`📡 [Finalize] Transcription API status: ${res.status}`)
-            console.log(`📡 [Finalize] Transcription API ok: ${res.ok}`)
-            const contentType = res.headers.get("content-type")
-            console.log(`📡 [Finalize] Response content-type: ${contentType}`)
-
-            if (contentType?.includes("application/json")) {
-              const data = await res.json()
-              console.log(`📄 [Finalize] Transcription API response:`, data)
-            } else {
-              const text = await res.text()
-              console.log(`📄 [Finalize] Transcription API response (text):`, text.substring(0, 200))
-            }
+            console.log(`✅ [Finalize] Transcript saved to database`)
           })
           .catch((err) => {
-            console.error(`❌ [Finalize] Transcription API error:`, err)
+            console.error(`❌ [Finalize] Transcription failed:`, err)
           })
       }
 
