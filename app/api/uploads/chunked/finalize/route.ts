@@ -192,10 +192,15 @@ export async function POST(request: NextRequest) {
 
         const authHeader = request.headers.get("authorization")
 
-        console.log(`🌐 [Finalize] Calling transcription API at /api/uploads/auto-transcribe`)
+        const protocol = request.headers.get("x-forwarded-proto") || "http"
+        const host = request.headers.get("host")
+        const baseUrl = `${protocol}://${host}`
+        const transcribeUrl = `${baseUrl}/api/uploads/auto-transcribe`
+
+        console.log(`🌐 [Finalize] Calling transcription API at ${transcribeUrl}`)
 
         // Call transcription endpoint (fire-and-forget)
-        fetch(`/api/uploads/auto-transcribe`, {
+        fetch(transcribeUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
