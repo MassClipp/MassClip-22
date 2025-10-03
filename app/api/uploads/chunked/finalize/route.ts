@@ -189,12 +189,15 @@ export async function POST(request: NextRequest) {
       console.log(`✅ [Finalize] Created upload record: ${uploadRef.id}`)
 
       if (uploadData.type === "video") {
-        console.log(`🎬 [Finalize] Video detected, starting transcription`)
+        console.log(`[v0] VIDEO DETECTED - Type: ${uploadData.type}`)
+        console.log(`[v0] Starting transcription for upload: ${uploadRef.id}`)
+        console.log(`[v0] Video URL: ${sessionData.publicUrl}`)
 
         // Fire-and-forget transcription (don't block the response)
         transcribeVideo(sessionData.publicUrl)
           .then(async (result) => {
-            console.log(`✅ [Finalize] Transcription completed (${result.text.length} chars)`)
+            console.log(`[v0] TRANSCRIPTION SUCCESS - Length: ${result.text.length} chars`)
+            console.log(`[v0] Transcript preview: ${result.text.substring(0, 100)}...`)
 
             // Save transcript to database
             await db.collection("uploads").doc(uploadRef.id).update({
@@ -204,11 +207,14 @@ export async function POST(request: NextRequest) {
               transcribedAt: new Date(),
             })
 
-            console.log(`✅ [Finalize] Transcript saved to database`)
+            console.log(`[v0] Transcript saved to database for upload: ${uploadRef.id}`)
           })
           .catch((err) => {
-            console.error(`❌ [Finalize] Transcription failed:`, err)
+            console.error(`[v0] TRANSCRIPTION FAILED for upload ${uploadRef.id}:`, err)
+            console.error(`[v0] Error details:`, JSON.stringify(err, null, 2))
           })
+      } else {
+        console.log(`[v0] NOT A VIDEO - Type: ${uploadData.type}, skipping transcription`)
       }
 
       // Update session status
