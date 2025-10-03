@@ -106,6 +106,9 @@ class UploadQueueManager {
           if (progress.fileUrl) {
             queuedUpload.fileUrl = progress.fileUrl
           }
+          if (progress.firestoreDocId) {
+            queuedUpload.uploadId = progress.firestoreDocId
+          }
 
           if (progress.status === "completed") {
             this.completeUpload(queuedUpload)

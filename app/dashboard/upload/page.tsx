@@ -455,7 +455,7 @@ export default function UploadPage() {
                     Authorization: `Bearer ${token}`,
                   },
                   body: JSON.stringify({
-                    uploadId: queuedUpload.uploadId,
+                    uploadId: queuedUpload.uploadId, // This is now the Firestore document ID
                     videoUrl: queuedUpload.fileUrl,
                     mimeType: queuedUpload.file.type,
                   }),
