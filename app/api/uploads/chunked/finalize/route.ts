@@ -190,7 +190,6 @@ export async function POST(request: NextRequest) {
       if (uploadData.type === "video") {
         console.log(`[v0] 🎬 Video upload detected, triggering transcription API...`)
 
-        // Call the auto-transcribe endpoint asynchronously
         const transcribeUrl = `${process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || "https://massclippp-gmailcoms-projects.vercel.app"}/api/uploads/auto-transcribe`
 
         fetch(transcribeUrl, {
@@ -201,6 +200,7 @@ export async function POST(request: NextRequest) {
           body: JSON.stringify({
             uploadId: uploadRef.id,
             videoUrl: sessionData.publicUrl,
+            mimeType: sessionData.fileType,
           }),
         }).catch((error) => {
           console.error(`[v0] ❌ Failed to trigger transcription API:`, error)

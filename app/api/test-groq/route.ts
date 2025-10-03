@@ -30,7 +30,7 @@ export async function POST() {
     console.log("[v0] 📞 Making test API call...")
     const completion = await groq.chat.completions.create({
       messages: [{ role: "user", content: 'Say "Hello from Groq!"' }],
-      model: "mixtral-8x7b-32768",
+      model: "llama-3.3-70b-versatile",
       max_tokens: 50,
     })
 
