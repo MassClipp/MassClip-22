@@ -434,9 +434,8 @@ export default function UploadPage() {
               description: `${queuedUpload.file.name} has been uploaded successfully.`,
             })
 
-            // Check if it's a video file and trigger transcription
             const isVideo = queuedUpload.file.type.startsWith("video/")
-            if (isVideo && queuedUpload.uploadId) {
+            if (isVideo && queuedUpload.uploadId && queuedUpload.fileUrl) {
               console.log(`[v0] Video upload completed, triggering transcription for: ${queuedUpload.uploadId}`)
 
               try {
@@ -447,7 +446,11 @@ export default function UploadPage() {
                     "Content-Type": "application/json",
                     Authorization: `Bearer ${token}`,
                   },
-                  body: JSON.stringify({ uploadId: queuedUpload.uploadId }),
+                  body: JSON.stringify({
+                    uploadId: queuedUpload.uploadId,
+                    videoUrl: queuedUpload.fileUrl,
+                    mimeType: queuedUpload.file.type,
+                  }),
                 })
 
                 if (transcribeResponse.ok) {
