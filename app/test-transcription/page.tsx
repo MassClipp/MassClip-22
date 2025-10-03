@@ -1,19 +1,68 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { auth } from "@/lib/firebase/firebase"
+import { auth, db } from "@/lib/firebase/firebase"
+import { collection, query, where, getDocs, orderBy, limit } from "firebase/firestore"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+
+interface Upload {
+  id: string
+  title: string
+  videoUrl: string
+  mimeType: string
+  createdAt: any
+}
 
 export default function TestTranscriptionPage() {
-  const [videoUrl, setVideoUrl] = useState("")
+  const [uploads, setUploads] = useState<Upload[]>([])
+  const [selectedUploadId, setSelectedUploadId] = useState<string>("")
   const [logs, setLogs] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [isFetchingUploads, setIsFetchingUploads] = useState(false)
 
   const addLog = (message: string) => {
     setLogs((prev) => [...prev, `${new Date().toLocaleTimeString()}: ${message}`])
   }
+
+  const fetchUploads = async () => {
+    setIsFetchingUploads(true)
+    addLog("📥 Fetching real uploads from database...")
+
+    try {
+      const user = auth.currentUser
+      if (!user) {
+        addLog("❌ No user logged in")
+        setIsFetchingUploads(false)
+        return
+      }
+
+      const uploadsRef = collection(db, "uploads")
+      const q = query(uploadsRef, where("userId", "==", user.uid), orderBy("createdAt", "desc"), limit(20))
+
+      const snapshot = await getDocs(q)
+      const uploadsList = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as Upload[]
+
+      setUploads(uploadsList)
+      addLog(`✅ Found ${uploadsList.length} uploads`)
+
+      if (uploadsList.length > 0) {
+        setSelectedUploadId(uploadsList[0].id)
+      }
+    } catch (error) {
+      addLog(`❌ Error fetching uploads: ${error instanceof Error ? error.message : "Unknown error"}`)
+    } finally {
+      setIsFetchingUploads(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchUploads()
+  }, [])
 
   const testTranscription = async () => {
     setLogs([])
@@ -28,6 +77,16 @@ export default function TestTranscriptionPage() {
         return
       }
 
+      const selectedUpload = uploads.find((u) => u.id === selectedUploadId)
+      if (!selectedUpload) {
+        addLog("❌ No upload selected")
+        setIsLoading(false)
+        return
+      }
+
+      addLog(`📹 Testing with: ${selectedUpload.title}`)
+      addLog(`🆔 Upload ID: ${selectedUpload.id}`)
+
       const token = await user.getIdToken()
       addLog("✅ Got auth token")
 
@@ -40,11 +99,9 @@ export default function TestTranscriptionPage() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          videoUrl:
-            videoUrl ||
-            "https://pub-93cabcf58da344dea3d33ba1e4be2ef2.r2.dev/creators/motivationcave/1759448614293-Damii_.Daddy's_Money.mov",
-          uploadId: "test_" + Date.now(),
-          mimeType: "video/quicktime",
+          videoUrl: selectedUpload.videoUrl,
+          uploadId: selectedUpload.id,
+          mimeType: selectedUpload.mimeType || "video/quicktime",
         }),
       })
 
@@ -108,13 +165,33 @@ export default function TestTranscriptionPage() {
             <CardTitle>Test Transcription Endpoint</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">Test the auto-transcribe endpoint with a video URL</p>
-            <Input
-              placeholder="Video URL (optional - will use test URL if empty)"
-              value={videoUrl}
-              onChange={(e) => setVideoUrl(e.target.value)}
-            />
-            <Button onClick={testTranscription} disabled={isLoading}>
+            <p className="text-sm text-muted-foreground">
+              Test the auto-transcribe endpoint with a real uploaded video
+            </p>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Select Upload</label>
+              <div className="flex gap-2">
+                <Select value={selectedUploadId} onValueChange={setSelectedUploadId} disabled={isFetchingUploads}>
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder="Select an upload" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {uploads.map((upload) => (
+                      <SelectItem key={upload.id} value={upload.id}>
+                        {upload.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button onClick={fetchUploads} disabled={isFetchingUploads} variant="outline">
+                  {isFetchingUploads ? "Loading..." : "Refresh"}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">{uploads.length} uploads available</p>
+            </div>
+
+            <Button onClick={testTranscription} disabled={isLoading || !selectedUploadId}>
               {isLoading ? "Testing..." : "Test Transcription"}
             </Button>
           </CardContent>
