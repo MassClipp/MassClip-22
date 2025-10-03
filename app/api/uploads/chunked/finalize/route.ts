@@ -2,7 +2,6 @@ import { type NextRequest, NextResponse } from "next/server"
 import { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3"
 import { initializeFirebaseAdmin, db } from "@/lib/firebase/firebaseAdmin"
 import { headers } from "next/headers"
-import { transcribeVideo } from "@/lib/groq-transcription"
 
 // Initialize Firebase Admin
 initializeFirebaseAdmin()
@@ -188,35 +187,6 @@ export async function POST(request: NextRequest) {
       const uploadRef = await db.collection("uploads").add(uploadData)
       console.log(`✅ [Finalize] Created upload record: ${uploadRef.id}`)
 
-      if (uploadData.type === "video") {
-        console.log(`[v0] VIDEO DETECTED - Type: ${uploadData.type}`)
-        console.log(`[v0] Starting transcription for upload: ${uploadRef.id}`)
-        console.log(`[v0] Video URL: ${sessionData.publicUrl}`)
-
-        // Fire-and-forget transcription (don't block the response)
-        transcribeVideo(sessionData.publicUrl)
-          .then(async (result) => {
-            console.log(`[v0] TRANSCRIPTION SUCCESS - Length: ${result.text.length} chars`)
-            console.log(`[v0] Transcript preview: ${result.text.substring(0, 100)}...`)
-
-            // Save transcript to database
-            await db.collection("uploads").doc(uploadRef.id).update({
-              transcript: result.text,
-              transcriptDuration: result.duration,
-              transcriptLanguage: result.language,
-              transcribedAt: new Date(),
-            })
-
-            console.log(`[v0] Transcript saved to database for upload: ${uploadRef.id}`)
-          })
-          .catch((err) => {
-            console.error(`[v0] TRANSCRIPTION FAILED for upload ${uploadRef.id}:`, err)
-            console.error(`[v0] Error details:`, JSON.stringify(err, null, 2))
-          })
-      } else {
-        console.log(`[v0] NOT A VIDEO - Type: ${uploadData.type}, skipping transcription`)
-      }
-
       // Update session status
       await db.collection("uploadSessions").doc(uploadId).update({
         status: "completed",
@@ -231,6 +201,7 @@ export async function POST(request: NextRequest) {
         success: true,
         uploadId: uploadRef.id,
         fileUrl: sessionData.publicUrl,
+        fileType: uploadData.type,
         message: "Upload completed successfully",
       })
     } catch (combineError) {

@@ -427,12 +427,44 @@ export default function UploadPage() {
         const queueId = uploadQueueManager.addToQueue(file, priority, finalFolderId, folderPath)
 
         // Set up individual progress callback
-        uploadQueueManager.setProgressCallback(queueId, (queuedUpload) => {
+        uploadQueueManager.setProgressCallback(queueId, async (queuedUpload) => {
           if (queuedUpload.status === "completed") {
             toast({
               title: "Upload Complete!",
               description: `${queuedUpload.file.name} has been uploaded successfully.`,
             })
+
+            // Check if it's a video file and trigger transcription
+            const isVideo = queuedUpload.file.type.startsWith("video/")
+            if (isVideo && queuedUpload.uploadId) {
+              console.log(`[v0] Video upload completed, triggering transcription for: ${queuedUpload.uploadId}`)
+
+              try {
+                const token = await user.getIdToken()
+                const transcribeResponse = await fetch("/api/uploads/auto-transcribe", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                  },
+                  body: JSON.stringify({ uploadId: queuedUpload.uploadId }),
+                })
+
+                if (transcribeResponse.ok) {
+                  console.log(`[v0] Transcription started successfully for: ${queuedUpload.uploadId}`)
+                  toast({
+                    title: "Transcription Started",
+                    description: "Your video is being transcribed in the background.",
+                  })
+                } else {
+                  const error = await transcribeResponse.json()
+                  console.error(`[v0] Transcription failed:`, error)
+                }
+              } catch (error) {
+                console.error(`[v0] Failed to trigger transcription:`, error)
+              }
+            }
+
             // Refresh uploads list
             setTimeout(() => fetchUploads(), 1000)
           } else if (queuedUpload.status === "error") {
