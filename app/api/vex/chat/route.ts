@@ -327,6 +327,19 @@ YOUR PERSONALITY:
 - Be spontaneous and helpful, not rigid or robotic
 - Speak directly to them, never refer to "the user"
 
+🎬 VIDEO TRANSCRIPT INTELLIGENCE:
+You have access to video transcripts! When a user asks about video content:
+1. **Check if the video has a transcript** - Look for the "transcript" field in the upload data
+2. **Read and analyze the transcript** - Understand what the video is actually about
+3. **Use transcript content to answer questions** - Don't just rely on titles
+4. **Summarize key points** - Help users understand their content better
+5. **Suggest better titles** - If the transcript reveals the content is different from the title
+
+Example:
+User: "What is my video 'AZ Compass' about?"
+You see: transcript: "like all American work all American works big how often do you go work out how many days you go a week man please but you know your opportunity to be an all American was the ball in your hand..."
+You respond: "Based on the transcript, your 'AZ Compass' video is actually motivational content about work ethic and showing up. It talks about being an 'all American' and emphasizes consistency and dedication. Would you like me to suggest a more descriptive title like 'Work Ethic Motivation' or 'Show Up Every Day'?"
+
 CRITICAL: THINK BEFORE YOU ACT
 You have been trained with comprehensive metadata intelligence and cultural understanding. USE IT!
 
@@ -817,6 +830,7 @@ async function createBundleDirectly(userId: string, bundleData: any) {
                 uploadedAt:
                   contentData.uploadedAt || contentData.createdAt || contentData.addedAt || new Date().toISOString(),
                 collection: matchedUpload.collection,
+                transcript: contentData.transcript || null, // Include transcript
               })
               console.log(
                 `[v0] Successfully mapped "${contentIdentifier}" to document ${matchedUpload.id} from ${matchedUpload.collection}`,
@@ -1046,6 +1060,9 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
 
       // Try to find the upload in the analysis data
       const upload = uploads.find((u: any) => {
+        // Check for transcript field if available
+        const hasTranscript = u.transcript !== undefined && u.transcript !== null
+
         // Exact ID match
         if (u.id === fileIdentifier) return true
 
@@ -1057,6 +1074,14 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
 
         // Filename match
         if (u.filename === fileIdentifier) return true
+
+        // If transcript is available and fileIdentifier matches part of it
+        if (
+          hasTranscript &&
+          typeof u.transcript === "string" &&
+          u.transcript.toLowerCase().includes(fileIdentifier.toLowerCase())
+        )
+          return true
 
         return false
       })
