@@ -428,6 +428,13 @@ export default function UploadPage() {
 
         // Set up individual progress callback
         uploadQueueManager.setProgressCallback(queueId, async (queuedUpload) => {
+          console.log(`[v0] Upload progress callback triggered for: ${queuedUpload.file.name}`)
+          console.log(`[v0] Status: ${queuedUpload.status}`)
+          console.log(`[v0] File type: ${queuedUpload.file.type}`)
+          console.log(`[v0] Upload ID: ${queuedUpload.uploadId}`)
+          console.log(`[v0] File URL: ${queuedUpload.fileUrl}`)
+          console.log(`[v0] Full queuedUpload object:`, queuedUpload)
+
           if (queuedUpload.status === "completed") {
             toast({
               title: "Upload Complete!",
@@ -435,6 +442,8 @@ export default function UploadPage() {
             })
 
             const isVideo = queuedUpload.file.type.startsWith("video/")
+            console.log(`[v0] Is video check: ${isVideo}`)
+
             if (isVideo && queuedUpload.uploadId && queuedUpload.fileUrl) {
               console.log(`[v0] Video upload completed, triggering transcription for: ${queuedUpload.uploadId}`)
 
