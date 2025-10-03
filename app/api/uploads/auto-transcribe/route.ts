@@ -11,12 +11,17 @@ export async function POST(request: NextRequest) {
   try {
     // Verify authentication
     const authHeader = request.headers.get("authorization")
+    console.log(`🔑 [Auto-Transcribe] Auth header present: ${!!authHeader}`)
+    console.log(`🔑 [Auto-Transcribe] Auth header value: ${authHeader?.substring(0, 20)}...`)
+
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      console.log("❌ [Auto-Transcribe] No auth token")
+      console.log("❌ [Auto-Transcribe] No auth token or invalid format")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const token = authHeader.split("Bearer ")[1]
+    console.log(`🔑 [Auto-Transcribe] Token length: ${token?.length}`)
+
     const decodedToken = await getAuth().verifyIdToken(token)
     console.log(`✅ [Auto-Transcribe] Authenticated user: ${decodedToken.uid}`)
 
