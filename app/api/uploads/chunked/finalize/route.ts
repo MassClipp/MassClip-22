@@ -191,15 +191,11 @@ export async function POST(request: NextRequest) {
         console.log(`🎬 [Finalize] Video detected, triggering transcription`)
 
         const authHeader = request.headers.get("authorization")
-        const baseUrl =
-          process.env.NEXT_PUBLIC_APP_URL ||
-          process.env.NEXT_PUBLIC_SITE_URL ||
-          "https://massclippp-gmailcoms-projects.vercel.app"
 
-        console.log(`🌐 [Finalize] Calling transcription API at ${baseUrl}/api/uploads/auto-transcribe`)
+        console.log(`🌐 [Finalize] Calling transcription API at /api/uploads/auto-transcribe`)
 
         // Call transcription endpoint (fire-and-forget)
-        fetch(`${baseUrl}/api/uploads/auto-transcribe`, {
+        fetch(`/api/uploads/auto-transcribe`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
