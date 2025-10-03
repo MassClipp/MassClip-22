@@ -193,8 +193,17 @@ export async function POST(request: NextRequest) {
         const headersList = headers()
         const authorization = headersList.get("authorization")
 
+        console.log(`[v0] 🔑 Authorization header exists: ${!!authorization}`)
+
         // Call the auto-transcribe endpoint asynchronously
         const transcribeUrl = `${process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || "https://massclippp-gmailcoms-projects.vercel.app"}/api/uploads/auto-transcribe`
+
+        console.log(`[v0] 🌐 Transcription URL: ${transcribeUrl}`)
+        console.log(`[v0] 📦 Payload:`, {
+          uploadId: uploadRef.id,
+          videoUrl: sessionData.publicUrl,
+          mimeType: sessionData.fileType,
+        })
 
         fetch(transcribeUrl, {
           method: "POST",
@@ -207,9 +216,17 @@ export async function POST(request: NextRequest) {
             videoUrl: sessionData.publicUrl,
             mimeType: sessionData.fileType,
           }),
-        }).catch((error) => {
-          console.error(`[v0] ❌ Failed to trigger transcription API:`, error)
         })
+          .then((response) => {
+            console.log(`[v0] 📡 Transcription API response status: ${response.status}`)
+            return response.json()
+          })
+          .then((data) => {
+            console.log(`[v0] 📄 Transcription API response data:`, data)
+          })
+          .catch((error) => {
+            console.error(`[v0] ❌ Failed to trigger transcription API:`, error)
+          })
 
         console.log(`[v0] 🚀 Transcription API called for upload ${uploadRef.id}`)
       }
