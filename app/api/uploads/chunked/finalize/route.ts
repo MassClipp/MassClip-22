@@ -191,6 +191,7 @@ export async function POST(request: NextRequest) {
         console.log(`🎬 [Finalize] Video detected, triggering transcription`)
 
         const authHeader = request.headers.get("authorization")
+        console.log(`🔑 [Finalize] Auth header for transcription: ${authHeader?.substring(0, 30)}...`)
 
         const protocol = request.headers.get("x-forwarded-proto") || "http"
         const host = request.headers.get("host")
@@ -204,7 +205,7 @@ export async function POST(request: NextRequest) {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            ...(authHeader && { Authorization: authHeader }),
+            ...(authHeader && { authorization: authHeader }),
           },
           body: JSON.stringify({
             uploadId: uploadRef.id,
@@ -214,8 +215,17 @@ export async function POST(request: NextRequest) {
         })
           .then(async (res) => {
             console.log(`📡 [Finalize] Transcription API status: ${res.status}`)
-            const data = await res.json()
-            console.log(`📄 [Finalize] Transcription API response:`, data)
+            console.log(`📡 [Finalize] Transcription API ok: ${res.ok}`)
+            const contentType = res.headers.get("content-type")
+            console.log(`📡 [Finalize] Response content-type: ${contentType}`)
+
+            if (contentType?.includes("application/json")) {
+              const data = await res.json()
+              console.log(`📄 [Finalize] Transcription API response:`, data)
+            } else {
+              const text = await res.text()
+              console.log(`📄 [Finalize] Transcription API response (text):`, text.substring(0, 200))
+            }
           })
           .catch((err) => {
             console.error(`❌ [Finalize] Transcription API error:`, err)
