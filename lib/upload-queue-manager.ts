@@ -8,6 +8,7 @@ export interface QueuedUpload {
   progress?: UploadProgress
   error?: string
   uploadId?: string
+  fileUrl?: string
   createdAt: number
   folderId?: string
   folderPath?: string
@@ -102,6 +103,9 @@ class UploadQueueManager {
         (progress) => {
           queuedUpload.progress = progress
           queuedUpload.uploadId = progress.uploadId
+          if (progress.fileUrl) {
+            queuedUpload.fileUrl = progress.fileUrl
+          }
 
           if (progress.status === "completed") {
             this.completeUpload(queuedUpload)
@@ -176,6 +180,7 @@ class UploadQueueManager {
       item.error = undefined
       item.progress = undefined
       item.uploadId = undefined
+      item.fileUrl = undefined
       this.notifyProgress(item)
       this.notifyGlobalProgress()
       this.processQueue()

@@ -442,7 +442,6 @@ export default function UploadPage() {
             })
 
             const isVideo = queuedUpload.file.type.startsWith("video/")
-            console.log(`[v0] Is video check: ${isVideo}`)
 
             if (isVideo && queuedUpload.uploadId && queuedUpload.fileUrl) {
               console.log(`[v0] Video upload completed, triggering transcription for: ${queuedUpload.uploadId}`)

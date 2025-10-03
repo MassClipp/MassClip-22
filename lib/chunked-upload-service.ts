@@ -18,6 +18,7 @@ export interface UploadProgress {
   percentage: number // percentage completed (0-100)
   status: "queued" | "uploading" | "completed" | "error" | "paused"
   error?: string
+  fileUrl?: string
 }
 
 export interface ChunkedUploadSession {
@@ -329,7 +330,7 @@ export class ChunkedUploadService {
       const result = await response.json()
       console.log(`[v0] Finalize success result:`, result)
       console.log(`✅ [Chunked Upload] Upload completed: ${uploadId}`)
-      this.updateProgress(uploadId, "completed")
+      this.updateProgress(uploadId, "completed", undefined, result.fileUrl)
     } catch (error) {
       console.error("❌ [Chunked Upload] Upload finalization failed:", error)
       console.error("[v0] Full error details:", error)
@@ -337,7 +338,7 @@ export class ChunkedUploadService {
     }
   }
 
-  private updateProgress(uploadId: string, status: UploadProgress["status"], error?: string) {
+  private updateProgress(uploadId: string, status: UploadProgress["status"], error?: string, fileUrl?: string) {
     const session = this.sessions.get(uploadId)
     const callback = this.progressCallbacks.get(uploadId)
 
@@ -367,6 +368,7 @@ export class ChunkedUploadService {
       percentage,
       status,
       error,
+      fileUrl,
     }
 
     session.lastProgressTime = now
