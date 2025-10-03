@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { initializeFirebaseAdmin, db } from "@/lib/firebase/firebaseAdmin"
-import { getAuth } from "firebase-admin/auth"
 import { transcribeVideo } from "@/lib/groq-transcription"
 
 initializeFirebaseAdmin()
@@ -9,15 +8,6 @@ initializeFirebaseAdmin()
 export async function POST(request: NextRequest) {
   try {
     console.log("🤖 [Auto-Transcribe] Starting automatic transcription...")
-
-    const authHeader = request.headers.get("authorization")
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const token = authHeader.split("Bearer ")[1]
-    const decodedToken = await getAuth().verifyIdToken(token)
-    const userId = decodedToken.uid
 
     const { uploadId, videoUrl, mimeType } = await request.json()
 
