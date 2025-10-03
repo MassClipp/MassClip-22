@@ -159,8 +159,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "R2 bucket not configured" }, { status: 500 })
     }
 
-    console.log(`🏁 [Finalize Upload] Starting finalization for ${uploadId}`)
-    console.log(`📦 [Finalize Upload] Combining ${completedChunks.length} chunks`)
+    console.log(`🏁 [Finalize] Starting finalization for ${uploadId}`)
 
     try {
       // Combine chunks into final file
@@ -171,12 +170,12 @@ export async function POST(request: NextRequest) {
         uid: user.uid,
         fileUrl: sessionData.publicUrl,
         filename: sessionData.originalFileName,
-        title: sessionData.originalFileName.split(".")[0], // Remove extension for title
+        title: sessionData.originalFileName.split(".")[0],
         type: getFileType(sessionData.fileType),
         size: sessionData.fileSize,
         mimeType: sessionData.fileType,
-        folderId: sessionData.folderId || null, // Include folder ID from session
-        folderPath: sessionData.folderPath || null, // Include folder path from session
+        folderId: sessionData.folderId || null,
+        folderPath: sessionData.folderPath || null,
         createdAt: new Date(),
         updatedAt: new Date(),
         uploadMethod: "chunked",
@@ -186,30 +185,25 @@ export async function POST(request: NextRequest) {
       }
 
       const uploadRef = await db.collection("uploads").add(uploadData)
+      console.log(`✅ [Finalize] Created upload record: ${uploadRef.id}`)
 
       if (uploadData.type === "video") {
-        console.log(`[v0] 🎬 Video upload detected, triggering transcription API...`)
+        console.log(`🎬 [Finalize] Video detected, triggering transcription`)
 
-        const headersList = headers()
-        const authorization = headersList.get("authorization")
+        const authHeader = request.headers.get("authorization")
+        const baseUrl =
+          process.env.NEXT_PUBLIC_APP_URL ||
+          process.env.NEXT_PUBLIC_SITE_URL ||
+          "https://massclippp-gmailcoms-projects.vercel.app"
 
-        console.log(`[v0] 🔑 Authorization header exists: ${!!authorization}`)
+        console.log(`🌐 [Finalize] Calling transcription API at ${baseUrl}/api/uploads/auto-transcribe`)
 
-        // Call the auto-transcribe endpoint asynchronously
-        const transcribeUrl = `${process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || "https://massclippp-gmailcoms-projects.vercel.app"}/api/uploads/auto-transcribe`
-
-        console.log(`[v0] 🌐 Transcription URL: ${transcribeUrl}`)
-        console.log(`[v0] 📦 Payload:`, {
-          uploadId: uploadRef.id,
-          videoUrl: sessionData.publicUrl,
-          mimeType: sessionData.fileType,
-        })
-
-        fetch(transcribeUrl, {
+        // Call transcription endpoint
+        fetch(`${baseUrl}/api/uploads/auto-transcribe`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            ...(authorization && { Authorization: authorization }),
+            ...(authHeader && { Authorization: authHeader }),
           },
           body: JSON.stringify({
             uploadId: uploadRef.id,
@@ -217,18 +211,14 @@ export async function POST(request: NextRequest) {
             mimeType: sessionData.fileType,
           }),
         })
-          .then((response) => {
-            console.log(`[v0] 📡 Transcription API response status: ${response.status}`)
-            return response.json()
+          .then(async (res) => {
+            console.log(`📡 [Finalize] Transcription API status: ${res.status}`)
+            const data = await res.json()
+            console.log(`📄 [Finalize] Transcription API response:`, data)
           })
-          .then((data) => {
-            console.log(`[v0] 📄 Transcription API response data:`, data)
+          .catch((err) => {
+            console.error(`❌ [Finalize] Transcription API error:`, err)
           })
-          .catch((error) => {
-            console.error(`[v0] ❌ Failed to trigger transcription API:`, error)
-          })
-
-        console.log(`[v0] 🚀 Transcription API called for upload ${uploadRef.id}`)
       }
 
       // Update session status
@@ -239,13 +229,7 @@ export async function POST(request: NextRequest) {
         updatedAt: new Date(),
       })
 
-      console.log(`✅ [Finalize Upload] Upload completed: ${uploadId}`)
-      console.log(`📄 [Finalize Upload] Created upload record: ${uploadRef.id}`)
-      if (sessionData.folderId && sessionData.folderId !== "main") {
-        console.log(`📂 [Finalize Upload] Assigned to folder: ${sessionData.folderId} (${sessionData.folderPath})`)
-      } else {
-        console.log(`📁 [Finalize Upload] Assigned to Main folder`)
-      }
+      console.log(`✅ [Finalize] Upload completed: ${uploadRef.id}`)
 
       return NextResponse.json({
         success: true,
@@ -254,9 +238,8 @@ export async function POST(request: NextRequest) {
         message: "Upload completed successfully",
       })
     } catch (combineError) {
-      console.error("❌ [Finalize Upload] Failed to combine chunks:", combineError)
+      console.error("❌ [Finalize] Failed to combine chunks:", combineError)
 
-      // Update session with error status
       await db
         .collection("uploadSessions")
         .doc(uploadId)
@@ -269,8 +252,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to combine uploaded chunks into final file" }, { status: 500 })
     }
   } catch (error) {
-    console.error("Error finalizing chunked upload:", error)
-
+    console.error("❌ [Finalize] Error:", error)
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unknown error occurred" },
       { status: 500 },

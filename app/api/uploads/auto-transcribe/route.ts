@@ -5,21 +5,24 @@ import { transcribeVideo } from "@/lib/groq-transcription"
 
 initializeFirebaseAdmin()
 
-// This endpoint is called automatically after video upload
 export async function POST(request: NextRequest) {
-  try {
-    console.log("🤖 [Auto-Transcribe] Starting automatic transcription...")
+  console.log("🤖 [Auto-Transcribe] Request received")
 
+  try {
+    // Verify authentication
     const authHeader = request.headers.get("authorization")
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      console.log("❌ [Auto-Transcribe] No auth token")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const token = authHeader.split("Bearer ")[1]
     const decodedToken = await getAuth().verifyIdToken(token)
-    const userId = decodedToken.uid
+    console.log(`✅ [Auto-Transcribe] Authenticated user: ${decodedToken.uid}`)
 
+    // Get request data
     const { uploadId, videoUrl, mimeType } = await request.json()
+    console.log(`📦 [Auto-Transcribe] Data:`, { uploadId, videoUrl, mimeType })
 
     if (!uploadId || !videoUrl) {
       return NextResponse.json({ error: "Upload ID and video URL required" }, { status: 400 })
@@ -27,18 +30,16 @@ export async function POST(request: NextRequest) {
 
     // Only transcribe videos
     if (!mimeType?.startsWith("video/")) {
-      console.log("⏭️ [Auto-Transcribe] Skipping non-video content")
-      return NextResponse.json({ success: true, skipped: true, reason: "Not a video" })
+      console.log("⏭️ [Auto-Transcribe] Skipping non-video")
+      return NextResponse.json({ success: true, skipped: true })
     }
 
-    console.log(`🤖 [Auto-Transcribe] Transcribing video: ${uploadId}`)
+    console.log(`🎤 [Auto-Transcribe] Starting transcription for ${uploadId}`)
 
-    // Transcribe with Groq
+    // Transcribe
     const result = await transcribeVideo(videoUrl)
 
-    console.log(`✅ [Auto-Transcribe] Transcription complete: ${result.text.length} characters`)
-
-    // Update Firestore with transcript
+    // Save to Firestore
     await db.collection("uploads").doc(uploadId).update({
       transcript: result.text,
       transcriptDuration: result.duration,
@@ -46,7 +47,7 @@ export async function POST(request: NextRequest) {
       transcribedAt: new Date(),
     })
 
-    console.log(`✅ [Auto-Transcribe] Transcript saved to Firestore`)
+    console.log(`✅ [Auto-Transcribe] Saved transcript (${result.text.length} chars)`)
 
     return NextResponse.json({
       success: true,
@@ -56,7 +57,6 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error("❌ [Auto-Transcribe] Error:", error)
-    // Don't fail the upload if transcription fails
     return NextResponse.json(
       {
         success: false,
