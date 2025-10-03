@@ -288,6 +288,16 @@ export class ChunkedUploadService {
     try {
       const token = await this.getValidAuthToken()
 
+      console.log(`[v0] About to call finalize endpoint for ${uploadId}`)
+      console.log(`[v0] Has auth token: ${!!token}`)
+      console.log(`[v0] Session data:`, {
+        uploadId: session.uploadId,
+        fileName: session.fileName,
+        fileType: session.fileType,
+        completedChunks: session.uploadedChunks.size,
+        totalChunks: session.totalChunks,
+      })
+
       const response = await fetch("/api/uploads/chunked/finalize", {
         method: "POST",
         headers: {
@@ -300,16 +310,29 @@ export class ChunkedUploadService {
         }),
       })
 
+      console.log(`[v0] Finalize response status: ${response.status}`)
+      console.log(`[v0] Finalize response ok: ${response.ok}`)
+
       if (!response.ok) {
-        const error = await response.json()
+        const errorText = await response.text()
+        console.error("[v0] Finalize error response:", errorText)
+        let error
+        try {
+          error = JSON.parse(errorText)
+        } catch {
+          error = { error: errorText }
+        }
         console.error("❌ [Chunked Upload] Finalization failed:", error)
         throw new Error(error.error || "Failed to finalize upload")
       }
 
+      const result = await response.json()
+      console.log(`[v0] Finalize success result:`, result)
       console.log(`✅ [Chunked Upload] Upload completed: ${uploadId}`)
       this.updateProgress(uploadId, "completed")
     } catch (error) {
       console.error("❌ [Chunked Upload] Upload finalization failed:", error)
+      console.error("[v0] Full error details:", error)
       this.updateProgress(uploadId, "error", error instanceof Error ? error.message : "Finalization failed")
     }
   }
