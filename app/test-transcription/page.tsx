@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { auth, db } from "@/lib/firebase/firebase"
-import { collection, query, where, getDocs, orderBy, limit } from "firebase/firestore"
+import { collection, query, where, getDocs, limit } from "firebase/firestore"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface Upload {
@@ -39,13 +39,19 @@ export default function TestTranscriptionPage() {
       }
 
       const uploadsRef = collection(db, "uploads")
-      const q = query(uploadsRef, where("userId", "==", user.uid), orderBy("createdAt", "desc"), limit(20))
+      const q = query(uploadsRef, where("userId", "==", user.uid), limit(20))
 
       const snapshot = await getDocs(q)
       const uploadsList = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       })) as Upload[]
+
+      uploadsList.sort((a, b) => {
+        const aTime = a.createdAt?.toMillis?.() || 0
+        const bTime = b.createdAt?.toMillis?.() || 0
+        return bTime - aTime
+      })
 
       setUploads(uploadsList)
       addLog(`✅ Found ${uploadsList.length} uploads`)
