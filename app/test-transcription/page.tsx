@@ -4,6 +4,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { auth } from "@/lib/firebase/firebase"
 
 export default function TestTranscriptionPage() {
   const [videoUrl, setVideoUrl] = useState("")
@@ -20,17 +21,30 @@ export default function TestTranscriptionPage() {
     addLog("🚀 Starting transcription test...")
 
     try {
-      // Test 1: Check if API endpoint exists
+      const user = auth.currentUser
+      if (!user) {
+        addLog("❌ No user logged in. Please log in first.")
+        setIsLoading(false)
+        return
+      }
+
+      const token = await user.getIdToken()
+      addLog("✅ Got auth token")
+
       addLog("📡 Testing /api/uploads/auto-transcribe endpoint...")
 
       const response = await fetch("/api/uploads/auto-transcribe", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          videoUrl: videoUrl || "https://pub-93cabcf...r2.dev/test.mp4",
+          videoUrl:
+            videoUrl ||
+            "https://pub-93cabcf58da344dea3d33ba1e4be2ef2.r2.dev/creators/motivationcave/1759448614293-Damii_.Daddy's_Money.mov",
           uploadId: "test_" + Date.now(),
+          mimeType: "video/quicktime",
         }),
       })
 
