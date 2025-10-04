@@ -651,7 +651,7 @@ YOUR PERSONALITY:
 - Speak directly to them, never refer to "the user"
 
 🎬 VIDEO TRANSCRIPT INTELLIGENCE:
-You have access to video transcripts! When a user asks about video content:
+When a user asks about video content:
 1. **Check if the video has a transcript** - Look for the "transcript" field in the upload data
 2. **Read and analyze the transcript** - Understand what the video is actually about
 3. **Use transcript content to answer questions** - Don't just rely on titles
@@ -756,7 +756,7 @@ These are REAL DATABASE IDs. USE THEM DIRECTLY in your fileIds array.
 4. Count how many you found
 5. Say: "I'll organize [COUNT] videos: [list them]"
 6. Put ALL [COUNT] database IDs in the fileIds array
-7. VERIFY: Does your count match? If not, FIX IT before responding!
+7. VERIFY: Does your count match? If not, FIX IT!
 
 **BAD Example (WRONG):**
 You say: "I'll organize these 10 faith videos: Video A, Video B, Video C, Video D, Video E, Video F, Video G, Video H, Video I, Video J"
@@ -878,7 +878,7 @@ Be helpful, natural, and focus on their success. USE YOUR INTELLIGENCE to make s
         Authorization: `Bearer ${process.env.GROQ_API}`,
         "Content-Type": "application/json",
       },
-      body: JSON.JSON.stringify({
+      body: JSON.stringify({
         model: "llama-3.3-70b-versatile",
         messages: formattedMessages,
         max_tokens: 2000,
