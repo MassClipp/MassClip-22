@@ -1403,11 +1403,36 @@ function findBestMatch(
     }
 
     // Identifier contains title (65% confidence)
-    if (lowerIdentifier.includes(upload.title?.toLowerCase())) {
+    if (upload.title && lowerIdentifier.includes(upload.title.toLowerCase())) {
       confidence = Math.max(confidence, 65)
       reasons.push("Identifier contains title")
     }
 
+    // Fuzzy title matching - check for partial word matches
+    if (upload.title) {
+      const titleWords = upload.title.toLowerCase().split(/\s+/)
+      const identifierWords = lowerIdentifier.split(/\s+/)
+
+      let matchingWords = 0
+      titleWords.forEach((titleWord) => {
+        if (titleWord.length > 2) {
+          // Skip very short words
+          identifierWords.forEach((idWord) => {
+            if (idWord.includes(titleWord) || titleWord.includes(idWord)) {
+              matchingWords++
+            }
+          })
+        }
+      })
+
+      if (matchingWords > 0) {
+        const fuzzyConfidence = Math.min(40 + matchingWords * 15, 75)
+        confidence = Math.max(confidence, fuzzyConfidence)
+        reasons.push(`${matchingWords} fuzzy word matches in title`)
+      }
+    }
+
+    // AGGRESSIVE TRANSCRIPT MATCHING
     if (upload.transcript && typeof upload.transcript === "string") {
       const transcriptLower = upload.transcript.toLowerCase()
 
@@ -1417,37 +1442,107 @@ function findBestMatch(
         reasons.push("Identifier found in transcript")
       }
 
-      // Check for folder keyword matches in transcript
+      // AGGRESSIVE: Check for ANY folder keyword matches in transcript
       let keywordMatches = 0
+      const matchedKeywords: string[] = []
+
       folderKeywords.forEach((keyword) => {
         if (transcriptLower.includes(keyword)) {
           keywordMatches++
+          matchedKeywords.push(keyword)
         }
       })
 
+      // If ANY keywords match, give it a decent confidence score
       if (keywordMatches > 0) {
-        const keywordConfidence = Math.min(60 + keywordMatches * 10, 80)
+        // More aggressive scoring: even 1 keyword match gets 50% confidence
+        const keywordConfidence = Math.min(50 + keywordMatches * 15, 95)
         confidence = Math.max(confidence, keywordConfidence)
-        reasons.push(`${keywordMatches} folder keywords in transcript`)
+        reasons.push(`${keywordMatches} folder keywords in transcript (${matchedKeywords.slice(0, 3).join(", ")})`)
+      }
+
+      // AGGRESSIVE: Check for related terms and synonyms
+      const relatedTerms = getRelatedTerms(folderKeywords)
+      let relatedMatches = 0
+
+      relatedTerms.forEach((term) => {
+        if (transcriptLower.includes(term)) {
+          relatedMatches++
+        }
+      })
+
+      if (relatedMatches > 0) {
+        const relatedConfidence = Math.min(45 + relatedMatches * 10, 80)
+        confidence = Math.max(confidence, relatedConfidence)
+        reasons.push(`${relatedMatches} related terms in transcript`)
       }
     }
 
+    // AGGRESSIVE: Detected niche matching
     if (upload.detectedNiche) {
       const nicheLower = upload.detectedNiche.toLowerCase()
 
-      // Check if detected niche matches folder keywords
+      // Check if detected niche matches ANY folder keywords
+      let nicheKeywordMatches = 0
       folderKeywords.forEach((keyword) => {
-        if (nicheLower.includes(keyword)) {
-          const nicheConfidence = upload.confidence ? Math.min(50 + upload.confidence * 20, 70) : 50
-          confidence = Math.max(confidence, nicheConfidence)
-          reasons.push(`Detected niche matches (${upload.detectedNiche})`)
+        if (nicheLower.includes(keyword) || keyword.includes(nicheLower)) {
+          nicheKeywordMatches++
         }
       })
 
+      if (nicheKeywordMatches > 0) {
+        // Use the upload's confidence score if available, otherwise default to 60%
+        const nicheConfidence = upload.confidence ? Math.min(55 + upload.confidence * 25, 85) : 60
+        confidence = Math.max(confidence, nicheConfidence)
+        reasons.push(`Detected niche matches (${upload.detectedNiche})`)
+      }
+
       // Check if identifier matches detected niche
-      if (nicheLower === lowerIdentifier || nicheLower.includes(lowerIdentifier)) {
-        confidence = Math.max(confidence, 60)
+      if (
+        nicheLower === lowerIdentifier ||
+        nicheLower.includes(lowerIdentifier) ||
+        lowerIdentifier.includes(nicheLower)
+      ) {
+        confidence = Math.max(confidence, 65)
         reasons.push("Identifier matches detected niche")
+      }
+    }
+
+    // AGGRESSIVE: Check description if available
+    if (upload.description && typeof upload.description === "string") {
+      const descLower = upload.description.toLowerCase()
+      let descKeywordMatches = 0
+
+      folderKeywords.forEach((keyword) => {
+        if (descLower.includes(keyword)) {
+          descKeywordMatches++
+        }
+      })
+
+      if (descKeywordMatches > 0) {
+        const descConfidence = Math.min(40 + descKeywordMatches * 10, 70)
+        confidence = Math.max(confidence, descConfidence)
+        reasons.push(`${descKeywordMatches} keywords in description`)
+      }
+    }
+
+    // AGGRESSIVE: Check tags if available
+    if (upload.tags && Array.isArray(upload.tags)) {
+      let tagMatches = 0
+
+      upload.tags.forEach((tag: string) => {
+        const tagLower = tag.toLowerCase()
+        folderKeywords.forEach((keyword) => {
+          if (tagLower.includes(keyword) || keyword.includes(tagLower)) {
+            tagMatches++
+          }
+        })
+      })
+
+      if (tagMatches > 0) {
+        const tagConfidence = Math.min(45 + tagMatches * 10, 75)
+        confidence = Math.max(confidence, tagConfidence)
+        reasons.push(`${tagMatches} matching tags`)
       }
     }
 
@@ -1459,11 +1554,51 @@ function findBestMatch(
     }
   }
 
-  if (bestConfidence >= 50) {
+  // AGGRESSIVE: Lower threshold from 50% to 30%
+  if (bestConfidence >= 30) {
     return { upload: bestMatch, confidence: bestConfidence, matchReason: bestReason }
   }
 
   return { upload: null, confidence: 0, matchReason: "No confident match found" }
+}
+
+function getRelatedTerms(keywords: string[]): string[] {
+  const relatedTermsMap: Record<string, string[]> = {
+    // Faith-related expansions
+    jesus: ["christ", "savior", "messiah", "lord"],
+    god: ["lord", "father", "almighty", "creator", "divine"],
+    faith: ["believe", "trust", "conviction", "devotion"],
+    prayer: ["pray", "praying", "intercession"],
+    church: ["congregation", "worship", "ministry"],
+    bible: ["scripture", "word", "gospel"],
+    spiritual: ["spirit", "soul", "divine"],
+    salvation: ["saved", "redemption", "deliverance"],
+
+    // Motivation-related expansions
+    motivation: ["motivate", "inspire", "inspiration", "driven"],
+    success: ["achieve", "achievement", "accomplish", "win", "winning"],
+    grind: ["hustle", "work", "dedication", "discipline"],
+    mindset: ["mentality", "attitude", "perspective", "thinking"],
+    goals: ["target", "objective", "aim", "ambition"],
+
+    // Meme-related expansions
+    meme: ["funny", "comedy", "humor", "viral"],
+    pov: ["point of view", "perspective"],
+
+    // SFX-related expansions
+    sfx: ["sound effect", "audio", "sound"],
+    whoosh: ["swoosh", "transition"],
+  }
+
+  const relatedTerms: string[] = []
+
+  keywords.forEach((keyword) => {
+    if (relatedTermsMap[keyword]) {
+      relatedTerms.push(...relatedTermsMap[keyword])
+    }
+  })
+
+  return [...new Set(relatedTerms)] // Remove duplicates
 }
 
 async function createFolderDirectly(userId: string, folderData: any) {
