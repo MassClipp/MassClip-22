@@ -144,20 +144,6 @@ When organizing files, use the folder names exactly as shown above.
               const unorganizedContent = analysisData?.unorganizedContent || []
               const detectedNiches = analysisData?.detectedNiches || []
 
-              console.log("[v0] Raw contentByFolder structure:", JSON.stringify(Object.keys(contentByFolder)))
-              console.log("[v0] Raw contentByNiche structure:", JSON.stringify(Object.keys(contentByNiche)))
-              console.log("[v0] Raw unorganizedContent count:", unorganizedContent.length)
-
-              // Debug: Log the actual structure of contentByFolder
-              for (const [folderName, items] of Object.entries(contentByFolder)) {
-                console.log(
-                  `[v0] Folder "${folderName}" has ${Array.isArray(items) ? items.length : "non-array"} items`,
-                )
-                if (Array.isArray(items)) {
-                  console.log(`[v0] First few items in "${folderName}":`, items.slice(0, 3))
-                }
-              }
-
               // Filter out generic/invalid titles from unorganized content
               const validUnorganizedContent = unorganizedContent.filter((item: any) => {
                 const title = item.title || ""
@@ -239,6 +225,16 @@ When organizing files, use the folder names exactly as shown above.
               let intelligenceContext = "\n\n🧠 VEX INTELLIGENCE SYSTEM:\n"
               intelligenceContext += "You have access to advanced metadata analysis and cultural understanding.\n\n"
 
+              intelligenceContext += "**Faith & Spirituality Keywords:**\n"
+              intelligenceContext +=
+                "- Christian: Jesus, Christ, God, Lord, Holy Spirit, Bible, Scripture, Gospel, salvation, grace, faith, prayer, worship, church, ministry, pastor, sermon, testimony, blessed, amen\n"
+              intelligenceContext +=
+                "- General Faith: spiritual, spirituality, soul, divine, sacred, holy, heaven, eternal, redemption, forgiveness, mercy, righteousness, covenant, disciple, believer\n"
+              intelligenceContext +=
+                "- Biblical Themes: rebellion (against God), repentance, transformation, renewal, deliverance, breakthrough, victory, overcome, perseverance, endurance\n"
+              intelligenceContext +=
+                "- Worship & Praise: praise, glory, hallelujah, hosanna, exalt, magnify, adore, thanksgiving\n\n"
+
               intelligenceContext += "**Metadata Intelligence Patterns:**\n"
               intelligenceContext += "- SFX: 0.5-5s duration, .wav/.mp3, names like 'whoosh', 'impact', 'click'\n"
               intelligenceContext +=
@@ -248,7 +244,9 @@ When organizing files, use the folder names exactly as shown above.
               intelligenceContext += "- B-roll: 10s-2min footage, cinematic, 'timelapse', 'footage', 'shots'\n"
               intelligenceContext +=
                 "- Background Videos: 30s-5min loops, 'background', 'loop', 'abstract', 'particles'\n"
-              intelligenceContext += "- Voiceover: 10-60s audio, .mp3, 'voiceover', 'narration', 'commercial'\n\n"
+              intelligenceContext += "- Voiceover: 10-60s audio, .mp3, 'voiceover', 'narration', 'commercial'\n"
+              intelligenceContext +=
+                "- Faith/Sermon: 1-60min videos, .mp4, contains faith keywords, sermon-like content\n\n"
 
               intelligenceContext += "**Cultural & Conversational Patterns:**\n"
               intelligenceContext += "- Motivation: 'don't wait', 'grind', 'no excuses', 'get up', imperative tone\n"
@@ -259,7 +257,9 @@ When organizing files, use the folder names exactly as shown above.
               intelligenceContext += "- Mindset: philosophical, 'perspective shift', 'mental model', deeper thinking\n"
               intelligenceContext += "- B-roll: 'aesthetic vibes', 'moody footage', 'cinematic', 'overlay this'\n"
               intelligenceContext +=
-                "- Background Videos: 'seamless loop', 'chill vibes', 'ambient', 'perfect for backgrounds'\n\n"
+                "- Background Videos: 'seamless loop', 'chill vibes', 'ambient', 'perfect for backgrounds'\n"
+              intelligenceContext +=
+                "- Faith/Sermon: references to God/Jesus, biblical language, spiritual themes, testimony-style\n\n"
 
               intelligenceContext += "**Critical Thinking Rules:**\n"
               intelligenceContext += "1. ANALYZE TITLES CAREFULLY - What do the words actually mean?\n"
@@ -269,7 +269,65 @@ When organizing files, use the folder names exactly as shown above.
                 "3. DESCRIPTIVE TITLES = USE CONTEXT - '2819 Rebellion' has 'Rebellion' (meaningful), 'grind_speech_final' is clearly motivation\n"
               intelligenceContext += "4. CHECK METADATA - Duration, file type, size all matter\n"
               intelligenceContext += "5. WHEN UNCERTAIN = ASK - Don't guess, ask the user for clarification\n"
-              intelligenceContext += "6. USE EVIDENCE - Combine filename + duration + keywords + cultural patterns\n\n"
+              intelligenceContext += "6. USE EVIDENCE - Combine filename + duration + keywords + cultural patterns\n"
+              intelligenceContext +=
+                "7. **READ TRANSCRIPTS FIRST** - If a video has a transcript, READ IT to understand the actual content\n"
+              intelligenceContext +=
+                "8. **TRANSCRIPT > TITLE** - The transcript is the truth. Titles can be misleading or generic.\n\n"
+
+              intelligenceContext += "**🎬 VIDEO TRANSCRIPT INTELLIGENCE:**\n"
+              intelligenceContext += "When a user asks about a video, YOU MUST:\n"
+              intelligenceContext += "1. Check if the video has a 'transcript' field\n"
+              intelligenceContext +=
+                "2. If transcript exists, READ THE ENTIRE TRANSCRIPT to understand what the video is about\n"
+              intelligenceContext += "3. Use the transcript content to answer questions accurately\n"
+              intelligenceContext += "4. Identify themes, topics, and keywords from the transcript\n"
+              intelligenceContext +=
+                "5. Suggest better titles if the transcript reveals different content than the title suggests\n"
+              intelligenceContext +=
+                "6. Look for faith keywords in transcripts to identify religious/spiritual content\n\n"
+
+              intelligenceContext += "**Example:**\n"
+              intelligenceContext += "User: 'What is my video about?'\n"
+              intelligenceContext += "You see: title: 'AZ Compass', transcript: 'like all American work...'\n"
+              intelligenceContext +=
+                "You respond: 'Based on the transcript, your video is about work ethic and motivation...'\n\n"
+
+              // Get all unique uploads from analysisData
+              const allUploads = analysisData.uploads || []
+              const uniqueUploadsMap = new Map()
+
+              allUploads.forEach((upload: any) => {
+                if (!uniqueUploadsMap.has(upload.id)) {
+                  uniqueUploadsMap.set(upload.id, upload)
+                }
+              })
+
+              const uniqueUploads = Array.from(uniqueUploadsMap.values())
+
+              let transcriptContext = ""
+              const videosWithTranscripts = uniqueUploads.filter((u: any) => u.transcript && u.transcript.length > 0)
+
+              if (videosWithTranscripts.length > 0) {
+                transcriptContext = "\n\n📝 VIDEOS WITH TRANSCRIPTS (Full Content Available):\n"
+                transcriptContext +=
+                  "These videos have been transcribed. You can read their full content to understand what they're about.\n\n"
+
+                for (const video of videosWithTranscripts) {
+                  const transcriptPreview = video.transcript.substring(0, 500) // First 500 chars
+                  const hasMore = video.transcript.length > 500
+
+                  transcriptContext += `**"${video.title}"** (${video.contentType}, ${video.transcriptDuration || 0}s)\n`
+                  transcriptContext += `Transcript: "${transcriptPreview}${hasMore ? "..." : ""}"\n`
+                  if (hasMore) {
+                    transcriptContext += `[Full transcript available - ${video.transcript.length} characters total]\n`
+                  }
+                  transcriptContext += `\n`
+                }
+
+                transcriptContext +=
+                  "\n**IMPORTANT:** When users ask about these videos, reference the actual transcript content, not just the title.\n"
+              }
 
               if (validUnorganizedContent.length > 0) {
                 folderContentsContext += `\n\n📋 UNORGANIZED CONTENT WITH INTELLIGENCE ANALYSIS (${validUnorganizedContent.length} items):\n`
@@ -281,9 +339,17 @@ When organizing files, use the folder names exactly as shown above.
                   const confidence = item.confidence || "low"
                   const reasoning = item.reasoning || "No analysis available"
 
+                  const hasTranscript = item.transcript && item.transcript.length > 0
+                  const transcriptPreview = hasTranscript ? item.transcript.substring(0, 200) : null
+
                   folderContentsContext += `\n"${title}" (${type})\n`
                   folderContentsContext += `  → Detected: ${detectedNiche} (${confidence} confidence)\n`
                   folderContentsContext += `  → Reasoning: ${reasoning}\n`
+
+                  if (hasTranscript) {
+                    folderContentsContext += `  → Transcript Preview: "${transcriptPreview}..."\n`
+                    folderContentsContext += `  → [Full transcript available for detailed analysis]\n`
+                  }
                 }
 
                 if (validUnorganizedContent.length > 15) {
@@ -293,16 +359,16 @@ When organizing files, use the folder names exactly as shown above.
 
               userContentContext = `
 
-USER'S CONTENT LIBRARY (Analyzed with Metadata Intelligence v3):
+USER'S CONTENT LIBRARY (Analyzed with Metadata Intelligence v3 + Transcript Intelligence):
 Total Uploads: ${analysisData?.totalUploads || 0}
 Categories: ${(analysisData?.categories || []).join(", ")}
 User Folders: ${(analysisData?.userFolders || []).map((f: any) => f.name).join(", ")}
 ${detectedNiches.length > 0 ? `\nDetected Content Niches: ${detectedNiches.map((n: any) => `${n.name} (${n.count} items, ${n.avgConfidence}% avg confidence)`).join(", ")}` : ""}
-${folderContentsContext}${nicheContentsContext}${intelligenceContext}
+${transcriptContext}${folderContentsContext}${nicheContentsContext}${intelligenceContext}
 
 Available content IDs for bundling: ${(analysisData?.uploads || []).map((upload: any) => upload.id).join(", ")}
 `
-              console.log("[v0] User context loaded with FULL metadata intelligence and reasoning")
+              console.log("[v0] User context loaded with FULL metadata intelligence, transcripts, and faith keywords")
             } else {
               console.log("[v0] No analysis data found, user may need to run analysis first")
             }
@@ -452,7 +518,7 @@ CREATE_BUNDLE: {"title": "Bundle Name", "description": "Bundle description", "pr
 
 Bundle limit responses:
 - If at limit: "You've reached your bundle limit. Upgrade to Creator Pro for unlimited bundles!"
-- If free tier wants >10 videos: "Free users can include up to 10 videos per bundle. Upgrade for unlimited!"
+- If free tier wants >10 videos: "Free users can only include up to 10 videos per bundle. Upgrade for unlimited!"
 
 ${userContentContext}${bundleLimitsContext}${folderContext}
 
