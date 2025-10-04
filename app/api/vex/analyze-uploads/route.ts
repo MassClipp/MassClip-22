@@ -115,6 +115,9 @@ export async function POST(request: NextRequest) {
             folderId: data.folderId || null,
             folderName: data.folderName || null,
             tags: data.tags || [],
+            transcript: data.transcript || undefined,
+            transcriptDuration: data.transcriptDuration || undefined,
+            transcriptLanguage: data.transcriptLanguage || undefined,
           }
 
           // Analyze with metadata intelligence

@@ -24,6 +24,9 @@ export interface FileMetadata {
   folderId?: string | null
   folderName?: string | null
   tags?: string[]
+  transcript?: string
+  transcriptDuration?: number
+  transcriptLanguage?: string
 }
 
 export interface MetadataReasoning {
@@ -257,6 +260,262 @@ function analyzeFolderOrigin(folderName: string | null | undefined): {
 }
 
 /**
+ * Analyze transcript content for deeper understanding
+ * This is the MOST IMPORTANT signal for understanding video content
+ */
+function analyzeTranscript(transcript: string | undefined): {
+  likelyNiche: string | null
+  evidence: string
+  confidence: number
+  themes: string[]
+  isFaithBased: boolean
+  faithKeywords: string[]
+} {
+  if (!transcript || transcript.trim().length < 20) {
+    return {
+      likelyNiche: null,
+      evidence: "No transcript available for analysis",
+      confidence: 0,
+      themes: [],
+      isFaithBased: false,
+      faithKeywords: [],
+    }
+  }
+
+  const lowerTranscript = transcript.toLowerCase()
+  const themes: string[] = []
+  const faithKeywords: string[] = []
+  let isFaithBased = false
+
+  // Faith/Spiritual keyword bank (comprehensive)
+  const faithKeywordBank = [
+    // Core Christian terms
+    "jesus",
+    "christ",
+    "god",
+    "lord",
+    "holy spirit",
+    "father",
+    "son",
+    "trinity",
+    "savior",
+    "messiah",
+    // Biblical concepts
+    "bible",
+    "scripture",
+    "gospel",
+    "salvation",
+    "grace",
+    "mercy",
+    "faith",
+    "prayer",
+    "worship",
+    "praise",
+    "blessing",
+    "blessed",
+    "amen",
+    "hallelujah",
+    // Christian life
+    "christian",
+    "christianity",
+    "believer",
+    "disciple",
+    "apostle",
+    "church",
+    "ministry",
+    "pastor",
+    "preacher",
+    "sermon",
+    // Spiritual concepts
+    "spiritual",
+    "spirituality",
+    "soul",
+    "spirit",
+    "heaven",
+    "eternal",
+    "eternity",
+    "redemption",
+    "forgiveness",
+    "repentance",
+    "sin",
+    "righteousness",
+    "holiness",
+    // Biblical events/concepts
+    "resurrection",
+    "crucifixion",
+    "cross",
+    "sacrifice",
+    "covenant",
+    "prophecy",
+    "revelation",
+    "kingdom of god",
+    "kingdom of heaven",
+    // Religious practices
+    "baptism",
+    "communion",
+    "eucharist",
+    "testimony",
+    "witness",
+    "evangelism",
+    "mission",
+    "missionary",
+    // Rebellion/spiritual warfare (specific to user's content)
+    "rebellion",
+    "spiritual warfare",
+    "enemy",
+    "devil",
+    "satan",
+    "demon",
+    "temptation",
+    "overcome",
+    "victory",
+    "armor of god",
+  ]
+
+  // Check for faith keywords
+  for (const keyword of faithKeywordBank) {
+    if (lowerTranscript.includes(keyword)) {
+      faithKeywords.push(keyword)
+      isFaithBased = true
+    }
+  }
+
+  // Motivation/Mindset themes
+  const motivationKeywords = [
+    "work hard",
+    "hustle",
+    "grind",
+    "success",
+    "achieve",
+    "goal",
+    "dream",
+    "ambition",
+    "dedication",
+    "perseverance",
+    "discipline",
+    "focus",
+    "commitment",
+    "excellence",
+    "champion",
+    "winner",
+    "overcome",
+    "challenge",
+    "opportunity",
+    "mindset",
+  ]
+
+  let motivationScore = 0
+  for (const keyword of motivationKeywords) {
+    if (lowerTranscript.includes(keyword)) {
+      motivationScore++
+    }
+  }
+
+  if (motivationScore >= 3) {
+    themes.push("motivation")
+  }
+
+  // Sports/Athletic themes
+  const sportsKeywords = [
+    "game",
+    "play",
+    "team",
+    "coach",
+    "athlete",
+    "training",
+    "practice",
+    "competition",
+    "championship",
+    "season",
+    "ball",
+    "field",
+    "court",
+  ]
+
+  let sportsScore = 0
+  for (const keyword of sportsKeywords) {
+    if (lowerTranscript.includes(keyword)) {
+      sportsScore++
+    }
+  }
+
+  if (sportsScore >= 3) {
+    themes.push("sports")
+  }
+
+  // Business/Entrepreneurship themes
+  const businessKeywords = [
+    "business",
+    "entrepreneur",
+    "startup",
+    "company",
+    "market",
+    "customer",
+    "revenue",
+    "profit",
+    "investment",
+    "strategy",
+    "growth",
+    "scale",
+  ]
+
+  let businessScore = 0
+  for (const keyword of businessKeywords) {
+    if (lowerTranscript.includes(keyword)) {
+      businessScore++
+    }
+  }
+
+  if (businessScore >= 3) {
+    themes.push("business")
+  }
+
+  // Determine niche based on transcript analysis
+  let likelyNiche: string | null = null
+  let confidence = 0
+
+  if (isFaithBased) {
+    likelyNiche = "faith"
+    confidence = 0.95 // Very high confidence if faith keywords are present
+    themes.push("faith")
+  } else if (motivationScore >= 5) {
+    likelyNiche = "motivation"
+    confidence = 0.85
+  } else if (sportsScore >= 5) {
+    likelyNiche = "sports"
+    confidence = 0.8
+  } else if (businessScore >= 5) {
+    likelyNiche = "business"
+    confidence = 0.8
+  } else if (motivationScore >= 3) {
+    likelyNiche = "motivation"
+    confidence = 0.6
+  }
+
+  const transcriptLength = transcript.length
+  const transcriptPreview = transcript.substring(0, 150) + (transcriptLength > 150 ? "..." : "")
+
+  let evidence = `Transcript analysis (${transcriptLength} chars): "${transcriptPreview}"`
+
+  if (isFaithBased) {
+    evidence += ` | FAITH-BASED CONTENT DETECTED with keywords: ${faithKeywords.slice(0, 5).join(", ")}`
+  }
+
+  if (themes.length > 0) {
+    evidence += ` | Detected themes: ${themes.join(", ")}`
+  }
+
+  return {
+    likelyNiche,
+    evidence,
+    confidence,
+    themes,
+    isFaithBased,
+    faithKeywords,
+  }
+}
+
+/**
  * Main metadata analysis function - makes Vex THINK
  */
 export function analyzeMetadata(metadata: FileMetadata, existingFolders: string[] = []): MetadataReasoning {
@@ -269,6 +528,17 @@ export function analyzeMetadata(metadata: FileMetadata, existingFolders: string[
     mindset: 0,
     broll: 0,
     "background-videos": 0,
+    faith: 0,
+    sports: 0,
+    business: 0,
+  }
+
+  const transcriptAnalysis = analyzeTranscript(metadata.transcript)
+  if (transcriptAnalysis.likelyNiche) {
+    evidence.push(`📜 ${transcriptAnalysis.evidence}`)
+    scores[transcriptAnalysis.likelyNiche] += transcriptAnalysis.confidence * 50 // Transcript is MOST important
+  } else if (metadata.transcript) {
+    evidence.push(`📜 Transcript available but no clear niche detected`)
   }
 
   // 1. Analyze file extension
@@ -349,15 +619,15 @@ export function analyzeMetadata(metadata: FileMetadata, existingFolders: string[
   const secondScore = sortedNiches.length > 1 ? sortedNiches[1][1] : 0
 
   // Determine confidence based on score and gap between top 2
-  let confidence: "very_high" | "high" | "medium" | "low" = "low"
+  let confidenceLevel: "very_high" | "high" | "medium" | "low" = "low"
   const scoreGap = topScore - secondScore
 
   if (topScore >= 30 && scoreGap >= 15) {
-    confidence = "very_high"
+    confidenceLevel = "very_high"
   } else if (topScore >= 20 && scoreGap >= 10) {
-    confidence = "high"
+    confidenceLevel = "high"
   } else if (topScore >= 10) {
-    confidence = "medium"
+    confidenceLevel = "medium"
   }
 
   // Generate reasoning summary
@@ -369,7 +639,11 @@ export function analyzeMetadata(metadata: FileMetadata, existingFolders: string[
       reasoning += `, is ${metadata.duration < 60 ? `${metadata.duration} seconds` : `${Math.floor(metadata.duration / 60)}m ${metadata.duration % 60}s`} long`
     }
 
-    if (keywordAnalysis.primaryNiche) {
+    if (transcriptAnalysis.isFaithBased) {
+      reasoning += `, and the transcript contains faith-based content mentioning: ${transcriptAnalysis.faithKeywords.slice(0, 3).join(", ")}`
+    } else if (transcriptAnalysis.themes.length > 0) {
+      reasoning += `, and the transcript discusses themes of ${transcriptAnalysis.themes.join(", ")}`
+    } else if (keywordAnalysis.primaryNiche) {
       const matchedKeywords = keywordAnalysis.allMatches[0]?.matchedKeywords.slice(0, 3).join(", ") || ""
       if (matchedKeywords) {
         reasoning += `, and includes keywords like "${matchedKeywords}"`
@@ -383,7 +657,7 @@ export function analyzeMetadata(metadata: FileMetadata, existingFolders: string[
 
   return {
     evidence,
-    confidence,
+    confidence: confidenceLevel,
     reasoning,
     detectedNiche,
     suggestedFolder: keywordAnalysis.suggestedFolder,
