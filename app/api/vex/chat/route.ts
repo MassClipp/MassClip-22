@@ -189,10 +189,10 @@ Format your response as JSON:
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(req: Request) {
   try {
     console.log("[v0] Chat API called")
-    const { messages } = await request.json()
+    const { messages } = await req.json()
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       console.log("[v0] No messages provided")
@@ -212,7 +212,7 @@ export async function POST(request: Request) {
     let bundleLimitsContext = ""
     let folderContext = ""
     let userId = null
-    const authHeader = request.headers.get("authorization")
+    const authHeader = req.headers.get("authorization")
 
     if (authHeader && authHeader.startsWith("Bearer ")) {
       try {
@@ -1700,15 +1700,6 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
     }
   }
 }
-
-// Removed functions:
-// - performMultiPassReasoning
-// - analyzeSemanticFit
-// - analyzeFolderContext
-// - analyzeTranscriptRelevance
-// - extractKeywordsFromText
-// - getRelatedTerms
-// - findBestMatch
 
 function createFolderDirectly(userId: string, folderData: any) {
   try {
