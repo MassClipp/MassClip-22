@@ -1083,6 +1083,10 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
     }
 
     console.log(`[v0] 📂 Starting organization: ${fileIds.length} files → "${targetFolder}"`)
+    console.log(`[v0] 📝 Reason: ${reason}`)
+
+    const folderKeywords = extractKeywordsFromText(targetFolder + " " + (reason || ""))
+    console.log(`[v0] 🔑 Extracted keywords for matching:`, folderKeywords)
 
     let foldersSnapshot = await db
       .collection("folders")
@@ -1126,47 +1130,31 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
 
     const movedFiles: string[] = []
     const notFoundFiles: string[] = []
+    const matchDetails: any[] = [] // Track why each file was matched or not
 
     for (const fileIdentifier of fileIds) {
       console.log(`[v0] 🔍 Looking for: "${fileIdentifier}"`)
 
-      const upload = uploads.find((u: any) => {
-        const hasTranscript = u.transcript !== undefined && u.transcript !== null
+      const matchResult = findBestMatch(fileIdentifier, uploads, folderKeywords)
 
-        // Exact ID match
-        if (u.id === fileIdentifier) return true
-
-        // Exact title match
-        if (u.title === fileIdentifier) return true
-
-        // Case-insensitive title match
-        if (u.title?.toLowerCase() === fileIdentifier.toLowerCase()) return true
-
-        // Filename match
-        if (u.filename === fileIdentifier) return true
-
-        if (
-          hasTranscript &&
-          typeof u.transcript === "string" &&
-          u.transcript.toLowerCase().includes(fileIdentifier.toLowerCase())
-        )
-          return true
-
-        if (u.detectedNiche && u.detectedNiche.toLowerCase() === fileIdentifier.toLowerCase()) return true
-
-        return false
-      })
-
-      if (!upload) {
+      if (!matchResult.upload) {
         console.log(`[v0] ❌ Not found: "${fileIdentifier}"`)
         notFoundFiles.push(fileIdentifier)
+        matchDetails.push({
+          identifier: fileIdentifier,
+          matched: false,
+          reason: "No matching content found",
+        })
         continue
       }
 
+      const upload = matchResult.upload
+      console.log(
+        `[v0] ✅ Found: "${upload.title}" (confidence: ${matchResult.confidence}, reason: ${matchResult.matchReason})`,
+      )
+
       if (upload.transcript) {
-        console.log(`[v0] 📝 Found "${upload.title}" with transcript (detected: ${upload.detectedNiche || "unknown"})`)
-      } else {
-        console.log(`[v0] ✅ Found: ${upload.id} in collection "${upload.collection}"`)
+        console.log(`[v0] 📝 Has transcript (${upload.transcript.length} chars)`)
       }
 
       try {
@@ -1177,6 +1165,11 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
         if (!docSnap.exists) {
           console.log(`[v0] ❌ Document doesn't exist: ${upload.id}`)
           notFoundFiles.push(fileIdentifier)
+          matchDetails.push({
+            identifier: fileIdentifier,
+            matched: false,
+            reason: "Document not found in database",
+          })
           continue
         }
 
@@ -1184,6 +1177,11 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
         if (docData.uid !== userId && docData.userId !== userId) {
           console.log(`[v0] ❌ Ownership mismatch: ${upload.id}`)
           notFoundFiles.push(fileIdentifier)
+          matchDetails.push({
+            identifier: fileIdentifier,
+            matched: false,
+            reason: "Ownership verification failed",
+          })
           continue
         }
 
@@ -1196,20 +1194,46 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
           vexOrganizeReason: reason || "Organized by Vex AI",
           vexDetectedNiche: upload.detectedNiche || null,
           vexHasTranscript: !!upload.transcript,
+          vexMatchConfidence: matchResult.confidence, // Store match confidence
+          vexMatchReason: matchResult.matchReason, // Store why it was matched
         })
 
         movedFiles.push(upload.title || upload.filename || fileIdentifier)
+        matchDetails.push({
+          identifier: fileIdentifier,
+          matched: true,
+          title: upload.title,
+          confidence: matchResult.confidence,
+          reason: matchResult.matchReason,
+        })
         console.log(`[v0] ✅ Moved: "${upload.title}" to "${targetFolder}"`)
       } catch (error) {
         console.error(`[v0] ❌ Error moving ${upload.id}:`, error)
         notFoundFiles.push(fileIdentifier)
+        matchDetails.push({
+          identifier: fileIdentifier,
+          matched: false,
+          reason: `Error: ${error instanceof Error ? error.message : "Unknown error"}`,
+        })
       }
     }
+
+    console.log(`[v0] 📊 Match Summary:`)
+    console.log(`[v0]   ✅ Matched: ${movedFiles.length}`)
+    console.log(`[v0]   ❌ Not found: ${notFoundFiles.length}`)
+    matchDetails.forEach((detail) => {
+      if (detail.matched) {
+        console.log(`[v0]   ✓ "${detail.identifier}" → "${detail.title}" (${detail.confidence}% - ${detail.reason})`)
+      } else {
+        console.log(`[v0]   ✗ "${detail.identifier}" - ${detail.reason}`)
+      }
+    })
 
     if (movedFiles.length === 0) {
       return {
         success: false,
         error: `Could not move any files. ${notFoundFiles.length > 0 ? `Not found: ${notFoundFiles.join(", ")}` : ""}`,
+        matchDetails, // Return match details for debugging
       }
     }
 
@@ -1232,6 +1256,7 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
       targetFolder,
       movedFiles,
       notFound: notFoundFiles.length > 0 ? notFoundFiles : undefined,
+      matchDetails, // Return match details for transparency
     }
   } catch (error) {
     console.error("[v0] File organization error:", error)
@@ -1240,6 +1265,205 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
       error: error instanceof Error ? error.message : "An unexpected error occurred while organizing files.",
     }
   }
+}
+
+function extractKeywordsFromText(text: string): string[] {
+  const lowerText = text.toLowerCase()
+  const keywords: string[] = []
+
+  // Faith/spiritual keywords
+  const faithKeywords = [
+    "jesus",
+    "christ",
+    "god",
+    "lord",
+    "holy",
+    "spirit",
+    "bible",
+    "scripture",
+    "gospel",
+    "salvation",
+    "grace",
+    "faith",
+    "prayer",
+    "worship",
+    "church",
+    "ministry",
+    "pastor",
+    "sermon",
+    "testimony",
+    "blessed",
+    "amen",
+    "spiritual",
+    "soul",
+    "divine",
+    "sacred",
+    "heaven",
+    "eternal",
+    "redemption",
+    "forgiveness",
+    "mercy",
+    "righteousness",
+    "covenant",
+    "disciple",
+    "believer",
+    "rebellion",
+    "repentance",
+    "transformation",
+    "renewal",
+    "deliverance",
+    "breakthrough",
+    "victory",
+    "overcome",
+    "perseverance",
+  ]
+
+  // Motivation keywords
+  const motivationKeywords = [
+    "motivation",
+    "motivational",
+    "grind",
+    "hustle",
+    "discipline",
+    "success",
+    "mindset",
+    "goals",
+    "work",
+    "dedication",
+    "perseverance",
+    "achievement",
+  ]
+
+  // Meme keywords
+  const memeKeywords = ["meme", "funny", "pov", "comedy", "humor", "joke", "viral"]
+
+  // SFX keywords
+  const sfxKeywords = ["sfx", "sound", "effect", "audio", "whoosh", "impact", "transition"]
+
+  // Check which categories match
+  faithKeywords.forEach((keyword) => {
+    if (lowerText.includes(keyword)) keywords.push(keyword)
+  })
+
+  motivationKeywords.forEach((keyword) => {
+    if (lowerText.includes(keyword)) keywords.push(keyword)
+  })
+
+  memeKeywords.forEach((keyword) => {
+    if (lowerText.includes(keyword)) keywords.push(keyword)
+  })
+
+  sfxKeywords.forEach((keyword) => {
+    if (lowerText.includes(keyword)) keywords.push(keyword)
+  })
+
+  return [...new Set(keywords)] // Remove duplicates
+}
+
+function findBestMatch(
+  identifier: string,
+  uploads: any[],
+  folderKeywords: string[],
+): { upload: any | null; confidence: number; matchReason: string } {
+  const lowerIdentifier = identifier.toLowerCase()
+  let bestMatch: any = null
+  let bestConfidence = 0
+  let bestReason = ""
+
+  for (const upload of uploads) {
+    let confidence = 0
+    const reasons: string[] = []
+
+    // Exact ID match (100% confidence)
+    if (upload.id === identifier) {
+      return { upload, confidence: 100, matchReason: "Exact ID match" }
+    }
+
+    // Exact title match (95% confidence)
+    if (upload.title === identifier) {
+      return { upload, confidence: 95, matchReason: "Exact title match" }
+    }
+
+    // Case-insensitive title match (90% confidence)
+    if (upload.title?.toLowerCase() === lowerIdentifier) {
+      confidence = Math.max(confidence, 90)
+      reasons.push("Case-insensitive title match")
+    }
+
+    // Filename match (85% confidence)
+    if (upload.filename === identifier || upload.filename?.toLowerCase() === lowerIdentifier) {
+      confidence = Math.max(confidence, 85)
+      reasons.push("Filename match")
+    }
+
+    // Title contains identifier (70% confidence)
+    if (upload.title?.toLowerCase().includes(lowerIdentifier)) {
+      confidence = Math.max(confidence, 70)
+      reasons.push("Title contains identifier")
+    }
+
+    // Identifier contains title (65% confidence)
+    if (lowerIdentifier.includes(upload.title?.toLowerCase())) {
+      confidence = Math.max(confidence, 65)
+      reasons.push("Identifier contains title")
+    }
+
+    if (upload.transcript && typeof upload.transcript === "string") {
+      const transcriptLower = upload.transcript.toLowerCase()
+
+      // Check if identifier is in transcript
+      if (transcriptLower.includes(lowerIdentifier)) {
+        confidence = Math.max(confidence, 75)
+        reasons.push("Identifier found in transcript")
+      }
+
+      // Check for folder keyword matches in transcript
+      let keywordMatches = 0
+      folderKeywords.forEach((keyword) => {
+        if (transcriptLower.includes(keyword)) {
+          keywordMatches++
+        }
+      })
+
+      if (keywordMatches > 0) {
+        const keywordConfidence = Math.min(60 + keywordMatches * 10, 80)
+        confidence = Math.max(confidence, keywordConfidence)
+        reasons.push(`${keywordMatches} folder keywords in transcript`)
+      }
+    }
+
+    if (upload.detectedNiche) {
+      const nicheLower = upload.detectedNiche.toLowerCase()
+
+      // Check if detected niche matches folder keywords
+      folderKeywords.forEach((keyword) => {
+        if (nicheLower.includes(keyword)) {
+          const nicheConfidence = upload.confidence ? Math.min(50 + upload.confidence * 20, 70) : 50
+          confidence = Math.max(confidence, nicheConfidence)
+          reasons.push(`Detected niche matches (${upload.detectedNiche})`)
+        }
+      })
+
+      // Check if identifier matches detected niche
+      if (nicheLower === lowerIdentifier || nicheLower.includes(lowerIdentifier)) {
+        confidence = Math.max(confidence, 60)
+        reasons.push("Identifier matches detected niche")
+      }
+    }
+
+    // Update best match if this is better
+    if (confidence > bestConfidence) {
+      bestMatch = upload
+      bestConfidence = confidence
+      bestReason = reasons.join(", ")
+    }
+  }
+
+  if (bestConfidence >= 50) {
+    return { upload: bestMatch, confidence: bestConfidence, matchReason: bestReason }
+  }
+
+  return { upload: null, confidence: 0, matchReason: "No confident match found" }
 }
 
 async function createFolderDirectly(userId: string, folderData: any) {
