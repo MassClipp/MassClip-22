@@ -15,21 +15,6 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 export const maxDuration = 30
 
-interface ReasoningPass {
-  passNumber: number
-  analysis: string
-  confidence: number
-  concerns: string[]
-  recommendation: string
-}
-
-interface MultiPassDecision {
-  finalDecision: "proceed" | "reject" | "ask_user"
-  reasoning: ReasoningPass[]
-  overallConfidence: number
-  warnings: string[]
-}
-
 interface FileAnalysis {
   fileId: string
   fileName: string
@@ -48,65 +33,12 @@ interface SemanticAnalysisResult {
   warnings: string[]
 }
 
+// These old functions used broken keyword matching. Replaced with single LLM-first semantic analysis.
+
 /**
- * Perform 3-pass reasoning on a proposed action
- * Each pass independently evaluates the decision
+ * LLM-First Semantic Analysis
+ * The LLM reads transcripts directly and decides semantic fit with quoted evidence
  */
-async function performMultiPassReasoning(
-  action: string,
-  context: {
-    targetFolder?: string
-    fileIds?: string[]
-    uploads?: any[]
-    folderContents?: any[]
-    reason?: string
-  },
-): Promise<MultiPassDecision> {
-  const passes: ReasoningPass[] = []
-  const warnings: string[] = []
-
-  // PASS 1: Semantic Analysis - Does the content actually match the folder theme?
-  const pass1 = await analyzeSemanticFit(context)
-  passes.push(pass1)
-
-  // PASS 2: Folder Context Analysis - What's already in the folder? Does this fit?
-  const pass2 = await analyzeFolderContext(context)
-  passes.push(pass2)
-
-  // PASS 3: Transcript Deep Dive - Read actual transcripts and verify relevance
-  const pass3 = await analyzeTranscriptRelevance(context)
-  passes.push(pass3)
-
-  // Calculate overall confidence (average of all passes)
-  const overallConfidence = passes.reduce((sum, pass) => sum + pass.confidence, 0) / passes.length
-
-  // Collect all concerns
-  passes.forEach((pass) => {
-    warnings.push(...pass.concerns)
-  })
-
-  // Make final decision based on all passes
-  let finalDecision: "proceed" | "reject" | "ask_user" = "proceed"
-
-  if (overallConfidence < 60) {
-    finalDecision = "reject"
-    warnings.push(`Overall confidence too low: ${overallConfidence.toFixed(1)}%`)
-  } else if (overallConfidence < 75) {
-    finalDecision = "ask_user"
-    warnings.push(`Moderate confidence (${overallConfidence.toFixed(1)}%), requesting user confirmation`)
-  } else if (passes.some((pass) => pass.confidence < 50)) {
-    finalDecision = "ask_user"
-    warnings.push("At least one pass has low confidence, requesting user confirmation")
-  }
-
-  return {
-    finalDecision,
-    reasoning: passes,
-    overallConfidence,
-    warnings: [...new Set(warnings)], // Remove duplicates
-  }
-}
-
 async function performSemanticAnalysis(
   action: string,
   context: {
@@ -235,7 +167,7 @@ Respond with a JSON object in this exact format:
         Authorization: `Bearer ${process.env.GROQ_API}`,
         "Content-Type": "application/json",
       },
-      body: JSON.JSON.stringify({
+      body: JSON.stringify({
         model: "llama-3.3-70b-versatile",
         messages: [
           {
@@ -335,282 +267,6 @@ Respond with a JSON object in this exact format:
       summary: "Failed to perform semantic analysis",
       warnings: [`Error: ${error instanceof Error ? error.message : "Unknown error"}`],
     }
-  }
-}
-
-/**
- * PASS 1: Semantic Analysis
- * Analyzes if content semantically matches the folder theme
- */
-async function analyzeSemanticFit(context: any): Promise<ReasoningPass> {
-  const { targetFolder, fileIds, uploads, reason } = context
-  const concerns: string[] = []
-  let confidence = 100
-
-  if (!targetFolder || !fileIds || !uploads) {
-    return {
-      passNumber: 1,
-      analysis: "Missing required context for semantic analysis",
-      confidence: 0,
-      concerns: ["Missing targetFolder, fileIds, or uploads data"],
-      recommendation: "Cannot proceed without complete context",
-    }
-  }
-
-  // Extract folder theme keywords
-  const folderKeywords = extractKeywordsFromText(targetFolder + " " + (reason || ""))
-  console.log(`[v0] 🔍 Pass 1: Analyzing semantic fit for "${targetFolder}"`)
-  console.log(`[v0] 🔑 Folder keywords:`, folderKeywords)
-
-  const matchedFiles: any[] = []
-  const mismatchedFiles: any[] = []
-
-  for (const fileId of fileIds) {
-    const upload = uploads.find((u: any) => u.id === fileId)
-    if (!upload) {
-      concerns.push(`File ID "${fileId}" not found in uploads`)
-      confidence -= 10
-      continue
-    }
-
-    // Check transcript for semantic relevance
-    let semanticScore = 0
-    const matchReasons: string[] = []
-
-    if (upload.transcript) {
-      const transcriptLower = upload.transcript.toLowerCase()
-
-      // Count keyword matches
-      let keywordMatches = 0
-      folderKeywords.forEach((keyword: string) => {
-        if (transcriptLower.includes(keyword)) {
-          keywordMatches++
-          matchReasons.push(`Contains "${keyword}"`)
-        }
-      })
-
-      semanticScore = (keywordMatches / Math.max(folderKeywords.length, 1)) * 100
-
-      if (semanticScore >= 50) {
-        matchedFiles.push({ title: upload.title, score: semanticScore, reasons: matchReasons })
-      } else {
-        mismatchedFiles.push({ title: upload.title, score: semanticScore })
-        concerns.push(`"${upload.title}" has low semantic match (${semanticScore.toFixed(0)}%)`)
-        confidence -= 15
-      }
-    } else {
-      // No transcript available
-      concerns.push(`"${upload.title}" has no transcript for semantic analysis`)
-      confidence -= 5
-    }
-  }
-
-  const analysis = `Analyzed ${fileIds.length} files for semantic fit with "${targetFolder}". ${matchedFiles.length} files have strong semantic matches, ${mismatchedFiles.length} files have weak or no matches.`
-
-  const recommendation =
-    confidence >= 75
-      ? "Strong semantic fit, proceed with organization"
-      : confidence >= 50
-        ? "Moderate semantic fit, consider user confirmation"
-        : "Weak semantic fit, reject or ask user"
-
-  console.log(`[v0] ✅ Pass 1 Complete: ${confidence.toFixed(1)}% confidence`)
-
-  return {
-    passNumber: 1,
-    analysis,
-    confidence: Math.max(0, confidence),
-    concerns,
-    recommendation,
-  }
-}
-
-/**
- * PASS 2: Folder Context Analysis
- * Checks what's already in the folder and if new content fits
- */
-async function analyzeFolderContext(context: any): Promise<ReasoningPass> {
-  const { targetFolder, fileIds, uploads, folderContents } = context
-  const concerns: string[] = []
-  let confidence = 100
-
-  console.log(`[v0] 🔍 Pass 2: Analyzing folder context for "${targetFolder}"`)
-
-  if (!folderContents || folderContents.length === 0) {
-    concerns.push("Folder is empty, cannot verify consistency with existing content")
-    confidence -= 20
-    return {
-      passNumber: 2,
-      analysis: `Folder "${targetFolder}" is empty. Cannot verify if new content matches existing patterns.`,
-      confidence: Math.max(0, confidence),
-      concerns,
-      recommendation: "Proceed with caution, folder has no existing content to compare against",
-    }
-  }
-
-  // Analyze existing folder content to understand the theme
-  const existingNiches = new Set<string>()
-  const existingKeywords = new Set<string>()
-
-  folderContents.forEach((content: any) => {
-    if (content.detectedNiche) {
-      existingNiches.add(content.detectedNiche)
-    }
-    if (content.transcript) {
-      const keywords = extractKeywordsFromText(content.transcript)
-      keywords.forEach((kw: string) => existingKeywords.add(kw))
-    }
-  })
-
-  console.log(`[v0] 📊 Existing folder niches:`, Array.from(existingNiches))
-  console.log(`[v0] 🔑 Existing folder keywords:`, Array.from(existingKeywords).slice(0, 10))
-
-  // Check if new files match the existing folder theme
-  const consistentFiles: string[] = []
-  const inconsistentFiles: string[] = []
-
-  for (const fileId of fileIds) {
-    const upload = uploads.find((u: any) => u.id === fileId)
-    if (!upload) continue
-
-    let isConsistent = false
-
-    // Check if detected niche matches existing niches
-    if (upload.detectedNiche && existingNiches.has(upload.detectedNiche)) {
-      isConsistent = true
-      consistentFiles.push(upload.title)
-    } else if (upload.transcript) {
-      // Check if transcript contains existing folder keywords
-      const transcriptLower = upload.transcript.toLowerCase()
-      let keywordMatches = 0
-
-      Array.from(existingKeywords).forEach((keyword) => {
-        if (transcriptLower.includes(keyword)) {
-          keywordMatches++
-        }
-      })
-
-      if (keywordMatches >= 2) {
-        isConsistent = true
-        consistentFiles.push(upload.title)
-      } else {
-        inconsistentFiles.push(upload.title)
-        concerns.push(`"${upload.title}" doesn't match existing folder theme (only ${keywordMatches} keyword matches)`)
-        confidence -= 15
-      }
-    } else {
-      inconsistentFiles.push(upload.title)
-      concerns.push(`"${upload.title}" has no transcript to verify consistency`)
-      confidence -= 10
-    }
-  }
-
-  const analysis = `Folder "${targetFolder}" contains ${folderContents.length} existing files. ${consistentFiles.length} new files are consistent with existing content, ${inconsistentFiles.length} files may not fit.`
-
-  const recommendation =
-    confidence >= 75
-      ? "New content is consistent with existing folder theme"
-      : confidence >= 50
-        ? "Some inconsistencies detected, consider user confirmation"
-        : "Significant inconsistencies, reject or ask user"
-
-  console.log(`[v0] ✅ Pass 2 Complete: ${confidence.toFixed(1)}% confidence`)
-
-  return {
-    passNumber: 2,
-    analysis,
-    confidence: Math.max(0, confidence),
-    concerns,
-    recommendation,
-  }
-}
-
-/**
- * PASS 3: Transcript Deep Dive
- * Reads actual transcripts and verifies content relevance
- */
-async function analyzeTranscriptRelevance(context: any): Promise<ReasoningPass> {
-  const { targetFolder, fileIds, uploads, reason } = context
-  const concerns: string[] = []
-  let confidence = 100
-
-  console.log(`[v0] 🔍 Pass 3: Deep transcript analysis for "${targetFolder}"`)
-
-  const folderKeywords = extractKeywordsFromText(targetFolder + " " + (reason || ""))
-  const filesWithTranscripts: any[] = []
-  const filesWithoutTranscripts: any[] = []
-
-  for (const fileId of fileIds) {
-    const upload = uploads.find((u: any) => u.id === fileId)
-    if (!upload) continue
-
-    if (upload.transcript && upload.transcript.length > 50) {
-      filesWithTranscripts.push(upload)
-    } else {
-      filesWithoutTranscripts.push(upload)
-      concerns.push(`"${upload.title}" has no transcript or transcript is too short`)
-      confidence -= 10
-    }
-  }
-
-  console.log(
-    `[v0] 📝 ${filesWithTranscripts.length} files with transcripts, ${filesWithoutTranscripts.length} without`,
-  )
-
-  // Deep analysis of transcripts
-  const relevantFiles: any[] = []
-  const irrelevantFiles: any[] = []
-
-  for (const upload of filesWithTranscripts) {
-    const transcriptLower = upload.transcript.toLowerCase()
-
-    // Count how many folder keywords appear in transcript
-    let keywordCount = 0
-    const foundKeywords: string[] = []
-
-    folderKeywords.forEach((keyword: string) => {
-      const regex = new RegExp(`\\b${keyword}\\b`, "gi")
-      const matches = transcriptLower.match(regex)
-      if (matches) {
-        keywordCount += matches.length
-        foundKeywords.push(`${keyword} (${matches.length}x)`)
-      }
-    })
-
-    // Calculate relevance score based on keyword density
-    const transcriptWords = transcriptLower.split(/\s+/).length
-    const keywordDensity = (keywordCount / transcriptWords) * 100
-
-    console.log(`[v0] 📊 "${upload.title}": ${keywordCount} keyword mentions, ${keywordDensity.toFixed(2)}% density`)
-
-    if (keywordCount >= 3 || keywordDensity >= 1) {
-      relevantFiles.push({ title: upload.title, keywordCount, density: keywordDensity, keywords: foundKeywords })
-    } else {
-      irrelevantFiles.push({ title: upload.title, keywordCount, density: keywordDensity })
-      concerns.push(
-        `"${upload.title}" has low keyword relevance (${keywordCount} mentions, ${keywordDensity.toFixed(2)}% density)`,
-      )
-      confidence -= 20
-    }
-  }
-
-  const analysis = `Deep transcript analysis: ${relevantFiles.length} files are highly relevant to "${targetFolder}", ${irrelevantFiles.length} files have low relevance. ${filesWithoutTranscripts.length} files lack transcripts.`
-
-  const recommendation =
-    confidence >= 75
-      ? "Transcripts confirm strong relevance to folder theme"
-      : confidence >= 50
-        ? "Some transcripts show weak relevance, consider user confirmation"
-        : "Transcripts indicate poor fit, reject or ask user"
-
-  console.log(`[v0] ✅ Pass 3 Complete: ${confidence.toFixed(1)}% confidence`)
-
-  return {
-    passNumber: 3,
-    analysis,
-    confidence: Math.max(0, confidence),
-    concerns,
-    recommendation,
   }
 }
 
@@ -1222,7 +878,7 @@ Be helpful, natural, and focus on their success. USE YOUR INTELLIGENCE to make s
         Authorization: `Bearer ${process.env.GROQ_API}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
+      body: JSON.JSON.stringify({
         model: "llama-3.3-70b-versatile",
         messages: formattedMessages,
         max_tokens: 2000,
