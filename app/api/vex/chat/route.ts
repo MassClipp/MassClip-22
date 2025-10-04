@@ -30,41 +30,119 @@ interface MultiPassDecision {
   warnings: string[]
 }
 
-/**
- * NEW: LLM-First Semantic Analysis
- * Let the AI model read transcripts and decide semantic fit
- * No more keyword matching, fuzzy logic, or complex scoring
- */
-async function analyzeContentWithLLM(
-  targetFolder: string,
-  fileIds: string[],
-  uploads: any[],
-  reason?: string,
-): Promise<{
-  decision: "proceed" | "reject" | "ask_user"
-  confidence: number
-  analysis: string
-  fileAnalysis: Array<{
-    id: string
-    title: string
-    decision: "include" | "exclude"
-    reason: string
-    transcriptQuote?: string
-  }>
-}> {
-  console.log(`[v0] 🤖 LLM analyzing ${fileIds.length} files for "${targetFolder}" folder`)
+interface FileAnalysis {
+  fileId: string
+  fileName: string
+  semanticFit: "strong" | "moderate" | "weak" | "none"
+  confidence: number // 0-100
+  evidence: string // Quoted text from transcript that supports the decision
+  reasoning: string // Why this file does/doesn't fit
+  transcriptQuality: "good" | "short" | "missing" | "poor"
+}
 
-  // Build context for the LLM
+interface SemanticAnalysisResult {
+  decision: "proceed" | "ask_user" | "reject"
+  overallConfidence: number
+  fileAnalyses: FileAnalysis[]
+  summary: string
+  warnings: string[]
+}
+
+/**
+ * Perform 3-pass reasoning on a proposed action
+ * Each pass independently evaluates the decision
+ */
+async function performMultiPassReasoning(
+  action: string,
+  context: {
+    targetFolder?: string
+    fileIds?: string[]
+    uploads?: any[]
+    folderContents?: any[]
+    reason?: string
+  },
+): Promise<MultiPassDecision> {
+  const passes: ReasoningPass[] = []
+  const warnings: string[] = []
+
+  // PASS 1: Semantic Analysis - Does the content actually match the folder theme?
+  const pass1 = await analyzeSemanticFit(context)
+  passes.push(pass1)
+
+  // PASS 2: Folder Context Analysis - What's already in the folder? Does this fit?
+  const pass2 = await analyzeFolderContext(context)
+  passes.push(pass2)
+
+  // PASS 3: Transcript Deep Dive - Read actual transcripts and verify relevance
+  const pass3 = await analyzeTranscriptRelevance(context)
+  passes.push(pass3)
+
+  // Calculate overall confidence (average of all passes)
+  const overallConfidence = passes.reduce((sum, pass) => sum + pass.confidence, 0) / passes.length
+
+  // Collect all concerns
+  passes.forEach((pass) => {
+    warnings.push(...pass.concerns)
+  })
+
+  // Make final decision based on all passes
+  let finalDecision: "proceed" | "reject" | "ask_user" = "proceed"
+
+  if (overallConfidence < 60) {
+    finalDecision = "reject"
+    warnings.push(`Overall confidence too low: ${overallConfidence.toFixed(1)}%`)
+  } else if (overallConfidence < 75) {
+    finalDecision = "ask_user"
+    warnings.push(`Moderate confidence (${overallConfidence.toFixed(1)}%), requesting user confirmation`)
+  } else if (passes.some((pass) => pass.confidence < 50)) {
+    finalDecision = "ask_user"
+    warnings.push("At least one pass has low confidence, requesting user confirmation")
+  }
+
+  return {
+    finalDecision,
+    reasoning: passes,
+    overallConfidence,
+    warnings: [...new Set(warnings)], // Remove duplicates
+  }
+}
+
+async function performSemanticAnalysis(
+  action: string,
+  context: {
+    targetFolder?: string
+    fileIds?: string[]
+    uploads?: any[]
+    folderContents?: any[]
+    reason?: string
+  },
+): Promise<SemanticAnalysisResult> {
+  const { targetFolder, fileIds, uploads, folderContents, reason } = context
+
+  if (!targetFolder || !fileIds || !uploads) {
+    return {
+      decision: "reject",
+      overallConfidence: 0,
+      fileAnalyses: [],
+      summary: "Missing required context for semantic analysis",
+      warnings: ["Missing targetFolder, fileIds, or uploads data"],
+    }
+  }
+
+  console.log(`[v0] 🧠 Starting LLM semantic analysis for "${targetFolder}"`)
+  console.log(`[v0] 📊 Analyzing ${fileIds.length} files`)
+
+  // Prepare file data for LLM analysis
   const filesToAnalyze = fileIds
-    .map((id) => {
-      const upload = uploads.find((u: any) => u.id === id || u.title === id || u.filename === id)
+    .map((fileId) => {
+      const upload = uploads.find((u: any) => u.id === fileId)
       if (!upload) return null
 
       return {
         id: upload.id,
-        title: upload.title || upload.filename,
-        transcript: upload.transcript || null,
-        duration: upload.duration || null,
+        title: upload.title || upload.filename || "Untitled",
+        transcript: upload.transcript || "",
+        duration: upload.duration || 0,
         detectedNiche: upload.detectedNiche || null,
       }
     })
@@ -73,134 +151,482 @@ async function analyzeContentWithLLM(
   if (filesToAnalyze.length === 0) {
     return {
       decision: "reject",
-      confidence: 0,
-      analysis: "No valid files found to analyze",
-      fileAnalysis: [],
+      overallConfidence: 0,
+      fileAnalyses: [],
+      summary: "No valid files found for analysis",
+      warnings: ["Could not find any of the specified files in the uploads"],
     }
   }
 
-  // Create a prompt for the LLM to analyze semantic fit
-  const analysisPrompt = `You are analyzing whether video content belongs in a folder called "${targetFolder}".
+  // Build context about existing folder contents
+  let folderContextDescription = ""
+  if (folderContents && folderContents.length > 0) {
+    const sampleTitles = folderContents.slice(0, 5).map((f: any) => f.title || f.filename)
+    folderContextDescription = `\n\nExisting folder contents (${folderContents.length} files): ${sampleTitles.join(", ")}${folderContents.length > 5 ? "..." : ""}`
+  } else {
+    folderContextDescription = "\n\nThis folder is currently empty."
+  }
 
-${reason ? `User's reason for organizing: "${reason}"` : ""}
+  // Create the LLM prompt for semantic analysis
+  const analysisPrompt = `You are analyzing whether video content semantically fits into a folder called "${targetFolder}".
 
-For each video below, read the transcript carefully and decide if it semantically fits the "${targetFolder}" theme.
+${reason ? `User's reasoning: "${reason}"` : ""}${folderContextDescription}
 
-Videos to analyze:
+Your task: For each video below, read its transcript and determine if the content semantically matches the folder theme "${targetFolder}".
+
+**Analysis Guidelines:**
+1. **Read the actual transcript content** - Don't just rely on titles
+2. **Look for semantic meaning** - Does the video's content relate to the folder's theme?
+3. **Provide quoted evidence** - Include 1-2 short quotes from the transcript that support your decision
+4. **Check transcript quality** - Is the transcript long enough to make a confident decision?
+5. **Be honest about uncertainty** - If you're not sure, say so
+
+**Semantic Fit Levels:**
+- **strong**: Content clearly and directly relates to the folder theme (80-100% confidence)
+- **moderate**: Content somewhat relates or has tangential connections (50-79% confidence)
+- **weak**: Content barely relates or connection is unclear (20-49% confidence)
+- **none**: Content does not relate to the folder theme (0-19% confidence)
+
+**Transcript Quality Levels:**
+- **good**: Transcript is substantial (>100 words) and coherent
+- **short**: Transcript exists but is very brief (<100 words)
+- **missing**: No transcript available
+- **poor**: Transcript is garbled, incomplete, or unintelligible
+
+Analyze these ${filesToAnalyze.length} videos:
+
 ${filesToAnalyze
   .map(
-    (file: any, idx: number) => `
-${idx + 1}. "${file.title}"
-   Duration: ${file.duration ? `${Math.floor(file.duration / 60)}m ${file.duration % 60}s` : "unknown"}
-   Transcript: ${file.transcript ? `"${file.transcript.substring(0, 500)}${file.transcript.length > 500 ? "..." : ""}"` : "NO TRANSCRIPT AVAILABLE"}
+    (file: any, index: number) => `
+**Video ${index + 1}: "${file.title}"**
+- ID: ${file.id}
+- Duration: ${file.duration}s
+- Detected Niche: ${file.detectedNiche || "Unknown"}
+- Transcript: ${file.transcript ? `"${file.transcript.slice(0, 500)}${file.transcript.length > 500 ? "..." : ""}"` : "[NO TRANSCRIPT]"}
 `,
   )
   .join("\n")}
 
-For each video, respond with:
-1. INCLUDE or EXCLUDE
-2. A brief reason why (1-2 sentences)
-3. A quote from the transcript that supports your decision (if transcript available)
-
-Be strict: only include videos that clearly match the "${targetFolder}" theme. If a video is about a different topic, exclude it even if there's some overlap.
-
-Format your response as JSON:
+Respond with a JSON object in this exact format:
 {
-  "overallDecision": "proceed" | "reject" | "ask_user",
-  "confidence": 0-100,
-  "reasoning": "overall analysis",
-  "files": [
+  "fileAnalyses": [
     {
-      "title": "video title",
-      "decision": "include" | "exclude",
-      "reason": "why this decision was made",
-      "transcriptQuote": "relevant quote from transcript"
+      "fileId": "the file ID",
+      "fileName": "the file title",
+      "semanticFit": "strong|moderate|weak|none",
+      "confidence": 85,
+      "evidence": "Quote from transcript that supports this decision",
+      "reasoning": "Brief explanation of why this file does/doesn't fit",
+      "transcriptQuality": "good|short|missing|poor"
     }
-  ]
-}`
+  ],
+  "overallConfidence": 75,
+  "summary": "Overall assessment of whether these files fit the folder",
+  "warnings": ["Any concerns or issues to note"]
+}
+
+**IMPORTANT**: Respond ONLY with the JSON object, no other text.`
 
   try {
-    // Call Groq API for analysis
+    // Call LLM for semantic analysis
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
+        Authorization: `Bearer ${process.env.GROQ_API}`,
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
       },
-      body: JSON.stringify({
+      body: JSON.JSON.stringify({
         model: "llama-3.3-70b-versatile",
         messages: [
           {
             role: "system",
             content:
-              "You are a content categorization expert. You read video transcripts and determine if they semantically match a given folder theme. You are strict and only include content that clearly fits.",
+              "You are a semantic analysis expert. You read video transcripts and determine if content fits into specific categories. You always respond with valid JSON only.",
           },
           {
             role: "user",
             content: analysisPrompt,
           },
         ],
-        temperature: 0.3, // Low temperature for consistent decisions
-        response_format: { type: "json_object" },
+        max_tokens: 2000,
+        temperature: 0.2, // Lower temperature for more consistent analysis
       }),
     })
 
     if (!response.ok) {
-      throw new Error(`Groq API error: ${response.statusText}`)
+      throw new Error(`LLM API error: ${response.status}`)
     }
 
     const data = await response.json()
-    const analysisResult = JSON.parse(data.choices[0].message.content)
+    const llmResponse = data.choices?.[0]?.message?.content
 
-    console.log(`[v0] ✅ LLM Analysis Complete:`, analysisResult)
+    if (!llmResponse) {
+      throw new Error("No response from LLM")
+    }
 
-    // Map the LLM's analysis to our format
-    const fileAnalysis = analysisResult.files.map((file: any) => {
-      const originalFile = filesToAnalyze.find((f: any) => f.title === file.title)
-      return {
-        id: originalFile?.id || "",
-        title: file.title,
-        decision: file.decision,
-        reason: file.reason,
-        transcriptQuote: file.transcriptQuote,
+    // Parse LLM response
+    let analysisResult: any
+    try {
+      // Try to extract JSON if LLM added extra text
+      const jsonMatch = llmResponse.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        analysisResult = JSON.parse(jsonMatch[0])
+      } else {
+        analysisResult = JSON.parse(llmResponse)
+      }
+    } catch (parseError) {
+      console.error("[v0] Failed to parse LLM response:", llmResponse)
+      throw new Error("Failed to parse LLM analysis response")
+    }
+
+    // Validate and structure the result
+    const fileAnalyses: FileAnalysis[] = analysisResult.fileAnalyses || []
+    const overallConfidence = analysisResult.overallConfidence || 0
+    const warnings = analysisResult.warnings || []
+
+    // Add warnings for transcript quality issues
+    fileAnalyses.forEach((analysis) => {
+      if (analysis.transcriptQuality === "missing") {
+        warnings.push(`"${analysis.fileName}" has no transcript - analysis is based on title only`)
+      } else if (analysis.transcriptQuality === "short") {
+        warnings.push(`"${analysis.fileName}" has a very short transcript - confidence may be lower`)
+      } else if (analysis.transcriptQuality === "poor") {
+        warnings.push(`"${analysis.fileName}" has poor transcript quality - analysis may be unreliable`)
       }
     })
 
+    // Determine final decision based on overall confidence and individual analyses
+    let decision: "proceed" | "ask_user" | "reject" = "proceed"
+
+    const strongFits = fileAnalyses.filter((f) => f.semanticFit === "strong").length
+    const moderateFits = fileAnalyses.filter((f) => f.semanticFit === "moderate").length
+    const weakFits = fileAnalyses.filter((f) => f.semanticFit === "weak").length
+    const noneFits = fileAnalyses.filter((f) => f.semanticFit === "none").length
+
+    console.log(`[v0] 📊 Semantic fit distribution:`)
+    console.log(`[v0]   ✅ Strong: ${strongFits}`)
+    console.log(`[v0]   ⚠️  Moderate: ${moderateFits}`)
+    console.log(`[v0]   ⚠️  Weak: ${weakFits}`)
+    console.log(`[v0]   ❌ None: ${noneFits}`)
+
+    if (overallConfidence < 50 || noneFits > strongFits + moderateFits) {
+      decision = "reject"
+      warnings.push(`Low overall confidence (${overallConfidence}%) or too many poor fits`)
+    } else if (overallConfidence < 70 || weakFits > 0 || moderateFits > strongFits) {
+      decision = "ask_user"
+      warnings.push(`Moderate confidence (${overallConfidence}%) - user confirmation recommended`)
+    }
+
+    console.log(`[v0] 🎯 Final decision: ${decision} (${overallConfidence}% confidence)`)
+
     return {
-      decision: analysisResult.overallDecision,
-      confidence: analysisResult.confidence,
-      analysis: analysisResult.reasoning,
-      fileAnalysis,
+      decision,
+      overallConfidence,
+      fileAnalyses,
+      summary: analysisResult.summary || "Analysis complete",
+      warnings: [...new Set(warnings)], // Remove duplicates
     }
   } catch (error) {
-    console.error("[v0] LLM Analysis Error:", error)
-    // Fallback to simple matching if LLM fails
+    console.error("[v0] Semantic analysis error:", error)
     return {
-      decision: "ask_user",
-      confidence: 50,
-      analysis: "Unable to perform semantic analysis. Please review manually.",
-      fileAnalysis: filesToAnalyze.map((file: any) => ({
-        id: file.id,
-        title: file.title,
-        decision: "include",
-        reason: "Fallback: LLM analysis unavailable",
-      })),
+      decision: "reject",
+      overallConfidence: 0,
+      fileAnalyses: [],
+      summary: "Failed to perform semantic analysis",
+      warnings: [`Error: ${error instanceof Error ? error.message : "Unknown error"}`],
     }
   }
 }
 
-export async function POST(req: Request) {
+/**
+ * PASS 1: Semantic Analysis
+ * Analyzes if content semantically matches the folder theme
+ */
+async function analyzeSemanticFit(context: any): Promise<ReasoningPass> {
+  const { targetFolder, fileIds, uploads, reason } = context
+  const concerns: string[] = []
+  let confidence = 100
+
+  if (!targetFolder || !fileIds || !uploads) {
+    return {
+      passNumber: 1,
+      analysis: "Missing required context for semantic analysis",
+      confidence: 0,
+      concerns: ["Missing targetFolder, fileIds, or uploads data"],
+      recommendation: "Cannot proceed without complete context",
+    }
+  }
+
+  // Extract folder theme keywords
+  const folderKeywords = extractKeywordsFromText(targetFolder + " " + (reason || ""))
+  console.log(`[v0] 🔍 Pass 1: Analyzing semantic fit for "${targetFolder}"`)
+  console.log(`[v0] 🔑 Folder keywords:`, folderKeywords)
+
+  const matchedFiles: any[] = []
+  const mismatchedFiles: any[] = []
+
+  for (const fileId of fileIds) {
+    const upload = uploads.find((u: any) => u.id === fileId)
+    if (!upload) {
+      concerns.push(`File ID "${fileId}" not found in uploads`)
+      confidence -= 10
+      continue
+    }
+
+    // Check transcript for semantic relevance
+    let semanticScore = 0
+    const matchReasons: string[] = []
+
+    if (upload.transcript) {
+      const transcriptLower = upload.transcript.toLowerCase()
+
+      // Count keyword matches
+      let keywordMatches = 0
+      folderKeywords.forEach((keyword: string) => {
+        if (transcriptLower.includes(keyword)) {
+          keywordMatches++
+          matchReasons.push(`Contains "${keyword}"`)
+        }
+      })
+
+      semanticScore = (keywordMatches / Math.max(folderKeywords.length, 1)) * 100
+
+      if (semanticScore >= 50) {
+        matchedFiles.push({ title: upload.title, score: semanticScore, reasons: matchReasons })
+      } else {
+        mismatchedFiles.push({ title: upload.title, score: semanticScore })
+        concerns.push(`"${upload.title}" has low semantic match (${semanticScore.toFixed(0)}%)`)
+        confidence -= 15
+      }
+    } else {
+      // No transcript available
+      concerns.push(`"${upload.title}" has no transcript for semantic analysis`)
+      confidence -= 5
+    }
+  }
+
+  const analysis = `Analyzed ${fileIds.length} files for semantic fit with "${targetFolder}". ${matchedFiles.length} files have strong semantic matches, ${mismatchedFiles.length} files have weak or no matches.`
+
+  const recommendation =
+    confidence >= 75
+      ? "Strong semantic fit, proceed with organization"
+      : confidence >= 50
+        ? "Moderate semantic fit, consider user confirmation"
+        : "Weak semantic fit, reject or ask user"
+
+  console.log(`[v0] ✅ Pass 1 Complete: ${confidence.toFixed(1)}% confidence`)
+
+  return {
+    passNumber: 1,
+    analysis,
+    confidence: Math.max(0, confidence),
+    concerns,
+    recommendation,
+  }
+}
+
+/**
+ * PASS 2: Folder Context Analysis
+ * Checks what's already in the folder and if new content fits
+ */
+async function analyzeFolderContext(context: any): Promise<ReasoningPass> {
+  const { targetFolder, fileIds, uploads, folderContents } = context
+  const concerns: string[] = []
+  let confidence = 100
+
+  console.log(`[v0] 🔍 Pass 2: Analyzing folder context for "${targetFolder}"`)
+
+  if (!folderContents || folderContents.length === 0) {
+    concerns.push("Folder is empty, cannot verify consistency with existing content")
+    confidence -= 20
+    return {
+      passNumber: 2,
+      analysis: `Folder "${targetFolder}" is empty. Cannot verify if new content matches existing patterns.`,
+      confidence: Math.max(0, confidence),
+      concerns,
+      recommendation: "Proceed with caution, folder has no existing content to compare against",
+    }
+  }
+
+  // Analyze existing folder content to understand the theme
+  const existingNiches = new Set<string>()
+  const existingKeywords = new Set<string>()
+
+  folderContents.forEach((content: any) => {
+    if (content.detectedNiche) {
+      existingNiches.add(content.detectedNiche)
+    }
+    if (content.transcript) {
+      const keywords = extractKeywordsFromText(content.transcript)
+      keywords.forEach((kw: string) => existingKeywords.add(kw))
+    }
+  })
+
+  console.log(`[v0] 📊 Existing folder niches:`, Array.from(existingNiches))
+  console.log(`[v0] 🔑 Existing folder keywords:`, Array.from(existingKeywords).slice(0, 10))
+
+  // Check if new files match the existing folder theme
+  const consistentFiles: string[] = []
+  const inconsistentFiles: string[] = []
+
+  for (const fileId of fileIds) {
+    const upload = uploads.find((u: any) => u.id === fileId)
+    if (!upload) continue
+
+    let isConsistent = false
+
+    // Check if detected niche matches existing niches
+    if (upload.detectedNiche && existingNiches.has(upload.detectedNiche)) {
+      isConsistent = true
+      consistentFiles.push(upload.title)
+    } else if (upload.transcript) {
+      // Check if transcript contains existing folder keywords
+      const transcriptLower = upload.transcript.toLowerCase()
+      let keywordMatches = 0
+
+      Array.from(existingKeywords).forEach((keyword) => {
+        if (transcriptLower.includes(keyword)) {
+          keywordMatches++
+        }
+      })
+
+      if (keywordMatches >= 2) {
+        isConsistent = true
+        consistentFiles.push(upload.title)
+      } else {
+        inconsistentFiles.push(upload.title)
+        concerns.push(`"${upload.title}" doesn't match existing folder theme (only ${keywordMatches} keyword matches)`)
+        confidence -= 15
+      }
+    } else {
+      inconsistentFiles.push(upload.title)
+      concerns.push(`"${upload.title}" has no transcript to verify consistency`)
+      confidence -= 10
+    }
+  }
+
+  const analysis = `Folder "${targetFolder}" contains ${folderContents.length} existing files. ${consistentFiles.length} new files are consistent with existing content, ${inconsistentFiles.length} files may not fit.`
+
+  const recommendation =
+    confidence >= 75
+      ? "New content is consistent with existing folder theme"
+      : confidence >= 50
+        ? "Some inconsistencies detected, consider user confirmation"
+        : "Significant inconsistencies, reject or ask user"
+
+  console.log(`[v0] ✅ Pass 2 Complete: ${confidence.toFixed(1)}% confidence`)
+
+  return {
+    passNumber: 2,
+    analysis,
+    confidence: Math.max(0, confidence),
+    concerns,
+    recommendation,
+  }
+}
+
+/**
+ * PASS 3: Transcript Deep Dive
+ * Reads actual transcripts and verifies content relevance
+ */
+async function analyzeTranscriptRelevance(context: any): Promise<ReasoningPass> {
+  const { targetFolder, fileIds, uploads, reason } = context
+  const concerns: string[] = []
+  let confidence = 100
+
+  console.log(`[v0] 🔍 Pass 3: Deep transcript analysis for "${targetFolder}"`)
+
+  const folderKeywords = extractKeywordsFromText(targetFolder + " " + (reason || ""))
+  const filesWithTranscripts: any[] = []
+  const filesWithoutTranscripts: any[] = []
+
+  for (const fileId of fileIds) {
+    const upload = uploads.find((u: any) => u.id === fileId)
+    if (!upload) continue
+
+    if (upload.transcript && upload.transcript.length > 50) {
+      filesWithTranscripts.push(upload)
+    } else {
+      filesWithoutTranscripts.push(upload)
+      concerns.push(`"${upload.title}" has no transcript or transcript is too short`)
+      confidence -= 10
+    }
+  }
+
+  console.log(
+    `[v0] 📝 ${filesWithTranscripts.length} files with transcripts, ${filesWithoutTranscripts.length} without`,
+  )
+
+  // Deep analysis of transcripts
+  const relevantFiles: any[] = []
+  const irrelevantFiles: any[] = []
+
+  for (const upload of filesWithTranscripts) {
+    const transcriptLower = upload.transcript.toLowerCase()
+
+    // Count how many folder keywords appear in transcript
+    let keywordCount = 0
+    const foundKeywords: string[] = []
+
+    folderKeywords.forEach((keyword: string) => {
+      const regex = new RegExp(`\\b${keyword}\\b`, "gi")
+      const matches = transcriptLower.match(regex)
+      if (matches) {
+        keywordCount += matches.length
+        foundKeywords.push(`${keyword} (${matches.length}x)`)
+      }
+    })
+
+    // Calculate relevance score based on keyword density
+    const transcriptWords = transcriptLower.split(/\s+/).length
+    const keywordDensity = (keywordCount / transcriptWords) * 100
+
+    console.log(`[v0] 📊 "${upload.title}": ${keywordCount} keyword mentions, ${keywordDensity.toFixed(2)}% density`)
+
+    if (keywordCount >= 3 || keywordDensity >= 1) {
+      relevantFiles.push({ title: upload.title, keywordCount, density: keywordDensity, keywords: foundKeywords })
+    } else {
+      irrelevantFiles.push({ title: upload.title, keywordCount, density: keywordDensity })
+      concerns.push(
+        `"${upload.title}" has low keyword relevance (${keywordCount} mentions, ${keywordDensity.toFixed(2)}% density)`,
+      )
+      confidence -= 20
+    }
+  }
+
+  const analysis = `Deep transcript analysis: ${relevantFiles.length} files are highly relevant to "${targetFolder}", ${irrelevantFiles.length} files have low relevance. ${filesWithoutTranscripts.length} files lack transcripts.`
+
+  const recommendation =
+    confidence >= 75
+      ? "Transcripts confirm strong relevance to folder theme"
+      : confidence >= 50
+        ? "Some transcripts show weak relevance, consider user confirmation"
+        : "Transcripts indicate poor fit, reject or ask user"
+
+  console.log(`[v0] ✅ Pass 3 Complete: ${confidence.toFixed(1)}% confidence`)
+
+  return {
+    passNumber: 3,
+    analysis,
+    confidence: Math.max(0, confidence),
+    concerns,
+    recommendation,
+  }
+}
+
+// These are replaced by the single performSemanticAnalysis function above
+
+export async function POST(request: Request) {
   try {
     console.log("[v0] Chat API called")
-    const { messages } = await req.json()
+    const { messages } = await request.json()
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       console.log("[v0] No messages provided")
       return NextResponse.json({ error: "No messages provided" }, { status: 400 })
     }
 
-    if (!process.env.GROQ_API_KEY) {
-      // Changed from GROQ_API to GROQ_API_KEY
+    if (!process.env.GROQ_API) {
       console.log("[v0] Groq API key missing")
       return NextResponse.json({ error: "AI service not configured" }, { status: 500 })
     }
@@ -212,7 +638,7 @@ export async function POST(req: Request) {
     let bundleLimitsContext = ""
     let folderContext = ""
     let userId = null
-    const authHeader = req.headers.get("authorization")
+    const authHeader = request.headers.get("authorization")
 
     if (authHeader && authHeader.startsWith("Bearer ")) {
       try {
@@ -358,15 +784,10 @@ When organizing files, use the folder names exactly as shown above.
                   console.log(`[v0] Folder "${folderName}" contains ${itemsArray.length} items`)
 
                   const itemsList = itemsArray
-                    .map((item: any) => {
-                      const title = item.title || item.filename || "Untitled"
-                      const type = item.type || "unknown"
-                      return `  - ${title} (${type})`
-                    })
+                    .map((item: any) => `  - ${item.title || item.filename || "Untitled"} (${item.type || "unknown"})`)
                     .join("\n")
 
-                  folderContentsContext +=
-                    '\n"' + folderName + '" folder (' + itemsArray.length + " items):\n" + itemsList + "\n"
+                  folderContentsContext += `\n"${folderName}" folder (${itemsArray.length} items):\n${itemsList}\n`
                 }
               }
 
@@ -392,8 +813,7 @@ When organizing files, use the folder names exactly as shown above.
                     })
                     .join("\n")
 
-                  const nicheTitle = niche.charAt(0).toUpperCase() + niche.slice(1)
-                  nicheContentsContext += `\n${nicheTitle} (${itemsArray.length} items):\n${itemsList}\n`
+                  nicheContentsContext += `\n${niche.charAt(0).toUpperCase() + niche.slice(1)} (${itemsArray.length} items):\n${itemsList}\n`
                   if (itemsArray.length > 10) {
                     nicheContentsContext += `  ... and ${itemsArray.length - 10} more ${niche} items\n`
                   }
@@ -693,7 +1113,7 @@ You output: ORGANIZE_FILES: {"targetFolder": "Faith", "fileIds": ["abc123", "def
 ❌ WRONG! You said 5 but included 8 IDs!
 
 **GOOD Example (CORRECT):**
-You say: "I'll organize these 3 faith videos into your Faith folder: '2819 Rebellion', 'AZ Compass', and 'John Mark Stev'"
+You say: "I'll organize these 3 faith videos: '2819 Rebellion', 'AZ Compass', and 'John Mark Stev'"
 You output: ORGANIZE_FILES: {"targetFolder": "Faith", "fileIds": ["giKlNW6GUD176E34O9gx", "nSOHQnlPBpUq6Gzelhet", "abc123xyz"], ...}
 ✅ CORRECT! You said 3 and included exactly 3 database IDs!
 
@@ -718,7 +1138,7 @@ When organizing by theme (like "faith content"), you MUST:
 
 To organize, use:
 
-ORGANIZE_FILES: {"targetFolder": "Folder Name", "fileIds": ["REAL_DB_ID_1", "REAL_DB_ID_2", "REAL_DB_ID_3"], "reason": "Detailed reasoning"}
+ORGANIZE_FILES: {"targetFolder": "Folder Name", "fileIds": ["ALL", "THE", "FILES", "YOU", "MENTIONED"], "reason": "Detailed reasoning"}
 
 Format requirements:
 - MUST be valid JSON on a single line
@@ -799,7 +1219,7 @@ Be helpful, natural, and focus on their success. USE YOUR INTELLIGENCE to make s
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${process.env.GROQ_API_KEY}`, // Changed from GROQ_API to GROQ_API_KEY
+        Authorization: `Bearer ${process.env.GROQ_API}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -832,72 +1252,210 @@ Be helpful, natural, and focus on their success. USE YOUR INTELLIGENCE to make s
       return NextResponse.json({ error: "No response from AI" }, { status: 500 })
     }
 
-    // CHANGE: LLM analysis happens inside organizeFilesDirectly now
+    // CHANGE: Replace multi-pass reasoning with new semantic analysis
     if (assistantMessage.includes("ORGANIZE_FILES:") && userId) {
       try {
-        console.log("[v0] Validating ORGANIZE_FILES action...")
+        console.log("[v0] 🧠 Starting semantic analysis for ORGANIZE_FILES action...")
 
+        // Extract organization data
         const organizeMatch = assistantMessage.match(/ORGANIZE_FILES:\s*({.*?})/s)
         if (!organizeMatch) {
-          throw new Error("No valid organize data found")
+          throw new Error("No valid organization data found")
         }
 
         const organizeData = JSON.parse(organizeMatch[1])
-        console.log("[v0] Parsed organize data:", organizeData)
+        console.log("[v0] Parsed organization data:", organizeData)
 
-        console.log("[v0] Vex wants to organize files, starting direct organization...")
-
-        const orgProgressMessage = `🗂️ **Analyzing and organizing your files...** This will just take a moment!`
-        const orgActionRegex = /ORGANIZE_FILES:\s*({.*?})/s
-        if (assistantMessage.match(orgActionRegex)) {
-          assistantMessage = assistantMessage.replace(orgActionRegex, orgProgressMessage)
-        } else {
-          assistantMessage += `\n\n${orgProgressMessage}`
+        // Get analysis data and folder contents
+        const analysisDoc = await db.collection("vex_content_analysis").doc(userId).get()
+        if (!analysisDoc.exists) {
+          throw new Error("Content analysis not found")
         }
 
-        const orgResult = await organizeFilesDirectly(userId, organizeData)
+        const analysisData = analysisDoc.data()!
+        const uploads = analysisData.uploads || []
 
-        if (orgResult.success) {
-          let successMessage = `✅ **Files moved successfully!** Your "${orgResult.targetFolder}" folder now contains the following files:\n\n`
-          successMessage += `**Files moved:**\n`
-          orgResult.movedFiles.forEach((file: string) => {
-            successMessage += `* ${file}\n`
-          })
+        // Get existing folder contents
+        let folderContents: any[] = []
+        const foldersSnapshot = await db
+          .collection("folders")
+          .where("userId", "==", userId)
+          .where("name", "==", organizeData.targetFolder)
+          .where("isDeleted", "==", false)
+          .limit(1)
+          .get()
 
-          if (orgResult.llmAnalysis) {
-            successMessage += `\n**Analysis (${orgResult.llmAnalysis.confidence}% confidence):**\n${orgResult.llmAnalysis.reasoning}\n\n`
-            successMessage += `**Why each file was included:**\n`
-            orgResult.llmAnalysis.fileDetails
-              .filter((f: any) => f.decision === "include")
-              .forEach((f: any) => {
-                successMessage += `* **${f.title}**: ${f.reason}\n`
-                if (f.transcriptQuote) {
-                  successMessage += `  > "${f.transcriptQuote}"\n`
-                }
-              })
-          }
+        if (!foldersSnapshot.empty) {
+          const folderId = foldersSnapshot.docs[0].id
+          const uploadsInFolder = await db
+            .collection("uploads")
+            .where("folderId", "==", folderId)
+            .where("isDeleted", "==", false)
+            .limit(50)
+            .get()
 
-          if (orgResult.notFound && orgResult.notFound.length > 0) {
-            successMessage += `\n⚠️ Could not find: ${orgResult.notFound.join(", ")}`
-          }
+          folderContents = uploadsInFolder.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
+        }
 
-          assistantMessage = assistantMessage.replace(orgProgressMessage, successMessage)
+        // Perform LLM semantic analysis
+        const analysisResult = await performSemanticAnalysis("ORGANIZE_FILES", {
+          targetFolder: organizeData.targetFolder,
+          fileIds: organizeData.fileIds,
+          uploads,
+          folderContents,
+          reason: organizeData.reason,
+        })
+
+        console.log(`[v0] 🧠 Semantic analysis decision: ${analysisResult.decision}`)
+        console.log(`[v0] 📊 Overall confidence: ${analysisResult.overallConfidence}%`)
+        console.log(`[v0] 📝 Summary: ${analysisResult.summary}`)
+
+        // Handle decision
+        if (analysisResult.decision === "reject") {
+          // Reject the action and explain why with evidence
+          const evidenceList = analysisResult.fileAnalyses
+            .filter((f) => f.semanticFit === "weak" || f.semanticFit === "none")
+            .map((f) => `• **${f.fileName}**: ${f.reasoning}${f.evidence ? `\n  Evidence: "${f.evidence}"` : ""}`)
+            .join("\n")
+
+          assistantMessage = assistantMessage.replace(
+            /ORGANIZE_FILES:\s*{.*?}/s,
+            `❌ After analyzing the transcripts, I don't think these files fit well into "${organizeData.targetFolder}":\n\n${evidenceList}\n\n**Summary**: ${analysisResult.summary}\n\n${analysisResult.warnings.length > 0 ? `**Concerns**:\n${analysisResult.warnings.map((w) => `• ${w}`).join("\n")}\n\n` : ""}Would you like me to suggest a different folder, or would you prefer to organize these files differently?`,
+          )
+        } else if (analysisResult.decision === "ask_user") {
+          // Ask user for confirmation with detailed evidence
+          const evidenceList = analysisResult.fileAnalyses
+            .map(
+              (f) =>
+                `• **${f.fileName}** (${f.semanticFit} fit, ${f.confidence}% confidence)\n  ${f.reasoning}${f.evidence ? `\n  Evidence: "${f.evidence}"` : ""}`,
+            )
+            .join("\n\n")
+
+          assistantMessage = assistantMessage.replace(
+            /ORGANIZE_FILES:\s*{.*?}/s,
+            `⚠️ I've analyzed the transcripts and have moderate confidence (${analysisResult.overallConfidence}%) about organizing these files into "${organizeData.targetFolder}":\n\n${evidenceList}\n\n**Summary**: ${analysisResult.summary}\n\n${analysisResult.warnings.length > 0 ? `**Concerns**:\n${analysisResult.warnings.map((w) => `• ${w}`).join("\n")}\n\n` : ""}Would you like me to proceed with organizing these files?`,
+          )
         } else {
-          const errorMessage = `❌ ${orgResult.error}`
-          assistantMessage = assistantMessage.replace(orgProgressMessage, errorMessage)
+          // Proceed with organization
+          console.log("[v0] ✅ Semantic analysis approved, proceeding with organization")
+
+          // Validate consistency between what was said and what's in the JSON
+          const naturalLanguageText = assistantMessage.split("ORGANIZE_FILES:")[0]
+          const mentionedCount = countMentionedItems(naturalLanguageText)
+          const jsonCount = organizeData.fileIds?.length || 0
+
+          console.log(`[v0] 🔍 Consistency Check:`)
+          console.log(`[v0]   - Vex said: ${mentionedCount} items`)
+          console.log(`[v0]   - JSON has: ${jsonCount} items`)
+
+          if (mentionedCount > 0 && jsonCount > 0 && Math.abs(mentionedCount - jsonCount) > 2) {
+            console.log(`[v0] ❌ MISMATCH DETECTED: Said ${mentionedCount} but JSON has ${jsonCount}`)
+
+            // Re-match files using the analysis results
+            const correctedFileIds = analysisResult.fileAnalyses
+              .filter((f) => f.semanticFit === "strong" || f.semanticFit === "moderate")
+              .map((f) => f.fileId)
+
+            organizeData.fileIds = correctedFileIds
+            console.log(`[v0] ✅ Corrected: ${correctedFileIds.length} files will be organized`)
+
+            const correctedMessage = assistantMessage.replace(
+              /ORGANIZE_FILES:\s*{.*?}/s,
+              `ORGANIZE_FILES: ${JSON.stringify(organizeData)}`,
+            )
+            assistantMessage = correctedMessage
+
+            if (correctedFileIds.length !== jsonCount) {
+              assistantMessage = assistantMessage.replace(
+                "ORGANIZE_FILES:",
+                `\n\n*Note: I've verified and will organize ${correctedFileIds.length} files that semantically match "${organizeData.targetFolder}".*\n\nORGANIZE_FILES:`,
+              )
+            }
+          } else {
+            console.log(`[v0] ✅ Consistency check passed`)
+          }
+
+          // Verify all IDs are real database IDs
+          const validIds = new Set(uploads.map((u: any) => u.id))
+          const invalidIds = organizeData.fileIds.filter((id: string) => !validIds.has(id))
+
+          if (invalidIds.length > 0) {
+            console.log(`[v0] ⚠️ Found ${invalidIds.length} invalid IDs, attempting to fix...`)
+            const correctedIds: string[] = []
+
+            for (const identifier of organizeData.fileIds) {
+              if (validIds.has(identifier)) {
+                correctedIds.push(identifier)
+              } else {
+                // Try to find by matching with analysis results
+                const analysisMatch = analysisResult.fileAnalyses.find(
+                  (f) => f.fileName === identifier || f.fileId === identifier,
+                )
+                if (analysisMatch && validIds.has(analysisMatch.fileId)) {
+                  correctedIds.push(analysisMatch.fileId)
+                  console.log(`[v0]   Fixed: "${identifier}" → "${analysisMatch.fileId}"`)
+                } else {
+                  console.log(`[v0]   Could not fix: "${identifier}"`)
+                }
+              }
+            }
+
+            organizeData.fileIds = correctedIds
+            const correctedMessage = assistantMessage.replace(
+              /ORGANIZE_FILES:\s*{.*?}/s,
+              `ORGANIZE_FILES: ${JSON.stringify(organizeData)}`,
+            )
+            assistantMessage = correctedMessage
+            console.log(`[v0] ✅ Fixed IDs: ${correctedIds.length} valid database IDs`)
+          }
+
+          // Show progress message with semantic analysis summary
+          const strongFits = analysisResult.fileAnalyses.filter((f) => f.semanticFit === "strong").length
+          const moderateFits = analysisResult.fileAnalyses.filter((f) => f.semanticFit === "moderate").length
+
+          const orgProgressMessage = `🗂️ **Organizing your files now...** (${analysisResult.overallConfidence}% confidence)\n\n**Semantic Analysis**: ${strongFits} strong fits, ${moderateFits} moderate fits\n${analysisResult.summary}`
+
+          const orgActionRegex = /ORGANIZE_FILES:\s*({.*?})/s
+          if (assistantMessage.match(orgActionRegex)) {
+            assistantMessage = assistantMessage.replace(orgActionRegex, orgProgressMessage)
+          } else {
+            assistantMessage += `\n\n${orgProgressMessage}`
+          }
+
+          // Call the organize files API
+          const organizeResult = await organizeFilesDirectly(userId, organizeData)
+
+          if (organizeResult.success) {
+            const fileList = organizeResult.movedFiles?.length
+              ? `\n\n**Files moved:**\n${organizeResult.movedFiles.map((f: string) => `* ${f}`).join("\n")}`
+              : ""
+
+            const successMessage = `✅ **Files moved successfully!** Your "${organizeResult.targetFolder}" folder now contains the following files:${fileList}`
+            assistantMessage = assistantMessage.replace(orgProgressMessage, successMessage)
+          } else {
+            const errorMessage = `❌ ${organizeResult.error || "I encountered an issue organizing your files. Please try again."}`
+            assistantMessage = assistantMessage.replace(orgProgressMessage, errorMessage)
+          }
         }
       } catch (error) {
-        console.error("[v0] Organization error:", error)
-        const errorMessage = `❌ Error organizing files: ${error instanceof Error ? error.message : "Unknown error"}`
-        assistantMessage += `\n\n${errorMessage}`
+        console.error("[v0] File organization failed:", error)
+        const errorMessage = `❌ I encountered an error while analyzing this organization request: ${error instanceof Error ? error.message : "Unknown error"}`
+        if (assistantMessage.includes("ORGANIZE_FILES:")) {
+          assistantMessage = assistantMessage.replace(/ORGANIZE_FILES:\s*{.*?}/s, errorMessage)
+        } else {
+          assistantMessage += `\n\n${errorMessage}`
+        }
       }
     }
+
+    // If the assistant message still contains an action that needs direct backend processing,
+    // and it hasn't been handled by specific LLM analysis overrides, proceed.
+    // This section is for actions like CREATE_BUNDLE, RENAME_CONTENT, etc. that are not subject to LLM semantic analysis.
 
     if (assistantMessage.includes("CREATE_BUNDLE:") && userId) {
       try {
         console.log("[v0] Validating CREATE_BUNDLE action...")
 
-        // Extract bundle data
         const bundleMatch = assistantMessage.match(/CREATE_BUNDLE:\s*({.*?})/s)
         if (!bundleMatch) {
           throw new Error("No valid bundle data found")
@@ -906,185 +1464,28 @@ Be helpful, natural, and focus on their success. USE YOUR INTELLIGENCE to make s
         const bundleData = JSON.parse(bundleMatch[1])
         console.log("[v0] Parsed bundle data:", bundleData)
 
-        // Retrieve necessary context for multi-pass reasoning
-        const analysisDoc = await db.collection("vex_content_analysis").doc(userId).get()
-        let analysisData: any = {}
-        let uploads: any[] = []
+        const bundleProgressMessage = "🚀 **Creating your bundle now...** This will just take a moment!"
+        assistantMessage = assistantMessage.replace(/CREATE_BUNDLE:\s*{.*?}/s, bundleProgressMessage)
 
-        if (analysisDoc.exists) {
-          analysisData = analysisDoc.data()!
-          uploads = analysisData.uploads || []
-        }
+        const result = await createBundleDirectly(userId, bundleData)
 
-        // The multi-pass reasoning is now simplified and integrated directly into the LLM analysis for relevant actions like bundle creation.
-        // This section will now directly call a helper function or rely on the LLM's internal reasoning.
-
-        // For bundle creation, we rely on the LLM's direct decision making and use analyzeContentWithLLM for semantic fit checks on the content IDs proposed for the bundle.
-        // This assumes the LLM has already considered the semantic fit of the content IDs it chose.
-        // If `bundleData.contentIds` are provided, we perform a check on them.
-        let llmBundleAnalysis = {
-          decision: "proceed" as "proceed" | "reject" | "ask_user",
-          confidence: 100,
-          analysis: "Content fit validated by LLM.",
-          fileAnalysis: [],
-        }
-
-        if (bundleData.contentIds && bundleData.contentIds.length > 0) {
-          llmBundleAnalysis = await analyzeContentWithLLM(
-            bundleData.title || "Bundle Content", // Using bundle title as target folder for analysis
-            bundleData.contentIds,
-            uploads,
-            bundleData.description,
+        if (result.success) {
+          assistantMessage = assistantMessage.replace(
+            bundleProgressMessage,
+            `✅ **Bundle created successfully!** Your "${result.bundle.title}" bundle is now live in your dashboard. You can view it at your storefront or share it with customers right away!`,
           )
-          console.log("[v0] LLM Analysis for Bundle Content:", llmBundleAnalysis)
-        }
-
-        // Handle decision
-        if (llmBundleAnalysis.decision === "reject") {
-          const errorMessage = `I cannot create this bundle as the content doesn't seem to fit together well.\n\n**Analysis:**\n${llmBundleAnalysis.analysis}\n\n**File Analysis:**\n${llmBundleAnalysis.fileAnalysis.map((f) => `• ${f.title}: ${f.reason}`).join("\n")}`
-          assistantMessage = errorMessage
-          console.log("[v0] Bundle creation rejected based on LLM analysis.")
-        } else if (llmBundleAnalysis.decision === "ask_user") {
-          const confirmationMessage = `I'm a bit unsure about creating this bundle (${llmBundleAnalysis.confidence}% confidence).\n\n**Analysis:**\n${llmBundleAnalysis.analysis}\n\n**File Analysis:**\n${llmBundleAnalysis.fileAnalysis.map((f) => `• ${f.title}: ${f.decision === "include" ? "✓" : "✗"} ${f.reason}`).join("\n")}\n\nWould you like me to proceed anyway?`
-          assistantMessage = confirmationMessage
-          console.log("[v0] User confirmation requested for bundle creation.")
         } else {
-          // Proceed with bundle creation
-          console.log("[v0] LLM analysis indicates proceed, continuing with bundle creation.")
-
-          // VALIDATION STEP 1: Count what Vex said it would include
-          const naturalLanguageText = assistantMessage.split("CREATE_BUNDLE:")[0]
-          const mentionedCount = countMentionedItems(naturalLanguageText)
-          const jsonCount = bundleData.contentIds?.length || 0
-
-          console.log(`[v0] 🔍 Consistency Check:`)
-          console.log(`[v0]   - Vex said: ${mentionedCount} items`)
-          console.log(`[v0]   - JSON has: ${jsonCount} items`)
-
-          // VALIDATION STEP 2: Check if counts match
-          if (mentionedCount > 0 && jsonCount > 0 && Math.abs(mentionedCount - jsonCount) > 2) {
-            console.log(`[v0] ❌ MISMATCH DETECTED: Said ${mentionedCount} but JSON has ${jsonCount}`)
-
-            // Get analysis data to re-match properly
-            const correctedContentIds: string[] = []
-
-            console.log(`[v0] 🔄 Re-matching content IDs aggressively...`)
-
-            // Use LLM's file analysis for better ID matching if available
-            if (llmBundleAnalysis.fileAnalysis && llmBundleAnalysis.fileAnalysis.length > 0) {
-              for (const fileAnalysis of llmBundleAnalysis.fileAnalysis) {
-                if (fileAnalysis.decision === "include" && fileAnalysis.id) {
-                  correctedContentIds.push(fileAnalysis.id)
-                }
-              }
-              console.log(`[v0] ✅ Corrected: ${correctedContentIds.length} items using LLM file analysis`)
-            } else {
-              // Fallback if LLM analysis didn't provide IDs directly
-              for (const contentIdentifier of bundleData.contentIds) {
-                const matchResult = findBestMatch(contentIdentifier, uploads, []) // Use empty keywords for general matching
-                if (matchResult.upload && matchResult.confidence >= 50) {
-                  correctedContentIds.push(matchResult.upload.id)
-                  console.log(
-                    `[v0]   ✓ "${contentIdentifier}" → "${matchResult.upload.title}" (${matchResult.confidence}%)`,
-                  )
-                } else {
-                  console.log(`[v0]   ✗ "${contentIdentifier}" - No confident match`)
-                }
-              }
-              console.log(`[v0] ✅ Corrected: ${correctedContentIds.length} items using fallback matching`)
-            }
-
-            // Update the JSON with corrected IDs
-            bundleData.contentIds = correctedContentIds
-            console.log(`[v0] ✅ Corrected: ${correctedContentIds.length} items will be in bundle`)
-
-            // Update the assistant message
-            const correctedMessage = assistantMessage.replace(
-              /CREATE_BUNDLE:\s*{.*?}/s,
-              `CREATE_BUNDLE: ${JSON.stringify(bundleData)}`,
-            )
-            assistantMessage = correctedMessage
-
-            // Add a note about the correction
-            if (correctedContentIds.length !== jsonCount) {
-              assistantMessage = assistantMessage.replace(
-                "CREATE_BUNDLE:",
-                `\n\n*Note: I've verified and will include ${correctedContentIds.length} items in your bundle based on AI analysis.*\n\nCREATE_BUNDLE:`,
-              )
-            }
-          } else {
-            console.log(`[v0] ✅ Consistency check passed`)
-          }
-
-          // VALIDATION STEP 3: Verify all IDs are real database IDs
-          const validIds = new Set(uploads.map((u: any) => u.id))
-          const invalidIds = bundleData.contentIds.filter((id: string) => !validIds.has(id))
-
-          if (invalidIds.length > 0) {
-            console.log(`[v0] ⚠️ Found ${invalidIds.length} invalid IDs, attempting to fix...`)
-            const correctedIds: string[] = []
-
-            for (const identifier of bundleData.contentIds) {
-              if (validIds.has(identifier)) {
-                correctedIds.push(identifier)
-              } else {
-                // Fallback matching if LLM didn't provide a direct ID
-                const matchResult = findBestMatch(identifier, uploads, [])
-                if (matchResult.upload && matchResult.confidence >= 50) {
-                  correctedIds.push(matchResult.upload.id)
-                  console.log(`[v0]   Fixed: "${identifier}" → "${matchResult.upload.id}" (${matchResult.confidence}%)`)
-                }
-              }
-            }
-
-            bundleData.contentIds = correctedIds
-            const correctedMessage = assistantMessage.replace(
-              /CREATE_BUNDLE:\s*{.*?}/s,
-              `CREATE_BUNDLE: ${JSON.stringify(bundleData)}`,
-            )
-            assistantMessage = correctedMessage
-            console.log(`[v0] ✅ Fixed IDs: ${correctedIds.length} valid database IDs`)
-          }
-
-          // Now proceed with bundle creation
-          console.log("[v0] Vex wants to create a bundle, starting direct creation...")
-
-          // Show progress message
-          const bundleProgressMessage = "🚀 **Creating your bundle now...** This will just take a moment!"
-          const bundleActionRegex = /CREATE_BUNDLE:\s*({.*?})/s
-          if (assistantMessage.match(bundleActionRegex)) {
-            assistantMessage = assistantMessage.replace(bundleActionRegex, bundleProgressMessage)
-          } else {
-            assistantMessage += `\n\n${bundleProgressMessage}`
-          }
-
-          // Direct bundle creation with detailed progress
-          const result = await createBundleDirectly(userId, bundleData)
-
-          if (result.success) {
-            assistantMessage = assistantMessage.replace(
-              bundleProgressMessage,
-              `✅ **Bundle created successfully!** Your "${result.bundle.title}" bundle is now live in your dashboard. You can view it at your storefront or share it with customers right away!`,
-            )
-          } else {
-            assistantMessage = assistantMessage.replace(
-              bundleProgressMessage,
-              `❌ ${result.error || "I encountered an issue creating your bundle. Please try again or create it manually in your dashboard."}`,
-            )
-          }
+          assistantMessage = assistantMessage.replace(
+            bundleProgressMessage,
+            `❌ ${result.error || "I encountered an issue creating your bundle. Please try again or create it manually in your dashboard."}`,
+          )
         }
       } catch (error) {
         console.error("[v0] Bundle creation failed:", error)
-        const errorMessage =
-          "❌ I encountered an error while creating your bundle. Please try again or create it manually in your dashboard."
-        if (assistantMessage.includes("🚀 **Creating your bundle now...** This will just take a moment!")) {
-          assistantMessage = assistantMessage.replace(
-            "🚀 **Creating your bundle now...** This will just take a moment!",
-            errorMessage,
-          )
-        } else {
-          assistantMessage += `\n\n${errorMessage}`
-        }
+        assistantMessage = assistantMessage.replace(
+          "🚀 **Creating your bundle now...** This will just take a moment!",
+          "❌ I encountered an error while creating your bundle. Please try again or create it manually in your dashboard.",
+        )
       }
     }
 
@@ -1092,11 +1493,9 @@ Be helpful, natural, and focus on their success. USE YOUR INTELLIGENCE to make s
       try {
         console.log("[v0] Vex wants to refresh content analysis...")
 
-        // Show progress message
         const refreshProgressMessage = "🔄 **Refreshing your content analysis...** Scanning your library now!"
         assistantMessage = assistantMessage.replace(/REFRESH_ANALYSIS:\s*true/, refreshProgressMessage)
 
-        // Trigger analysis refresh
         const token = authHeader?.split("Bearer ")[1]
         const refreshResponse = await fetch(
           `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/api/vex/analyze-uploads`,
@@ -1134,7 +1533,6 @@ Be helpful, natural, and focus on their success. USE YOUR INTELLIGENCE to make s
       try {
         console.log("[v0] Vex wants to rename content...")
 
-        // Extract rename data
         const renameMatch = assistantMessage.match(/RENAME_CONTENT:\s*({.*?})/s)
         if (!renameMatch) {
           throw new Error("No valid rename data found")
@@ -1143,11 +1541,9 @@ Be helpful, natural, and focus on their success. USE YOUR INTELLIGENCE to make s
         const renameData = JSON.parse(renameMatch[1])
         console.log("[v0] Parsed rename data:", renameData)
 
-        // Show progress message
         const renameProgressMessage = "✏️ **Renaming content now...** Updating the title!"
         assistantMessage = assistantMessage.replace(/RENAME_CONTENT:\s*{.*?}/s, renameProgressMessage)
 
-        // Call the rename function
         const renameResult = await renameContentDirectly(userId, renameData)
 
         if (renameResult.success) {
@@ -1174,7 +1570,6 @@ Be helpful, natural, and focus on their success. USE YOUR INTELLIGENCE to make s
       try {
         console.log("[v0] Vex wants to create a folder...")
 
-        // Extract folder data
         const folderMatch = assistantMessage.match(/CREATE_FOLDER:\s*({.*?})/s)
         if (!folderMatch) {
           throw new Error("No valid folder data found")
@@ -1183,11 +1578,9 @@ Be helpful, natural, and focus on their success. USE YOUR INTELLIGENCE to make s
         const folderData = JSON.parse(folderMatch[1])
         console.log("[v0] Parsed folder data:", folderData)
 
-        // Show progress message
         const createFolderProgressMessage = "📁 **Creating folder now...** Setting up your new folder!"
         assistantMessage = assistantMessage.replace(/CREATE_FOLDER:\s*{.*?}/s, createFolderProgressMessage)
 
-        // Create the folder
         const folderResult = await createFolderDirectly(userId, folderData)
 
         if (folderResult.success) {
@@ -1232,7 +1625,6 @@ async function createBundleDirectly(userId: string, bundleData: any) {
     }
 
     console.log("[v0] Checking bundle limits...")
-    // Check bundle limits
     const tierInfo = await getUserTierInfo(userId)
     if (tierInfo.reachedBundleLimit) {
       return {
@@ -1250,7 +1642,6 @@ async function createBundleDirectly(userId: string, bundleData: any) {
     }
 
     console.log("[v0] Checking Stripe account...")
-    // Get connected Stripe account
     const connectedAccount = await ConnectedStripeAccountsService.getAccount(userId)
     if (!connectedAccount || !ConnectedStripeAccountsService.isAccountFullySetup(connectedAccount)) {
       return {
@@ -1384,7 +1775,6 @@ async function createBundleDirectly(userId: string, bundleData: any) {
     }
 
     console.log("[v0] Creating Stripe product...")
-    // Create Stripe product
     const product = await stripe.products.create(
       {
         name: title,
@@ -1402,7 +1792,6 @@ async function createBundleDirectly(userId: string, bundleData: any) {
     )
 
     console.log("[v0] Creating Stripe price...")
-    // Create Stripe price
     const stripePrice = await stripe.prices.create(
       {
         product: product.id,
@@ -1420,7 +1809,6 @@ async function createBundleDirectly(userId: string, bundleData: any) {
     )
 
     console.log("[v0] Saving bundle to database...")
-    // Create bundle metadata
     const totalSize = contentItems.reduce((sum, item) => sum + (item.fileSize || 0), 0)
     const totalDuration = contentItems.reduce((sum, item) => sum + (item.duration || 0), 0)
 
@@ -1440,7 +1828,6 @@ async function createBundleDirectly(userId: string, bundleData: any) {
       },
     }
 
-    // Save bundle to database
     const bundleRef = db.collection("bundles").doc()
     const bundleId = bundleRef.id
 
@@ -1450,48 +1837,41 @@ async function createBundleDirectly(userId: string, bundleData: any) {
       description: description || "",
       price: Number(price),
       comparePrice: null,
+      currency: "usd",
       billingType: "one_time",
       type: "one_time",
 
-      // Creator info
       creatorId: userId,
       stripeAccountId: stripeAccountId,
 
-      // Stripe product info
       stripeProductId: product.id,
       productId: product.id,
       stripePriceId: stripePrice.id,
       priceId: stripePrice.id,
 
-      // Content
       detailedContentItems: contentItems,
       contentItems: contentItems.map((item) => item.id),
       contentMetadata,
 
-      // Quick access arrays
       contentTitles: contentItems.map((item) => item.title),
       contentDescriptions: contentItems.map((item) => item.description),
       contentTags: contentItems.flatMap((item) => item.tags || []),
       contentThumbnails: contentItems.map((item) => item.thumbnailUrl).filter(Boolean),
       contentUrls: contentItems.map((item) => item.fileUrl).filter(Boolean),
 
-      // Visual
       thumbnailUrl: contentItems[0]?.thumbnailUrl || "",
       coverImage: contentItems[0]?.thumbnailUrl || "",
       coverImageUrl: contentItems[0]?.thumbnailUrl || "",
       customPreviewThumbnail: contentItems[0]?.thumbnailUrl || "",
 
-      // Status
       status: "active",
       active: true,
       isPublic: true,
 
-      // Timestamps
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
       contentLastUpdated: FieldValue.serverTimestamp(),
 
-      // Vex specific
       createdBy: "vex-ai",
       category: category || "Mixed Media",
       tags: tags || [],
@@ -1502,7 +1882,6 @@ async function createBundleDirectly(userId: string, bundleData: any) {
     await bundleRef.set(bundleDoc)
 
     console.log("[v0] Updating user bundle count...")
-    // Update user bundle count
     await incrementUserBundles(userId)
 
     console.log("[v0] Bundle created successfully:", bundleId)
@@ -1540,7 +1919,6 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
     console.log(`[v0] 📂 Starting organization: ${fileIds.length} files → "${targetFolder}"`)
     console.log(`[v0] 📝 Reason: ${reason}`)
 
-    // Check if folder exists
     let foldersSnapshot = await db
       .collection("folders")
       .where("userId", "==", userId)
@@ -1569,7 +1947,6 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
     const targetFolderId = foldersSnapshot.docs[0].id
     console.log(`[v0] ✅ Found folder: ${targetFolderId}`)
 
-    // Get content analysis
     const analysisDoc = await db.collection("vex_content_analysis").doc(userId).get()
     if (!analysisDoc.exists) {
       return {
@@ -1582,61 +1959,39 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
     const uploads = analysisData.uploads || []
     console.log(`[v0] 📊 Loaded ${uploads.length} uploads from analysis`)
 
-    const llmAnalysis = await analyzeContentWithLLM(targetFolder, fileIds, uploads, reason)
+    // The semantic analysis is now done once in the main flow, not repeated here
 
-    console.log(`[v0] 🤖 LLM Decision: ${llmAnalysis.decision} (${llmAnalysis.confidence}% confidence)`)
-    console.log(`[v0] 📝 Analysis: ${llmAnalysis.analysis}`)
-
-    // Handle LLM decision
-    if (llmAnalysis.decision === "reject") {
-      return {
-        success: false,
-        error: `I cannot organize these files into "${targetFolder}".\n\n${llmAnalysis.analysis}\n\n**File Analysis:**\n${llmAnalysis.fileAnalysis.map((f) => `• ${f.title}: ${f.reason}`).join("\n")}`,
-      }
-    }
-
-    if (llmAnalysis.decision === "ask_user") {
-      return {
-        success: false,
-        error: `I'm unsure about organizing these files into "${targetFolder}" (${llmAnalysis.confidence}% confidence).\n\n${llmAnalysis.analysis}\n\n**File Analysis:**\n${llmAnalysis.fileAnalysis.map((f) => `• ${f.title}: ${f.decision === "include" ? "✓" : "✗"} ${f.reason}`).join("\n")}\n\nWould you like me to proceed anyway?`,
-      }
-    }
-
-    // Proceed with organization - only include files that LLM approved
-    const approvedFiles = llmAnalysis.fileAnalysis.filter((f) => f.decision === "include")
     const movedFiles: string[] = []
     const notFoundFiles: string[] = []
 
-    for (const fileAnalysis of approvedFiles) {
-      const upload = uploads.find((u: any) => u.id === fileAnalysis.id)
+    for (const fileId of fileIds) {
+      console.log(`[v0] 🔍 Looking for: "${fileId}"`)
+
+      const upload = uploads.find((u: any) => u.id === fileId)
 
       if (!upload) {
-        console.log(`[v0] ❌ Not found: "${fileAnalysis.title}"`)
-        notFoundFiles.push(fileAnalysis.title)
+        console.log(`[v0] ❌ Not found: "${fileId}"`)
+        notFoundFiles.push(fileId)
         continue
       }
 
-      console.log(`[v0] ✅ Moving: "${upload.title}"`)
-      console.log(`[v0]    Reason: ${fileAnalysis.reason}`)
-      if (fileAnalysis.transcriptQuote) {
-        console.log(`[v0]    Quote: "${fileAnalysis.transcriptQuote}"`)
-      }
+      console.log(`[v0] ✅ Found: "${upload.title}"`)
 
       try {
         const docRef = db.collection(upload.collection).doc(upload.id)
 
-        // Verify document exists and belongs to user
+        // Verify the document exists and belongs to the user
         const docSnap = await docRef.get()
         if (!docSnap.exists) {
           console.log(`[v0] ❌ Document doesn't exist: ${upload.id}`)
-          notFoundFiles.push(fileAnalysis.title)
+          notFoundFiles.push(fileId)
           continue
         }
 
         const docData = docSnap.data()!
         if (docData.uid !== userId && docData.userId !== userId) {
           console.log(`[v0] ❌ Ownership mismatch: ${upload.id}`)
-          notFoundFiles.push(fileAnalysis.title)
+          notFoundFiles.push(fileId)
           continue
         }
 
@@ -1646,21 +2001,16 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
           folderName: targetFolder,
           updatedAt: FieldValue.serverTimestamp(),
           vexOrganized: true,
-          vexOrganizeReason: fileAnalysis.reason,
-          vexLLMAnalysis: {
-            decision: fileAnalysis.decision,
-            reason: fileAnalysis.reason,
-            transcriptQuote: fileAnalysis.transcriptQuote,
-            confidence: llmAnalysis.confidence,
-            analyzedAt: new Date().toISOString(),
-          },
+          vexOrganizeReason: reason || "Organized by Vex AI with semantic analysis",
+          vexDetectedNiche: upload.detectedNiche || null,
+          vexHasTranscript: !!upload.transcript,
         })
 
-        movedFiles.push(upload.title || upload.filename || fileAnalysis.title)
+        movedFiles.push(upload.title || upload.filename || fileId)
         console.log(`[v0] ✅ Moved: "${upload.title}" to "${targetFolder}"`)
       } catch (error) {
         console.error(`[v0] ❌ Error moving ${upload.id}:`, error)
-        notFoundFiles.push(fileAnalysis.title)
+        notFoundFiles.push(fileId)
       }
     }
 
@@ -1674,6 +2024,8 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
         error: `Could not move any files. ${notFoundFiles.length > 0 ? `Not found: ${notFoundFiles.join(", ")}` : ""}`,
       }
     }
+
+    console.log(`[v0] 🎉 Successfully moved ${movedFiles.length} files`)
 
     // Trigger analysis refresh in background
     try {
@@ -1692,11 +2044,6 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
       targetFolder,
       movedFiles,
       notFound: notFoundFiles.length > 0 ? notFoundFiles : undefined,
-      llmAnalysis: {
-        confidence: llmAnalysis.confidence,
-        reasoning: llmAnalysis.analysis,
-        fileDetails: llmAnalysis.fileAnalysis,
-      },
     }
   } catch (error) {
     console.error("[v0] File organization error:", error)
@@ -1707,7 +2054,129 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
   }
 }
 
-function createFolderDirectly(userId: string, folderData: any) {
+function extractKeywordsFromText(text: string): string[] {
+  const lowerText = text.toLowerCase()
+  const keywords: string[] = []
+
+  const faithKeywords = [
+    "jesus",
+    "christ",
+    "god",
+    "lord",
+    "holy",
+    "spirit",
+    "bible",
+    "scripture",
+    "gospel",
+    "salvation",
+    "grace",
+    "faith",
+    "prayer",
+    "worship",
+    "church",
+    "ministry",
+    "pastor",
+    "sermon",
+    "testimony",
+    "blessed",
+    "amen",
+    "spiritual",
+    "soul",
+    "divine",
+    "sacred",
+    "heaven",
+    "eternal",
+    "redemption",
+    "forgiveness",
+    "mercy",
+    "righteousness",
+    "covenant",
+    "disciple",
+    "believer",
+    "rebellion",
+    "repentance",
+    "transformation",
+    "renewal",
+    "deliverance",
+    "breakthrough",
+    "victory",
+    "perseverance",
+  ]
+
+  const motivationKeywords = [
+    "motivation",
+    "motivational",
+    "grind",
+    "hustle",
+    "discipline",
+    "success",
+    "mindset",
+    "goals",
+    "work",
+    "dedication",
+    "perseverance",
+    "achievement",
+  ]
+
+  const memeKeywords = ["meme", "funny", "pov", "comedy", "humor", "joke", "viral"]
+
+  const sfxKeywords = ["sfx", "sound", "effect", "audio", "whoosh", "impact", "transition"]
+
+  faithKeywords.forEach((keyword) => {
+    if (lowerText.includes(keyword)) keywords.push(keyword)
+  })
+
+  motivationKeywords.forEach((keyword) => {
+    if (lowerText.includes(keyword)) keywords.push(keyword)
+  })
+
+  memeKeywords.forEach((keyword) => {
+    if (lowerText.includes(keyword)) keywords.push(keyword)
+  })
+
+  sfxKeywords.forEach((keyword) => {
+    if (lowerText.includes(keyword)) keywords.push(keyword)
+  })
+
+  return [...new Set(keywords)]
+}
+
+function getRelatedTerms(keywords: string[]): string[] {
+  const relatedTermsMap: Record<string, string[]> = {
+    jesus: ["christ", "savior", "messiah", "lord"],
+    god: ["lord", "father", "almighty", "creator", "divine"],
+    faith: ["believe", "trust", "conviction", "devotion"],
+    prayer: ["pray", "praying", "intercession"],
+    church: ["congregation", "worship", "ministry"],
+    bible: ["scripture", "word", "gospel"],
+    spiritual: ["spirit", "soul", "divine"],
+    salvation: ["saved", "redemption", "deliverance"],
+
+    motivation: ["motivate", "inspire", "inspiration", "driven"],
+    success: ["achieve", "achievement", "accomplish", "win", "winning"],
+    grind: ["hustle", "work", "dedication", "discipline"],
+    mindset: ["mentality", "attitude", "perspective", "thinking"],
+    goals: ["target", "objective", "aim", "ambition"],
+
+    meme: ["funny", "comedy", "humor", "viral"],
+    pov: ["point of view", "perspective"],
+
+    sfx: ["sound effect", "audio", "sound"],
+    whoosh: ["swoosh", "transition"],
+  }
+
+  const relatedTerms: string[] = []
+
+  keywords.forEach((keyword) => {
+    if (relatedTermsMap[keyword]) {
+      relatedTerms.push(...relatedTermsMap[keyword])
+    }
+  })
+
+  return [...new Set(relatedTerms)]
+}
+
+async function createFolderDirectly(userId: string, folderData: any) {
   try {
     const { name, description, parentId } = folderData
 
@@ -1721,7 +2190,6 @@ function createFolderDirectly(userId: string, folderData: any) {
 
     console.log(`[v0] Creating folder "${name}" for user ${userId}`)
 
-    // Check for duplicate folder names
     const duplicateQuery = db
       .collection("folders")
       .where("userId", "==", userId)
@@ -1736,10 +2204,8 @@ function createFolderDirectly(userId: string, folderData: any) {
       }
     }
 
-    // Build folder path
     let parentPath = ""
     if (parentId && parentId !== "root") {
-      // FIX: Added await for db.collection(...).doc(...).get()
       const parentDoc = await db.collection("folders").doc(parentId).get()
       if (parentDoc.exists) {
         const parentData = parentDoc.data()
@@ -1749,12 +2215,11 @@ function createFolderDirectly(userId: string, folderData: any) {
 
     const folderPath = parentPath ? `${parentPath}/${name.trim()}` : `/${name.trim()}`
 
-    // Create folder
     const timestamp = new Date()
     const newFolder = {
       name: name.trim(),
       userId,
-      uid: userId, // Add uid for compatibility with existing queries
+      uid: userId,
       parentId: parentId && parentId !== "root" ? parentId : null,
       path: folderPath,
       description: description?.trim() || null,
@@ -1801,16 +2266,13 @@ async function renameContentDirectly(userId: string, renameData: any) {
     let oldTitle = contentId
     let documentId = ""
 
-    // Try to find the content by ID or title
     for (const collectionName of contentCollections) {
-      // First try exact ID match
       const docRef = db.collection(collectionName).doc(contentId)
       const docSnap = await docRef.get()
 
       if (docSnap.exists) {
         const docData = docSnap.data()!
 
-        // Verify ownership
         if (docData.uid === userId || docData.userId === userId) {
           oldTitle = docData.title || docData.filename || contentId
           documentId = docSnap.id
@@ -1820,7 +2282,6 @@ async function renameContentDirectly(userId: string, renameData: any) {
         }
       }
 
-      // If not found by ID, try to fuzzy matching by title/filename
       if (!found) {
         const querySnapshot = await db.collection(collectionName).where("userId", "==", userId).get()
 
@@ -1828,7 +2289,6 @@ async function renameContentDirectly(userId: string, renameData: any) {
           const docData = doc.data()
           const title = docData.title || docData.filename || ""
 
-          // Fuzzy match: check if identifier is in title or title is in identifier
           if (
             title.toLowerCase() === contentId.toLowerCase() ||
             title.toLowerCase().includes(contentId.toLowerCase()) ||
@@ -1853,8 +2313,6 @@ async function renameContentDirectly(userId: string, renameData: any) {
       }
     }
 
-    // Call the uploads API to rename the content
-    // This will cascade the update across all collections
     const response = await fetch(
       `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/api/uploads/${documentId}`,
       {
@@ -1930,12 +2388,6 @@ function getContentTypeFromMimeType(mimeType: string): string {
 }
 
 function countMentionedItems(text: string): number {
-  // Look for patterns like:
-  // - "I'll organize these 10 videos"
-  // - "I'll create a bundle with 5 items"
-  // - "Moving 3 files"
-  // - "Including 7 videos"
-
   const patterns = [
     /(?:these|all|the)?\s*(\d+)\s*(?:videos?|files?|items?|pieces?|content)/gi,
     /(?:organize|move|include|add|create)\s*(?:these|all|the)?\s*(\d+)/gi,
@@ -1954,7 +2406,6 @@ function countMentionedItems(text: string): number {
     }
   }
 
-  // Also count bullet points or numbered lists
   const bulletMatches = text.match(/^[\s]*[-*•]\s+/gm)
   if (bulletMatches && bulletMatches.length > maxCount) {
     maxCount = bulletMatches.length
@@ -1968,7 +2419,6 @@ function countMentionedItems(text: string): number {
   return maxCount
 }
 
-// The findBestMatch function is kept for bundle creation's fallback matching.
 function findBestMatch(
   identifier: string,
   uploads: any[],
@@ -1983,41 +2433,34 @@ function findBestMatch(
     let confidence = 0
     const reasons: string[] = []
 
-    // Exact ID match (100% confidence)
     if (upload.id === identifier) {
       return { upload, confidence: 100, matchReason: "Exact ID match" }
     }
 
-    // Exact title match (95% confidence)
     if (upload.title === identifier) {
       return { upload, confidence: 95, matchReason: "Exact title match" }
     }
 
-    // Case-insensitive title match (90% confidence)
     if (upload.title?.toLowerCase() === lowerIdentifier) {
       confidence = Math.max(confidence, 90)
       reasons.push("Case-insensitive title match")
     }
 
-    // Filename match (85% confidence)
     if (upload.filename === identifier || upload.filename?.toLowerCase() === lowerIdentifier) {
       confidence = Math.max(confidence, 85)
       reasons.push("Filename match")
     }
 
-    // Title contains identifier (70% confidence)
     if (upload.title?.toLowerCase().includes(lowerIdentifier)) {
       confidence = Math.max(confidence, 70)
       reasons.push("Title contains identifier")
     }
 
-    // Identifier contains title (65% confidence)
     if (upload.title && lowerIdentifier.includes(upload.title.toLowerCase())) {
       confidence = Math.max(confidence, 65)
       reasons.push("Identifier contains title")
     }
 
-    // Fuzzy title matching - check for partial word matches
     if (upload.title) {
       const titleWords = upload.title.toLowerCase().split(/\s+/)
       const identifierWords = lowerIdentifier.split(/\s+/)
@@ -2025,7 +2468,6 @@ function findBestMatch(
       let matchingWords = 0
       titleWords.forEach((titleWord) => {
         if (titleWord.length > 2) {
-          // Skip very short words
           identifierWords.forEach((idWord) => {
             if (idWord.includes(titleWord) || titleWord.includes(idWord)) {
               matchingWords++
@@ -2041,17 +2483,14 @@ function findBestMatch(
       }
     }
 
-    // AGGRESSIVE TRANSCRIPT MATCHING
     if (upload.transcript && typeof upload.transcript === "string") {
       const transcriptLower = upload.transcript.toLowerCase()
 
-      // Check if identifier is in transcript
       if (transcriptLower.includes(lowerIdentifier)) {
         confidence = Math.max(confidence, 75)
         reasons.push("Identifier found in transcript")
       }
 
-      // AGGRESSIVE: Check for ANY folder keyword matches in transcript
       let keywordMatches = 0
       const matchedKeywords: string[] = []
 
@@ -2062,15 +2501,12 @@ function findBestMatch(
         }
       })
 
-      // If ANY keywords match, give it a decent confidence score
       if (keywordMatches > 0) {
-        // More aggressive scoring: even 1 keyword match gets 50% confidence
         const keywordConfidence = Math.min(50 + keywordMatches * 15, 95)
         confidence = Math.max(confidence, keywordConfidence)
         reasons.push(`${keywordMatches} folder keywords in transcript (${matchedKeywords.slice(0, 3).join(", ")})`)
       }
 
-      // AGGRESSIVE: Check for related terms and synonyms
       const relatedTerms = getRelatedTerms(folderKeywords)
       let relatedMatches = 0
 
@@ -2087,11 +2523,9 @@ function findBestMatch(
       }
     }
 
-    // AGGRESSIVE: Detected niche matching
     if (upload.detectedNiche) {
       const nicheLower = upload.detectedNiche.toLowerCase()
 
-      // Check if detected niche matches ANY folder keywords
       let nicheKeywordMatches = 0
       folderKeywords.forEach((keyword) => {
         if (nicheLower.includes(keyword) || keyword.includes(nicheLower)) {
@@ -2100,13 +2534,11 @@ function findBestMatch(
       })
 
       if (nicheKeywordMatches > 0) {
-        // Use the upload's confidence score if available, otherwise default to 60%
         const nicheConfidence = upload.confidence ? Math.min(55 + upload.confidence * 25, 85) : 60
         confidence = Math.max(confidence, nicheConfidence)
         reasons.push(`Detected niche matches (${upload.detectedNiche})`)
       }
 
-      // Check if identifier matches detected niche
       if (
         nicheLower === lowerIdentifier ||
         nicheLower.includes(lowerIdentifier) ||
@@ -2117,7 +2549,6 @@ function findBestMatch(
       }
     }
 
-    // AGGRESSIVE: Check description if available
     if (upload.description && typeof upload.description === "string") {
       const descLower = upload.description.toLowerCase()
       let descKeywordMatches = 0
@@ -2135,7 +2566,6 @@ function findBestMatch(
       }
     }
 
-    // AGGRESSIVE: Check tags if available
     if (upload.tags && Array.isArray(upload.tags)) {
       let tagMatches = 0
 
@@ -2155,7 +2585,6 @@ function findBestMatch(
       }
     }
 
-    // Update best match if this is better
     if (confidence > bestConfidence) {
       bestMatch = upload
       bestConfidence = confidence
@@ -2163,94 +2592,9 @@ function findBestMatch(
     }
   }
 
-  // AGGRESSIVE: Lower threshold from 50% to 30%
   if (bestConfidence >= 30) {
     return { upload: bestMatch, confidence: bestConfidence, matchReason: bestReason }
   }
 
   return { upload: null, confidence: 0, matchReason: "No confident match found" }
-}
-
-// Placeholder for getRelatedTerms, assuming it's defined elsewhere or not strictly needed for this merge.
-// If this function is critical and missing, it would need to be provided.
-function getRelatedTerms(keywords: string[]): string[] {
-  // This is a placeholder. A real implementation would involve a dictionary or NLP model.
-  // For example, if keywords include "faith", related terms could be "spiritual", "religion", "god", etc.
-  const related: { [key: string]: string[] } = {
-    faith: ["spiritual", "religion", "god", "belief", "soul", "divine", "sacred", "worship"],
-    motivation: ["inspiration", "success", "hustle", "grind", "discipline", "goals", "achieve", "mindset"],
-    meme: ["funny", "lol", "tiktok", "viral", "relatable", "comedy"],
-    sfx: ["sound effect", "audio", "clip", "sound design", "music"],
-    "b-roll": ["footage", "stock footage", "cinematic", "background", "overlay"],
-  }
-
-  let allRelated: string[] = []
-  keywords.forEach((keyword) => {
-    const lowerKeyword = keyword.toLowerCase()
-    if (related[lowerKeyword]) {
-      allRelated = allRelated.concat(related[lowerKeyword])
-    }
-  })
-
-  // Add some general related terms
-  allRelated.push("content", "video", "upload", "file", "asset")
-
-  // Remove duplicates
-  return Array.from(new Set(allRelated))
-}
-
-// Placeholder for extractKeywordsFromText, assuming it's defined elsewhere or not strictly needed for this merge.
-function extractKeywordsFromText(text: string): string[] {
-  // A very basic keyword extractor. A real implementation would use NLP techniques.
-  const words = text.toLowerCase().match(/\b\w{4,}\b/g) || [] // Match words of 4+ characters
-  const stopWords = new Set([
-    "the",
-    "and",
-    "for",
-    "with",
-    "this",
-    "that",
-    "your",
-    "about",
-    "what",
-    "when",
-    "where",
-    "how",
-    "is",
-    "are",
-    "was",
-    "were",
-    "be",
-    "been",
-    "have",
-    "has",
-    "had",
-    "do",
-    "does",
-    "did",
-    "a",
-    "an",
-    "in",
-    "on",
-    "at",
-    "to",
-    "of",
-    "it",
-    "its",
-    "he",
-    "she",
-    "they",
-    "them",
-    "their",
-    "we",
-    "us",
-    "our",
-    "you",
-    "your",
-    "me",
-    "my",
-  ])
-
-  const keywords = words.filter((word) => !stopWords.has(word))
-  return Array.from(new Set(keywords)) // Return unique keywords
 }
