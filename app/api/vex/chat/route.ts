@@ -91,19 +91,19 @@ Respond in JSON format:
 Only include videos with confidence >= 60. Be strict - only match videos that genuinely discuss the folder theme.`
 
   try {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        Authorization: `Bearer ${process.env.GROQ_API}`,
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: "llama-3.3-70b-versatile",
         messages: [
           {
             role: "system",
             content:
-              "You are a content analysis expert. Analyze transcripts semantically and quote evidence to support your matches.",
+              "You are a content analysis expert. Analyze transcripts semantically and quote evidence to support your matches. Always respond with valid JSON.",
           },
           {
             role: "user",
@@ -116,7 +116,7 @@ Only include videos with confidence >= 60. Be strict - only match videos that ge
     })
 
     if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.statusText}`)
+      throw new Error(`Groq API error: ${response.statusText}`)
     }
 
     const data = await response.json()
