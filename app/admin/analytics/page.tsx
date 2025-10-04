@@ -5,8 +5,35 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Users, DollarSign, Video, Eye, ShoppingCart, Activity } from "lucide-react"
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from "recharts"
+import {
+  Users,
+  DollarSign,
+  Video,
+  Eye,
+  ShoppingCart,
+  Activity,
+  TrendingUp,
+  TrendingDown,
+  Clock,
+  Target,
+} from "lucide-react"
+import {
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
+} from "recharts"
 
 interface PlatformStats {
   totalUsers: number
@@ -37,6 +64,46 @@ interface PlatformStats {
     freeVideos: number
     premiumVideos: number
     avgPrice: number
+  }
+  dailyStats?: Array<{
+    date: string
+    revenue: number
+    sales: number
+    views: number
+    newUsers: number
+  }>
+  conversionFunnel?: {
+    profileViews: number
+    videoViews: number
+    addToCarts: number
+    purchases: number
+  }
+  contentPerformance?: {
+    avgViewsPerVideo: number
+    avgRevenuePerVideo: number
+    topPerformingVideos: Array<{
+      id: string
+      title: string
+      views: number
+      revenue: number
+      conversionRate: number
+    }>
+  }
+  growthMetrics?: {
+    revenueGrowthMoM: number
+    userGrowthMoM: number
+    salesGrowthWoW: number
+  }
+  creatorTiers?: {
+    topTier: number // >$1000/month
+    midTier: number // $100-$1000/month
+    lowTier: number // <$100/month
+  }
+  peakActivity?: {
+    peakHour: number
+    peakDay: string
+    activityByHour: Array<{ hour: number; activity: number }>
+    activityByDay: Array<{ day: string; activity: number }>
   }
 }
 
@@ -69,6 +136,16 @@ export default function AdminAnalyticsPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const formatGrowth = (value: number) => {
+    const isPositive = value >= 0
+    return (
+      <span className={`flex items-center gap-1 ${isPositive ? "text-green-600" : "text-red-600"}`}>
+        {isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+        {Math.abs(value).toFixed(1)}%
+      </span>
+    )
   }
 
   if (loading) {
@@ -109,6 +186,8 @@ export default function AdminAnalyticsPage() {
     )
   }
 
+  const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"]
+
   return (
     <div className="container mx-auto p-6 max-w-7xl">
       <div className="mb-8">
@@ -142,7 +221,10 @@ export default function AdminAnalyticsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.totalUsers.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">{stats.activeCreators} active creators</p>
+            <div className="flex items-center justify-between mt-1">
+              <p className="text-xs text-muted-foreground">{stats.activeCreators} active creators</p>
+              {stats.growthMetrics && <div className="text-xs">{formatGrowth(stats.growthMetrics.userGrowthMoM)}</div>}
+            </div>
           </CardContent>
         </Card>
 
@@ -155,7 +237,12 @@ export default function AdminAnalyticsPage() {
             <div className="text-2xl font-bold">
               ${stats.totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
-            <p className="text-xs text-muted-foreground">{stats.totalSales} total sales</p>
+            <div className="flex items-center justify-between mt-1">
+              <p className="text-xs text-muted-foreground">{stats.totalSales} total sales</p>
+              {stats.growthMetrics && (
+                <div className="text-xs">{formatGrowth(stats.growthMetrics.revenueGrowthMoM)}</div>
+              )}
+            </div>
           </CardContent>
         </Card>
 
@@ -186,11 +273,13 @@ export default function AdminAnalyticsPage() {
 
       {/* Detailed Analytics Tabs */}
       <Tabs defaultValue="revenue" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="revenue">Revenue</TabsTrigger>
           <TabsTrigger value="creators">Creators</TabsTrigger>
           <TabsTrigger value="content">Content</TabsTrigger>
           <TabsTrigger value="engagement">Engagement</TabsTrigger>
+          <TabsTrigger value="conversion">Conversion</TabsTrigger>
+          <TabsTrigger value="activity">Activity</TabsTrigger>
         </TabsList>
 
         {/* Revenue Tab */}
@@ -240,6 +329,43 @@ export default function AdminAnalyticsPage() {
               </CardContent>
             </Card>
           </div>
+
+          {stats.dailyStats && stats.dailyStats.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Daily Revenue Breakdown</CardTitle>
+                <CardDescription>Detailed day-by-day revenue and sales performance</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={stats.dailyStats}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" />
+                    <YAxis yAxisId="left" />
+                    <YAxis yAxisId="right" orientation="right" />
+                    <Tooltip />
+                    <Legend />
+                    <Line
+                      yAxisId="left"
+                      type="monotone"
+                      dataKey="revenue"
+                      stroke="#10b981"
+                      name="Revenue ($)"
+                      strokeWidth={2}
+                    />
+                    <Line
+                      yAxisId="right"
+                      type="monotone"
+                      dataKey="sales"
+                      stroke="#3b82f6"
+                      name="Sales"
+                      strokeWidth={2}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader>
@@ -302,6 +428,74 @@ export default function AdminAnalyticsPage() {
               </CardContent>
             </Card>
           </div>
+
+          {stats.creatorTiers && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Creator Performance Tiers</CardTitle>
+                <CardDescription>Distribution of creators by monthly revenue</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                  <div className="p-4 bg-yellow-50 dark:bg-yellow-950 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium">Top Tier</span>
+                      <Badge variant="default" className="bg-yellow-600">
+                        $1000+
+                      </Badge>
+                    </div>
+                    <p className="text-2xl font-bold">{stats.creatorTiers.topTier}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {((stats.creatorTiers.topTier / stats.activeCreators) * 100).toFixed(1)}% of creators
+                    </p>
+                  </div>
+                  <div className="p-4 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium">Mid Tier</span>
+                      <Badge variant="secondary">$100-$1000</Badge>
+                    </div>
+                    <p className="text-2xl font-bold">{stats.creatorTiers.midTier}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {((stats.creatorTiers.midTier / stats.activeCreators) * 100).toFixed(1)}% of creators
+                    </p>
+                  </div>
+                  <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium">Growing</span>
+                      <Badge variant="outline">{"<$100"}</Badge>
+                    </div>
+                    <p className="text-2xl font-bold">{stats.creatorTiers.lowTier}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {((stats.creatorTiers.lowTier / stats.activeCreators) * 100).toFixed(1)}% of creators
+                    </p>
+                  </div>
+                </div>
+                <ResponsiveContainer width="100%" height={250}>
+                  <PieChart>
+                    <Pie
+                      data={[
+                        { name: "Top Tier ($1000+)", value: stats.creatorTiers.topTier },
+                        { name: "Mid Tier ($100-$1000)", value: stats.creatorTiers.midTier },
+                        { name: "Growing (<$100)", value: stats.creatorTiers.lowTier },
+                      ]}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {[0, 1, 2].map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader>
@@ -392,6 +586,76 @@ export default function AdminAnalyticsPage() {
               </CardContent>
             </Card>
           </div>
+
+          {stats.contentPerformance && (
+            <>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Avg Views per Video</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      {stats.contentPerformance.avgViewsPerVideo.toLocaleString()}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Average engagement per content</p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Avg Revenue per Video</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      $
+                      {stats.contentPerformance.avgRevenuePerVideo.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Average monetization per content</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Top Performing Videos</CardTitle>
+                  <CardDescription>Highest revenue generating content</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {stats.contentPerformance.topPerformingVideos.map((video, index) => (
+                      <div key={video.id} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                        <div className="flex items-center gap-3 flex-1">
+                          <Badge variant="secondary" className="w-6 h-6 flex items-center justify-center text-xs">
+                            {index + 1}
+                          </Badge>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate">{video.title}</p>
+                            <div className="flex gap-4 text-xs text-muted-foreground mt-1">
+                              <span>{video.views.toLocaleString()} views</span>
+                              <span>{video.conversionRate.toFixed(2)}% conversion</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold text-green-600">
+                            $
+                            {video.revenue.toLocaleString(undefined, {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
 
           <Card>
             <CardHeader>
@@ -495,6 +759,225 @@ export default function AdminAnalyticsPage() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="conversion" className="space-y-6">
+          {stats.conversionFunnel ? (
+            <>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Conversion Funnel</CardTitle>
+                  <CardDescription>User journey from discovery to purchase</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="relative">
+                      <div className="flex items-center justify-between p-4 bg-blue-50 dark:bg-blue-950 rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <Eye className="h-5 w-5 text-blue-600" />
+                          <div>
+                            <p className="font-medium">Profile Views</p>
+                            <p className="text-sm text-muted-foreground">Initial discovery</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-2xl font-bold">{stats.conversionFunnel.profileViews.toLocaleString()}</p>
+                          <p className="text-xs text-muted-foreground">100%</p>
+                        </div>
+                      </div>
+                      <div className="absolute left-1/2 -translate-x-1/2 w-0.5 h-4 bg-gradient-to-b from-blue-500 to-purple-500" />
+                    </div>
+
+                    <div className="relative">
+                      <div className="flex items-center justify-between p-4 bg-purple-50 dark:bg-purple-950 rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <Video className="h-5 w-5 text-purple-600" />
+                          <div>
+                            <p className="font-medium">Video Views</p>
+                            <p className="text-sm text-muted-foreground">Content engagement</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-2xl font-bold">{stats.conversionFunnel.videoViews.toLocaleString()}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {((stats.conversionFunnel.videoViews / stats.conversionFunnel.profileViews) * 100).toFixed(
+                              1,
+                            )}
+                            %
+                          </p>
+                        </div>
+                      </div>
+                      <div className="absolute left-1/2 -translate-x-1/2 w-0.5 h-4 bg-gradient-to-b from-purple-500 to-orange-500" />
+                    </div>
+
+                    <div className="relative">
+                      <div className="flex items-center justify-between p-4 bg-orange-50 dark:bg-orange-950 rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <ShoppingCart className="h-5 w-5 text-orange-600" />
+                          <div>
+                            <p className="font-medium">Add to Cart</p>
+                            <p className="text-sm text-muted-foreground">Purchase intent</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-2xl font-bold">{stats.conversionFunnel.addToCarts.toLocaleString()}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {((stats.conversionFunnel.addToCarts / stats.conversionFunnel.profileViews) * 100).toFixed(
+                              1,
+                            )}
+                            %
+                          </p>
+                        </div>
+                      </div>
+                      <div className="absolute left-1/2 -translate-x-1/2 w-0.5 h-4 bg-gradient-to-b from-orange-500 to-green-500" />
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between p-4 bg-green-50 dark:bg-green-950 rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <Target className="h-5 w-5 text-green-600" />
+                          <div>
+                            <p className="font-medium">Purchases</p>
+                            <p className="text-sm text-muted-foreground">Completed transactions</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-2xl font-bold">{stats.conversionFunnel.purchases.toLocaleString()}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {((stats.conversionFunnel.purchases / stats.conversionFunnel.profileViews) * 100).toFixed(
+                              1,
+                            )}
+                            %
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Profile → Video</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      {((stats.conversionFunnel.videoViews / stats.conversionFunnel.profileViews) * 100).toFixed(1)}%
+                    </div>
+                    <p className="text-xs text-muted-foreground">Engagement rate</p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Video → Cart</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      {((stats.conversionFunnel.addToCarts / stats.conversionFunnel.videoViews) * 100).toFixed(1)}%
+                    </div>
+                    <p className="text-xs text-muted-foreground">Interest rate</p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Cart → Purchase</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      {((stats.conversionFunnel.purchases / stats.conversionFunnel.addToCarts) * 100).toFixed(1)}%
+                    </div>
+                    <p className="text-xs text-muted-foreground">Checkout completion</p>
+                  </CardContent>
+                </Card>
+              </div>
+            </>
+          ) : (
+            <Card>
+              <CardContent className="pt-6">
+                <p className="text-center text-muted-foreground">
+                  Conversion funnel data not available for this time range
+                </p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        <TabsContent value="activity" className="space-y-6">
+          {stats.peakActivity ? (
+            <>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Peak Activity Hour</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-5 w-5 text-blue-600" />
+                      <div className="text-2xl font-bold">{stats.peakActivity.peakHour}:00</div>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">Highest user activity time</p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Peak Activity Day</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{stats.peakActivity.peakDay}</div>
+                    <p className="text-xs text-muted-foreground">Most active day of week</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Activity by Hour</CardTitle>
+                  <CardDescription>User activity patterns throughout the day</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={stats.peakActivity.activityByHour}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="hour" label={{ value: "Hour of Day", position: "insideBottom", offset: -5 }} />
+                      <YAxis label={{ value: "Activity", angle: -90, position: "insideLeft" }} />
+                      <Tooltip />
+                      <Bar dataKey="activity" fill="#3b82f6" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Activity by Day of Week</CardTitle>
+                  <CardDescription>Weekly activity distribution</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={stats.peakActivity.activityByDay}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="day" />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="activity" fill="#10b981" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            </>
+          ) : (
+            <Card>
+              <CardContent className="pt-6">
+                <p className="text-center text-muted-foreground">
+                  Activity pattern data not available for this time range
+                </p>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
       </Tabs>
     </div>

@@ -358,10 +358,15 @@ When organizing files, use the folder names exactly as shown above.
                   console.log(`[v0] Folder "${folderName}" contains ${itemsArray.length} items`)
 
                   const itemsList = itemsArray
-                    .map((item: any) => `  - ${item.title || item.filename || "Untitled"} (${item.type || "unknown"})`)
+                    .map((item: any) => {
+                      const title = item.title || item.filename || "Untitled"
+                      const type = item.type || "unknown"
+                      return `  - ${title} (${type})`
+                    })
                     .join("\n")
 
-                  folderContentsContext += `\n"${folderName}" folder (${itemsArray.length} items):\n${itemsList}\n`
+                  folderContentsContext +=
+                    '\n"' + folderName + '" folder (' + itemsArray.length + " items):\n" + itemsList + "\n"
                 }
               }
 
