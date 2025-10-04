@@ -160,6 +160,23 @@ Respond with a JSON object in this exact format:
 **IMPORTANT**: Respond ONLY with the JSON object, no other text.`
 
   try {
+    const requestBody = {
+      model: "llama-3.3-70b-versatile",
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a semantic analysis expert. You read video transcripts and determine if content fits into specific categories. You always respond with valid JSON only.",
+        },
+        {
+          role: "user",
+          content: analysisPrompt,
+        },
+      ],
+      max_tokens: 2000,
+      temperature: 0.2,
+    }
+
     // Call LLM for semantic analysis
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
@@ -167,22 +184,7 @@ Respond with a JSON object in this exact format:
         Authorization: `Bearer ${process.env.GROQ_API}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are a semantic analysis expert. You read video transcripts and determine if content fits into specific categories. You always respond with valid JSON only.",
-          },
-          {
-            role: "user",
-            content: analysisPrompt,
-          },
-        ],
-        max_tokens: 2000,
-        temperature: 0.2, // Lower temperature for more consistent analysis
-      }),
+      body: JSON.stringify(requestBody),
     })
 
     if (!response.ok) {
