@@ -541,9 +541,10 @@ ORGANIZE_FILES: {"targetFolder": "Folder Name", "fileIds": ["REAL_DB_ID_1", "REA
 
 Format requirements:
 - MUST be valid JSON on a single line
-- fileIds MUST contain REAL DATABASE IDs from the content analysis
-- The COUNT of fileIds MUST match what you said in your response
+- NO line breaks or lists inside the JSON
+- Create the folder first if it doesn't exist
 - Include detailed reasoning that shows your intelligence
+- **fileIds MUST contain REAL DATABASE IDs from the content analysis**
 
 **4. CREATE BUNDLES**
 
@@ -700,6 +701,325 @@ Be helpful, natural, and focus on their success. USE YOUR INTELLIGENCE to make s
       return NextResponse.json({ error: "No response from AI" }, { status: 500 })
     }
 
+    if (assistantMessage.includes("ORGANIZE_FILES:") && userId) {
+      try {
+        console.log("[v0] Validating ORGANIZE_FILES action...")
+
+        // Extract organization data
+        const organizeMatch = assistantMessage.match(/ORGANIZE_FILES:\s*({.*?})/s)
+        if (!organizeMatch) {
+          throw new Error("No valid organization data found")
+        }
+
+        const organizeData = JSON.parse(organizeMatch[1])
+        console.log("[v0] Parsed organization data:", organizeData)
+
+        // VALIDATION STEP 1: Count what Vex said it would organize
+        const naturalLanguageText = assistantMessage.split("ORGANIZE_FILES:")[0]
+        const mentionedCount = countMentionedItems(naturalLanguageText)
+        const jsonCount = organizeData.fileIds?.length || 0
+
+        console.log(`[v0] 🔍 Consistency Check:`)
+        console.log(`[v0]   - Vex said: ${mentionedCount} items`)
+        console.log(`[v0]   - JSON has: ${jsonCount} items`)
+
+        // VALIDATION STEP 2: Check if counts match
+        if (mentionedCount > 0 && jsonCount > 0 && Math.abs(mentionedCount - jsonCount) > 2) {
+          // Allow 2 item tolerance for edge cases
+          console.log(`[v0] ❌ MISMATCH DETECTED: Said ${mentionedCount} but JSON has ${jsonCount}`)
+
+          // Get analysis data to re-match properly
+          const analysisDoc = await db.collection("vex_content_analysis").doc(userId).get()
+          if (analysisDoc.exists) {
+            const analysisData = analysisDoc.data()!
+            const uploads = analysisData.uploads || []
+
+            // Extract folder keywords for better matching
+            const folderKeywords = extractKeywordsFromText(
+              organizeData.targetFolder + " " + (organizeData.reason || ""),
+            )
+
+            // Re-match all files aggressively
+            const correctedFileIds: string[] = []
+            const matchDetails: any[] = []
+
+            console.log(`[v0] 🔄 Re-matching files aggressively...`)
+
+            for (const fileIdentifier of organizeData.fileIds) {
+              const matchResult = findBestMatch(fileIdentifier, uploads, folderKeywords)
+
+              if (matchResult.upload && matchResult.confidence >= 50) {
+                // Raised threshold to 50%
+                correctedFileIds.push(matchResult.upload.id)
+                matchDetails.push({
+                  identifier: fileIdentifier,
+                  matched: true,
+                  title: matchResult.upload.title,
+                  confidence: matchResult.confidence,
+                  reason: matchResult.matchReason,
+                })
+                console.log(`[v0]   ✓ "${fileIdentifier}" → "${matchResult.upload.title}" (${matchResult.confidence}%)`)
+              } else {
+                console.log(`[v0]   ✗ "${fileIdentifier}" - No confident match`)
+                matchDetails.push({
+                  identifier: fileIdentifier,
+                  matched: false,
+                  reason: "No confident match found",
+                })
+              }
+            }
+
+            // Update the JSON with corrected IDs
+            organizeData.fileIds = correctedFileIds
+            console.log(`[v0] ✅ Corrected: ${correctedFileIds.length} files will be organized`)
+
+            // Update the assistant message with corrected count
+            const correctedMessage = assistantMessage.replace(
+              /ORGANIZE_FILES:\s*{.*?}/s,
+              `ORGANIZE_FILES: ${JSON.stringify(organizeData)}`,
+            )
+            assistantMessage = correctedMessage
+
+            // Add a note about the correction
+            if (correctedFileIds.length !== jsonCount) {
+              assistantMessage = assistantMessage.replace(
+                "ORGANIZE_FILES:",
+                `\n\n*Note: I've verified and will organize ${correctedFileIds.length} files that match your folder's theme.*\n\nORGANIZE_FILES:`,
+              )
+            }
+          }
+        } else {
+          console.log(`[v0] ✅ Consistency check passed`)
+        }
+
+        // VALIDATION STEP 3: Verify all IDs are real database IDs
+        const analysisDoc = await db.collection("vex_content_analysis").doc(userId).get()
+        if (analysisDoc.exists) {
+          const analysisData = analysisDoc.data()!
+          const uploads = analysisData.uploads || []
+          const validIds = new Set(uploads.map((u: any) => u.id))
+
+          const invalidIds = organizeData.fileIds.filter((id: string) => !validIds.has(id))
+
+          if (invalidIds.length > 0) {
+            console.log(`[v0] ⚠️ Found ${invalidIds.length} invalid IDs, attempting to fix...`)
+
+            // Try to convert titles/identifiers to real IDs
+            const folderKeywords = extractKeywordsFromText(
+              organizeData.targetFolder + " " + (organizeData.reason || ""),
+            )
+            const correctedIds: string[] = []
+
+            for (const identifier of organizeData.fileIds) {
+              if (validIds.has(identifier)) {
+                // Already a valid ID
+                correctedIds.push(identifier)
+              } else {
+                // Try to find the real ID
+                const matchResult = findBestMatch(identifier, uploads, folderKeywords)
+                if (matchResult.upload && matchResult.confidence >= 50) {
+                  correctedIds.push(matchResult.upload.id)
+                  console.log(`[v0]   Fixed: "${identifier}" → "${matchResult.upload.id}" (${matchResult.confidence}%)`)
+                } else {
+                  console.log(`[v0]   Could not fix: "${identifier}"`)
+                }
+              }
+            }
+
+            // Update with corrected IDs
+            organizeData.fileIds = correctedIds
+            const correctedMessage = assistantMessage.replace(
+              /ORGANIZE_FILES:\s*{.*?}/s,
+              `ORGANIZE_FILES: ${JSON.stringify(organizeData)}`,
+            )
+            assistantMessage = correctedMessage
+
+            console.log(`[v0] ✅ Fixed IDs: ${correctedIds.length} valid database IDs`)
+          }
+        }
+
+        // Now proceed with the actual organization
+        console.log("[v0] Vex wants to organize files...")
+
+        // Show progress message
+        assistantMessage = assistantMessage.replace(
+          /ORGANIZE_FILES:\s*{.*?}/s,
+          "🗂️ **Organizing your files now...** Moving them to the right folder!",
+        )
+
+        // Call the organize files API
+        const organizeResult = await organizeFilesDirectly(userId, organizeData)
+
+        if (organizeResult.success) {
+          const fileList = organizeResult.movedFiles?.length
+            ? `\n\n**Files moved:**\n${organizeResult.movedFiles.map((f: string) => `* ${f}`).join("\n")}`
+            : ""
+
+          assistantMessage = assistantMessage.replace(
+            "🗂️ **Organizing your files now...** Moving them to the right folder!",
+            `✅ **Files moved successfully!** Your "${organizeResult.targetFolder}" folder now contains the following files:${fileList}`,
+          )
+        } else {
+          assistantMessage = assistantMessage.replace(
+            "🗂️ **Organizing your files now...** Moving them to the right folder!",
+            `❌ ${organizeResult.error || "I encountered an issue organizing your files. Please try again."}`,
+          )
+        }
+      } catch (error) {
+        console.error("[v0] File organization failed:", error)
+        assistantMessage = assistantMessage.replace(
+          /🗂️ \*\*Organizing your files now\.\.\.\*\* Moving them to the right folder!/,
+          "❌ I encountered an error while organizing your files. Please try again.",
+        )
+      }
+    }
+
+    if (assistantMessage.includes("CREATE_BUNDLE:") && userId) {
+      try {
+        console.log("[v0] Validating CREATE_BUNDLE action...")
+
+        // Extract bundle data
+        const bundleMatch = assistantMessage.match(/CREATE_BUNDLE:\s*({.*?})/s)
+        if (!bundleMatch) {
+          throw new Error("No valid bundle data found")
+        }
+
+        const bundleData = JSON.parse(bundleMatch[1])
+        console.log("[v0] Parsed bundle data:", bundleData)
+
+        // VALIDATION STEP 1: Count what Vex said it would include
+        const naturalLanguageText = assistantMessage.split("CREATE_BUNDLE:")[0]
+        const mentionedCount = countMentionedItems(naturalLanguageText)
+        const jsonCount = bundleData.contentIds?.length || 0
+
+        console.log(`[v0] 🔍 Consistency Check:`)
+        console.log(`[v0]   - Vex said: ${mentionedCount} items`)
+        console.log(`[v0]   - JSON has: ${jsonCount} items`)
+
+        // VALIDATION STEP 2: Check if counts match
+        if (mentionedCount > 0 && jsonCount > 0 && Math.abs(mentionedCount - jsonCount) > 2) {
+          console.log(`[v0] ❌ MISMATCH DETECTED: Said ${mentionedCount} but JSON has ${jsonCount}`)
+
+          // Get analysis data to re-match properly
+          const analysisDoc = await db.collection("vex_content_analysis").doc(userId).get()
+          if (analysisDoc.exists) {
+            const analysisData = analysisDoc.data()!
+            const uploads = analysisData.uploads || []
+
+            // Extract bundle keywords for better matching
+            const bundleKeywords = extractKeywordsFromText(bundleData.title + " " + (bundleData.description || ""))
+
+            // Re-match all content aggressively
+            const correctedContentIds: string[] = []
+
+            console.log(`[v0] 🔄 Re-matching content aggressively...`)
+
+            for (const contentIdentifier of bundleData.contentIds) {
+              const matchResult = findBestMatch(contentIdentifier, uploads, bundleKeywords)
+
+              if (matchResult.upload && matchResult.confidence >= 50) {
+                correctedContentIds.push(matchResult.upload.id)
+                console.log(
+                  `[v0]   ✓ "${contentIdentifier}" → "${matchResult.upload.title}" (${matchResult.confidence}%)`,
+                )
+              } else {
+                console.log(`[v0]   ✗ "${contentIdentifier}" - No confident match`)
+              }
+            }
+
+            // Update the JSON with corrected IDs
+            bundleData.contentIds = correctedContentIds
+            console.log(`[v0] ✅ Corrected: ${correctedContentIds.length} items will be in bundle`)
+
+            // Update the assistant message
+            const correctedMessage = assistantMessage.replace(
+              /CREATE_BUNDLE:\s*{.*?}/s,
+              `CREATE_BUNDLE: ${JSON.stringify(bundleData)}`,
+            )
+            assistantMessage = correctedMessage
+
+            // Add a note about the correction
+            if (correctedContentIds.length !== jsonCount) {
+              assistantMessage = assistantMessage.replace(
+                "CREATE_BUNDLE:",
+                `\n\n*Note: I've verified and will include ${correctedContentIds.length} items in your bundle.*\n\nCREATE_BUNDLE:`,
+              )
+            }
+          }
+        } else {
+          console.log(`[v0] ✅ Consistency check passed`)
+        }
+
+        // VALIDATION STEP 3: Verify all IDs are real database IDs
+        const analysisDoc = await db.collection("vex_content_analysis").doc(userId).get()
+        if (analysisDoc.exists) {
+          const analysisData = analysisDoc.data()!
+          const uploads = analysisData.uploads || []
+          const validIds = new Set(uploads.map((u: any) => u.id))
+
+          const invalidIds = bundleData.contentIds.filter((id: string) => !validIds.has(id))
+
+          if (invalidIds.length > 0) {
+            console.log(`[v0] ⚠️ Found ${invalidIds.length} invalid IDs, attempting to fix...`)
+
+            const bundleKeywords = extractKeywordsFromText(bundleData.title + " " + (bundleData.description || ""))
+            const correctedIds: string[] = []
+
+            for (const identifier of bundleData.contentIds) {
+              if (validIds.has(identifier)) {
+                correctedIds.push(identifier)
+              } else {
+                const matchResult = findBestMatch(identifier, uploads, bundleKeywords)
+                if (matchResult.upload && matchResult.confidence >= 50) {
+                  correctedIds.push(matchResult.upload.id)
+                  console.log(`[v0]   Fixed: "${identifier}" → "${matchResult.upload.id}" (${matchResult.confidence}%)`)
+                }
+              }
+            }
+
+            bundleData.contentIds = correctedIds
+            const correctedMessage = assistantMessage.replace(
+              /CREATE_BUNDLE:\s*{.*?}/s,
+              `CREATE_BUNDLE: ${JSON.stringify(bundleData)}`,
+            )
+            assistantMessage = correctedMessage
+
+            console.log(`[v0] ✅ Fixed IDs: ${correctedIds.length} valid database IDs`)
+          }
+        }
+
+        // Now proceed with bundle creation
+        console.log("[v0] Vex wants to create a bundle, starting direct creation...")
+
+        // Show progress message
+        assistantMessage = assistantMessage.replace(
+          /CREATE_BUNDLE:\s*{.*?}/s,
+          "🚀 **Creating your bundle now...** This will just take a moment!",
+        )
+
+        // Direct bundle creation with detailed progress
+        const result = await createBundleDirectly(userId, bundleData)
+
+        if (result.success) {
+          assistantMessage = assistantMessage.replace(
+            "🚀 **Creating your bundle now...** This will just take a moment!",
+            `✅ **Bundle created successfully!** Your "${result.bundle.title}" bundle is now live in your dashboard. You can view it at your storefront or share it with customers right away!`,
+          )
+        } else {
+          assistantMessage = assistantMessage.replace(
+            "🚀 **Creating your bundle now...** This will just take a moment!",
+            `❌ ${result.error || "I encountered an issue creating your bundle. Please try again or create it manually in your dashboard."}`,
+          )
+        }
+      } catch (error) {
+        console.error("[v0] Bundle creation failed:", error)
+        assistantMessage = assistantMessage.replace(
+          /🚀 \*\*Creating your bundle now\.\.\.\*\* This will just take a moment!/,
+          "❌ I encountered an error while creating your bundle. Please try again or create it manually in your dashboard.",
+        )
+      }
+    }
+
     if (assistantMessage.includes("REFRESH_ANALYSIS:") && userId) {
       try {
         console.log("[v0] Vex wants to refresh content analysis...")
@@ -786,52 +1106,6 @@ Be helpful, natural, and focus on their success. USE YOUR INTELLIGENCE to make s
       }
     }
 
-    if (assistantMessage.includes("ORGANIZE_FILES:") && userId) {
-      try {
-        console.log("[v0] Vex wants to organize files...")
-
-        // Extract organization data
-        const organizeMatch = assistantMessage.match(/ORGANIZE_FILES:\s*({.*?})/s)
-        if (!organizeMatch) {
-          throw new Error("No valid organization data found")
-        }
-
-        const organizeData = JSON.parse(organizeMatch[1])
-        console.log("[v0] Parsed organization data:", organizeData)
-
-        // Show progress message
-        assistantMessage = assistantMessage.replace(
-          /ORGANIZE_FILES:\s*{.*?}/s,
-          "🗂️ **Organizing your files now...** Moving them to the right folder!",
-        )
-
-        // Call the organize files API
-        const organizeResult = await organizeFilesDirectly(userId, organizeData)
-
-        if (organizeResult.success) {
-          const fileList = organizeResult.movedFiles?.length
-            ? `\n\n**Files moved:**\n${organizeResult.movedFiles.map((f: string) => `* ${f}`).join("\n")}`
-            : ""
-
-          assistantMessage = assistantMessage.replace(
-            "🗂️ **Organizing your files now...** Moving them to the right folder!",
-            `✅ **Files moved successfully!** Your "${organizeResult.targetFolder}" folder now contains the following files:${fileList}`,
-          )
-        } else {
-          assistantMessage = assistantMessage.replace(
-            "🗂️ **Organizing your files now...** Moving them to the right folder!",
-            `❌ ${organizeResult.error || "I encountered an issue organizing your files. Please try again."}`,
-          )
-        }
-      } catch (error) {
-        console.error("[v0] File organization failed:", error)
-        assistantMessage = assistantMessage.replace(
-          /🗂️ \*\*Organizing your files now\.\.\.\*\* Moving them to the right folder!/,
-          "❌ I encountered an error while organizing your files. Please try again.",
-        )
-      }
-    }
-
     if (assistantMessage.includes("CREATE_FOLDER:") && userId) {
       try {
         console.log("[v0] Vex wants to create a folder...")
@@ -870,50 +1144,6 @@ Be helpful, natural, and focus on their success. USE YOUR INTELLIGENCE to make s
         assistantMessage = assistantMessage.replace(
           /📁 \*\*Creating folder now\.\.\.\*\* Setting up your new folder!/,
           "❌ I encountered an error while creating the folder. Please try again.",
-        )
-      }
-    }
-
-    if (assistantMessage.includes("CREATE_BUNDLE:") && userId) {
-      try {
-        console.log("[v0] Vex wants to create a bundle, starting direct creation...")
-
-        // Extract bundle data
-        const bundleMatch = assistantMessage.match(/CREATE_BUNDLE:\s*({.*?})/s)
-        if (!bundleMatch) {
-          throw new Error("No valid bundle data found")
-        }
-
-        const bundleData = JSON.parse(bundleMatch[1])
-        console.log("[v0] Parsed bundle data:", bundleData)
-
-        // Show progress message
-        assistantMessage = assistantMessage.replace(
-          /CREATE_BUNDLE:\s*{.*?}/s,
-          "🚀 **Creating your bundle now...** This will just take a moment!",
-        )
-
-        // Direct bundle creation with detailed progress
-        const result = await createBundleDirectly(userId, bundleData)
-
-        if (result.success) {
-          // Replace with success message
-          assistantMessage = assistantMessage.replace(
-            "🚀 **Creating your bundle now...** This will just take a moment!",
-            `✅ **Bundle created successfully!** Your "${result.bundle.title}" bundle is now live in your dashboard. You can view it at your storefront or share it with customers right away!`,
-          )
-        } else {
-          // Replace with specific error message
-          assistantMessage = assistantMessage.replace(
-            "🚀 **Creating your bundle now...** This will just take a moment!",
-            `❌ ${result.error || "I encountered an issue creating your bundle. Please try again or create it manually in your dashboard."}`,
-          )
-        }
-      } catch (error) {
-        console.error("[v0] Bundle creation failed:", error)
-        assistantMessage = assistantMessage.replace(
-          /🚀 \*\*Creating your bundle now\.\.\.\*\* This will just take a moment!/,
-          "❌ I encountered an error while creating your bundle. Please try again or create it manually in your dashboard.",
         )
       }
     }
@@ -1478,7 +1708,6 @@ function extractKeywordsFromText(text: string): string[] {
     "deliverance",
     "breakthrough",
     "victory",
-    "overcome",
     "perseverance",
   ]
 
@@ -1524,207 +1753,8 @@ function extractKeywordsFromText(text: string): string[] {
   return [...new Set(keywords)] // Remove duplicates
 }
 
-function findBestMatch(
-  identifier: string,
-  uploads: any[],
-  folderKeywords: string[],
-): { upload: any | null; confidence: number; matchReason: string } {
-  const lowerIdentifier = identifier.toLowerCase()
-  let bestMatch: any = null
-  let bestConfidence = 0
-  let bestReason = ""
-
-  for (const upload of uploads) {
-    let confidence = 0
-    const reasons: string[] = []
-
-    // Exact ID match (100% confidence)
-    if (upload.id === identifier) {
-      return { upload, confidence: 100, matchReason: "Exact ID match" }
-    }
-
-    // Exact title match (95% confidence)
-    if (upload.title === identifier) {
-      return { upload, confidence: 95, matchReason: "Exact title match" }
-    }
-
-    // Case-insensitive title match (90% confidence)
-    if (upload.title?.toLowerCase() === lowerIdentifier) {
-      confidence = Math.max(confidence, 90)
-      reasons.push("Case-insensitive title match")
-    }
-
-    // Filename match (85% confidence)
-    if (upload.filename === identifier || upload.filename?.toLowerCase() === lowerIdentifier) {
-      confidence = Math.max(confidence, 85)
-      reasons.push("Filename match")
-    }
-
-    // Title contains identifier (70% confidence)
-    if (upload.title?.toLowerCase().includes(lowerIdentifier)) {
-      confidence = Math.max(confidence, 70)
-      reasons.push("Title contains identifier")
-    }
-
-    // Identifier contains title (65% confidence)
-    if (upload.title && lowerIdentifier.includes(upload.title.toLowerCase())) {
-      confidence = Math.max(confidence, 65)
-      reasons.push("Identifier contains title")
-    }
-
-    // Fuzzy title matching - check for partial word matches
-    if (upload.title) {
-      const titleWords = upload.title.toLowerCase().split(/\s+/)
-      const identifierWords = lowerIdentifier.split(/\s+/)
-
-      let matchingWords = 0
-      titleWords.forEach((titleWord) => {
-        if (titleWord.length > 2) {
-          // Skip very short words
-          identifierWords.forEach((idWord) => {
-            if (idWord.includes(titleWord) || titleWord.includes(idWord)) {
-              matchingWords++
-            }
-          })
-        }
-      })
-
-      if (matchingWords > 0) {
-        const fuzzyConfidence = Math.min(40 + matchingWords * 15, 75)
-        confidence = Math.max(confidence, fuzzyConfidence)
-        reasons.push(`${matchingWords} fuzzy word matches in title`)
-      }
-    }
-
-    // AGGRESSIVE TRANSCRIPT MATCHING
-    if (upload.transcript && typeof upload.transcript === "string") {
-      const transcriptLower = upload.transcript.toLowerCase()
-
-      // Check if identifier is in transcript
-      if (transcriptLower.includes(lowerIdentifier)) {
-        confidence = Math.max(confidence, 75)
-        reasons.push("Identifier found in transcript")
-      }
-
-      // AGGRESSIVE: Check for ANY folder keyword matches in transcript
-      let keywordMatches = 0
-      const matchedKeywords: string[] = []
-
-      folderKeywords.forEach((keyword) => {
-        if (transcriptLower.includes(keyword)) {
-          keywordMatches++
-          matchedKeywords.push(keyword)
-        }
-      })
-
-      // If ANY keywords match, give it a decent confidence score
-      if (keywordMatches > 0) {
-        // More aggressive scoring: even 1 keyword match gets 50% confidence
-        const keywordConfidence = Math.min(50 + keywordMatches * 15, 95)
-        confidence = Math.max(confidence, keywordConfidence)
-        reasons.push(`${keywordMatches} folder keywords in transcript (${matchedKeywords.slice(0, 3).join(", ")})`)
-      }
-
-      // AGGRESSIVE: Check for related terms and synonyms
-      const relatedTerms = getRelatedTerms(folderKeywords)
-      let relatedMatches = 0
-
-      relatedTerms.forEach((term) => {
-        if (transcriptLower.includes(term)) {
-          relatedMatches++
-        }
-      })
-
-      if (relatedMatches > 0) {
-        const relatedConfidence = Math.min(45 + relatedMatches * 10, 80)
-        confidence = Math.max(confidence, relatedConfidence)
-        reasons.push(`${relatedMatches} related terms in transcript`)
-      }
-    }
-
-    // AGGRESSIVE: Detected niche matching
-    if (upload.detectedNiche) {
-      const nicheLower = upload.detectedNiche.toLowerCase()
-
-      // Check if detected niche matches ANY folder keywords
-      let nicheKeywordMatches = 0
-      folderKeywords.forEach((keyword) => {
-        if (nicheLower.includes(keyword) || keyword.includes(nicheLower)) {
-          nicheKeywordMatches++
-        }
-      })
-
-      if (nicheKeywordMatches > 0) {
-        // Use the upload's confidence score if available, otherwise default to 60%
-        const nicheConfidence = upload.confidence ? Math.min(55 + upload.confidence * 25, 85) : 60
-        confidence = Math.max(confidence, nicheConfidence)
-        reasons.push(`Detected niche matches (${upload.detectedNiche})`)
-      }
-
-      // Check if identifier matches detected niche
-      if (
-        nicheLower === lowerIdentifier ||
-        nicheLower.includes(lowerIdentifier) ||
-        lowerIdentifier.includes(nicheLower)
-      ) {
-        confidence = Math.max(confidence, 65)
-        reasons.push("Identifier matches detected niche")
-      }
-    }
-
-    // AGGRESSIVE: Check description if available
-    if (upload.description && typeof upload.description === "string") {
-      const descLower = upload.description.toLowerCase()
-      let descKeywordMatches = 0
-
-      folderKeywords.forEach((keyword) => {
-        if (descLower.includes(keyword)) {
-          descKeywordMatches++
-        }
-      })
-
-      if (descKeywordMatches > 0) {
-        const descConfidence = Math.min(40 + descKeywordMatches * 10, 70)
-        confidence = Math.max(confidence, descConfidence)
-        reasons.push(`${descKeywordMatches} keywords in description`)
-      }
-    }
-
-    // AGGRESSIVE: Check tags if available
-    if (upload.tags && Array.isArray(upload.tags)) {
-      let tagMatches = 0
-
-      upload.tags.forEach((tag: string) => {
-        const tagLower = tag.toLowerCase()
-        folderKeywords.forEach((keyword) => {
-          if (tagLower.includes(keyword) || keyword.includes(tagLower)) {
-            tagMatches++
-          }
-        })
-      })
-
-      if (tagMatches > 0) {
-        const tagConfidence = Math.min(45 + tagMatches * 10, 75)
-        confidence = Math.max(confidence, tagConfidence)
-        reasons.push(`${tagMatches} matching tags`)
-      }
-    }
-
-    // Update best match if this is better
-    if (confidence > bestConfidence) {
-      bestMatch = upload
-      bestConfidence = confidence
-      bestReason = reasons.join(", ")
-    }
-  }
-
-  // AGGRESSIVE: Lower threshold from 50% to 30%
-  if (bestConfidence >= 30) {
-    return { upload: bestMatch, confidence: bestConfidence, matchReason: bestReason }
-  }
-
-  return { upload: null, confidence: 0, matchReason: "No confident match found" }
-}
+// Redeclared findBestMatch function removed to resolve lint/suspicious/noRedeclare error.
+// The existing findBestMatch function is preserved.
 
 function getRelatedTerms(keywords: string[]): string[] {
   const relatedTermsMap: Record<string, string[]> = {
@@ -1984,4 +2014,245 @@ function getContentTypeFromMimeType(mimeType: string): string {
   if (mimeType.startsWith("audio/")) return "audio"
   if (mimeType.startsWith("image/")) return "image"
   return "document"
+}
+
+function countMentionedItems(text: string): number {
+  // Look for patterns like:
+  // - "I'll organize these 10 videos"
+  // - "I'll create a bundle with 5 items"
+  // - "Moving 3 files"
+  // - "Including 7 videos"
+
+  const patterns = [
+    /(?:these|all|the)?\s*(\d+)\s*(?:videos?|files?|items?|pieces?|content)/gi,
+    /(?:organize|move|include|add|create)\s*(?:these|all|the)?\s*(\d+)/gi,
+    /(\d+)\s*(?:videos?|files?|items?)\s*(?:into|to|in)/gi,
+  ]
+
+  let maxCount = 0
+
+  for (const pattern of patterns) {
+    const matches = text.matchAll(pattern)
+    for (const match of matches) {
+      const count = Number.parseInt(match[1], 10)
+      if (!isNaN(count) && count > maxCount) {
+        maxCount = count
+      }
+    }
+  }
+
+  // Also count bullet points or numbered lists
+  const bulletMatches = text.match(/^[\s]*[-*•]\s+/gm)
+  if (bulletMatches && bulletMatches.length > maxCount) {
+    maxCount = bulletMatches.length
+  }
+
+  const numberedMatches = text.match(/^[\s]*\d+\.\s+/gm)
+  if (numberedMatches && numberedMatches.length > maxCount) {
+    maxCount = numberedMatches.length
+  }
+
+  return maxCount
+}
+
+function findBestMatch(
+  identifier: string,
+  uploads: any[],
+  folderKeywords: string[],
+): { upload: any | null; confidence: number; matchReason: string } {
+  const lowerIdentifier = identifier.toLowerCase()
+  let bestMatch: any = null
+  let bestConfidence = 0
+  let bestReason = ""
+
+  for (const upload of uploads) {
+    let confidence = 0
+    const reasons: string[] = []
+
+    // Exact ID match (100% confidence)
+    if (upload.id === identifier) {
+      return { upload, confidence: 100, matchReason: "Exact ID match" }
+    }
+
+    // Exact title match (95% confidence)
+    if (upload.title === identifier) {
+      return { upload, confidence: 95, matchReason: "Exact title match" }
+    }
+
+    // Case-insensitive title match (90% confidence)
+    if (upload.title?.toLowerCase() === lowerIdentifier) {
+      confidence = Math.max(confidence, 90)
+      reasons.push("Case-insensitive title match")
+    }
+
+    // Filename match (85% confidence)
+    if (upload.filename === identifier || upload.filename?.toLowerCase() === lowerIdentifier) {
+      confidence = Math.max(confidence, 85)
+      reasons.push("Filename match")
+    }
+
+    // Title contains identifier (70% confidence)
+    if (upload.title?.toLowerCase().includes(lowerIdentifier)) {
+      confidence = Math.max(confidence, 70)
+      reasons.push("Title contains identifier")
+    }
+
+    // Identifier contains title (65% confidence)
+    if (upload.title && lowerIdentifier.includes(upload.title.toLowerCase())) {
+      confidence = Math.max(confidence, 65)
+      reasons.push("Identifier contains title")
+    }
+
+    // Fuzzy title matching - check for partial word matches
+    if (upload.title) {
+      const titleWords = upload.title.toLowerCase().split(/\s+/)
+      const identifierWords = lowerIdentifier.split(/\s+/)
+
+      let matchingWords = 0
+      titleWords.forEach((titleWord) => {
+        if (titleWord.length > 2) {
+          // Skip very short words
+          identifierWords.forEach((idWord) => {
+            if (idWord.includes(titleWord) || titleWord.includes(idWord)) {
+              matchingWords++
+            }
+          })
+        }
+      })
+
+      if (matchingWords > 0) {
+        const fuzzyConfidence = Math.min(40 + matchingWords * 15, 75)
+        confidence = Math.max(confidence, fuzzyConfidence)
+        reasons.push(`${matchingWords} fuzzy word matches in title`)
+      }
+    }
+
+    // AGGRESSIVE TRANSCRIPT MATCHING
+    if (upload.transcript && typeof upload.transcript === "string") {
+      const transcriptLower = upload.transcript.toLowerCase()
+
+      // Check if identifier is in transcript
+      if (transcriptLower.includes(lowerIdentifier)) {
+        confidence = Math.max(confidence, 75)
+        reasons.push("Identifier found in transcript")
+      }
+
+      // AGGRESSIVE: Check for ANY folder keyword matches in transcript
+      let keywordMatches = 0
+      const matchedKeywords: string[] = []
+
+      folderKeywords.forEach((keyword) => {
+        if (transcriptLower.includes(keyword)) {
+          keywordMatches++
+          matchedKeywords.push(keyword)
+        }
+      })
+
+      // If ANY keywords match, give it a decent confidence score
+      if (keywordMatches > 0) {
+        // More aggressive scoring: even 1 keyword match gets 50% confidence
+        const keywordConfidence = Math.min(50 + keywordMatches * 15, 95)
+        confidence = Math.max(confidence, keywordConfidence)
+        reasons.push(`${keywordMatches} folder keywords in transcript (${matchedKeywords.slice(0, 3).join(", ")})`)
+      }
+
+      // AGGRESSIVE: Check for related terms and synonyms
+      const relatedTerms = getRelatedTerms(folderKeywords)
+      let relatedMatches = 0
+
+      relatedTerms.forEach((term) => {
+        if (transcriptLower.includes(term)) {
+          relatedMatches++
+        }
+      })
+
+      if (relatedMatches > 0) {
+        const relatedConfidence = Math.min(45 + relatedMatches * 10, 80)
+        confidence = Math.max(confidence, relatedConfidence)
+        reasons.push(`${relatedMatches} related terms in transcript`)
+      }
+    }
+
+    // AGGRESSIVE: Detected niche matching
+    if (upload.detectedNiche) {
+      const nicheLower = upload.detectedNiche.toLowerCase()
+
+      // Check if detected niche matches ANY folder keywords
+      let nicheKeywordMatches = 0
+      folderKeywords.forEach((keyword) => {
+        if (nicheLower.includes(keyword) || keyword.includes(nicheLower)) {
+          nicheKeywordMatches++
+        }
+      })
+
+      if (nicheKeywordMatches > 0) {
+        // Use the upload's confidence score if available, otherwise default to 60%
+        const nicheConfidence = upload.confidence ? Math.min(55 + upload.confidence * 25, 85) : 60
+        confidence = Math.max(confidence, nicheConfidence)
+        reasons.push(`Detected niche matches (${upload.detectedNiche})`)
+      }
+
+      // Check if identifier matches detected niche
+      if (
+        nicheLower === lowerIdentifier ||
+        nicheLower.includes(lowerIdentifier) ||
+        lowerIdentifier.includes(nicheLower)
+      ) {
+        confidence = Math.max(confidence, 65)
+        reasons.push("Identifier matches detected niche")
+      }
+    }
+
+    // AGGRESSIVE: Check description if available
+    if (upload.description && typeof upload.description === "string") {
+      const descLower = upload.description.toLowerCase()
+      let descKeywordMatches = 0
+
+      folderKeywords.forEach((keyword) => {
+        if (descLower.includes(keyword)) {
+          descKeywordMatches++
+        }
+      })
+
+      if (descKeywordMatches > 0) {
+        const descConfidence = Math.min(40 + descKeywordMatches * 10, 70)
+        confidence = Math.max(confidence, descConfidence)
+        reasons.push(`${descKeywordMatches} keywords in description`)
+      }
+    }
+
+    // AGGRESSIVE: Check tags if available
+    if (upload.tags && Array.isArray(upload.tags)) {
+      let tagMatches = 0
+
+      upload.tags.forEach((tag: string) => {
+        const tagLower = tag.toLowerCase()
+        folderKeywords.forEach((keyword) => {
+          if (tagLower.includes(keyword) || keyword.includes(tagLower)) {
+            tagMatches++
+          }
+        })
+      })
+
+      if (tagMatches > 0) {
+        const tagConfidence = Math.min(45 + tagMatches * 10, 75)
+        confidence = Math.max(confidence, tagConfidence)
+        reasons.push(`${tagMatches} matching tags`)
+      }
+    }
+
+    // Update best match if this is better
+    if (confidence > bestConfidence) {
+      bestMatch = upload
+      bestConfidence = confidence
+      bestReason = reasons.join(", ")
+    }
+  }
+
+  // AGGRESSIVE: Lower threshold from 50% to 30%
+  if (bestConfidence >= 30) {
+    return { upload: bestMatch, confidence: bestConfidence, matchReason: bestReason }
+  }
+
+  return { upload: null, confidence: 0, matchReason: "No confident match found" }
 }
