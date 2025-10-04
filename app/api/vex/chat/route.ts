@@ -849,31 +849,30 @@ async function createBundleDirectly(userId: string, bundleData: any) {
     const analysisData = analysisDoc.data()!
     const availableUploads = analysisData.uploads || []
 
-    console.log("[v0] Processing content items with proper ID mapping...")
+    console.log("[v0] Processing content items with transcript intelligence...")
     const contentItems = []
     for (const contentIdentifier of contentIds) {
       try {
-        // First, try to find by exact document ID
         let matchedUpload = availableUploads.find((upload: any) => upload.id === contentIdentifier)
 
-        // If not found by ID, try to match by title or filename
         if (!matchedUpload) {
           matchedUpload = availableUploads.find(
             (upload: any) =>
               upload.title === contentIdentifier ||
               upload.filename === contentIdentifier ||
               upload.title.toLowerCase().includes(contentIdentifier.toLowerCase()) ||
-              contentIdentifier.toLowerCase().includes(upload.title.toLowerCase()),
+              contentIdentifier.toLowerCase().includes(upload.title.toLowerCase()) ||
+              (upload.transcript &&
+                typeof upload.transcript === "string" &&
+                upload.transcript.toLowerCase().includes(contentIdentifier.toLowerCase())),
           )
         }
 
         if (matchedUpload) {
-          // Fetch the actual document from the correct collection
           const contentDoc = await db.collection(matchedUpload.collection).doc(matchedUpload.id).get()
           if (contentDoc.exists) {
             const contentData = contentDoc.data()!
 
-            // Verify this content belongs to the user
             if (contentData.uid === userId || contentData.userId === userId) {
               contentItems.push({
                 id: matchedUpload.id,
@@ -896,10 +895,12 @@ async function createBundleDirectly(userId: string, bundleData: any) {
                 uploadedAt:
                   contentData.uploadedAt || contentData.createdAt || contentData.addedAt || new Date().toISOString(),
                 collection: matchedUpload.collection,
-                transcript: contentData.transcript || null, // Include transcript
+                transcript: contentData.transcript || matchedUpload.transcript || null,
+                detectedNiche: matchedUpload.detectedNiche || null,
+                nicheConfidence: matchedUpload.confidence || null,
               })
               console.log(
-                `[v0] Successfully mapped "${contentIdentifier}" to document ${matchedUpload.id} from ${matchedUpload.collection}`,
+                `[v0] Successfully mapped "${contentIdentifier}" to document ${matchedUpload.id} from ${matchedUpload.collection}${matchedUpload.transcript ? " (has transcript)" : ""}`,
               )
             }
           }
@@ -920,6 +921,11 @@ async function createBundleDirectly(userId: string, bundleData: any) {
     }
 
     console.log(`[v0] Successfully processed ${contentItems.length} content items`)
+
+    const itemsWithTranscripts = contentItems.filter((item) => item.transcript).length
+    if (itemsWithTranscripts > 0) {
+      console.log(`[v0] 📝 Bundle includes ${itemsWithTranscripts} items with transcripts for better organization`)
+    }
 
     console.log("[v0] Creating Stripe product...")
     // Create Stripe product
@@ -1124,9 +1130,7 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
     for (const fileIdentifier of fileIds) {
       console.log(`[v0] 🔍 Looking for: "${fileIdentifier}"`)
 
-      // Try to find the upload in the analysis data
       const upload = uploads.find((u: any) => {
-        // Check for transcript field if available
         const hasTranscript = u.transcript !== undefined && u.transcript !== null
 
         // Exact ID match
@@ -1141,13 +1145,14 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
         // Filename match
         if (u.filename === fileIdentifier) return true
 
-        // If transcript is available and fileIdentifier matches part of it
         if (
           hasTranscript &&
           typeof u.transcript === "string" &&
           u.transcript.toLowerCase().includes(fileIdentifier.toLowerCase())
         )
           return true
+
+        if (u.detectedNiche && u.detectedNiche.toLowerCase() === fileIdentifier.toLowerCase()) return true
 
         return false
       })
@@ -1158,7 +1163,11 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
         continue
       }
 
-      console.log(`[v0] ✅ Found: ${upload.id} in collection "${upload.collection}"`)
+      if (upload.transcript) {
+        console.log(`[v0] 📝 Found "${upload.title}" with transcript (detected: ${upload.detectedNiche || "unknown"})`)
+      } else {
+        console.log(`[v0] ✅ Found: ${upload.id} in collection "${upload.collection}"`)
+      }
 
       try {
         const docRef = db.collection(upload.collection).doc(upload.id)
@@ -1185,6 +1194,8 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
           updatedAt: FieldValue.serverTimestamp(),
           vexOrganized: true,
           vexOrganizeReason: reason || "Organized by Vex AI",
+          vexDetectedNiche: upload.detectedNiche || null,
+          vexHasTranscript: !!upload.transcript,
         })
 
         movedFiles.push(upload.title || upload.filename || fileIdentifier)
