@@ -6,15 +6,12 @@ export async function POST() {
   try {
     console.log("🔄 Running behavioral email diagnostics...")
 
-    const usersSnapshot = await adminDb.collection("users").get()
-    const totalUsers = usersSnapshot.size
-
     // Get all behavioral email users
     const behavioralSnapshot = await adminDb.collection("behavioralEmails").get()
-    const behavioralUsers = behavioralSnapshot.docs.map((doc) => doc.data())
+    const totalUsers = behavioralSnapshot.size
 
     // Count unsubscribed users
-    const unsubscribedUsers = behavioralUsers.filter((user) => user.unsubscribed === true).length
+    const unsubscribedUsers = behavioralSnapshot.docs.filter((doc) => doc.data().unsubscribed === true).length
 
     const eligibleUsers = totalUsers - unsubscribedUsers
 
@@ -33,7 +30,9 @@ export async function POST() {
     const errors: string[] = []
 
     // Analyze each user
-    for (const user of behavioralUsers) {
+    for (const doc of behavioralSnapshot.docs) {
+      const user = doc.data()
+
       if (user.unsubscribed) continue
 
       try {
