@@ -849,82 +849,117 @@ async function createBundleDirectly(userId: string, bundleData: any) {
     const analysisData = analysisDoc.data()!
     const availableUploads = analysisData.uploads || []
 
-    console.log("[v0] Processing content items with transcript intelligence...")
+    const bundleKeywords = extractKeywordsFromText(title + " " + (description || ""))
+    console.log(`[v0] 🔑 Bundle keywords for matching:`, bundleKeywords)
+
+    console.log("[v0] Processing content items with AGGRESSIVE transcript intelligence...")
     const contentItems = []
+    const matchDetails: any[] = []
+
     for (const contentIdentifier of contentIds) {
       try {
-        let matchedUpload = availableUploads.find((upload: any) => upload.id === contentIdentifier)
+        const matchResult = findBestMatch(contentIdentifier, availableUploads, bundleKeywords)
 
-        if (!matchedUpload) {
-          matchedUpload = availableUploads.find(
-            (upload: any) =>
-              upload.title === contentIdentifier ||
-              upload.filename === contentIdentifier ||
-              upload.title.toLowerCase().includes(contentIdentifier.toLowerCase()) ||
-              contentIdentifier.toLowerCase().includes(upload.title.toLowerCase()) ||
-              (upload.transcript &&
-                typeof upload.transcript === "string" &&
-                upload.transcript.toLowerCase().includes(contentIdentifier.toLowerCase())),
-          )
+        if (!matchResult.upload) {
+          console.log(`[v0] ❌ Could not find: "${contentIdentifier}"`)
+          matchDetails.push({
+            identifier: contentIdentifier,
+            matched: false,
+            reason: "No matching content found",
+          })
+          continue
         }
 
-        if (matchedUpload) {
-          const contentDoc = await db.collection(matchedUpload.collection).doc(matchedUpload.id).get()
-          if (contentDoc.exists) {
-            const contentData = contentDoc.data()!
+        const matchedUpload = matchResult.upload
+        console.log(
+          `[v0] ✅ Matched: "${contentIdentifier}" → "${matchedUpload.title}" (${matchResult.confidence}% - ${matchResult.matchReason})`,
+        )
 
-            if (contentData.uid === userId || contentData.userId === userId) {
-              contentItems.push({
-                id: matchedUpload.id,
-                title: contentData.title || contentData.filename || `Content ${contentItems.length + 1}`,
-                description: contentData.description || "",
-                fileUrl: contentData.url || contentData.downloadUrl || contentData.downloadURL || "",
-                downloadUrl: contentData.downloadUrl || contentData.url || contentData.downloadURL || "",
-                publicUrl: contentData.publicUrl || contentData.url || contentData.downloadURL || "",
-                thumbnailUrl: contentData.thumbnailUrl || "",
-                fileSize: contentData.fileSize || contentData.size || 0,
-                fileSizeFormatted: formatFileSize(contentData.fileSize || contentData.size || 0),
-                duration: contentData.duration || 0,
-                durationFormatted: formatDuration(contentData.duration || 0),
-                mimeType: contentData.mimeType || contentData.type || "video/mp4",
-                format: contentData.format || getFormatFromMimeType(contentData.mimeType || contentData.type),
-                quality: contentData.quality || "HD",
-                tags: contentData.tags || [],
-                contentType: getContentTypeFromMimeType(contentData.mimeType || contentData.type),
-                createdAt: contentData.createdAt || contentData.addedAt || new Date().toISOString(),
-                uploadedAt:
-                  contentData.uploadedAt || contentData.createdAt || contentData.addedAt || new Date().toISOString(),
-                collection: matchedUpload.collection,
-                transcript: contentData.transcript || matchedUpload.transcript || null,
-                detectedNiche: matchedUpload.detectedNiche || null,
-                nicheConfidence: matchedUpload.confidence || null,
-              })
-              console.log(
-                `[v0] Successfully mapped "${contentIdentifier}" to document ${matchedUpload.id} from ${matchedUpload.collection}${matchedUpload.transcript ? " (has transcript)" : ""}`,
-              )
-            }
+        if (matchedUpload.transcript) {
+          console.log(`[v0] 📝 Has transcript (${matchedUpload.transcript.length} chars)`)
+        }
+
+        const contentDoc = await db.collection(matchedUpload.collection).doc(matchedUpload.id).get()
+        if (contentDoc.exists) {
+          const contentData = contentDoc.data()!
+
+          if (contentData.uid === userId || contentData.userId === userId) {
+            contentItems.push({
+              id: matchedUpload.id,
+              title: contentData.title || contentData.filename || `Content ${contentItems.length + 1}`,
+              description: contentData.description || "",
+              fileUrl: contentData.url || contentData.downloadUrl || contentData.downloadURL || "",
+              downloadUrl: contentData.downloadUrl || contentData.url || contentData.downloadURL || "",
+              publicUrl: contentData.publicUrl || contentData.url || contentData.downloadURL || "",
+              thumbnailUrl: contentData.thumbnailUrl || "",
+              fileSize: contentData.fileSize || contentData.size || 0,
+              fileSizeFormatted: formatFileSize(contentData.fileSize || contentData.size || 0),
+              duration: contentData.duration || 0,
+              durationFormatted: formatDuration(contentData.duration || 0),
+              mimeType: contentData.mimeType || contentData.type || "video/mp4",
+              format: contentData.format || getFormatFromMimeType(contentData.mimeType || contentData.type),
+              quality: contentData.quality || "HD",
+              tags: contentData.tags || [],
+              contentType: getContentTypeFromMimeType(contentData.mimeType || contentData.type),
+              createdAt: contentData.createdAt || contentData.addedAt || new Date().toISOString(),
+              uploadedAt:
+                contentData.uploadedAt || contentData.createdAt || contentData.addedAt || new Date().toISOString(),
+              collection: matchedUpload.collection,
+              transcript: contentData.transcript || matchedUpload.transcript || null,
+              detectedNiche: matchedUpload.detectedNiche || null,
+              nicheConfidence: matchedUpload.confidence || null,
+              vexMatchConfidence: matchResult.confidence,
+              vexMatchReason: matchResult.matchReason,
+            })
+
+            matchDetails.push({
+              identifier: contentIdentifier,
+              matched: true,
+              title: matchedUpload.title,
+              confidence: matchResult.confidence,
+              reason: matchResult.matchReason,
+            })
+
+            console.log(
+              `[v0] ✅ Added to bundle: "${matchedUpload.title}" from ${matchedUpload.collection}${matchedUpload.transcript ? " (has transcript)" : ""}`,
+            )
           }
-        } else {
-          console.warn(`[v0] Could not find content for identifier: "${contentIdentifier}"`)
         }
       } catch (error) {
         console.warn(`[v0] Failed to process content "${contentIdentifier}":`, error)
+        matchDetails.push({
+          identifier: contentIdentifier,
+          matched: false,
+          reason: `Error: ${error instanceof Error ? error.message : "Unknown error"}`,
+        })
       }
     }
+
+    console.log(`[v0] 📊 Bundle Match Summary:`)
+    console.log(`[v0]   ✅ Matched: ${contentItems.length}`)
+    console.log(`[v0]   ❌ Not found: ${contentIds.length - contentItems.length}`)
+    matchDetails.forEach((detail) => {
+      if (detail.matched) {
+        console.log(`[v0]   ✓ "${detail.identifier}" → "${detail.title}" (${detail.confidence}% - ${detail.reason})`)
+      } else {
+        console.log(`[v0]   ✗ "${detail.identifier}" - ${detail.reason}`)
+      }
+    })
 
     if (contentItems.length === 0) {
       return {
         success: false,
         error:
           "No valid content items found. The content you referenced may not exist or may not belong to your account.",
+        matchDetails,
       }
     }
 
-    console.log(`[v0] Successfully processed ${contentItems.length} content items`)
+    console.log(`[v0] Successfully processed ${contentItems.length} content items for bundle`)
 
     const itemsWithTranscripts = contentItems.filter((item) => item.transcript).length
     if (itemsWithTranscripts > 0) {
-      console.log(`[v0] 📝 Bundle includes ${itemsWithTranscripts} items with transcripts for better organization`)
+      console.log(`[v0] 📝 Bundle includes ${itemsWithTranscripts} items with transcripts`)
     }
 
     console.log("[v0] Creating Stripe product...")
