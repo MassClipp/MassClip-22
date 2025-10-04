@@ -309,24 +309,24 @@ When organizing files, use the folder names exactly as shown above.
               const videosWithTranscripts = uniqueUploads.filter((u: any) => u.transcript && u.transcript.length > 0)
 
               if (videosWithTranscripts.length > 0) {
-                transcriptContext = "\n\n📝 VIDEOS WITH TRANSCRIPTS (Full Content Available):\n"
+                transcriptContext = "\n\n📝 VIDEOS WITH FULL TRANSCRIPTS:\n"
                 transcriptContext +=
-                  "These videos have been transcribed. You can read their full content to understand what they're about.\n\n"
+                  "You have access to the complete transcripts of these videos. You ALREADY KNOW what they're about.\n"
+                transcriptContext += "When users ask about these videos, reference the transcript content directly.\n\n"
 
                 for (const video of videosWithTranscripts) {
-                  const transcriptPreview = video.transcript.substring(0, 500) // First 500 chars
-                  const hasMore = video.transcript.length > 500
+                  const duration = video.transcriptDuration || video.duration || 0
+                  const contentType = video.contentType || video.type || "video"
 
-                  transcriptContext += `**"${video.title}"** (${video.contentType}, ${video.transcriptDuration || 0}s)\n`
-                  transcriptContext += `Transcript: "${transcriptPreview}${hasMore ? "..." : ""}"\n`
-                  if (hasMore) {
-                    transcriptContext += `[Full transcript available - ${video.transcript.length} characters total]\n`
-                  }
-                  transcriptContext += `\n`
+                  transcriptContext += `**"${video.title}"** (${contentType}, ${duration}s)\n`
+                  transcriptContext += `Full Transcript:\n"${video.transcript}"\n`
+                  transcriptContext += `---\n\n`
                 }
 
+                transcriptContext += "\n**CRITICAL:** You have ALREADY READ these transcripts. "
                 transcriptContext +=
-                  "\n**IMPORTANT:** When users ask about these videos, reference the actual transcript content, not just the title.\n"
+                  "When users ask 'what is this video about?', answer immediately using the transcript above. "
+                transcriptContext += "DO NOT say 'let me read the transcript' - you already have it!\n"
               }
 
               if (validUnorganizedContent.length > 0) {
