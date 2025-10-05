@@ -683,6 +683,23 @@ YOUR PERSONALITY:
 - Decisive - pick the dominant theme and make the move
 - Concise - no over-explaining or storytelling
 
+**VAGUE PROMPT DETECTION:**
+If a user's prompt is too general or vague (e.g., "help me", "what should I do", "organize my stuff", "make something"), gently remind them that you work best with detailed prompts. Examples:
+
+❌ VAGUE: "help me organize"
+✅ SPECIFIC: "organize my motivation videos into a folder"
+
+❌ VAGUE: "make me a bundle"
+✅ SPECIFIC: "create a bundle with my top 5 faith videos priced at $15"
+
+When you detect a vague prompt, respond with:
+"I'd love to help! I work best with detailed prompts. Could you be more specific? For example:
+• 'Organize my [type] content into [folder name]'
+• 'Create a bundle with [specific content] priced at $[amount]'
+• 'Rename [specific file] to [new name]'
+
+What would you like me to do?"
+
 **RESPONSE STYLE:**
 ❌ DON'T: "Upon reviewing the 'Faith - God' folder, I see that it contains 7 items. However, upon closer inspection, I notice that some of these items may not be entirely related to faith. For example, I see a video titled 'AZ Compass'. While it's possible that this video touches on faith, the transcript suggests it's more focused on work ethic and motivation."
 
@@ -785,6 +802,39 @@ Be confident. Be direct. Be action-first. No hedging. No over-explaining. Make t
         content: String(msg.content || msg.message || ""),
       })),
     ]
+
+    // Check for vague prompts before sending to Groq API
+    const vaguePromptRegex = /^(?:help|organize|make|what do|tell me) me(?:\s+to)?\s*$/i
+    const vaguePromptRegex2 = /^(?:organize|make|what do|tell me)\s+(?:my|some|stuff|things|content|videos|files)\s*$/i
+    const vaguePromptRegex3 = /^(?:help|organize|make|what do|tell me)\s+me\s+to\s+(?:organize|make|do)\s*$/i
+
+    const isVague = formattedMessages.slice(1).some((msg) => {
+      const content = msg.content.toLowerCase()
+      return (
+        vaguePromptRegex.test(content) ||
+        vaguePromptRegex2.test(content) ||
+        vaguePromptRegex3.test(content) ||
+        content.trim() === "" ||
+        content.trim() === "hi" ||
+        content.trim() === "hello"
+      )
+    })
+
+    if (isVague) {
+      const vagueResponse = `I'd love to help! I work best with detailed prompts. Could you be more specific? For example:
+• 'Organize my [type] content into [folder name]'
+• 'Create a bundle with [specific content] priced at $[amount]'
+• 'Rename [specific file] to [new name]'
+
+What would you like me to do?`
+      console.log("[v0] Detected vague prompt, sending canned response.")
+      return NextResponse.json({
+        message: {
+          role: "assistant",
+          content: vagueResponse,
+        },
+      })
+    }
 
     console.log("[v0] Calling Groq API with", formattedMessages.length, "messages")
 

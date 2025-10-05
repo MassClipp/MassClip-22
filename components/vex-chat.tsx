@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -21,6 +21,7 @@ import {
   LogOut,
   ChevronRight,
   ChevronLeft,
+  ArrowDown,
 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -83,6 +84,11 @@ function VexChat({ children }: VexChatProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
 
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const scrollAreaRef = useRef<HTMLDivElement>(null)
+  const [showScrollButton, setShowScrollButton] = useState(false)
+  const [isUserScrolling, setIsUserScrolling] = useState(false)
+
   const isVexChatPage = pathname === "/dashboard/vex"
   const isUploadPage = pathname === "/dashboard/upload"
 
@@ -136,6 +142,39 @@ function VexChat({ children }: VexChatProps) {
     { icon: Package, label: "My Purchases", href: "/dashboard/purchases" },
     { icon: Gift, label: "Free Content", href: "/dashboard/free-content" },
   ]
+
+  useEffect(() => {
+    if (!isUserScrolling && messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" })
+    }
+  }, [messages, isLoading, isUserScrolling])
+
+  useEffect(() => {
+    const scrollArea = scrollAreaRef.current
+    if (!scrollArea) return
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = scrollArea
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 100
+
+      setShowScrollButton(!isNearBottom)
+
+      // If user scrolls up, mark as user scrolling
+      if (!isNearBottom) {
+        setIsUserScrolling(true)
+      } else {
+        setIsUserScrolling(false)
+      }
+    }
+
+    scrollArea.addEventListener("scroll", handleScroll)
+    return () => scrollArea.removeEventListener("scroll", handleScroll)
+  }, [])
+
+  const scrollToBottom = () => {
+    setIsUserScrolling(false)
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }
 
   // Load chat sessions
   useEffect(() => {
@@ -1167,7 +1206,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
             </div>
           )}
 
-          <ScrollArea className={`flex-1 ${isMobile ? "px-3" : "px-4"}`}>
+          <ScrollArea className={`flex-1 ${isMobile ? "px-3" : "px-4"}`} ref={scrollAreaRef}>
             <div className={`${isMobile ? "max-w-full" : "max-w-4xl mx-auto"} py-4 min-h-full flex flex-col`}>
               {messages.length === 0 && (
                 <div className="text-center flex-1 flex flex-col justify-center items-center min-h-[60vh] px-2">
@@ -1252,10 +1291,23 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                       </div>
                     </div>
                   )}
+
+                  <div ref={messagesEndRef} />
                 </div>
               )}
             </div>
           </ScrollArea>
+
+          {showScrollButton && (
+            <Button
+              onClick={scrollToBottom}
+              size="sm"
+              className="fixed bottom-24 right-8 h-10 w-10 p-0 rounded-full bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 shadow-lg z-50 transition-all duration-200"
+              title="Scroll to bottom"
+            >
+              <ArrowDown className="h-4 w-4" />
+            </Button>
+          )}
 
           <div className={`flex-shrink-0 ${isMobile ? "px-3" : "px-4"} py-3`}>
             <div className={`${isMobile ? "max-w-full" : "max-w-4xl mx-auto"}`}>
