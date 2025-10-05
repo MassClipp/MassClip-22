@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { initializeFirebaseAdmin, db } from "@/lib/firebase/firebaseAdmin"
 import { getAuth } from "firebase-admin/auth"
 import { transcribeVideo } from "@/lib/groq-transcription"
-import { checkSubscription } from "@/lib/subscription"
+import { canAnalyzeTranscripts } from "@/lib/subscription"
 
 initializeFirebaseAdmin()
 
@@ -13,6 +13,7 @@ export async function POST(request: NextRequest) {
     // Verify authentication
     const authHeader = request.headers.get("authorization")
     console.log(`🔑 [Auto-Transcribe] Auth header present: ${!!authHeader}`)
+    console.log(`🔑 [Auto-Transcribe] Auth header value: ${authHeader?.substring(0, 20)}...`)
 
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       console.log("❌ [Auto-Transcribe] No auth token or invalid format")
@@ -20,26 +21,20 @@ export async function POST(request: NextRequest) {
     }
 
     const token = authHeader.split("Bearer ")[1]
+    console.log(`🔑 [Auto-Transcribe] Token length: ${token?.length}`)
+
     const decodedToken = await getAuth().verifyIdToken(token)
     const userId = decodedToken.uid
     console.log(`✅ [Auto-Transcribe] Authenticated user: ${userId}`)
 
-    const subscription = await checkSubscription(userId)
-    const hasTranscriptPermission = subscription.plan === "creator_pro" || subscription.plan === "pro"
-
+    const hasTranscriptPermission = await canAnalyzeTranscripts(userId)
     if (!hasTranscriptPermission) {
-      console.log(
-        `⛔ [Auto-Transcribe] User ${userId} does not have transcript analysis permission (plan: ${subscription.plan})`,
-      )
-      return NextResponse.json(
-        {
-          success: false,
-          skipped: true,
-          reason: "Transcript analysis requires Creator Pro plan",
-          message: "Upgrade to Creator Pro to unlock transcript analysis",
-        },
-        { status: 200 },
-      )
+      console.log(`⏭️ [Auto-Transcribe] User ${userId} does not have transcript analysis permission (Free plan)`)
+      return NextResponse.json({
+        success: true,
+        skipped: true,
+        reason: "Transcript analysis not available on Free plan",
+      })
     }
 
     // Get request data

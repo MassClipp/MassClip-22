@@ -12,20 +12,17 @@ export interface FreeUserDoc {
   bundlesLimit: number
   maxVideosPerBundle: number
   platformFeePercentage: number
+  maxFolders: number
+  canCreateSubfolders: boolean
+  canAnalyzeTranscripts: boolean
+  canCreateBundles: boolean
+  vexCapabilities: "basic" | "full"
   // Features
   hasUnlimitedDownloads: boolean
   hasPremiumContent: boolean
   hasNoWatermark: boolean
   hasPrioritySupport: boolean
   hasLimitedOrganization: boolean
-  // Additional permissions
-  maxFolders: number
-  canHaveSubfolders: boolean
-  canCreateBundles: boolean
-  hasBasicVexAI: boolean
-  hasFullVexAI: boolean
-  canAnalyzeTranscripts: boolean
-  canVexCreateBundles: boolean
   // Timestamps
   createdAt: any
   updatedAt: any
@@ -42,18 +39,16 @@ const FREE_TIER_DEFAULTS = {
   bundlesLimit: 2,
   maxVideosPerBundle: 10,
   platformFeePercentage: 20,
+  maxFolders: 2,
+  canCreateSubfolders: false,
+  canAnalyzeTranscripts: false,
+  canCreateBundles: false,
+  vexCapabilities: "basic" as const,
   hasUnlimitedDownloads: false,
   hasPremiumContent: false,
   hasNoWatermark: false,
   hasPrioritySupport: false,
   hasLimitedOrganization: true,
-  maxFolders: 2,
-  canHaveSubfolders: false,
-  canCreateBundles: false,
-  hasBasicVexAI: true,
-  hasFullVexAI: false,
-  canAnalyzeTranscripts: false,
-  canVexCreateBundles: false,
 }
 
 export async function getFreeUser(uid: string): Promise<FreeUserDoc | null> {
@@ -242,6 +237,11 @@ export async function getFreeUserLimits(uid: string): Promise<{
   bundlesLimit: number
   maxVideosPerBundle: number
   platformFeePercentage: number
+  maxFolders: number
+  canCreateSubfolders: boolean
+  canAnalyzeTranscripts: boolean
+  canCreateBundles: boolean
+  vexCapabilities: "basic" | "full"
   reachedDownloadLimit: boolean
   reachedBundleLimit: boolean
   hasUnlimitedDownloads: boolean
@@ -249,13 +249,6 @@ export async function getFreeUserLimits(uid: string): Promise<{
   hasNoWatermark: boolean
   hasPrioritySupport: boolean
   hasLimitedOrganization: boolean
-  maxFolders: number
-  canHaveSubfolders: boolean
-  canCreateBundles: boolean
-  hasBasicVexAI: boolean
-  hasFullVexAI: boolean
-  canAnalyzeTranscripts: boolean
-  canVexCreateBundles: boolean
   daysUntilReset: number
 }> {
   // Check and reset monthly limits if needed
@@ -291,6 +284,11 @@ export async function getFreeUserLimits(uid: string): Promise<{
     bundlesLimit: freeUser.bundlesLimit,
     maxVideosPerBundle: freeUser.maxVideosPerBundle,
     platformFeePercentage: freeUser.platformFeePercentage,
+    maxFolders: freeUser.maxFolders ?? FREE_TIER_DEFAULTS.maxFolders,
+    canCreateSubfolders: freeUser.canCreateSubfolders ?? FREE_TIER_DEFAULTS.canCreateSubfolders,
+    canAnalyzeTranscripts: freeUser.canAnalyzeTranscripts ?? FREE_TIER_DEFAULTS.canAnalyzeTranscripts,
+    canCreateBundles: freeUser.canCreateBundles ?? FREE_TIER_DEFAULTS.canCreateBundles,
+    vexCapabilities: freeUser.vexCapabilities ?? FREE_TIER_DEFAULTS.vexCapabilities,
     reachedDownloadLimit: freeUser.downloadsUsed >= freeUser.downloadsLimit,
     reachedBundleLimit: freeUser.bundlesCreated >= freeUser.bundlesLimit,
     hasUnlimitedDownloads: freeUser.hasUnlimitedDownloads,
@@ -298,13 +296,6 @@ export async function getFreeUserLimits(uid: string): Promise<{
     hasNoWatermark: freeUser.hasNoWatermark,
     hasPrioritySupport: freeUser.hasPrioritySupport,
     hasLimitedOrganization: freeUser.hasLimitedOrganization,
-    maxFolders: freeUser.maxFolders,
-    canHaveSubfolders: freeUser.canHaveSubfolders,
-    canCreateBundles: freeUser.canCreateBundles,
-    hasBasicVexAI: freeUser.hasBasicVexAI,
-    hasFullVexAI: freeUser.hasFullVexAI,
-    canAnalyzeTranscripts: freeUser.canAnalyzeTranscripts,
-    canVexCreateBundles: freeUser.canVexCreateBundles,
     daysUntilReset,
   }
 }

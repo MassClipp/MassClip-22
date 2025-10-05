@@ -1,7 +1,7 @@
 "use client"
 import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
-import { CheckCircle2, Crown, Shield, Zap } from "lucide-react"
+import { CheckCircle2, Crown, Shield, Zap, Folder } from "lucide-react"
 import { SubscribeButton } from "@/components/subscribe-button"
 import { useAuth } from "@/contexts/auth-context"
 import { useUserPlan } from "@/hooks/use-user-plan"
@@ -69,13 +69,7 @@ export default function MembershipPlansPage() {
                 <ul className="space-y-4 mb-8">
                   <li className="flex items-start">
                     <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                    <span>
-                      <strong>2 folders max</strong> (no subfolders)
-                    </span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                    <span>Basic Vex AI for content organization</span>
+                    <span>2 folders max (no subfolders)</span>
                   </li>
                   <li className="flex items-start">
                     <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
@@ -84,6 +78,14 @@ export default function MembershipPlansPage() {
                   <li className="flex items-start">
                     <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
                     <span>10 videos per bundle limit</span>
+                  </li>
+                  <li className="flex items-start">
+                    <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
+                    <span>Basic Vex AI - content organization only</span>
+                  </li>
+                  <li className="flex items-start">
+                    <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
+                    <span>20% platform fee on sales</span>
                   </li>
                 </ul>
 
@@ -123,31 +125,37 @@ export default function MembershipPlansPage() {
                 </div>
                 <p className="text-zinc-400 mb-6">Everything you need to create amazing content</p>
                 <p className="text-4xl font-semibold text-white mb-6">
-                  $19<span className="text-xl text-zinc-400">/month</span>
+                  $15<span className="text-xl text-zinc-400">/month</span>
                 </p>
 
                 <ul className="space-y-4 mb-8">
                   <li className="flex items-start">
                     <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
                     <span>
-                      <strong>Unlimited folders</strong> with subfolders
+                      <strong>Unlimited folders with subfolders</strong>
                     </span>
                   </li>
                   <li className="flex items-start">
                     <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                    <span>Full Vex AI with bundle creation & transcript analysis</span>
+                    <span>
+                      <strong>Unlimited bundles on storefront</strong>
+                    </span>
                   </li>
                   <li className="flex items-start">
                     <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                    <span>Unlimited bundles on storefront</span>
+                    <span>
+                      <strong>Unlimited videos per bundle</strong>
+                    </span>
                   </li>
                   <li className="flex items-start">
                     <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                    <span>Unlimited videos per bundle</span>
+                    <span>
+                      <strong>Full Vex AI</strong> - bundle creation & transcript analysis
+                    </span>
                   </li>
                   <li className="flex items-start">
                     <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                    <span>Only 10% platform fee</span>
+                    <span>Only 10% platform fee on sales</span>
                   </li>
                 </ul>
 
@@ -174,24 +182,24 @@ export default function MembershipPlansPage() {
 
             <div className="grid md:grid-cols-3 gap-6 mb-12">
               <div className="bg-zinc-900/30 border border-zinc-800/50 rounded-lg p-6 backdrop-blur-sm">
-                <Crown className="h-8 w-8 text-red-600 mb-4" />
-                <h4 className="text-lg font-medium text-white mb-2">Full Vex AI</h4>
+                <Folder className="h-8 w-8 text-red-600 mb-4" />
+                <h4 className="text-lg font-medium text-white mb-2">Unlimited Organization</h4>
                 <p className="text-zinc-400">
-                  Let Vex create bundles for you with advanced transcript analysis and intelligent content organization
+                  Create unlimited folders and subfolders to organize your content library perfectly
                 </p>
               </div>
 
               <div className="bg-zinc-900/30 border border-zinc-800/50 rounded-lg p-6 backdrop-blur-sm">
                 <Zap className="h-8 w-8 text-red-600 mb-4" />
-                <h4 className="text-lg font-medium text-white mb-2">Unlimited Organization</h4>
+                <h4 className="text-lg font-medium text-white mb-2">Full Vex AI</h4>
                 <p className="text-zinc-400">
-                  Create unlimited folders with subfolders to organize your content exactly how you want
+                  Let Vex AI create bundles for you and analyze transcripts for better content insights
                 </p>
               </div>
 
               <div className="bg-zinc-900/30 border border-zinc-800/50 rounded-lg p-6 backdrop-blur-sm">
                 <Shield className="h-8 w-8 text-red-600 mb-4" />
-                <h4 className="text-lg font-medium text-white mb-2">Lower Platform Fee</h4>
+                <h4 className="text-lg font-medium text-white mb-2">Lower Fees</h4>
                 <p className="text-zinc-400">Keep more of your earnings with only 10% platform fee instead of 20%</p>
               </div>
             </div>

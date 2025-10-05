@@ -18,7 +18,11 @@ export interface SubscriptionData {
     platformFeePercentage: number
     maxVideosPerBundle: number | null // null means unlimited
     maxBundles: number | null // null means unlimited
-    transcriptAnalysis: boolean
+    maxFolders: number | null // null means unlimited
+    canCreateSubfolders: boolean
+    canAnalyzeTranscripts: boolean
+    canCreateBundles: boolean
+    vexCapabilities: "basic" | "full"
   }
 }
 
@@ -31,7 +35,27 @@ const FREE_DEFAULTS = {
   platformFeePercentage: 20,
   maxVideosPerBundle: 10,
   maxBundles: 2,
-  transcriptAnalysis: false,
+  maxFolders: 2,
+  canCreateSubfolders: false,
+  canAnalyzeTranscripts: false,
+  canCreateBundles: false,
+  vexCapabilities: "basic" as const,
+}
+
+// Defaults for pro tier
+const PRO_DEFAULTS = {
+  unlimitedDownloads: true,
+  premiumContent: true,
+  noWatermark: true,
+  prioritySupport: true,
+  platformFeePercentage: 10,
+  maxVideosPerBundle: null,
+  maxBundles: null,
+  maxFolders: null,
+  canCreateSubfolders: true,
+  canAnalyzeTranscripts: true,
+  canCreateBundles: true,
+  vexCapabilities: "full" as const,
 }
 
 export async function checkSubscription(userId?: string): Promise<SubscriptionData> {
@@ -53,16 +77,7 @@ export async function checkSubscription(userId?: string): Promise<SubscriptionDa
         stripeCustomerId: membership.stripeCustomerId,
         stripeSubscriptionId: membership.stripeSubscriptionId,
         currentPeriodEnd: membership.currentPeriodEnd,
-        features: {
-          unlimitedDownloads: true,
-          premiumContent: true,
-          noWatermark: true,
-          prioritySupport: true,
-          platformFeePercentage: 10,
-          maxVideosPerBundle: null, // unlimited
-          maxBundles: null, // unlimited
-          transcriptAnalysis: true,
-        },
+        features: PRO_DEFAULTS,
       }
     }
 
@@ -81,7 +96,20 @@ export async function checkSubscription(userId?: string): Promise<SubscriptionDa
 
       const maxBundles = typeof data.bundlesLimit === "number" ? data.bundlesLimit : FREE_DEFAULTS.maxBundles
 
-      const transcriptAnalysis = data.transcriptAnalysis || FREE_DEFAULTS.transcriptAnalysis
+      const maxFolders = typeof data.maxFolders === "number" ? data.maxFolders : FREE_DEFAULTS.maxFolders
+
+      const canCreateSubfolders =
+        typeof data.canCreateSubfolders === "boolean" ? data.canCreateSubfolders : FREE_DEFAULTS.canCreateSubfolders
+
+      const canAnalyzeTranscripts =
+        typeof data.canAnalyzeTranscripts === "boolean"
+          ? data.canAnalyzeTranscripts
+          : FREE_DEFAULTS.canAnalyzeTranscripts
+
+      const canCreateBundles =
+        typeof data.canCreateBundles === "boolean" ? data.canCreateBundles : FREE_DEFAULTS.canCreateBundles
+
+      const vexCapabilities = data.vexCapabilities || FREE_DEFAULTS.vexCapabilities
 
       return {
         isActive: false,
@@ -94,7 +122,11 @@ export async function checkSubscription(userId?: string): Promise<SubscriptionDa
           platformFeePercentage,
           maxVideosPerBundle,
           maxBundles,
-          transcriptAnalysis,
+          maxFolders,
+          canCreateSubfolders,
+          canAnalyzeTranscripts,
+          canCreateBundles,
+          vexCapabilities,
         },
       }
     }
@@ -119,16 +151,7 @@ export function getSubscriptionFeatures(plan: string) {
   switch (plan) {
     case "pro":
     case "creator_pro":
-      return {
-        unlimitedDownloads: true,
-        premiumContent: true,
-        noWatermark: true,
-        prioritySupport: true,
-        platformFeePercentage: 10,
-        maxVideosPerBundle: null, // unlimited
-        maxBundles: null, // unlimited
-        transcriptAnalysis: true,
-      }
+      return PRO_DEFAULTS
     default:
       return { ...FREE_DEFAULTS }
   }
@@ -156,6 +179,10 @@ export function getMaxBundles(plan: string): number | null {
   return plan === "pro" || plan === "creator_pro" ? null : FREE_DEFAULTS.maxBundles
 }
 
+export function getMaxFolders(plan: string): number | null {
+  return plan === "pro" || plan === "creator_pro" ? null : FREE_DEFAULTS.maxFolders
+}
+
 export function canAddVideoToBundle(currentVideoCount: number, plan: string): boolean {
   const maxVideos = getMaxVideosPerBundle(plan)
   if (maxVideos === null) return true // unlimited
@@ -168,7 +195,34 @@ export function canCreateBundle(currentBundleCount: number, plan: string): boole
   return currentBundleCount < maxBundles
 }
 
+export function canCreateSubfolders(plan: string): boolean {
+  return plan === "pro" || plan === "creator_pro" ? true : FREE_DEFAULTS.canCreateSubfolders
+}
+
 export function canAnalyzeTranscripts(plan: string): boolean {
-  // Only Creator Pro users can analyze transcripts
-  return plan === "pro" || plan === "creator_pro"
+  return plan === "pro" || plan === "creator_pro" ? true : FREE_DEFAULTS.canAnalyzeTranscripts
+}
+
+export function canCreateBundles(plan: string): boolean {
+  return plan === "pro" || plan === "creator_pro" ? true : FREE_DEFAULTS.canCreateBundles
+}
+
+export async function canAnalyzeTranscriptsForUser(userId: string): Promise<boolean> {
+  const subscription = await checkSubscription(userId)
+  return subscription.features.canAnalyzeTranscripts
+}
+
+export async function canCreateBundlesForUser(userId: string): Promise<boolean> {
+  const subscription = await checkSubscription(userId)
+  return subscription.features.canCreateBundles
+}
+
+export async function canCreateSubfoldersForUser(userId: string): Promise<boolean> {
+  const subscription = await checkSubscription(userId)
+  return subscription.features.canCreateSubfolders
+}
+
+export async function getMaxFoldersForUser(userId: string): Promise<number | null> {
+  const subscription = await checkSubscription(userId)
+  return subscription.features.maxFolders
 }

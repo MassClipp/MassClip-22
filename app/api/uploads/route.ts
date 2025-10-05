@@ -1,7 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { initializeFirebaseAdmin, db } from "@/lib/firebase/firebaseAdmin"
 import { transcribeVideoWithGroq } from "@/lib/groq-transcription"
-import { checkSubscription } from "@/lib/subscription"
 
 // Initialize Firebase Admin
 initializeFirebaseAdmin()
@@ -241,33 +240,24 @@ export async function POST(request: NextRequest) {
       console.log(`✅ [Uploads API] Upload record created with ID: ${docRef.id}`)
 
       if (contentType === "video") {
-        const subscription = await checkSubscription(user.uid)
-        const hasTranscriptPermission = subscription.plan === "creator_pro" || subscription.plan === "pro"
+        console.log(`🎤 [Uploads API] Triggering transcription for video: ${docRef.id}`)
 
-        if (hasTranscriptPermission) {
-          console.log(`🎤 [Uploads API] Triggering transcription for video: ${docRef.id} (user has permission)`)
-
-          // Trigger transcription asynchronously (don't wait for it)
-          transcribeVideoWithGroq(publicURL)
-            .then(async (result) => {
-              console.log(`✅ [Auto-Transcribe] Completed for ${docRef.id}`)
-              await docRef.update({
-                transcript: result.text,
-                transcriptDuration: result.duration,
-                transcriptLanguage: result.language,
-                transcribedAt: new Date(),
-              })
-              console.log(`💾 [Auto-Transcribe] Saved transcript to Firestore`)
+        // Trigger transcription asynchronously (don't wait for it)
+        transcribeVideoWithGroq(publicURL)
+          .then(async (result) => {
+            console.log(`✅ [Auto-Transcribe] Completed for ${docRef.id}`)
+            await docRef.update({
+              transcript: result.text,
+              transcriptDuration: result.duration,
+              transcriptLanguage: result.language,
+              transcribedAt: new Date(),
             })
-            .catch((error) => {
-              console.error(`❌ [Auto-Transcribe] Failed for ${docRef.id}:`, error)
-              // Don't fail the upload if transcription fails
-            })
-        } else {
-          console.log(
-            `⛔ [Uploads API] Skipping transcription for ${docRef.id} - user plan: ${subscription.plan} (requires Creator Pro)`,
-          )
-        }
+            console.log(`💾 [Auto-Transcribe] Saved transcript to Firestore`)
+          })
+          .catch((error) => {
+            console.error(`❌ [Auto-Transcribe] Failed for ${docRef.id}:`, error)
+            // Don't fail the upload if transcription fails
+          })
       }
 
       return NextResponse.json({
