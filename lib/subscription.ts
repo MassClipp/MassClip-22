@@ -16,13 +16,12 @@ export interface SubscriptionData {
     noWatermark: boolean
     prioritySupport: boolean
     platformFeePercentage: number
-    maxVideosPerBundle: number | null // null means unlimited
-    maxBundles: number | null // null means unlimited
-    maxFolders: number | null // null means unlimited
+    maxVideosPerBundle: number | null
+    maxBundles: number | null
+    maxFolders: number | null
     canCreateSubfolders: boolean
     canAnalyzeTranscripts: boolean
     canCreateBundles: boolean
-    vexCapabilities: "basic" | "full"
   }
 }
 
@@ -39,29 +38,11 @@ const FREE_DEFAULTS = {
   canCreateSubfolders: false,
   canAnalyzeTranscripts: false,
   canCreateBundles: false,
-  vexCapabilities: "basic" as const,
-}
-
-// Defaults for pro tier
-const PRO_DEFAULTS = {
-  unlimitedDownloads: true,
-  premiumContent: true,
-  noWatermark: true,
-  prioritySupport: true,
-  platformFeePercentage: 10,
-  maxVideosPerBundle: null,
-  maxBundles: null,
-  maxFolders: null,
-  canCreateSubfolders: true,
-  canAnalyzeTranscripts: true,
-  canCreateBundles: true,
-  vexCapabilities: "full" as const,
 }
 
 export async function checkSubscription(userId?: string): Promise<SubscriptionData> {
   try {
     if (!userId) {
-      // Anonymous/unauthenticated -> treat as free
       return {
         isActive: false,
         plan: "free",
@@ -77,7 +58,19 @@ export async function checkSubscription(userId?: string): Promise<SubscriptionDa
         stripeCustomerId: membership.stripeCustomerId,
         stripeSubscriptionId: membership.stripeSubscriptionId,
         currentPeriodEnd: membership.currentPeriodEnd,
-        features: PRO_DEFAULTS,
+        features: {
+          unlimitedDownloads: true,
+          premiumContent: true,
+          noWatermark: true,
+          prioritySupport: true,
+          platformFeePercentage: 10,
+          maxVideosPerBundle: null,
+          maxBundles: null,
+          maxFolders: null,
+          canCreateSubfolders: true,
+          canAnalyzeTranscripts: true,
+          canCreateBundles: true,
+        },
       }
     }
 
@@ -85,7 +78,6 @@ export async function checkSubscription(userId?: string): Promise<SubscriptionDa
     if (freeSnap.exists()) {
       const data = freeSnap.data() as any
 
-      // Prefer stored limits if present, fallback to defaults
       const platformFeePercentage =
         typeof data.platformFeePercentage === "number"
           ? data.platformFeePercentage
@@ -109,8 +101,6 @@ export async function checkSubscription(userId?: string): Promise<SubscriptionDa
       const canCreateBundles =
         typeof data.canCreateBundles === "boolean" ? data.canCreateBundles : FREE_DEFAULTS.canCreateBundles
 
-      const vexCapabilities = data.vexCapabilities || FREE_DEFAULTS.vexCapabilities
-
       return {
         isActive: false,
         plan: "free",
@@ -126,7 +116,6 @@ export async function checkSubscription(userId?: string): Promise<SubscriptionDa
           canCreateSubfolders,
           canAnalyzeTranscripts,
           canCreateBundles,
-          vexCapabilities,
         },
       }
     }
@@ -151,7 +140,19 @@ export function getSubscriptionFeatures(plan: string) {
   switch (plan) {
     case "pro":
     case "creator_pro":
-      return PRO_DEFAULTS
+      return {
+        unlimitedDownloads: true,
+        premiumContent: true,
+        noWatermark: true,
+        prioritySupport: true,
+        platformFeePercentage: 10,
+        maxVideosPerBundle: null,
+        maxBundles: null,
+        maxFolders: null,
+        canCreateSubfolders: true,
+        canAnalyzeTranscripts: true,
+        canCreateBundles: true,
+      }
     default:
       return { ...FREE_DEFAULTS }
   }
@@ -196,33 +197,13 @@ export function canCreateBundle(currentBundleCount: number, plan: string): boole
 }
 
 export function canCreateSubfolders(plan: string): boolean {
-  return plan === "pro" || plan === "creator_pro" ? true : FREE_DEFAULTS.canCreateSubfolders
+  return plan === "pro" || plan === "creator_pro"
 }
 
 export function canAnalyzeTranscripts(plan: string): boolean {
-  return plan === "pro" || plan === "creator_pro" ? true : FREE_DEFAULTS.canAnalyzeTranscripts
+  return plan === "pro" || plan === "creator_pro"
 }
 
-export function canCreateBundles(plan: string): boolean {
-  return plan === "pro" || plan === "creator_pro" ? true : FREE_DEFAULTS.canCreateBundles
-}
-
-export async function canAnalyzeTranscriptsForUser(userId: string): Promise<boolean> {
-  const subscription = await checkSubscription(userId)
-  return subscription.features.canAnalyzeTranscripts
-}
-
-export async function canCreateBundlesForUser(userId: string): Promise<boolean> {
-  const subscription = await checkSubscription(userId)
-  return subscription.features.canCreateBundles
-}
-
-export async function canCreateSubfoldersForUser(userId: string): Promise<boolean> {
-  const subscription = await checkSubscription(userId)
-  return subscription.features.canCreateSubfolders
-}
-
-export async function getMaxFoldersForUser(userId: string): Promise<number | null> {
-  const subscription = await checkSubscription(userId)
-  return subscription.features.maxFolders
+export function canUserCreateBundles(plan: string): boolean {
+  return plan === "pro" || plan === "creator_pro"
 }

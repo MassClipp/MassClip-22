@@ -1,7 +1,7 @@
 "use client"
 import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
-import { CheckCircle2, Crown, Shield, Zap, Folder } from "lucide-react"
+import { CheckCircle2, Crown, Shield, Zap, Download } from "lucide-react"
 import { SubscribeButton } from "@/components/subscribe-button"
 import { useAuth } from "@/contexts/auth-context"
 import { useUserPlan } from "@/hooks/use-user-plan"
@@ -69,6 +69,24 @@ export default function MembershipPlansPage() {
                 <ul className="space-y-4 mb-8">
                   <li className="flex items-start">
                     <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
+                    <span>
+                      <strong>50 downloads per month</strong>
+                    </span>
+                  </li>
+                  <li className="flex items-start">
+                    <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
+                    <span>Access to all clips</span>
+                  </li>
+                  <li className="flex items-start">
+                    <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
+                    <span>Standard video quality</span>
+                  </li>
+                  <li className="flex items-start">
+                    <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
+                    <span>Dynamic content organization</span>
+                  </li>
+                  <li className="flex items-start">
+                    <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
                     <span>2 folders max (no subfolders)</span>
                   </li>
                   <li className="flex items-start">
@@ -125,33 +143,47 @@ export default function MembershipPlansPage() {
                 </div>
                 <p className="text-zinc-400 mb-6">Everything you need to create amazing content</p>
                 <p className="text-4xl font-semibold text-white mb-6">
-                  $15<span className="text-xl text-zinc-400">/month</span>
+                  $19<span className="text-xl text-zinc-400">/month</span>
                 </p>
 
                 <ul className="space-y-4 mb-8">
                   <li className="flex items-start">
                     <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
                     <span>
-                      <strong>Unlimited folders with subfolders</strong>
+                      <strong>Unlimited downloads</strong>
                     </span>
                   </li>
                   <li className="flex items-start">
                     <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                    <span>
-                      <strong>Unlimited bundles on storefront</strong>
-                    </span>
+                    <span>Access to all clips</span>
                   </li>
                   <li className="flex items-start">
                     <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                    <span>
-                      <strong>Unlimited videos per bundle</strong>
-                    </span>
+                    <span>High video quality</span>
                   </li>
                   <li className="flex items-start">
                     <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                    <span>
-                      <strong>Full Vex AI</strong> - bundle creation & transcript analysis
-                    </span>
+                    <span>Priority support</span>
+                  </li>
+                  <li className="flex items-start">
+                    <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
+                    <span>Advanced organization features</span>
+                  </li>
+                  <li className="flex items-start">
+                    <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
+                    <span>Unlimited folders with subfolders</span>
+                  </li>
+                  <li className="flex items-start">
+                    <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
+                    <span>Unlimited bundles on storefront</span>
+                  </li>
+                  <li className="flex items-start">
+                    <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
+                    <span>Unlimited videos per bundle</span>
+                  </li>
+                  <li className="flex items-start">
+                    <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
+                    <span>Full Vex AI - bundle creation & transcript analysis</span>
                   </li>
                   <li className="flex items-start">
                     <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
@@ -182,25 +214,23 @@ export default function MembershipPlansPage() {
 
             <div className="grid md:grid-cols-3 gap-6 mb-12">
               <div className="bg-zinc-900/30 border border-zinc-800/50 rounded-lg p-6 backdrop-blur-sm">
-                <Folder className="h-8 w-8 text-red-600 mb-4" />
-                <h4 className="text-lg font-medium text-white mb-2">Unlimited Organization</h4>
-                <p className="text-zinc-400">
-                  Create unlimited folders and subfolders to organize your content library perfectly
-                </p>
+                <Download className="h-8 w-8 text-red-600 mb-4" />
+                <h4 className="text-lg font-medium text-white mb-2">Unlimited Downloads</h4>
+                <p className="text-zinc-400">Download as many clips as you need without any monthly restrictions</p>
               </div>
 
               <div className="bg-zinc-900/30 border border-zinc-800/50 rounded-lg p-6 backdrop-blur-sm">
                 <Zap className="h-8 w-8 text-red-600 mb-4" />
-                <h4 className="text-lg font-medium text-white mb-2">Full Vex AI</h4>
-                <p className="text-zinc-400">
-                  Let Vex AI create bundles for you and analyze transcripts for better content insights
-                </p>
+                <h4 className="text-lg font-medium text-white mb-2">Premium Content</h4>
+                <p className="text-zinc-400">Access our entire library of high-quality, professionally curated clips</p>
               </div>
 
               <div className="bg-zinc-900/30 border border-zinc-800/50 rounded-lg p-6 backdrop-blur-sm">
                 <Shield className="h-8 w-8 text-red-600 mb-4" />
-                <h4 className="text-lg font-medium text-white mb-2">Lower Fees</h4>
-                <p className="text-zinc-400">Keep more of your earnings with only 10% platform fee instead of 20%</p>
+                <h4 className="text-lg font-medium text-white mb-2">Advanced Organization</h4>
+                <p className="text-zinc-400">
+                  Enjoy dynamic content organization with shuffled videos for a fresh experience
+                </p>
               </div>
             </div>
 

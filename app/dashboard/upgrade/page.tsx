@@ -8,34 +8,44 @@ import { Card } from "@/components/ui/card"
 import { useAuth } from "@/contexts/auth-context"
 import { useUserPlan } from "@/hooks/use-user-plan"
 
-const BUNDLE_SLOT_TIERS = {
-  tier1: {
-    slots: 1,
-    amount: 500, // $5.00
-    priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_BUNDLE_SLOT_1 || "",
-    description: "1 Bundle Slot",
+const bundleOptions = [
+  {
+    id: "bundle-1",
+    name: "1 Extra Bundle",
+    price: 3.99,
+    bundles: 1,
+    description: "Perfect for trying out premium bundles",
+    icon: Package,
+    priceId: "price_1S4pU2Dheyb0pkWFfJNzelxi",
   },
-  tier3: {
-    slots: 3,
-    amount: 1200, // $12.00
-    priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_BUNDLE_SLOT_3 || "",
-    description: "3 Bundle Slots",
+  {
+    id: "bundle-3",
+    name: "3 Extra Bundles",
+    price: 7.99,
+    bundles: 3,
+    description: "Great value for regular creators",
+    icon: Package,
+    popular: true,
+    priceId: "price_1S4pUrDheyb0pkWFAY0jv6Xy",
   },
-  tier5: {
-    slots: 5,
-    amount: 1800, // $18.00
-    priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_BUNDLE_SLOT_5 || "",
-    description: "5 Bundle Slots",
+  {
+    id: "bundle-5",
+    name: "5 Extra Bundles",
+    price: 11.99,
+    bundles: 5,
+    description: "Best deal for power users",
+    icon: Package,
+    priceId: "price_1S4pVUDheyb0pkWF4AT6vKMQ",
   },
-} as const
+]
 
 export default function UpgradePage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user } = useAuth()
   const { isProUser, loading } = useUserPlan()
-  const [showSuccessMessage, setShowSuccessMessage] = useState(false)
   const [purchasingBundle, setPurchasingBundle] = useState<string | null>(null)
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false)
 
   useEffect(() => {
     const success = searchParams.get("success")
@@ -51,6 +61,44 @@ export default function UpgradePage() {
       }, 5000)
     }
   }, [searchParams])
+
+  const handleBundlePurchase = async (bundleId: string) => {
+    try {
+      setPurchasingBundle(bundleId)
+      const bundleOption = bundleOptions.find((option) => option.id === bundleId)
+      if (!bundleOption) {
+        console.warn("[Upgrade] Bundle option not found")
+        return
+      }
+
+      const idToken = await user?.getIdToken?.()
+      const res = await fetch("/api/stripe/checkout/bundles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          idToken,
+          bundleId,
+          priceId: bundleOption.priceId,
+          bundles: bundleOption.bundles,
+          price: bundleOption.price,
+        }),
+      })
+
+      if (!res.ok) {
+        console.warn("[Upgrade] Failed to create checkout session for bundle purchase.")
+        return
+      }
+
+      const data = (await res.json()) as { url?: string }
+      if (data?.url) {
+        window.location.href = data.url
+      }
+    } catch (err) {
+      console.error("[Upgrade] Error starting bundle checkout:", err)
+    } finally {
+      setPurchasingBundle(null)
+    }
+  }
 
   const handleUpgradeClick = async () => {
     try {
@@ -75,40 +123,6 @@ export default function UpgradePage() {
     }
   }
 
-  const handleBundlePurchase = async (tier: keyof typeof BUNDLE_SLOT_TIERS) => {
-    setPurchasingBundle(tier)
-    try {
-      const idToken = await user?.getIdToken?.()
-      const tierInfo = BUNDLE_SLOT_TIERS[tier]
-
-      const res = await fetch("/api/stripe/checkout/bundles", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          idToken,
-          bundleId: `bundle-slot-${tier}`,
-          priceId: tierInfo.priceId,
-          bundles: tierInfo.slots,
-          price: tierInfo.amount / 100,
-        }),
-      })
-
-      if (!res.ok) {
-        console.warn("[Upgrade] Failed to create checkout session for bundle slots.")
-        setPurchasingBundle(null)
-        return
-      }
-
-      const data = (await res.json()) as { url?: string }
-      if (data?.url) {
-        window.location.href = data.url
-      }
-    } catch (err) {
-      console.error("[Upgrade] Error starting bundle slot checkout:", err)
-      setPurchasingBundle(null)
-    }
-  }
-
   return (
     <div className="space-y-8">
       {showSuccessMessage && (
@@ -129,12 +143,97 @@ export default function UpgradePage() {
         <h1 className="text-4xl font-light text-white">
           Choose Your{" "}
           <span className="bg-gradient-to-br from-slate-300 via-cyan-200 to-white bg-clip-text text-transparent">
-            Plan
-          </span>
+            Upgrade
+          </span>{" "}
+          Plan
         </h1>
         <p className="text-lg text-white/70 max-w-2xl mx-auto">
-          Unlock powerful features to organize and monetize your content
+          Get extra bundles with one-time purchases or upgrade to Creator Pro for unlimited access
         </p>
+      </div>
+
+      <div className="text-center space-y-2">
+        <h2 className="text-2xl font-light text-white">One-Time Bundle Purchases</h2>
+        <p className="text-white/60">Perfect for free users who want extra bundles without a subscription</p>
+      </div>
+
+      <div className="space-y-4">
+        {bundleOptions.map((option) => {
+          const Icon = option.icon
+          const isPurchasing = purchasingBundle === option.id
+
+          return (
+            <Card
+              key={option.id}
+              className={`relative overflow-hidden border transition-all ${
+                option.popular
+                  ? "border-cyan-400/50 shadow-lg shadow-cyan-500/20"
+                  : "border-zinc-700/50 hover:border-zinc-600/70"
+              } bg-gradient-to-br from-zinc-900/90 to-black/90`}
+            >
+              {option.popular && (
+                <div className="absolute right-0 top-0 bg-gradient-to-r from-cyan-400 to-blue-400 px-3 py-1 text-xs font-bold text-black">
+                  POPULAR
+                </div>
+              )}
+
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-400/30">
+                      <Icon className="h-5 w-5 text-cyan-300" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-light text-white">{option.name}</h3>
+                      <p className="text-zinc-400 text-sm">{option.description}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-light text-white">${option.price}</p>
+                    <span className="text-xs text-zinc-400">one-time</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4 text-sm text-white/70">
+                    <div className="flex items-center gap-1">
+                      <CheckCircle2 className="h-4 w-4 text-cyan-400" />
+                      {option.bundles} extra bundle{option.bundles > 1 ? "s" : ""}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <CheckCircle2 className="h-4 w-4 text-cyan-400" />
+                      Instant activation
+                    </div>
+                  </div>
+
+                  <Button
+                    onClick={() => handleBundlePurchase(option.id)}
+                    disabled={isPurchasing}
+                    className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white"
+                  >
+                    {isPurchasing ? (
+                      <div className="flex items-center">
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
+                        Processing...
+                      </div>
+                    ) : (
+                      `Buy ${option.bundles} Bundle${option.bundles > 1 ? "s" : ""}`
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          )
+        })}
+      </div>
+
+      <div className="text-center py-6">
+        <div className="inline-block p-1 bg-gradient-to-r from-cyan-500/20 to-blue-500/20 rounded-xl">
+          <div className="bg-zinc-900 rounded-lg p-6">
+            <h3 className="text-xl font-light text-white mb-2">Or Go Unlimited</h3>
+            <p className="text-white/60">Get unlimited bundles and premium features with Creator Pro</p>
+          </div>
+        </div>
       </div>
 
       <div className="space-y-6">
@@ -164,7 +263,7 @@ export default function UpgradePage() {
 
             <div className="space-y-2 mb-4">
               {[
-                { text: "2 folders max (no subfolders)", highlight: false },
+                { text: "2 folders max (no subfolders)", highlight: true },
                 { text: "2 bundles max on storefront", highlight: false },
                 { text: "10 videos per bundle limit", highlight: false },
                 { text: "Basic Vex AI - content organization only", highlight: false },
@@ -248,60 +347,6 @@ export default function UpgradePage() {
             )}
           </div>
         </Card>
-
-        <div className="space-y-4">
-          <div className="text-center">
-            <h2 className="text-2xl font-light text-white mb-2">
-              Need More{" "}
-              <span className="bg-gradient-to-br from-slate-300 via-cyan-200 to-white bg-clip-text text-transparent">
-                Bundle Slots?
-              </span>
-            </h2>
-            <p className="text-zinc-400 text-sm">One-time purchases to expand your storefront capacity</p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {(
-              Object.entries(BUNDLE_SLOT_TIERS) as [
-                keyof typeof BUNDLE_SLOT_TIERS,
-                (typeof BUNDLE_SLOT_TIERS)[keyof typeof BUNDLE_SLOT_TIERS],
-              ][]
-            ).map(([tier, info]) => (
-              <Card key={tier} className="border border-zinc-700/50 bg-gradient-to-br from-zinc-900/90 to-black/90">
-                <div className="p-5">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500/20 to-pink-500/20 border border-purple-400/30">
-                      <Package className="h-5 w-5 text-purple-300" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-light text-white">{info.description}</h3>
-                      <p className="text-xs text-zinc-500">One-time purchase</p>
-                    </div>
-                  </div>
-
-                  <div className="mb-4">
-                    <p className="text-3xl font-light text-white">${(info.amount / 100).toFixed(2)}</p>
-                    <p className="text-xs text-zinc-400 mt-1">
-                      ${(info.amount / 100 / info.slots).toFixed(2)} per bundle slot
-                    </p>
-                  </div>
-
-                  <Button
-                    onClick={() => handleBundlePurchase(tier)}
-                    disabled={purchasingBundle === tier}
-                    className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-400 hover:to-pink-400 text-white"
-                  >
-                    {purchasingBundle === tier ? "Processing..." : "Purchase"}
-                  </Button>
-                </div>
-              </Card>
-            ))}
-          </div>
-
-          <p className="text-center text-xs text-zinc-500">
-            Bundle slots are added to your account permanently and never expire
-          </p>
-        </div>
       </div>
     </div>
   )

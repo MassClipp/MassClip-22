@@ -16,7 +16,6 @@ export interface FreeUserDoc {
   canCreateSubfolders: boolean
   canAnalyzeTranscripts: boolean
   canCreateBundles: boolean
-  vexCapabilities: "basic" | "full"
   // Features
   hasUnlimitedDownloads: boolean
   hasPremiumContent: boolean
@@ -43,7 +42,6 @@ const FREE_TIER_DEFAULTS = {
   canCreateSubfolders: false,
   canAnalyzeTranscripts: false,
   canCreateBundles: false,
-  vexCapabilities: "basic" as const,
   hasUnlimitedDownloads: false,
   hasPremiumContent: false,
   hasNoWatermark: false,
@@ -241,7 +239,6 @@ export async function getFreeUserLimits(uid: string): Promise<{
   canCreateSubfolders: boolean
   canAnalyzeTranscripts: boolean
   canCreateBundles: boolean
-  vexCapabilities: "basic" | "full"
   reachedDownloadLimit: boolean
   reachedBundleLimit: boolean
   hasUnlimitedDownloads: boolean
@@ -264,6 +261,10 @@ export async function getFreeUserLimits(uid: string): Promise<{
       bundlesLimit: FREE_TIER_DEFAULTS.bundlesLimit,
       maxVideosPerBundle: FREE_TIER_DEFAULTS.maxVideosPerBundle,
       platformFeePercentage: FREE_TIER_DEFAULTS.platformFeePercentage,
+      maxFolders: FREE_TIER_DEFAULTS.maxFolders,
+      canCreateSubfolders: FREE_TIER_DEFAULTS.canCreateSubfolders,
+      canAnalyzeTranscripts: FREE_TIER_DEFAULTS.canAnalyzeTranscripts,
+      canCreateBundles: FREE_TIER_DEFAULTS.canCreateBundles,
       reachedDownloadLimit: false,
       reachedBundleLimit: false,
       ...FREE_TIER_DEFAULTS,
@@ -288,7 +289,6 @@ export async function getFreeUserLimits(uid: string): Promise<{
     canCreateSubfolders: freeUser.canCreateSubfolders ?? FREE_TIER_DEFAULTS.canCreateSubfolders,
     canAnalyzeTranscripts: freeUser.canAnalyzeTranscripts ?? FREE_TIER_DEFAULTS.canAnalyzeTranscripts,
     canCreateBundles: freeUser.canCreateBundles ?? FREE_TIER_DEFAULTS.canCreateBundles,
-    vexCapabilities: freeUser.vexCapabilities ?? FREE_TIER_DEFAULTS.vexCapabilities,
     reachedDownloadLimit: freeUser.downloadsUsed >= freeUser.downloadsLimit,
     reachedBundleLimit: freeUser.bundlesCreated >= freeUser.bundlesLimit,
     hasUnlimitedDownloads: freeUser.hasUnlimitedDownloads,

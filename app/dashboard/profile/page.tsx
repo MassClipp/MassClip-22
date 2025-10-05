@@ -752,7 +752,7 @@ export default function ProfilePage() {
                           </div>
                           <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
                             <div className="w-1.5 h-1.5 rounded-full bg-zinc-500"></div>
-                            <span className="text-sm text-zinc-300">No Transcript Analysis</span>
+                            <span className="text-sm text-zinc-300">No Bundle Creation</span>
                           </div>
                           <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
                             <div className="w-1.5 h-1.5 rounded-full bg-zinc-500"></div>

@@ -5,7 +5,6 @@ import { FieldValue } from "firebase-admin/firestore"
 import Stripe from "stripe"
 import { ConnectedStripeAccountsService } from "@/lib/connected-stripe-accounts-service"
 import { getUserTierInfo, incrementUserBundles } from "@/lib/user-tier-service"
-import { canCreateBundles } from "@/lib/subscription"
 
 // Initialize Firebase Admin
 initializeFirebaseAdmin()
@@ -28,18 +27,6 @@ export async function POST(request: Request) {
     const token = authHeader.split("Bearer ")[1]
     const decodedToken = await getAuth().verifyIdToken(token)
     const userId = decodedToken.uid
-
-    const hasBundlePermission = await canCreateBundles(userId)
-    if (!hasBundlePermission) {
-      return NextResponse.json(
-        {
-          error: "Bundle creation not available",
-          details: "Upgrade to Creator Pro to unlock Vex AI bundle creation capabilities.",
-          code: "BUNDLE_CREATION_NOT_ALLOWED",
-        },
-        { status: 403 },
-      )
-    }
 
     const { title, description, price, contentIds, category, tags } = await request.json()
 

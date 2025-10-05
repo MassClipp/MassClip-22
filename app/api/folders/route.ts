@@ -1,7 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { initializeFirebaseAdmin, db } from "@/lib/firebase/firebaseAdmin"
 import { getAuth } from "firebase-admin/auth"
-import { checkSubscription } from "@/lib/subscription"
 
 // Initialize Firebase Admin
 initializeFirebaseAdmin()
@@ -135,16 +134,16 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      const isSubfolder = parentId && parentId !== "root"
+      const { checkSubscription } = await import("@/lib/subscription")
+      const subscription = await checkSubscription(userId)
 
-      if (isSubfolder) {
-        // Check if user has permission to create subfolders
-        const subscription = await checkSubscription(userId)
+      // If creating a subfolder, check if user has permission
+      if (parentId && parentId !== "root") {
         if (!subscription.features.canCreateSubfolders) {
           return NextResponse.json(
             {
-              error: "Subfolder creation not available",
-              details: "Upgrade to Creator Pro to create subfolders and organize your content better.",
+              error: "Subfolder creation is not available on the Free plan",
+              details: "Upgrade to Creator Pro to create subfolders and organize your content better",
               code: "SUBFOLDER_NOT_ALLOWED",
             },
             { status: 403 },
@@ -152,12 +151,12 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      if (!isSubfolder) {
-        const subscription = await checkSubscription(userId)
+      // If creating a root folder, check folder count limit
+      if (!parentId || parentId === "root") {
         const maxFolders = subscription.features.maxFolders
 
         if (maxFolders !== null) {
-          // Count existing root folders (non-deleted, no parent)
+          // Count existing root folders
           const rootFoldersSnapshot = await db
             .collection("folders")
             .where("userId", "==", userId)
@@ -165,13 +164,11 @@ export async function POST(request: NextRequest) {
             .where("isDeleted", "==", false)
             .get()
 
-          const rootFolderCount = rootFoldersSnapshot.size
-
-          if (rootFolderCount >= maxFolders) {
+          if (rootFoldersSnapshot.size >= maxFolders) {
             return NextResponse.json(
               {
-                error: "Folder limit reached",
-                details: `You've reached your limit of ${maxFolders} folders. Upgrade to Creator Pro for unlimited folders.`,
+                error: `Folder limit reached (${maxFolders} folders max on Free plan)`,
+                details: "Upgrade to Creator Pro for unlimited folders",
                 code: "FOLDER_LIMIT_REACHED",
               },
               { status: 403 },
