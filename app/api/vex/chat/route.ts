@@ -595,7 +595,23 @@ When organizing files, use the folder names exactly as shown above.
 
               const uniqueUploads = Array.from(uniqueUploadsMap.values())
 
+              let fileIdMappingContext = "\n\n🆔 FILE ID REFERENCE (USE THESE EXACT IDS):\n"
+              fileIdMappingContext += "When organizing files, you MUST use these exact database IDs:\n\n"
+
+              for (const upload of uniqueUploads) {
+                const title = upload.title || upload.filename || "Untitled"
+                const type = upload.contentType || upload.type || "unknown"
+                const duration = upload.duration ? `${upload.duration}s` : "unknown duration"
+                const folder = upload.folderName || "unorganized"
+
+                fileIdMappingContext += `• "${title}" → ID: ${upload.id} (${type}, ${duration}, in: ${folder})\n`
+              }
+
+              fileIdMappingContext += "\n**CRITICAL:** Copy these IDs EXACTLY into your ORGANIZE_FILES JSON.\n"
+              fileIdMappingContext += "DO NOT make up IDs. DO NOT use titles as IDs. USE THE IDs SHOWN ABOVE.\n\n"
+
               let transcriptContext = ""
+
               const videosWithTranscripts = uniqueUploads.filter((u: any) => u.transcript && u.transcript.length > 0)
 
               if (videosWithTranscripts.length > 0) {
@@ -654,9 +670,7 @@ Total Uploads: ${analysisData?.totalUploads || 0}
 Categories: ${(analysisData?.categories || []).join(", ")}
 User Folders: ${(analysisData?.userFolders || []).map((f: any) => f.name).join(", ")}
 ${detectedNiches.length > 0 ? `\nDetected Content Niches: ${detectedNiches.map((n: any) => `${n.name} (${n.count} items, ${n.avgConfidence}% avg confidence)`).join(", ")}` : ""}
-${transcriptContext}${folderContentsContext}${nicheContentsContext}${intelligenceContext}
-
-Available content IDs for bundling: ${(analysisData?.uploads || []).map((upload: any) => upload.id).join(", ")}
+${fileIdMappingContext}${transcriptContext}${folderContentsContext}${nicheContentsContext}${intelligenceContext}
 `
               console.log("[v0] User context loaded with FULL metadata intelligence, transcripts, and faith keywords")
             } else {
@@ -703,48 +717,32 @@ RENAME_CONTENT: {"contentId": "file_id", "newTitle": "New Title", "reason": "bri
 
 When organizing files:
 
-1. **Read the transcripts** - Understand what each video is actually about
-2. **Make confident decisions** - Pick the best folder for each file
-3. **Use database IDs** - Get the "id" field from the uploads array above
+1. **Find the file in the FILE ID REFERENCE section above**
+2. **Copy the exact ID shown** (looks like: "abc123xyz" or "upload_abc123")
+3. **Use that ID in your ORGANIZE_FILES JSON**
 4. **Count accurately** - Verify your count matches your JSON array length
 5. **Be direct** - Show what's moving, then output the JSON
 
 **RESPONSE FORMAT:**
 
 ✅ CORRECT:
-"Moving 3 videos to Faith:
-• 'Nathalie Nicole Smith' (ID: abc123) - trusting God's plans
-• '2819 Rebellion' (ID: def456) - rebellion against God
-• '2819 Fruit' (ID: ghi789) - evidence of Christianity
+"Moving 2 videos to Mindset:
+• 'Tykwondoe' (ID: loAidYardbykdgCR7YNl) - surrounding yourself with excellence
+• 'AZ Compass' (ID: ADrPTpP9hyUdnZw59l56) - work ethic and focus
 
-ORGANIZE_FILES: {"targetFolder": "Faith - God", "fileIds": ["abc123", "def456", "ghi789"], "reason": "Faith and spirituality content"}"
+ORGANIZE_FILES: {"targetFolder": "Mindset", "fileIds": ["loAidYardbykdgCR7YNl", "ADrPTpP9hyUdnZw59l56"], "reason": "Mindset and personal development content"}"
 
-❌ WRONG:
-"After carefully analyzing your content library, I've identified several videos that could potentially fit into the Faith category. However, I want to make sure I understand your organizational preferences correctly..."
+❌ WRONG (using made-up IDs):
+ORGANIZE_FILES: {"targetFolder": "Mindset", "fileIds": ["tykwondoe_123", "az_compass_456"], "reason": "..."}
+
+❌ WRONG (using titles as IDs):
+ORGANIZE_FILES: {"targetFolder": "Mindset", "fileIds": ["Tykwondoe", "AZ Compass"], "reason": "..."}
 
 **CRITICAL RULES:**
-- Use the "id" field from uploads (looks like: "abc123xyz")
+- Look up each file in the FILE ID REFERENCE section
+- Copy the ID EXACTLY as shown (case-sensitive, character-for-character)
+- If you can't find a file in the reference, DON'T include it
 - Count your items and verify the JSON array has the same count
-- Be confident - don't second-guess yourself
-- Output ORGANIZE_FILES JSON immediately after listing files
-
-**EXAMPLE WITH REAL DATA:**
-
-Given uploads:
-[
-  { id: "upload_abc123", title: "Nathalie Nicole Smith", transcript: "God knows the plans..." },
-  { id: "upload_def456", title: "2819 Rebellion", transcript: "rebellion against God..." }
-]
-
-CORRECT:
-"Moving 2 videos to Faith:
-• 'Nathalie Nicole Smith' - trusting God's plans
-• '2819 Rebellion' - rebellion against God
-
-ORGANIZE_FILES: {"targetFolder": "Faith - God", "fileIds": ["upload_abc123", "upload_def456"], "reason": "Faith content"}"
-
-WRONG:
-ORGANIZE_FILES: {"targetFolder": "Faith - God", "fileIds": ["Nathalie Nicole Smith", "2819 Rebellion"], "reason": "Faith content"}
 
 **4. CREATE BUNDLES**
 
@@ -1071,7 +1069,7 @@ What would you like me to do?`
         } else {
           assistantMessage = assistantMessage.replace(
             renameProgressMessage,
-            `❌ ${renameResult.error || "I encountered an issue renaming the content. Please try again."}`,
+            `❌ ${renameResult.error || "Failed to rename content."}`,
           )
         }
       } catch (error) {

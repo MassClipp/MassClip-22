@@ -554,16 +554,6 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
     setInput("")
     setIsLoading(true)
 
-    console.log("[v0 CLIENT] User message:", userMessage.content)
-    console.log("[v0 CLIENT] Total messages being sent:", newMessages.length)
-    console.log(
-      "[v0 CLIENT] Last 3 messages:",
-      newMessages.slice(-3).map((m) => ({
-        role: m.role,
-        content: m.content.substring(0, 100),
-      })),
-    )
-
     // Create new chat if none exists
     if (!currentChatId) {
       try {
@@ -624,12 +614,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
 
     try {
       const token = user ? await user.getIdToken(true) : null
-      console.log("[v0 CLIENT] Got token for chat:", !!token)
-
-      const requestBody = {
-        messages: newMessages,
-      }
-      console.log("[v0 CLIENT] Request body:", JSON.stringify(requestBody, null, 2))
+      console.log("[v0] Got token for chat:", !!token)
 
       const response = await fetch("/api/vex/chat", {
         method: "POST",
@@ -637,24 +622,20 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
           "Content-Type": "application/json",
           ...(token && { Authorization: `Bearer ${token}` }),
         },
-        body: JSON.stringify(requestBody),
+        body: JSON.stringify({
+          messages: newMessages,
+        }),
       })
 
-      console.log("[v0 CLIENT] Chat response status:", response.status)
+      console.log("[v0] Chat response status:", response.status)
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        console.error("[v0 CLIENT] Chat API error:", response.status, errorData)
+        console.error("[v0] Chat API error:", response.status, errorData)
         throw new Error(`Chat failed: ${response.status} - ${errorData.details || errorData.error || "Unknown error"}`)
       }
 
       const data = await response.json()
-
-      console.log("[v0 CLIENT] Response data:", {
-        messageLength: data.message?.content?.length,
-        hasBundleJobId: !!data.bundleJobId,
-        bundleJobId: data.bundleJobId,
-      })
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -664,7 +645,6 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
       }
 
       if (data.bundleJobId) {
-        console.log("[v0 CLIENT] Bundle job created:", data.bundleJobId)
         setBundleJobs((prev) => ({
           ...prev,
           [data.bundleJobId]: {
@@ -684,7 +664,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
         await saveCurrentChat(finalMessages)
       }
     } catch (error) {
-      console.error("[v0 CLIENT] Chat error:", error)
+      console.error("Chat error:", error)
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
