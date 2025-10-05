@@ -18,6 +18,7 @@ export interface SubscriptionData {
     platformFeePercentage: number
     maxVideosPerBundle: number | null // null means unlimited
     maxBundles: number | null // null means unlimited
+    transcriptAnalysis: boolean
   }
 }
 
@@ -30,6 +31,7 @@ const FREE_DEFAULTS = {
   platformFeePercentage: 20,
   maxVideosPerBundle: 10,
   maxBundles: 2,
+  transcriptAnalysis: false,
 }
 
 export async function checkSubscription(userId?: string): Promise<SubscriptionData> {
@@ -59,6 +61,7 @@ export async function checkSubscription(userId?: string): Promise<SubscriptionDa
           platformFeePercentage: 10,
           maxVideosPerBundle: null, // unlimited
           maxBundles: null, // unlimited
+          transcriptAnalysis: true,
         },
       }
     }
@@ -78,6 +81,8 @@ export async function checkSubscription(userId?: string): Promise<SubscriptionDa
 
       const maxBundles = typeof data.bundlesLimit === "number" ? data.bundlesLimit : FREE_DEFAULTS.maxBundles
 
+      const transcriptAnalysis = data.transcriptAnalysis || FREE_DEFAULTS.transcriptAnalysis
+
       return {
         isActive: false,
         plan: "free",
@@ -89,6 +94,7 @@ export async function checkSubscription(userId?: string): Promise<SubscriptionDa
           platformFeePercentage,
           maxVideosPerBundle,
           maxBundles,
+          transcriptAnalysis,
         },
       }
     }
@@ -121,6 +127,7 @@ export function getSubscriptionFeatures(plan: string) {
         platformFeePercentage: 10,
         maxVideosPerBundle: null, // unlimited
         maxBundles: null, // unlimited
+        transcriptAnalysis: true,
       }
     default:
       return { ...FREE_DEFAULTS }
@@ -159,4 +166,9 @@ export function canCreateBundle(currentBundleCount: number, plan: string): boole
   const maxBundles = getMaxBundles(plan)
   if (maxBundles === null) return true // unlimited
   return currentBundleCount < maxBundles
+}
+
+export function canAnalyzeTranscripts(plan: string): boolean {
+  // Only Creator Pro users can analyze transcripts
+  return plan === "pro" || plan === "creator_pro"
 }
