@@ -35,10 +35,6 @@ interface SemanticAnalysisResult {
 
 // These old functions used broken keyword matching. Replaced with single LLM-first semantic analysis.
 
-/**
- * LLM-First Semantic Analysis
- * The LLM reads transcripts directly and decides semantic fit with quoted evidence
- */
 async function performSemanticAnalysis(
   action: string,
   context: {
@@ -51,24 +47,54 @@ async function performSemanticAnalysis(
 ): Promise<SemanticAnalysisResult> {
   const { targetFolder, fileIds, uploads, folderContents, reason } = context
 
-  if (!targetFolder || !fileIds || !uploads) {
+  // Validate inputs
+  if (!targetFolder || targetFolder === "None" || targetFolder === "undefined") {
+    console.error("[v0] ❌ Invalid targetFolder:", targetFolder)
     return {
       decision: "reject",
       overallConfidence: 0,
       fileAnalyses: [],
-      summary: "Missing required context for semantic analysis",
-      warnings: ["Missing targetFolder, fileIds, or uploads data"],
+      summary: "Invalid folder name provided",
+      warnings: ["Folder name is missing or invalid"],
     }
   }
 
-  console.log(`[v0] 🧠 Starting LLM semantic analysis for "${targetFolder}"`)
-  console.log(`[v0] 📊 Analyzing ${fileIds.length} files`)
+  if (!fileIds || fileIds.length === 0) {
+    console.error("[v0] ❌ No file IDs provided")
+    return {
+      decision: "reject",
+      overallConfidence: 0,
+      fileAnalyses: [],
+      summary: "No files specified for analysis",
+      warnings: ["File IDs array is empty"],
+    }
+  }
+
+  if (!uploads || uploads.length === 0) {
+    console.error("[v0] ❌ No uploads data available")
+    return {
+      decision: "reject",
+      overallConfidence: 0,
+      fileAnalyses: [],
+      summary: "No upload data available",
+      warnings: ["Uploads array is empty - content analysis may need to be refreshed"],
+    }
+  }
+
+  console.log(`[v0] 🧠 Starting semantic analysis for "${targetFolder}"`)
+  console.log(`[v0] 📊 Analyzing ${fileIds.length} files from ${uploads.length} total uploads`)
 
   // Prepare file data for LLM analysis
   const filesToAnalyze = fileIds
     .map((fileId) => {
       const upload = uploads.find((u: any) => u.id === fileId)
-      if (!upload) return null
+      if (!upload) {
+        console.warn(`[v0] ⚠️ File not found: ${fileId}`)
+        return null
+      }
+
+      console.log(`[v0] ✅ Found file: "${upload.title}" (${upload.duration || 0}s)`)
+      console.log(`[v0]    Transcript: ${upload.transcript ? `${upload.transcript.length} chars` : "MISSING"}`)
 
       return {
         id: upload.id,
@@ -81,16 +107,22 @@ async function performSemanticAnalysis(
     .filter(Boolean)
 
   if (filesToAnalyze.length === 0) {
+    console.error("[v0] ❌ No valid files found for analysis")
     return {
       decision: "reject",
       overallConfidence: 0,
       fileAnalyses: [],
-      summary: "No valid files found for analysis",
-      warnings: ["Could not find any of the specified files in the uploads"],
+      summary: "Could not find any of the specified files",
+      warnings: ["None of the file IDs matched uploads in the database"],
     }
   }
 
-  // Build context about existing folder contents
+  console.log(`[v0] 📝 Files to analyze: ${filesToAnalyze.length}`)
+  filesToAnalyze.forEach((file: any) => {
+    console.log(`[v0]    - "${file.title}": ${file.transcript ? "HAS TRANSCRIPT" : "NO TRANSCRIPT"}`)
+  })
+
+  // Build folder context
   let folderContextDescription = ""
   if (folderContents && folderContents.length > 0) {
     const sampleTitles = folderContents.slice(0, 5).map((f: any) => f.title || f.filename)
@@ -99,33 +131,32 @@ async function performSemanticAnalysis(
     folderContextDescription = "\n\nThis folder is currently empty."
   }
 
-  // Create the LLM prompt for semantic analysis
-  const analysisPrompt = `You are analyzing whether video content semantically fits into a folder called "${targetFolder}".
+  // Create LLM prompt
+  const analysisPrompt = `Analyze whether video content fits into the folder "${targetFolder}".
 
 ${reason ? `User's reasoning: "${reason}"` : ""}${folderContextDescription}
 
-Your task: For each video below, read its transcript and determine if the content semantically matches the folder theme "${targetFolder}".
+For each video, read the transcript and determine semantic fit.
 
-**Analysis Guidelines:**
-1. **Read the actual transcript content** - Don't just rely on titles
-2. **Look for semantic meaning** - Does the video's content relate to the folder's theme?
-3. **Provide quoted evidence** - Include 1-2 short quotes from the transcript that support your decision
-4. **Check transcript quality** - Is the transcript long enough to make a confident decision?
-5. **Be honest about uncertainty** - If you're not sure, say so
+**Guidelines:**
+- Read the actual transcript content, not just titles
+- Identify the dominant theme (every video has overlap - pick the primary message)
+- Be confident and decisive
+- Provide brief quoted evidence
 
-**Semantic Fit Levels:**
-- **strong**: Content clearly and directly relates to the folder theme (80-100% confidence)
-- **moderate**: Content somewhat relates or has tangential connections (50-79% confidence)
-- **weak**: Content barely relates or connection is unclear (20-49% confidence)
-- **none**: Content does not relate to the folder theme (0-19% confidence)
+**Semantic Fit:**
+- strong: Clearly relates (80-100%)
+- moderate: Somewhat relates (50-79%)
+- weak: Barely relates (20-49%)
+- none: Doesn't relate (0-19%)
 
-**Transcript Quality Levels:**
-- **good**: Transcript is substantial (>100 words) and coherent
-- **short**: Transcript exists but is very brief (<100 words)
-- **missing**: No transcript available
-- **poor**: Transcript is garbled, incomplete, or unintelligible
+**Transcript Quality:**
+- good: >100 words, coherent
+- short: <100 words
+- missing: No transcript
+- poor: Garbled/incomplete
 
-Analyze these ${filesToAnalyze.length} videos:
+Videos to analyze:
 
 ${filesToAnalyze
   .map(
@@ -133,31 +164,29 @@ ${filesToAnalyze
 **Video ${index + 1}: "${file.title}"**
 - ID: ${file.id}
 - Duration: ${file.duration}s
-- Detected Niche: ${file.detectedNiche || "Unknown"}
+- Niche: ${file.detectedNiche || "Unknown"}
 - Transcript: ${file.transcript ? `"${file.transcript.slice(0, 500)}${file.transcript.length > 500 ? "..." : ""}"` : "[NO TRANSCRIPT]"}
 `,
   )
   .join("\n")}
 
-Respond with a JSON object in this exact format:
+Respond with JSON only:
 {
   "fileAnalyses": [
     {
-      "fileId": "the file ID",
-      "fileName": "the file title",
+      "fileId": "file ID",
+      "fileName": "file title",
       "semanticFit": "strong|moderate|weak|none",
       "confidence": 85,
-      "evidence": "Quote from transcript that supports this decision",
-      "reasoning": "Brief explanation of why this file does/doesn't fit",
+      "evidence": "Brief quote from transcript",
+      "reasoning": "One sentence why it fits/doesn't fit",
       "transcriptQuality": "good|short|missing|poor"
     }
   ],
   "overallConfidence": 75,
-  "summary": "Overall assessment of whether these files fit the folder",
-  "warnings": ["Any concerns or issues to note"]
-}
-
-**IMPORTANT**: Respond ONLY with the JSON object, no other text.`
+  "summary": "Overall assessment",
+  "warnings": ["Any concerns"]
+}`
 
   try {
     const requestBody = {
@@ -166,7 +195,7 @@ Respond with a JSON object in this exact format:
         {
           role: "system",
           content:
-            "You are a semantic analysis expert. You read video transcripts and determine if content fits into specific categories. You always respond with valid JSON only.",
+            "You are a semantic analysis expert. Read video transcripts and determine if content fits categories. Respond with valid JSON only. Be confident and decisive.",
         },
         {
           role: "user",
@@ -177,7 +206,8 @@ Respond with a JSON object in this exact format:
       temperature: 0.2,
     }
 
-    // Call LLM for semantic analysis
+    console.log("[v0] 🤖 Calling LLM for semantic analysis...")
+
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -188,6 +218,8 @@ Respond with a JSON object in this exact format:
     })
 
     if (!response.ok) {
+      const errorText = await response.text()
+      console.error("[v0] ❌ LLM API error:", response.status, errorText)
       throw new Error(`LLM API error: ${response.status}`)
     }
 
@@ -195,13 +227,15 @@ Respond with a JSON object in this exact format:
     const llmResponse = data.choices?.[0]?.message?.content
 
     if (!llmResponse) {
+      console.error("[v0] ❌ No response from LLM")
       throw new Error("No response from LLM")
     }
+
+    console.log("[v0] ✅ Got LLM response")
 
     // Parse LLM response
     let analysisResult: any
     try {
-      // Try to extract JSON if LLM added extra text
       const jsonMatch = llmResponse.match(/\{[\s\S]*\}/)
       if (jsonMatch) {
         analysisResult = JSON.parse(jsonMatch[0])
@@ -209,27 +243,26 @@ Respond with a JSON object in this exact format:
         analysisResult = JSON.parse(llmResponse)
       }
     } catch (parseError) {
-      console.error("[v0] Failed to parse LLM response:", llmResponse)
+      console.error("[v0] ❌ Failed to parse LLM response:", llmResponse)
       throw new Error("Failed to parse LLM analysis response")
     }
 
-    // Validate and structure the result
     const fileAnalyses: FileAnalysis[] = analysisResult.fileAnalyses || []
     const overallConfidence = analysisResult.overallConfidence || 0
     const warnings = analysisResult.warnings || []
 
-    // Add warnings for transcript quality issues
+    // Add transcript quality warnings
     fileAnalyses.forEach((analysis) => {
       if (analysis.transcriptQuality === "missing") {
-        warnings.push(`"${analysis.fileName}" has no transcript - analysis is based on title only`)
+        warnings.push(`"${analysis.fileName}" has no transcript - analysis based on title only`)
       } else if (analysis.transcriptQuality === "short") {
-        warnings.push(`"${analysis.fileName}" has a very short transcript - confidence may be lower`)
+        warnings.push(`"${analysis.fileName}" has short transcript - lower confidence`)
       } else if (analysis.transcriptQuality === "poor") {
-        warnings.push(`"${analysis.fileName}" has poor transcript quality - analysis may be unreliable`)
+        warnings.push(`"${analysis.fileName}" has poor transcript quality`)
       }
     })
 
-    // Determine final decision based on overall confidence and individual analyses
+    // Determine decision
     let decision: "proceed" | "ask_user" | "reject" = "proceed"
 
     const strongFits = fileAnalyses.filter((f) => f.semanticFit === "strong").length
@@ -237,37 +270,36 @@ Respond with a JSON object in this exact format:
     const weakFits = fileAnalyses.filter((f) => f.semanticFit === "weak").length
     const noneFits = fileAnalyses.filter((f) => f.semanticFit === "none").length
 
-    console.log(`[v0] 📊 Semantic fit distribution:`)
-    console.log(`[v0]   ✅ Strong: ${strongFits}`)
-    console.log(`[v0]   ⚠️  Moderate: ${moderateFits}`)
-    console.log(`[v0]   ⚠️  Weak: ${weakFits}`)
-    console.log(`[v0]   ❌ None: ${noneFits}`)
+    console.log(
+      `[v0] 📊 Semantic fit: ${strongFits} strong, ${moderateFits} moderate, ${weakFits} weak, ${noneFits} none`,
+    )
 
-    if (overallConfidence < 50 || noneFits > strongFits + moderateFits) {
+    // Decision logic
+    if (noneFits > fileAnalyses.length / 2) {
       decision = "reject"
-      warnings.push(`Low overall confidence (${overallConfidence}%) or too many poor fits`)
-    } else if (overallConfidence < 70 || weakFits > 0 || moderateFits > strongFits) {
+    } else if (strongFits >= fileAnalyses.length * 0.7) {
+      decision = "proceed"
+    } else if (overallConfidence < 60 || weakFits > 0 || warnings.length > 2) {
       decision = "ask_user"
-      warnings.push(`Moderate confidence (${overallConfidence}%) - user confirmation recommended`)
     }
 
-    console.log(`[v0] 🎯 Final decision: ${decision} (${overallConfidence}% confidence)`)
+    console.log(`[v0] 🎯 Decision: ${decision} (confidence: ${overallConfidence}%)`)
 
     return {
       decision,
       overallConfidence,
       fileAnalyses,
       summary: analysisResult.summary || "Analysis complete",
-      warnings: [...new Set(warnings)], // Remove duplicates
+      warnings,
     }
   } catch (error) {
-    console.error("[v0] Semantic analysis error:", error)
+    console.error("[v0] ❌ Semantic analysis error:", error)
     return {
       decision: "reject",
       overallConfidence: 0,
       fileAnalyses: [],
       summary: "Failed to perform semantic analysis",
-      warnings: [`Error: ${error instanceof Error ? error.message : "Unknown error"}`],
+      warnings: [error instanceof Error ? error.message : "Unknown error occurred"],
     }
   }
 }
@@ -500,7 +532,7 @@ When organizing files, use the folder names exactly as shown above.
                 "- Motivation: 30s-5min videos, .mp4, names with 'grind', 'discipline', 'success'\n"
               intelligenceContext += "- Memes: 5-30s videos, .mp4/.gif, names with 'meme', 'funny', 'POV', 'me when'\n"
               intelligenceContext += "- Mindset: 1-10min videos, philosophical content, 'mindset', 'growth', 'mental'\n"
-              intelligenceContext += "- B-roll: 10s-2min footage, cinematic, 'timelapse', 'footage', 'shots'\n"
+              intelligenceContext += "- B-roll: 10s-2min footage, cinematic, 'timelapse', 'shots'\n"
               intelligenceContext +=
                 "- Background Videos: 30s-5min loops, 'background', 'loop', 'abstract', 'particles'\n"
               intelligenceContext += "- Voiceover: 10-60s audio, .mp3, 'voiceover', 'narration', 'commercial'\n"
@@ -674,7 +706,7 @@ Before organizing, renaming, or categorizing ANY content:
 1. **Analyze the full context** - filename, duration, file type, keywords, transcript
 2. **Check for generic titles** - IMG_8030, pure numbers, "Video 1" = ASK FIRST
 3. **Use your intelligence** - Combine filename + duration + transcript + keywords
-4. **When uncertain = ASK** - Don't guess on generic titles
+4. **When uncertain = ASK** - Don't guess
 5. **Be decisive on clear content** - If the transcript shows it's about X, move it to X folder
 
 ===== YOUR CAPABILITIES =====
