@@ -685,6 +685,19 @@ ${fileIdMappingContext}${transcriptContext}${folderContentsContext}${nicheConten
       }
     }
 
+    const fileIdReference = (
+      (
+        await db
+          .collection("vex_content_analysis")
+          .doc(userId || "dummy")
+          .get()
+      ).data()?.uploads || []
+    )
+      .map((upload: any, index: number) => {
+        return `${index + 1}. "${upload.title}" → ID: ${upload.id}`
+      })
+      .join("\n")
+
     const systemPrompt = `You are Vex, MassClip's AI assistant. You help users organize their video content library.
 
 ===== CORE PRINCIPLES =====
