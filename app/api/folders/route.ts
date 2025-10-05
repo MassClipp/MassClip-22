@@ -1,6 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { initializeFirebaseAdmin, db } from "@/lib/firebase/firebaseAdmin"
 import { getAuth } from "firebase-admin/auth"
+import { getMembership } from "@/lib/memberships-service"
+import { getFreeUser } from "@/lib/free-users-service"
 
 // Initialize Firebase Admin
 initializeFirebaseAdmin()
@@ -111,6 +113,49 @@ export async function POST(request: NextRequest) {
       // Parse request body
       const body = await request.json()
       const { name, parentId, color, description } = body
+
+      const membership = await getMembership(userId)
+      const isProUser = membership && membership.isActive
+
+      if (!isProUser) {
+        // Check if user is free tier and enforce limits
+        const freeUser = await getFreeUser(userId)
+        if (freeUser) {
+          // Count existing root folders (folders with no parent)
+          const rootFoldersSnapshot = await db
+            .collection("folders")
+            .where("userId", "==", userId)
+            .where("parentId", "==", null)
+            .where("isDeleted", "==", false)
+            .get()
+
+          const rootFolderCount = rootFoldersSnapshot.size
+
+          // Check if creating a subfolder (not allowed for free users)
+          if (parentId && parentId !== "root") {
+            return NextResponse.json(
+              {
+                error: "Free plan does not support subfolders",
+                details: "Upgrade to Creator Pro to create subfolders and organize your content better",
+                code: "SUBFOLDER_NOT_ALLOWED",
+              },
+              { status: 403 },
+            )
+          }
+
+          // Check if user has reached folder limit (2 folders max for free)
+          if (rootFolderCount >= 2) {
+            return NextResponse.json(
+              {
+                error: "Folder limit reached",
+                details: "Free plan allows up to 2 folders. Upgrade to Creator Pro for unlimited folders",
+                code: "FOLDER_LIMIT_REACHED",
+              },
+              { status: 403 },
+            )
+          }
+        }
+      }
 
       // Validate required fields
       if (!name || typeof name !== "string" || name.trim().length === 0) {

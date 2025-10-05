@@ -18,6 +18,14 @@ export interface FreeUserDoc {
   hasNoWatermark: boolean
   hasPrioritySupport: boolean
   hasLimitedOrganization: boolean
+  // Additional permissions
+  maxFolders: number
+  canHaveSubfolders: boolean
+  canCreateBundles: boolean
+  hasBasicVexAI: boolean
+  hasFullVexAI: boolean
+  canAnalyzeTranscripts: boolean
+  canVexCreateBundles: boolean
   // Timestamps
   createdAt: any
   updatedAt: any
@@ -39,6 +47,13 @@ const FREE_TIER_DEFAULTS = {
   hasNoWatermark: false,
   hasPrioritySupport: false,
   hasLimitedOrganization: true,
+  maxFolders: 2,
+  canHaveSubfolders: false,
+  canCreateBundles: false,
+  hasBasicVexAI: true,
+  hasFullVexAI: false,
+  canAnalyzeTranscripts: false,
+  canVexCreateBundles: false,
 }
 
 export async function getFreeUser(uid: string): Promise<FreeUserDoc | null> {
@@ -234,6 +249,13 @@ export async function getFreeUserLimits(uid: string): Promise<{
   hasNoWatermark: boolean
   hasPrioritySupport: boolean
   hasLimitedOrganization: boolean
+  maxFolders: number
+  canHaveSubfolders: boolean
+  canCreateBundles: boolean
+  hasBasicVexAI: boolean
+  hasFullVexAI: boolean
+  canAnalyzeTranscripts: boolean
+  canVexCreateBundles: boolean
   daysUntilReset: number
 }> {
   // Check and reset monthly limits if needed
@@ -276,6 +298,13 @@ export async function getFreeUserLimits(uid: string): Promise<{
     hasNoWatermark: freeUser.hasNoWatermark,
     hasPrioritySupport: freeUser.hasPrioritySupport,
     hasLimitedOrganization: freeUser.hasLimitedOrganization,
+    maxFolders: freeUser.maxFolders,
+    canHaveSubfolders: freeUser.canHaveSubfolders,
+    canCreateBundles: freeUser.canCreateBundles,
+    hasBasicVexAI: freeUser.hasBasicVexAI,
+    hasFullVexAI: freeUser.hasFullVexAI,
+    canAnalyzeTranscripts: freeUser.canAnalyzeTranscripts,
+    canVexCreateBundles: freeUser.canVexCreateBundles,
     daysUntilReset,
   }
 }

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { CheckCircle2, Crown, Shield, Package, Download, ChevronRight } from "lucide-react"
+import { CheckCircle2, Crown, Shield, Package } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { useAuth } from "@/contexts/auth-context"
@@ -39,45 +39,12 @@ const bundleOptions = [
   },
 ]
 
-const downloadOptions = [
-  {
-    id: "download-5",
-    name: "5 Extra Downloads",
-    price: 3.99,
-    downloads: 5,
-    description: "Perfect for occasional use",
-    icon: Download,
-    priceId: "price_1SABziDheyb0pkWFkOLxpVWM",
-  },
-  {
-    id: "download-10",
-    name: "10 Extra Downloads",
-    price: 7.99,
-    downloads: 10,
-    description: "Great for regular creators",
-    icon: Download,
-    popular: true,
-    priceId: "price_1SAC03Dheyb0pkWFiOdBWRqd",
-  },
-  {
-    id: "download-20",
-    name: "20 Extra Downloads",
-    price: 11.99,
-    downloads: 20,
-    description: "Best value for power users",
-    icon: Download,
-    priceId: "price_1SAC0NDheyb0pkWFU6sqHzbH",
-  },
-]
-
 export default function UpgradePage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user } = useAuth()
   const { isProUser, loading } = useUserPlan()
   const [purchasingBundle, setPurchasingBundle] = useState<string | null>(null)
-  const [purchasingDownload, setPurchasingDownload] = useState<string | null>(null)
-  const [showingDownloads, setShowingDownloads] = useState(false)
   const [showSuccessMessage, setShowSuccessMessage] = useState(false)
 
   useEffect(() => {
@@ -134,44 +101,6 @@ export default function UpgradePage() {
     }
   }
 
-  const handleDownloadPurchase = async (downloadId: string) => {
-    try {
-      setPurchasingDownload(downloadId)
-      const downloadOption = downloadOptions.find((option) => option.id === downloadId)
-      if (!downloadOption) {
-        console.warn("[Upgrade] Download option not found")
-        return
-      }
-
-      const idToken = await user?.getIdToken?.()
-      const res = await fetch("/api/stripe/checkout/downloads", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          idToken,
-          downloadId,
-          priceId: downloadOption.priceId,
-          downloads: downloadOption.downloads,
-          price: downloadOption.price,
-        }),
-      })
-
-      if (!res.ok) {
-        console.warn("[Upgrade] Failed to create checkout session for download purchase.")
-        return
-      }
-
-      const data = (await res.json()) as { url?: string }
-      if (data?.url) {
-        window.location.href = data.url
-      }
-    } catch (err) {
-      console.error("[Upgrade] Error starting download checkout:", err)
-    } finally {
-      setPurchasingDownload(null)
-    }
-  }
-
   const handleUpgradeClick = async () => {
     try {
       const idToken = await user?.getIdToken?.()
@@ -224,47 +153,15 @@ export default function UpgradePage() {
         </p>
       </div>
 
-      <div className="flex items-center justify-center gap-3">
-        <Button
-          onClick={() => setShowingDownloads(false)}
-          variant={!showingDownloads ? "default" : "outline"}
-          className={`px-4 py-2 rounded-lg transition-all ${
-            !showingDownloads
-              ? "bg-gradient-to-r from-cyan-500 to-blue-500 text-white"
-              : "border-zinc-600 text-zinc-300 hover:border-zinc-500"
-          }`}
-        >
-          Bundle Offers
-        </Button>
-        <ChevronRight className="h-4 w-4 text-zinc-400" />
-        <Button
-          onClick={() => setShowingDownloads(true)}
-          variant={showingDownloads ? "default" : "outline"}
-          className={`px-4 py-2 rounded-lg transition-all ${
-            showingDownloads
-              ? "bg-gradient-to-r from-cyan-500 to-blue-500 text-white"
-              : "border-zinc-600 text-zinc-300 hover:border-zinc-500"
-          }`}
-        >
-          Download Offers
-        </Button>
-      </div>
-
       <div className="text-center space-y-2">
-        <h2 className="text-2xl font-light text-white">
-          {showingDownloads ? "One-Time Download Purchases" : "One-Time Bundle Purchases"}
-        </h2>
-        <p className="text-white/60">
-          {showingDownloads
-            ? "Perfect for free users who need extra downloads without a subscription"
-            : "Perfect for free users who want extra bundles without a subscription"}
-        </p>
+        <h2 className="text-2xl font-light text-white">One-Time Bundle Purchases</h2>
+        <p className="text-white/60">Perfect for free users who want extra bundles without a subscription</p>
       </div>
 
       <div className="space-y-4">
-        {(showingDownloads ? downloadOptions : bundleOptions).map((option) => {
+        {bundleOptions.map((option) => {
           const Icon = option.icon
-          const isPurchasing = showingDownloads ? purchasingDownload === option.id : purchasingBundle === option.id
+          const isPurchasing = purchasingBundle === option.id
 
           return (
             <Card
@@ -302,9 +199,7 @@ export default function UpgradePage() {
                   <div className="flex items-center gap-4 text-sm text-white/70">
                     <div className="flex items-center gap-1">
                       <CheckCircle2 className="h-4 w-4 text-cyan-400" />
-                      {showingDownloads
-                        ? `${(option as any).downloads} extra downloads`
-                        : `${(option as any).bundles} extra bundle${(option as any).bundles > 1 ? "s" : ""}`}
+                      {`${option.bundles} extra bundle${option.bundles > 1 ? "s" : ""}`}
                     </div>
                     <div className="flex items-center gap-1">
                       <CheckCircle2 className="h-4 w-4 text-cyan-400" />
@@ -313,9 +208,7 @@ export default function UpgradePage() {
                   </div>
 
                   <Button
-                    onClick={() =>
-                      showingDownloads ? handleDownloadPurchase(option.id) : handleBundlePurchase(option.id)
-                    }
+                    onClick={() => handleBundlePurchase(option.id)}
                     disabled={isPurchasing}
                     className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white"
                   >
@@ -324,10 +217,8 @@ export default function UpgradePage() {
                         <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
                         Processing...
                       </div>
-                    ) : showingDownloads ? (
-                      `Buy ${(option as any).downloads} Downloads`
                     ) : (
-                      `Buy ${(option as any).bundles} Bundle${(option as any).bundles > 1 ? "s" : ""}`
+                      `Buy ${option.bundles} Bundle${option.bundles > 1 ? "s" : ""}`
                     )}
                   </Button>
                 </div>
@@ -373,9 +264,10 @@ export default function UpgradePage() {
 
             <div className="space-y-2 mb-4">
               {[
-                { text: "15 downloads per month", highlight: true },
+                { text: "2 folders max (no subfolders)", highlight: false },
                 { text: "2 bundles max on storefront", highlight: false },
                 { text: "10 videos per bundle limit", highlight: false },
+                { text: "Basic Vex AI - content organization only", highlight: false },
                 { text: "20% platform fee on sales", highlight: false },
               ].map((feature, index) => (
                 <div key={index} className="flex items-center gap-2">
@@ -425,9 +317,10 @@ export default function UpgradePage() {
 
             <div className="space-y-2 mb-4">
               {[
-                "Unlimited downloads",
+                "Unlimited folders with subfolders",
                 "Unlimited bundles on storefront",
                 "Unlimited videos per bundle",
+                "Full Vex AI - bundle creation & transcript analysis",
                 "Only 10% platform fee on sales",
               ].map((feature, index) => (
                 <div key={index} className="flex items-center gap-2">

@@ -709,7 +709,7 @@ export default function ProfilePage() {
                         <>
                           <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
                             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-                            <span className="text-sm text-zinc-200">Unlimited Downloads</span>
+                            <span className="text-sm text-zinc-200">Unlimited Folders & Subfolders</span>
                           </div>
                           <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
                             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
@@ -721,11 +721,11 @@ export default function ProfilePage() {
                           </div>
                           <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
                             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-                            <span className="text-sm text-zinc-200">Access to All Clips</span>
+                            <span className="text-sm text-zinc-200">Full Vex AI with Bundle Creation</span>
                           </div>
                           <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
                             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-                            <span className="text-sm text-zinc-200">No Watermark</span>
+                            <span className="text-sm text-zinc-200">Transcript Analysis</span>
                           </div>
                           <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
                             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
@@ -736,7 +736,7 @@ export default function ProfilePage() {
                         <>
                           <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
                             <div className="w-1.5 h-1.5 rounded-full bg-zinc-500"></div>
-                            <span className="text-sm text-zinc-300">15 downloads per month</span>
+                            <span className="text-sm text-zinc-300">2 folders max (no subfolders)</span>
                           </div>
                           <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
                             <div className="w-1.5 h-1.5 rounded-full bg-zinc-500"></div>
@@ -748,11 +748,11 @@ export default function ProfilePage() {
                           </div>
                           <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
                             <div className="w-1.5 h-1.5 rounded-full bg-zinc-500"></div>
-                            <span className="text-sm text-zinc-300">Access to Free Content</span>
+                            <span className="text-sm text-zinc-300">Basic Vex AI - organization only</span>
                           </div>
                           <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
                             <div className="w-1.5 h-1.5 rounded-full bg-zinc-500"></div>
-                            <span className="text-sm text-zinc-300">Limited organization features</span>
+                            <span className="text-sm text-zinc-300">No bundle creation or transcript analysis</span>
                           </div>
                           <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
                             <div className="w-1.5 h-1.5 rounded-full bg-zinc-500"></div>
