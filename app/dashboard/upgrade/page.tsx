@@ -7,7 +7,27 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { useAuth } from "@/contexts/auth-context"
 import { useUserPlan } from "@/hooks/use-user-plan"
-import { BUNDLE_SLOT_TIERS } from "@/lib/bundle-slots-service"
+
+const BUNDLE_SLOT_TIERS = {
+  tier1: {
+    slots: 1,
+    amount: 500, // $5.00
+    priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_BUNDLE_SLOT_1 || "",
+    description: "1 Bundle Slot",
+  },
+  tier3: {
+    slots: 3,
+    amount: 1200, // $12.00
+    priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_BUNDLE_SLOT_3 || "",
+    description: "3 Bundle Slots",
+  },
+  tier5: {
+    slots: 5,
+    amount: 1800, // $18.00
+    priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_BUNDLE_SLOT_5 || "",
+    description: "5 Bundle Slots",
+  },
+} as const
 
 export default function UpgradePage() {
   const router = useRouter()
