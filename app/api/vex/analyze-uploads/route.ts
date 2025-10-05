@@ -52,7 +52,11 @@ export async function POST(request: NextRequest) {
       console.log("✅ [Vex Analyze v3] Authenticated user:", userId)
 
       console.log("🗂️ [Vex Analyze v3] Loading user's folder structure...")
-      const foldersSnapshot = await db.collection("folders").where("userId", "==", userId).get()
+      const foldersSnapshot = await db
+        .collection("folders")
+        .where("userId", "==", userId)
+        .where("isDeleted", "==", false)
+        .get()
 
       const userFolders = foldersSnapshot.docs
         .map((doc) => ({
