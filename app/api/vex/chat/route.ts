@@ -5,7 +5,7 @@ import { FieldValue } from "firebase-admin/firestore"
 import Stripe from "stripe"
 import { ConnectedStripeAccountsService } from "@/lib/connected-stripe-accounts-service"
 import { getUserTierInfo, incrementUserBundles } from "@/lib/user-tier-service"
-import { canUserCreateBundles } from "@/lib/subscription"
+import { canUserCreateBundles, checkSubscription } from "@/lib/subscription"
 
 // Initialize Firebase Admin
 initializeFirebaseAdmin()
@@ -328,6 +328,9 @@ export async function POST(request: Request) {
     let userContentContext = ""
     let bundleLimitsContext = ""
     let folderContext = ""
+    let planPermissionsContext = ""
+    let userPlan = "free" // Default to free
+    let subscriptionData: any = {} // Initialize subscriptionData
     const authHeader = request.headers.get("authorization")
 
     if (authHeader && authHeader.startsWith("Bearer ")) {
@@ -345,16 +348,62 @@ export async function POST(request: Request) {
             console.log("[v0] User authenticated:", userId)
 
             const tierInfoData = await getUserTierInfo(userId)
+            userPlan = tierInfoData.tier || "free"
+            subscriptionData = await checkSubscription(userId)
+
+            // Build plan permissions context
+            planPermissionsContext = `
+
+===== YOUR PLAN PERMISSIONS =====
+
+Current Plan: ${userPlan === "creator_pro" ? "Creator Pro" : "Free"}
+
+${
+  userPlan === "free"
+    ? `
+**FREE PLAN LIMITS:**
+• Folders: ${subscriptionData.features.maxFolders} folders maximum (NO subfolders allowed)
+• Bundles: ${subscriptionData.features.maxBundles} bundles maximum on storefront
+• Videos per bundle: ${subscriptionData.features.maxVideosPerBundle} videos maximum
+• Vex AI: Basic content organization only
+• Transcript Analysis: NOT AVAILABLE (Creator Pro only)
+• Bundle Creation via Vex: NOT AVAILABLE (Creator Pro only)
+• Platform Fee: ${subscriptionData.features.platformFeePercentage}% on sales
+
+⚠️ IMPORTANT RESTRICTIONS:
+- You CANNOT create subfolders for free users
+- You CANNOT analyze or reference transcript content for free users
+- You CANNOT create bundles via Vex for free users (they must create manually)
+- Free users can only organize content into their ${subscriptionData.features.maxFolders} root-level folders
+
+If user asks about these features, tell them to upgrade to Creator Pro.
+`
+    : `
+**CREATOR PRO FEATURES:**
+• Folders: UNLIMITED folders with subfolders
+• Bundles: UNLIMITED bundles on storefront
+• Videos per bundle: UNLIMITED videos
+• Vex AI: Full capabilities including bundle creation
+• Transcript Analysis: AVAILABLE - You can analyze and reference video transcripts
+• Bundle Creation via Vex: AVAILABLE - You can create bundles for users
+• Platform Fee: ${subscriptionData.features.platformFeePercentage}% on sales (reduced from 20%)
+
+✅ You have full access to all Vex AI features.
+`
+}
+`
+
             bundleLimitsContext = `
 
 BUNDLE LIMITS:
 Current bundles: ${tierInfoData.bundlesCreated || 0}
 Bundle limit: ${tierInfoData.bundlesLimit === null ? "unlimited" : tierInfoData.bundlesLimit || 2}
-Can create bundles: ${!tierInfoData.reachedBundleLimit ? "YES" : "NO"}
+Can create bundles: ${!tierInfoData.reachedBundleLimit && subscriptionData.features.canCreateBundles ? "YES" : "NO"}
 User tier: ${tierInfoData.tier || "free"}
 Max videos per bundle: ${tierInfoData.maxVideosPerBundle === null ? "unlimited" : tierInfoData.maxVideosPerBundle || 10}
 
 ${tierInfoData.reachedBundleLimit ? `⚠️ BUNDLE LIMIT REACHED: User has reached their limit of ${tierInfoData.bundlesLimit || 2} bundles. ${(tierInfoData.tier || "free") === "free" ? "They need to upgrade to Creator Pro for unlimited bundles or purchase extra bundle slots." : "They should contact support."}` : ""}
+${!subscriptionData.features.canCreateBundles ? `⚠️ BUNDLE CREATION DISABLED: Free users cannot create bundles via Vex. Direct them to upgrade to Creator Pro.` : ""}
 `
 
             try {
@@ -707,10 +756,11 @@ ${fileIdMappingContext}${transcriptContext}${folderContentsContext}${nicheConten
 2. **Action-First** - Show what you're doing, then do it. No long explanations.
 3. **Use Database IDs** - Always use the "id" field from uploads, never titles or filenames.
 4. **Count Accurately** - If you say "5 videos", your JSON must have exactly 5 IDs.
+5. **Respect Plan Limits** - Always check user's plan before suggesting restricted features.
 
 ===== CONTENT ANALYSIS DATA =====
 
-${userContentContext}${bundleLimitsContext}${folderContext}
+${userContentContext}${planPermissionsContext}${bundleLimitsContext}${folderContext}
 
 ===== YOUR CAPABILITIES =====
 
@@ -721,7 +771,14 @@ REFRESH_ANALYSIS: true
 
 **1. CREATE FOLDERS**
 
-CREATE_FOLDER: {"name": "Folder Name", "description": "Brief description"}
+${
+  userPlan === "free"
+    ? `⚠️ FREE PLAN: User can only create ${subscriptionData.features.maxFolders} root-level folders (NO subfolders).
+Check folder count before creating. If at limit, tell them to upgrade to Creator Pro.
+
+`
+    : ""
+}CREATE_FOLDER: {"name": "Folder Name", "description": "Brief description"}
 
 **2. RENAME CONTENT**
 
@@ -760,7 +817,16 @@ ORGANIZE_FILES: {"targetFolder": "Mindset", "fileIds": ["Tykwondoe", "AZ Compass
 
 **4. CREATE BUNDLES**
 
-CREATE_BUNDLE: {"title": "Bundle Name", "description": "Description", "price": 15, "contentIds": ["id1", "id2"], "category": "Video Pack", "tags": ["tag1", "tag2"]}
+${
+  !subscriptionData.features.canCreateBundles
+    ? `⚠️ BUNDLE CREATION DISABLED: Free users cannot create bundles via Vex.
+Tell them: "Bundle creation via Vex is a Creator Pro feature. You can upgrade to unlock this, or create bundles manually in your dashboard."
+
+DO NOT output CREATE_BUNDLE for free users.
+
+`
+    : ""
+}CREATE_BUNDLE: {"title": "Bundle Name", "description": "Description", "price": 15, "contentIds": ["id1", "id2"], "category": "Video Pack", "tags": ["tag1", "tag2"]}
 
 ===== RESPONSE STYLE =====
 
@@ -883,10 +949,10 @@ What would you like me to do?`
 
         const tierInfo = await getUserTierInfo(userId)
         const userPlan = tierInfo.tier || "free"
+        const subscriptionData = await checkSubscription(userId)
 
-        if (!canUserCreateBundles(userPlan)) {
-          const errorMessage =
-            "❌ Bundle creation is only available on Creator Pro. Upgrade your plan to unlock this feature."
+        if (!canUserCreateBundles(userPlan) || !subscriptionData.features.canCreateBundles) {
+          const errorMessage = `❌ Bundle creation via Vex is a Creator Pro feature. You can upgrade to unlock this, or create bundles manually in your dashboard.`
           assistantMessage = assistantMessage.replace(/CREATE_BUNDLE:\s*{.*?}/s, errorMessage)
 
           return NextResponse.json({
@@ -1171,10 +1237,20 @@ async function createBundleDirectly(userId: string, bundleData: any) {
 
     console.log("[v0] Checking bundle limits...")
     const tierInfo = await getUserTierInfo(userId)
-    if (tierInfo.reachedBundleLimit) {
+    const subscriptionData = await checkSubscription(userId)
+    const userPlan = tierInfo.tier || "free"
+
+    if (tierInfo.reachedBundleLimit && userPlan !== "creator_pro") {
       return {
         success: false,
         error: `You've reached your bundle limit. Please upgrade your plan to create more bundles.`,
+      }
+    }
+
+    if (!subscriptionData.features.canCreateBundles) {
+      return {
+        success: false,
+        error: "Bundle creation via Vex is a Creator Pro feature. Please upgrade your plan.",
       }
     }
 
