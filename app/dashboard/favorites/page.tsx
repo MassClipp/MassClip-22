@@ -807,15 +807,7 @@ export default function FavoritesPage() {
           <div className="max-w-md mx-auto bg-zinc-900/50 backdrop-blur-sm p-8 rounded-xl border border-zinc-800">
             <Heart className="h-16 w-16 text-zinc-600 mx-auto mb-4" />
             <p className="text-white text-xl font-medium mb-3">You haven't added any favorites yet</p>
-            <p className="text-zinc-400 mb-6">
-              Browse videos and click the heart icon to add them to your favorites for quick access.
-            </p>
-            <Button
-              className="bg-red-600 hover:bg-red-700 text-white transition-all duration-300"
-              onClick={() => (window.location.href = "/dashboard/explore")}
-            >
-              Browse Videos
-            </Button>
+            <p className="text-zinc-400">This is where content you liked from other creators will appear.</p>
           </div>
         </motion.div>
       )}
