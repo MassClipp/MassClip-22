@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { CheckCircle2, Crown, Shield } from "lucide-react"
+import { CheckCircle2, Crown, Shield, Package } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { useAuth } from "@/contexts/auth-context"
 import { useUserPlan } from "@/hooks/use-user-plan"
+import { BUNDLE_SLOT_TIERS } from "@/lib/bundle-slots-service"
 
 export default function UpgradePage() {
   const router = useRouter()
@@ -14,6 +15,7 @@ export default function UpgradePage() {
   const { user } = useAuth()
   const { isProUser, loading } = useUserPlan()
   const [showSuccessMessage, setShowSuccessMessage] = useState(false)
+  const [purchasingBundle, setPurchasingBundle] = useState<string | null>(null)
 
   useEffect(() => {
     const success = searchParams.get("success")
@@ -50,6 +52,40 @@ export default function UpgradePage() {
       }
     } catch (err) {
       console.error("[Upgrade] Error starting membership checkout:", err)
+    }
+  }
+
+  const handleBundlePurchase = async (tier: keyof typeof BUNDLE_SLOT_TIERS) => {
+    setPurchasingBundle(tier)
+    try {
+      const idToken = await user?.getIdToken?.()
+      const tierInfo = BUNDLE_SLOT_TIERS[tier]
+
+      const res = await fetch("/api/stripe/checkout/bundles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          idToken,
+          bundleId: `bundle-slot-${tier}`,
+          priceId: tierInfo.priceId,
+          bundles: tierInfo.slots,
+          price: tierInfo.amount / 100,
+        }),
+      })
+
+      if (!res.ok) {
+        console.warn("[Upgrade] Failed to create checkout session for bundle slots.")
+        setPurchasingBundle(null)
+        return
+      }
+
+      const data = (await res.json()) as { url?: string }
+      if (data?.url) {
+        window.location.href = data.url
+      }
+    } catch (err) {
+      console.error("[Upgrade] Error starting bundle slot checkout:", err)
+      setPurchasingBundle(null)
     }
   }
 
@@ -192,6 +228,60 @@ export default function UpgradePage() {
             )}
           </div>
         </Card>
+
+        <div className="space-y-4">
+          <div className="text-center">
+            <h2 className="text-2xl font-light text-white mb-2">
+              Need More{" "}
+              <span className="bg-gradient-to-br from-slate-300 via-cyan-200 to-white bg-clip-text text-transparent">
+                Bundle Slots?
+              </span>
+            </h2>
+            <p className="text-zinc-400 text-sm">One-time purchases to expand your storefront capacity</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {(
+              Object.entries(BUNDLE_SLOT_TIERS) as [
+                keyof typeof BUNDLE_SLOT_TIERS,
+                (typeof BUNDLE_SLOT_TIERS)[keyof typeof BUNDLE_SLOT_TIERS],
+              ][]
+            ).map(([tier, info]) => (
+              <Card key={tier} className="border border-zinc-700/50 bg-gradient-to-br from-zinc-900/90 to-black/90">
+                <div className="p-5">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500/20 to-pink-500/20 border border-purple-400/30">
+                      <Package className="h-5 w-5 text-purple-300" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-light text-white">{info.description}</h3>
+                      <p className="text-xs text-zinc-500">One-time purchase</p>
+                    </div>
+                  </div>
+
+                  <div className="mb-4">
+                    <p className="text-3xl font-light text-white">${(info.amount / 100).toFixed(2)}</p>
+                    <p className="text-xs text-zinc-400 mt-1">
+                      ${(info.amount / 100 / info.slots).toFixed(2)} per bundle slot
+                    </p>
+                  </div>
+
+                  <Button
+                    onClick={() => handleBundlePurchase(tier)}
+                    disabled={purchasingBundle === tier}
+                    className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-400 hover:to-pink-400 text-white"
+                  >
+                    {purchasingBundle === tier ? "Processing..." : "Purchase"}
+                  </Button>
+                </div>
+              </Card>
+            ))}
+          </div>
+
+          <p className="text-center text-xs text-zinc-500">
+            Bundle slots are added to your account permanently and never expire
+          </p>
+        </div>
       </div>
     </div>
   )
