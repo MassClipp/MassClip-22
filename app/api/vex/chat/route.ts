@@ -309,11 +309,7 @@ Respond with JSON only:
 export async function POST(request: Request) {
   try {
     console.log("[v0] Chat API called")
-    const { messages, userId } = await request.json()
-
-    if (!userId) {
-      return NextResponse.json({ error: "User ID is required" }, { status: 400 })
-    }
+    const { messages } = await request.json()
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       console.log("[v0] No messages provided")
@@ -327,7 +323,7 @@ export async function POST(request: Request) {
 
     console.log("[v0] Processing", messages.length, "messages")
 
-    // Get user context if authenticated
+    let userId: string | null = null
     let userContentContext = ""
     let bundleLimitsContext = ""
     let folderContext = ""
@@ -344,6 +340,7 @@ export async function POST(request: Request) {
           // Validate token format (JWT should have 3 parts separated by dots)
           if (token.split(".").length === 3) {
             const decodedToken = await getAuth().verifyIdToken(token)
+            userId = decodedToken.uid
             console.log("[v0] User authenticated:", userId)
 
             const tierInfoData = await getUserTierInfo(userId)
