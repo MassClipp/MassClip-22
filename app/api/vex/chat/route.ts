@@ -1435,6 +1435,7 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
 
     console.log(`[v0] 📂 Starting organization: ${fileIds.length} files → "${targetFolder}"`)
     console.log(`[v0] 📝 Reason: ${reason}`)
+    console.log(`[v0] 📋 File IDs to move:`, JSON.stringify(fileIds, null, 2))
 
     let foldersSnapshot = await db
       .collection("folders")
@@ -1475,42 +1476,65 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
     const analysisData = analysisDoc.data()!
     const uploads = analysisData.uploads || []
     console.log(`[v0] 📊 Loaded ${uploads.length} uploads from analysis`)
-
-    // The semantic analysis is now done once in the main flow, not repeated here
+    console.log(`[v0] 📋 Available uploads:`)
+    uploads.forEach((u: any) => {
+      console.log(`[v0]   - ID: "${u.id}" → Title: "${u.title}"`)
+    })
 
     const movedFiles: string[] = []
     const notFoundFiles: string[] = []
 
     for (const fileId of fileIds) {
-      console.log(`[v0] 🔍 Looking for: "${fileId}"`)
+      console.log(`[v0] 🔍 Looking for file ID: "${fileId}"`)
 
       const upload = uploads.find((u: any) => u.id === fileId)
 
       if (!upload) {
-        console.log(`[v0] ❌ Not found: "${fileId}"`)
+        console.log(`[v0] ❌ Not found in uploads array: "${fileId}"`)
+        const similarIds = uploads
+          .filter((u: any) => u.id.includes(fileId.substring(0, 5)) || fileId.includes(u.id.substring(0, 5)))
+          .map((u: any) => `"${u.id}" (${u.title})`)
+        if (similarIds.length > 0) {
+          console.log(`[v0] 💡 Similar IDs found:`, similarIds)
+        }
         notFoundFiles.push(fileId)
         continue
       }
 
-      console.log(`[v0] ✅ Found: "${upload.title}"`)
+      console.log(`[v0] ✅ Found upload:`)
+      console.log(`[v0]   - ID: "${upload.id}"`)
+      console.log(`[v0]   - Title: "${upload.title}"`)
+      console.log(`[v0]   - Collection: "${upload.collection}"`)
 
       try {
         const docRef = db.collection(upload.collection).doc(upload.id)
+        console.log(`[v0] 📄 Querying: ${upload.collection}/${upload.id}`)
 
         // Verify the document exists and belongs to the user
         const docSnap = await docRef.get()
         if (!docSnap.exists) {
-          console.log(`[v0] ❌ Document doesn't exist: ${upload.id}`)
+          console.log(`[v0] ❌ Document doesn't exist in Firestore: ${upload.collection}/${upload.id}`)
           notFoundFiles.push(fileId)
           continue
         }
 
         const docData = docSnap.data()!
+        console.log(`[v0] 📄 Document data:`, {
+          uid: docData.uid,
+          userId: docData.userId,
+          title: docData.title,
+          currentFolder: docData.folderId,
+        })
+
         if (docData.uid !== userId && docData.userId !== userId) {
-          console.log(`[v0] ❌ Ownership mismatch: ${upload.id}`)
+          console.log(
+            `[v0] ❌ Ownership mismatch: expected "${userId}", got uid="${docData.uid}" userId="${docData.userId}"`,
+          )
           notFoundFiles.push(fileId)
           continue
         }
+
+        console.log(`[v0] 🔄 Updating document to move to folder: ${targetFolderId}`)
 
         // Update the document
         await docRef.update({
@@ -1524,7 +1548,7 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
         })
 
         movedFiles.push(upload.title || upload.filename || fileId)
-        console.log(`[v0] ✅ Moved: "${upload.title}" to "${targetFolder}"`)
+        console.log(`[v0] ✅ Successfully moved: "${upload.title}" to "${targetFolder}"`)
       } catch (error) {
         console.error(`[v0] ❌ Error moving ${upload.id}:`, error)
         notFoundFiles.push(fileId)
@@ -1532,8 +1556,12 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
     }
 
     console.log(`[v0] 📊 Organization Summary:`)
-    console.log(`[v0]   ✅ Moved: ${movedFiles.length}`)
+    console.log(`[v0]   ✅ Moved: ${movedFiles.length} files`)
+    console.log(`[v0]   📝 Files: ${movedFiles.join(", ")}`)
     console.log(`[v0]   ❌ Not found: ${notFoundFiles.length}`)
+    if (notFoundFiles.length > 0) {
+      console.log(`[v0]   📝 Not found IDs: ${notFoundFiles.join(", ")}`)
+    }
 
     if (movedFiles.length === 0) {
       return {
