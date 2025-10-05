@@ -93,26 +93,36 @@ function VexChat({ children }: VexChatProps) {
   const isUploadPage = pathname === "/dashboard/upload"
 
   const allSuggestions = [
-    "Make me 3 motivation bundles",
-    "Make me a meme template bundle",
-    "What's the best way to bundle my content for sale?",
-    "Help me create a beginner photography bundle",
-    "What should I price my video editing pack?",
-    "Build a bundle for social media templates",
-    "Create a free lead magnet bundle",
-    "How do I package my fitness content?",
-    "Make me a bundle for entrepreneurs",
-    "What's trending in content bundles right now?",
-    "Help me create a seasonal content pack",
-    "How should I price my design templates?",
-    "Create a bundle for small business owners",
-    "What content performs best in bundles?",
-    "Help me organize my content library",
-    "Make me a productivity bundle",
-    "How do I create urgency in my bundles?",
-    "What's the ideal bundle size?",
-    "Help me write compelling bundle descriptions",
-    "Create a bundle for content creators",
+    // Video content with transcripts
+    "Organize all my content that focuses on money, wealth, and financial success into one folder",
+    "Create a bundle that focuses on never giving up, perseverance, and relentless determination",
+    "Make me 3 motivation bundles targeting entrepreneurs who are just starting their journey",
+    "Organize all videos about mindset, mental toughness, and overcoming obstacles into a folder",
+    "Create a bundle focused on building discipline, consistency, and daily habits for success",
+    "Make me a bundle about leadership, influence, and becoming a better communicator",
+    "Organize content about fitness, health, and physical transformation into one place",
+    "Create a bundle targeting small business owners who need marketing and sales strategies",
+    "Make me a bundle about productivity, time management, and getting more done in less time",
+    "Organize all content related to personal development, self-improvement, and growth mindset",
+
+    // SFX and audio content
+    "Create a sound effects bundle with cinematic impacts, whooshes, and transitions for video editors",
+    "Make me a bundle of ambient background sounds perfect for meditation and focus content",
+    "Organize all my sound effects by category: impacts, transitions, UI sounds, and atmospheres",
+    "Create a premium SFX pack with bass drops, risers, and dramatic sound effects for content creators",
+
+    // B-roll and background videos
+    "Make me a b-roll bundle featuring urban cityscapes, time-lapses, and modern lifestyle footage",
+    "Create a nature b-roll pack with forests, oceans, mountains, and wildlife for documentary creators",
+    "Organize all my b-roll footage by theme: business, lifestyle, nature, and technology",
+    "Make me a bundle of abstract motion backgrounds and animated textures for video overlays",
+    "Create a cinematic b-roll collection with slow-motion shots and dramatic lighting",
+
+    // Memes and visual content
+    "Organize all my meme templates by category: reaction memes, text memes, and trending formats",
+    "Create a viral meme bundle with the most popular and trending templates right now",
+    "Make me a meme starter pack perfect for social media managers and content creators",
+    "Organize meme content by emotion: funny, relatable, motivational, and sarcastic",
   ]
 
   const [currentSuggestions, setCurrentSuggestions] = useState<string[]>([])
@@ -1209,49 +1219,65 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
           <ScrollArea className={`flex-1 ${isMobile ? "px-3" : "px-4"}`} ref={scrollAreaRef}>
             <div className={`${isMobile ? "max-w-full" : "max-w-4xl mx-auto"} py-4 min-h-full flex flex-col`}>
               {messages.length === 0 && (
-                <div className="text-center flex-1 flex flex-col justify-center items-center min-h-[60vh] px-2">
-                  <h2 className={`${isMobile ? "text-xl" : "text-2xl"} font-semibold mb-2`}>Hi! I'm Vex</h2>
-                  <p
-                    className={`text-muted-foreground mb-6 ${isMobile ? "max-w-sm text-sm" : "max-w-md"} mx-auto leading-relaxed`}
-                  >
-                    I'll help you create profitable bundles, set optimal pricing, and build compelling storefront
-                    content.
-                  </p>
+                <div className="flex min-h-[60vh] px-2">
+                  <div className="flex-shrink-0 w-80 pr-6 flex flex-col justify-center">
+                    <div className="space-y-3">
+                      {currentSuggestions.map((suggestion, index) => (
+                        <button
+                          key={`${suggestion}-${index}`}
+                          className="group relative text-left p-4 rounded-xl overflow-hidden transition-all duration-300 hover:scale-[1.02] hover:-translate-y-0.5"
+                          onClick={() => handleSuggestionClick(suggestion)}
+                          style={{ fontSize: "16px" }}
+                        >
+                          {/* Dark gradient background */}
+                          <div className="absolute inset-0 bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 opacity-90" />
 
-                  {contentAnalysis && (
-                    <div
-                      className={`mb-6 p-3 rounded-lg bg-transparent ${isMobile ? "max-w-sm" : "max-w-md"} mx-auto border border-zinc-700/50`}
-                    >
-                      <p className="text-sm text-muted-foreground mb-1">
-                        Analyzed {contentAnalysis.totalUploads} uploads
-                      </p>
-                      {contentAnalysis.categories.length > 0 && (
-                        <p className="text-xs text-muted-foreground">
-                          Found: {contentAnalysis.categories.slice(0, 3).join(", ")}
-                          {contentAnalysis.categories.length > 3 && ` +${contentAnalysis.categories.length - 3} more`}
-                        </p>
-                      )}
+                          {/* Shine effect */}
+                          <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                          <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+
+                          {/* Border glow */}
+                          <div className="absolute inset-0 rounded-xl border border-zinc-700/50 group-hover:border-zinc-600/70 transition-colors duration-300" />
+
+                          {/* Content */}
+                          <div className="relative z-10">
+                            <p className="text-sm text-zinc-200 leading-relaxed group-hover:text-white transition-colors duration-300">
+                              {suggestion}
+                            </p>
+                          </div>
+
+                          {/* Bottom shine accent */}
+                          <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                        </button>
+                      ))}
                     </div>
-                  )}
 
-                  <div
-                    className={`grid ${isMobile ? "grid-cols-1 gap-2 max-w-full" : "grid-cols-1 md:grid-cols-2 gap-2 max-w-2xl"} mx-auto mb-4`}
-                  >
-                    {currentSuggestions.map((suggestion, index) => (
-                      <button
-                        key={`${suggestion}-${index}`}
-                        className={`text-left ${isMobile ? "p-3 text-sm" : "p-3 text-sm"} rounded-lg bg-transparent border border-zinc-700/50 hover:bg-zinc-800/30 hover:border-zinc-600/50 transition-all duration-200`}
-                        onClick={() => handleSuggestionClick(suggestion)}
-                        style={{ fontSize: "16px" }} // Prevent iOS zoom
-                      >
-                        {suggestion}
-                      </button>
-                    ))}
+                    <p className="text-xs text-zinc-500 mt-4 text-center">💡 Detailed prompts get better results</p>
                   </div>
 
-                  <p className="text-xs text-zinc-500 max-w-md mx-auto text-center">
-                    Vex works best with detailed prompts
-                  </p>
+                  <div className="flex-1 flex flex-col justify-center items-start pl-6 border-l border-zinc-800/50">
+                    <h2 className="text-3xl font-semibold mb-3 bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
+                      Hi! I'm Vex
+                    </h2>
+                    <p className="text-muted-foreground mb-6 max-w-md leading-relaxed">
+                      I'll help you create profitable bundles, set optimal pricing, organize your content library, and
+                      build compelling storefront content.
+                    </p>
+
+                    {contentAnalysis && (
+                      <div className="p-4 rounded-lg bg-zinc-900/50 border border-zinc-800/50 max-w-md">
+                        <p className="text-sm text-zinc-300 mb-1 font-medium">
+                          📊 Analyzed {contentAnalysis.totalUploads} uploads
+                        </p>
+                        {contentAnalysis.categories.length > 0 && (
+                          <p className="text-xs text-zinc-400">
+                            Found: {contentAnalysis.categories.slice(0, 3).join(", ")}
+                            {contentAnalysis.categories.length > 3 && ` +${contentAnalysis.categories.length - 3} more`}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
