@@ -1433,9 +1433,11 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
       return { success: false, error: "Missing required organization information." }
     }
 
-    console.log(`[v0] 📂 Starting organization: ${fileIds.length} files → "${targetFolder}"`)
-    console.log(`[v0] 📝 Reason: ${reason}`)
-    console.log(`[v0] 📋 File IDs to move:`, JSON.stringify(fileIds, null, 2))
+    console.log(`[v0] 📂 ========== ORGANIZE EXECUTION START ==========`)
+    console.log(`[v0] 📂 Target folder: "${targetFolder}"`)
+    console.log(`[v0] 📂 Number of files: ${fileIds.length}`)
+    console.log(`[v0] 📂 Reason: ${reason}`)
+    console.log(`[v0] 📂 Raw file IDs from Vex:`, JSON.stringify(fileIds, null, 2))
 
     let foldersSnapshot = await db
       .collection("folders")
@@ -1456,6 +1458,7 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
     }
 
     if (foldersSnapshot.empty) {
+      console.log(`[v0] ❌ Folder "${targetFolder}" not found`)
       return {
         success: false,
         error: `Folder "${targetFolder}" not found. Please create it first.`,
@@ -1463,10 +1466,11 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
     }
 
     const targetFolderId = foldersSnapshot.docs[0].id
-    console.log(`[v0] ✅ Found folder: ${targetFolderId}`)
+    console.log(`[v0] ✅ Found target folder ID: ${targetFolderId}`)
 
     const analysisDoc = await db.collection("vex_content_analysis").doc(userId).get()
     if (!analysisDoc.exists) {
+      console.log(`[v0] ❌ No content analysis found for user`)
       return {
         success: false,
         error: "Content analysis not found. Please refresh your content analysis first.",
@@ -1476,41 +1480,72 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
     const analysisData = analysisDoc.data()!
     const uploads = analysisData.uploads || []
     console.log(`[v0] 📊 Loaded ${uploads.length} uploads from analysis`)
-    console.log(`[v0] 📋 Available uploads:`)
-    uploads.forEach((u: any) => {
-      console.log(`[v0]   - ID: "${u.id}" → Title: "${u.title}"`)
+
+    console.log(`[v0] 📋 ========== AVAILABLE UPLOADS ==========`)
+    uploads.forEach((u: any, index: number) => {
+      console.log(`[v0] ${index + 1}. ID: "${u.id}" | Title: "${u.title}" | Collection: "${u.collection}"`)
     })
+    console.log(`[v0] 📋 ========================================`)
 
     const movedFiles: string[] = []
     const notFoundFiles: string[] = []
 
-    for (const fileId of fileIds) {
+    for (let i = 0; i < fileIds.length; i++) {
+      const fileId = fileIds[i]
+      console.log(`[v0] 🔍 ========== PROCESSING FILE ${i + 1}/${fileIds.length} ==========`)
       console.log(`[v0] 🔍 Looking for file ID: "${fileId}"`)
+      console.log(`[v0] 🔍 File ID type: ${typeof fileId}`)
+      console.log(`[v0] 🔍 File ID length: ${fileId.length}`)
 
       const upload = uploads.find((u: any) => u.id === fileId)
 
       if (!upload) {
-        console.log(`[v0] ❌ Not found in uploads array: "${fileId}"`)
-        const similarIds = uploads
-          .filter((u: any) => u.id.includes(fileId.substring(0, 5)) || fileId.includes(u.id.substring(0, 5)))
-          .map((u: any) => `"${u.id}" (${u.title})`)
-        if (similarIds.length > 0) {
-          console.log(`[v0] 💡 Similar IDs found:`, similarIds)
+        console.log(`[v0] ❌ EXACT MATCH FAILED for: "${fileId}"`)
+
+        const similarByPrefix = uploads.filter(
+          (u: any) =>
+            u.id.startsWith(fileId.substring(0, Math.min(5, fileId.length))) ||
+            fileId.startsWith(u.id.substring(0, Math.min(5, u.id.length))),
+        )
+
+        if (similarByPrefix.length > 0) {
+          console.log(`[v0] 💡 Found ${similarByPrefix.length} uploads with similar ID prefix:`)
+          similarByPrefix.forEach((u: any) => {
+            console.log(`[v0]    - "${u.id}" (${u.title})`)
+          })
         }
+
+        const byTitle = uploads.filter(
+          (u: any) =>
+            u.title &&
+            fileId &&
+            (u.title.toLowerCase() === fileId.toLowerCase() ||
+              u.title.toLowerCase().includes(fileId.toLowerCase()) ||
+              fileId.toLowerCase().includes(u.title.toLowerCase())),
+        )
+
+        if (byTitle.length > 0) {
+          console.log(`[v0] 💡 Found ${byTitle.length} uploads with matching title:`)
+          byTitle.forEach((u: any) => {
+            console.log(`[v0]    - "${u.id}" (${u.title})`)
+          })
+        }
+
         notFoundFiles.push(fileId)
+        console.log(`[v0] ❌ Skipping file: "${fileId}" - not found in uploads`)
         continue
       }
 
-      console.log(`[v0] ✅ Found upload:`)
-      console.log(`[v0]   - ID: "${upload.id}"`)
-      console.log(`[v0]   - Title: "${upload.title}"`)
-      console.log(`[v0]   - Collection: "${upload.collection}"`)
+      console.log(`[v0] ✅ EXACT MATCH FOUND!`)
+      console.log(`[v0]    Upload ID: "${upload.id}"`)
+      console.log(`[v0]    Upload Title: "${upload.title}"`)
+      console.log(`[v0]    Upload Collection: "${upload.collection}"`)
+      console.log(`[v0]    Current Folder: ${upload.folderId || "none"} (${upload.folderName || "unorganized"})`)
 
       try {
         const docRef = db.collection(upload.collection).doc(upload.id)
-        console.log(`[v0] 📄 Querying: ${upload.collection}/${upload.id}`)
+        console.log(`[v0] 📄 Querying Firestore: ${upload.collection}/${upload.id}`)
 
-        // Verify the document exists and belongs to the user
         const docSnap = await docRef.get()
         if (!docSnap.exists) {
           console.log(`[v0] ❌ Document doesn't exist in Firestore: ${upload.collection}/${upload.id}`)
@@ -1519,49 +1554,51 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
         }
 
         const docData = docSnap.data()!
-        console.log(`[v0] 📄 Document data:`, {
-          uid: docData.uid,
-          userId: docData.userId,
-          title: docData.title,
-          currentFolder: docData.folderId,
-        })
+        console.log(`[v0] 📄 Document found in Firestore:`)
+        console.log(`[v0]    uid: "${docData.uid}"`)
+        console.log(`[v0]    userId: "${docData.userId}"`)
+        console.log(`[v0]    title: "${docData.title}"`)
+        console.log(`[v0]    currentFolderId: "${docData.folderId || "none"}"`)
+        console.log(`[v0]    currentFolderName: "${docData.folderName || "none"}"`)
 
         if (docData.uid !== userId && docData.userId !== userId) {
-          console.log(
-            `[v0] ❌ Ownership mismatch: expected "${userId}", got uid="${docData.uid}" userId="${docData.userId}"`,
-          )
+          console.log(`[v0] ❌ OWNERSHIP MISMATCH!`)
+          console.log(`[v0]    Expected userId: "${userId}"`)
+          console.log(`[v0]    Document uid: "${docData.uid}"`)
+          console.log(`[v0]    Document userId: "${docData.userId}"`)
           notFoundFiles.push(fileId)
           continue
         }
 
-        console.log(`[v0] 🔄 Updating document to move to folder: ${targetFolderId}`)
+        console.log(`[v0] ✅ Ownership verified`)
+        console.log(`[v0] 🔄 Updating document to move to folder: "${targetFolder}" (${targetFolderId})`)
 
-        // Update the document
         await docRef.update({
           folderId: targetFolderId,
           folderName: targetFolder,
           updatedAt: FieldValue.serverTimestamp(),
           vexOrganized: true,
-          vexOrganizeReason: reason || "Organized by Vex AI with semantic analysis",
+          vexOrganizeReason: reason || "Organized by Vex AI",
           vexDetectedNiche: upload.detectedNiche || null,
           vexHasTranscript: !!upload.transcript,
         })
 
         movedFiles.push(upload.title || upload.filename || fileId)
-        console.log(`[v0] ✅ Successfully moved: "${upload.title}" to "${targetFolder}"`)
+        console.log(`[v0] ✅ SUCCESS! Moved "${upload.title}" to "${targetFolder}"`)
       } catch (error) {
-        console.error(`[v0] ❌ Error moving ${upload.id}:`, error)
+        console.error(`[v0] ❌ ERROR moving ${upload.id}:`, error)
         notFoundFiles.push(fileId)
       }
     }
 
-    console.log(`[v0] 📊 Organization Summary:`)
-    console.log(`[v0]   ✅ Moved: ${movedFiles.length} files`)
-    console.log(`[v0]   📝 Files: ${movedFiles.join(", ")}`)
-    console.log(`[v0]   ❌ Not found: ${notFoundFiles.length}`)
+    console.log(`[v0] 📊 ========== ORGANIZE EXECUTION COMPLETE ==========`)
+    console.log(`[v0] ✅ Successfully moved: ${movedFiles.length} files`)
+    console.log(`[v0] 📝 Moved files: ${movedFiles.join(", ")}`)
+    console.log(`[v0] ❌ Not found: ${notFoundFiles.length} files`)
     if (notFoundFiles.length > 0) {
-      console.log(`[v0]   📝 Not found IDs: ${notFoundFiles.join(", ")}`)
+      console.log(`[v0] 📝 Not found IDs: ${notFoundFiles.join(", ")}`)
     }
+    console.log(`[v0] ====================================================`)
 
     if (movedFiles.length === 0) {
       return {
@@ -1570,9 +1607,6 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
       }
     }
 
-    console.log(`[v0] 🎉 Successfully moved ${movedFiles.length} files`)
-
-    // Trigger analysis refresh in background
     try {
       fetch(`${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/api/vex/analyze-uploads`, {
         method: "POST",
@@ -1591,7 +1625,7 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
       notFound: notFoundFiles.length > 0 ? notFoundFiles : undefined,
     }
   } catch (error) {
-    console.error("[v0] File organization error:", error)
+    console.error("[v0] ❌ File organization error:", error)
     return {
       success: false,
       error: error instanceof Error ? error.message : "An unexpected error occurred while organizing files.",
