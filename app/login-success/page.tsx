@@ -35,8 +35,8 @@ export default function LoginSuccessPage() {
               const profileData = await userProfileCheck.json()
 
               if (profileData.isFirstTime) {
-                console.log("🆕 First-time user detected, redirecting to membership page")
-                window.location.href = "/membership-plans"
+                console.log("🆕 First-time user detected, redirecting to welcome page")
+                window.location.href = "/welcome"
                 return
               }
             }
