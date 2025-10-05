@@ -1,19 +1,40 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { initializeFirebaseAdmin, db } from "@/lib/firebase/firebaseAdmin"
+import { initializeFirebaseAdmin, db, auth as adminAuth } from "@/lib/firebase/firebaseAdmin"
 
 // Initialize Firebase Admin
 initializeFirebaseAdmin()
 
-async function verifyAuthToken(request: NextRequest) {}
+async function verifyAuthToken(request: NextRequest) {
+  try {
+    console.log("[v0] Verifying auth token...")
+    const authHeader = request.headers.get("Authorization")
+
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      console.log("[v0] No valid Authorization header found")
+      return null
+    }
+
+    const idToken = authHeader.split("Bearer ")[1]
+    console.log("[v0] Token extracted, verifying with Firebase Admin...")
+
+    const decodedToken = await adminAuth.verifyIdToken(idToken)
+    console.log("[v0] Token verified successfully for user:", decodedToken.uid)
+
+    return decodedToken
+  } catch (error) {
+    console.error("[v0] Error verifying auth token:", error)
+    return null
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("🔍 [Create User Profile] POST request received")
+    console.log("[v0] Create User Profile API called")
 
     // Verify authentication
     const user = await verifyAuthToken(request)
     if (!user) {
-      console.log("❌ [Create User Profile] Unauthorized request")
+      console.log("[v0] Unauthorized request - no valid token")
       return NextResponse.json(
         {
           error: "Unauthorized",
@@ -23,12 +44,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    console.log("[v0] User authenticated:", user.uid)
+
     // Parse request body
-    const { username, displayName } = await request.json()
-    console.log("🔍 [Create User Profile] Request data:", { username, displayName })
+    const body = await request.json()
+    const { username, displayName } = body
+    console.log("[v0] Request body:", { username, displayName, uid: user.uid })
 
     if (!username) {
-      console.error("❌ [Create User Profile] Missing required fields")
+      console.error("[v0] Missing username in request")
       return NextResponse.json({ error: "Username is required" }, { status: 400 })
     }
 
@@ -37,7 +61,7 @@ export async function POST(request: NextRequest) {
     const userDoc = await userDocRef.get()
 
     if (userDoc && userDoc.exists) {
-      console.log("✅ [Create User Profile] User profile already exists")
+      console.log("[v0] User profile already exists, returning isNewUser: false")
 
       // Update existing profile
       await userDocRef.update({
@@ -55,6 +79,8 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    console.log("[v0] Creating new user profile with isNewUser: true")
+
     const userData = {
       uid: user.uid,
       username: username,
@@ -66,7 +92,7 @@ export async function POST(request: NextRequest) {
     }
 
     await userDocRef.set(userData)
-    console.log("✅ [Create User Profile] User profile created with isNewUser flag")
+    console.log("[v0] User profile created successfully")
 
     return NextResponse.json({
       success: true,
@@ -76,7 +102,7 @@ export async function POST(request: NextRequest) {
       isNewUser: true,
     })
   } catch (error) {
-    console.error("❌ [Create User Profile] Error:", error)
+    console.error("[v0] Error in create-user API:", error)
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unknown error occurred" },
       { status: 500 },

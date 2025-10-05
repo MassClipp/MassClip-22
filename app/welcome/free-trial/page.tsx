@@ -11,14 +11,19 @@ export default function FreeTrialPage() {
   const { user, loading } = useAuth()
   const [startingTrial, setStartingTrial] = useState(false)
 
+  console.log("[v0] Free trial page loaded, user:", user?.uid, "loading:", loading)
+
   // Redirect if not authenticated
   useEffect(() => {
+    console.log("[v0] Free trial page useEffect, user:", user?.uid, "loading:", loading)
     if (!loading && !user) {
+      console.log("[v0] No user found, redirecting to login")
       router.push("/login")
     }
   }, [user, loading, router])
 
   const handleStartTrial = async () => {
+    console.log("[v0] Starting free trial for user:", user?.uid)
     setStartingTrial(true)
     try {
       // Call API to start free trial
@@ -29,39 +34,52 @@ export default function FreeTrialPage() {
         },
       })
 
+      console.log("[v0] Trial start API response status:", response.status)
+
       if (!response.ok) {
         throw new Error("Failed to start trial")
       }
 
+      const data = await response.json()
+      console.log("[v0] Trial started successfully:", data)
+
       // Redirect to dashboard
+      console.log("[v0] Redirecting to /dashboard/vex")
       router.push("/dashboard/vex")
     } catch (error) {
-      console.error("Error starting trial:", error)
+      console.error("[v0] Error starting trial:", error)
       setStartingTrial(false)
     }
   }
 
   const handleSkip = async () => {
+    console.log("[v0] Skipping trial for user:", user?.uid)
     try {
       // Mark user as no longer new
-      await fetch("/api/user/mark-onboarded", {
+      const response = await fetch("/api/user/mark-onboarded", {
         method: "POST",
       })
 
+      console.log("[v0] Mark onboarded API response status:", response.status)
+
+      console.log("[v0] Redirecting to /dashboard/vex")
       router.push("/dashboard/vex")
     } catch (error) {
-      console.error("Error skipping trial:", error)
+      console.error("[v0] Error skipping trial:", error)
       router.push("/dashboard/vex")
     }
   }
 
   if (loading) {
+    console.log("[v0] Free trial page still loading...")
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="text-white">Loading...</div>
       </div>
     )
   }
+
+  console.log("[v0] Rendering free trial page")
 
   return (
     <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4 relative overflow-hidden">

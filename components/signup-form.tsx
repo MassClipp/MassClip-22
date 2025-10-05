@@ -22,9 +22,10 @@ export function SignupForm() {
 
   const createServerSideRecords = async (user: any) => {
     try {
-      console.log("🔄 Creating server-side records for user:", user.uid)
+      console.log("[v0] Creating server-side records for user:", user.uid)
 
       const idToken = await user.getIdToken()
+      console.log("[v0] Got ID token, calling create-user API...")
 
       const response = await fetch("/api/auth/create-user", {
         method: "POST",
@@ -41,16 +42,17 @@ export function SignupForm() {
       })
 
       const data = await response.json()
+      console.log("[v0] Create-user API response:", data)
 
       if (!response.ok) {
-        console.error("❌ Server-side record creation failed:", data)
+        console.error("[v0] Server-side record creation failed:", data)
         throw new Error(data.details || data.error || "Failed to create server-side records")
       }
 
-      console.log("✅ Server-side records created successfully:", data)
+      console.log("[v0] Server-side records created successfully, isNewUser:", data.isNewUser)
       return data
     } catch (error) {
-      console.error("❌ Error creating server-side records:", error)
+      console.error("[v0] Error creating server-side records:", error)
       throw error
     }
   }
@@ -72,20 +74,23 @@ export function SignupForm() {
     setLoading(true)
 
     try {
-      console.log("🔄 Creating user with email and password...")
+      console.log("[v0] Starting email signup...")
       const userCredential = await createUserWithEmailAndPassword(auth, email, password)
-      console.log("✅ Firebase user created successfully")
+      console.log("[v0] Firebase user created successfully:", userCredential.user.uid)
 
       const userData = await createServerSideRecords(userCredential.user)
+      console.log("[v0] User data received:", userData)
 
-      console.log("✅ Signup completed successfully, redirecting...")
+      console.log("[v0] Signup completed, redirecting based on isNewUser:", userData.isNewUser)
       if (userData.isNewUser) {
+        console.log("[v0] Redirecting to /welcome/free-trial")
         router.push("/welcome/free-trial")
       } else {
+        console.log("[v0] Redirecting to /dashboard")
         router.push("/dashboard")
       }
     } catch (error: any) {
-      console.error("❌ Email signup error:", error)
+      console.error("[v0] Email signup error:", error)
       setError(error.message || "Failed to create account")
     } finally {
       setLoading(false)
@@ -97,24 +102,27 @@ export function SignupForm() {
     setLoading(true)
 
     try {
-      console.log("🔄 Starting Google signup...")
+      console.log("[v0] Starting Google signup...")
       const provider = new GoogleAuthProvider()
       provider.addScope("email")
       provider.addScope("profile")
 
       const result = await signInWithPopup(auth, provider)
-      console.log("✅ Google signup successful:", result.user.email)
+      console.log("[v0] Google signup successful:", result.user.uid)
 
       const userData = await createServerSideRecords(result.user)
+      console.log("[v0] User data received:", userData)
 
-      console.log("✅ Google signup completed successfully, redirecting...")
+      console.log("[v0] Google signup completed, redirecting based on isNewUser:", userData.isNewUser)
       if (userData.isNewUser) {
+        console.log("[v0] Redirecting to /welcome/free-trial")
         router.push("/welcome/free-trial")
       } else {
+        console.log("[v0] Redirecting to /dashboard")
         router.push("/dashboard")
       }
     } catch (error: any) {
-      console.error("❌ Google signup error:", error)
+      console.error("[v0] Google signup error:", error)
       if (error.code === "auth/popup-closed-by-user") {
         setError("Signup cancelled")
       } else if (error.code === "auth/popup-blocked") {
