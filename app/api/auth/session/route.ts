@@ -44,6 +44,29 @@ export async function GET(request: NextRequest) {
       )
     } catch (error) {
       console.error("[v0] Invalid session cookie:", error)
+
+      // Try to decode the session cookie without verification to see what's in it
+      try {
+        const base64Url = sessionCookie.split(".")[1]
+        const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/")
+        const jsonPayload = decodeURIComponent(
+          atob(base64)
+            .split("")
+            .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+            .join(""),
+        )
+        const payload = JSON.parse(jsonPayload)
+        console.log("[v0] Session cookie payload (unverified):", {
+          uid: payload.sub || payload.user_id,
+          iss: payload.iss,
+          aud: payload.aud,
+          exp: payload.exp,
+          iat: payload.iat,
+        })
+      } catch (decodeError) {
+        console.error("[v0] Could not decode session cookie payload:", decodeError)
+      }
+
       // Clear the invalid cookie
       cookieStore.delete("session")
       return NextResponse.json({ user: null }, { status: 200 })

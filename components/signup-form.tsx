@@ -23,9 +23,11 @@ export function SignupForm() {
   const createServerSideRecords = async (user: any) => {
     try {
       console.log("[v0] Creating server-side records for user:", user.uid)
+      console.log("[v0] User email:", user.email)
+      console.log("[v0] User displayName:", user.displayName)
 
       const idToken = await user.getIdToken()
-      console.log("[v0] Got ID token, calling create-user API...")
+      console.log("[v0] Got ID token, length:", idToken.length)
 
       console.log("[v0] Creating session cookie...")
       const sessionResponse = await fetch("/api/auth/session", {
@@ -37,11 +39,18 @@ export function SignupForm() {
       })
 
       if (!sessionResponse.ok) {
-        console.error("[v0] Failed to create session cookie")
+        const errorData = await sessionResponse.json()
+        console.error("[v0] Failed to create session cookie:", errorData)
         throw new Error("Failed to create session")
       }
-      console.log("[v0] Session cookie created successfully")
 
+      const sessionData = await sessionResponse.json()
+      console.log("[v0] Session cookie created successfully:", sessionData)
+
+      await new Promise((resolve) => setTimeout(resolve, 500))
+      console.log("[v0] Waited 500ms for session cookie to propagate")
+
+      console.log("[v0] Calling create-user API...")
       const response = await fetch("/api/auth/create-user", {
         method: "POST",
         headers: {
