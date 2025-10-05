@@ -76,11 +76,14 @@ export function SignupForm() {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password)
       console.log("✅ Firebase user created successfully")
 
-      // Create server-side records
-      await createServerSideRecords(userCredential.user)
+      const userData = await createServerSideRecords(userCredential.user)
 
       console.log("✅ Signup completed successfully, redirecting...")
-      router.push("/dashboard")
+      if (userData.isNewUser) {
+        router.push("/welcome/free-trial")
+      } else {
+        router.push("/dashboard")
+      }
     } catch (error: any) {
       console.error("❌ Email signup error:", error)
       setError(error.message || "Failed to create account")
@@ -102,11 +105,14 @@ export function SignupForm() {
       const result = await signInWithPopup(auth, provider)
       console.log("✅ Google signup successful:", result.user.email)
 
-      // Create server-side records
-      await createServerSideRecords(result.user)
+      const userData = await createServerSideRecords(result.user)
 
       console.log("✅ Google signup completed successfully, redirecting...")
-      router.push("/dashboard")
+      if (userData.isNewUser) {
+        router.push("/welcome/free-trial")
+      } else {
+        router.push("/dashboard")
+      }
     } catch (error: any) {
       console.error("❌ Google signup error:", error)
       if (error.code === "auth/popup-closed-by-user") {
