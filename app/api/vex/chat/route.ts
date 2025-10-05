@@ -793,49 +793,11 @@ You: "I can help you organize your content more accurately with detailed prompts
 
 What would you like me to help you organize?"`
 
-    // Ensure messages have proper format
-    const formattedMessages = [
-      { role: "system", content: systemPrompt },
-      ...messages.map((msg: any) => ({
-        role: msg.role || "user",
-        content: String(msg.content || msg.message || ""),
-      })),
-    ]
-
-    // Check for vague prompts before sending to Groq API
-    const vaguePromptRegex = /^(?:help|organize|make|what do|tell me) me(?:\s+to)?\s*$/i
-    const vaguePromptRegex2 = /^(?:organize|make|what do|tell me)\s+(?:my|some|stuff|things|content|videos|files)\s*$/i
-    const vaguePromptRegex3 = /^(?:help|organize|make|what do|tell me)\s+me\s+to\s+(?:organize|make|do)\s*$/i
-
-    const isVague = formattedMessages.slice(1).some((msg) => {
-      const content = msg.content.toLowerCase()
-      return (
-        vaguePromptRegex.test(content) ||
-        vaguePromptRegex2.test(content) ||
-        vaguePromptRegex3.test(content) ||
-        content.trim() === "" ||
-        content.trim() === "hi" ||
-        content.trim() === "hello"
-      )
-    })
-
-    if (isVague) {
-      const vagueResponse = `I'd love to help! The more specific and detailed your requests are, the better I can help you organize and monetize your content. Could you be more specific? For example:
-• 'Organize my [type] content into [folder name]'
-• 'Create a bundle with [specific content] priced at $[amount]'
-• 'Rename [specific file] to [new name]'
-
-What would you like me to do?`
-      console.log("[v0] Detected vague prompt, sending canned response.")
-      return NextResponse.json({
-        message: {
-          role: "assistant",
-          content: vagueResponse,
-        },
-      })
-    }
-
-    console.log("[v0] Calling Groq API with", formattedMessages.length, "messages")
+    // Prepare messages for Groq API
+    const groqMessages = messages.map((msg) => ({
+      role: msg.role || "user",
+      content: String(msg.content || msg.message || ""),
+    }))
 
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
@@ -845,7 +807,7 @@ What would you like me to do?`
       },
       body: JSON.stringify({
         model: "llama-3.3-70b-versatile",
-        messages: formattedMessages,
+        messages: groqMessages,
         max_tokens: 2000,
         temperature: 0.3,
       }),
