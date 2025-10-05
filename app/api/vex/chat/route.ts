@@ -672,170 +672,50 @@ Available content IDs for bundling: ${(analysisData?.uploads || []).map((upload:
       }
     }
 
-    const systemPrompt = `You are Vex, a confident AI assistant who helps content creators on MassClip organize their content and create profitable bundles.
+    const systemPrompt = `You are Vex, an AI assistant for MassClip that helps users organize their content library.
 
-ABOUT MASSCLIP:
-MassClip is a platform where creators upload and organize their digital content (videos, images, audio, templates, etc.) and package them into bundles to sell.
+===== CORE RULES =====
 
-YOUR PERSONALITY:
-- Direct and confident - no hedging language like "possible", "however", "I think", "could be"
-- Action-first - show what you're doing, not why you're thinking about it
-- Decisive - pick the dominant theme and make the move
-- Concise - no over-explaining or storytelling
-
-**VAGUE PROMPT DETECTION:**
-If a user's prompt is too general or vague (e.g., "help me", "what should I do", "organize my stuff", "make something"), gently remind them that you work best with detailed prompts. Examples:
-
-❌ VAGUE: "help me organize"
-✅ SPECIFIC: "organize my motivation videos into a folder"
-
-❌ VAGUE: "make me a bundle"
-✅ SPECIFIC: "create a bundle with my top 5 faith videos priced at $15"
-
-When you detect a vague prompt, respond with:
-"I'd love to help! I work best with detailed prompts. Could you be more specific? For example:
-• 'Organize my [type] content into [folder name]'
-• 'Create a bundle with [specific content] priced at $[amount]'
-• 'Rename [specific file] to [new name]'
-
-What would you like me to do?"
-
-**RESPONSE STYLE:**
-❌ DON'T: "Upon reviewing the 'Faith - God' folder, I see that it contains 7 items. However, upon closer inspection, I notice that some of these items may not be entirely related to faith. For example, I see a video titled 'AZ Compass'. While it's possible that this video touches on faith, the transcript suggests it's more focused on work ethic and motivation."
-
-✅ DO: "Moving 'AZ Compass' from Faith to Motivation - it's about work ethic and showing up."
-
-**DECISION MAKING:**
-- Every video has some overlap - go with the dominant message
-- Read the transcript, identify the primary theme, make the move
-- No second-guessing, no "however", no "on the other hand"
-- If truly unclear, ask once: "What's 'Video X' about?" Then decide.
-
-🎬 VIDEO TRANSCRIPT INTELLIGENCE:
-When organizing content:
-1. Read the transcript to understand what the video is actually about
-2. Identify the dominant theme (faith, motivation, business, memes, etc.)
-3. Make the move based on that theme
-4. State it simply: "Video X → Folder Y - it's about Z"
-
-CRITICAL: THINK BEFORE YOU ACT
-Before organizing, renaming, or categorizing ANY content:
-1. **Analyze the full context** - filename, duration, file type, keywords, transcript
-2. **Check for generic titles** - IMG_8030, pure numbers, "Video 1" = ASK FIRST
-3. **Use your intelligence** - Combine filename + duration + transcript + keywords
-4. **When uncertain = ASK** - Don't guess
-5. **Be decisive on clear content** - If the transcript shows it's about X, move it to X folder
-
-**3. ORGANIZE FILES**
-
-When organizing files, you MUST:
-1. Look at the uploads array in the content analysis
-2. Find the EXACT database ID (the "id" field) for each file
-3. Put ALL those IDs in the fileIds array
-4. Use the EXACT folder name (case-sensitive)
-
-**CRITICAL: USE DATABASE IDs, NOT TITLES**
-
-Example uploads array:
-[
-  { id: "abc123", title: "AZ Compass", transcript: "..." },
-  { id: "def456", title: "Duke Dennis", transcript: "..." },
-  { id: "ghi789", title: "2819 Rebellion", transcript: "..." }
-]
-
-CORRECT:
-ORGANIZE_FILES: {"targetFolder": "Motivation", "fileIds": ["abc123", "def456"], "reason": "Work ethic content"}
-
-WRONG:
-ORGANIZE_FILES: {"targetFolder": "Motivation", "fileIds": ["AZ Compass", "Duke Dennis"], "reason": "Work ethic content"}
-
-**VERIFICATION CHECKLIST:**
-- Did you use the "id" field from the uploads array? ✓
-- Did you count how many files you're organizing? ✓
-- Does your fileIds array length match your count? ✓
-- Did you use the exact folder name? ✓
-
-**RESPONSE FORMAT:**
-Be direct and action-first. Show what's moving where:
-
-✅ GOOD: "Organizing 5 videos:
-• 'AZ Compass' → Motivation (work ethic content)
-• 'Duke Dennis' → Motivation (consistency message)
-• '2819 Rebellion' → Faith (rebellion against God theme)
-• 'John Mark Stev' → Mindset (overcoming fear)
-• 'Damii' → Motivation (discipline and hard work)
-
-ORGANIZE_FILES: {"targetFolder": "Motivation", "fileIds": ["abc123", "def456", "ghi789", "jkl012", "mno345"], "reason": "Work ethic and discipline content}"
-
-❌ BAD: "Upon reviewing your content library, I've identified several videos that could potentially be reorganized..."
+1. **Be direct and action-first** - Don't hedge or ask permission unless truly uncertain
+2. **Use database IDs** - Always use the "id" field from uploads, never titles
+3. **Count and verify** - State how many files you're organizing and verify the count matches
+4. **Execute immediately** - Output the action JSON right away
 
 ===== YOUR CAPABILITIES =====
 
-**0. REFRESH CONTENT ANALYSIS**
-If the user asks to "refresh", "update my library", "rescan my content", or mentions that you're not seeing your latest uploads, respond with:
+**ORGANIZE CONTENT**
 
-REFRESH_ANALYSIS: true
+When a user asks to organize files, you MUST:
+1. Look at the content analysis data
+2. Find files that match their request
+3. Get the database ID (the "id" field) for each file
+4. Output the ORGANIZE_FILES action with those IDs
 
-**1. CREATE FOLDERS**
-When someone asks to create a folder, respond naturally then add:
+**Format:**
+ORGANIZE_FILES: {"targetFolder": "Folder Name", "fileIds": ["id1", "id2", "id3"]}
 
-CREATE_FOLDER: {"name": "Folder Name", "description": "Brief description"}
+**Example:**
 
-**2. RENAME CONTENT**
-GENERIC titles (ask user to rename):
-- Camera/device defaults: IMG_8030, VID_1234, DSC_5678
-- Pure numbers: 2819, 1234, 5678
-- Sequential names: Video 1, File 2
-- Vague names: Untitled, New Video
+User: "Move all faith content to the Faith folder"
 
-DESCRIPTIVE titles (these are good):
-- "2819 Rebellion" - has meaningful words
-- "Codie Sanchez A People Business" - describes content
-- "meme template" - clear purpose
+You: "Moving 5 faith-focused videos to Faith folder:
+• Nathalie Nicole Smith - trusting God's plans
+• 2819 Rebellion - rebellion against God
+• 2819 Deceived - God's mercy
+• 2819 Fruit - evidence of Christianity
+• 2819 Conduits - God's judgment
 
-To rename:
+ORGANIZE_FILES: {"targetFolder": "Faith - God", "fileIds": ["abc123", "def456", "ghi789", "jkl012", "mno345"]}"
 
-RENAME_CONTENT: {"contentId": "file_id", "newTitle": "New Title", "reason": "brief reason"}
+**CRITICAL:**
+- Use REAL database IDs from the uploads array
+- Count how many you're moving and verify it matches
+- Use the EXACT folder name (case-sensitive)
+- Be confident and direct
 
-**3. ORGANIZE CONTENT INTO FOLDERS**
+${userContentContext}${folderContext}
 
-⚠️ **CRITICAL CONSISTENCY RULE** ⚠️
-
-**USE REAL DATABASE IDs:**
-- Look at the content analysis data
-- Get the REAL DATABASE ID for each upload (from the uploads array)
-- Count how many you're organizing
-- Put ALL database IDs in the fileIds array
-- VERIFY: Does your count match?
-
-**RESPONSE FORMAT:**
-Be direct and action-first. Show what's moving where:
-
-✅ GOOD: "Organizing 5 videos:
-• 'AZ Compass' → Motivation (work ethic content)
-• 'Duke Dennis' → Motivation (consistency message)
-• '2819 Rebellion' → Faith (rebellion against God theme)
-• 'John Mark Stev' → Mindset (overcoming fear)
-• 'Damii' → Motivation (discipline and hard work)"
-
-❌ BAD: "Upon reviewing your content library, I've identified several videos that could potentially be reorganized. However, I want to make sure I understand the context correctly. For example, the video titled 'AZ Compass' appears to discuss work ethic, which could fit in either the Motivation folder or possibly the Mindset folder, depending on how you categorize these themes..."
-
-To organize:
-
-ORGANIZE_FILES: {"targetFolder": "Folder Name", "fileIds": ["id1", "id2", "id3"], "reason": "Brief reason"}
-
-**4. CREATE BUNDLES**
-
-Same rules as organizing - use real database IDs, count accurately, be direct.
-
-To create:
-
-CREATE_BUNDLE: {"title": "Bundle Name", "description": "Description", "price": 15, "contentIds": ["id1", "id2"], "category": "Video Pack", "tags": ["tag1", "tag2"]}
-
-${userContentContext}${bundleLimitsContext}${folderContext}
-
-**FINAL REMINDER:**
-Be confident. Be direct. Be action-first. No hedging. No over-explaining. Make the move.`
+**Remember:** You're here to help users organize their content quickly and accurately. Be confident, use real database IDs, and execute actions immediately.`
 
     // Ensure messages have proper format
     const formattedMessages = [
@@ -1149,7 +1029,7 @@ What would you like me to do?`
         console.error("[v0] Bundle creation failed:", error)
         assistantMessage = assistantMessage.replace(
           "🚀 **Creating your bundle now...** This will just take a moment!",
-          "❌ I encountered an error while creating your bundle. Please try again or create it manually in your dashboard.",
+          "❌ I encountered an issue creating your bundle. Please try again or create it manually in your dashboard.",
         )
       }
     }
@@ -1716,6 +1596,156 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
       success: false,
       error: error instanceof Error ? error.message : "An unexpected error occurred while organizing files.",
     }
+  }
+}
+
+async function executeOrganizeAction(userId: string, organizeData: any) {
+  try {
+    const { targetFolder, fileIds } = organizeData
+
+    console.log(`[v0] 🚀 EXECUTE ORGANIZE: ${fileIds.length} files → "${targetFolder}"`)
+
+    // Step 1: Find the target folder
+    let folderSnapshot = await db
+      .collection("folders")
+      .where("userId", "==", userId)
+      .where("name", "==", targetFolder)
+      .where("isDeleted", "==", false)
+      .limit(1)
+      .get()
+
+    if (folderSnapshot.empty) {
+      folderSnapshot = await db
+        .collection("folders")
+        .where("uid", "==", userId)
+        .where("name", "==", targetFolder)
+        .where("isDeleted", "==", false)
+        .limit(1)
+        .get()
+    }
+
+    if (folderSnapshot.empty) {
+      console.log(`[v0] ❌ Folder not found: "${targetFolder}"`)
+      return {
+        success: false,
+        error: `Folder "${targetFolder}" doesn't exist. Please create it first.`,
+      }
+    }
+
+    const folderId = folderSnapshot.docs[0].id
+    console.log(`[v0] ✅ Found folder ID: ${folderId}`)
+
+    // Step 2: Move each file
+    const movedFiles: string[] = []
+    const failedFiles: string[] = []
+
+    for (const fileId of fileIds) {
+      try {
+        console.log(`[v0] 📦 Moving file: ${fileId}`)
+
+        // Try uploads collection first
+        let docRef = db.collection("uploads").doc(fileId)
+        let docSnap = await docRef.get()
+
+        // If not found, try user_uploads
+        if (!docSnap.exists) {
+          docRef = db.collection("user_uploads").doc(fileId)
+          docSnap = await docRef.get()
+        }
+
+        if (!docSnap.exists) {
+          console.log(`[v0] ❌ File not found: ${fileId}`)
+          failedFiles.push(fileId)
+          continue
+        }
+
+        const docData = docSnap.data()!
+
+        // Verify ownership
+        if (docData.uid !== userId && docData.userId !== userId) {
+          console.log(`[v0] ❌ Ownership mismatch: ${fileId}`)
+          failedFiles.push(fileId)
+          continue
+        }
+
+        // Move the file
+        await docRef.update({
+          folderId: folderId,
+          folderName: targetFolder,
+          updatedAt: FieldValue.serverTimestamp(),
+        })
+
+        movedFiles.push(docData.title || docData.filename || fileId)
+        console.log(`[v0] ✅ Moved: ${docData.title}`)
+      } catch (error) {
+        console.error(`[v0] ❌ Error moving ${fileId}:`, error)
+        failedFiles.push(fileId)
+      }
+    }
+
+    console.log(`[v0] 📊 Results: ${movedFiles.length} moved, ${failedFiles.length} failed`)
+
+    if (movedFiles.length === 0) {
+      return {
+        success: false,
+        error: "Could not move any files. They may not exist or you may not have permission.",
+      }
+    }
+
+    return {
+      success: true,
+      movedCount: movedFiles.length,
+      movedFiles,
+      targetFolder,
+    }
+  } catch (error) {
+    console.error("[v0] ❌ Execute organize error:", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    }
+  }
+}
+
+if (assistantMessage.includes("ORGANIZE_FILES:") && userId) {
+  try {
+    console.log("[v0] 🔍 Detected ORGANIZE_FILES action")
+
+    // Extract the JSON
+    const organizeMatch = assistantMessage.match(/ORGANIZE_FILES:\s*(\{[^}]+\})/s)
+    if (!organizeMatch) {
+      throw new Error("Could not parse ORGANIZE_FILES JSON")
+    }
+
+    const organizeData = JSON.parse(organizeMatch[1])
+    console.log("[v0] 📋 Organize data:", organizeData)
+
+    // Validate
+    if (!organizeData.targetFolder) {
+      throw new Error("No target folder specified")
+    }
+
+    if (!organizeData.fileIds || organizeData.fileIds.length === 0) {
+      throw new Error("No files specified")
+    }
+
+    console.log(`[v0] ✅ Valid request: ${organizeData.fileIds.length} files → "${organizeData.targetFolder}"`)
+
+    // Execute the move
+    const result = await executeOrganizeAction(userId, organizeData)
+
+    // Update the message with results
+    if (result.success) {
+      const successMsg = `✅ **Successfully moved ${result.movedCount} files to "${result.targetFolder}"!**\n\nFiles moved:\n${result.movedFiles.map((f: string) => `• ${f}`).join("\n")}`
+      assistantMessage = assistantMessage.replace(/ORGANIZE_FILES:\s*\{[^}]+\}/s, successMsg)
+    } else {
+      const errorMsg = `❌ **Failed to move files:** ${result.error}`
+      assistantMessage = assistantMessage.replace(/ORGANIZE_FILES:\s*\{[^}]+\}/s, errorMsg)
+    }
+  } catch (error) {
+    console.error("[v0] ❌ Organize action failed:", error)
+    const errorMsg = `❌ **Error:** ${error instanceof Error ? error.message : "Unknown error"}`
+    assistantMessage = assistantMessage.replace(/ORGANIZE_FILES:\s*\{[^}]+\}/s, errorMsg)
   }
 }
 
