@@ -820,7 +820,7 @@ What would you like me to help you organize?"`
     })
 
     if (isVague) {
-      const vagueResponse = `I'd love to help! I work best with detailed prompts. Could you be more specific? For example:
+      const vagueResponse = `I'd love to help! The more specific and detailed your requests are, the better I can help you organize and monetize your content. Could you be more specific? For example:
 • 'Organize my [type] content into [folder name]'
 • 'Create a bundle with [specific content] priced at $[amount]'
 • 'Rename [specific file] to [new name]'

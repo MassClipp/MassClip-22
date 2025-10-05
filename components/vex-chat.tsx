@@ -84,6 +84,9 @@ function VexChat({ children }: VexChatProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
 
+  // State for suggestions
+  const [currentSuggestions, setCurrentSuggestions] = useState<string[]>([])
+
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const [showScrollButton, setShowScrollButton] = useState(false)
@@ -92,47 +95,27 @@ function VexChat({ children }: VexChatProps) {
   const isVexChatPage = pathname === "/dashboard/vex"
   const isUploadPage = pathname === "/dashboard/upload"
 
-  const allSuggestions = [
-    // Video content with transcripts - organizing
-    "Organize all my content that focuses on money, wealth, and financial success into one folder called 'Money Mindset'",
-    "Move all videos about entrepreneurship, business growth, and startup advice into a 'Business' folder",
-    "Create a folder called 'Fitness & Health' and organize all my workout, nutrition, and wellness content there",
-    "Organize my motivational content about discipline, hard work, and perseverance into a 'Grind' folder",
-
-    // Video content with transcripts - bundles
-    "Make me a bundle that focuses on never giving up, pushing through adversity, and maintaining relentless determination",
-    "Create a comprehensive bundle about building wealth, making money online, and achieving financial freedom for aspiring entrepreneurs",
-    "Build me a bundle combining my best content on productivity, time management, and getting more done in less time",
-    "Make a bundle focused on self-improvement, personal development, and becoming the best version of yourself",
-    "Create a bundle about social media growth strategies, content creation tips, and building an online presence",
-
-    // SFX bundles (no transcripts)
-    "Make me a bundle of all my cinematic sound effects including whooshes, impacts, and transitions for video editors",
-    "Create a bundle with my best ambient sound effects like rain, thunder, and nature sounds for content creators",
-    "Build a bundle of UI sound effects including clicks, notifications, and interface sounds for app developers",
-
-    // B-roll bundles (no transcripts, visual only)
-    "Create a bundle of all my city b-roll footage including skylines, streets, and urban environments for filmmakers",
-    "Make me a bundle with nature b-roll like sunsets, forests, and ocean waves for travel content creators",
-    "Build a bundle of lifestyle b-roll showing people working, studying, and daily activities for social media creators",
-
-    // Background video bundles (no transcripts, looping content)
-    "Create a bundle of animated background videos with geometric patterns and gradients for streamers and content creators",
-    "Make me a bundle of particle effect backgrounds and motion graphics for video editors and designers",
-    "Build a bundle with abstract background loops including smoke, fire, and light effects for creative projects",
-
-    // Meme bundles (no transcripts, visual/text based)
-    "Create a meme template bundle with my most popular reaction images and viral formats for social media managers",
-    "Make me a bundle of trending meme templates and formats that content creators can customize for their audience",
-    "Build a bundle of niche-specific meme templates for the fitness, business, and motivation communities",
-
-    // Mixed content bundles
-    "Create a complete content creator starter pack with b-roll, sound effects, and motivational clips for beginners",
-    "Make me a premium bundle combining my best motivational videos, cinematic b-roll, and epic sound effects",
-    "Build a social media content bundle with short-form videos, meme templates, and trending audio clips",
+  const navigationItems = [
+    { icon: Upload, label: "Upload", href: "/dashboard/upload" },
+    { icon: Package, label: "Bundles", href: "/dashboard/bundles" },
+    { icon: DollarSign, label: "Earnings", href: "/dashboard/earnings" },
+    { icon: Heart, label: "Favorites", href: "/dashboard/favorites" },
+    { icon: CreditCard, label: "Upgrade", href: "/dashboard/upgrade" },
+    { icon: Package, label: "My Purchases", href: "/dashboard/purchases" },
+    { icon: Gift, label: "Free Content", href: "/dashboard/free-content" },
   ]
 
-  const [currentSuggestions, setCurrentSuggestions] = useState<string[]>([])
+  // Suggestions list (moved here to fix undeclared variable error)
+  const allSuggestions = [
+    "Help me create a beginner photography bundle",
+    "What should I price my video editing pack?",
+    "Build a bundle for social media templates",
+    "Create a free lead magnet bundle",
+    "Suggest ideas for a digital art bundle",
+    "How can I bundle my services effectively?",
+    "What elements should be in a 'starter pack' bundle?",
+    "Generate a bundle for productivity tools",
+  ]
 
   useEffect(() => {
     const getRandomSuggestions = () => {
@@ -148,16 +131,6 @@ function VexChat({ children }: VexChatProps) {
     "What should I price my video editing pack?",
     "Build a bundle for social media templates",
     "Create a free lead magnet bundle",
-  ]
-
-  const navigationItems = [
-    { icon: Upload, label: "Upload", href: "/dashboard/upload" },
-    { icon: Package, label: "Bundles", href: "/dashboard/bundles" },
-    { icon: DollarSign, label: "Earnings", href: "/dashboard/earnings" },
-    { icon: Heart, label: "Favorites", href: "/dashboard/favorites" },
-    { icon: CreditCard, label: "Upgrade", href: "/dashboard/upgrade" },
-    { icon: Package, label: "My Purchases", href: "/dashboard/purchases" },
-    { icon: Gift, label: "Free Content", href: "/dashboard/free-content" },
   ]
 
   useEffect(() => {
@@ -1226,77 +1199,35 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
           <ScrollArea className={`flex-1 ${isMobile ? "px-3" : "px-4"}`} ref={scrollAreaRef}>
             <div className={`${isMobile ? "max-w-full" : "max-w-4xl mx-auto"} py-4 min-h-full flex flex-col`}>
               {messages.length === 0 && (
-                <div className="flex min-h-[70vh] gap-8 px-4">
-                  <div className="flex-1 flex flex-col justify-center max-w-md">
-                    <div className="mb-6">
-                      <h3 className="text-sm font-medium text-zinc-400 mb-2">💡 Detailed prompts get better results</h3>
-                    </div>
+                <div className="text-center flex-1 flex flex-col justify-center items-center min-h-[60vh] px-2">
+                  <h2 className={`${isMobile ? "text-xl" : "text-2xl"} font-semibold mb-2`}>Hi! I'm Vex</h2>
+                  <p
+                    className={`text-muted-foreground mb-6 ${isMobile ? "max-w-sm text-sm" : "max-w-md"} mx-auto leading-relaxed`}
+                  >
+                    I'll help you create profitable bundles, set optimal pricing, and build compelling storefront
+                    content.
+                  </p>
 
-                    <div className="space-y-3">
-                      {currentSuggestions.map((suggestion, index) => (
-                        <button
-                          key={`${suggestion}-${index}`}
-                          onClick={() => handleSuggestionClick(suggestion)}
-                          className="group relative w-full text-left p-4 rounded-xl overflow-hidden transition-all duration-300 hover:scale-[1.02] hover:-translate-y-0.5"
-                          style={{ fontSize: "16px" }}
-                        >
-                          <div className="absolute inset-0 bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 opacity-90" />
-
-                          <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-
-                          <div
-                            className="absolute inset-0 rounded-xl bg-gradient-to-br from-zinc-700/50 via-zinc-600/30 to-zinc-700/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                            style={{ padding: "1px" }}
-                          >
-                            <div className="absolute inset-[1px] rounded-xl bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900" />
-                          </div>
-
-                          <div className="relative z-10">
-                            <p className="text-sm text-zinc-200 leading-relaxed group-hover:text-white transition-colors duration-300">
-                              {suggestion}
-                            </p>
-                          </div>
-
-                          <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-blue-500/10 to-transparent rounded-bl-full opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="flex-1 flex flex-col justify-center max-w-lg">
-                    <div className="space-y-6">
-                      <div>
-                        <h2 className="text-4xl font-bold mb-3 bg-gradient-to-r from-white via-zinc-200 to-zinc-400 bg-clip-text text-transparent">
-                          Hi! I'm Vex
-                        </h2>
-                        <p className="text-lg text-zinc-400 leading-relaxed">
-                          I'll help you create profitable bundles, set optimal pricing, and build compelling storefront
-                          content.
+                  {contentAnalysis && (
+                    <div
+                      className={`mb-6 p-3 rounded-lg bg-transparent ${isMobile ? "max-w-sm" : "max-w-md"} mx-auto border border-zinc-700/50`}
+                    >
+                      <p className="text-sm text-muted-foreground mb-1">
+                        Analyzed {contentAnalysis.totalUploads} uploads
+                      </p>
+                      {contentAnalysis.categories.length > 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          Found: {contentAnalysis.categories.slice(0, 3).join(", ")}
+                          {contentAnalysis.categories.length > 3 && ` +${contentAnalysis.categories.length - 3} more`}
                         </p>
-                      </div>
-
-                      {contentAnalysis && (
-                        <div className="p-4 rounded-xl bg-gradient-to-br from-zinc-900/50 to-zinc-800/30 border border-zinc-700/50">
-                          <p className="text-sm text-zinc-300 mb-1 font-medium">
-                            Analyzed {contentAnalysis.totalUploads} uploads
-                          </p>
-                          {contentAnalysis.categories.length > 0 && (
-                            <p className="text-xs text-zinc-500">
-                              Found: {contentAnalysis.categories.slice(0, 3).join(", ")}
-                              {contentAnalysis.categories.length > 3 &&
-                                ` +${contentAnalysis.categories.length - 3} more`}
-                            </p>
-                          )}
-                        </div>
                       )}
-
-                      <div className="pt-4">
-                        <p className="text-xs text-zinc-600 italic">
-                          The more specific your request, the better I can help you organize and monetize your content.
-                        </p>
-                      </div>
                     </div>
-                  </div>
+                  )}
+
+                  <p className="text-xs text-zinc-500 max-w-md mx-auto text-center">
+                    The more specific and detailed your requests are, the better I can help you organize and monetize
+                    your content
+                  </p>
                 </div>
               )}
 
