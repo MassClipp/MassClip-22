@@ -309,7 +309,11 @@ Respond with JSON only:
 export async function POST(request: Request) {
   try {
     console.log("[v0] Chat API called")
-    const { messages } = await request.json()
+    const { messages, userId } = await request.json()
+
+    if (!userId) {
+      return NextResponse.json({ error: "User ID is required" }, { status: 400 })
+    }
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       console.log("[v0] No messages provided")
@@ -327,7 +331,6 @@ export async function POST(request: Request) {
     let userContentContext = ""
     let bundleLimitsContext = ""
     let folderContext = ""
-    let userId = null
     const authHeader = request.headers.get("authorization")
 
     if (authHeader && authHeader.startsWith("Bearer ")) {
@@ -341,7 +344,6 @@ export async function POST(request: Request) {
           // Validate token format (JWT should have 3 parts separated by dots)
           if (token.split(".").length === 3) {
             const decodedToken = await getAuth().verifyIdToken(token)
-            userId = decodedToken.uid
             console.log("[v0] User authenticated:", userId)
 
             const tierInfoData = await getUserTierInfo(userId)
@@ -672,50 +674,116 @@ Available content IDs for bundling: ${(analysisData?.uploads || []).map((upload:
       }
     }
 
-    const systemPrompt = `You are Vex, an AI assistant for MassClip that helps users organize their content library.
+    const systemPrompt = `You are Vex, MassClip's AI assistant. You help users organize their video content library.
 
-===== CORE RULES =====
+===== CORE PRINCIPLES =====
 
-1. **Be direct and action-first** - Don't hedge or ask permission unless truly uncertain
-2. **Use database IDs** - Always use the "id" field from uploads, never titles
-3. **Count and verify** - State how many files you're organizing and verify the count matches
-4. **Execute immediately** - Output the action JSON right away
+1. **Be Direct** - No hedging, no "I think", no "potentially". Make confident decisions.
+2. **Action-First** - Show what you're doing, then do it. No long explanations.
+3. **Use Database IDs** - Always use the "id" field from uploads, never titles or filenames.
+4. **Count Accurately** - If you say "5 videos", your JSON must have exactly 5 IDs.
+
+===== CONTENT ANALYSIS DATA =====
+
+${userContentContext}${bundleLimitsContext}${folderContext}
 
 ===== YOUR CAPABILITIES =====
 
-**ORGANIZE CONTENT**
+**0. REFRESH CONTENT ANALYSIS**
+If user asks to "refresh" or "update library":
 
-When a user asks to organize files, you MUST:
-1. Look at the content analysis data
-2. Find files that match their request
-3. Get the database ID (the "id" field) for each file
-4. Output the ORGANIZE_FILES action with those IDs
+REFRESH_ANALYSIS: true
 
-**Format:**
-ORGANIZE_FILES: {"targetFolder": "Folder Name", "fileIds": ["id1", "id2", "id3"]}
+**1. CREATE FOLDERS**
 
-**Example:**
+CREATE_FOLDER: {"name": "Folder Name", "description": "Brief description"}
 
-User: "Move all faith content to the Faith folder"
+**2. RENAME CONTENT**
 
-You: "Moving 5 faith-focused videos to Faith folder:
-• Nathalie Nicole Smith - trusting God's plans
-• 2819 Rebellion - rebellion against God
-• 2819 Deceived - God's mercy
-• 2819 Fruit - evidence of Christianity
-• 2819 Conduits - God's judgment
+RENAME_CONTENT: {"contentId": "file_id", "newTitle": "New Title", "reason": "brief reason"}
 
-ORGANIZE_FILES: {"targetFolder": "Faith - God", "fileIds": ["abc123", "def456", "ghi789", "jkl012", "mno345"]}"
+**3. ORGANIZE CONTENT** ⚠️ MOST IMPORTANT
 
-**CRITICAL:**
-- Use REAL database IDs from the uploads array
-- Count how many you're moving and verify it matches
-- Use the EXACT folder name (case-sensitive)
-- Be confident and direct
+When organizing files:
 
-${userContentContext}${folderContext}
+1. **Read the transcripts** - Understand what each video is actually about
+2. **Make confident decisions** - Pick the best folder for each file
+3. **Use database IDs** - Get the "id" field from the uploads array above
+4. **Count accurately** - Verify your count matches your JSON array length
+5. **Be direct** - Show what's moving, then output the JSON
 
-**Remember:** You're here to help users organize their content quickly and accurately. Be confident, use real database IDs, and execute actions immediately.`
+**RESPONSE FORMAT:**
+
+✅ CORRECT:
+"Moving 3 videos to Faith:
+• 'Nathalie Nicole Smith' (ID: abc123) - trusting God's plans
+• '2819 Rebellion' (ID: def456) - rebellion against God
+• '2819 Fruit' (ID: ghi789) - evidence of Christianity
+
+ORGANIZE_FILES: {"targetFolder": "Faith - God", "fileIds": ["abc123", "def456", "ghi789"], "reason": "Faith and spirituality content"}"
+
+❌ WRONG:
+"After carefully analyzing your content library, I've identified several videos that could potentially fit into the Faith category. However, I want to make sure I understand your organizational preferences correctly..."
+
+**CRITICAL RULES:**
+- Use the "id" field from uploads (looks like: "abc123xyz")
+- Count your items and verify the JSON array has the same count
+- Be confident - don't second-guess yourself
+- Output ORGANIZE_FILES JSON immediately after listing files
+
+**EXAMPLE WITH REAL DATA:**
+
+Given uploads:
+[
+  { id: "upload_abc123", title: "Nathalie Nicole Smith", transcript: "God knows the plans..." },
+  { id: "upload_def456", title: "2819 Rebellion", transcript: "rebellion against God..." }
+]
+
+CORRECT:
+"Moving 2 videos to Faith:
+• 'Nathalie Nicole Smith' - trusting God's plans
+• '2819 Rebellion' - rebellion against God
+
+ORGANIZE_FILES: {"targetFolder": "Faith - God", "fileIds": ["upload_abc123", "upload_def456"], "reason": "Faith content"}"
+
+WRONG:
+ORGANIZE_FILES: {"targetFolder": "Faith - God", "fileIds": ["Nathalie Nicole Smith", "2819 Rebellion"], "reason": "Faith content"}
+
+**4. CREATE BUNDLES**
+
+CREATE_BUNDLE: {"title": "Bundle Name", "description": "Description", "price": 15, "contentIds": ["id1", "id2"], "category": "Video Pack", "tags": ["tag1", "tag2"]}
+
+===== RESPONSE STYLE =====
+
+- Be direct and confident
+- Show what you're doing, then do it
+- No hedging language ("I think", "potentially", "could be")
+- No long explanations before actions
+- If user's prompt is vague, remind them you work better with detailed requests
+
+===== EXAMPLES =====
+
+User: "move faith content to faith folder"
+
+You: "Moving 7 videos to Faith:
+• 'Nathalie Nicole Smith' - trusting God's plans
+• 'Nathalie Nicole Smith' - God renewing mind and spirit
+• '2819_Deceived' - being deceived and God's mercy
+• '2819_Fruit' - evidence of Christianity
+• '2819_Rebellion' - rebellion against God
+• '2819_Conduits' - entities that promote sin
+• 'Damji-i' - taking responsibility, mentions son
+
+ORGANIZE_FILES: {"targetFolder": "Faith - God", "fileIds": ["id1", "id2", "id3", "id4", "id5", "id6", "id7"], "reason": "Faith and spirituality content"}"
+
+User: "organize my stuff"
+
+You: "I can help you organize your content more accurately with detailed prompts. For example:
+• 'Move all motivational content to the Motivation folder'
+• 'Put videos about faith and God into the Faith folder'
+• 'Create a bundle with my top 5 workout videos'
+
+What would you like me to help you organize?"`
 
     // Ensure messages have proper format
     const formattedMessages = [
@@ -797,205 +865,112 @@ What would you like me to do?`
       return NextResponse.json({ error: "No response from AI" }, { status: 500 })
     }
 
-    // CHANGE: Replace multi-pass reasoning with new semantic analysis
+    // CHANGE: Removed the complex performSemanticAnalysis function - it was second-guessing Vex and causing contradictions
+    // CHANGE: Simplified to: Vex decides → Extract JSON → Execute moves
+
     if (assistantMessage.includes("ORGANIZE_FILES:") && userId) {
       try {
-        console.log("[v0] 🧠 Starting semantic analysis for ORGANIZE_FILES action...")
+        console.log("[v0] 🧠 Detected ORGANIZE_FILES action")
 
         // Extract organization data
-        const organizeMatch = assistantMessage.match(/ORGANIZE_FILES:\s*({.*?})/s)
+        const organizeMatch = assistantMessage.match(/ORGANIZE_FILES:\s*(\{[^}]+\})/s)
         if (!organizeMatch) {
-          throw new Error("No valid organization data found")
+          console.log("[v0] ❌ No valid ORGANIZE_FILES JSON found")
+          throw new Error("No valid organization data found in response")
         }
 
-        const organizeData = JSON.parse(organizeMatch[1])
-        console.log("[v0] Parsed organization data:", organizeData)
+        let organizeData
+        try {
+          organizeData = JSON.parse(organizeMatch[1])
+        } catch (parseError) {
+          console.log("[v0] ❌ Failed to parse JSON:", organizeMatch[1])
+          throw new Error("Invalid JSON format in ORGANIZE_FILES")
+        }
 
-        // Get analysis data and folder contents
+        console.log("[v0] ✅ Parsed organization data:", organizeData)
+        console.log("[v0]   - Target folder:", organizeData.targetFolder)
+        console.log("[v0]   - File count:", organizeData.fileIds?.length || 0)
+        console.log("[v0]   - File IDs:", organizeData.fileIds)
+
+        // CHANGE: Validate required fields
+        if (!organizeData.targetFolder || organizeData.targetFolder === "None") {
+          throw new Error(`Invalid targetFolder: ${organizeData.targetFolder}`)
+        }
+
+        if (!organizeData.fileIds || !Array.isArray(organizeData.fileIds) || organizeData.fileIds.length === 0) {
+          throw new Error("No valid files specified for organization")
+        }
+
+        // CHANGE: Get uploads data to verify IDs
         const analysisDoc = await db.collection("vex_content_analysis").doc(userId).get()
         if (!analysisDoc.exists) {
-          throw new Error("Content analysis not found")
+          throw new Error("Content analysis not found - please refresh your content first")
         }
 
         const analysisData = analysisDoc.data()!
         const uploads = analysisData.uploads || []
+        console.log(`[v0] 📊 Loaded ${uploads.length} uploads from analysis`)
 
-        // Get existing folder contents
-        let folderContents: any[] = []
-        const foldersSnapshot = await db
-          .collection("folders")
-          .where("userId", "==", userId)
-          .where("name", "==", organizeData.targetFolder)
-          .where("isDeleted", "==", false)
-          .limit(1)
-          .get()
+        // CHANGE: Verify all file IDs exist in the uploads array
+        const validIds = new Set(uploads.map((u: any) => u.id))
+        const validFileIds: string[] = []
+        const invalidIds: string[] = []
 
-        if (!foldersSnapshot.empty) {
-          const folderId = foldersSnapshot.docs[0].id
-          const uploadsInFolder = await db
-            .collection("uploads")
-            .where("folderId", "==", folderId)
-            .where("isDeleted", "==", false)
-            .limit(50)
-            .get()
-
-          folderContents = uploadsInFolder.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
+        for (const fileId of organizeData.fileIds) {
+          if (validIds.has(fileId)) {
+            validFileIds.push(fileId)
+            const upload = uploads.find((u: any) => u.id === fileId)
+            console.log(`[v0] ✅ Valid ID: "${fileId}" → "${upload?.title}"`)
+          } else {
+            invalidIds.push(fileId)
+            console.log(`[v0] ❌ Invalid ID: "${fileId}" (not found in uploads)`)
+          }
         }
 
-        // Perform LLM semantic analysis
-        const analysisResult = await performSemanticAnalysis("ORGANIZE_FILES", {
-          targetFolder: organizeData.targetFolder,
-          fileIds: organizeData.fileIds,
-          uploads,
-          folderContents,
-          reason: organizeData.reason,
-        })
+        if (validFileIds.length === 0) {
+          throw new Error(`None of the ${organizeData.fileIds.length} file IDs matched uploads in the database`)
+        }
 
-        console.log(`[v0] 🧠 Semantic analysis decision: ${analysisResult.decision}`)
-        console.log(`[v0] 📊 Overall confidence: ${analysisResult.overallConfidence}%`)
-        console.log(`[v0] 📝 Summary: ${analysisResult.summary}`)
+        if (invalidIds.length > 0) {
+          console.log(`[v0] ⚠️ ${invalidIds.length} invalid IDs will be skipped`)
+        }
 
-        // Handle decision
-        if (analysisResult.decision === "reject") {
-          // Reject the action and explain why with evidence
-          const evidenceList = analysisResult.fileAnalyses
-            .filter((f) => f.semanticFit === "weak" || f.semanticFit === "none")
-            .map((f) => `• **${f.fileName}**: ${f.reasoning}${f.evidence ? `\n  Evidence: "${f.evidence}"` : ""}`)
-            .join("\n")
+        // CHANGE: Update the organize data with only valid IDs
+        organizeData.fileIds = validFileIds
 
-          assistantMessage = assistantMessage.replace(
-            /ORGANIZE_FILES:\s*{.*?}/s,
-            `❌ After analyzing the transcripts, I don't think these files fit well into "${organizeData.targetFolder}":\n\n${evidenceList}\n\n**Summary**: ${analysisResult.summary}\n\n${analysisResult.warnings.length > 0 ? `**Concerns**:\n${analysisResult.warnings.map((w) => `• ${w}`).join("\n")}\n\n` : ""}Would you like me to suggest a different folder, or would you prefer to organize these files differently?`,
-          )
-        } else if (analysisResult.decision === "ask_user") {
-          // Ask user for confirmation with detailed evidence
-          const evidenceList = analysisResult.fileAnalyses
-            .map(
-              (f) =>
-                `• **${f.fileName}** (${f.semanticFit} fit, ${f.confidence}% confidence)\n  ${f.reasoning}${f.evidence ? `\n  Evidence: "${f.evidence}"` : ""}`,
-            )
-            .join("\n\n")
+        console.log(`[v0] ✅ Proceeding with ${validFileIds.length} valid files`)
 
-          assistantMessage = assistantMessage.replace(
-            /ORGANIZE_FILES:\s*{.*?}/s,
-            `⚠️ I've analyzed the transcripts and have moderate confidence (${analysisResult.overallConfidence}%) about organizing these files into "${organizeData.targetFolder}":\n\n${evidenceList}\n\n**Summary**: ${analysisResult.summary}\n\n${analysisResult.warnings.length > 0 ? `**Concerns**:\n${analysisResult.warnings.map((w) => `• ${w}`).join("\n")}\n\n` : ""}Would you like me to proceed with organizing these files?`,
-          )
+        // CHANGE: Show progress message
+        const progressMessage = `🗂️ Moving ${validFileIds.length} file${validFileIds.length === 1 ? "" : "s"} to "${organizeData.targetFolder}"...`
+
+        const orgActionRegex = /ORGANIZE_FILES:\s*(\{[^}]+\})/s
+        assistantMessage = assistantMessage.replace(orgActionRegex, progressMessage)
+
+        // CHANGE: Execute the organize operation
+        const organizeResult = await organizeFilesDirectly(userId, organizeData)
+
+        if (organizeResult.success) {
+          const fileList = organizeResult.movedFiles?.length
+            ? `\n\n**Files moved:**\n${organizeResult.movedFiles.map((f: string) => `• ${f}`).join("\n")}`
+            : ""
+
+          const successMessage = `✅ Successfully moved ${organizeResult.movedFiles?.length || validFileIds.length} file${validFileIds.length === 1 ? "" : "s"} to "${organizeResult.targetFolder}"!${fileList}`
+          assistantMessage = assistantMessage.replace(progressMessage, successMessage)
         } else {
-          // Proceed with organization
-          console.log("[v0] ✅ Semantic analysis approved, proceeding with organization")
-
-          // Validate consistency between what was said and what's in the JSON
-          const naturalLanguageText = assistantMessage.split("ORGANIZE_FILES:")[0]
-          const mentionedCount = countMentionedItems(naturalLanguageText)
-          const jsonCount = organizeData.fileIds?.length || 0
-
-          console.log(`[v0] 🔍 Consistency Check:`)
-          console.log(`[v0]   - Vex said: ${mentionedCount} items`)
-          console.log(`[v0]   - JSON has: ${jsonCount} items`)
-
-          if (mentionedCount > 0 && jsonCount > 0 && Math.abs(mentionedCount - jsonCount) > 2) {
-            console.log(`[v0] ❌ MISMATCH DETECTED: Said ${mentionedCount} but JSON has ${jsonCount}`)
-
-            // Re-match files using the analysis results
-            const correctedFileIds = analysisResult.fileAnalyses
-              .filter((f) => f.semanticFit === "strong" || f.semanticFit === "moderate")
-              .map((f) => f.fileId)
-
-            organizeData.fileIds = correctedFileIds
-            console.log(`[v0] ✅ Corrected: ${correctedFileIds.length} files will be organized`)
-
-            const correctedMessage = assistantMessage.replace(
-              /ORGANIZE_FILES:\s*{.*?}/s,
-              `ORGANIZE_FILES: ${JSON.stringify(organizeData)}`,
-            )
-            assistantMessage = correctedMessage
-
-            if (correctedFileIds.length !== jsonCount) {
-              assistantMessage = assistantMessage.replace(
-                "ORGANIZE_FILES:",
-                `\n\n*Note: I've verified and will organize ${correctedFileIds.length} files that semantically match "${organizeData.targetFolder}".*\n\nORGANIZE_FILES:`,
-              )
-            }
-          } else {
-            console.log(`[v0] ✅ Consistency check passed`)
-          }
-
-          // Verify all IDs are real database IDs
-          const validIds = new Set(uploads.map((u: any) => u.id))
-          const invalidIds = organizeData.fileIds.filter((id: string) => !validIds.has(id))
-
-          if (invalidIds.length > 0) {
-            console.log(`[v0] ⚠️ Found ${invalidIds.length} invalid IDs, attempting to fix...`)
-            const correctedIds: string[] = []
-
-            for (const identifier of organizeData.fileIds) {
-              if (validIds.has(identifier)) {
-                correctedIds.push(identifier)
-              } else {
-                // Try to find by matching with analysis results
-                const analysisMatch = analysisResult.fileAnalyses.find(
-                  (f) => f.fileName === identifier || f.fileId === identifier,
-                )
-                if (analysisMatch && validIds.has(analysisMatch.fileId)) {
-                  correctedIds.push(analysisMatch.fileId)
-                  console.log(`[v0]   Fixed: "${identifier}" → "${analysisMatch.fileId}"`)
-                } else {
-                  console.log(`[v0]   Could not fix: "${identifier}"`)
-                }
-              }
-            }
-
-            organizeData.fileIds = correctedIds
-            const correctedMessage = assistantMessage.replace(
-              /ORGANIZE_FILES:\s*{.*?}/s,
-              `ORGANIZE_FILES: ${JSON.stringify(organizeData)}`,
-            )
-            assistantMessage = correctedMessage
-            console.log(`[v0] ✅ Fixed IDs: ${correctedIds.length} valid database IDs`)
-          }
-
-          // Show progress message with semantic analysis summary
-          const strongFits = analysisResult.fileAnalyses.filter((f) => f.semanticFit === "strong").length
-          const moderateFits = analysisResult.fileAnalyses.filter((f) => f.semanticFit === "moderate").length
-
-          const orgProgressMessage = `🗂️ **Organizing your files now...** (${analysisResult.overallConfidence}% confidence)\n\n**Semantic Analysis**: ${strongFits} strong fits, ${moderateFits} moderate fits\n${analysisResult.summary}`
-
-          const orgActionRegex = /ORGANIZE_FILES:\s*({.*?})/s
-          if (assistantMessage.match(orgActionRegex)) {
-            assistantMessage = assistantMessage.replace(orgActionRegex, orgProgressMessage)
-          } else {
-            assistantMessage += `\n\n${orgProgressMessage}`
-          }
-
-          // Call the organize files API
-          const organizeResult = await organizeFilesDirectly(userId, organizeData)
-
-          if (organizeResult.success) {
-            const fileList = organizeResult.movedFiles?.length
-              ? `\n\n**Files moved:**\n${organizeResult.movedFiles.map((f: string) => `* ${f}`).join("\n")}`
-              : ""
-
-            const successMessage = `✅ **Files moved successfully!** Your "${organizeResult.targetFolder}" folder now contains the following files:${fileList}`
-            assistantMessage = assistantMessage.replace(orgProgressMessage, successMessage)
-          } else {
-            const errorMessage = `❌ ${organizeResult.error || "I encountered an issue organizing your files. Please try again."}`
-            assistantMessage = assistantMessage.replace(orgProgressMessage, errorMessage)
-          }
+          const errorMessage = `❌ ${organizeResult.error || "Failed to organize files. Please try again."}`
+          assistantMessage = assistantMessage.replace(progressMessage, errorMessage)
         }
       } catch (error) {
-        console.error("[v0] File organization failed:", error)
-        const errorMessage = `❌ I encountered an error while analyzing this organization request: ${error instanceof Error ? error.message : "Unknown error"}`
+        console.error("[v0] ❌ File organization failed:", error)
+        const errorMessage = `❌ Organization failed: ${error instanceof Error ? error.message : "Unknown error"}`
+
         if (assistantMessage.includes("ORGANIZE_FILES:")) {
-          assistantMessage = assistantMessage.replace(/ORGANIZE_FILES:\s*{.*?}/s, errorMessage)
+          assistantMessage = assistantMessage.replace(/ORGANIZE_FILES:\s*(\{[^}]+\})/s, errorMessage)
         } else {
           assistantMessage += `\n\n${errorMessage}`
         }
       }
     }
-
-    // If the assistant message still contains an action that needs direct backend processing,
-    // and it hasn't been handled by specific LLM analysis overrides, proceed.
-    // This section is for actions like CREATE_BUNDLE, RENAME_CONTENT, etc. that are not subject to LLM semantic analysis.
 
     if (assistantMessage.includes("CREATE_BUNDLE:") && userId) {
       try {
@@ -1029,7 +1004,7 @@ What would you like me to do?`
         console.error("[v0] Bundle creation failed:", error)
         assistantMessage = assistantMessage.replace(
           "🚀 **Creating your bundle now...** This will just take a moment!",
-          "❌ I encountered an issue creating your bundle. Please try again or create it manually in your dashboard.",
+          "❌ I encountered an error while creating your bundle. Please try again or create it manually in your dashboard.",
         )
       }
     }
@@ -1596,156 +1571,6 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
       success: false,
       error: error instanceof Error ? error.message : "An unexpected error occurred while organizing files.",
     }
-  }
-}
-
-async function executeOrganizeAction(userId: string, organizeData: any) {
-  try {
-    const { targetFolder, fileIds } = organizeData
-
-    console.log(`[v0] 🚀 EXECUTE ORGANIZE: ${fileIds.length} files → "${targetFolder}"`)
-
-    // Step 1: Find the target folder
-    let folderSnapshot = await db
-      .collection("folders")
-      .where("userId", "==", userId)
-      .where("name", "==", targetFolder)
-      .where("isDeleted", "==", false)
-      .limit(1)
-      .get()
-
-    if (folderSnapshot.empty) {
-      folderSnapshot = await db
-        .collection("folders")
-        .where("uid", "==", userId)
-        .where("name", "==", targetFolder)
-        .where("isDeleted", "==", false)
-        .limit(1)
-        .get()
-    }
-
-    if (folderSnapshot.empty) {
-      console.log(`[v0] ❌ Folder not found: "${targetFolder}"`)
-      return {
-        success: false,
-        error: `Folder "${targetFolder}" doesn't exist. Please create it first.`,
-      }
-    }
-
-    const folderId = folderSnapshot.docs[0].id
-    console.log(`[v0] ✅ Found folder ID: ${folderId}`)
-
-    // Step 2: Move each file
-    const movedFiles: string[] = []
-    const failedFiles: string[] = []
-
-    for (const fileId of fileIds) {
-      try {
-        console.log(`[v0] 📦 Moving file: ${fileId}`)
-
-        // Try uploads collection first
-        let docRef = db.collection("uploads").doc(fileId)
-        let docSnap = await docRef.get()
-
-        // If not found, try user_uploads
-        if (!docSnap.exists) {
-          docRef = db.collection("user_uploads").doc(fileId)
-          docSnap = await docRef.get()
-        }
-
-        if (!docSnap.exists) {
-          console.log(`[v0] ❌ File not found: ${fileId}`)
-          failedFiles.push(fileId)
-          continue
-        }
-
-        const docData = docSnap.data()!
-
-        // Verify ownership
-        if (docData.uid !== userId && docData.userId !== userId) {
-          console.log(`[v0] ❌ Ownership mismatch: ${fileId}`)
-          failedFiles.push(fileId)
-          continue
-        }
-
-        // Move the file
-        await docRef.update({
-          folderId: folderId,
-          folderName: targetFolder,
-          updatedAt: FieldValue.serverTimestamp(),
-        })
-
-        movedFiles.push(docData.title || docData.filename || fileId)
-        console.log(`[v0] ✅ Moved: ${docData.title}`)
-      } catch (error) {
-        console.error(`[v0] ❌ Error moving ${fileId}:`, error)
-        failedFiles.push(fileId)
-      }
-    }
-
-    console.log(`[v0] 📊 Results: ${movedFiles.length} moved, ${failedFiles.length} failed`)
-
-    if (movedFiles.length === 0) {
-      return {
-        success: false,
-        error: "Could not move any files. They may not exist or you may not have permission.",
-      }
-    }
-
-    return {
-      success: true,
-      movedCount: movedFiles.length,
-      movedFiles,
-      targetFolder,
-    }
-  } catch (error) {
-    console.error("[v0] ❌ Execute organize error:", error)
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
-    }
-  }
-}
-
-if (assistantMessage.includes("ORGANIZE_FILES:") && userId) {
-  try {
-    console.log("[v0] 🔍 Detected ORGANIZE_FILES action")
-
-    // Extract the JSON
-    const organizeMatch = assistantMessage.match(/ORGANIZE_FILES:\s*(\{[^}]+\})/s)
-    if (!organizeMatch) {
-      throw new Error("Could not parse ORGANIZE_FILES JSON")
-    }
-
-    const organizeData = JSON.parse(organizeMatch[1])
-    console.log("[v0] 📋 Organize data:", organizeData)
-
-    // Validate
-    if (!organizeData.targetFolder) {
-      throw new Error("No target folder specified")
-    }
-
-    if (!organizeData.fileIds || organizeData.fileIds.length === 0) {
-      throw new Error("No files specified")
-    }
-
-    console.log(`[v0] ✅ Valid request: ${organizeData.fileIds.length} files → "${organizeData.targetFolder}"`)
-
-    // Execute the move
-    const result = await executeOrganizeAction(userId, organizeData)
-
-    // Update the message with results
-    if (result.success) {
-      const successMsg = `✅ **Successfully moved ${result.movedCount} files to "${result.targetFolder}"!**\n\nFiles moved:\n${result.movedFiles.map((f: string) => `• ${f}`).join("\n")}`
-      assistantMessage = assistantMessage.replace(/ORGANIZE_FILES:\s*\{[^}]+\}/s, successMsg)
-    } else {
-      const errorMsg = `❌ **Failed to move files:** ${result.error}`
-      assistantMessage = assistantMessage.replace(/ORGANIZE_FILES:\s*\{[^}]+\}/s, errorMsg)
-    }
-  } catch (error) {
-    console.error("[v0] ❌ Organize action failed:", error)
-    const errorMsg = `❌ **Error:** ${error instanceof Error ? error.message : "Unknown error"}`
-    assistantMessage = assistantMessage.replace(/ORGANIZE_FILES:\s*\{[^}]+\}/s, errorMsg)
   }
 }
 
