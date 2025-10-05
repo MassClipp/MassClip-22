@@ -27,6 +27,21 @@ export function SignupForm() {
       const idToken = await user.getIdToken()
       console.log("[v0] Got ID token, calling create-user API...")
 
+      console.log("[v0] Creating session cookie...")
+      const sessionResponse = await fetch("/api/auth/session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ idToken }),
+      })
+
+      if (!sessionResponse.ok) {
+        console.error("[v0] Failed to create session cookie")
+        throw new Error("Failed to create session")
+      }
+      console.log("[v0] Session cookie created successfully")
+
       const response = await fetch("/api/auth/create-user", {
         method: "POST",
         headers: {
