@@ -93,36 +93,43 @@ function VexChat({ children }: VexChatProps) {
   const isUploadPage = pathname === "/dashboard/upload"
 
   const allSuggestions = [
-    // Video content with transcripts
-    "Organize all my content that focuses on money, wealth, and financial success into one folder",
-    "Create a bundle that focuses on never giving up, perseverance, and relentless determination",
-    "Make me 3 motivation bundles targeting entrepreneurs who are just starting their journey",
-    "Organize all videos about mindset, mental toughness, and overcoming obstacles into a folder",
-    "Create a bundle focused on building discipline, consistency, and daily habits for success",
-    "Make me a bundle about leadership, influence, and becoming a better communicator",
-    "Organize content about fitness, health, and physical transformation into one place",
-    "Create a bundle targeting small business owners who need marketing and sales strategies",
-    "Make me a bundle about productivity, time management, and getting more done in less time",
-    "Organize all content related to personal development, self-improvement, and growth mindset",
+    // Video content with transcripts - organizing
+    "Organize all my content that focuses on money, wealth, and financial success into one folder called 'Money Mindset'",
+    "Move all videos about entrepreneurship, business growth, and startup advice into a 'Business' folder",
+    "Create a folder called 'Fitness & Health' and organize all my workout, nutrition, and wellness content there",
+    "Organize my motivational content about discipline, hard work, and perseverance into a 'Grind' folder",
 
-    // SFX and audio content
-    "Create a sound effects bundle with cinematic impacts, whooshes, and transitions for video editors",
-    "Make me a bundle of ambient background sounds perfect for meditation and focus content",
-    "Organize all my sound effects by category: impacts, transitions, UI sounds, and atmospheres",
-    "Create a premium SFX pack with bass drops, risers, and dramatic sound effects for content creators",
+    // Video content with transcripts - bundles
+    "Make me a bundle that focuses on never giving up, pushing through adversity, and maintaining relentless determination",
+    "Create a comprehensive bundle about building wealth, making money online, and achieving financial freedom for aspiring entrepreneurs",
+    "Build me a bundle combining my best content on productivity, time management, and getting more done in less time",
+    "Make a bundle focused on self-improvement, personal development, and becoming the best version of yourself",
+    "Create a bundle about social media growth strategies, content creation tips, and building an online presence",
 
-    // B-roll and background videos
-    "Make me a b-roll bundle featuring urban cityscapes, time-lapses, and modern lifestyle footage",
-    "Create a nature b-roll pack with forests, oceans, mountains, and wildlife for documentary creators",
-    "Organize all my b-roll footage by theme: business, lifestyle, nature, and technology",
-    "Make me a bundle of abstract motion backgrounds and animated textures for video overlays",
-    "Create a cinematic b-roll collection with slow-motion shots and dramatic lighting",
+    // SFX bundles (no transcripts)
+    "Make me a bundle of all my cinematic sound effects including whooshes, impacts, and transitions for video editors",
+    "Create a bundle with my best ambient sound effects like rain, thunder, and nature sounds for content creators",
+    "Build a bundle of UI sound effects including clicks, notifications, and interface sounds for app developers",
 
-    // Memes and visual content
-    "Organize all my meme templates by category: reaction memes, text memes, and trending formats",
-    "Create a viral meme bundle with the most popular and trending templates right now",
-    "Make me a meme starter pack perfect for social media managers and content creators",
-    "Organize meme content by emotion: funny, relatable, motivational, and sarcastic",
+    // B-roll bundles (no transcripts, visual only)
+    "Create a bundle of all my city b-roll footage including skylines, streets, and urban environments for filmmakers",
+    "Make me a bundle with nature b-roll like sunsets, forests, and ocean waves for travel content creators",
+    "Build a bundle of lifestyle b-roll showing people working, studying, and daily activities for social media creators",
+
+    // Background video bundles (no transcripts, looping content)
+    "Create a bundle of animated background videos with geometric patterns and gradients for streamers and content creators",
+    "Make me a bundle of particle effect backgrounds and motion graphics for video editors and designers",
+    "Build a bundle with abstract background loops including smoke, fire, and light effects for creative projects",
+
+    // Meme bundles (no transcripts, visual/text based)
+    "Create a meme template bundle with my most popular reaction images and viral formats for social media managers",
+    "Make me a bundle of trending meme templates and formats that content creators can customize for their audience",
+    "Build a bundle of niche-specific meme templates for the fitness, business, and motivation communities",
+
+    // Mixed content bundles
+    "Create a complete content creator starter pack with b-roll, sound effects, and motivational clips for beginners",
+    "Make me a premium bundle combining my best motivational videos, cinematic b-roll, and epic sound effects",
+    "Build a social media content bundle with short-form videos, meme templates, and trending audio clips",
   ]
 
   const [currentSuggestions, setCurrentSuggestions] = useState<string[]>([])
@@ -1219,64 +1226,76 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
           <ScrollArea className={`flex-1 ${isMobile ? "px-3" : "px-4"}`} ref={scrollAreaRef}>
             <div className={`${isMobile ? "max-w-full" : "max-w-4xl mx-auto"} py-4 min-h-full flex flex-col`}>
               {messages.length === 0 && (
-                <div className="flex min-h-[60vh] px-2">
-                  <div className="flex-shrink-0 w-80 pr-6 flex flex-col justify-center">
+                <div className="flex min-h-[70vh] gap-8 px-4">
+                  <div className="flex-1 flex flex-col justify-center max-w-md">
+                    <div className="mb-6">
+                      <h3 className="text-sm font-medium text-zinc-400 mb-2">💡 Detailed prompts get better results</h3>
+                    </div>
+
                     <div className="space-y-3">
                       {currentSuggestions.map((suggestion, index) => (
                         <button
                           key={`${suggestion}-${index}`}
-                          className="group relative text-left p-4 rounded-xl overflow-hidden transition-all duration-300 hover:scale-[1.02] hover:-translate-y-0.5"
                           onClick={() => handleSuggestionClick(suggestion)}
+                          className="group relative w-full text-left p-4 rounded-xl overflow-hidden transition-all duration-300 hover:scale-[1.02] hover:-translate-y-0.5"
                           style={{ fontSize: "16px" }}
                         >
-                          {/* Dark gradient background */}
                           <div className="absolute inset-0 bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 opacity-90" />
 
-                          {/* Shine effect */}
                           <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                          <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
 
-                          {/* Border glow */}
-                          <div className="absolute inset-0 rounded-xl border border-zinc-700/50 group-hover:border-zinc-600/70 transition-colors duration-300" />
+                          <div
+                            className="absolute inset-0 rounded-xl bg-gradient-to-br from-zinc-700/50 via-zinc-600/30 to-zinc-700/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                            style={{ padding: "1px" }}
+                          >
+                            <div className="absolute inset-[1px] rounded-xl bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900" />
+                          </div>
 
-                          {/* Content */}
                           <div className="relative z-10">
                             <p className="text-sm text-zinc-200 leading-relaxed group-hover:text-white transition-colors duration-300">
                               {suggestion}
                             </p>
                           </div>
 
-                          {/* Bottom shine accent */}
-                          <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                          <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-blue-500/10 to-transparent rounded-bl-full opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                         </button>
                       ))}
                     </div>
-
-                    <p className="text-xs text-zinc-500 mt-4 text-center">💡 Detailed prompts get better results</p>
                   </div>
 
-                  <div className="flex-1 flex flex-col justify-center items-start pl-6 border-l border-zinc-800/50">
-                    <h2 className="text-3xl font-semibold mb-3 bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
-                      Hi! I'm Vex
-                    </h2>
-                    <p className="text-muted-foreground mb-6 max-w-md leading-relaxed">
-                      I'll help you create profitable bundles, set optimal pricing, organize your content library, and
-                      build compelling storefront content.
-                    </p>
-
-                    {contentAnalysis && (
-                      <div className="p-4 rounded-lg bg-zinc-900/50 border border-zinc-800/50 max-w-md">
-                        <p className="text-sm text-zinc-300 mb-1 font-medium">
-                          📊 Analyzed {contentAnalysis.totalUploads} uploads
+                  <div className="flex-1 flex flex-col justify-center max-w-lg">
+                    <div className="space-y-6">
+                      <div>
+                        <h2 className="text-4xl font-bold mb-3 bg-gradient-to-r from-white via-zinc-200 to-zinc-400 bg-clip-text text-transparent">
+                          Hi! I'm Vex
+                        </h2>
+                        <p className="text-lg text-zinc-400 leading-relaxed">
+                          I'll help you create profitable bundles, set optimal pricing, and build compelling storefront
+                          content.
                         </p>
-                        {contentAnalysis.categories.length > 0 && (
-                          <p className="text-xs text-zinc-400">
-                            Found: {contentAnalysis.categories.slice(0, 3).join(", ")}
-                            {contentAnalysis.categories.length > 3 && ` +${contentAnalysis.categories.length - 3} more`}
-                          </p>
-                        )}
                       </div>
-                    )}
+
+                      {contentAnalysis && (
+                        <div className="p-4 rounded-xl bg-gradient-to-br from-zinc-900/50 to-zinc-800/30 border border-zinc-700/50">
+                          <p className="text-sm text-zinc-300 mb-1 font-medium">
+                            Analyzed {contentAnalysis.totalUploads} uploads
+                          </p>
+                          {contentAnalysis.categories.length > 0 && (
+                            <p className="text-xs text-zinc-500">
+                              Found: {contentAnalysis.categories.slice(0, 3).join(", ")}
+                              {contentAnalysis.categories.length > 3 &&
+                                ` +${contentAnalysis.categories.length - 3} more`}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="pt-4">
+                        <p className="text-xs text-zinc-600 italic">
+                          The more specific your request, the better I can help you organize and monetize your content.
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
