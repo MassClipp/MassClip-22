@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { initializeFirebaseAdmin, db } from "@/lib/firebase/firebaseAdmin"
-import { transcribeVideoWithGroq } from "@/lib/groq-transcription"
+import { transcribeVideo } from "@/lib/groq-transcription"
 
 // Initialize Firebase Admin
 initializeFirebaseAdmin()
@@ -243,7 +243,7 @@ export async function POST(request: NextRequest) {
         console.log(`🎤 [Uploads API] Triggering transcription for video: ${docRef.id}`)
 
         // Trigger transcription asynchronously (don't wait for it)
-        transcribeVideoWithGroq(publicURL)
+        transcribeVideo(publicURL)
           .then(async (result) => {
             console.log(`✅ [Auto-Transcribe] Completed for ${docRef.id}`)
             await docRef.update({

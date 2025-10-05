@@ -5,6 +5,7 @@ import { FieldValue } from "firebase-admin/firestore"
 import Stripe from "stripe"
 import { ConnectedStripeAccountsService } from "@/lib/connected-stripe-accounts-service"
 import { getUserTierInfo, incrementUserBundles } from "@/lib/user-tier-service"
+import { canUserCreateBundles } from "@/lib/subscription"
 
 // Initialize Firebase Admin
 initializeFirebaseAdmin()
@@ -876,6 +877,59 @@ What would you like me to do?`
     // CHANGE: Removed the complex performSemanticAnalysis function - it was second-guessing Vex and causing contradictions
     // CHANGE: Simplified to: Vex decides → Extract JSON → Execute moves
 
+    if (assistantMessage.includes("CREATE_BUNDLE:") && userId) {
+      try {
+        console.log("[v0] Validating CREATE_BUNDLE action...")
+
+        const tierInfo = await getUserTierInfo(userId)
+        const userPlan = tierInfo.tier || "free"
+
+        if (!canUserCreateBundles(userPlan)) {
+          const errorMessage =
+            "❌ Bundle creation is only available on Creator Pro. Upgrade your plan to unlock this feature."
+          assistantMessage = assistantMessage.replace(/CREATE_BUNDLE:\s*{.*?}/s, errorMessage)
+
+          return NextResponse.json({
+            message: {
+              role: "assistant",
+              content: assistantMessage,
+            },
+          })
+        }
+
+        const bundleMatch = assistantMessage.match(/CREATE_BUNDLE:\s*({.*?})/s)
+        if (!bundleMatch) {
+          throw new Error("No valid bundle data found")
+        }
+
+        const bundleData = JSON.parse(bundleMatch[1])
+        console.log("[v0] Parsed bundle data:", bundleData)
+
+        const bundleProgressMessage = "🚀 **Creating your bundle now...** This will just take a moment!"
+        assistantMessage = assistantMessage.replace(/CREATE_BUNDLE:\s*{.*?}/s, bundleProgressMessage)
+
+        const result = await createBundleDirectly(userId, bundleData)
+
+        if (result.success) {
+          assistantMessage = assistantMessage.replace(
+            bundleProgressMessage,
+            `✅ **Bundle created successfully!** Your "${result.bundle.title}" bundle is now live in your dashboard. You can view it at your storefront or share it with customers right away!`,
+          )
+        } else {
+          assistantMessage = assistantMessage.replace(
+            bundleProgressMessage,
+            `❌ ${result.error || "I encountered an issue creating your bundle. Please try again or create it manually in your dashboard."}`,
+          )
+        }
+      } catch (error) {
+        console.error("[v0] Bundle creation failed:", error)
+        assistantMessage = assistantMessage.replace(
+          "🚀 **Creating your bundle now...** This will just take a moment!",
+          "❌ I encountered an error while creating your bundle. Please try again or create it manually in your dashboard.",
+        )
+      }
+    }
+
     if (assistantMessage.includes("ORGANIZE_FILES:") && userId) {
       try {
         console.log("[v0] 🧠 Detected ORGANIZE_FILES action")
@@ -977,43 +1031,6 @@ What would you like me to do?`
         } else {
           assistantMessage += `\n\n${errorMessage}`
         }
-      }
-    }
-
-    if (assistantMessage.includes("CREATE_BUNDLE:") && userId) {
-      try {
-        console.log("[v0] Validating CREATE_BUNDLE action...")
-
-        const bundleMatch = assistantMessage.match(/CREATE_BUNDLE:\s*({.*?})/s)
-        if (!bundleMatch) {
-          throw new Error("No valid bundle data found")
-        }
-
-        const bundleData = JSON.parse(bundleMatch[1])
-        console.log("[v0] Parsed bundle data:", bundleData)
-
-        const bundleProgressMessage = "🚀 **Creating your bundle now...** This will just take a moment!"
-        assistantMessage = assistantMessage.replace(/CREATE_BUNDLE:\s*{.*?}/s, bundleProgressMessage)
-
-        const result = await createBundleDirectly(userId, bundleData)
-
-        if (result.success) {
-          assistantMessage = assistantMessage.replace(
-            bundleProgressMessage,
-            `✅ **Bundle created successfully!** Your "${result.bundle.title}" bundle is now live in your dashboard. You can view it at your storefront or share it with customers right away!`,
-          )
-        } else {
-          assistantMessage = assistantMessage.replace(
-            bundleProgressMessage,
-            `❌ ${result.error || "I encountered an issue creating your bundle. Please try again or create it manually in your dashboard."}`,
-          )
-        }
-      } catch (error) {
-        console.error("[v0] Bundle creation failed:", error)
-        assistantMessage = assistantMessage.replace(
-          "🚀 **Creating your bundle now...** This will just take a moment!",
-          "❌ I encountered an error while creating your bundle. Please try again or create it manually in your dashboard.",
-        )
       }
     }
 

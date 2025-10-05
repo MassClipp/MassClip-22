@@ -5,6 +5,7 @@ import { FieldValue } from "firebase-admin/firestore"
 import Stripe from "stripe"
 import { ConnectedStripeAccountsService } from "@/lib/connected-stripe-accounts-service"
 import { getUserTierInfo, incrementUserBundles } from "@/lib/user-tier-service"
+import { canUserCreateBundles } from "@/lib/subscription"
 
 // Initialize Firebase Admin
 initializeFirebaseAdmin()
@@ -45,8 +46,21 @@ export async function POST(request: Request) {
       contentIds: contentIds.length,
     })
 
-    // Check bundle limits
     const tierInfo = await getUserTierInfo(userId)
+    const userPlan = tierInfo.tier || "free"
+
+    if (!canUserCreateBundles(userPlan)) {
+      return NextResponse.json(
+        {
+          error: "Bundle creation requires Creator Pro",
+          details: "Upgrade to Creator Pro to create bundles with Vex AI.",
+          code: "BUNDLE_CREATION_NOT_ALLOWED",
+        },
+        { status: 403 },
+      )
+    }
+
+    // Check bundle limits
     if (tierInfo.reachedBundleLimit) {
       return NextResponse.json(
         {

@@ -2,6 +2,8 @@ import { type NextRequest, NextResponse } from "next/server"
 import { initializeFirebaseAdmin, db } from "@/lib/firebase/firebaseAdmin"
 import { getAuth } from "firebase-admin/auth"
 import { analyzeMetadata, type FileMetadata } from "@/lib/vex-metadata-intelligence"
+import { canAnalyzeTranscripts } from "@/lib/subscription"
+import { getUserTierInfo } from "@/lib/user-tier-service"
 
 // Initialize Firebase Admin
 initializeFirebaseAdmin()
@@ -50,6 +52,12 @@ export async function POST(request: NextRequest) {
       const decodedToken = await getAuth().verifyIdToken(token)
       const userId = decodedToken.uid
       console.log("✅ [Vex Analyze v3] Authenticated user:", userId)
+
+      const tierInfo = await getUserTierInfo(userId)
+      const userPlan = tierInfo.tier || "free"
+      const canAnalyze = canAnalyzeTranscripts(userPlan)
+
+      console.log(`🔐 [Vex Analyze v3] User plan: ${userPlan}, Can analyze transcripts: ${canAnalyze}`)
 
       console.log("🗂️ [Vex Analyze v3] Loading user's folder structure...")
       const foldersSnapshot = await db
@@ -119,9 +127,9 @@ export async function POST(request: NextRequest) {
             folderId: data.folderId || null,
             folderName: data.folderName || null,
             tags: data.tags || [],
-            transcript: data.transcript || undefined,
-            transcriptDuration: data.transcriptDuration || undefined,
-            transcriptLanguage: data.transcriptLanguage || undefined,
+            transcript: canAnalyze ? data.transcript || undefined : undefined,
+            transcriptDuration: canAnalyze ? data.transcriptDuration || undefined : undefined,
+            transcriptLanguage: canAnalyze ? data.transcriptLanguage || undefined : undefined,
           }
 
           // Analyze with metadata intelligence
@@ -149,10 +157,10 @@ export async function POST(request: NextRequest) {
             nicheConfidence: metadataAnalysis.confidence,
             reasoning: metadataAnalysis.reasoning,
             evidence: metadataAnalysis.evidence,
-            ...(data.transcript && { transcript: data.transcript }),
-            ...(data.transcriptDuration && { transcriptDuration: data.transcriptDuration }),
-            ...(data.transcriptLanguage && { transcriptLanguage: data.transcriptLanguage }),
-            ...(data.transcribedAt && { transcribedAt: data.transcribedAt }),
+            ...(canAnalyze && data.transcript && { transcript: data.transcript }),
+            ...(canAnalyze && data.transcriptDuration && { transcriptDuration: data.transcriptDuration }),
+            ...(canAnalyze && data.transcriptLanguage && { transcriptLanguage: data.transcriptLanguage }),
+            ...(canAnalyze && data.transcribedAt && { transcribedAt: data.transcribedAt }),
           }
 
           uploadsByDocId.set(doc.id, upload)
@@ -299,10 +307,11 @@ export async function POST(request: NextRequest) {
           suggestedFolder: u.suggestedFolder,
           confidence: u.nicheConfidence,
           reasoning: u.reasoning, // Include Vex's reasoning
-          ...(u.transcript && { transcript: u.transcript }),
-          ...(u.transcriptDuration && { transcriptDuration: u.transcriptDuration }),
-          ...(u.transcriptLanguage && { transcriptLanguage: u.transcriptLanguage }),
-          ...(u.transcribedAt && { transcribedAt: u.transcribedAt }),
+          evidence: u.evidence,
+          ...(canAnalyze && u.transcript && { transcript: u.transcript }),
+          ...(canAnalyze && u.transcriptDuration && { transcriptDuration: u.transcriptDuration }),
+          ...(canAnalyze && u.transcriptLanguage && { transcriptLanguage: u.transcriptLanguage }),
+          ...(canAnalyze && u.transcribedAt && { transcribedAt: u.transcribedAt }),
         })),
         uploads: uniqueUploads,
         userFolders: userFolders,
