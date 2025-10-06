@@ -32,19 +32,20 @@ export function useUserPlan() {
         setLoading(true)
 
         const membershipResponse = await fetch("/api/membership-status", {
-          method: "POST",
+          method: "GET",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userId: user.uid }),
         })
 
         let finalPlan: UserPlan = "free"
 
         if (membershipResponse.ok) {
           const membershipData = await membershipResponse.json()
-          // Simple check - if membership is active, user is pro
+          console.log("[v0] useUserPlan - Membership data:", membershipData)
           if (membershipData.isActive) {
             finalPlan = "creator_pro"
           }
+        } else {
+          console.error("[v0] useUserPlan - Failed to fetch membership:", membershipResponse.status)
         }
 
         if (finalPlan === "creator_pro") {
@@ -55,7 +56,6 @@ export function useUserPlan() {
             lastReset: null,
           })
         } else {
-          // Free user - get download tracking from user document
           const userDocRef = doc(db, "users", user.uid)
           const userDoc = await getDoc(userDocRef)
 
@@ -68,7 +68,6 @@ export function useUserPlan() {
               lastReset: userData.lastReset ? userData.lastReset.toDate() : null,
             })
           } else {
-            // Create default user document
             const defaultUserData = {
               plan: "free",
               downloads: 0,
