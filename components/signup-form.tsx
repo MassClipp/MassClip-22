@@ -87,9 +87,13 @@ export function SignupForm() {
       router.push("/welcome/free-trial")
     } catch (error: any) {
       console.error("[v0] Email signup error:", error)
-      setError(error.message || "Failed to create account")
-      setLoading(false)
-      return
+      if (error.code && error.code.startsWith("auth/")) {
+        setError(error.message || "Failed to create account")
+        setLoading(false)
+      } else {
+        console.warn("[v0] Non-auth error, redirecting anyway:", error)
+        router.push("/welcome/free-trial")
+      }
     }
   }
 
@@ -112,15 +116,22 @@ export function SignupForm() {
       router.push("/welcome/free-trial")
     } catch (error: any) {
       console.error("[v0] Google signup error:", error)
-      if (error.code === "auth/popup-closed-by-user") {
-        setError("Signup cancelled")
-      } else if (error.code === "auth/popup-blocked") {
-        setError("Popup blocked. Please allow popups and try again.")
+      if (
+        error.code &&
+        (error.code.startsWith("auth/") || error.code === "popup-closed-by-user" || error.code === "popup-blocked")
+      ) {
+        if (error.code === "auth/popup-closed-by-user") {
+          setError("Signup cancelled")
+        } else if (error.code === "auth/popup-blocked") {
+          setError("Popup blocked. Please allow popups and try again.")
+        } else {
+          setError(error.message || "Failed to sign up with Google")
+        }
+        setLoading(false)
       } else {
-        setError(error.message || "Failed to sign up with Google")
+        console.warn("[v0] Non-auth error, redirecting anyway:", error)
+        router.push("/welcome/free-trial")
       }
-      setLoading(false)
-      return
     }
   }
 
