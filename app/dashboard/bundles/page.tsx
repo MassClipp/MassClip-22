@@ -108,15 +108,14 @@ export default function BundlesPage() {
   const { limits: freeTierLimits, loading: limitsLoading } = useFreeTierLimits()
   const { planData, isProUser } = useUserPlan()
 
-  // </CHANGE> Remove debug logging after confirming it works
-  // useEffect(() => {
-  //   console.log("[v0] Bundles page - User plan data:", {
-  //     planData,
-  //     isProUser,
-  //     freeTierLimits,
-  //     limitsLoading,
-  //   })
-  // }, [planData, isProUser, freeTierLimits, limitsLoading])
+  useEffect(() => {
+    console.log("[v0] Bundles page - User plan data:", {
+      planData,
+      isProUser,
+      freeTierLimits,
+      limitsLoading,
+    })
+  }, [planData, isProUser, freeTierLimits, limitsLoading])
   // </CHANGE>
 
   const bundleLimit = isProUser ? Number.POSITIVE_INFINITY : freeTierLimits?.bundlesLimit || 2

@@ -23,6 +23,7 @@ export function useUserPlan() {
   useEffect(() => {
     const fetchUserPlan = async () => {
       if (!user) {
+        console.log("[v0] useUserPlan - No user, skipping fetch")
         setPlanData(null)
         setLoading(false)
         return
@@ -31,22 +32,41 @@ export function useUserPlan() {
       try {
         setLoading(true)
 
+        console.log("[v0] useUserPlan - Fetching membership status for user:", user.uid)
+        console.log("[v0] useUserPlan - User email:", user.email)
+
         const membershipResponse = await fetch("/api/membership-status", {
-          method: "GET",
+          method: "POST",
           headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: user.uid }),
         })
+
+        console.log("[v0] useUserPlan - Membership response status:", membershipResponse.status)
+        console.log("[v0] useUserPlan - Membership response ok:", membershipResponse.ok)
 
         let finalPlan: UserPlan = "free"
 
         if (membershipResponse.ok) {
           const membershipData = await membershipResponse.json()
-          console.log("[v0] useUserPlan - Membership data:", membershipData)
+          console.log("[v0] useUserPlan - Membership data:", JSON.stringify(membershipData, null, 2))
+
+          // Simple check - if membership is active, user is pro
           if (membershipData.isActive) {
             finalPlan = "creator_pro"
+            console.log("[v0] useUserPlan - User is active (pro or trial), setting plan to creator_pro")
+          } else {
+            console.log(
+              "[v0] useUserPlan - User is not active (isActive:",
+              membershipData.isActive,
+              "), keeping plan as free",
+            )
           }
         } else {
-          console.error("[v0] useUserPlan - Failed to fetch membership:", membershipResponse.status)
+          const errorText = await membershipResponse.text()
+          console.log("[v0] useUserPlan - Membership API call failed with error:", errorText)
         }
+
+        console.log("[v0] useUserPlan - Final plan determined:", finalPlan)
 
         if (finalPlan === "creator_pro") {
           setPlanData({
@@ -55,7 +75,9 @@ export function useUserPlan() {
             downloadsLimit: Number.POSITIVE_INFINITY,
             lastReset: null,
           })
+          console.log("[v0] useUserPlan - Set plan data for creator_pro")
         } else {
+          // Free user - get download tracking from user document
           const userDocRef = doc(db, "users", user.uid)
           const userDoc = await getDoc(userDocRef)
 
@@ -68,6 +90,7 @@ export function useUserPlan() {
               lastReset: userData.lastReset ? userData.lastReset.toDate() : null,
             })
           } else {
+            // Create default user document
             const defaultUserData = {
               plan: "free",
               downloads: 0,
@@ -90,7 +113,7 @@ export function useUserPlan() {
 
         setError(null)
       } catch (err) {
-        console.error("Error fetching user plan:", err)
+        console.error("[v0] useUserPlan - Error fetching user plan:", err)
         setError("Failed to load user plan data")
         setPlanData({
           plan: "free",
