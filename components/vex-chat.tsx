@@ -778,7 +778,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
   }, [isSidebarOpen])
 
   return (
-    <div className="flex min-h-screen relative bg-black">
+    <div className="flex min-h-screen relative bg-gradient-to-br from-black via-zinc-900 to-black">
       {/* Fixed noise overlay */}
       <div className="fixed inset-0 bg-[url('/noise.png')] opacity-[0.03] mix-blend-soft-light pointer-events-none z-0"></div>
 

@@ -52,7 +52,7 @@ export function TopHeader() {
   const pageTitle = getPageTitle(pathname)
 
   return (
-    <div className="w-full bg-zinc-950/95 backdrop-blur-sm border-b border-zinc-800 px-4 py-3 z-50">
+    <div className="w-full bg-zinc-950/95 backdrop-blur-sm border-b border-zinc-800 px-4 py-4 z-50">
       <div className="flex items-center">
         <h1 className="text-lg font-medium text-white">{pageTitle}</h1>
       </div>
