@@ -160,12 +160,22 @@ const LandingPage = () => {
           <div className="scroll-animate space-y-8 text-center">
             <h2 className="text-4xl lg:text-5xl font-thin text-black">What Does Vex Do?</h2>
 
-            <div className="max-w-3xl mx-auto">
-              <p className="text-lg lg:text-xl text-gray-700 leading-relaxed font-light">
-                Simply upload your content, tell Vex what kind of bundles you want to sell, and watch as Vex
-                intelligently organizes your content into professional, sellable bundles ready for market in seconds. No
-                more manual sorting, no more messy file management, just streamlined content monetization.
-              </p>
+            <div className="flex flex-col lg:flex-row gap-12 items-center">
+              <div className="flex-1">
+                <p className="text-lg lg:text-xl text-gray-700 leading-relaxed font-light">
+                  Simply upload your content, tell Vex what kind of bundles you want to sell, and watch as Vex
+                  intelligently organizes your content into professional, sellable bundles ready for market in seconds.
+                  No more manual sorting, no more messy file management, just streamlined content monetization.
+                </p>
+              </div>
+
+              <div className="flex-1">
+                <img
+                  src="/images/vex-chat-demo.jpg"
+                  alt="Vex AI creating bundles through chat interface"
+                  className="w-full max-w-lg mx-auto rounded-2xl shadow-2xl"
+                />
+              </div>
             </div>
           </div>
         </div>
