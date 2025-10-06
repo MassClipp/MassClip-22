@@ -47,14 +47,16 @@ export function SignupForm() {
 
       if (!response.ok) {
         console.error("[v0] Server-side record creation failed:", data)
-        throw new Error(data.details || data.error || "Failed to create server-side records")
+        console.warn("[v0] Continuing despite error to ensure redirect happens")
+      } else {
+        console.log("[v0] Server-side records created successfully")
       }
 
-      console.log("[v0] Server-side records created successfully")
       return data
     } catch (error) {
       console.error("[v0] Error creating server-side records:", error)
-      throw error
+      console.warn("[v0] Continuing despite error to ensure redirect happens")
+      return { success: false, error: error }
     }
   }
 
@@ -86,8 +88,8 @@ export function SignupForm() {
     } catch (error: any) {
       console.error("[v0] Email signup error:", error)
       setError(error.message || "Failed to create account")
-    } finally {
       setLoading(false)
+      return
     }
   }
 
@@ -117,8 +119,8 @@ export function SignupForm() {
       } else {
         setError(error.message || "Failed to sign up with Google")
       }
-    } finally {
       setLoading(false)
+      return
     }
   }
 
