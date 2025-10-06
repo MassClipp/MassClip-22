@@ -22,12 +22,9 @@ export async function GET(req: NextRequest) {
       exists: !!membership,
       status: membership?.status,
       currentPeriodEnd: membership?.currentPeriodEnd,
-      trialEnd: membership?.trialEnd,
     })
 
-    const isOnTrial = membership?.status === "trialing" || membership?.status === "trial_grace_period"
-
-    if (!membership || !isOnTrial) {
+    if (!membership || membership.status !== "trialing") {
       return NextResponse.json({
         isOnTrial: false,
         daysRemaining: 0,
@@ -38,19 +35,15 @@ export async function GET(req: NextRequest) {
     const now = new Date()
     let trialEndDate: Date | null = null
 
-    const dateField = membership.trialEnd || membership.currentPeriodEnd
-
-    if (dateField) {
+    if (membership.currentPeriodEnd) {
       // Check if it's a Firestore Timestamp object
-      if (typeof dateField === "object" && "toDate" in dateField) {
-        trialEndDate = (dateField as any).toDate()
-      } else if (dateField instanceof Date) {
-        trialEndDate = dateField
-      } else if (typeof dateField === "object" && "_seconds" in dateField) {
+      if (typeof membership.currentPeriodEnd === "object" && "toDate" in membership.currentPeriodEnd) {
+        trialEndDate = (membership.currentPeriodEnd as any).toDate()
+      } else if (membership.currentPeriodEnd instanceof Date) {
+        trialEndDate = membership.currentPeriodEnd
+      } else if (typeof membership.currentPeriodEnd === "object" && "_seconds" in membership.currentPeriodEnd) {
         // Handle Firestore Timestamp with _seconds property
-        trialEndDate = new Date((dateField as any)._seconds * 1000)
-      } else if (typeof dateField === "number") {
-        trialEndDate = new Date(dateField * 1000)
+        trialEndDate = new Date((membership.currentPeriodEnd as any)._seconds * 1000)
       }
     }
 

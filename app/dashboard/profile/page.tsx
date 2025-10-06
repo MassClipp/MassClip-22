@@ -25,6 +25,7 @@ import {
   CheckCircle,
   ExternalLink,
   RefreshCw,
+  Clock,
 } from "lucide-react"
 import ReactCrop, { type Crop, centerCrop, makeAspectCrop } from "react-image-crop"
 import "react-image-crop/dist/ReactCrop.css"
@@ -92,11 +93,10 @@ export default function ProfilePage() {
 
   const [subscriptionData, setSubscriptionData] = useState<any>(null)
   const [loadingSubscription, setLoadingSubscription] = useState(false)
-
   const [trialStatus, setTrialStatus] = useState<{
     isOnTrial: boolean
     daysRemaining: number
-    trialEndDate?: string
+    trialEndDate: string | null
   } | null>(null)
 
   const isProUser = subscriptionData?.plan === "creator_pro" && subscriptionData?.isActive
@@ -189,15 +189,15 @@ export default function ProfilePage() {
     if (!user) return
 
     try {
-      const idToken = await user.getIdToken()
-      const res = await fetch("/api/user/trial-status", {
+      const token = await user.getIdToken()
+      const response = await fetch("/api/user/trial-status", {
         headers: {
-          Authorization: `Bearer ${idToken}`,
+          Authorization: `Bearer ${token}`,
         },
       })
 
-      if (res.ok) {
-        const data = await res.json()
+      if (response.ok) {
+        const data = await response.json()
         setTrialStatus(data)
       }
     } catch (error) {
@@ -377,7 +377,21 @@ export default function ProfilePage() {
     <div className="space-y-8">
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 pb-6 border-b border-zinc-800/50">
         <div className="space-y-2">
-          <h1 className="text-2xl font-semibold text-white tracking-tight">Profile Settings</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-semibold text-white tracking-tight">Profile Settings</h1>
+            {trialStatus?.isOnTrial && (
+              <Badge
+                className={`${
+                  trialStatus.daysRemaining <= 1
+                    ? "bg-gradient-to-r from-orange-500 to-red-500"
+                    : "bg-gradient-to-r from-cyan-500 to-blue-500"
+                } text-white border-0 px-3 py-1`}
+              >
+                <Clock className="h-3 w-3 mr-1.5" />
+                Free Trial: {trialStatus.daysRemaining} {trialStatus.daysRemaining === 1 ? "day" : "days"} left
+              </Badge>
+            )}
+          </div>
           <p className="text-zinc-400">Manage your creator profile and settings</p>
         </div>
       </div>
@@ -665,22 +679,48 @@ export default function ProfilePage() {
               ) : (
                 <div className="space-y-8">
                   {trialStatus?.isOnTrial && (
-                    <div className="p-4 rounded-lg border border-cyan-500/30 bg-gradient-to-r from-cyan-500/10 to-blue-500/10">
+                    <div
+                      className={`p-4 rounded-lg border ${
+                        trialStatus.daysRemaining <= 1
+                          ? "bg-orange-900/20 border-orange-500/30"
+                          : "bg-cyan-900/20 border-cyan-500/30"
+                      }`}
+                    >
                       <div className="flex items-start gap-3">
-                        <div className="w-2 h-2 rounded-full bg-cyan-500 mt-2 flex-shrink-0"></div>
+                        <div
+                          className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
+                            trialStatus.daysRemaining <= 1 ? "bg-orange-500" : "bg-cyan-500"
+                          }`}
+                        ></div>
                         <div className="flex-1">
-                          <p className="text-cyan-200 text-sm font-medium mb-1">
-                            Free Trial Active - {trialStatus.daysRemaining} Day
-                            {trialStatus.daysRemaining !== 1 ? "s" : ""} Remaining
+                          <p
+                            className={`font-medium mb-1 ${
+                              trialStatus.daysRemaining <= 1 ? "text-orange-200" : "text-cyan-200"
+                            }`}
+                          >
+                            Free Trial Active
                           </p>
-                          <p className="text-cyan-300/80 text-xs leading-relaxed mb-2">
-                            You're currently enjoying full Creator Pro features during your 3-day free trial. Your trial
-                            ends on {trialStatus.trialEndDate ? safelyFormatDate(trialStatus.trialEndDate) : "soon"}.
+                          <p
+                            className={`text-sm leading-relaxed ${
+                              trialStatus.daysRemaining <= 1 ? "text-orange-300/80" : "text-cyan-300/80"
+                            }`}
+                          >
+                            You have {trialStatus.daysRemaining} {trialStatus.daysRemaining === 1 ? "day" : "days"}{" "}
+                            remaining in your 3-day Creator Pro trial. Your trial ends on{" "}
+                            {trialStatus.trialEndDate
+                              ? new Date(trialStatus.trialEndDate).toLocaleDateString("en-US", {
+                                  month: "long",
+                                  day: "numeric",
+                                  year: "numeric",
+                                })
+                              : "soon"}
+                            .
                           </p>
-                          <p className="text-cyan-300/80 text-xs leading-relaxed">
-                            After your trial ends, you'll be automatically switched to the Free plan unless you upgrade
-                            to Creator Pro.
-                          </p>
+                          {trialStatus.daysRemaining <= 1 && (
+                            <p className="text-sm text-orange-200 mt-2 font-medium">
+                              ⚠️ Your trial is ending soon! Upgrade now to keep your Creator Pro features.
+                            </p>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -690,17 +730,15 @@ export default function ProfilePage() {
                     <div className="flex items-center justify-between">
                       <h3 className="text-lg font-medium text-white">Current Plan</h3>
                       <Badge
-                        variant={subscriptionData?.isActive || trialStatus?.isOnTrial ? "default" : "secondary"}
+                        variant={subscriptionData?.isActive ? "default" : "secondary"}
                         className={`px-3 py-1 font-medium ${
-                          subscriptionData?.isActive || trialStatus?.isOnTrial
-                            ? trialStatus?.isOnTrial
-                              ? "bg-cyan-600 hover:bg-cyan-700 text-white"
-                              : "bg-emerald-600 hover:bg-emerald-700 text-white"
+                          subscriptionData?.isActive
+                            ? "bg-emerald-600 hover:bg-emerald-700 text-white"
                             : "bg-zinc-600 hover:bg-zinc-700 text-zinc-200"
                         }`}
                       >
                         {trialStatus?.isOnTrial
-                          ? "Free Trial (Creator Pro)"
+                          ? "Creator Pro (Trial)"
                           : subscriptionData?.plan === "creator_pro" && subscriptionData?.isActive
                             ? "Creator Pro"
                             : "Free"}
@@ -754,8 +792,7 @@ export default function ProfilePage() {
                   <div className="space-y-4">
                     <h3 className="text-lg font-medium text-white">Plan Features</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {(subscriptionData?.plan === "creator_pro" && subscriptionData?.isActive) ||
-                      trialStatus?.isOnTrial ? (
+                      {subscriptionData?.plan === "creator_pro" && subscriptionData?.isActive ? (
                         <>
                           <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
                             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
@@ -814,19 +851,12 @@ export default function ProfilePage() {
                   </div>
 
                   <div className="flex flex-wrap gap-3 pt-4 border-t border-zinc-800/50">
-                    {!subscriptionData?.isActive && !trialStatus?.isOnTrial ? (
+                    {subscriptionData?.plan !== "creator_pro" || !subscriptionData?.isActive ? (
                       <Button
                         onClick={() => router.push("/dashboard/upgrade")}
                         className="bg-white hover:bg-gray-100 text-black font-medium px-6"
                       >
                         Upgrade to Pro
-                      </Button>
-                    ) : trialStatus?.isOnTrial ? (
-                      <Button
-                        onClick={() => router.push("/dashboard/upgrade")}
-                        className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white font-medium px-6"
-                      >
-                        Upgrade Now - Keep Pro Features
                       </Button>
                     ) : (
                       <>

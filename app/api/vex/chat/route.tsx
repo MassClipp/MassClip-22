@@ -6,8 +6,6 @@ import Stripe from "stripe"
 import { ConnectedStripeAccountsService } from "@/lib/connected-stripe-accounts-service"
 import { getUserTierInfo, incrementUserBundles } from "@/lib/user-tier-service"
 import { canUserCreateBundles, checkSubscription } from "@/lib/subscription"
-// Import adminDb from firebaseAdmin.ts
-import * as adminDb from "@/lib/firebase/firebaseAdmin"
 
 // Initialize Firebase Admin
 initializeFirebaseAdmin()
@@ -331,9 +329,10 @@ export async function POST(request: Request) {
     let bundleLimitsContext = ""
     let folderContext = ""
     let planPermissionsContext = ""
-    let trialStatusContext = ""
     let userPlan = "free" // Default to free
     let subscriptionData: any = {} // Initialize subscriptionData
+    let trialStatus: any = null
+    // </CHANGE>
     const authHeader = request.headers.get("authorization")
 
     if (authHeader && authHeader.startsWith("Bearer ")) {
@@ -354,57 +353,40 @@ export async function POST(request: Request) {
             userPlan = tierInfoData.tier || "free"
             subscriptionData = await checkSubscription(userId)
 
-            const membershipDoc = await adminDb.collection("memberships").doc(userId).get()
-            if (membershipDoc.exists) {
-              const membership = membershipDoc.data()
-              if (membership?.status === "trialing" && membership?.isActive) {
-                const currentPeriodEnd = membership.currentPeriodEnd
-                if (currentPeriodEnd) {
-                  const endDate = currentPeriodEnd._seconds
-                    ? new Date(currentPeriodEnd._seconds * 1000)
-                    : currentPeriodEnd.toDate
-                      ? currentPeriodEnd.toDate()
-                      : new Date(currentPeriodEnd)
-
+            try {
+              const membershipDoc = await db.collection("memberships").doc(userId).get()
+              if (membershipDoc.exists) {
+                const membershipData = membershipDoc.data()
+                if (membershipData?.status === "trialing" && membershipData?.currentPeriodEnd) {
+                  const endDate =
+                    membershipData.currentPeriodEnd.toDate?.() ||
+                    new Date(membershipData.currentPeriodEnd._seconds * 1000)
                   const now = new Date()
-                  const diffTime = endDate.getTime() - now.getTime()
-                  const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+                  const daysRemaining = Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
 
                   if (daysRemaining > 0) {
-                    trialStatusContext = `
-
-===== FREE TRIAL STATUS =====
-
-🎉 User is currently on a FREE TRIAL of Creator Pro!
-Trial Days Remaining: ${daysRemaining} day${daysRemaining !== 1 ? "s" : ""}
-Trial End Date: ${endDate.toLocaleDateString()}
-
-The user has FULL ACCESS to all Creator Pro features during the trial:
-• Unlimited folders with subfolders
-• Unlimited bundles
-• Unlimited videos per bundle
-• Full Vex AI capabilities including bundle creation
-• Transcript analysis
-• Only 10% platform fee
-
-⚠️ IMPORTANT: After the trial ends, they will be switched to the Free plan unless they upgrade.
-If they ask about their trial, let them know how many days they have left and encourage them to upgrade to keep these features.
-
-`
+                    trialStatus = {
+                      isOnTrial: true,
+                      daysRemaining,
+                      trialEndDate: endDate.toISOString(),
+                    }
                   }
                 }
               }
+            } catch (error) {
+              console.error("[v0] Error checking trial status:", error)
             }
+            // </CHANGE>
 
             // Build plan permissions context
             planPermissionsContext = `
 
 ===== YOUR PLAN PERMISSIONS =====
 
-Current Plan: ${trialStatusContext ? "Free Trial (Creator Pro Access)" : userPlan === "creator_pro" ? "Creator Pro" : "Free"}
+Current Plan: ${userPlan === "creator_pro" ? "Creator Pro" : "Free"}${trialStatus?.isOnTrial ? ` (FREE TRIAL - ${trialStatus.daysRemaining} days remaining)` : ""}
 
-${trialStatusContext}${
-  userPlan === "free" && !trialStatusContext
+${
+  userPlan === "free"
     ? `
 **FREE PLAN LIMITS:**
 • Folders: ${subscriptionData.features.maxFolders} folders maximum (NO subfolders allowed)
@@ -424,7 +406,7 @@ ${trialStatusContext}${
 If user asks about these features, tell them to upgrade to Creator Pro.
 `
     : `
-**CREATOR PRO FEATURES:**
+**CREATOR PRO FEATURES:**${trialStatus?.isOnTrial ? ` (FREE TRIAL - ${trialStatus.daysRemaining} days remaining)` : ""}
 • Folders: UNLIMITED folders with subfolders
 • Bundles: UNLIMITED bundles on storefront
 • Videos per bundle: UNLIMITED videos
@@ -433,7 +415,7 @@ If user asks about these features, tell them to upgrade to Creator Pro.
 • Bundle Creation via Vex: AVAILABLE - You can create bundles for users
 • Platform Fee: ${subscriptionData.features.platformFeePercentage}% on sales (reduced from 20%)
 
-✅ You have full access to all Vex AI features.
+✅ You have full access to all Vex AI features.${trialStatus?.isOnTrial ? `\n\n⏰ TRIAL REMINDER: User's trial ends in ${trialStatus.daysRemaining} days. ${trialStatus.daysRemaining <= 1 ? "Remind them to upgrade to keep these features!" : ""}` : ""}
 `
 }
 `
@@ -817,7 +799,7 @@ REFRESH_ANALYSIS: true
 **1. CREATE FOLDERS**
 
 ${
-  userPlan === "free" && !trialStatusContext
+  userPlan === "free"
     ? `⚠️ FREE PLAN: User can only create ${subscriptionData.features.maxFolders} root-level folders (NO subfolders).
 Check folder count before creating. If at limit, tell them to upgrade to Creator Pro.
 

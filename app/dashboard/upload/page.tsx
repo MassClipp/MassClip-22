@@ -7,6 +7,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/components/ui/use-toast"
+import { Badge } from "@/components/ui/badge"
+import { Clock } from "lucide-react"
+// </CHANGE>
 import {
   Upload,
   Search,
@@ -29,7 +32,6 @@ import {
   X,
   CheckCircle,
   AlertCircle,
-  Clock,
 } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -110,6 +112,12 @@ export default function UploadPage() {
   // State
   const [uploads, setUploads] = useState<UploadType[]>([])
   const [loading, setLoading] = useState(true)
+  const [trialStatus, setTrialStatus] = useState<{
+    isOnTrial: boolean
+    daysRemaining: number
+    trialEndDate: string | null
+  } | null>(null)
+  // </CHANGE>
   const [searchTerm, setSearchTerm] = useState("")
   const [filterType, setFilterType] = useState("all")
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
@@ -179,11 +187,34 @@ export default function UploadPage() {
     }
   }, [user])
 
+  const checkTrialStatus = useCallback(async () => {
+    if (!user) return
+
+    try {
+      const token = await user.getIdToken()
+      const response = await fetch("/api/user/trial-status", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setTrialStatus(data)
+      }
+    } catch (error) {
+      console.error("Error checking trial status:", error)
+    }
+  }, [user])
+  // </CHANGE>
+
   useEffect(() => {
     if (user) {
       checkUserProfile()
+      checkTrialStatus()
+      // </CHANGE>
     }
-  }, [user, checkUserProfile])
+  }, [user, checkUserProfile, checkTrialStatus])
 
   // Fetch uploads
   const fetchUploads = useCallback(async () => {
@@ -796,7 +827,16 @@ export default function UploadPage() {
 
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 pb-6 border-b border-zinc-800/50">
         <div className="space-y-2">
-          <h1 className="text-2xl font-semibold text-white tracking-tight">Content Library</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-semibold text-white tracking-tight">Content Library</h1>
+            {trialStatus?.isOnTrial && (
+              <Badge className="bg-gradient-to-r from-cyan-500 to-blue-500 text-white border-0 px-3 py-1">
+                <Clock className="h-3 w-3 mr-1.5" />
+                Free Trial: {trialStatus.daysRemaining} {trialStatus.daysRemaining === 1 ? "day" : "days"} left
+              </Badge>
+            )}
+          </div>
+          {/* </CHANGE> */}
           <p className="text-zinc-400">Upload and manage your content files</p>
           {username && (
             <div className="flex items-center gap-2 text-xs text-zinc-500">
