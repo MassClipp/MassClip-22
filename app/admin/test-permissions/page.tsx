@@ -142,13 +142,22 @@ export default function TestPermissionsPage() {
   const testBundleLimits = async (): Promise<TestResult> => {
     try {
       const token = await user?.getIdToken()
+      console.log("[v0] Testing bundle limits with token:", token ? "present" : "missing")
+
       const response = await fetch("/api/user/check-bundle-limits?type=create", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       })
-      if (!response.ok) throw new Error("Failed to check bundle limits")
-      const data = await response.json()
+
+      console.log("[v0] Bundle limits response status:", response.status)
+      const responseText = await response.text()
+      console.log("[v0] Bundle limits response text:", responseText)
+
+      if (!response.ok) throw new Error(`Failed to check bundle limits: ${response.status} ${responseText}`)
+
+      const data = JSON.parse(responseText)
+      console.log("[v0] Bundle limits data:", data)
 
       const isUnlimited = data.maxAllowed === null || data.maxAllowed === Number.POSITIVE_INFINITY
       return {
@@ -160,6 +169,7 @@ export default function TestPermissionsPage() {
         data,
       }
     } catch (error) {
+      console.error("[v0] Bundle limits test error:", error)
       return {
         name: "Bundle Limits",
         status: "error",
@@ -198,16 +208,25 @@ export default function TestPermissionsPage() {
   const testPlatformFee = async (): Promise<TestResult> => {
     try {
       const token = await user?.getIdToken()
+      console.log("[v0] Testing platform fee with token:", token ? "present" : "missing")
+
       const response = await fetch("/api/membership-status", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       })
-      if (!response.ok) throw new Error("Failed to check platform fee")
-      const data = await response.json()
+
+      console.log("[v0] Platform fee response status:", response.status)
+      const responseText = await response.text()
+      console.log("[v0] Platform fee response text:", responseText)
+
+      if (!response.ok) throw new Error(`Failed to check platform fee: ${response.status} ${responseText}`)
+
+      const data = JSON.parse(responseText)
+      console.log("[v0] Platform fee data:", data)
 
       const expectedFee = data.plan === "creator_pro" || data.status === "trialing" ? 10 : 20
-      const actualFee = data.features.platformFeePercentage
+      const actualFee = data.features?.platformFeePercentage
 
       return {
         name: "Platform Fee",
@@ -216,6 +235,7 @@ export default function TestPermissionsPage() {
         data: { plan: data.plan, status: data.status, platformFeePercentage: actualFee },
       }
     } catch (error) {
+      console.error("[v0] Platform fee test error:", error)
       return {
         name: "Platform Fee",
         status: "error",
@@ -254,22 +274,33 @@ export default function TestPermissionsPage() {
   const testTrialExpirationCron = async (): Promise<TestResult> => {
     try {
       const token = await user?.getIdToken()
+      console.log("[v0] Testing trial expiration cron with token:", token ? "present" : "missing")
+
       const response = await fetch("/api/trial/check-expired", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
         },
       })
-      if (!response.ok) throw new Error("Failed to test trial expiration")
-      const data = await response.json()
+
+      console.log("[v0] Trial expiration response status:", response.status)
+      const responseText = await response.text()
+      console.log("[v0] Trial expiration response text:", responseText)
+
+      if (!response.ok) throw new Error(`Failed to test trial expiration: ${response.status} ${responseText}`)
+
+      const data = JSON.parse(responseText)
+      console.log("[v0] Trial expiration data:", data)
 
       return {
         name: "Trial Expiration Cron",
         status: "success",
-        message: `Cron job working: ${data.expiredCount} expired trials processed`,
+        message: `Cron job working: ${data.expiredCount || 0} expired trials processed`,
         data,
       }
     } catch (error) {
+      console.error("[v0] Trial expiration test error:", error)
       return {
         name: "Trial Expiration Cron",
         status: "error",
