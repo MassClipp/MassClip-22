@@ -73,7 +73,7 @@ export function SignupForm() {
         throw new Error(data.details || data.error || "Failed to create server-side records")
       }
 
-      console.log("[v0] Server-side records created successfully, isNewUser:", data.isNewUser)
+      console.log("[v0] Server-side records created successfully")
       return data
     } catch (error) {
       console.error("[v0] Error creating server-side records:", error)
@@ -102,17 +102,10 @@ export function SignupForm() {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password)
       console.log("[v0] Firebase user created successfully:", userCredential.user.uid)
 
-      const userData = await createServerSideRecords(userCredential.user)
-      console.log("[v0] User data received:", userData)
+      await createServerSideRecords(userCredential.user)
 
-      console.log("[v0] Signup completed, redirecting based on isNewUser:", userData.isNewUser)
-      if (userData.isNewUser) {
-        console.log("[v0] Redirecting to /welcome/free-trial")
-        router.push("/welcome/free-trial")
-      } else {
-        console.log("[v0] Redirecting to /dashboard")
-        router.push("/dashboard")
-      }
+      console.log("[v0] Signup completed, redirecting to /welcome/free-trial")
+      router.push("/welcome/free-trial")
     } catch (error: any) {
       console.error("[v0] Email signup error:", error)
       setError(error.message || "Failed to create account")
@@ -134,17 +127,10 @@ export function SignupForm() {
       const result = await signInWithPopup(auth, provider)
       console.log("[v0] Google signup successful:", result.user.uid)
 
-      const userData = await createServerSideRecords(result.user)
-      console.log("[v0] User data received:", userData)
+      await createServerSideRecords(result.user)
 
-      console.log("[v0] Google signup completed, redirecting based on isNewUser:", userData.isNewUser)
-      if (userData.isNewUser) {
-        console.log("[v0] Redirecting to /welcome/free-trial")
-        router.push("/welcome/free-trial")
-      } else {
-        console.log("[v0] Redirecting to /dashboard")
-        router.push("/dashboard")
-      }
+      console.log("[v0] Google signup completed, redirecting to /welcome/free-trial")
+      router.push("/welcome/free-trial")
     } catch (error: any) {
       console.error("[v0] Google signup error:", error)
       if (error.code === "auth/popup-closed-by-user") {
