@@ -72,6 +72,58 @@ export function CreateFolderDialog({
 
       if (!response.ok) {
         const errorData = await response.json()
+
+        // Handle folder limit reached
+        if (errorData.code === "FOLDER_LIMIT_REACHED") {
+          toast({
+            title: "Folder Limit Reached",
+            description: errorData.error,
+            variant: "destructive",
+            action: (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => (window.location.href = "/upgrade")}
+                className="bg-white text-black hover:bg-zinc-100"
+              >
+                Upgrade Now
+              </Button>
+            ),
+          })
+          return
+        }
+
+        // Handle subfolder not allowed
+        if (errorData.code === "SUBFOLDER_NOT_ALLOWED") {
+          toast({
+            title: "Subfolders Not Available",
+            description: errorData.details,
+            variant: "destructive",
+            action: (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => (window.location.href = "/upgrade")}
+                className="bg-white text-black hover:bg-zinc-100"
+              >
+                Upgrade to Pro
+              </Button>
+            ),
+          })
+          return
+        }
+
+        // Handle duplicate name
+        if (errorData.code === "DUPLICATE_NAME") {
+          toast({
+            title: "Duplicate Folder Name",
+            description: "A folder with this name already exists in this location. Please choose a different name.",
+            variant: "destructive",
+          })
+          return
+        }
+
+        // Generic error
         throw new Error(errorData.error || "Failed to create folder")
       }
 
