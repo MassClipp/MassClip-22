@@ -108,9 +108,18 @@ export default function BundlesPage() {
   const { limits: freeTierLimits, loading: limitsLoading } = useFreeTierLimits()
   const { planData, isProUser } = useUserPlan()
 
+  useEffect(() => {
+    console.log("[v0] Bundles page - User plan data:", {
+      planData,
+      isProUser,
+      freeTierLimits,
+      limitsLoading,
+    })
+  }, [planData, isProUser, freeTierLimits, limitsLoading])
+  // </CHANGE>
+
   const bundleLimit = isProUser ? Number.POSITIVE_INFINITY : freeTierLimits?.bundlesLimit || 2
   const isAtBundleLimit = !isProUser && productBoxes.length >= bundleLimit
-  // </CHANGE>
 
   const [availableUploads, setAvailableUploads] = useState<ContentItem[]>([])
   const [showAddContentModal, setShowAddContentModal] = useState<string | null>(null)
