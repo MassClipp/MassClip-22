@@ -33,9 +33,8 @@ export async function POST(request: NextRequest) {
 
     const uid = authUser.uid
 
-    // Calculate trial end date (14 days from now)
     const trialEndDate = new Date()
-    trialEndDate.setDate(trialEndDate.getDate() + 14)
+    trialEndDate.setDate(trialEndDate.getDate() + 3)
 
     // Update user document with trial information
     const userRef = db.collection("users").doc(uid)
@@ -79,7 +78,7 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    console.log(`✅ Started 14-day trial for user ${uid}`)
+    console.log(`✅ Started 3-day trial for user ${uid}`)
 
     return NextResponse.json({
       success: true,

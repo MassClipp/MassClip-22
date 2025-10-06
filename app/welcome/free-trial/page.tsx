@@ -101,7 +101,7 @@ export default function FreeTrialPage() {
             Try Creator Pro Free
           </h1>
           <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-            Experience the full power of Vex AI with a 14-day free trial. No credit card required.
+            Experience the full power of Vex AI with a 3-day free trial. No credit card required.
           </p>
         </div>
 
@@ -141,7 +141,7 @@ export default function FreeTrialPage() {
           <div className="bg-gradient-to-br from-cyan-500/10 to-blue-500/10 backdrop-blur-sm border-2 border-cyan-500/30 rounded-2xl p-8 relative">
             <div className="absolute -top-3 left-1/2 -translate-x-1/2">
               <div className="px-4 py-1 rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm font-medium">
-                14-Day Free Trial
+                3-Day Free Trial
               </div>
             </div>
             <div className="mb-6">
@@ -203,7 +203,7 @@ export default function FreeTrialPage() {
             ) : (
               <>
                 <Zap className="w-5 h-5 mr-2" />
-                Start 14-Day Free Trial
+                Start 3-Day Free Trial
               </>
             )}
           </Button>
@@ -218,7 +218,7 @@ export default function FreeTrialPage() {
 
         {/* Fine print */}
         <p className="text-center text-sm text-gray-500 mt-8">
-          Your trial will automatically convert to the free plan after 14 days. No credit card required.
+          Your trial will automatically convert to the free plan after 3 days. No credit card required.
         </p>
       </div>
     </div>
