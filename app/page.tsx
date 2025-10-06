@@ -117,7 +117,7 @@ const LandingPage = () => {
                       aria-label="Add attachment"
                     >
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M12 5v14M5 12h14" />
+                        <path d="M12 5v14M5 12h14M17 7H7M17 7V17" />
                       </svg>
                     </button>
                     <button
@@ -155,14 +155,14 @@ const LandingPage = () => {
         </div>
       </main>
 
-      <section className="relative z-10 py-20 px-6 bg-white">
-        <div className="max-w-7xl mx-auto">
-          <div className="scroll-animate space-y-8 text-center">
-            <h2 className="text-4xl lg:text-5xl font-thin text-black">What Does Vex Do?</h2>
+      <section className="relative z-10 py-12 px-6 bg-white">
+        <div className="max-w-6xl mx-auto">
+          <div className="scroll-animate">
+            <h2 className="text-3xl lg:text-4xl font-thin text-black text-center mb-8">What Does Vex Do?</h2>
 
-            <div className="flex flex-col lg:flex-row gap-12 items-center">
+            <div className="flex flex-col lg:flex-row gap-8 items-center">
               <div className="flex-1">
-                <p className="text-lg lg:text-xl text-gray-700 leading-relaxed font-light">
+                <p className="text-base lg:text-lg text-gray-700 leading-relaxed font-light">
                   Simply upload your content, tell Vex what kind of bundles you want to sell, and watch as Vex
                   intelligently organizes your content into professional, sellable bundles ready for market in seconds.
                   No more manual sorting, no more messy file management, just streamlined content monetization.
@@ -171,7 +171,7 @@ const LandingPage = () => {
 
               <div className="flex-1">
                 <img
-                  src="/images/vex-chat-demo.jpg"
+                  src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/6ABFEE6A-4223-490F-A7AE-3B1C50E59EBE-rvZ59rJqIizqTXXekuCOctKp0deD0h.jpg"
                   alt="Vex AI creating bundles through chat interface"
                   className="w-full max-w-lg mx-auto rounded-2xl shadow-2xl"
                 />
