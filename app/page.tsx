@@ -117,7 +117,7 @@ const LandingPage = () => {
                       aria-label="Add attachment"
                     >
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M12 5v14M5 12h14M17 7H7M17 7V17" />
+                        <path d="M12 5v14M5 12h14" />
                       </svg>
                     </button>
                     <button
@@ -158,11 +158,11 @@ const LandingPage = () => {
       <section className="relative z-10 py-12 px-6 bg-white">
         <div className="max-w-6xl mx-auto">
           <div className="scroll-animate">
-            <h2 className="text-4xl lg:text-5xl font-thin text-black text-center mb-8">What Does Vex Do?</h2>
+            <h2 className="text-5xl lg:text-6xl font-thin text-black text-center mb-12">What Does Vex Do?</h2>
 
-            <div className="flex flex-col lg:flex-row gap-8 items-center">
+            <div className="flex flex-col lg:flex-row gap-12 items-center">
               <div className="flex-1">
-                <p className="text-lg lg:text-xl text-gray-700 leading-relaxed font-light">
+                <p className="text-xl lg:text-2xl text-gray-700 leading-relaxed font-light">
                   Simply upload your content, tell Vex what kind of bundles you want to sell, and watch as Vex
                   intelligently organizes your content into professional, sellable bundles ready for market in seconds.
                   No more manual sorting, no more messy file management, just streamlined content monetization.
