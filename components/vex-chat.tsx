@@ -91,6 +91,8 @@ function VexChat({ children }: VexChatProps) {
     trialEndDate: string | null
   } | null>(null)
 
+  const [hasStartedTrial, setHasStartedTrial] = useState<boolean>(false)
+
   // State for suggestions
   const [currentSuggestions, setCurrentSuggestions] = useState<string[]>([])
 
@@ -734,6 +736,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
         if (response.ok) {
           const data = await response.json()
           setTrialStatus(data)
+          setHasStartedTrial(data.isOnTrial || data.trialEndDate !== null)
         }
       } catch (error) {
         console.error("Error fetching trial status:", error)
@@ -961,7 +964,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
 
                   {/* Footer with Profile & Settings */}
                   <div className="p-3 border-t border-zinc-800 space-y-2">
-                    {trialStatus?.isOnTrial && (
+                    {trialStatus?.isOnTrial ? (
                       <div className="mb-2">
                         <Badge
                           className={`w-full justify-center ${
@@ -975,7 +978,18 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                           left
                         </Badge>
                       </div>
-                    )}
+                    ) : !hasStartedTrial ? (
+                      <div className="mb-2">
+                        <Button
+                          onClick={() => router.push("/dashboard/upgrade")}
+                          size="sm"
+                          className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white border-0 font-medium text-xs h-9"
+                        >
+                          <Gift className="h-3 w-3 mr-1.5" />
+                          Start Free Trial
+                        </Button>
+                      </div>
+                    ) : null}
 
                     {/* Profile Section */}
                     <div className="flex items-center gap-3 p-2 rounded-lg bg-zinc-900/50">
@@ -1165,7 +1179,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
 
                 {/* Footer with Profile & Settings */}
                 <div className="p-3 border-t border-zinc-800 space-y-2">
-                  {trialStatus?.isOnTrial && (
+                  {trialStatus?.isOnTrial ? (
                     <div className="mb-2">
                       <Badge
                         className={`w-full justify-center ${
@@ -1178,7 +1192,18 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                         Free Trial: {trialStatus.daysRemaining} {trialStatus.daysRemaining === 1 ? "day" : "days"} left
                       </Badge>
                     </div>
-                  )}
+                  ) : !hasStartedTrial ? (
+                    <div className="mb-2">
+                      <Button
+                        onClick={() => router.push("/dashboard/upgrade")}
+                        size="sm"
+                        className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white border-0 font-medium text-xs h-9"
+                      >
+                        <Gift className="h-3 w-3 mr-1.5" />
+                        Start Free Trial
+                      </Button>
+                    </div>
+                  ) : null}
 
                   {/* Profile Section */}
                   <div className="flex items-center gap-3 p-2 rounded-lg bg-zinc-900/50">
