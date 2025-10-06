@@ -7,102 +7,69 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
+import { useAuth } from "@/contexts/auth-context"
 
-export default function TestStripeWebhookPage() {
+export default function TestBundlePurchaseWebhook() {
   const { toast } = useToast()
+  const { user } = useAuth()
   const [loading, setLoading] = useState(false)
-  const [email, setEmail] = useState("")
-  const [priceId, setPriceId] = useState("")
-  const [customerId, setCustomerId] = useState("")
-  const [subscriptionId, setSubscriptionId] = useState("")
+
+  const [bundleId, setBundleId] = useState("")
+  const [buyerEmail, setBuyerEmail] = useState(user?.email || "")
+  const [buyerName, setBuyerName] = useState(user?.displayName || "Test User")
+  const [creatorId, setCreatorId] = useState("")
+  const [price, setPrice] = useState("9.99")
   const [logs, setLogs] = useState<string[]>([])
 
   const addLog = (message: string) => {
     setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${message}`])
   }
 
-  const simulateCheckoutComplete = async () => {
+  const simulateBundlePurchase = async () => {
     setLoading(true)
-    addLog("Simulating checkout.session.completed event...")
+    addLog("Simulating bundle purchase checkout.session.completed event...")
 
     try {
-      const response = await fetch("/api/stripe/webhook", {
+      const buyerUid = user?.uid || `test_user_${Date.now()}`
+      const sessionId = `cs_test_${Date.now()}`
+      const customerId = `cus_test_${Date.now()}`
+      const paymentIntentId = `pi_test_${Date.now()}`
+
+      addLog(`Bundle ID: ${bundleId}`)
+      addLog(`Buyer: ${buyerName} (${buyerEmail})`)
+      addLog(`Price: $${price}`)
+
+      const response = await fetch("/api/webhooks/stripe", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "stripe-signature": "test_signature",
         },
         body: JSON.stringify({
+          id: `evt_test_${Date.now()}`,
+          object: "event",
+          api_version: "2023-10-16",
+          created: Math.floor(Date.now() / 1000),
           type: "checkout.session.completed",
           data: {
             object: {
-              id: `cs_test_${Date.now()}`,
-              customer: customerId || `cus_test_${Date.now()}`,
-              customer_email: email,
-              subscription: subscriptionId || `sub_test_${Date.now()}`,
-              metadata: {
-                priceId: priceId,
-              },
-              mode: "subscription",
+              id: sessionId,
+              object: "checkout.session",
+              amount_total: Math.round(Number.parseFloat(price) * 100), // Convert to cents
+              currency: "usd",
+              customer: customerId,
+              payment_intent: paymentIntentId,
               payment_status: "paid",
-            },
-          },
-        }),
-      })
-
-      if (response.ok) {
-        addLog("✅ Checkout completed successfully")
-        toast({
-          title: "Success",
-          description: "Simulated checkout.session.completed webhook",
-        })
-      } else {
-        const error = await response.text()
-        addLog(`❌ Error: ${error}`)
-        toast({
-          title: "Error",
-          description: error,
-          variant: "destructive",
-        })
-      }
-    } catch (error) {
-      addLog(`❌ Error: ${error}`)
-      toast({
-        title: "Error",
-        description: String(error),
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const simulateSubscriptionCreated = async () => {
-    setLoading(true)
-    addLog("Simulating customer.subscription.created event...")
-
-    try {
-      const response = await fetch("/api/stripe/webhook", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "stripe-signature": "test_signature",
-        },
-        body: JSON.stringify({
-          type: "customer.subscription.created",
-          data: {
-            object: {
-              id: subscriptionId || `sub_test_${Date.now()}`,
-              customer: customerId || `cus_test_${Date.now()}`,
-              status: "active",
-              items: {
-                data: [
-                  {
-                    price: {
-                      id: priceId,
-                    },
-                  },
-                ],
+              status: "complete",
+              mode: "payment", // One-time payment, not subscription
+              metadata: {
+                contentType: "bundle",
+                bundleId: bundleId,
+                productBoxId: bundleId,
+                buyerUid: buyerUid,
+                buyerEmail: buyerEmail,
+                buyerName: buyerName,
+                creatorId: creatorId || "unknown",
+                buyerPlan: "free",
               },
             },
           },
@@ -110,60 +77,13 @@ export default function TestStripeWebhookPage() {
       })
 
       if (response.ok) {
-        addLog("✅ Subscription created successfully")
+        const result = await response.json()
+        addLog("✅ Bundle purchase webhook processed successfully!")
+        addLog(`Session ID: ${sessionId}`)
+        addLog(`Check bundlePurchases collection for purchase record`)
         toast({
           title: "Success",
-          description: "Simulated customer.subscription.created webhook",
-        })
-      } else {
-        const error = await response.text()
-        addLog(`❌ Error: ${error}`)
-        toast({
-          title: "Error",
-          description: error,
-          variant: "destructive",
-        })
-      }
-    } catch (error) {
-      addLog(`❌ Error: ${error}`)
-      toast({
-        title: "Error",
-        description: String(error),
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const simulateSubscriptionDeleted = async () => {
-    setLoading(true)
-    addLog("Simulating customer.subscription.deleted event...")
-
-    try {
-      const response = await fetch("/api/stripe/webhook", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "stripe-signature": "test_signature",
-        },
-        body: JSON.stringify({
-          type: "customer.subscription.deleted",
-          data: {
-            object: {
-              id: subscriptionId || `sub_test_${Date.now()}`,
-              customer: customerId || `cus_test_${Date.now()}`,
-              status: "canceled",
-            },
-          },
-        }),
-      })
-
-      if (response.ok) {
-        addLog("✅ Subscription deleted successfully")
-        toast({
-          title: "Success",
-          description: "Simulated customer.subscription.deleted webhook",
+          description: "Bundle purchase webhook simulated successfully",
         })
       } else {
         const error = await response.text()
@@ -189,77 +109,91 @@ export default function TestStripeWebhookPage() {
   return (
     <div className="container mx-auto p-8 max-w-4xl">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">Stripe Webhook Tester</h1>
-        <p className="text-muted-foreground">Simulate Stripe webhook events without going through actual checkout</p>
+        <h1 className="text-3xl font-bold mb-2">Bundle Purchase Webhook Tester</h1>
+        <p className="text-muted-foreground">Simulate a Stripe bundle purchase without going through actual checkout</p>
       </div>
 
       <div className="grid gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>Test Data</CardTitle>
-            <CardDescription>Enter test data for webhook simulation</CardDescription>
+            <CardTitle>Bundle Purchase Details</CardTitle>
+            <CardDescription>Enter the bundle and buyer information</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Customer Email</Label>
+              <Label htmlFor="bundleId">Bundle ID *</Label>
               <Input
-                id="email"
+                id="bundleId"
+                placeholder="Enter bundle document ID from Firestore"
+                value={bundleId}
+                onChange={(e) => setBundleId(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">Find this in Firestore under the bundles collection</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="price">Price (USD) *</Label>
+              <Input
+                id="price"
+                type="number"
+                step="0.01"
+                placeholder="9.99"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="buyerEmail">Buyer Email *</Label>
+              <Input
+                id="buyerEmail"
                 type="email"
-                placeholder="test@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                placeholder="buyer@example.com"
+                value={buyerEmail}
+                onChange={(e) => setBuyerEmail(e.target.value)}
               />
             </div>
+
             <div className="space-y-2">
-              <Label htmlFor="priceId">Price ID</Label>
+              <Label htmlFor="buyerName">Buyer Name</Label>
               <Input
-                id="priceId"
-                placeholder="price_xxx"
-                value={priceId}
-                onChange={(e) => setPriceId(e.target.value)}
+                id="buyerName"
+                placeholder="John Doe"
+                value={buyerName}
+                onChange={(e) => setBuyerName(e.target.value)}
               />
             </div>
+
             <div className="space-y-2">
-              <Label htmlFor="customerId">Customer ID (optional)</Label>
+              <Label htmlFor="creatorId">Creator ID (optional)</Label>
               <Input
-                id="customerId"
-                placeholder="cus_xxx (auto-generated if empty)"
-                value={customerId}
-                onChange={(e) => setCustomerId(e.target.value)}
+                id="creatorId"
+                placeholder="Creator's Firebase UID"
+                value={creatorId}
+                onChange={(e) => setCreatorId(e.target.value)}
               />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="subscriptionId">Subscription ID (optional)</Label>
-              <Input
-                id="subscriptionId"
-                placeholder="sub_xxx (auto-generated if empty)"
-                value={subscriptionId}
-                onChange={(e) => setSubscriptionId(e.target.value)}
-              />
+              <p className="text-xs text-muted-foreground">Leave empty if unknown - will use bundle's creator</p>
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Webhook Events</CardTitle>
-            <CardDescription>Simulate different Stripe webhook events</CardDescription>
+            <CardTitle>Simulate Purchase</CardTitle>
+            <CardDescription>This will trigger the Stripe webhook handler</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <Button onClick={simulateCheckoutComplete} disabled={loading || !email || !priceId} className="w-full">
-              Simulate Checkout Complete
-            </Button>
+          <CardContent>
             <Button
-              onClick={simulateSubscriptionCreated}
-              disabled={loading || !priceId}
-              variant="secondary"
+              onClick={simulateBundlePurchase}
+              disabled={loading || !bundleId || !buyerEmail || !price}
               className="w-full"
+              size="lg"
             >
-              Simulate Subscription Created
+              {loading ? "Processing..." : "Simulate Bundle Purchase"}
             </Button>
-            <Button onClick={simulateSubscriptionDeleted} disabled={loading} variant="destructive" className="w-full">
-              Simulate Subscription Deleted
-            </Button>
+            <p className="text-xs text-muted-foreground mt-2">
+              This will create a purchase record in bundlePurchases collection
+            </p>
           </CardContent>
         </Card>
 
