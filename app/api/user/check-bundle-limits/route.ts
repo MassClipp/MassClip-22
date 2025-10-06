@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
       const bundlesSnapshot = await getDocs(bundlesQuery)
       const currentBundleCount = bundlesSnapshot.size
 
-      const maxAllowed = isCreatorPro ? null : 2
+      const maxAllowed = isCreatorPro ? Number.POSITIVE_INFINITY : 2
       const canCreate = isCreatorPro || currentBundleCount < 2
 
       return NextResponse.json({
@@ -66,6 +66,7 @@ export async function GET(request: NextRequest) {
         maxAllowed,
         plan: membership?.plan || "free",
         status: membership?.status,
+        isCreatorPro,
         message: canCreate
           ? "You can create a new bundle"
           : `You've reached your bundle limit (2). Upgrade to Creator Pro for unlimited bundles.`,
@@ -74,7 +75,7 @@ export async function GET(request: NextRequest) {
 
     if (checkType === "content") {
       // Check video per bundle limit
-      const maxAllowed = isCreatorPro ? null : 10
+      const maxAllowed = isCreatorPro ? Number.POSITIVE_INFINITY : 10
 
       if (bundleId) {
         const bundleDoc = await getDoc(doc(db, "productBoxes", bundleId))
@@ -93,6 +94,7 @@ export async function GET(request: NextRequest) {
           maxAllowed,
           plan: membership?.plan || "free",
           status: membership?.status,
+          isCreatorPro,
           message: canAdd
             ? "You can add more videos to this bundle"
             : `You've reached the video limit for this bundle (10). Upgrade to Creator Pro for unlimited videos per bundle.`,
@@ -104,6 +106,7 @@ export async function GET(request: NextRequest) {
         maxAllowed,
         plan: membership?.plan || "free",
         status: membership?.status,
+        isCreatorPro,
         message: isCreatorPro ? "Unlimited videos per bundle" : "10 videos per bundle limit",
       })
     }
