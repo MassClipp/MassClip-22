@@ -93,6 +93,12 @@ export default function ProfilePage() {
   const [subscriptionData, setSubscriptionData] = useState<any>(null)
   const [loadingSubscription, setLoadingSubscription] = useState(false)
 
+  const [trialStatus, setTrialStatus] = useState<{
+    isOnTrial: boolean
+    daysRemaining: number
+    trialEndDate?: string
+  } | null>(null)
+
   const isProUser = subscriptionData?.plan === "creator_pro" && subscriptionData?.isActive
 
   useEffect(() => {
@@ -173,14 +179,31 @@ export default function ProfilePage() {
   }
 
   useEffect(() => {
-    fetchProfile()
-  }, [user])
-
-  useEffect(() => {
     if (user) {
       fetchSubscriptionData(user, setSubscriptionData, setLoadingSubscription)
+      fetchTrialStatus()
     }
   }, [user])
+
+  const fetchTrialStatus = async () => {
+    if (!user) return
+
+    try {
+      const idToken = await user.getIdToken()
+      const res = await fetch("/api/user/trial-status", {
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+        },
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        setTrialStatus(data)
+      }
+    } catch (error) {
+      console.error("Error fetching trial status:", error)
+    }
+  }
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -641,20 +664,46 @@ export default function ProfilePage() {
                 </div>
               ) : (
                 <div className="space-y-8">
+                  {trialStatus?.isOnTrial && (
+                    <div className="p-4 rounded-lg border border-cyan-500/30 bg-gradient-to-r from-cyan-500/10 to-blue-500/10">
+                      <div className="flex items-start gap-3">
+                        <div className="w-2 h-2 rounded-full bg-cyan-500 mt-2 flex-shrink-0"></div>
+                        <div className="flex-1">
+                          <p className="text-cyan-200 text-sm font-medium mb-1">
+                            Free Trial Active - {trialStatus.daysRemaining} Day
+                            {trialStatus.daysRemaining !== 1 ? "s" : ""} Remaining
+                          </p>
+                          <p className="text-cyan-300/80 text-xs leading-relaxed mb-2">
+                            You're currently enjoying full Creator Pro features during your 3-day free trial. Your trial
+                            ends on {trialStatus.trialEndDate ? safelyFormatDate(trialStatus.trialEndDate) : "soon"}.
+                          </p>
+                          <p className="text-cyan-300/80 text-xs leading-relaxed">
+                            After your trial ends, you'll be automatically switched to the Free plan unless you upgrade
+                            to Creator Pro.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <h3 className="text-lg font-medium text-white">Current Plan</h3>
                       <Badge
-                        variant={subscriptionData?.isActive ? "default" : "secondary"}
+                        variant={subscriptionData?.isActive || trialStatus?.isOnTrial ? "default" : "secondary"}
                         className={`px-3 py-1 font-medium ${
-                          subscriptionData?.isActive
-                            ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                          subscriptionData?.isActive || trialStatus?.isOnTrial
+                            ? trialStatus?.isOnTrial
+                              ? "bg-cyan-600 hover:bg-cyan-700 text-white"
+                              : "bg-emerald-600 hover:bg-emerald-700 text-white"
                             : "bg-zinc-600 hover:bg-zinc-700 text-zinc-200"
                         }`}
                       >
-                        {subscriptionData?.plan === "creator_pro" && subscriptionData?.isActive
-                          ? "Creator Pro"
-                          : "Free"}
+                        {trialStatus?.isOnTrial
+                          ? "Free Trial (Creator Pro)"
+                          : subscriptionData?.plan === "creator_pro" && subscriptionData?.isActive
+                            ? "Creator Pro"
+                            : "Free"}
                       </Badge>
                     </div>
 
@@ -705,7 +754,8 @@ export default function ProfilePage() {
                   <div className="space-y-4">
                     <h3 className="text-lg font-medium text-white">Plan Features</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {subscriptionData?.plan === "creator_pro" && subscriptionData?.isActive ? (
+                      {(subscriptionData?.plan === "creator_pro" && subscriptionData?.isActive) ||
+                      trialStatus?.isOnTrial ? (
                         <>
                           <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
                             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
@@ -764,12 +814,19 @@ export default function ProfilePage() {
                   </div>
 
                   <div className="flex flex-wrap gap-3 pt-4 border-t border-zinc-800/50">
-                    {subscriptionData?.plan !== "creator_pro" || !subscriptionData?.isActive ? (
+                    {!subscriptionData?.isActive && !trialStatus?.isOnTrial ? (
                       <Button
                         onClick={() => router.push("/dashboard/upgrade")}
                         className="bg-white hover:bg-gray-100 text-black font-medium px-6"
                       >
                         Upgrade to Pro
+                      </Button>
+                    ) : trialStatus?.isOnTrial ? (
+                      <Button
+                        onClick={() => router.push("/dashboard/upgrade")}
+                        className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white font-medium px-6"
+                      >
+                        Upgrade Now - Keep Pro Features
                       </Button>
                     ) : (
                       <>
