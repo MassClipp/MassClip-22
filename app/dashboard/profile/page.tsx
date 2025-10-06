@@ -25,7 +25,6 @@ import {
   CheckCircle,
   ExternalLink,
   RefreshCw,
-  Clock,
 } from "lucide-react"
 import ReactCrop, { type Crop, centerCrop, makeAspectCrop } from "react-image-crop"
 import "react-image-crop/dist/ReactCrop.css"
@@ -177,6 +176,12 @@ export default function ProfilePage() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    if (user) {
+      fetchProfile()
+    }
+  }, [user])
 
   useEffect(() => {
     if (user) {
@@ -377,21 +382,7 @@ export default function ProfilePage() {
     <div className="space-y-8">
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 pb-6 border-b border-zinc-800/50">
         <div className="space-y-2">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-semibold text-white tracking-tight">Profile Settings</h1>
-            {trialStatus?.isOnTrial && (
-              <Badge
-                className={`${
-                  trialStatus.daysRemaining <= 1
-                    ? "bg-gradient-to-r from-orange-500 to-red-500"
-                    : "bg-gradient-to-r from-cyan-500 to-blue-500"
-                } text-white border-0 px-3 py-1`}
-              >
-                <Clock className="h-3 w-3 mr-1.5" />
-                Free Trial: {trialStatus.daysRemaining} {trialStatus.daysRemaining === 1 ? "day" : "days"} left
-              </Badge>
-            )}
-          </div>
+          <h1 className="text-2xl font-semibold text-white tracking-tight">Profile Settings</h1>
           <p className="text-zinc-400">Manage your creator profile and settings</p>
         </div>
       </div>

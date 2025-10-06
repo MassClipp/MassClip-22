@@ -37,6 +37,8 @@ import {
 import { doc, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { TopHeader } from "@/components/top-header"
+import { Badge } from "@/components/ui/badge"
+import { Clock } from "lucide-react"
 
 interface Message {
   id: string
@@ -83,6 +85,11 @@ function VexChat({ children }: VexChatProps) {
   const [username, setUsername] = useState<string | null>(null)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+  const [trialStatus, setTrialStatus] = useState<{
+    isOnTrial: boolean
+    daysRemaining: number
+    trialEndDate: string | null
+  } | null>(null)
 
   // State for suggestions
   const [currentSuggestions, setCurrentSuggestions] = useState<string[]>([])
@@ -565,7 +572,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
           })
 
           if (titleResponse.ok) {
-            const titleData = await titleResponse.json()
+            const titleData = await titleResponse.json() // Corrected variable name here
             chatTitle = titleData.title || chatTitle
           }
         } catch (titleError) {
@@ -710,6 +717,32 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
     }
 
     fetchUsername()
+  }, [user])
+
+  useEffect(() => {
+    const fetchTrialStatus = async () => {
+      if (!user) return
+
+      try {
+        const token = await user.getIdToken()
+        const response = await fetch("/api/user/trial-status", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          setTrialStatus(data)
+        }
+      } catch (error) {
+        console.error("Error fetching trial status:", error)
+      }
+    }
+
+    if (user) {
+      fetchTrialStatus()
+    }
   }, [user])
 
   useEffect(() => {
@@ -928,6 +961,22 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
 
                   {/* Footer with Profile & Settings */}
                   <div className="p-3 border-t border-zinc-800 space-y-2">
+                    {trialStatus?.isOnTrial && (
+                      <div className="mb-2">
+                        <Badge
+                          className={`w-full justify-center ${
+                            trialStatus.daysRemaining <= 1
+                              ? "bg-gradient-to-r from-orange-500 to-red-500"
+                              : "bg-gradient-to-r from-cyan-500 to-blue-500"
+                          } text-white border-0 px-3 py-1.5`}
+                        >
+                          <Clock className="h-3 w-3 mr-1.5" />
+                          Free Trial: {trialStatus.daysRemaining} {trialStatus.daysRemaining === 1 ? "day" : "days"}{" "}
+                          left
+                        </Badge>
+                      </div>
+                    )}
+
                     {/* Profile Section */}
                     <div className="flex items-center gap-3 p-2 rounded-lg bg-zinc-900/50">
                       <Avatar className="h-8 w-8">
@@ -1116,6 +1165,21 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
 
                 {/* Footer with Profile & Settings */}
                 <div className="p-3 border-t border-zinc-800 space-y-2">
+                  {trialStatus?.isOnTrial && (
+                    <div className="mb-2">
+                      <Badge
+                        className={`w-full justify-center ${
+                          trialStatus.daysRemaining <= 1
+                            ? "bg-gradient-to-r from-orange-500 to-red-500"
+                            : "bg-gradient-to-r from-cyan-500 to-blue-500"
+                        } text-white border-0 px-3 py-1.5`}
+                      >
+                        <Clock className="h-3 w-3 mr-1.5" />
+                        Free Trial: {trialStatus.daysRemaining} {trialStatus.daysRemaining === 1 ? "day" : "days"} left
+                      </Badge>
+                    </div>
+                  )}
+
                   {/* Profile Section */}
                   <div className="flex items-center gap-3 p-2 rounded-lg bg-zinc-900/50">
                     <Avatar className="h-8 w-8">
@@ -1187,7 +1251,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
       {isVexChatPage ? (
         /* Main Chat Area - Only show on /dashboard/vex */
         <div
-          className={`flex flex-col flex-1 min-h-screen pt-16 ${isMobile ? "ml-0" : isSidebarCollapsed ? "ml-16" : "ml-60"} ${isMobile && isSidebarOpen ? "blur-sm pointer-events-none" : ""} transition-all duration-300 relative z-10`}
+          className={`flex-col flex-1 min-h-screen pt-16 ${isMobile ? "ml-0" : isSidebarCollapsed ? "ml-16" : "ml-60"} ${isMobile && isSidebarOpen ? "blur-sm pointer-events-none" : ""} transition-all duration-300 relative z-10`}
         >
           {isLoadingCurrentChat && (
             <div className="flex items-center justify-center py-4 border-b border-zinc-800">
