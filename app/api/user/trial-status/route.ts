@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { verifyIdToken } from "@/lib/firebase-admin"
 import { getMembership } from "@/lib/memberships-service"
+import { getFreeUser } from "@/lib/free-users-service"
 
 export async function GET(req: NextRequest) {
   try {
@@ -15,6 +16,9 @@ export async function GET(req: NextRequest) {
 
     console.log("[v0] Trial Status - Checking for user:", userId.substring(0, 8) + "...")
 
+    const freeUser = await getFreeUser(userId)
+    const hasUsedFreeTrial = freeUser?.hasUsedFreeTrial === true
+
     // Get membership status
     const membership = await getMembership(userId)
 
@@ -22,6 +26,7 @@ export async function GET(req: NextRequest) {
       exists: !!membership,
       status: membership?.status,
       currentPeriodEnd: membership?.currentPeriodEnd,
+      hasUsedFreeTrial,
     })
 
     if (!membership || membership.status !== "trialing") {
@@ -29,6 +34,7 @@ export async function GET(req: NextRequest) {
         isOnTrial: false,
         daysRemaining: 0,
         trialEndDate: null,
+        hasUsedFreeTrial,
       })
     }
 
@@ -53,12 +59,14 @@ export async function GET(req: NextRequest) {
       trialEndDate,
       daysRemaining,
       isOnTrial: true,
+      hasUsedFreeTrial,
     })
 
     return NextResponse.json({
       isOnTrial: true,
       daysRemaining: Math.max(0, daysRemaining),
       trialEndDate: trialEndDate,
+      hasUsedFreeTrial,
     })
   } catch (error) {
     console.error("[Trial Status] Error:", error)

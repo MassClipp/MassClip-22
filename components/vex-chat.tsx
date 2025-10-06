@@ -89,9 +89,8 @@ function VexChat({ children }: VexChatProps) {
     isOnTrial: boolean
     daysRemaining: number
     trialEndDate: string | null
+    hasUsedFreeTrial?: boolean
   } | null>(null)
-
-  const [hasStartedTrial, setHasStartedTrial] = useState<boolean>(false)
 
   // State for suggestions
   const [currentSuggestions, setCurrentSuggestions] = useState<string[]>([])
@@ -736,7 +735,6 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
         if (response.ok) {
           const data = await response.json()
           setTrialStatus(data)
-          setHasStartedTrial(data.isOnTrial || data.trialEndDate !== null)
         }
       } catch (error) {
         console.error("Error fetching trial status:", error)
@@ -978,7 +976,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                           left
                         </Badge>
                       </div>
-                    ) : !hasStartedTrial ? (
+                    ) : !trialStatus?.hasUsedFreeTrial ? (
                       <div className="mb-2">
                         <Button
                           onClick={() => router.push("/welcome/free-trial")}
@@ -1192,7 +1190,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                         Free Trial: {trialStatus.daysRemaining} {trialStatus.daysRemaining === 1 ? "day" : "days"} left
                       </Badge>
                     </div>
-                  ) : !hasStartedTrial ? (
+                  ) : !trialStatus?.hasUsedFreeTrial ? (
                     <div className="mb-2">
                       <Button
                         onClick={() => router.push("/welcome/free-trial")}

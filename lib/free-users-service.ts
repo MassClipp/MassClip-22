@@ -22,6 +22,8 @@ export interface FreeUserDoc {
   hasNoWatermark: boolean
   hasPrioritySupport: boolean
   hasLimitedOrganization: boolean
+  // Permanent trial tracking field
+  hasUsedFreeTrial?: boolean // Permanent flag - once true, never resets
   // Timestamps
   createdAt: any
   updatedAt: any
@@ -247,6 +249,7 @@ export async function getFreeUserLimits(uid: string): Promise<{
   hasPrioritySupport: boolean
   hasLimitedOrganization: boolean
   daysUntilReset: number
+  hasUsedFreeTrial?: boolean
 }> {
   // Check and reset monthly limits if needed
   const freeUser = await checkAndResetMonthlyLimits(uid)
@@ -269,6 +272,7 @@ export async function getFreeUserLimits(uid: string): Promise<{
       reachedBundleLimit: false,
       ...FREE_TIER_DEFAULTS,
       daysUntilReset: 0,
+      hasUsedFreeTrial: false,
     }
   }
 
@@ -297,6 +301,7 @@ export async function getFreeUserLimits(uid: string): Promise<{
     hasPrioritySupport: freeUser.hasPrioritySupport,
     hasLimitedOrganization: freeUser.hasLimitedOrganization,
     daysUntilReset,
+    hasUsedFreeTrial: freeUser.hasUsedFreeTrial ?? false,
   }
 }
 

@@ -39,6 +39,14 @@ export async function POST(request: NextRequest) {
     const email = authUser.email || null
     console.log("[v0] Starting trial for user:", { uid, email })
 
+    const freeUserRef = db.collection("freeUsers").doc(uid)
+    const freeUserDoc = await freeUserRef.get()
+
+    if (freeUserDoc.exists && freeUserDoc.data()?.hasUsedFreeTrial === true) {
+      console.log("[v0] User has already used their free trial")
+      return NextResponse.json({ error: "You have already used your free trial" }, { status: 400 })
+    }
+
     const trialEndDate = new Date()
     trialEndDate.setDate(trialEndDate.getDate() + 3)
     console.log("[v0] Trial end date:", trialEndDate.toISOString())
@@ -102,14 +110,13 @@ export async function POST(request: NextRequest) {
 
     // Update or create freeUsers document with Creator Pro permissions during trial
     console.log("[v0] Updating freeUsers collection...")
-    const freeUserRef = db.collection("freeUsers").doc(uid)
-    const freeUserDoc = await freeUserRef.get()
     console.log("[v0] FreeUser exists:", freeUserDoc.exists)
 
     if (freeUserDoc.exists) {
       await freeUserRef.update({
         trialActive: true,
         trialEndDate: trialEndDate,
+        hasUsedFreeTrial: true,
         canCreateBundles: true,
         canAnalyzeTranscripts: true,
         maxFolders: 999999,
@@ -123,6 +130,7 @@ export async function POST(request: NextRequest) {
         trialActive: true,
         trialStartDate: new Date(),
         trialEndDate: trialEndDate,
+        hasUsedFreeTrial: true,
         canCreateBundles: true,
         canAnalyzeTranscripts: true,
         maxFolders: 999999,
