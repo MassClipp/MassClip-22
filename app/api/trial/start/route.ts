@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { initializeFirebaseAdmin, db } from "@/lib/firebase/firebaseAdmin"
 import { headers } from "next/headers"
+import { FieldValue } from "firebase-admin/firestore"
 
 initializeFirebaseAdmin()
 
@@ -32,20 +33,48 @@ export async function POST(request: NextRequest) {
     }
 
     const uid = authUser.uid
+    const email = authUser.email || null
 
     const trialEndDate = new Date()
     trialEndDate.setDate(trialEndDate.getDate() + 3)
 
+    const membershipData = {
+      uid,
+      email,
+      plan: "creator_pro",
+      status: "trialing",
+      isActive: true,
+      currentPeriodEnd: trialEndDate,
+      downloadsUsed: 0,
+      bundlesCreated: 0,
+      features: {
+        unlimitedDownloads: true,
+        premiumContent: true,
+        noWatermark: true,
+        prioritySupport: true,
+        platformFeePercentage: 10,
+        maxVideosPerBundle: null,
+        maxBundles: null,
+      },
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }
+
+    await db.collection("memberships").doc(uid).set(membershipData)
+
     // Update user document with trial information
     const userRef = db.collection("users").doc(uid)
-    await userRef.update({
-      isNewUser: false,
-      trialActive: true,
-      trialStartDate: new Date(),
-      trialEndDate: trialEndDate,
-      plan: "creator_pro_trial",
-      updatedAt: new Date(),
-    })
+    await userRef.set(
+      {
+        isNewUser: false,
+        trialActive: true,
+        trialStartDate: new Date(),
+        trialEndDate: trialEndDate,
+        plan: "creator_pro_trial",
+        updatedAt: new Date(),
+      },
+      { merge: true },
+    )
 
     // Update or create freeUsers document with Creator Pro permissions during trial
     const freeUserRef = db.collection("freeUsers").doc(uid)
