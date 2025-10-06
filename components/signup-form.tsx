@@ -81,19 +81,14 @@ export function SignupForm() {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password)
       console.log("[v0] Firebase user created successfully:", userCredential.user.uid)
 
-      await createServerSideRecords(userCredential.user)
+      createServerSideRecords(userCredential.user)
 
-      console.log("[v0] Signup completed, redirecting to /welcome/free-trial")
-      router.push("/welcome/free-trial")
+      console.log("[v0] Redirecting to free trial page...")
+      window.location.href = "/welcome/free-trial"
     } catch (error: any) {
       console.error("[v0] Email signup error:", error)
-      if (error.code && error.code.startsWith("auth/")) {
-        setError(error.message || "Failed to create account")
-        setLoading(false)
-      } else {
-        console.warn("[v0] Non-auth error, redirecting anyway:", error)
-        router.push("/welcome/free-trial")
-      }
+      setError(error.message || "Failed to create account")
+      setLoading(false)
     }
   }
 
@@ -110,28 +105,20 @@ export function SignupForm() {
       const result = await signInWithPopup(auth, provider)
       console.log("[v0] Google signup successful:", result.user.uid)
 
-      await createServerSideRecords(result.user)
+      createServerSideRecords(result.user)
 
-      console.log("[v0] Google signup completed, redirecting to /welcome/free-trial")
-      router.push("/welcome/free-trial")
+      console.log("[v0] Redirecting to free trial page...")
+      window.location.href = "/welcome/free-trial"
     } catch (error: any) {
       console.error("[v0] Google signup error:", error)
-      if (
-        error.code &&
-        (error.code.startsWith("auth/") || error.code === "popup-closed-by-user" || error.code === "popup-blocked")
-      ) {
-        if (error.code === "auth/popup-closed-by-user") {
-          setError("Signup cancelled")
-        } else if (error.code === "auth/popup-blocked") {
-          setError("Popup blocked. Please allow popups and try again.")
-        } else {
-          setError(error.message || "Failed to sign up with Google")
-        }
-        setLoading(false)
+      if (error.code === "auth/popup-closed-by-user") {
+        setError("Signup cancelled")
+      } else if (error.code === "auth/popup-blocked") {
+        setError("Popup blocked. Please allow popups and try again.")
       } else {
-        console.warn("[v0] Non-auth error, redirecting anyway:", error)
-        router.push("/welcome/free-trial")
+        setError(error.message || "Failed to sign up with Google")
       }
+      setLoading(false)
     }
   }
 
