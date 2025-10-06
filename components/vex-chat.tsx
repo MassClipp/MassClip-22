@@ -1336,6 +1336,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                 </div>
               )}
             </div>
+            <div className="h-32" />
           </ScrollArea>
 
           {showScrollButton && (
@@ -1349,7 +1350,9 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
             </Button>
           )}
 
-          <div className={`flex-shrink-0 ${isMobile ? "px-3" : "px-4"} py-3`}>
+          <div
+            className={`fixed bottom-0 ${isMobile ? "left-0 right-0" : isSidebarCollapsed ? "left-16 right-0" : "left-60 right-0"} bg-gradient-to-t from-black via-black to-transparent pt-4 pb-3 ${isMobile ? "px-3" : "px-4"} z-40 transition-all duration-300`}
+          >
             <div className={`${isMobile ? "max-w-full" : "max-w-4xl mx-auto"}`}>
               {messages.length > 0 && (
                 <div className="flex justify-center mb-2">
