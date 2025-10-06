@@ -93,7 +93,7 @@ function VexChat({ children }: VexChatProps) {
   } | null>(null)
   const [membershipStatus, setMembershipStatus] = useState<{
     plan: string
-    isProUser: boolean
+    isActive: boolean
   } | null>(null)
 
   // State for suggestions
@@ -766,7 +766,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
           const data = await response.json()
           setMembershipStatus({
             plan: data.plan || "free",
-            isProUser: data.isProUser || false,
+            isActive: data.isActive || false,
           })
         }
       } catch (error) {
@@ -1009,7 +1009,8 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                           left
                         </Badge>
                       </div>
-                    ) : !trialStatus?.hasUsedFreeTrial && !membershipStatus?.isProUser ? (
+                    ) : !trialStatus?.hasUsedFreeTrial &&
+                      !(membershipStatus?.plan === "creator_pro" && membershipStatus?.isActive) ? (
                       <div className="mb-2">
                         <Button
                           onClick={() => router.push("/welcome/free-trial")}
@@ -1223,7 +1224,8 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                         Free Trial: {trialStatus.daysRemaining} {trialStatus.daysRemaining === 1 ? "day" : "days"} left
                       </Badge>
                     </div>
-                  ) : !trialStatus?.hasUsedFreeTrial && !membershipStatus?.isProUser ? (
+                  ) : !trialStatus?.hasUsedFreeTrial &&
+                    !(membershipStatus?.plan === "creator_pro" && membershipStatus?.isActive) ? (
                     <div className="mb-2">
                       <Button
                         onClick={() => router.push("/welcome/free-trial")}
