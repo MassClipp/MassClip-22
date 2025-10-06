@@ -981,7 +981,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                     ) : !hasStartedTrial ? (
                       <div className="mb-2">
                         <Button
-                          onClick={() => router.push("/dashboard/upgrade")}
+                          onClick={() => router.push("/welcome/free-trial")}
                           size="sm"
                           className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white border-0 font-medium text-xs h-9"
                         >
@@ -1195,7 +1195,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                   ) : !hasStartedTrial ? (
                     <div className="mb-2">
                       <Button
-                        onClick={() => router.push("/dashboard/upgrade")}
+                        onClick={() => router.push("/welcome/free-trial")}
                         size="sm"
                         className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white border-0 font-medium text-xs h-9"
                       >
