@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, CheckCircle2, XCircle, AlertCircle, Play } from "lucide-react"
+import { useAuth } from "@/contexts/auth-context"
 
 interface TestResult {
   name: string
@@ -14,10 +15,22 @@ interface TestResult {
 }
 
 export default function TestPermissionsPage() {
+  const { user } = useAuth()
   const [loading, setLoading] = useState(false)
   const [results, setResults] = useState<TestResult[]>([])
 
   const runAllTests = async () => {
+    if (!user) {
+      setResults([
+        {
+          name: "Authentication",
+          status: "error",
+          message: "Not authenticated. Please log in first.",
+        },
+      ])
+      return
+    }
+
     setLoading(true)
     setResults([])
     const testResults: TestResult[] = []
@@ -63,14 +76,14 @@ export default function TestPermissionsPage() {
 
   const testUserAuth = async (): Promise<TestResult> => {
     try {
-      const response = await fetch("/api/user/me")
-      if (!response.ok) throw new Error("Not authenticated")
-      const data = await response.json()
+      if (!user) {
+        throw new Error("Not authenticated")
+      }
       return {
         name: "User Authentication",
         status: "success",
-        message: `Authenticated as ${data.email}`,
-        data: { uid: data.uid, email: data.email },
+        message: `Authenticated as ${user.email}`,
+        data: { uid: user.uid, email: user.email },
       }
     } catch (error) {
       return {
@@ -83,7 +96,12 @@ export default function TestPermissionsPage() {
 
   const testTrialStatus = async (): Promise<TestResult> => {
     try {
-      const response = await fetch("/api/user/trial-status")
+      const token = await user?.getIdToken()
+      const response = await fetch("/api/user/trial-status", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
       if (!response.ok) throw new Error("Failed to fetch trial status")
       const data = await response.json()
       return {
@@ -103,16 +121,14 @@ export default function TestPermissionsPage() {
 
   const testMembershipRecord = async (): Promise<TestResult> => {
     try {
-      const response = await fetch("/api/debug/check-membership")
+      const response = await fetch(`/api/debug/check-membership?userId=${user?.uid}`)
       if (!response.ok) throw new Error("Failed to fetch membership")
       const data = await response.json()
       return {
         name: "Membership Record",
-        status: data.membership.exists ? "success" : "warning",
-        message: data.membership.exists
-          ? `Membership found: ${data.membership.data.plan} (${data.membership.data.status})`
-          : "No membership record",
-        data: data.membership.data,
+        status: data.exists ? "success" : "warning",
+        message: data.exists ? `Membership found: ${data.data.plan} (${data.data.status})` : "No membership record",
+        data: data.data,
       }
     } catch (error) {
       return {
@@ -125,7 +141,12 @@ export default function TestPermissionsPage() {
 
   const testBundleLimits = async (): Promise<TestResult> => {
     try {
-      const response = await fetch("/api/user/check-bundle-limits?type=create")
+      const token = await user?.getIdToken()
+      const response = await fetch("/api/user/check-bundle-limits?type=create", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
       if (!response.ok) throw new Error("Failed to check bundle limits")
       const data = await response.json()
 
@@ -149,7 +170,12 @@ export default function TestPermissionsPage() {
 
   const testVideoLimits = async (): Promise<TestResult> => {
     try {
-      const response = await fetch("/api/user/check-bundle-limits?type=content")
+      const token = await user?.getIdToken()
+      const response = await fetch("/api/user/check-bundle-limits?type=content", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
       if (!response.ok) throw new Error("Failed to check video limits")
       const data = await response.json()
 
@@ -171,18 +197,23 @@ export default function TestPermissionsPage() {
 
   const testPlatformFee = async (): Promise<TestResult> => {
     try {
-      const response = await fetch("/api/membership-status")
+      const token = await user?.getIdToken()
+      const response = await fetch("/api/membership-status", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
       if (!response.ok) throw new Error("Failed to check platform fee")
       const data = await response.json()
 
-      const expectedFee = data.plan === "creator_pro" ? 10 : 20
+      const expectedFee = data.plan === "creator_pro" || data.status === "trialing" ? 10 : 20
       const actualFee = data.features.platformFeePercentage
 
       return {
         name: "Platform Fee",
         status: actualFee === expectedFee ? "success" : "error",
         message: `Platform fee: ${actualFee}% (expected: ${expectedFee}%)`,
-        data: { plan: data.plan, platformFeePercentage: actualFee },
+        data: { plan: data.plan, status: data.status, platformFeePercentage: actualFee },
       }
     } catch (error) {
       return {
@@ -195,7 +226,12 @@ export default function TestPermissionsPage() {
 
   const testVexPermissions = async (): Promise<TestResult> => {
     try {
-      const response = await fetch("/api/vex/get-bundle-limits")
+      const token = await user?.getIdToken()
+      const response = await fetch("/api/vex/get-bundle-limits", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
       if (!response.ok) throw new Error("Failed to check Vex permissions")
       const data = await response.json()
 
@@ -217,7 +253,13 @@ export default function TestPermissionsPage() {
 
   const testTrialExpirationCron = async (): Promise<TestResult> => {
     try {
-      const response = await fetch("/api/trial/check-expired", { method: "POST" })
+      const token = await user?.getIdToken()
+      const response = await fetch("/api/trial/check-expired", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
       if (!response.ok) throw new Error("Failed to test trial expiration")
       const data = await response.json()
 
@@ -268,6 +310,11 @@ export default function TestPermissionsPage() {
           <p className="text-zinc-400">
             Comprehensive testing of trial permissions, bundle limits, and Creator Pro features
           </p>
+          {!user && (
+            <div className="mt-4 p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
+              <p className="text-red-500 text-sm">⚠️ Not authenticated. Please log in to run tests.</p>
+            </div>
+          )}
         </div>
 
         <Card className="bg-zinc-900 border-zinc-800">
@@ -277,7 +324,7 @@ export default function TestPermissionsPage() {
           <CardContent>
             <Button
               onClick={runAllTests}
-              disabled={loading}
+              disabled={loading || !user}
               className="w-full bg-white text-black hover:bg-zinc-200"
               size="lg"
             >

@@ -1112,7 +1112,7 @@ export default function BundlesPage() {
                       setShowCreateModal(true)
                     }
                   }}
-                  className={`bg-white text-black hover:bg-zinc-100 font-medium px-6`}
+                  className="bg-white text-black hover:bg-zinc-200"
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   {productBoxes.length >= bundleLimit ? "Want more bundles?" : "Create Bundle"}
@@ -1304,7 +1304,7 @@ export default function BundlesPage() {
                     setShowCreateModal(true)
                   }
                 }}
-                className="bg-red-600 hover:bg-red-700"
+                className="bg-white text-black hover:bg-zinc-200"
               >
                 <Plus className="h-4 w-4 mr-2" />
                 {productBoxes.length >= bundleLimit ? "Want more bundles?" : "Create Your First Bundle"}
