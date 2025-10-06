@@ -91,6 +91,10 @@ function VexChat({ children }: VexChatProps) {
     trialEndDate: string | null
     hasUsedFreeTrial?: boolean
   } | null>(null)
+  const [membershipStatus, setMembershipStatus] = useState<{
+    plan: string
+    isProUser: boolean
+  } | null>(null)
 
   // State for suggestions
   const [currentSuggestions, setCurrentSuggestions] = useState<string[]>([])
@@ -747,6 +751,35 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
   }, [user])
 
   useEffect(() => {
+    const fetchMembershipStatus = async () => {
+      if (!user) return
+
+      try {
+        const token = await user.getIdToken()
+        const response = await fetch("/api/membership-status", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          setMembershipStatus({
+            plan: data.plan || "free",
+            isProUser: data.isProUser || false,
+          })
+        }
+      } catch (error) {
+        console.error("Error fetching membership status:", error)
+      }
+    }
+
+    if (user) {
+      fetchMembershipStatus()
+    }
+  }, [user])
+
+  useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (isMobile && isSidebarOpen) {
         const sidebar = document.getElementById("vex-sidebar")
@@ -976,7 +1009,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                           left
                         </Badge>
                       </div>
-                    ) : !trialStatus?.hasUsedFreeTrial ? (
+                    ) : !trialStatus?.hasUsedFreeTrial && !membershipStatus?.isProUser ? (
                       <div className="mb-2">
                         <Button
                           onClick={() => router.push("/welcome/free-trial")}
@@ -1190,7 +1223,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                         Free Trial: {trialStatus.daysRemaining} {trialStatus.daysRemaining === 1 ? "day" : "days"} left
                       </Badge>
                     </div>
-                  ) : !trialStatus?.hasUsedFreeTrial ? (
+                  ) : !trialStatus?.hasUsedFreeTrial && !membershipStatus?.isProUser ? (
                     <div className="mb-2">
                       <Button
                         onClick={() => router.push("/welcome/free-trial")}
