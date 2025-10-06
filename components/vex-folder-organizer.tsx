@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Folder, Bot, ArrowRight } from "lucide-react"
+import { Folder, Bot, ArrowRight, Sparkles } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 
 interface VexFolderOrganizerProps {
@@ -17,8 +17,9 @@ interface FolderSuggestion {
   folderId: string
   folderName: string
   reason: string
-  confidence: "high" | "medium" | "fallback"
+  confidence: "very_high" | "high" | "medium" | "fallback"
   fileCount: number
+  usedTranscript?: boolean
 }
 
 export function VexFolderOrganizer({ selectedFiles, onOrganizeComplete, userToken }: VexFolderOrganizerProps) {
@@ -47,26 +48,79 @@ export function VexFolderOrganizer({ selectedFiles, onOrganizeComplete, userToke
       const foldersData = await foldersResponse.json()
       setFolders(foldersData.folders)
 
-      // Group files by suggested folder
-      const folderGroups: { [key: string]: FolderSuggestion } = {}
+      console.log("[v0] Fetching metadata for selected files...")
+      const fileMetadataPromises = selectedFiles.map(async (fileId) => {
+        try {
+          const response = await fetch(`/api/uploads/${fileId}`, {
+            headers: {
+              Authorization: `Bearer ${userToken}`,
+            },
+          })
+          if (response.ok) {
+            return await response.json()
+          }
+          return null
+        } catch (error) {
+          console.error(`[v0] Error fetching metadata for ${fileId}:`, error)
+          return null
+        }
+      })
 
-      // For now, we'll suggest based on file count - in a real implementation,
-      // you'd analyze each file's content to suggest appropriate folders
-      const mainFolder = foldersData.folders.find((f: any) => f.id === "main")
-      const contentFolders = foldersData.folders.filter((f: any) => f.id !== "main")
+      const filesMetadata = (await Promise.all(fileMetadataPromises)).filter(Boolean)
+      console.log(`[v0] Fetched metadata for ${filesMetadata.length} files`)
 
-      // Simple logic: suggest the folder with the least files for better distribution
-      const targetFolder =
-        contentFolders.length > 0
-          ? contentFolders.reduce((min, folder) => (folder.fileCount < min.fileCount ? folder : min))
-          : mainFolder
+      const folderGroups: { [key: string]: FolderSuggestion & { files: string[] } } = {}
 
-      folderGroups[targetFolder.id] = {
-        folderId: targetFolder.id,
-        folderName: targetFolder.name,
-        reason: `Suggested for better content organization`,
-        confidence: "medium",
-        fileCount: selectedFiles.length,
+      for (const fileData of filesMetadata) {
+        try {
+          const suggestionResponse = await fetch("/api/vex/suggest-folder", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${userToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              filename: fileData.filename || fileData.title,
+              title: fileData.title,
+              description: fileData.description,
+              fileType: fileData.contentType || fileData.type,
+              mimeType: fileData.mimeType,
+              duration: fileData.duration,
+              transcript: fileData.transcript, // Include transcript for Creator Pro users
+            }),
+          })
+
+          if (suggestionResponse.ok) {
+            const suggestionData = await suggestionResponse.json()
+            const suggestion = suggestionData.suggestion
+
+            console.log(
+              `[v0] File "${fileData.title}" → "${suggestion.folderName}" (${suggestion.confidence}${suggestion.usedTranscript ? ", used transcript" : ""})`,
+            )
+
+            if (!folderGroups[suggestion.folderId]) {
+              folderGroups[suggestion.folderId] = {
+                folderId: suggestion.folderId,
+                folderName: suggestion.folderName,
+                reason: suggestion.reason,
+                confidence: suggestion.confidence,
+                fileCount: 0,
+                files: [],
+                usedTranscript: suggestion.usedTranscript,
+              }
+            }
+
+            folderGroups[suggestion.folderId].fileCount++
+            folderGroups[suggestion.folderId].files.push(fileData.id)
+
+            if (suggestion.usedTranscript && folderGroups[suggestion.folderId].confidence !== "very_high") {
+              folderGroups[suggestion.folderId].confidence = "very_high"
+              folderGroups[suggestion.folderId].usedTranscript = true
+            }
+          }
+        } catch (error) {
+          console.error(`[v0] Error getting suggestion for file:`, error)
+        }
       }
 
       setSuggestions(Object.values(folderGroups))
@@ -82,7 +136,7 @@ export function VexFolderOrganizer({ selectedFiles, onOrganizeComplete, userToke
     }
   }
 
-  const organizeFiles = async (suggestion: FolderSuggestion) => {
+  const organizeFiles = async (suggestion: FolderSuggestion & { files?: string[] }) => {
     setIsOrganizing(true)
     try {
       const response = await fetch("/api/vex/organize-files", {
@@ -92,7 +146,7 @@ export function VexFolderOrganizer({ selectedFiles, onOrganizeComplete, userToke
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          fileIds: selectedFiles,
+          fileIds: suggestion.files || selectedFiles,
           targetFolderId: suggestion.folderId,
           reason: `Vex AI suggestion: ${suggestion.reason}`,
         }),
@@ -167,21 +221,36 @@ export function VexFolderOrganizer({ selectedFiles, onOrganizeComplete, userToke
             <h4 className="text-sm font-medium text-white">Vex Suggestions:</h4>
             {suggestions.map((suggestion, index) => (
               <div key={index} className="flex items-center justify-between p-3 bg-zinc-800 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <Folder className="h-4 w-4 text-blue-400" />
-                  <div>
-                    <p className="text-sm font-medium text-white">{suggestion.folderName}</p>
-                    <p className="text-xs text-zinc-400">{suggestion.reason}</p>
+                <div className="flex items-center gap-3 flex-1">
+                  <Folder className="h-4 w-4 text-blue-400 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-white">{suggestion.folderName}</p>
+                      {suggestion.usedTranscript && (
+                        <Badge variant="default" className="bg-purple-600 text-xs">
+                          <Sparkles className="h-3 w-3 mr-1" />
+                          Transcript
+                        </Badge>
+                      )}
+                      <Badge
+                        variant={
+                          suggestion.confidence === "very_high" || suggestion.confidence === "high"
+                            ? "default"
+                            : "secondary"
+                        }
+                        className="text-xs"
+                      >
+                        {suggestion.confidence.replace("_", " ")}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-zinc-400 mt-1 truncate">{suggestion.reason}</p>
                   </div>
-                  <Badge variant={suggestion.confidence === "high" ? "default" : "secondary"}>
-                    {suggestion.confidence}
-                  </Badge>
                 </div>
                 <Button
                   size="sm"
-                  onClick={() => organizeFiles(suggestion)}
+                  onClick={() => organizeFiles(suggestion as any)}
                   disabled={isOrganizing}
-                  className="bg-green-600 hover:bg-green-700"
+                  className="bg-green-600 hover:bg-green-700 ml-2 flex-shrink-0"
                 >
                   {isOrganizing ? (
                     <Bot className="h-4 w-4 animate-spin" />
