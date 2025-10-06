@@ -12,6 +12,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { useUserPlan } from "@/hooks/use-user-plan"
 import { doc, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
+import TrialBadge from "@/components/trial-badge"
 
 interface DashboardHeaderProps {
   initialSearchQuery?: string
@@ -129,6 +130,10 @@ export default function DashboardHeader({ initialSearchQuery = "" }: DashboardHe
 
           {/* Right Section */}
           <div className="flex items-center gap-2">
+            <div className="hidden md:block">
+              <TrialBadge />
+            </div>
+
             <div className="flex items-center gap-1 md:hidden">
               <Button
                 onClick={() => router.push("/dashboard/upload")}
@@ -234,6 +239,10 @@ export default function DashboardHeader({ initialSearchQuery = "" }: DashboardHe
         <div className="md:hidden border-t border-zinc-800/50">
           <div className="container mx-auto px-4 py-4">
             <div className="mb-4 space-y-3">
+              <div className="flex justify-center">
+                <TrialBadge />
+              </div>
+
               {/* PRO Badge - rectangular with curved ends */}
               {isProUser && (
                 <div className="flex justify-center">
