@@ -1,9 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getAuth } from "firebase-admin/auth"
 import { initializeApp, getApps, cert } from "firebase-admin/app"
+import { getFirestore } from "firebase-admin/firestore"
 import { getMembership } from "@/lib/memberships-service"
-import { db } from "@/lib/firebase"
-import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore"
 
 if (!getApps().length) {
   const serviceAccount = {
@@ -68,8 +67,8 @@ export async function GET(request: NextRequest) {
 
     if (checkType === "create") {
       try {
-        const bundlesQuery = query(collection(db, "productBoxes"), where("creatorId", "==", userId))
-        const bundlesSnapshot = await getDocs(bundlesQuery)
+        const db = getFirestore()
+        const bundlesSnapshot = await db.collection("productBoxes").where("creatorId", "==", userId).get()
         const currentBundleCount = bundlesSnapshot.size
 
         const maxAllowed = isCreatorPro ? Number.POSITIVE_INFINITY : 2
@@ -105,14 +104,15 @@ export async function GET(request: NextRequest) {
 
       if (bundleId) {
         try {
-          const bundleDoc = await getDoc(doc(db, "productBoxes", bundleId))
+          const db = getFirestore()
+          const bundleDoc = await db.collection("productBoxes").doc(bundleId).get()
 
-          if (!bundleDoc.exists()) {
+          if (!bundleDoc.exists) {
             return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
           }
 
           const bundleData = bundleDoc.data()
-          const currentVideoCount = bundleData.contentItems?.length || 0
+          const currentVideoCount = bundleData?.contentItems?.length || 0
           const canAdd = isCreatorPro || currentVideoCount < 10
 
           return NextResponse.json({
