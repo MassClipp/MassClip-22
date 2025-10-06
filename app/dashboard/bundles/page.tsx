@@ -110,6 +110,7 @@ export default function BundlesPage() {
 
   const bundleLimit = isProUser ? Number.POSITIVE_INFINITY : freeTierLimits?.bundlesLimit || 2
   const isAtBundleLimit = !isProUser && productBoxes.length >= bundleLimit
+  // </CHANGE>
 
   const [availableUploads, setAvailableUploads] = useState<ContentItem[]>([])
   const [showAddContentModal, setShowAddContentModal] = useState<string | null>(null)
@@ -1098,6 +1099,7 @@ export default function BundlesPage() {
                   {productBoxes.length}/{isProUser ? "∞" : bundleLimit}
                 </span>
               </h1>
+              {/* </CHANGE> */}
               <p className="text-zinc-400 text-sm">Create and manage premium content packages for your audience</p>
             </div>
 
@@ -1106,16 +1108,18 @@ export default function BundlesPage() {
                 {/* Make the Create Bundle button clickable and redirect to upgrade when at limit */}
                 <Button
                   onClick={() => {
-                    if (productBoxes.length >= bundleLimit) {
+                    if (!isProUser && productBoxes.length >= bundleLimit) {
                       router.push("/dashboard/upgrade")
                     } else {
                       setShowCreateModal(true)
                     }
+                    // </CHANGE>
                   }}
                   className="bg-white text-black hover:bg-zinc-200"
                 >
                   <Plus className="h-4 w-4 mr-2" />
-                  {productBoxes.length >= bundleLimit ? "Want more bundles?" : "Create Bundle"}
+                  {!isProUser && productBoxes.length >= bundleLimit ? "Want more bundles?" : "Create Bundle"}
+                  {/* </CHANGE> */}
                 </Button>
               </DialogTrigger>
               <DialogContent className="bg-zinc-900 border-zinc-800 text-white">
@@ -1298,16 +1302,18 @@ export default function BundlesPage() {
               {/* Update the empty state button to redirect to upgrade when at limit */}
               <Button
                 onClick={() => {
-                  if (productBoxes.length >= bundleLimit) {
+                  if (!isProUser && productBoxes.length >= bundleLimit) {
                     router.push("/dashboard/upgrade")
                   } else {
                     setShowCreateModal(true)
                   }
+                  // </CHANGE>
                 }}
                 className="bg-white text-black hover:bg-zinc-200"
               >
                 <Plus className="h-4 w-4 mr-2" />
-                {productBoxes.length >= bundleLimit ? "Want more bundles?" : "Create Your First Bundle"}
+                {!isProUser && productBoxes.length >= bundleLimit ? "Want more bundles?" : "Create Your First Bundle"}
+                {/* </CHANGE> */}
               </Button>
             </div>
           ) : (
