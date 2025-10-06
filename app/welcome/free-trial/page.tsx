@@ -26,11 +26,14 @@ export default function FreeTrialPage() {
     console.log("[v0] Starting free trial for user:", user?.uid)
     setStartingTrial(true)
     try {
+      const idToken = await user?.getIdToken()
+
       // Call API to start free trial
       const response = await fetch("/api/trial/start", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
         },
       })
 
@@ -45,7 +48,7 @@ export default function FreeTrialPage() {
 
       // Redirect to dashboard
       console.log("[v0] Redirecting to /dashboard/vex")
-      router.push("/dashboard/vex")
+      window.location.href = "/dashboard/vex"
     } catch (error) {
       console.error("[v0] Error starting trial:", error)
       setStartingTrial(false)
