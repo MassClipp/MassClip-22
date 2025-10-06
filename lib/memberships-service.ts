@@ -54,20 +54,30 @@ export async function getMembership(uid: string): Promise<MembershipDoc | null> 
   try {
     console.log("🔄 Getting membership for uid:", uid.substring(0, 8) + "...")
 
-    const { getStripeSubscriptionStatus } = await import("./stripe-subscription-service")
-    const stripeStatus = await getStripeSubscriptionStatus(uid)
-
-    // If Stripe says the subscription is inactive, return null (free user)
-    if (!stripeStatus.isActive) {
-      console.log("ℹ️ Stripe subscription inactive - user is free tier")
-      return null
-    }
-
     const docRef = adminDb.collection("memberships").doc(uid)
     const docSnap = await docRef.get()
 
     if (docSnap.exists) {
       const data = docSnap.data() as MembershipDoc
+
+      if (data.status === "trialing") {
+        console.log("✅ Found trialing membership (no Stripe validation needed):", {
+          plan: data.plan,
+          status: data.status,
+          isActive: data.isActive,
+        })
+        return data
+      }
+
+      // For non-trial memberships, validate with Stripe
+      const { getStripeSubscriptionStatus } = await import("./stripe-subscription-service")
+      const stripeStatus = await getStripeSubscriptionStatus(uid)
+
+      // If Stripe says the subscription is inactive, return null (free user)
+      if (!stripeStatus.isActive) {
+        console.log("ℹ️ Stripe subscription inactive - user is free tier")
+        return null
+      }
 
       const updatedData = {
         ...data,
@@ -229,3 +239,5 @@ export async function deleteMembership(uid: string): Promise<void> {
   await adminDb.collection("memberships").doc(uid).delete()
   console.log(`✅ Deleted membership record for user: ${uid}`)
 }
+
+// Additional updates can be added here if necessary
