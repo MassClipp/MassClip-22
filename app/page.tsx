@@ -158,11 +158,11 @@ const LandingPage = () => {
       <section className="relative z-10 py-12 px-6 bg-white">
         <div className="max-w-6xl mx-auto">
           <div className="scroll-animate">
-            <h2 className="text-3xl lg:text-4xl font-thin text-black text-center mb-8">What Does Vex Do?</h2>
+            <h2 className="text-4xl lg:text-5xl font-thin text-black text-center mb-8">What Does Vex Do?</h2>
 
             <div className="flex flex-col lg:flex-row gap-8 items-center">
               <div className="flex-1">
-                <p className="text-base lg:text-lg text-gray-700 leading-relaxed font-light">
+                <p className="text-lg lg:text-xl text-gray-700 leading-relaxed font-light">
                   Simply upload your content, tell Vex what kind of bundles you want to sell, and watch as Vex
                   intelligently organizes your content into professional, sellable bundles ready for market in seconds.
                   No more manual sorting, no more messy file management, just streamlined content monetization.
