@@ -26,18 +26,24 @@ async function getAuthUser(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    console.log("[v0] Trial start API called")
+
     // Get authenticated user
     const authUser = await getAuthUser(request)
     if (!authUser) {
+      console.log("[v0] No auth user found")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const uid = authUser.uid
     const email = authUser.email || null
+    console.log("[v0] Starting trial for user:", { uid, email })
 
     const trialEndDate = new Date()
     trialEndDate.setDate(trialEndDate.getDate() + 3)
+    console.log("[v0] Trial end date:", trialEndDate.toISOString())
 
+    // Create membership record
     const membershipData = {
       uid,
       email,
@@ -60,9 +66,19 @@ export async function POST(request: NextRequest) {
       updatedAt: FieldValue.serverTimestamp(),
     }
 
+    console.log("[v0] Creating membership record...")
     await db.collection("memberships").doc(uid).set(membershipData)
+    console.log("[v0] Membership record created successfully")
+
+    // Verify membership was created
+    const membershipCheck = await db.collection("memberships").doc(uid).get()
+    console.log("[v0] Membership verification:", {
+      exists: membershipCheck.exists,
+      data: membershipCheck.data(),
+    })
 
     // Update user document with trial information
+    console.log("[v0] Updating users collection...")
     const userRef = db.collection("users").doc(uid)
     await userRef.set(
       {
@@ -75,10 +91,20 @@ export async function POST(request: NextRequest) {
       },
       { merge: true },
     )
+    console.log("[v0] Users collection updated")
+
+    // Verify user update
+    const userCheck = await userRef.get()
+    console.log("[v0] User verification:", {
+      exists: userCheck.exists,
+      data: userCheck.data(),
+    })
 
     // Update or create freeUsers document with Creator Pro permissions during trial
+    console.log("[v0] Updating freeUsers collection...")
     const freeUserRef = db.collection("freeUsers").doc(uid)
     const freeUserDoc = await freeUserRef.get()
+    console.log("[v0] FreeUser exists:", freeUserDoc.exists)
 
     if (freeUserDoc.exists) {
       await freeUserRef.update({
@@ -90,6 +116,7 @@ export async function POST(request: NextRequest) {
         canCreateSubfolders: true,
         updatedAt: new Date(),
       })
+      console.log("[v0] FreeUser updated")
     } else {
       await freeUserRef.set({
         uid: uid,
@@ -105,16 +132,35 @@ export async function POST(request: NextRequest) {
         createdAt: new Date(),
         updatedAt: new Date(),
       })
+      console.log("[v0] FreeUser created")
     }
 
-    console.log(`✅ Started 3-day trial for user ${uid}`)
+    // Verify freeUser update
+    const freeUserCheck = await freeUserRef.get()
+    console.log("[v0] FreeUser verification:", {
+      exists: freeUserCheck.exists,
+      data: freeUserCheck.data(),
+    })
+
+    console.log(`[v0] ✅ Started 3-day trial for user ${uid}`)
 
     return NextResponse.json({
       success: true,
       trialEndDate: trialEndDate.toISOString(),
+      debug: {
+        membershipCreated: membershipCheck.exists,
+        userUpdated: userCheck.exists,
+        freeUserUpdated: freeUserCheck.exists,
+      },
     })
   } catch (error) {
-    console.error("Error starting trial:", error)
-    return NextResponse.json({ error: "Failed to start trial" }, { status: 500 })
+    console.error("[v0] Error starting trial:", error)
+    return NextResponse.json(
+      {
+        error: "Failed to start trial",
+        details: error instanceof Error ? error.message : String(error),
+      },
+      { status: 500 },
+    )
   }
 }

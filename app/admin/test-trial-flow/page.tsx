@@ -69,9 +69,10 @@ export default function TestTrialFlowPage() {
         data: trialData,
       })
 
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+
       // Step 3: Verify permissions
       updateStep(2, { status: "running", message: "Checking trial permissions..." })
-      await new Promise((resolve) => setTimeout(resolve, 1000))
 
       const permissionsResponse = await fetch(`/api/user/trial-status`, {
         headers: {
@@ -90,9 +91,16 @@ export default function TestTrialFlowPage() {
         data: permissionsData,
       })
 
-      // Step 4: Check database records
+      // Step 4: Check database records directly
       updateStep(3, { status: "running", message: "Verifying database records..." })
-      await new Promise((resolve) => setTimeout(resolve, 500))
+
+      const membershipResponse = await fetch(`/api/debug/check-membership?userId=${user.uid}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+      const membershipData = await membershipResponse.json()
+      console.log("[v0] Membership check:", membershipData)
 
       // Check if user document was updated
       const userCheckResponse = await fetch(`/api/debug/user-bundle-data?userId=${user.uid}`)
@@ -109,6 +117,7 @@ export default function TestTrialFlowPage() {
           ? "Database records updated correctly"
           : "Database records missing trial permissions",
         data: {
+          membership: membershipData,
           freeUser: userCheckData.processedData?.freeUser,
           user: userCheckData.processedData?.user,
         },
@@ -120,6 +129,7 @@ export default function TestTrialFlowPage() {
         updateStep(currentStep, {
           status: "error",
           message: error.message,
+          data: { error: error.toString(), stack: error.stack },
         })
       }
     } finally {
