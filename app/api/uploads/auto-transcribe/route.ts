@@ -41,8 +41,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Upload ID and video URL required" }, { status: 400 })
     }
 
-    if (!mimeType?.startsWith("video/")) {
-      console.log("⏭️ [Auto-Transcribe] Skipping non-video")
+    if (!mimeType?.startsWith("video/") && !mimeType?.startsWith("audio/")) {
+      console.log("⏭️ [Auto-Transcribe] Skipping non-video/audio file")
       return NextResponse.json({ success: true, skipped: true })
     }
 

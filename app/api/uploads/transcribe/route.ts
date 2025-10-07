@@ -40,10 +40,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
     }
 
-    // Check if it's a video
     const mimeType = uploadData?.mimeType || uploadData?.type || ""
-    if (!mimeType.startsWith("video/")) {
-      return NextResponse.json({ error: "Only videos can be transcribed" }, { status: 400 })
+    if (!mimeType.startsWith("video/") && !mimeType.startsWith("audio/")) {
+      return NextResponse.json({ error: "Only videos and audio files can be transcribed" }, { status: 400 })
     }
 
     // Check if already transcribed
@@ -56,15 +55,15 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    const videoUrl = uploadData?.url || uploadData?.downloadURL
-    if (!videoUrl) {
-      return NextResponse.json({ error: "Video URL not found" }, { status: 400 })
+    const mediaUrl = uploadData?.url || uploadData?.downloadURL
+    if (!mediaUrl) {
+      return NextResponse.json({ error: "Media URL not found" }, { status: 400 })
     }
 
-    console.log(`🎙️ [Transcribe] Transcribing video...`)
+    console.log(`🎙️ [Transcribe] Transcribing ${mimeType.startsWith("video/") ? "video" : "audio"}...`)
 
     // Transcribe with Groq
-    const result = await transcribeVideo(videoUrl)
+    const result = await transcribeVideo(mediaUrl)
 
     console.log(`✅ [Transcribe] Transcription complete: ${result.text.length} characters`)
 

@@ -239,8 +239,8 @@ export async function POST(request: NextRequest) {
       const docRef = await db.collection("uploads").add(metadata)
       console.log(`✅ [Uploads API] Upload record created with ID: ${docRef.id}`)
 
-      if (contentType === "video") {
-        console.log(`🎤 [Uploads API] Triggering transcription for video: ${docRef.id}`)
+      if (contentType === "video" || contentType === "audio") {
+        console.log(`🎤 [Uploads API] Triggering transcription for ${contentType}: ${docRef.id}`)
 
         // Trigger transcription asynchronously (don't wait for it)
         transcribeVideo(publicURL)
