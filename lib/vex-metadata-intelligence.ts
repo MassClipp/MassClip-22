@@ -238,6 +238,8 @@ function analyzeFolderOrigin(folderName: string | null | undefined): {
     mindset: ["mindset", "mental", "psychology", "thinking", "philosophy"],
     broll: ["broll", "b-roll", "footage", "cinematic", "stock"],
     "background-videos": ["background", "backdrop", "loop", "animated background"],
+    faith: ["faith", "spiritual", "religion", "church", "bible"],
+    money: ["money", "wealth", "financial", "income", "profit"],
   }
 
   for (const [niche, keywords] of Object.entries(nicheKeywords)) {
@@ -287,7 +289,7 @@ function analyzeTranscript(transcript: string | undefined): {
   const faithKeywords: string[] = []
   let isFaithBased = false
 
-  // Faith/Spiritual keyword bank (comprehensive)
+  // Only keeping explicitly religious/spiritual terms to prevent false positives on business/motivation content
   const faithKeywordBank = [
     // Core Christian terms
     "jesus",
@@ -295,8 +297,8 @@ function analyzeTranscript(transcript: string | undefined): {
     "god",
     "lord",
     "holy spirit",
-    "father",
-    "son",
+    "father in heaven",
+    "son of god",
     "trinity",
     "savior",
     "messiah",
@@ -307,12 +309,13 @@ function analyzeTranscript(transcript: string | undefined): {
     "salvation",
     "grace",
     "mercy",
-    "faith",
+    "faith in god",
     "prayer",
     "worship",
-    "praise",
+    "praise god",
+    "praise the lord",
     "blessing",
-    "blessed",
+    "blessed by god",
     "amen",
     "hallelujah",
     // Christian life
@@ -327,15 +330,14 @@ function analyzeTranscript(transcript: string | undefined): {
     "preacher",
     "sermon",
     // Spiritual concepts
-    "spiritual",
-    "spirituality",
+    "spiritual warfare", // Keep this specific phrase
     "soul",
-    "spirit",
+    "spirit of god",
     "heaven",
-    "eternal",
+    "eternal life",
     "eternity",
     "redemption",
-    "forgiveness",
+    "forgiveness of sins",
     "repentance",
     "sin",
     "righteousness",
@@ -343,8 +345,8 @@ function analyzeTranscript(transcript: string | undefined): {
     // Biblical events/concepts
     "resurrection",
     "crucifixion",
-    "cross",
-    "sacrifice",
+    "cross of christ",
+    "sacrifice of jesus",
     "covenant",
     "prophecy",
     "revelation",
@@ -355,32 +357,43 @@ function analyzeTranscript(transcript: string | undefined): {
     "communion",
     "eucharist",
     "testimony",
-    "witness",
+    "witness for christ",
     "evangelism",
     "mission",
     "missionary",
-    // Rebellion/spiritual warfare (specific to user's content)
-    "rebellion",
-    "spiritual warfare",
-    "enemy",
+    // Spiritual warfare (specific phrases only)
+    "armor of god",
     "devil",
     "satan",
     "demon",
-    "temptation",
-    "overcome",
-    "victory",
-    "armor of god",
+    "demonic",
+    // Other religions (for broader faith detection)
+    "allah",
+    "quran",
+    "koran",
+    "muslim",
+    "islam",
+    "buddhist",
+    "buddha",
+    "hindu",
+    "meditation on god",
+    "divine",
   ]
 
   // Check for faith keywords
   for (const keyword of faithKeywordBank) {
     if (lowerTranscript.includes(keyword)) {
       faithKeywords.push(keyword)
-      isFaithBased = true
     }
   }
 
-  // Motivation/Mindset themes
+  const veryExplicitKeywords = ["jesus", "christ", "god", "lord", "bible", "scripture", "prayer", "worship", "church"]
+  const hasVeryExplicitKeyword = faithKeywords.some((kw) => veryExplicitKeywords.includes(kw))
+
+  if (faithKeywords.length >= 2 || (faithKeywords.length >= 1 && hasVeryExplicitKeyword)) {
+    isFaithBased = true
+  }
+
   const motivationKeywords = [
     "work hard",
     "hustle",
@@ -398,10 +411,11 @@ function analyzeTranscript(transcript: string | undefined): {
     "excellence",
     "champion",
     "winner",
-    "overcome",
     "challenge",
     "opportunity",
     "mindset",
+    "push yourself",
+    "never give up",
   ]
 
   let motivationScore = 0
@@ -443,6 +457,36 @@ function analyzeTranscript(transcript: string | undefined): {
     themes.push("sports")
   }
 
+  const moneyKeywords = [
+    "money",
+    "wealth",
+    "rich",
+    "financial",
+    "income",
+    "profit",
+    "cash",
+    "millionaire",
+    "billionaire",
+    "broke",
+    "poor",
+    "expensive",
+    "cheap",
+    "afford",
+    "pay",
+    "earn",
+  ]
+
+  let moneyScore = 0
+  for (const keyword of moneyKeywords) {
+    if (lowerTranscript.includes(keyword)) {
+      moneyScore++
+    }
+  }
+
+  if (moneyScore >= 3) {
+    themes.push("money")
+  }
+
   // Business/Entrepreneurship themes
   const businessKeywords = [
     "business",
@@ -474,10 +518,14 @@ function analyzeTranscript(transcript: string | undefined): {
   let likelyNiche: string | null = null
   let confidence = 0
 
+  // This makes the LLM's natural understanding more important than keyword matching
   if (isFaithBased) {
     likelyNiche = "faith"
-    confidence = 0.95 // Very high confidence if faith keywords are present
+    confidence = 0.85
     themes.push("faith")
+  } else if (moneyScore >= 5) {
+    likelyNiche = "money"
+    confidence = 0.85
   } else if (motivationScore >= 5) {
     likelyNiche = "motivation"
     confidence = 0.85
@@ -487,6 +535,9 @@ function analyzeTranscript(transcript: string | undefined): {
   } else if (businessScore >= 5) {
     likelyNiche = "business"
     confidence = 0.8
+  } else if (moneyScore >= 3) {
+    likelyNiche = "money"
+    confidence = 0.6
   } else if (motivationScore >= 3) {
     likelyNiche = "motivation"
     confidence = 0.6
@@ -531,12 +582,13 @@ export function analyzeMetadata(metadata: FileMetadata, existingFolders: string[
     faith: 0,
     sports: 0,
     business: 0,
+    money: 0, // Added money as a category
   }
 
   const transcriptAnalysis = analyzeTranscript(metadata.transcript)
   if (transcriptAnalysis.likelyNiche) {
     evidence.push(`📜 ${transcriptAnalysis.evidence}`)
-    scores[transcriptAnalysis.likelyNiche] += transcriptAnalysis.confidence * 50 // Transcript is MOST important
+    scores[transcriptAnalysis.likelyNiche] += transcriptAnalysis.confidence * 30
   } else if (metadata.transcript) {
     evidence.push(`📜 Transcript available but no clear niche detected`)
   }
