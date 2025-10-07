@@ -88,16 +88,29 @@ export function SignupForm() {
         },
       })
 
+      console.log("[v0] Trial check response status:", trialCheckResponse.status)
+
       let shouldRedirectToTrial = true
       if (trialCheckResponse.ok) {
         const trialData = await trialCheckResponse.json()
+        console.log("[v0] Trial data received:", trialData)
         if (trialData.hasUsedFreeTrial || trialData.isOnTrial || trialData.hasActiveCreatorPro) {
+          console.log("[v0] User not eligible for trial:", {
+            hasUsedFreeTrial: trialData.hasUsedFreeTrial,
+            isOnTrial: trialData.isOnTrial,
+            hasActiveCreatorPro: trialData.hasActiveCreatorPro,
+          })
           shouldRedirectToTrial = false
+        } else {
+          console.log("[v0] User IS eligible for trial")
         }
+      } else {
+        console.log("[v0] Trial check failed, response not ok")
       }
 
       createServerSideRecords(userCredential.user)
 
+      console.log("[v0] Should redirect to trial?", shouldRedirectToTrial)
       if (shouldRedirectToTrial) {
         console.log("[v0] Redirecting to free trial page...")
         window.location.href = "/welcome/free-trial"
@@ -136,16 +149,29 @@ export function SignupForm() {
         },
       })
 
+      console.log("[v0] Google - Trial check response status:", trialCheckResponse.status)
+
       let shouldRedirectToTrial = true
       if (trialCheckResponse.ok) {
         const trialData = await trialCheckResponse.json()
+        console.log("[v0] Google - Trial data received:", trialData)
         if (trialData.hasUsedFreeTrial || trialData.isOnTrial || trialData.hasActiveCreatorPro) {
+          console.log("[v0] Google - User not eligible for trial:", {
+            hasUsedFreeTrial: trialData.hasUsedFreeTrial,
+            isOnTrial: trialData.isOnTrial,
+            hasActiveCreatorPro: trialData.hasActiveCreatorPro,
+          })
           shouldRedirectToTrial = false
+        } else {
+          console.log("[v0] Google - User IS eligible for trial")
         }
+      } else {
+        console.log("[v0] Google - Trial check failed, response not ok")
       }
 
       createServerSideRecords(result.user)
 
+      console.log("[v0] Google - Should redirect to trial?", shouldRedirectToTrial)
       if (shouldRedirectToTrial) {
         console.log("[v0] Redirecting to free trial page...")
         window.location.href = "/welcome/free-trial"
