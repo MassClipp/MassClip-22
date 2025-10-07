@@ -289,7 +289,6 @@ function analyzeTranscript(transcript: string | undefined): {
   const faithKeywords: string[] = []
   let isFaithBased = false
 
-  // Only keeping explicitly religious/spiritual terms to prevent false positives on business/motivation content
   const faithKeywordBank = [
     // Core Christian terms
     "jesus",
@@ -330,7 +329,7 @@ function analyzeTranscript(transcript: string | undefined): {
     "preacher",
     "sermon",
     // Spiritual concepts
-    "spiritual warfare", // Keep this specific phrase
+    "spiritual warfare",
     "soul",
     "spirit of god",
     "heaven",
@@ -367,7 +366,7 @@ function analyzeTranscript(transcript: string | undefined): {
     "satan",
     "demon",
     "demonic",
-    // Other religions (for broader faith detection)
+    // Other religions
     "allah",
     "quran",
     "koran",
@@ -395,27 +394,26 @@ function analyzeTranscript(transcript: string | undefined): {
   }
 
   const motivationKeywords = [
-    "work hard",
-    "hustle",
-    "grind",
-    "success",
-    "achieve",
-    "goal",
-    "dream",
+    "motivational speech",
+    "inspirational",
+    "work ethic",
+    "hustle culture",
+    "grind mentality",
+    "success mindset",
+    "achieve your dreams",
+    "goal setting",
     "ambition",
     "dedication",
     "perseverance",
-    "discipline",
-    "focus",
+    "discipline yourself",
+    "stay focused",
     "commitment",
     "excellence",
-    "champion",
-    "winner",
-    "challenge",
-    "opportunity",
-    "mindset",
-    "push yourself",
+    "champion mindset",
     "never give up",
+    "keep pushing",
+    "stay hungry",
+    "relentless",
   ]
 
   let motivationScore = 0
@@ -425,25 +423,29 @@ function analyzeTranscript(transcript: string | undefined): {
     }
   }
 
-  if (motivationScore >= 3) {
+  if (motivationScore >= 4) {
     themes.push("motivation")
   }
 
-  // Sports/Athletic themes
   const sportsKeywords = [
-    "game",
-    "play",
-    "team",
-    "coach",
     "athlete",
-    "training",
-    "practice",
+    "athletic performance",
+    "training camp",
+    "practice session",
     "competition",
     "championship",
-    "season",
-    "ball",
-    "field",
-    "court",
+    "playoff",
+    "tournament",
+    "game day",
+    "sports team",
+    "coaching staff",
+    "locker room",
+    "stadium",
+    "arena",
+    "field goal",
+    "touchdown",
+    "home run",
+    "slam dunk",
   ]
 
   let sportsScore = 0
@@ -453,27 +455,27 @@ function analyzeTranscript(transcript: string | undefined): {
     }
   }
 
-  if (sportsScore >= 3) {
+  if (sportsScore >= 4) {
     themes.push("sports")
   }
 
   const moneyKeywords = [
-    "money",
-    "wealth",
-    "rich",
-    "financial",
-    "income",
-    "profit",
-    "cash",
-    "millionaire",
+    "make money",
+    "earn money",
+    "financial freedom",
+    "wealth building",
+    "get rich",
+    "millionaire mindset",
     "billionaire",
-    "broke",
-    "poor",
-    "expensive",
-    "cheap",
-    "afford",
-    "pay",
-    "earn",
+    "passive income",
+    "cash flow",
+    "net worth",
+    "broke mentality",
+    "financial literacy",
+    "money management",
+    "investment strategy",
+    "portfolio",
+    "assets",
   ]
 
   let moneyScore = 0
@@ -483,24 +485,25 @@ function analyzeTranscript(transcript: string | undefined): {
     }
   }
 
-  if (moneyScore >= 3) {
+  if (moneyScore >= 4) {
     themes.push("money")
   }
 
-  // Business/Entrepreneurship themes
   const businessKeywords = [
-    "business",
+    "start a business",
     "entrepreneur",
-    "startup",
-    "company",
-    "market",
-    "customer",
-    "revenue",
-    "profit",
-    "investment",
-    "strategy",
-    "growth",
-    "scale",
+    "entrepreneurship",
+    "startup founder",
+    "business model",
+    "business strategy",
+    "market share",
+    "customer acquisition",
+    "revenue stream",
+    "profit margin",
+    "business growth",
+    "scale your business",
+    "venture capital",
+    "angel investor",
   ]
 
   let businessScore = 0
@@ -510,37 +513,35 @@ function analyzeTranscript(transcript: string | undefined): {
     }
   }
 
-  if (businessScore >= 3) {
+  if (businessScore >= 4) {
     themes.push("business")
   }
 
-  // Determine niche based on transcript analysis
   let likelyNiche: string | null = null
   let confidence = 0
 
-  // This makes the LLM's natural understanding more important than keyword matching
   if (isFaithBased) {
     likelyNiche = "faith"
     confidence = 0.85
     themes.push("faith")
-  } else if (moneyScore >= 5) {
+  } else if (moneyScore >= 6) {
     likelyNiche = "money"
-    confidence = 0.85
-  } else if (motivationScore >= 5) {
+    confidence = 0.8
+  } else if (motivationScore >= 6) {
     likelyNiche = "motivation"
-    confidence = 0.85
-  } else if (sportsScore >= 5) {
+    confidence = 0.8
+  } else if (sportsScore >= 6) {
     likelyNiche = "sports"
-    confidence = 0.8
-  } else if (businessScore >= 5) {
+    confidence = 0.75
+  } else if (businessScore >= 6) {
     likelyNiche = "business"
-    confidence = 0.8
-  } else if (moneyScore >= 3) {
+    confidence = 0.75
+  } else if (moneyScore >= 4) {
     likelyNiche = "money"
-    confidence = 0.6
-  } else if (motivationScore >= 3) {
+    confidence = 0.5
+  } else if (motivationScore >= 4) {
     likelyNiche = "motivation"
-    confidence = 0.6
+    confidence = 0.5
   }
 
   const transcriptLength = transcript.length
