@@ -95,6 +95,8 @@ function VexChat({ children }: VexChatProps) {
     plan: string
     isActive: boolean
   } | null>(null)
+  const [isLoadingTrialStatus, setIsLoadingTrialStatus] = useState(true)
+  const [isLoadingMembershipStatus, setIsLoadingMembershipStatus] = useState(true)
 
   // State for suggestions
   const [currentSuggestions, setCurrentSuggestions] = useState<string[]>([])
@@ -728,6 +730,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
     const fetchTrialStatus = async () => {
       if (!user) return
 
+      setIsLoadingTrialStatus(true)
       try {
         const token = await user.getIdToken()
         const response = await fetch("/api/user/trial-status", {
@@ -742,6 +745,8 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
         }
       } catch (error) {
         console.error("Error fetching trial status:", error)
+      } finally {
+        setIsLoadingTrialStatus(false)
       }
     }
 
@@ -754,6 +759,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
     const fetchMembershipStatus = async () => {
       if (!user) return
 
+      setIsLoadingMembershipStatus(true)
       try {
         const token = await user.getIdToken()
         const response = await fetch("/api/membership-status", {
@@ -771,6 +777,8 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
         }
       } catch (error) {
         console.error("Error fetching membership status:", error)
+      } finally {
+        setIsLoadingMembershipStatus(false)
       }
     }
 
@@ -1009,7 +1017,9 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                           left
                         </Badge>
                       </div>
-                    ) : !trialStatus?.hasUsedFreeTrial &&
+                    ) : !isLoadingTrialStatus &&
+                      !isLoadingMembershipStatus &&
+                      !trialStatus?.hasUsedFreeTrial &&
                       !(membershipStatus?.plan === "creator_pro" && membershipStatus?.isActive) ? (
                       <div className="mb-2">
                         <Button
@@ -1224,7 +1234,9 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                         Free Trial: {trialStatus.daysRemaining} {trialStatus.daysRemaining === 1 ? "day" : "days"} left
                       </Badge>
                     </div>
-                  ) : !trialStatus?.hasUsedFreeTrial &&
+                  ) : !isLoadingTrialStatus &&
+                    !isLoadingMembershipStatus &&
+                    !trialStatus?.hasUsedFreeTrial &&
                     !(membershipStatus?.plan === "creator_pro" && membershipStatus?.isActive) ? (
                     <div className="mb-2">
                       <Button

@@ -39,8 +39,24 @@ export async function POST(request: NextRequest) {
     const email = authUser.email || null
     console.log("[v0] Starting trial for user:", { uid, email })
 
+    const membershipRef = db.collection("memberships").doc(uid)
+    const membershipDoc = await membershipRef.get()
+
+    if (membershipDoc.exists) {
+      const membershipData = membershipDoc.data()
+      if (membershipData?.plan === "creator_pro" && membershipData?.isActive === true) {
+        console.log("[v0] User is already a Creator Pro member")
+        return NextResponse.json({ error: "You are already a Creator Pro member. No trial needed!" }, { status: 400 })
+      }
+    }
+
     const freeUserRef = db.collection("freeUsers").doc(uid)
     const freeUserDoc = await freeUserRef.get()
+
+    if (freeUserDoc.exists && freeUserDoc.data()?.trialActive === true) {
+      console.log("[v0] User is already on an active trial")
+      return NextResponse.json({ error: "You already have an active trial" }, { status: 400 })
+    }
 
     if (freeUserDoc.exists && freeUserDoc.data()?.hasUsedFreeTrial === true) {
       console.log("[v0] User has already used their free trial")
@@ -115,6 +131,7 @@ export async function POST(request: NextRequest) {
     if (freeUserDoc.exists) {
       await freeUserRef.update({
         trialActive: true,
+        trialStartDate: new Date(),
         trialEndDate: trialEndDate,
         hasUsedFreeTrial: true,
         canCreateBundles: true,

@@ -81,13 +81,37 @@ export function SignupForm() {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password)
       console.log("[v0] Firebase user created successfully:", userCredential.user.uid)
 
+      const idToken = await userCredential.user.getIdToken()
+      const trialCheckResponse = await fetch("/api/user/trial-status", {
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+        },
+      })
+
+      let shouldRedirectToTrial = true
+      if (trialCheckResponse.ok) {
+        const trialData = await trialCheckResponse.json()
+        if (trialData.hasUsedFreeTrial || trialData.isOnTrial) {
+          shouldRedirectToTrial = false
+        }
+      }
+
       createServerSideRecords(userCredential.user)
 
-      console.log("[v0] Redirecting to free trial page...")
-      window.location.href = "/welcome/free-trial"
+      if (shouldRedirectToTrial) {
+        console.log("[v0] Redirecting to free trial page...")
+        window.location.href = "/welcome/free-trial"
+      } else {
+        console.log("[v0] User already used trial, redirecting to dashboard...")
+        window.location.href = "/dashboard"
+      }
     } catch (error: any) {
       console.error("[v0] Email signup error:", error)
-      setError(error.message || "Failed to create account")
+      if (error.code === "auth/email-already-in-use") {
+        setError("This email is already registered. Please sign in instead.")
+      } else {
+        setError(error.message || "Failed to create account")
+      }
       setLoading(false)
     }
   }
@@ -105,10 +129,30 @@ export function SignupForm() {
       const result = await signInWithPopup(auth, provider)
       console.log("[v0] Google signup successful:", result.user.uid)
 
+      const idToken = await result.user.getIdToken()
+      const trialCheckResponse = await fetch("/api/user/trial-status", {
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+        },
+      })
+
+      let shouldRedirectToTrial = true
+      if (trialCheckResponse.ok) {
+        const trialData = await trialCheckResponse.json()
+        if (trialData.hasUsedFreeTrial || trialData.isOnTrial) {
+          shouldRedirectToTrial = false
+        }
+      }
+
       createServerSideRecords(result.user)
 
-      console.log("[v0] Redirecting to free trial page...")
-      window.location.href = "/welcome/free-trial"
+      if (shouldRedirectToTrial) {
+        console.log("[v0] Redirecting to free trial page...")
+        window.location.href = "/welcome/free-trial"
+      } else {
+        console.log("[v0] User already used trial, redirecting to dashboard...")
+        window.location.href = "/dashboard"
+      }
     } catch (error: any) {
       console.error("[v0] Google signup error:", error)
       if (error.code === "auth/popup-closed-by-user") {
