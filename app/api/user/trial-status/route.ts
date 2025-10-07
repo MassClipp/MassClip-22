@@ -25,16 +25,30 @@ export async function GET(req: NextRequest) {
     console.log("[v0] Trial Status - Membership data:", {
       exists: !!membership,
       status: membership?.status,
+      plan: membership?.plan,
       currentPeriodEnd: membership?.currentPeriodEnd,
       hasUsedFreeTrial,
     })
 
-    if (!membership || membership.status !== "trialing") {
+    const hasActiveCreatorPro = membership?.status === "active" && membership?.plan === "creator_pro"
+
+    if (!membership || (membership.status !== "trialing" && !hasActiveCreatorPro)) {
       return NextResponse.json({
         isOnTrial: false,
         daysRemaining: 0,
         trialEndDate: null,
         hasUsedFreeTrial,
+        hasActiveCreatorPro: false,
+      })
+    }
+
+    if (hasActiveCreatorPro) {
+      return NextResponse.json({
+        isOnTrial: false,
+        daysRemaining: 0,
+        trialEndDate: null,
+        hasUsedFreeTrial: true, // They've effectively "used" the trial by having active subscription
+        hasActiveCreatorPro: true,
       })
     }
 
@@ -60,6 +74,7 @@ export async function GET(req: NextRequest) {
       daysRemaining,
       isOnTrial: true,
       hasUsedFreeTrial,
+      hasActiveCreatorPro: false,
     })
 
     return NextResponse.json({
@@ -67,6 +82,7 @@ export async function GET(req: NextRequest) {
       daysRemaining: Math.max(0, daysRemaining),
       trialEndDate: trialEndDate,
       hasUsedFreeTrial,
+      hasActiveCreatorPro: false,
     })
   } catch (error) {
     console.error("[Trial Status] Error:", error)

@@ -91,7 +91,7 @@ export function SignupForm() {
       let shouldRedirectToTrial = true
       if (trialCheckResponse.ok) {
         const trialData = await trialCheckResponse.json()
-        if (trialData.hasUsedFreeTrial || trialData.isOnTrial) {
+        if (trialData.hasUsedFreeTrial || trialData.isOnTrial || trialData.hasActiveCreatorPro) {
           shouldRedirectToTrial = false
         }
       }
@@ -102,7 +102,7 @@ export function SignupForm() {
         console.log("[v0] Redirecting to free trial page...")
         window.location.href = "/welcome/free-trial"
       } else {
-        console.log("[v0] User already used trial, redirecting to dashboard...")
+        console.log("[v0] User already used trial or has Creator Pro, redirecting to dashboard...")
         window.location.href = "/dashboard"
       }
     } catch (error: any) {
@@ -139,7 +139,7 @@ export function SignupForm() {
       let shouldRedirectToTrial = true
       if (trialCheckResponse.ok) {
         const trialData = await trialCheckResponse.json()
-        if (trialData.hasUsedFreeTrial || trialData.isOnTrial) {
+        if (trialData.hasUsedFreeTrial || trialData.isOnTrial || trialData.hasActiveCreatorPro) {
           shouldRedirectToTrial = false
         }
       }
@@ -150,7 +150,7 @@ export function SignupForm() {
         console.log("[v0] Redirecting to free trial page...")
         window.location.href = "/welcome/free-trial"
       } else {
-        console.log("[v0] User already used trial, redirecting to dashboard...")
+        console.log("[v0] User already used trial or has Creator Pro, redirecting to dashboard...")
         window.location.href = "/dashboard"
       }
     } catch (error: any) {

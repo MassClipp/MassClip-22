@@ -10,8 +10,44 @@ export default function FreeTrialPage() {
   const router = useRouter()
   const { user, loading } = useAuth()
   const [startingTrial, setStartingTrial] = useState(false)
+  const [checkingEligibility, setCheckingEligibility] = useState(true)
 
   console.log("[v0] Free trial page loaded, user:", user?.uid, "loading:", loading)
+
+  useEffect(() => {
+    const checkTrialEligibility = async () => {
+      if (!user) return
+
+      try {
+        const idToken = await user.getIdToken()
+        const response = await fetch("/api/user/trial-status", {
+          headers: {
+            Authorization: `Bearer ${idToken}`,
+          },
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          console.log("[v0] Trial eligibility check:", data)
+
+          // If user has active Creator Pro or already used trial, redirect to dashboard
+          if (data.hasActiveCreatorPro || data.hasUsedFreeTrial || data.isOnTrial) {
+            console.log("[v0] User not eligible for trial, redirecting to dashboard")
+            router.push("/dashboard")
+            return
+          }
+        }
+      } catch (error) {
+        console.error("[v0] Error checking trial eligibility:", error)
+      } finally {
+        setCheckingEligibility(false)
+      }
+    }
+
+    if (!loading && user) {
+      checkTrialEligibility()
+    }
+  }, [user, loading, router])
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -73,7 +109,7 @@ export default function FreeTrialPage() {
     }
   }
 
-  if (loading) {
+  if (loading || checkingEligibility) {
     console.log("[v0] Free trial page still loading...")
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
