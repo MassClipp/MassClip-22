@@ -4,19 +4,37 @@ import { initializeFirebaseAdmin, db } from "@/lib/firebase-admin"
 import BundleDetailView from "@/components/bundle-detail-view"
 
 // Helper function to convert Firestore data to plain objects
-function serializeData(data: any) {
+function serializeData(data: any): any {
   if (!data) return null
 
-  const plainData = { ...data }
-
-  if (plainData.createdAt && typeof plainData.createdAt.toDate === "function") {
-    plainData.createdAt = plainData.createdAt.toDate().toISOString()
-  }
-  if (plainData.updatedAt && typeof plainData.updatedAt.toDate === "function") {
-    plainData.updatedAt = plainData.updatedAt.toDate().toISOString()
+  // Handle arrays
+  if (Array.isArray(data)) {
+    return data.map((item) => serializeData(item))
   }
 
-  return plainData
+  // Handle Firestore Timestamp objects
+  if (data._seconds !== undefined && data._nanoseconds !== undefined) {
+    return new Date(data._seconds * 1000 + data._nanoseconds / 1000000).toISOString()
+  }
+
+  // Handle objects with toDate method (Firestore Timestamp)
+  if (typeof data.toDate === "function") {
+    return data.toDate().toISOString()
+  }
+
+  // Handle plain objects recursively
+  if (typeof data === "object" && data !== null) {
+    const serialized: any = {}
+    for (const key in data) {
+      if (data.hasOwnProperty(key)) {
+        serialized[key] = serializeData(data[key])
+      }
+    }
+    return serialized
+  }
+
+  // Return primitive values as-is
+  return data
 }
 
 export async function generateMetadata({
@@ -117,7 +135,6 @@ export default async function BundleDetailPage({
       notFound()
     }
 
-    // Serialize data
     const serializedBundle = serializeData(bundleData)
     const serializedCreator = serializeData(creatorData)
 
