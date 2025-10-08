@@ -47,6 +47,8 @@ export default function BundleDetailView({ bundle, creator }: BundleDetailViewPr
     }
   }
 
+  const actualContentCount = bundle.detailedContentItems?.length || bundle.contentCount || 0
+
   return (
     <div className="min-h-screen bg-black text-white">
       {/* Header */}
@@ -109,7 +111,7 @@ export default function BundleDetailView({ bundle, creator }: BundleDetailViewPr
               <h1 className="text-3xl sm:text-4xl font-bold mb-2">{bundle.title}</h1>
               <div className="flex items-center gap-2 text-zinc-400">
                 <Package className="w-4 h-4" />
-                <span>{bundle.contentCount} items included</span>
+                <span>{actualContentCount} items included</span>
               </div>
             </div>
 
