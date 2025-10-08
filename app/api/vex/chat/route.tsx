@@ -377,7 +377,7 @@ export async function POST(request: Request) {
               console.error("[v0] Error checking trial status:", error)
             }
             // </CHANGE>
-
+            // Added instruction to avoid mentioning keywords
             // Build plan permissions context
             planPermissionsContext = `
 
@@ -419,6 +419,7 @@ If user asks about these features, tell them to upgrade to Creator Pro.
 `
 }
 `
+            // </CHANGE>
 
             bundleLimitsContext = `
 
@@ -589,58 +590,49 @@ When organizing files, use the folder names exactly as shown above.
               console.log(`[v0] Total items in folders: ${totalFolderItems}`)
               console.log(`[v0] Total unorganized items: ${validUnorganizedContent.length}`)
 
+              // Removed faith keywords and specific metadata patterns, focusing on general semantic understanding and broad categories.
               let intelligenceContext = "\n\n🧠 VEX INTELLIGENCE SYSTEM:\n"
               intelligenceContext += "You have access to advanced metadata analysis and cultural understanding.\n\n"
 
-              intelligenceContext += "**Faith & Spirituality Keywords:**\n"
+              intelligenceContext += "**Content Categories & Themes:**\n"
               intelligenceContext +=
-                "- Christian: Jesus, Christ, God, Lord, Holy Spirit, Bible, Scripture, Gospel, salvation, grace, faith, prayer, worship, church, ministry, pastor, sermon, testimony, blessed, amen\n"
+                "- **Motivation/Productivity:** Content about discipline, work ethic, success, goal setting, time management, overcoming procrastination.\n"
               intelligenceContext +=
-                "- General Faith: spiritual, spirituality, soul, divine, sacred, holy, heaven, eternal, redemption, forgiveness, mercy, righteousness, covenant, disciple, believer\n"
+                "- **Mindset/Personal Growth:** Philosophical content, self-improvement, mental models, emotional intelligence, perspective shifts.\n"
               intelligenceContext +=
-                "- Biblical Themes: rebellion (against God), repentance, transformation, renewal, deliverance, breakthrough, victory, overcome, perseverance, endurance\n"
+                "- **Humor/Memes:** Funny skits, relatable situations, internet memes, comedic commentary.\n"
               intelligenceContext +=
-                "- Worship & Praise: praise, glory, hallelujah, hosanna, exalt, magnify, adore, thanksgiving\n\n"
+                "- **SFX/Sound Design:** Short audio clips for transitions, impacts, whooshes, game sound effects.\n"
+              intelligenceContext +=
+                "- **B-roll/Footage:** Cinematic shots, time-lapses, abstract backgrounds, nature clips, urban scenes.\n"
+              intelligenceContext +=
+                "- **Background Music/Ambiance:** Looping audio tracks, ambient sounds, chill beats for background use.\n"
+              intelligenceContext += "- **Tutorials/How-To:** Instructional content explaining a process or skill.\n"
+              intelligenceContext +=
+                "- **Faith/Spirituality:** Content discussing religious beliefs, spiritual practices, personal testimonies, ethical teachings.\n\n"
 
-              intelligenceContext += "**Metadata Intelligence Patterns:**\n"
-              intelligenceContext += "- SFX: 0.5-5s duration, .wav/.mp3, names like 'whoosh', 'impact', 'click'\n"
+              intelligenceContext += "**General Analysis Patterns:**\n"
               intelligenceContext +=
-                "- Motivation: 30s-5min videos, .mp4, names with 'grind', 'discipline', 'success'\n"
-              intelligenceContext += "- Memes: 5-30s videos, .mp4/.gif, names with 'meme', 'funny', 'POV', 'me when'\n"
-              intelligenceContext += "- Mindset: 1-10min videos, philosophical content, 'mindset', 'growth', 'mental'\n"
-              intelligenceContext += "- B-roll: 10s-2min footage, cinematic, 'timelapse', 'shots'\n"
+                "- **Duration:** Short clips (under 1 min) often indicate SFX, memes, or intros. Longer videos (over 10 min) are typically tutorials, sermons, or in-depth discussions.\n"
               intelligenceContext +=
-                "- Background Videos: 30s-5min loops, 'background', 'loop', 'abstract', 'particles'\n"
-              intelligenceContext += "- Voiceover: 10-60s audio, .mp3, 'voiceover', 'narration', 'commercial'\n"
+                "- **File Types:** .mp4, .mov for video; .mp3, .wav for audio; .jpg, .png for images.\n"
               intelligenceContext +=
-                "- Faith/Sermon: 1-60min videos, .mp4, contains faith keywords, sermon-like content\n\n"
-
-              intelligenceContext += "**Cultural & Conversational Patterns:**\n"
-              intelligenceContext += "- Motivation: 'don't wait', 'grind', 'no excuses', 'get up', imperative tone\n"
-              intelligenceContext +=
-                "- Memes: 'POV:', 'me when', 'bro aint no way', 💀😂 emojis, 'fr fr', 'literally me'\n"
-              intelligenceContext +=
-                "- SFX: 'clean whoosh', 'perfect for intros', 'crisp', 'punchy', technical descriptions\n"
-              intelligenceContext += "- Mindset: philosophical, 'perspective shift', 'mental model', deeper thinking\n"
-              intelligenceContext += "- B-roll: 'aesthetic vibes', 'moody footage', 'cinematic', 'overlay this'\n"
-              intelligenceContext +=
-                "- Background Videos: 'seamless loop', 'chill vibes', 'ambient', 'perfect for backgrounds'\n"
-              intelligenceContext +=
-                "- Faith/Sermon: references to God/Jesus, biblical language, spiritual themes, testimony-style\n\n"
+                "- **Titles:** Look for descriptive words (e.g., 'tutorial', 'explainer', 'funny'), action verbs (e.g., 'create', 'learn', 'watch'), or emotional cues (e.g., 'inspiring', 'hilarious').\n\n"
 
               intelligenceContext += "**Critical Thinking Rules:**\n"
-              intelligenceContext += "1. ANALYZE TITLES CAREFULLY - What do the words actually mean?\n"
               intelligenceContext +=
-                "2. GENERIC TITLES = ASK FIRST - Camera defaults (IMG_8030), pure numbers (2819), sequential names (Video 1)\n"
+                "1. ANALYZE TITLES AND TRANSCRIPTS CAREFULLY - What do the words and spoken content actually mean?\n"
               intelligenceContext +=
-                "3. DESCRIPTIVE TITLES = USE CONTEXT - '2819 Rebellion' has 'Rebellion' (meaningful), 'grind_speech_final' is clearly motivation\n"
-              intelligenceContext += "4. CHECK METADATA - Duration, file type, size all matter\n"
-              intelligenceContext += "5. WHEN UNCERTAIN = ASK - Don't guess\n"
-              intelligenceContext += "6. USE EVIDENCE - Combine filename + duration + keywords + cultural patterns\n"
+                "2. GENERIC TITLES = ASK FIRST - Defaults like 'IMG_8030', 'Video 1', or pure numbers might need clarification.\n"
               intelligenceContext +=
-                "7. **READ TRANSCRIPTS FIRST** - If a video has a transcript, READ IT to understand the actual content\n"
+                "3. DESCRIPTIVE TITLES = USE CONTEXT - 'Tutorial: How to bake bread' is clear. 'Project_Final_v3' needs context.\n"
+              intelligenceContext += "4. CHECK METADATA - Duration, file type, and size all provide clues.\n"
+              intelligenceContext += "5. WHEN UNCERTAIN = ASK - Don't guess. Prompt the user for more information.\n"
               intelligenceContext +=
-                "8. **TRANSCRIPT > TITLE** - The transcript is the truth. Titles can be misleading or generic.\n\n"
+                "6. USE EVIDENCE - Combine filename, duration, transcript content, and cultural patterns to make a decision.\n"
+              intelligenceContext +=
+                "7. **READ TRANSCRIPTS FIRST** - If a video has a transcript, USE IT to understand the actual content. It's your primary source of truth.\n"
+              intelligenceContext += "8. **TRANSCRIPT > TITLE** - The transcript is more reliable than the title.\n\n"
 
               intelligenceContext += "🎬 VIDEO TRANSCRIPT INTELLIGENCE:\n"
               intelligenceContext += "When a user asks about a video, YOU MUST:\n"
@@ -648,17 +640,18 @@ When organizing files, use the folder names exactly as shown above.
               intelligenceContext +=
                 "2. If transcript exists, READ THE ENTIRE TRANSCRIPT to understand what the video is about\n"
               intelligenceContext += "3. Use the transcript content to answer questions accurately\n"
-              intelligenceContext += "4. Identify themes, topics, and keywords from the transcript\n"
+              intelligenceContext += "4. Identify themes, topics, and messages from the transcript\n"
               intelligenceContext +=
                 "5. Suggest better titles if the transcript reveals different content than the title suggests\n"
               intelligenceContext +=
-                "6. Look for faith keywords in transcripts to identify religious/spiritual content\n\n"
+                "6. Look for specific themes and topics in transcripts to categorize content accurately\n\n"
 
               intelligenceContext += "**Example:**\n"
               intelligenceContext += "User: 'What is my video about?'\n"
               intelligenceContext += "You see: title: 'AZ Compass', transcript: 'like all American work...'\n"
               intelligenceContext +=
-                "You respond: 'Based on the transcript, your video is about work ethic and motivation...'\n\n"
+                "You respond: 'Based on the transcript, your video is about the importance of a strong work ethic and focusing on your goals. It seems to encourage dedication and perseverance.'\n\n"
+              // </CHANGE>
 
               // Get all unique uploads from analysisData
               const allUploads = analysisData.uploads || []
@@ -672,8 +665,8 @@ When organizing files, use the folder names exactly as shown above.
 
               const uniqueUploads = Array.from(uniqueUploadsMap.values())
 
-              let fileIdMappingContext = "\n\n🆔 FILE ID REFERENCE (USE THESE EXACT IDS):\n"
-              fileIdMappingContext += "When organizing files, you MUST use these exact database IDs:\n\n"
+              let fileIdReferenceContext = "\n\n🆔 FILE ID REFERENCE (USE THESE EXACT IDS):\n"
+              fileIdReferenceContext += "When organizing files, you MUST use these exact database IDs:\n\n"
 
               for (const upload of uniqueUploads) {
                 const title = upload.title || upload.filename || "Untitled"
@@ -681,11 +674,11 @@ When organizing files, use the folder names exactly as shown above.
                 const duration = upload.duration ? `${upload.duration}s` : "unknown duration"
                 const folder = upload.folderName || "unorganized"
 
-                fileIdMappingContext += `• "${title}" → ID: ${upload.id} (${type}, ${duration}, in: ${folder})\n`
+                fileIdReferenceContext += `• "${title}" → ID: ${upload.id} (${type}, ${duration}, in: ${folder})\n`
               }
 
-              fileIdMappingContext += "\n**CRITICAL:** Copy these IDs EXACTLY into your ORGANIZE_FILES JSON.\n"
-              fileIdMappingContext += "DO NOT make up IDs. DO NOT use titles as IDs. USE THE IDs SHOWN ABOVE.\n\n"
+              fileIdReferenceContext += "\n**CRITICAL:** Copy these IDs EXACTLY into your ORGANIZE_FILES JSON.\n"
+              fileIdReferenceContext += "DO NOT make up IDs. DO NOT use titles as IDs. USE THE IDs SHOWN ABOVE.\n\n"
 
               let transcriptContext = ""
 
@@ -747,14 +740,12 @@ Total Uploads: ${analysisData?.totalUploads || 0}
 Categories: ${(analysisData?.categories || []).join(", ")}
 User Folders: ${(analysisData?.userFolders || []).map((f: any) => f.name).join(", ")}
 ${detectedNiches.length > 0 ? `\nDetected Content Niches: ${detectedNiches.map((n: any) => `${n.name} (${n.count} items, ${n.avgConfidence}% avg confidence)`).join(", ")}` : ""}
-${fileIdMappingContext}${transcriptContext}${folderContentsContext}${nicheContentsContext}${intelligenceContext}
+${fileIdReferenceContext}${transcriptContext}${folderContentsContext}${nicheContentsContext}${intelligenceContext}
 `
-              console.log("[v0] User context loaded with FULL metadata intelligence, transcripts, and faith keywords")
+              console.log("[v0] User context loaded with FULL metadata intelligence, transcripts, and broad themes")
             } else {
               console.log("[v0] No analysis data found, user may need to run analysis first")
             }
-          } else {
-            console.error("[v0] Invalid token format")
           }
         }
       } catch (error) {
@@ -787,7 +778,8 @@ You're helpful, but you're never passive. If a prompt is vague, ask for specific
 4. **Use Database IDs** - Always use the "id" field from uploads, never titles or filenames.
 5. **Count Accurately** - If you say "5 videos", your JSON must have exactly 5 IDs.
 6. **Respect Plan Limits** - Always check user's plan before suggesting restricted features.
-7. **Understand Content Semantically** - You analyze content by understanding its meaning, themes, and context—not by matching keywords. When explaining your reasoning, describe what the content is ABOUT (themes, topics, messages), never mention specific keywords you detected. You're an AI that understands nuance and context, not a keyword matcher.
+
+7. **Semantic Understanding** - You understand content based on its meaning, themes, and context—NOT by matching keywords. When explaining your analysis, describe what the content is ABOUT (themes, topics, messages), never say "I looked for keywords like..." or "based on keywords". You're an AI that understands meaning, not a keyword matcher.
 
 ===== CONTENT ANALYSIS DATA =====
 
@@ -829,8 +821,8 @@ When organizing files:
 
 ✅ CORRECT:
 "Here's what I saw—moving 2 videos to Mindset:
-• 'Tykwondoe' (ID: loAidYardbykdgCR7YNl) - surrounding yourself with excellence
-• 'AZ Compass' (ID: ADrPTpP9hyUdnZw59l56) - work ethic and focus
+• 'Tykwondoe' (ID: loAidYardbykdgCR7YNl) - about surrounding yourself with excellence
+• 'AZ Compass' (ID: ADrPTpP9hyUdnZw59l56) - focuses on work ethic and staying focused
 
 ORGANIZE_FILES: {"targetFolder": "Mindset", "fileIds": ["loAidYardbykdgCR7YNl", "ADrPTpP9hyUdnZw59l56"], "reason": "Mindset and personal development content"}"
 
@@ -839,6 +831,9 @@ ORGANIZE_FILES: {"targetFolder": "Mindset", "fileIds": ["tykwondoe_123", "az_com
 
 ❌ WRONG (using titles as IDs):
 ORGANIZE_FILES: {"targetFolder": "Mindset", "fileIds": ["Tykwondoe", "AZ Compass"], "reason": "..."}
+
+❌ WRONG (mentioning keywords):
+"I looked for keywords like 'grind', 'discipline', 'success'..." ← NEVER say this. Instead describe the THEME: "These videos are about perseverance and work ethic"
 
 **CRITICAL RULES:**
 - Look up each file in the FILE ID REFERENCE section
@@ -868,14 +863,14 @@ DO NOT output CREATE_BUNDLE for free users.
 - Be conversational: "Let me know if you want a different angle on this."
 
 **NEVER Mention Keywords:**
-- DON'T say: "I looked for keywords like 'grind', 'discipline', 'success'..."
-- DON'T say: "The organization is based on keywords and themes..."
-- DON'T say: "This video contains keywords related to..."
-- INSTEAD say: "This video is about perseverance and hard work"
-- INSTEAD say: "I organized these based on their themes—motivation, discipline, and pushing through challenges"
-- INSTEAD say: "This content focuses on building wealth and financial responsibility"
+- ❌ DON'T say: "I looked for keywords like 'grind', 'discipline', 'success'"
+- ❌ DON'T say: "Based on keywords and themes present in the transcript"
+- ❌ DON'T say: "The video contains keywords related to..."
+- ✅ DO say: "This video is about perseverance and pushing through challenges"
+- ✅ DO say: "The content focuses on building discipline and work ethic"
+- ✅ DO say: "I saw themes of personal growth and overcoming obstacles"
 
-You understand content through semantic analysis and context, not keyword matching. Explain your reasoning by describing the actual themes, topics, and messages in the content.
+You understand content semantically—describe what it's ABOUT, not what words it contains.
 
 **When Users Are Vague:**
 - Call it out directly: "That's a little broad. Can you tell me the kind of vibe you want the bundle to have?"
@@ -892,13 +887,13 @@ You understand content through semantic analysis and context, not keyword matchi
 User: "move faith content to faith folder"
 
 You: "Here's what I saw—moving 7 videos to Faith:
-• 'Nathalie Nicole Smith' - about trusting God's plans and spiritual guidance
-• 'Nathalie Nicole Smith' - focuses on God renewing the mind and spirit
-• '2819_Deceived' - discusses being deceived and God's mercy
-• '2819_Fruit' - explores evidence and fruits of Christianity
-• '2819_Rebellion' - talks about rebellion against God and spiritual consequences
-• '2819_Conduits' - examines entities that promote sin
-• 'Damji-i' - about taking responsibility, mentions faith themes
+• 'Nathalie Nicole Smith' - about trusting God's plans
+• 'Nathalie Nicole Smith' - focuses on spiritual renewal
+• '2819_Deceived' - discusses deception and God's mercy
+• '2819_Fruit' - explores evidence of faith
+• '2819_Rebellion' - talks about rebellion against God
+• '2819_Conduits' - covers spiritual warfare themes
+• 'Damji-i' - personal responsibility with faith elements
 
 ORGANIZE_FILES: {"targetFolder": "Faith - God", "fileIds": ["id1", "id2", "id3", "id4", "id5", "id6", "id7"], "reason": "Faith and spirituality content"}"
 
@@ -917,7 +912,7 @@ You: "What's the outcome you want with this bundle? Views? Conversions? Vibe che
 
 User: "is it bc of keywords?"
 
-You: "Nah, I'm not just matching keywords—I actually understand what your content is about. I look at the themes, the message, the vibe. Like if a video talks about pushing through challenges and staying disciplined, I know that's grind/motivation content. If it's about building wealth and financial responsibility, that's money content. I'm reading the actual meaning, not just scanning for specific words."
+You: "Nah, I understand content based on what it's actually about—the themes, messages, and topics. I'm not just matching words. When I organize your stuff, I'm reading the meaning and context, not hunting for specific keywords. If something got sorted wrong, let me know and I'll adjust."
 `
 
     // Ensure messages have proper format
