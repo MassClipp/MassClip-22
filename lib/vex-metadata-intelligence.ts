@@ -583,13 +583,14 @@ export function analyzeMetadata(metadata: FileMetadata, existingFolders: string[
     faith: 0,
     sports: 0,
     business: 0,
-    money: 0, // Added money as a category
+    money: 0,
   }
 
+  // Transcript analysis is now the PRIMARY signal (was 30x, now 50x)
   const transcriptAnalysis = analyzeTranscript(metadata.transcript)
   if (transcriptAnalysis.likelyNiche) {
     evidence.push(`📜 ${transcriptAnalysis.evidence}`)
-    scores[transcriptAnalysis.likelyNiche] += transcriptAnalysis.confidence * 30
+    scores[transcriptAnalysis.likelyNiche] += transcriptAnalysis.confidence * 50 // LLM understanding is king
   } else if (metadata.transcript) {
     evidence.push(`📜 Transcript available but no clear niche detected`)
   }
@@ -605,7 +606,7 @@ export function analyzeMetadata(metadata: FileMetadata, existingFolders: string[
   const durationAnalysis = analyzeDuration(metadata.duration, metadata.contentType)
   evidence.push(`⏱️ ${durationAnalysis.evidence}`)
   if (durationAnalysis.likelyNiche) {
-    scores[durationAnalysis.likelyNiche] += durationAnalysis.confidence * 15 // Duration is very important
+    scores[durationAnalysis.likelyNiche] += durationAnalysis.confidence * 15
   }
 
   // 3. Analyze filename structure
@@ -616,7 +617,7 @@ export function analyzeMetadata(metadata: FileMetadata, existingFolders: string[
   const folderAnalysis = analyzeFolderOrigin(metadata.folderName)
   evidence.push(`📁 ${folderAnalysis.evidence}`)
   if (folderAnalysis.suggestedNiche) {
-    scores[folderAnalysis.suggestedNiche] += folderAnalysis.confidence * 12
+    scores[folderAnalysis.suggestedNiche] += folderAnalysis.confidence * 5
   }
 
   // 5. Analyze title/description with keyword intelligence
@@ -625,7 +626,7 @@ export function analyzeMetadata(metadata: FileMetadata, existingFolders: string[
     evidence.push(
       `🔍 Title analysis detected "${keywordAnalysis.primaryNiche}" with ${Math.round(keywordAnalysis.confidence * 100)}% confidence`,
     )
-    scores[keywordAnalysis.primaryNiche] += keywordAnalysis.confidence * 20 // Keywords are important
+    scores[keywordAnalysis.primaryNiche] += keywordAnalysis.confidence * 5
   } else {
     evidence.push(`🔍 Title "${metadata.title}" doesn't match any known content patterns`)
   }
@@ -635,7 +636,7 @@ export function analyzeMetadata(metadata: FileMetadata, existingFolders: string[
     const descAnalysis = analyzeContent(metadata.description, existingFolders)
     if (descAnalysis.primaryNiche) {
       evidence.push(`📋 Description analysis supports "${descAnalysis.primaryNiche}" classification`)
-      scores[descAnalysis.primaryNiche] += descAnalysis.confidence * 10
+      scores[descAnalysis.primaryNiche] += descAnalysis.confidence * 3
     }
   }
 
@@ -645,7 +646,7 @@ export function analyzeMetadata(metadata: FileMetadata, existingFolders: string[
     const tagAnalysis = analyzeContent(tagText, existingFolders)
     if (tagAnalysis.primaryNiche) {
       evidence.push(`🏷️ Tags suggest "${tagAnalysis.primaryNiche}" content`)
-      scores[tagAnalysis.primaryNiche] += tagAnalysis.confidence * 8
+      scores[tagAnalysis.primaryNiche] += tagAnalysis.confidence * 3
     }
   }
 
@@ -655,7 +656,7 @@ export function analyzeMetadata(metadata: FileMetadata, existingFolders: string[
       `💬 Conversational analysis detected "${culturalAnalysis.likelyNiche}" vibe (${Math.round(culturalAnalysis.confidence)}% confidence)`,
     )
     if (scores[culturalAnalysis.likelyNiche] !== undefined) {
-      scores[culturalAnalysis.likelyNiche] += (culturalAnalysis.confidence / 100) * 15
+      scores[culturalAnalysis.likelyNiche] += (culturalAnalysis.confidence / 100) * 8
     }
   }
   if (culturalAnalysis.detectedMarkers.length > 0) {
