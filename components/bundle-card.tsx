@@ -1,6 +1,9 @@
 "use client"
 
+import type React from "react"
+
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Package } from "lucide-react"
 import { UnlockButton } from "@/components/unlock-button"
 
@@ -25,9 +28,11 @@ interface BundleCardProps {
   item: ContentItem
   user: any
   creatorId: string
+  creatorUsername?: string
 }
 
-export default function BundleCard({ item, user, creatorId }: BundleCardProps) {
+export default function BundleCard({ item, user, creatorId, creatorUsername }: BundleCardProps) {
+  const router = useRouter()
   const [isThumbnailHovered, setIsThumbnailHovered] = useState(false)
   const [imageError, setImageError] = useState(false)
 
@@ -40,6 +45,7 @@ export default function BundleCard({ item, user, creatorId }: BundleCardProps) {
     price: item.price,
     contentCount: item.contentCount,
     creatorId,
+    creatorUsername,
     currentUserId: user?.uid,
   })
 
@@ -61,11 +67,25 @@ export default function BundleCard({ item, user, creatorId }: BundleCardProps) {
     return "0.00"
   }
 
+  const handleCardClick = (e: React.MouseEvent) => {
+    // Don't navigate if clicking the buy button
+    if ((e.target as HTMLElement).closest("button")) {
+      return
+    }
+
+    if (creatorUsername) {
+      router.push(`/creator/${creatorUsername}/bundle/${item.id}`)
+    }
+  }
+
   const formattedPrice = formatPrice(item.price)
   console.log("💰 Final formatted price:", formattedPrice)
 
   return (
-    <div className="bg-zinc-900 rounded-lg overflow-hidden border border-zinc-700/30 hover:border-zinc-600/40 transition-all duration-300 w-full max-w-[340px] sm:max-w-[320px] relative">
+    <div
+      onClick={handleCardClick}
+      className="bg-zinc-900 rounded-lg overflow-hidden border border-zinc-700/30 hover:border-zinc-600/40 transition-all duration-300 w-full max-w-[340px] sm:max-w-[320px] relative cursor-pointer"
+    >
       <div
         className="relative aspect-square bg-zinc-800 overflow-hidden"
         onMouseEnter={() => setIsThumbnailHovered(true)}
