@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, type FormEvent } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -22,6 +22,7 @@ import {
   ChevronRight,
   ChevronLeft,
   ArrowDown,
+  Palette,
 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -114,6 +115,7 @@ function VexChat({ children }: VexChatProps) {
     { icon: Package, label: "Bundles", href: "/dashboard/bundles" },
     { icon: DollarSign, label: "Earnings", href: "/dashboard/earnings" },
     { icon: Heart, label: "Favorites", href: "/dashboard/favorites" },
+    { icon: Palette, label: "Storefront", href: "/dashboard/storefront" }, // Added Storefront navigation item
     { icon: CreditCard, label: "Upgrade", href: "/dashboard/upgrade", highlight: true }, // Added highlight flag for premium styling
     { icon: Package, label: "My Purchases", href: "/dashboard/purchases" },
     { icon: Gift, label: "Free Content", href: "/dashboard/free-content" },
@@ -543,7 +545,8 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
     return () => clearInterval(interval)
   }, [user, bundleJobs])
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
+    // Changed to FormEvent for type safety
     e.preventDefault()
     if (!input.trim() || isLoading) return
 
@@ -579,7 +582,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
           })
 
           if (titleResponse.ok) {
-            const titleData = await titleResponse.json() // Corrected variable name here
+            const titleData = await titleResponse.json()
             chatTitle = titleData.title || chatTitle
           }
         } catch (titleError) {
@@ -994,7 +997,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                           onClick={() => handleNavigation(item.href)}
                           className={`w-full flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all duration-200 ${
                             item.highlight
-                              ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white hover:from-blue-700 hover:to-blue-600 shadow-lg shadow-blue-500/20 font-medium"
+                              ? "bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 text-white hover:from-blue-600 hover:via-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/30 hover:shadow-blue-500/40 font-medium hover:scale-[1.02] active:scale-[0.98]" // Enhanced gradient with modern multi-stop gradient, better shadows, and subtle scale effect
                               : "text-zinc-300 hover:text-white hover:bg-zinc-800/50"
                           }`}
                         >
@@ -1216,7 +1219,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                         onClick={() => handleNavigation(item.href)}
                         className={`w-full flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all duration-200 ${
                           item.highlight
-                            ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white hover:from-blue-700 hover:to-blue-600 shadow-lg shadow-blue-500/20 font-medium"
+                            ? "bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 text-white hover:from-blue-600 hover:via-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/30 hover:shadow-blue-500/40 font-medium hover:scale-[1.02] active:scale-[0.98]" // Enhanced gradient with modern multi-stop gradient, better shadows, and subtle scale effect
                             : "text-zinc-300 hover:text-white hover:bg-zinc-800/50"
                         }`}
                       >
