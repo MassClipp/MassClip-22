@@ -3,13 +3,19 @@
 import type React from "react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from "firebase/auth"
+import {
+  createUserWithEmailAndPassword,
+  signInWithPopup,
+  GoogleAuthProvider,
+  getAdditionalUserInfo,
+} from "firebase/auth"
 import { auth } from "@/lib/firebase-safe"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2 } from "lucide-react"
 import Link from "next/link"
+import { useToast } from "@/hooks/use-toast"
 
 export function SignupForm() {
   const [email, setEmail] = useState("")
@@ -19,6 +25,7 @@ export function SignupForm() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const router = useRouter()
+  const { toast } = useToast()
 
   const createServerSideRecords = async (user: any) => {
     try {
@@ -140,7 +147,25 @@ export function SignupForm() {
       provider.addScope("profile")
 
       const result = await signInWithPopup(auth, provider)
-      console.log("[v0] Google signup successful:", result.user.uid)
+
+      const additionalUserInfo = getAdditionalUserInfo(result)
+
+      if (!additionalUserInfo?.isNewUser) {
+        // This is an existing account trying to sign up
+        console.log("[v0] Existing user tried to sign up, logging them out and redirecting")
+        await auth.signOut()
+
+        toast({
+          title: "Account already exists",
+          description: "You already have an account. Please sign in instead.",
+          variant: "destructive",
+        })
+
+        router.push("/")
+        return
+      }
+
+      console.log("[v0] Google signup successful - new user:", result.user.uid)
 
       const idToken = await result.user.getIdToken()
       const trialCheckResponse = await fetch("/api/user/trial-status", {
