@@ -114,7 +114,7 @@ function VexChat({ children }: VexChatProps) {
     { icon: Package, label: "Bundles", href: "/dashboard/bundles" },
     { icon: DollarSign, label: "Earnings", href: "/dashboard/earnings" },
     { icon: Heart, label: "Favorites", href: "/dashboard/favorites" },
-    { icon: CreditCard, label: "Upgrade", href: "/dashboard/upgrade" },
+    { icon: CreditCard, label: "Upgrade", href: "/dashboard/upgrade", highlight: true }, // Added highlight flag for premium styling
     { icon: Package, label: "My Purchases", href: "/dashboard/purchases" },
     { icon: Gift, label: "Free Content", href: "/dashboard/free-content" },
   ]
@@ -992,7 +992,11 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                         <button
                           key={item.href}
                           onClick={() => handleNavigation(item.href)}
-                          className="w-full flex items-center gap-3 px-3 py-2 text-sm text-zinc-300 hover:text-white hover:bg-zinc-800/50 rounded-lg transition-all duration-200"
+                          className={`w-full flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all duration-200 ${
+                            item.highlight
+                              ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white hover:from-blue-700 hover:to-blue-600 shadow-lg shadow-blue-500/20 font-medium"
+                              : "text-zinc-300 hover:text-white hover:bg-zinc-800/50"
+                          }`}
                         >
                           <item.icon className="h-4 w-4" />
                           {item.label}
@@ -1210,7 +1214,11 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                       <button
                         key={item.href}
                         onClick={() => handleNavigation(item.href)}
-                        className="w-full flex items-center gap-3 px-3 py-2 text-sm text-zinc-300 hover:text-white hover:bg-zinc-800/50 rounded-lg transition-all duration-200"
+                        className={`w-full flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all duration-200 ${
+                          item.highlight
+                            ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white hover:from-blue-700 hover:to-blue-600 shadow-lg shadow-blue-500/20 font-medium"
+                            : "text-zinc-300 hover:text-white hover:bg-zinc-800/50"
+                        }`}
                       >
                         <item.icon className="h-4 w-4" />
                         {item.label}

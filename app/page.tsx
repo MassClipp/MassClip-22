@@ -140,7 +140,7 @@ const LandingPage = () => {
                 onClick={handleGetStarted}
                 className="px-8 py-4 bg-white text-black hover:bg-white/90 font-light rounded-full text-lg transition-all duration-200"
               >
-                Get Started
+                Get Started For Free
               </Button>
 
               <Button
