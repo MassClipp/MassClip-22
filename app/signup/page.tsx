@@ -1,5 +1,5 @@
 "use client"
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { useFirebaseAuthStable } from "@/hooks/use-firebase-auth-stable"
 import { Loader2 } from "lucide-react"
@@ -10,11 +10,19 @@ export default function SignupPage() {
   const router = useRouter()
   const { authChecked, user, loading, isInitialized } = useFirebaseAuthStable()
   const { toast } = useToast()
+  const initialAuthChecked = useRef(false)
+  const wasAuthenticatedOnLoad = useRef(false)
 
-  // Redirect if user is already authenticated
   useEffect(() => {
-    if (isInitialized && authChecked && user) {
-      console.log("🔄 User already authenticated, redirecting to landing page")
+    if (isInitialized && authChecked && !initialAuthChecked.current) {
+      initialAuthChecked.current = true
+      wasAuthenticatedOnLoad.current = !!user
+    }
+  }, [isInitialized, authChecked, user])
+
+  useEffect(() => {
+    if (isInitialized && authChecked && user && wasAuthenticatedOnLoad.current) {
+      console.log("🔄 User was already authenticated on load, redirecting to landing page")
       toast({
         title: "Already logged in",
         description: "You already have an account and are logged in.",
