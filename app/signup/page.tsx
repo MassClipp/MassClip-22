@@ -14,13 +14,13 @@ export default function SignupPage() {
   // Redirect if user is already authenticated
   useEffect(() => {
     if (isInitialized && authChecked && user) {
-      console.log("🔄 User already authenticated, redirecting to dashboard")
+      console.log("🔄 User already authenticated, redirecting to landing page")
       toast({
         title: "Already logged in",
         description: "You already have an account and are logged in.",
         variant: "default",
       })
-      router.push("/dashboard")
+      router.push("/")
     }
   }, [isInitialized, authChecked, user, router, toast])
 
