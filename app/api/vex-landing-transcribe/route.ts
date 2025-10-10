@@ -1,5 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { transcribeVideo } from "@/lib/groq-transcription"
+import Groq from "groq-sdk"
+import { Buffer } from "buffer"
+
+const groq = new Groq({
+  apiKey: process.env.GROQ_API_KEY,
+})
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,29 +15,36 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 })
     }
 
-    // Convert file to buffer and create temporary URL
+    console.log(`[v0] Transcribing ${file.name} (${file.size} bytes)`)
+
     const bytes = await file.arrayBuffer()
     const buffer = Buffer.from(bytes)
 
-    // Create a data URL for transcription
-    const base64 = buffer.toString("base64")
-    const mimeType = file.type || "video/mp4"
-    const dataUrl = `data:${mimeType};base64,${base64}`
+    // Create audio file for Groq (same as authenticated version)
+    const audioFilename = file.name.replace(/\.(mp4|mov|avi|mkv|webm)$/i, ".mp3")
+    const audioFile = new File([buffer], audioFilename, { type: "audio/mpeg" })
 
-    console.log(`[v0] Transcribing ${file.name} (${file.size} bytes)`)
+    // Call Groq Whisper with same settings as authenticated version
+    const transcription = await groq.audio.transcriptions.create({
+      file: audioFile,
+      model: "whisper-large-v3-turbo",
+      language: "en",
+      response_format: "verbose_json",
+      temperature: 0.0,
+    })
 
-    // Transcribe using Groq
-    const result = await transcribeVideo(dataUrl)
-
-    console.log(`[v0] Transcription complete: ${result.text.length} characters`)
+    console.log(`[v0] Transcription complete: ${transcription.text?.length || 0} characters`)
 
     return NextResponse.json({
-      transcript: result.text,
-      duration: result.duration,
-      language: result.language,
+      transcript: transcription.text || "",
+      duration: transcription.duration,
+      language: transcription.language || "en",
     })
   } catch (error) {
     console.error("[v0] Transcription error:", error)
-    return NextResponse.json({ error: "Transcription failed", transcript: "" }, { status: 500 })
+    return NextResponse.json(
+      { error: "Transcription failed", details: error instanceof Error ? error.message : "Unknown error" },
+      { status: 500 },
+    )
   }
 }

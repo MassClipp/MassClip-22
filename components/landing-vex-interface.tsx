@@ -4,7 +4,7 @@ import type React from "react"
 import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { Upload, Send, X } from "lucide-react"
+import { Upload, Send, X, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
 interface Message {
@@ -50,7 +50,10 @@ export function LandingVexInterface() {
           body: formData,
         })
 
-        if (!response.ok) throw new Error("Failed to transcribe file")
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.details || "Failed to transcribe file")
+        }
         const data = await response.json()
 
         return {
@@ -77,7 +80,7 @@ export function LandingVexInterface() {
       toast.success(`Uploaded ${newFiles.length} file(s)`)
     } catch (error) {
       console.error("Upload error:", error)
-      toast.error("Failed to upload files")
+      toast.error(error instanceof Error ? error.message : "Failed to upload files")
     } finally {
       setIsUploading(false)
       if (fileInputRef.current) {
@@ -184,13 +187,18 @@ export function LandingVexInterface() {
                 className="hidden"
               />
               <Button
-                onClick={() => fileInputRef.current?.click()}
+                type="button"
                 variant="ghost"
                 size="icon"
-                className="h-10 w-10 shrink-0 hover:bg-zinc-800"
-                disabled={uploadedFiles.length >= 5 || isUploading}
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading || uploadedFiles.length >= 5}
+                className="shrink-0"
               >
-                <Upload className="h-5 w-5" />
+                {isUploading ? (
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                ) : (
+                  <Upload className="h-5 w-5 text-muted-foreground" />
+                )}
               </Button>
               <Textarea
                 value={input}
@@ -290,13 +298,18 @@ export function LandingVexInterface() {
                 className="hidden"
               />
               <Button
-                onClick={() => fileInputRef.current?.click()}
+                type="button"
                 variant="ghost"
                 size="icon"
-                className="h-10 w-10 shrink-0 hover:bg-zinc-800"
-                disabled={uploadedFiles.length >= 5 || isUploading}
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading || uploadedFiles.length >= 5}
+                className="shrink-0"
               >
-                <Upload className="h-5 w-5" />
+                {isUploading ? (
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                ) : (
+                  <Upload className="h-5 w-5 text-muted-foreground" />
+                )}
               </Button>
               <Textarea
                 value={input}
