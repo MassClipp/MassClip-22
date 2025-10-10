@@ -89,16 +89,23 @@ export function LandingVexInterface() {
         let transcript = ""
         if (file.type.startsWith("video/") || file.type.startsWith("audio/")) {
           console.log("[v0] Transcribing file...")
-          const transcribeResponse = await fetch("/api/vex-landing-transcribe", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ url: publicUrl }),
-          })
+          try {
+            const transcribeResponse = await fetch("/api/vex-landing-transcribe", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ url: publicUrl }),
+            })
 
-          if (transcribeResponse.ok) {
-            const transcribeData = await transcribeResponse.json()
-            transcript = transcribeData.transcript || ""
-            console.log("[v0] Transcription complete:", transcript.length, "characters")
+            if (transcribeResponse.ok) {
+              const transcribeData = await transcribeResponse.json()
+              transcript = transcribeData.transcript || ""
+              console.log("[v0] Transcription status:", transcript ? "success" : "undefined")
+              console.log("[v0] Transcription complete:", transcript.length, "characters")
+            } else {
+              console.error("[v0] Transcription failed:", transcribeResponse.status, transcribeResponse.statusText)
+            }
+          } catch (error) {
+            console.error("[v0] Transcription error:", error)
           }
         }
 

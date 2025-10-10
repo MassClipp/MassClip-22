@@ -115,7 +115,7 @@ function VideoUploadCard({ video, onRemove }: { video: UploadedVideo; onRemove: 
         {video.status === "error" && video.error && <p className="text-xs text-red-400 mt-2">{video.error}</p>}
 
         {/* Transcript preview */}
-        {video.status === "complete" && video.transcript && (
+        {video.status === "complete" && video.transcript && typeof video.transcript === "string" && (
           <div className="mt-2 p-2 bg-zinc-900/50 border border-zinc-700 rounded text-xs text-zinc-400 max-h-20 overflow-y-auto">
             {video.transcript.substring(0, 150)}
             {video.transcript.length > 150 && "..."}
