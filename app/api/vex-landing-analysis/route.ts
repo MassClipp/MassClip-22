@@ -1,8 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
 import Groq from "groq-sdk"
-import { initializeFirebaseAdmin, db } from "@/lib/firebase/firebaseAdmin"
-
-initializeFirebaseAdmin()
 
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
@@ -10,7 +7,7 @@ const groq = new Groq({
 
 export async function POST(request: NextRequest) {
   try {
-    const { message, uploadIds, sessionId, conversationHistory } = await request.json()
+    const { message, files, conversationHistory } = await request.json()
 
     const messages: any[] = [
       {
@@ -59,28 +56,15 @@ Keep responses concise, friendly, and focused on helping creators succeed.`,
     }
 
     let fileContext = ""
-    if (uploadIds && uploadIds.length > 0) {
-      try {
-        const uploadDocs = await Promise.all(
-          uploadIds.map((id: string) => db.collection("landingUploads").doc(id).get()),
-        )
+    if (files && files.length > 0) {
+      fileContext = `\n\nThe user has uploaded ${files.length} file(s):\n`
+      files.forEach((file: any, index: number) => {
+        fileContext += `${index + 1}. "${file.name}"\n`
 
-        const uploads = uploadDocs.filter((doc) => doc.exists).map((doc) => ({ id: doc.id, ...doc.data() }))
-
-        if (uploads.length > 0) {
-          fileContext = `\n\nThe user has uploaded ${uploads.length} file(s):\n`
-          uploads.forEach((upload: any, index: number) => {
-            const sizeInMB = ((upload.fileSize || 0) / (1024 * 1024)).toFixed(2)
-            fileContext += `${index + 1}. "${upload.filename}" (${sizeInMB}MB, ${upload.mimeType || "unknown"})\n`
-
-            if (upload.transcript) {
-              fileContext += `   Transcript: ${upload.transcript.substring(0, 500)}${upload.transcript.length > 500 ? "..." : ""}\n`
-            }
-          })
+        if (file.transcript) {
+          fileContext += `   Content: ${file.transcript.substring(0, 1000)}${file.transcript.length > 1000 ? "..." : ""}\n`
         }
-      } catch (error) {
-        console.error("Error fetching uploads from Firestore:", error)
-      }
+      })
     }
 
     messages.push({

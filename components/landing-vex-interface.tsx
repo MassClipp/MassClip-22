@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Upload, Send, X } from "lucide-react"
@@ -18,6 +18,7 @@ interface UploadedFile {
   name: string
   size: number
   type: string
+  transcript?: string
 }
 
 export function LandingVexInterface() {
@@ -26,12 +27,7 @@ export function LandingVexInterface() {
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const [isUploading, setIsUploading] = useState(false)
-  const [sessionId, setSessionId] = useState<string>("")
   const fileInputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    setSessionId(`session-${Date.now()}-${Math.random().toString(36).substring(7)}`)
-  }, [])
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
@@ -46,53 +42,23 @@ export function LandingVexInterface() {
 
     try {
       const uploadPromises = files.map(async (file) => {
-        // Step 1: Get presigned URL from R2
-        const urlResponse = await fetch("/api/vex-landing-get-upload-url", {
+        const formData = new FormData()
+        formData.append("file", file)
+
+        const response = await fetch("/api/vex-landing-transcribe", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            fileName: file.name,
-            fileType: file.type,
-          }),
+          body: formData,
         })
 
-        if (!urlResponse.ok) throw new Error("Failed to get upload URL")
-        const { uploadUrl, publicUrl, key } = await urlResponse.json()
-
-        // Step 2: Upload file directly to R2
-        const uploadResponse = await fetch(uploadUrl, {
-          method: "PUT",
-          body: file,
-          headers: {
-            "Content-Type": file.type,
-          },
-        })
-
-        if (!uploadResponse.ok) throw new Error("Failed to upload to R2")
-
-        // Step 3: Create metadata record in Firestore
-        const metadataResponse = await fetch("/api/vex-landing-upload", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            fileUrl: publicUrl,
-            filename: file.name,
-            title: file.name.split(".")[0],
-            size: file.size,
-            mimeType: file.type,
-            r2Key: key,
-            sessionId: sessionId,
-          }),
-        })
-
-        if (!metadataResponse.ok) throw new Error("Failed to create upload record")
-        const metadata = await metadataResponse.json()
+        if (!response.ok) throw new Error("Failed to transcribe file")
+        const data = await response.json()
 
         return {
-          id: metadata.id,
+          id: `file-${Date.now()}-${Math.random().toString(36).substring(7)}`,
           name: file.name,
           size: file.size,
           type: file.type,
+          transcript: data.transcript || "",
         }
       })
 
@@ -106,7 +72,7 @@ export function LandingVexInterface() {
       }
       setMessages((prev) => [...prev, uploadMessage])
 
-      await analyzeUploads(newFiles.map((f) => f.id))
+      await analyzeUploads(newFiles)
 
       toast.success(`Uploaded ${newFiles.length} file(s)`)
     } catch (error) {
@@ -120,7 +86,7 @@ export function LandingVexInterface() {
     }
   }
 
-  const analyzeUploads = async (uploadIds: string[]) => {
+  const analyzeUploads = async (files: UploadedFile[]) => {
     setIsAnalyzing(true)
 
     try {
@@ -129,8 +95,10 @@ export function LandingVexInterface() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: "Analyze these files",
-          uploadIds,
-          sessionId,
+          files: files.map((f) => ({
+            name: f.name,
+            transcript: f.transcript,
+          })),
           conversationHistory: messages,
         }),
       })
@@ -170,8 +138,10 @@ export function LandingVexInterface() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: input,
-          uploadIds: uploadedFiles.map((f) => f.id),
-          sessionId,
+          files: uploadedFiles.map((f) => ({
+            name: f.name,
+            transcript: f.transcript,
+          })),
           conversationHistory: messages,
         }),
       })
@@ -295,12 +265,12 @@ export function LandingVexInterface() {
               {uploadedFiles.map((file, index) => (
                 <div
                   key={index}
-                  className="flex items-center gap-2 bg-zinc-900/50 border border-zinc-800 rounded-lg px-3 py-2 text-sm"
+                  className="flex items-center gap-2 bg-gradient-to-r from-teal-500/20 to-cyan-400/20 border border-teal-500/30 rounded-lg px-3 py-2 text-sm"
                 >
-                  <span className="text-zinc-400 truncate max-w-[150px]">{file.name}</span>
+                  <span className="text-white truncate max-w-[150px]">{file.name}</span>
                   <button
                     onClick={() => setUploadedFiles((prev) => prev.filter((_, i) => i !== index))}
-                    className="text-zinc-500 hover:text-white"
+                    className="text-zinc-400 hover:text-white"
                   >
                     <X className="h-4 w-4" />
                   </button>
