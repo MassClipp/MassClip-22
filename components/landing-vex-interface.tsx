@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -34,9 +34,9 @@ export function LandingVexInterface() {
   const scrollRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
+  const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages, isAnalyzing])
+  }
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
@@ -68,6 +68,8 @@ export function LandingVexInterface() {
         analyzeContent(newFiles)
       }, 500)
     }
+
+    setTimeout(scrollToBottom, 100)
   }
 
   const analyzeContent = async (filesToAnalyze?: UploadedFile[]) => {
@@ -119,6 +121,8 @@ export function LandingVexInterface() {
     setMessages((prev) => [...prev, userMessage])
     setInput("")
     setIsAnalyzing(true)
+
+    setTimeout(scrollToBottom, 100)
 
     try {
       const response = await fetch("/api/vex-landing-analysis", {
