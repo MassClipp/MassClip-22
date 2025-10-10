@@ -38,10 +38,15 @@ export function LandingVexInterface() {
       return
     }
 
+    console.log(
+      "[v0] Starting file upload:",
+      files.map((f) => f.name),
+    )
     setIsUploading(true)
 
     try {
       const uploadPromises = files.map(async (file) => {
+        console.log("[v0] Uploading file:", file.name, file.size, file.type)
         const formData = new FormData()
         formData.append("file", file)
 
@@ -50,11 +55,15 @@ export function LandingVexInterface() {
           body: formData,
         })
 
+        console.log("[v0] Transcribe response status:", response.status)
+
         if (!response.ok) {
           const errorData = await response.json()
+          console.error("[v0] Transcribe error:", errorData)
           throw new Error(errorData.details || "Failed to transcribe file")
         }
         const data = await response.json()
+        console.log("[v0] Transcription success:", data.transcript?.length || 0, "characters")
 
         return {
           id: `file-${Date.now()}-${Math.random().toString(36).substring(7)}`,
@@ -66,6 +75,7 @@ export function LandingVexInterface() {
       })
 
       const newFiles = await Promise.all(uploadPromises)
+      console.log("[v0] All files uploaded:", newFiles.length)
       setUploadedFiles((prev) => [...prev, ...newFiles])
 
       const uploadMessage: Message = {
@@ -79,9 +89,10 @@ export function LandingVexInterface() {
 
       toast.success(`Uploaded ${newFiles.length} file(s)`)
     } catch (error) {
-      console.error("Upload error:", error)
+      console.error("[v0] Upload error:", error)
       toast.error(error instanceof Error ? error.message : "Failed to upload files")
     } finally {
+      console.log("[v0] Upload complete, resetting loading state")
       setIsUploading(false)
       if (fileInputRef.current) {
         fileInputRef.current.value = ""
