@@ -9,10 +9,16 @@ export async function POST(request: NextRequest) {
   try {
     const { message, files } = await request.json()
 
-    const fileContext =
-      files && files.length > 0
-        ? `\n\nThe user has uploaded ${files.length} file(s): ${files.map((f: any) => f.name).join(", ")}`
-        : ""
+    let fileContext = ""
+    if (files && files.length > 0) {
+      fileContext = `\n\nThe user has uploaded ${files.length} file(s):\n`
+      files.forEach((f: any, index: number) => {
+        const sizeInMB = (f.size / (1024 * 1024)).toFixed(2)
+        const fileType = f.type || "unknown"
+        fileContext += `${index + 1}. "${f.name}" (${sizeInMB}MB, ${fileType})\n`
+      })
+      fileContext += `\nAnalyze these file names, sizes, and types to understand the content. Look for patterns, themes, and natural groupings.`
+    }
 
     const systemPrompt = `You are Vex, an AI assistant helping content creators organize their uploads and create sellable bundles.
 
@@ -23,12 +29,13 @@ Your personality:
 - You understand content strategy and monetization
 
 When analyzing content:
-1. Look at file names, types, and any context the user provides
-2. Identify themes, patterns, and natural groupings
+1. Look at file names, types, sizes, and any context the user provides
+2. Identify themes, patterns, and natural groupings from the file metadata
 3. Suggest practical folder organization strategies
 4. Propose bundle ideas with specific pricing recommendations
 5. Explain WHY your suggestions work and the value they provide
 6. Consider the target audience and market positioning
+7. Be specific about what you see in their file names and how they relate
 
 Be natural and conversational. Don't be overly formal or robotic. Think out loud about what you're seeing in their content.
 

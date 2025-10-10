@@ -21,14 +21,14 @@ const LandingPage = () => {
   return (
     <div className="min-h-screen bg-black flex flex-col">
       <header className="sticky top-0 z-50 border-b border-white/10 bg-black/80 backdrop-blur-xl">
-        <nav className="flex items-center justify-between max-w-7xl mx-auto px-6 py-4">
+        <nav className="flex items-center justify-between max-w-7xl mx-auto px-6 py-4 relative">
           <div className="text-white font-light text-2xl">
             <span className="font-league-spartan font-bold" style={{ fontFamily: "var(--font-league-spartan)" }}>
               Vex
             </span>
           </div>
 
-          <div className="hidden md:flex items-center gap-6">
+          <div className="absolute left-1/2 transform -translate-x-1/2 hidden md:flex items-center gap-6">
             <a href="#features" className="text-white/80 hover:text-white transition-colors font-light text-sm">
               Features
             </a>

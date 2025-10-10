@@ -6,7 +6,7 @@ import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Send, Upload, Sparkles, Loader2, X, FileVideo, ArrowRight } from "lucide-react"
+import { Send, Upload, Loader2, X, FileVideo, ArrowRight } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 
@@ -191,7 +191,6 @@ export function LandingVexInterface() {
                 >
                   {message.role === "assistant" && (
                     <div className="flex items-center gap-2 mb-2">
-                      <Sparkles className="w-4 h-4 text-teal-400" />
                       <span className="text-xs font-light text-white/60">VEX AI</span>
                     </div>
                   )}
@@ -204,8 +203,17 @@ export function LandingVexInterface() {
               <div className="flex justify-start">
                 <div className="bg-white/10 rounded-2xl px-4 py-3">
                   <div className="flex items-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin text-teal-400" />
-                    <span className="text-sm font-light text-white/60">VEX is analyzing...</span>
+                    <div className="flex space-x-1">
+                      <div className="w-2 h-2 bg-white/60 rounded-full animate-pulse"></div>
+                      <div
+                        className="w-2 h-2 bg-white/60 rounded-full animate-pulse"
+                        style={{ animationDelay: "0.2s" }}
+                      ></div>
+                      <div
+                        className="w-2 h-2 bg-white/60 rounded-full animate-pulse"
+                        style={{ animationDelay: "0.4s" }}
+                      ></div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -266,8 +274,7 @@ export function LandingVexInterface() {
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
                   <>
-                    <Sparkles className="w-4 h-4 mr-2" />
-                    Analyze
+                    <span className="text-sm font-light text-teal-400 mr-2">Analyze</span>
                   </>
                 )}
               </Button>
@@ -305,7 +312,6 @@ export function LandingVexInterface() {
             size="lg"
             className="bg-gradient-to-r from-teal-500 to-cyan-400 text-white hover:from-teal-600 hover:to-cyan-500 font-light rounded-full shadow-2xl shadow-teal-500/50 px-8 py-6 text-base"
           >
-            <Sparkles className="w-5 h-5 mr-2" />
             Sign Up to Take Action
             <ArrowRight className="w-5 h-5 ml-2" />
           </Button>
