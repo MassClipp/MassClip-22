@@ -45,28 +45,60 @@ export function LandingVexInterface() {
       const uploadPromises = files.map(async (file) => {
         console.log("[v0] Uploading file:", file.name)
 
-        const formData = new FormData()
-        formData.append("file", file)
-
-        const response = await fetch("/api/vex-landing-upload-file", {
+        // Get presigned URL
+        const urlResponse = await fetch("/api/vex-landing-get-upload-url", {
           method: "POST",
-          body: formData,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fileName: file.name,
+            fileType: file.type,
+          }),
         })
 
-        if (!response.ok) {
-          const error = await response.json()
-          throw new Error(error.error || "Upload failed")
+        if (!urlResponse.ok) {
+          throw new Error("Failed to get upload URL")
         }
 
-        const data = await response.json()
-        console.log("[v0] Upload successful:", data.name)
+        const { uploadUrl, publicUrl } = await urlResponse.json()
+
+        // Upload to R2
+        const uploadResponse = await fetch(uploadUrl, {
+          method: "PUT",
+          body: file,
+          headers: {
+            "Content-Type": file.type,
+          },
+        })
+
+        if (!uploadResponse.ok) {
+          throw new Error("Failed to upload to R2")
+        }
+
+        console.log("[v0] File uploaded to R2:", publicUrl)
+
+        // Transcribe if video/audio
+        let transcript = ""
+        if (file.type.startsWith("video/") || file.type.startsWith("audio/")) {
+          console.log("[v0] Transcribing file...")
+          const transcribeResponse = await fetch("/api/vex-landing-transcribe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url: publicUrl }),
+          })
+
+          if (transcribeResponse.ok) {
+            const transcribeData = await transcribeResponse.json()
+            transcript = transcribeData.transcript || ""
+            console.log("[v0] Transcription complete:", transcript.length, "characters")
+          }
+        }
 
         return {
           id: `file-${Date.now()}-${Math.random().toString(36).substring(7)}`,
-          name: data.name,
-          size: data.size,
-          type: data.type,
-          transcript: data.transcript || "",
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          transcript,
         }
       })
 
