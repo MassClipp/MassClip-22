@@ -25,18 +25,11 @@ interface UploadedFile {
 
 export function LandingVexInterface() {
   const router = useRouter()
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "welcome",
-      role: "assistant",
-      content:
-        "👋 Hi! I'm VEX, your AI content assistant. Upload your videos and I'll analyze them to suggest organization strategies and bundle ideas. No signup required to see what I can do!",
-    },
-  ])
+  const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
-  const [showSignupPrompt, setShowSignupPrompt] = useState(false)
+  const [showSignupButton, setShowSignupButton] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -63,7 +56,6 @@ export function LandingVexInterface() {
 
     setUploadedFiles((prev) => [...prev, ...newFiles])
 
-    // Add user message about upload
     const fileNames = newFiles.map((f) => f.name).join(", ")
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -72,7 +64,6 @@ export function LandingVexInterface() {
     }
     setMessages((prev) => [...prev, userMessage])
 
-    // Auto-analyze if this is the first upload
     if (uploadedFiles.length === 0) {
       setTimeout(() => {
         analyzeContent(newFiles)
@@ -90,55 +81,31 @@ export function LandingVexInterface() {
 
     setIsAnalyzing(true)
 
-    // Simulate AI analysis
-    setTimeout(() => {
+    try {
+      const response = await fetch("/api/vex-landing-analysis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: "Analyze these files and suggest organization and bundle ideas",
+          files: files.map((f) => ({ name: f.name, size: f.size })),
+        }),
+      })
+
+      const data = await response.json()
+
       const analysisMessage: Message = {
         id: Date.now().toString(),
         role: "assistant",
-        content: generateAnalysis(files),
+        content: data.analysis || "I couldn't analyze that. Please try again.",
       }
       setMessages((prev) => [...prev, analysisMessage])
+      setShowSignupButton(true)
+    } catch (error) {
+      console.error("Analysis error:", error)
+      toast.error("Failed to analyze content")
+    } finally {
       setIsAnalyzing(false)
-      setShowSignupPrompt(true)
-    }, 2000)
-  }
-
-  const generateAnalysis = (files: UploadedFile[]): string => {
-    const fileCount = files.length
-    const fileNames = files.map((f) => f.name).join(", ")
-
-    return `🎯 **Content Analysis Complete**
-
-I've analyzed your ${fileCount} video${fileCount > 1 ? "s" : ""}: ${fileNames}
-
-**📊 What I Found:**
-Based on the file names and metadata, your content appears to focus on motivational and personal development themes.
-
-**📁 Recommended Organization:**
-I suggest organizing your content into these folders:
-• **Motivation & Mindset** - Core motivational content
-• **Personal Growth** - Self-improvement focused videos
-• **Success Strategies** - Actionable advice and tactics
-
-**💰 Bundle Ideas:**
-Here are some sellable bundles I can create for you:
-
-1. **"Mindset Mastery Bundle"** - $29
-   • All motivational content packaged together
-   • Perfect for creators looking for inspiration clips
-
-2. **"Personal Growth Collection"** - $39
-   • Comprehensive self-improvement content
-   • Great for coaches and educators
-
-3. **"Success Starter Pack"** - $19
-   • Entry-level bundle for new customers
-   • Mix of your best performing content
-
-**✨ Next Steps:**
-Sign up to let me organize your content into these folders and create these bundles automatically. I'll handle the file organization, bundle creation, and even set up your storefront!
-
-Ready to take action?`
+    }
   }
 
   const handleSendMessage = async () => {
@@ -154,34 +121,31 @@ Ready to take action?`
     setInput("")
     setIsAnalyzing(true)
 
-    // Simulate AI response
-    setTimeout(() => {
-      const response: Message = {
+    try {
+      const response = await fetch("/api/vex-landing-analysis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: input,
+          files: uploadedFiles.map((f) => ({ name: f.name, size: f.size })),
+        }),
+      })
+
+      const data = await response.json()
+
+      const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: generateContextualResponse(input),
+        content: data.analysis || "I can help with that! Sign up to take action.",
       }
-      setMessages((prev) => [...prev, response])
+      setMessages((prev) => [...prev, assistantMessage])
+      setShowSignupButton(true)
+    } catch (error) {
+      console.error("Message error:", error)
+      toast.error("Failed to send message")
+    } finally {
       setIsAnalyzing(false)
-    }, 1500)
-  }
-
-  const generateContextualResponse = (userInput: string): string => {
-    const lower = userInput.toLowerCase()
-
-    if (lower.includes("bundle") || lower.includes("create")) {
-      return "I can definitely help you create bundles! To actually create and publish bundles, you'll need to sign up. Once you do, I'll automatically organize your content and create the bundles we discussed. Want me to show you what the bundles would look like first?"
     }
-
-    if (lower.includes("organize") || lower.includes("folder")) {
-      return "I'll organize your content into smart folders based on themes, topics, and content type. To save this organization and apply it to your account, you'll need to sign up. Should I proceed with the organization plan I suggested?"
-    }
-
-    if (lower.includes("price") || lower.includes("cost")) {
-      return "Great question! VEX is free to start - you can upload content and I'll analyze it for free. To actually create bundles and sell them, you'll need a free account. There's no cost to sign up, and you only pay when you make sales (standard payment processing fees apply)."
-    }
-
-    return "I can help you with that! However, to take action on any of my recommendations (creating bundles, organizing content, setting up your storefront), you'll need to sign up. It's free and takes less than a minute. Want to get started?"
   }
 
   const removeFile = (id: string) => {
@@ -189,7 +153,7 @@ Ready to take action?`
   }
 
   return (
-    <div className="flex-1 flex flex-col max-w-6xl mx-auto w-full px-4 py-8">
+    <div className="flex-1 flex flex-col max-w-6xl mx-auto w-full px-4 py-8 relative">
       {/* Hero Section */}
       <div className="text-center mb-8">
         <h1 className="text-4xl lg:text-6xl font-thin text-white mb-4 leading-tight">Let VEX Analyze Your Content</h1>
@@ -203,6 +167,19 @@ Ready to take action?`
         {/* Messages */}
         <ScrollArea className="flex-1 p-6" ref={scrollRef}>
           <div className="space-y-6">
+            {messages.length === 0 && (
+              <div className="text-center flex flex-col justify-center items-center min-h-[50vh]">
+                <h2 className="text-2xl font-semibold mb-2 text-white">Hi! I'm Vex</h2>
+                <p className="text-white/60 mb-6 max-w-md mx-auto leading-relaxed">
+                  I'll help you create profitable bundles, set optimal pricing, and build compelling storefront content.
+                </p>
+                <p className="text-xs text-white/40 max-w-md mx-auto text-center">
+                  The more specific and detailed your requests are, the better I can help you organize and monetize your
+                  content
+                </p>
+              </div>
+            )}
+
             {messages.map((message) => (
               <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
                 <div
@@ -229,27 +206,6 @@ Ready to take action?`
                   <div className="flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin text-teal-400" />
                     <span className="text-sm font-light text-white/60">VEX is analyzing...</span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Signup Prompt */}
-            {showSignupPrompt && (
-              <div className="flex justify-center">
-                <div className="bg-gradient-to-r from-teal-500/20 to-cyan-400/20 border border-teal-500/30 rounded-2xl p-6 max-w-md">
-                  <div className="text-center space-y-4">
-                    <Sparkles className="w-8 h-8 text-teal-400 mx-auto" />
-                    <h3 className="text-xl font-light text-white">Ready to Take Action?</h3>
-                    <p className="text-sm text-white/70 font-light">
-                      Sign up now to let VEX organize your content and create these bundles automatically
-                    </p>
-                    <Button
-                      onClick={() => router.push("/signup")}
-                      className="w-full bg-gradient-to-r from-teal-500 to-cyan-400 text-white hover:from-teal-600 hover:to-cyan-500 font-light rounded-full"
-                    >
-                      Sign Up Free <ArrowRight className="w-4 h-4 ml-2" />
-                    </Button>
                   </div>
                 </div>
               </div>
@@ -341,6 +297,20 @@ Ready to take action?`
           </p>
         </div>
       </div>
+
+      {showSignupButton && (
+        <div className="fixed bottom-8 right-8 z-50 animate-in slide-in-from-bottom-4 duration-500">
+          <Button
+            onClick={() => router.push("/signup")}
+            size="lg"
+            className="bg-gradient-to-r from-teal-500 to-cyan-400 text-white hover:from-teal-600 hover:to-cyan-500 font-light rounded-full shadow-2xl shadow-teal-500/50 px-8 py-6 text-base"
+          >
+            <Sparkles className="w-5 h-5 mr-2" />
+            Sign Up to Take Action
+            <ArrowRight className="w-5 h-5 ml-2" />
+          </Button>
+        </div>
+      )}
     </div>
   )
 }
