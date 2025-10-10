@@ -22,7 +22,6 @@ import {
   ChevronRight,
   ChevronLeft,
   ArrowDown,
-  Palette,
 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -115,8 +114,7 @@ function VexChat({ children }: VexChatProps) {
     { icon: Package, label: "Bundles", href: "/dashboard/bundles" },
     { icon: DollarSign, label: "Earnings", href: "/dashboard/earnings" },
     { icon: Heart, label: "Favorites", href: "/dashboard/favorites" },
-    { icon: Palette, label: "Storefront", href: "/dashboard/storefront" }, // Added Storefront navigation item
-    { icon: CreditCard, label: "Upgrade", href: "/dashboard/upgrade", highlight: true }, // Added highlight flag for premium styling
+    { icon: CreditCard, label: "Upgrade", href: "/dashboard/upgrade", highlight: true },
     { icon: Package, label: "My Purchases", href: "/dashboard/purchases" },
     { icon: Gift, label: "Free Content", href: "/dashboard/free-content" },
   ]
@@ -997,7 +995,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                           onClick={() => handleNavigation(item.href)}
                           className={`w-full flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all duration-200 ${
                             item.highlight
-                              ? "bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 text-white hover:from-blue-600 hover:via-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/30 hover:shadow-blue-500/40 font-medium hover:scale-[1.02] active:scale-[0.98]" // Enhanced gradient with modern multi-stop gradient, better shadows, and subtle scale effect
+                              ? "bg-gradient-to-br from-teal-400 via-teal-500 to-white text-gray-900 hover:from-teal-500 hover:via-teal-600 hover:to-white shadow-lg shadow-teal-500/30 hover:shadow-teal-500/40 font-medium hover:scale-[1.02] active:scale-[0.98]" // Updated to teal and white gradient
                               : "text-zinc-300 hover:text-white hover:bg-zinc-800/50"
                           }`}
                         >
@@ -1219,7 +1217,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                         onClick={() => handleNavigation(item.href)}
                         className={`w-full flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all duration-200 ${
                           item.highlight
-                            ? "bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 text-white hover:from-blue-600 hover:via-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/30 hover:shadow-blue-500/40 font-medium hover:scale-[1.02] active:scale-[0.98]" // Enhanced gradient with modern multi-stop gradient, better shadows, and subtle scale effect
+                            ? "bg-gradient-to-br from-teal-400 via-teal-500 to-white text-gray-900 hover:from-teal-500 hover:via-teal-600 hover:to-white shadow-lg shadow-teal-500/30 hover:shadow-teal-500/40 font-medium hover:scale-[1.02] active:scale-[0.98]" // Updated to teal and white gradient
                             : "text-zinc-300 hover:text-white hover:bg-zinc-800/50"
                         }`}
                       >
