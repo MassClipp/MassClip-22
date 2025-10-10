@@ -1,11 +1,11 @@
 "use client"
 
 import type React from "react"
-
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Upload, Send, X } from "lucide-react"
+import { toast } from "sonner"
 
 interface Message {
   id: string
@@ -18,7 +18,6 @@ interface UploadedFile {
   name: string
   size: number
   type: string
-  url: string
 }
 
 export function LandingVexInterface() {
@@ -27,14 +26,19 @@ export function LandingVexInterface() {
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const [isUploading, setIsUploading] = useState(false)
+  const [sessionId, setSessionId] = useState<string>("")
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    setSessionId(`session-${Date.now()}-${Math.random().toString(36).substring(7)}`)
+  }, [])
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
     if (files.length === 0) return
 
     if (uploadedFiles.length + files.length > 5) {
-      alert("You can only upload up to 5 files without signing up")
+      toast.error("Maximum 5 files without signup")
       return
     }
 
@@ -42,43 +46,72 @@ export function LandingVexInterface() {
 
     try {
       const uploadPromises = files.map(async (file) => {
-        const formData = new FormData()
-        formData.append("file", file)
-
-        const response = await fetch("/api/vex-landing-upload", {
+        // Step 1: Get presigned URL from R2
+        const urlResponse = await fetch("/api/vex-landing-get-upload-url", {
           method: "POST",
-          body: formData,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fileName: file.name,
+            fileType: file.type,
+          }),
         })
 
-        if (!response.ok) {
-          throw new Error("Upload failed")
-        }
+        if (!urlResponse.ok) throw new Error("Failed to get upload URL")
+        const { uploadUrl, publicUrl, key } = await urlResponse.json()
 
-        const data = await response.json()
+        // Step 2: Upload file directly to R2
+        const uploadResponse = await fetch(uploadUrl, {
+          method: "PUT",
+          body: file,
+          headers: {
+            "Content-Type": file.type,
+          },
+        })
+
+        if (!uploadResponse.ok) throw new Error("Failed to upload to R2")
+
+        // Step 3: Create metadata record in Firestore
+        const metadataResponse = await fetch("/api/vex-landing-upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fileUrl: publicUrl,
+            filename: file.name,
+            title: file.name.split(".")[0],
+            size: file.size,
+            mimeType: file.type,
+            r2Key: key,
+            sessionId: sessionId,
+          }),
+        })
+
+        if (!metadataResponse.ok) throw new Error("Failed to create upload record")
+        const metadata = await metadataResponse.json()
+
         return {
-          id: data.id,
+          id: metadata.id,
           name: file.name,
           size: file.size,
           type: file.type,
-          url: data.publicUrl,
         }
       })
 
-      const uploaded = await Promise.all(uploadPromises)
-      setUploadedFiles((prev) => [...prev, ...uploaded])
+      const newFiles = await Promise.all(uploadPromises)
+      setUploadedFiles((prev) => [...prev, ...newFiles])
 
-      const fileNames = uploaded.map((f) => f.name).join(", ")
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now().toString(),
-          role: "user",
-          content: `Uploaded: ${fileNames}`,
-        },
-      ])
+      const uploadMessage: Message = {
+        id: Date.now().toString(),
+        role: "user",
+        content: `Uploaded: ${newFiles.map((f) => f.name).join(", ")}`,
+      }
+      setMessages((prev) => [...prev, uploadMessage])
+
+      await analyzeUploads(newFiles.map((f) => f.id))
+
+      toast.success(`Uploaded ${newFiles.length} file(s)`)
     } catch (error) {
       console.error("Upload error:", error)
-      alert("Failed to upload files. Please try again.")
+      toast.error("Failed to upload files")
     } finally {
       setIsUploading(false)
       if (fileInputRef.current) {
@@ -87,19 +120,7 @@ export function LandingVexInterface() {
     }
   }
 
-  const handleSendMessage = async () => {
-    if (!input.trim() && uploadedFiles.length === 0) return
-
-    const userMessage = input.trim()
-    setInput("")
-
-    const newUserMessage: Message = {
-      id: Date.now().toString(),
-      role: "user",
-      content: userMessage,
-    }
-
-    setMessages((prev) => [...prev, newUserMessage])
+  const analyzeUploads = async (uploadIds: string[]) => {
     setIsAnalyzing(true)
 
     try {
@@ -107,53 +128,82 @@ export function LandingVexInterface() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: userMessage,
+          message: "Analyze these files",
+          uploadIds,
+          sessionId,
           conversationHistory: messages,
-          uploadedFileIds: uploadedFiles.map((f) => f.id),
         }),
       })
 
-      if (!response.ok) {
-        throw new Error("Analysis failed")
+      const data = await response.json()
+
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: data.analysis || "I can help with that! Sign up to take action.",
       }
+      setMessages((prev) => [...prev, assistantMessage])
+    } catch (error) {
+      console.error("Analysis error:", error)
+      toast.error("Failed to analyze files")
+    } finally {
+      setIsAnalyzing(false)
+    }
+  }
+
+  const handleSendMessage = async () => {
+    if (!input.trim()) return
+
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: "user",
+      content: input,
+    }
+
+    setMessages((prev) => [...prev, userMessage])
+    setInput("")
+    setIsAnalyzing(true)
+
+    try {
+      const response = await fetch("/api/vex-landing-analysis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: input,
+          uploadIds: uploadedFiles.map((f) => f.id),
+          sessionId,
+          conversationHistory: messages,
+        }),
+      })
 
       const data = await response.json()
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: (Date.now() + 1).toString(),
-          role: "assistant",
-          content: data.response,
-        },
-      ])
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: data.analysis || "I can help with that! Sign up to take action.",
+      }
+      setMessages((prev) => [...prev, assistantMessage])
     } catch (error) {
-      console.error("Analysis error:", error)
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: (Date.now() + 1).toString(),
-          role: "assistant",
-          content: "Sorry, I encountered an error. Please try again.",
-        },
-      ])
+      console.error("Message error:", error)
+      toast.error("Failed to send message")
     } finally {
       setIsAnalyzing(false)
     }
   }
 
   return (
-    <div className="w-full flex flex-col items-center justify-center px-4">
+    <div className="flex-1 flex flex-col items-center justify-center min-h-[calc(100vh-80px)] px-4 py-16 relative">
       {messages.length === 0 ? (
-        <div className="max-w-3xl w-full flex flex-col items-center justify-center space-y-8 py-20">
+        <div className="max-w-4xl w-full space-y-8">
           <div className="text-center space-y-4">
-            <h2 className="text-2xl font-medium text-white">Hi! I'm Vex</h2>
-            <p className="text-zinc-400 text-lg">
-              I'll help you create profitable bundles, set optimal pricing, and build compelling storefront content.
+            <h1 className="text-5xl lg:text-7xl font-medium text-white tracking-tight">Have content to sell?</h1>
+            <p className="text-lg lg:text-xl text-white/60 font-light max-w-3xl mx-auto">
+              Upload your content to Vex, and watch it organize and bundle your content in seconds.
             </p>
           </div>
 
-          <div className="w-full max-w-2xl bg-zinc-900/50 border border-zinc-800 rounded-2xl p-3 backdrop-blur-sm">
+          <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-3 backdrop-blur-sm">
             <div className="flex gap-3 items-end">
               <input
                 ref={fileInputRef}
@@ -168,7 +218,7 @@ export function LandingVexInterface() {
                 variant="ghost"
                 size="icon"
                 className="h-10 w-10 shrink-0 hover:bg-zinc-800"
-                disabled={isUploading}
+                disabled={uploadedFiles.length >= 5 || isUploading}
               >
                 <Upload className="h-5 w-5" />
               </Button>

@@ -1,107 +1,129 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3"
 import { initializeFirebaseAdmin, db } from "@/lib/firebase/firebaseAdmin"
 import { transcribeVideo } from "@/lib/groq-transcription"
 
 initializeFirebaseAdmin()
 
-const s3Client = new S3Client({
-  region: "auto",
-  endpoint: process.env.CLOUDFLARE_R2_ENDPOINT || process.env.R2_ENDPOINT,
-  credentials: {
-    accessKeyId: process.env.CLOUDFLARE_R2_ACCESS_KEY_ID || process.env.R2_ACCESS_KEY_ID || "",
-    secretAccessKey: process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY || process.env.R2_SECRET_ACCESS_KEY || "",
-  },
-})
+function generatePublicURL(filename: string, r2Key?: string): string {
+  const publicDomain = process.env.R2_PUBLIC_URL || process.env.CLOUDFLARE_R2_PUBLIC_URL
+
+  if (publicDomain) {
+    const key = r2Key || filename
+    return `${publicDomain}/${key}`
+  }
+
+  const bucketName = process.env.R2_BUCKET_NAME || process.env.CLOUDFLARE_R2_BUCKET_NAME
+  if (bucketName) {
+    return `https://pub-${bucketName}.r2.dev/${filename}`
+  }
+
+  return `https://pub-f0fde4a9c6fb4bc7a1f5f9677ef9a304.r2.dev/${filename}`
+}
 
 export async function POST(request: NextRequest) {
   try {
-    const formData = await request.formData()
-    const file = formData.get("file") as File
-
-    if (!file) {
-      return NextResponse.json({ error: "No file provided" }, { status: 400 })
+    let body
+    try {
+      body = await request.json()
+    } catch (parseError) {
+      console.error("❌ [Landing Upload] JSON parse error:", parseError)
+      return NextResponse.json({ error: "Invalid JSON in request body" }, { status: 400 })
     }
 
-    const timestamp = Date.now()
-    const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_")
-    const fileKey = `landing-uploads/${timestamp}-${sanitizedFileName}`
-
-    const bucketName = process.env.CLOUDFLARE_R2_BUCKET_NAME || process.env.R2_BUCKET_NAME
-
-    if (!bucketName) {
-      return NextResponse.json({ error: "R2 bucket not configured" }, { status: 500 })
-    }
-
-    const arrayBuffer = await file.arrayBuffer()
-    const buffer = Buffer.from(arrayBuffer)
-
-    const uploadCommand = new PutObjectCommand({
-      Bucket: bucketName,
-      Key: fileKey,
-      Body: buffer,
-      ContentType: file.type,
+    const { fileUrl, filename, title, size, mimeType, r2Key, sessionId } = body
+    console.log("🔍 [Landing Upload] Upload data:", {
+      fileUrl,
+      filename,
+      title,
+      size,
+      mimeType,
+      r2Key,
+      sessionId,
     })
 
-    await s3Client.send(uploadCommand)
-    console.log(`✅ [Landing Upload] Uploaded to R2: ${fileKey}`)
+    if (!filename) {
+      return NextResponse.json({ error: "Missing required field: filename" }, { status: 400 })
+    }
 
-    const publicUrl = `${process.env.CLOUDFLARE_R2_PUBLIC_URL || process.env.R2_PUBLIC_URL}/${fileKey}`
+    const publicURL = fileUrl || generatePublicURL(filename, r2Key)
 
     let contentType = "other"
-    if (file.type.startsWith("video/")) contentType = "video"
-    else if (file.type.startsWith("audio/")) contentType = "audio"
+    if (mimeType) {
+      if (mimeType.startsWith("video/")) contentType = "video"
+      else if (mimeType.startsWith("audio/")) contentType = "audio"
+      else if (mimeType.startsWith("image/")) contentType = "image"
+      else if (mimeType.includes("pdf") || mimeType.includes("document")) contentType = "document"
+    }
 
     const metadata = {
-      filename: file.name,
-      fileUrl: publicUrl,
-      fileSize: file.size,
-      mimeType: file.type,
+      sessionId: sessionId || "unknown",
+
+      // Core file information
+      title: title || filename.split(".")[0],
+      filename,
+      fileUrl: publicURL,
+      fileSize: size || 0,
+      mimeType: mimeType || "application/octet-stream",
       contentType,
-      r2Key: fileKey,
+
+      // Optional fields
+      r2Key: r2Key || filename,
+
+      // Legacy compatibility
       type: contentType,
-      publicUrl,
+      category: contentType,
+      publicUrl: publicURL,
+      downloadUrl: publicURL,
+
+      // Timestamps
       createdAt: new Date(),
+      updatedAt: new Date(),
     }
 
-    const docRef = await db.collection("landingUploads").add(metadata)
-    console.log(`✅ [Landing Upload] Metadata saved to Firestore: ${docRef.id}`)
+    console.log("📝 [Landing Upload] Creating upload with metadata:", metadata)
 
-    let transcript = null
-    if (contentType === "video" || contentType === "audio") {
-      try {
-        console.log(`🎤 [Landing Upload] Starting transcription for ${docRef.id}...`)
-        const result = await transcribeVideo(publicUrl)
-        transcript = result.text
+    try {
+      const docRef = await db.collection("landingUploads").add(metadata)
+      console.log(`✅ [Landing Upload] Upload record created with ID: ${docRef.id}`)
 
-        await docRef.update({
-          transcript: result.text,
-          transcriptDuration: result.duration,
-          transcriptLanguage: result.language,
-          transcribedAt: new Date(),
-        })
+      if (contentType === "video" || contentType === "audio") {
+        console.log(`🎤 [Landing Upload] Triggering transcription for ${contentType}: ${docRef.id}`)
 
-        console.log(`✅ [Landing Upload] Transcription complete: ${transcript.length} characters`)
-      } catch (error) {
-        console.error("❌ [Landing Upload] Transcription failed:", error)
-        // Don't fail the upload if transcription fails
+        transcribeVideo(publicURL)
+          .then(async (result) => {
+            console.log(`✅ [Landing Auto-Transcribe] Completed for ${docRef.id}`)
+            await docRef.update({
+              transcript: result.text,
+              transcriptDuration: result.duration,
+              transcriptLanguage: result.language,
+              transcribedAt: new Date(),
+            })
+            console.log(`💾 [Landing Auto-Transcribe] Saved transcript to Firestore`)
+          })
+          .catch((error) => {
+            console.error(`❌ [Landing Auto-Transcribe] Failed for ${docRef.id}:`, error)
+          })
       }
-    }
 
-    return NextResponse.json({
-      success: true,
-      id: docRef.id,
-      name: file.name,
-      size: file.size,
-      type: file.type,
-      publicUrl,
-      transcript,
-    })
+      return NextResponse.json({
+        id: docRef.id,
+        ...metadata,
+      })
+    } catch (firestoreError) {
+      console.error("❌ [Landing Upload] Firestore error:", firestoreError)
+      return NextResponse.json(
+        {
+          error: "Database error",
+          details: firestoreError instanceof Error ? firestoreError.message : "Unknown database error",
+        },
+        { status: 500 },
+      )
+    }
   } catch (error) {
-    console.error("❌ [Landing Upload] Error:", error)
+    console.error("❌ [Landing Upload] Error creating upload:", error)
     return NextResponse.json(
       {
-        error: "Upload failed",
+        error: "Failed to create upload record",
         details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 },

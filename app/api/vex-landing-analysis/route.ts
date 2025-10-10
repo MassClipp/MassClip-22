@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { initializeFirebaseAdmin, db } from "@/lib/firebase/firebaseAdmin"
 import Groq from "groq-sdk"
+import { initializeFirebaseAdmin, db } from "@/lib/firebase/firebaseAdmin"
 
 initializeFirebaseAdmin()
 
@@ -10,7 +10,7 @@ const groq = new Groq({
 
 export async function POST(request: NextRequest) {
   try {
-    const { message, conversationHistory, uploadedFileIds } = await request.json()
+    const { message, uploadIds, sessionId, conversationHistory } = await request.json()
 
     const messages: any[] = [
       {
@@ -59,32 +59,27 @@ Keep responses concise, friendly, and focused on helping creators succeed.`,
     }
 
     let fileContext = ""
-    if (uploadedFileIds && uploadedFileIds.length > 0) {
+    if (uploadIds && uploadIds.length > 0) {
       try {
         const uploadDocs = await Promise.all(
-          uploadedFileIds.map((id: string) => db.collection("landingUploads").doc(id).get()),
+          uploadIds.map((id: string) => db.collection("landingUploads").doc(id).get()),
         )
 
-        const uploads = uploadDocs
-          .filter((doc) => doc.exists)
-          .map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          }))
+        const uploads = uploadDocs.filter((doc) => doc.exists).map((doc) => ({ id: doc.id, ...doc.data() }))
 
         if (uploads.length > 0) {
           fileContext = `\n\nThe user has uploaded ${uploads.length} file(s):\n`
           uploads.forEach((upload: any, index: number) => {
             const sizeInMB = ((upload.fileSize || 0) / (1024 * 1024)).toFixed(2)
-            fileContext += `${index + 1}. "${upload.filename}" (${sizeInMB}MB, ${upload.contentType})\n`
+            fileContext += `${index + 1}. "${upload.filename}" (${sizeInMB}MB, ${upload.mimeType || "unknown"})\n`
 
             if (upload.transcript) {
-              fileContext += `   Content: ${upload.transcript.substring(0, 800)}${upload.transcript.length > 800 ? "..." : ""}\n\n`
+              fileContext += `   Transcript: ${upload.transcript.substring(0, 500)}${upload.transcript.length > 500 ? "..." : ""}\n`
             }
           })
         }
       } catch (error) {
-        console.error("❌ [VEX Analysis] Error fetching uploads:", error)
+        console.error("Error fetching uploads from Firestore:", error)
       }
     }
 
@@ -100,11 +95,11 @@ Keep responses concise, friendly, and focused on helping creators succeed.`,
       max_tokens: 1024,
     })
 
-    const response = completion.choices[0]?.message?.content || "I couldn't analyze that. Please try again."
+    const analysis = completion.choices[0]?.message?.content || "I couldn't analyze that. Please try again."
 
-    return NextResponse.json({ response })
+    return NextResponse.json({ analysis })
   } catch (error) {
-    console.error("❌ [VEX Analysis] Error:", error)
+    console.error("Error in VEX landing analysis:", error)
     return NextResponse.json({ error: "Failed to analyze content" }, { status: 500 })
   }
 }
