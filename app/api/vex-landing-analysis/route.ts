@@ -22,9 +22,9 @@ Your role is to:
 3. Propose bundle ideas with pricing recommendations
 4. Explain the potential value and monetization opportunities
 
-After providing your analysis, ALWAYS end with: "To organize your content and create these bundles, sign up to get started!"
+After providing your analysis, end with: "To organize your content and create these bundles, sign up to get started!"
 
-Be enthusiastic, specific, and actionable. Focus on demonstrating value. Keep responses concise but informative.`
+Be enthusiastic, specific, and actionable. Focus on demonstrating value.`
 
     const completion = await groq.chat.completions.create({
       messages: [
