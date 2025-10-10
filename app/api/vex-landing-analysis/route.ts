@@ -61,7 +61,7 @@ Keep responses concise, friendly, and focused on helping creators succeed.`,
       files.forEach((file: any, index: number) => {
         fileContext += `${index + 1}. "${file.name}"\n`
 
-        if (file.transcript) {
+        if (file.transcript && typeof file.transcript === "string") {
           fileContext += `   Content: ${file.transcript.substring(0, 1000)}${file.transcript.length > 1000 ? "..." : ""}\n`
         }
       })
