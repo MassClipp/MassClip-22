@@ -7,19 +7,12 @@ const groq = new Groq({
 
 export async function POST(request: NextRequest) {
   try {
-    const { message, files } = await request.json()
+    const { message, files, conversationHistory } = await request.json()
 
-    let fileContext = ""
-    if (files && files.length > 0) {
-      fileContext = `\n\nThe user has uploaded ${files.length} file(s):\n`
-      files.forEach((f: any, index: number) => {
-        const sizeInMB = (f.size / (1024 * 1024)).toFixed(2)
-        const fileType = f.type || "unknown"
-        fileContext += `${index + 1}. "${f.name}" (${sizeInMB}MB, ${fileType})\n`
-      })
-    }
-
-    const systemPrompt = `You are VEX, a friendly AI assistant for content creators. You help them organize their videos and create bundles to sell.
+    const messages: any[] = [
+      {
+        role: "system",
+        content: `You are VEX, a friendly AI assistant for content creators. You help them organize their videos and create bundles to sell.
 
 **Your Personality:**
 - Conversational and casual, like ChatGPT
@@ -36,7 +29,7 @@ export async function POST(request: NextRequest) {
 - Never mention "keywords" or "based on keywords" - you understand meaning, not word matching
 
 **When Users Upload Content:**
-- Analyze what the content is about based on file names and context
+- Analyze what the content is about based on file names, transcripts, and context
 - Suggest thoughtful organization strategies (folders, categories)
 - Propose bundle ideas with pricing suggestions
 - Be specific and actionable in your recommendations
@@ -49,13 +42,40 @@ export async function POST(request: NextRequest) {
 **Ending Your Responses:**
 After giving analysis or recommendations, casually mention: "Want to make this happen? Sign up to organize your content and create these bundles!"
 
-Keep responses concise, friendly, and focused on helping creators succeed.`
+Keep responses concise, friendly, and focused on helping creators succeed.`,
+      },
+    ]
+
+    if (conversationHistory && conversationHistory.length > 0) {
+      conversationHistory.forEach((msg: any) => {
+        messages.push({
+          role: msg.role,
+          content: msg.content,
+        })
+      })
+    }
+
+    let fileContext = ""
+    if (files && files.length > 0) {
+      fileContext = `\n\nThe user has uploaded ${files.length} file(s):\n`
+      files.forEach((f: any, index: number) => {
+        const sizeInMB = (f.size / (1024 * 1024)).toFixed(2)
+        const fileType = f.type || "unknown"
+        fileContext += `${index + 1}. "${f.name}" (${sizeInMB}MB, ${fileType})\n`
+
+        if (f.transcript) {
+          fileContext += `   Transcript: ${f.transcript.substring(0, 500)}${f.transcript.length > 500 ? "..." : ""}\n`
+        }
+      })
+    }
+
+    messages.push({
+      role: "user",
+      content: message + fileContext,
+    })
 
     const completion = await groq.chat.completions.create({
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: message + fileContext },
-      ],
+      messages,
       model: "llama-3.3-70b-versatile",
       temperature: 0.9,
       max_tokens: 1024,
