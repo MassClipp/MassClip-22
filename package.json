@@ -50,7 +50,7 @@
     "@radix-ui/react-tooltip": "latest",
     "@react-email/render": "latest",
     "@tanstack/react-query": "latest",
-    "@vercel/blob": "latest",
+    "@vercel/blob": "2.0.0",
     "ai": "latest",
     "autoprefixer": "^10.4.20",
     "buffer": "latest",

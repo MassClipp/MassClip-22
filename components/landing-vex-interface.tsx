@@ -18,7 +18,6 @@ interface UploadedFile {
   name: string
   size: number
   type: string
-  url: string
   transcript?: string
 }
 
@@ -59,7 +58,6 @@ export function LandingVexInterface() {
           name: file.name,
           size: file.size,
           type: file.type,
-          url: data.url,
           transcript: data.transcript,
         }
       })

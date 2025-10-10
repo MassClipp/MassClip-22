@@ -1,5 +1,4 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { put } from "@vercel/blob"
 import { transcribeVideo } from "@/lib/groq-transcription"
 
 export async function POST(request: NextRequest) {
@@ -11,19 +10,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 })
     }
 
-    // Upload to Vercel Blob
-    const blob = await put(`landing-uploads/${Date.now()}-${file.name}`, file, {
-      access: "public",
-    })
+    const arrayBuffer = await file.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
+    const base64 = buffer.toString("base64")
+    const dataUrl = `data:${file.type};base64,${base64}`
 
-    console.log(`✅ [Landing Upload] Uploaded: ${blob.url}`)
+    console.log(`✅ [Landing Upload] Processing: ${file.name}`)
 
     // Transcribe if it's a video/audio file
     let transcript = null
     if (file.type.startsWith("video/") || file.type.startsWith("audio/")) {
       try {
         console.log(`🎤 [Landing Upload] Starting transcription...`)
-        const result = await transcribeVideo(blob.url)
+        const result = await transcribeVideo(dataUrl)
         transcript = result.text
         console.log(`✅ [Landing Upload] Transcription complete: ${transcript.length} characters`)
       } catch (error) {
@@ -34,7 +33,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      url: blob.url,
       name: file.name,
       size: file.size,
       type: file.type,
