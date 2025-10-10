@@ -39,62 +39,41 @@ export function LandingVexInterface() {
     }
 
     setIsUploading(true)
+    console.log("[v0] Starting file upload for", files.length, "files")
 
     try {
       const uploadPromises = files.map(async (file) => {
-        const urlResponse = await fetch("/api/vex-landing-get-upload-url", {
+        console.log("[v0] Uploading file:", file.name)
+
+        const formData = new FormData()
+        formData.append("file", file)
+
+        const response = await fetch("/api/vex-landing-upload-file", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            fileName: file.name,
-            fileType: file.type,
-            fileSize: file.size,
-          }),
+          body: formData,
         })
 
-        if (!urlResponse.ok) {
-          throw new Error("Failed to get upload URL")
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.error || "Upload failed")
         }
 
-        const { uploadUrl, key, publicUrl } = await urlResponse.json()
-
-        const uploadResponse = await fetch(uploadUrl, {
-          method: "PUT",
-          body: file,
-          headers: {
-            "Content-Type": file.type,
-          },
-        })
-
-        if (!uploadResponse.ok) {
-          throw new Error("Failed to upload to R2")
-        }
-
-        let transcript = ""
-        if (file.type.startsWith("video/") || file.type.startsWith("audio/")) {
-          const transcribeResponse = await fetch("/api/vex-landing-transcribe", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ url: publicUrl }),
-          })
-
-          if (transcribeResponse.ok) {
-            const transcribeData = await transcribeResponse.json()
-            transcript = transcribeData.transcript || ""
-          }
-        }
+        const data = await response.json()
+        console.log("[v0] Upload successful:", data.name)
 
         return {
           id: `file-${Date.now()}-${Math.random().toString(36).substring(7)}`,
-          name: file.name,
-          size: file.size,
-          type: file.type,
-          transcript,
+          name: data.name,
+          size: data.size,
+          type: data.type,
+          transcript: data.transcript || "",
         }
       })
 
       const newFiles = await Promise.all(uploadPromises)
       setUploadedFiles((prev) => [...prev, ...newFiles])
+
+      console.log("[v0] All files uploaded, analyzing...")
 
       const uploadMessage: Message = {
         id: Date.now().toString(),
@@ -107,7 +86,7 @@ export function LandingVexInterface() {
 
       toast.success(`Uploaded ${newFiles.length} file(s)`)
     } catch (error) {
-      console.error("Upload error:", error)
+      console.error("[v0] Upload error:", error)
       toast.error(error instanceof Error ? error.message : "Failed to upload files")
     } finally {
       setIsUploading(false)
