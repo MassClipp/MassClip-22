@@ -6,7 +6,6 @@ import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Upload, Send, X } from "lucide-react"
-import { toast } from "sonner"
 
 interface Message {
   id: string
@@ -15,10 +14,11 @@ interface Message {
 }
 
 interface UploadedFile {
+  id: string
   name: string
   size: number
   type: string
-  transcript?: string
+  url: string
 }
 
 export function LandingVexInterface() {
@@ -27,7 +27,6 @@ export function LandingVexInterface() {
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const [isUploading, setIsUploading] = useState(false)
-  const [showSignupButton, setShowSignupButton] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -35,7 +34,7 @@ export function LandingVexInterface() {
     if (files.length === 0) return
 
     if (uploadedFiles.length + files.length > 5) {
-      toast.error("Maximum 5 files without signup")
+      alert("You can only upload up to 5 files without signing up")
       return
     }
 
@@ -51,33 +50,35 @@ export function LandingVexInterface() {
           body: formData,
         })
 
-        if (!response.ok) throw new Error("Upload failed")
+        if (!response.ok) {
+          throw new Error("Upload failed")
+        }
 
         const data = await response.json()
         return {
+          id: data.id,
           name: file.name,
           size: file.size,
           type: file.type,
-          transcript: data.transcript,
+          url: data.publicUrl,
         }
       })
 
-      const newFiles = await Promise.all(uploadPromises)
-      setUploadedFiles((prev) => [...prev, ...newFiles])
+      const uploaded = await Promise.all(uploadPromises)
+      setUploadedFiles((prev) => [...prev, ...uploaded])
 
-      const uploadMessage: Message = {
-        id: Date.now().toString(),
-        role: "user",
-        content: `Uploaded: ${newFiles.map((f) => f.name).join(", ")}`,
-      }
-      setMessages((prev) => [...prev, uploadMessage])
-
-      await analyzeUploads(newFiles)
-
-      toast.success(`Uploaded ${newFiles.length} file(s)`)
+      const fileNames = uploaded.map((f) => f.name).join(", ")
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          role: "user",
+          content: `Uploaded: ${fileNames}`,
+        },
+      ])
     } catch (error) {
       console.error("Upload error:", error)
-      toast.error("Failed to upload files")
+      alert("Failed to upload files. Please try again.")
     } finally {
       setIsUploading(false)
       if (fileInputRef.current) {
@@ -86,53 +87,19 @@ export function LandingVexInterface() {
     }
   }
 
-  const analyzeUploads = async (files: UploadedFile[]) => {
-    setIsAnalyzing(true)
-
-    try {
-      const response = await fetch("/api/vex-landing-analysis", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: "Analyze these files",
-          files: files.map((f) => ({
-            name: f.name,
-            size: f.size,
-            type: f.type,
-            transcript: f.transcript,
-          })),
-          conversationHistory: messages,
-        }),
-      })
-
-      const data = await response.json()
-
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: data.analysis || "I can help with that! Sign up to take action.",
-      }
-      setMessages((prev) => [...prev, assistantMessage])
-      setShowSignupButton(true)
-    } catch (error) {
-      console.error("Analysis error:", error)
-      toast.error("Failed to analyze files")
-    } finally {
-      setIsAnalyzing(false)
-    }
-  }
-
   const handleSendMessage = async () => {
-    if (!input.trim()) return
+    if (!input.trim() && uploadedFiles.length === 0) return
 
-    const userMessage: Message = {
+    const userMessage = input.trim()
+    setInput("")
+
+    const newUserMessage: Message = {
       id: Date.now().toString(),
       role: "user",
-      content: input,
+      content: userMessage,
     }
 
-    setMessages((prev) => [...prev, userMessage])
-    setInput("")
+    setMessages((prev) => [...prev, newUserMessage])
     setIsAnalyzing(true)
 
     try {
@@ -140,46 +107,53 @@ export function LandingVexInterface() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: input,
-          files: uploadedFiles.map((f) => ({
-            name: f.name,
-            size: f.size,
-            type: f.type,
-            transcript: f.transcript,
-          })),
+          message: userMessage,
           conversationHistory: messages,
+          uploadedFileIds: uploadedFiles.map((f) => f.id),
         }),
       })
 
+      if (!response.ok) {
+        throw new Error("Analysis failed")
+      }
+
       const data = await response.json()
 
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: data.analysis || "I can help with that! Sign up to take action.",
-      }
-      setMessages((prev) => [...prev, assistantMessage])
-      setShowSignupButton(true)
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: data.response,
+        },
+      ])
     } catch (error) {
-      console.error("Message error:", error)
-      toast.error("Failed to send message")
+      console.error("Analysis error:", error)
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: "Sorry, I encountered an error. Please try again.",
+        },
+      ])
     } finally {
       setIsAnalyzing(false)
     }
   }
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center min-h-[calc(100vh-80px)] px-4 py-16 relative">
+    <div className="w-full flex flex-col items-center justify-center px-4">
       {messages.length === 0 ? (
-        <div className="max-w-4xl w-full space-y-8">
+        <div className="max-w-3xl w-full flex flex-col items-center justify-center space-y-8 py-20">
           <div className="text-center space-y-4">
-            <h1 className="text-5xl lg:text-7xl font-medium text-white tracking-tight">Have content to sell?</h1>
-            <p className="text-lg lg:text-xl text-white/60 font-light max-w-3xl mx-auto">
-              Upload your content to Vex, and watch it organize and bundle your content in seconds.
+            <h2 className="text-2xl font-medium text-white">Hi! I'm Vex</h2>
+            <p className="text-zinc-400 text-lg">
+              I'll help you create profitable bundles, set optimal pricing, and build compelling storefront content.
             </p>
           </div>
 
-          <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-3 backdrop-blur-sm">
+          <div className="w-full max-w-2xl bg-zinc-900/50 border border-zinc-800 rounded-2xl p-3 backdrop-blur-sm">
             <div className="flex gap-3 items-end">
               <input
                 ref={fileInputRef}
@@ -194,7 +168,7 @@ export function LandingVexInterface() {
                 variant="ghost"
                 size="icon"
                 className="h-10 w-10 shrink-0 hover:bg-zinc-800"
-                disabled={uploadedFiles.length >= 5 || isUploading}
+                disabled={isUploading}
               >
                 <Upload className="h-5 w-5" />
               </Button>
@@ -330,18 +304,6 @@ export function LandingVexInterface() {
           <p className="text-xs text-zinc-500 text-center mt-2">
             Upload up to 5 files without signup • Sign up for unlimited uploads and to take action
           </p>
-        </div>
-      )}
-
-      {showSignupButton && (
-        <div className="fixed bottom-8 right-8">
-          <Button
-            onClick={() => (window.location.href = "/signup")}
-            size="lg"
-            className="bg-gradient-to-r from-teal-500 to-cyan-400 hover:from-teal-600 hover:to-cyan-500 text-white font-medium shadow-lg"
-          >
-            Sign Up to Take Action
-          </Button>
         </div>
       )}
     </div>
