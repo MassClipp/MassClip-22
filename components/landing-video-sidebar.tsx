@@ -41,7 +41,7 @@ export function LandingVideoSidebar({ videos, onRemoveVideo }: LandingVideoSideb
 
 function VideoUploadCard({ video, onRemove }: { video: UploadedVideo; onRemove: () => void }) {
   const [isPlaying, setIsPlaying] = useState(false)
-  const [showPlayer, setShowPlayer] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(false)
 
   return (
     <>
@@ -141,15 +141,28 @@ function VideoUploadCard({ video, onRemove }: { video: UploadedVideo; onRemove: 
             video.transcript &&
             typeof video.transcript === "string" &&
             video.transcript.length > 0 && (
-              <div className="mt-3 p-2.5 bg-white/5 backdrop-blur-sm border border-white/20 rounded text-xs text-white/70 max-h-20 overflow-y-auto leading-relaxed">
-                {video.transcript.substring(0, 150)}
-                {video.transcript.length > 150 && "..."}
+              <div className="mt-3">
+                <div
+                  className={`p-2.5 bg-white/5 backdrop-blur-sm border border-white/20 rounded text-xs text-white/70 leading-relaxed overflow-y-auto transition-all ${
+                    isExpanded ? "max-h-96" : "max-h-20"
+                  }`}
+                >
+                  {isExpanded
+                    ? video.transcript
+                    : `${video.transcript.substring(0, 150)}${video.transcript.length > 150 ? "..." : ""}`}
+                </div>
+                {video.transcript.length > 150 && (
+                  <button
+                    onClick={() => setIsExpanded(!isExpanded)}
+                    className="mt-2 text-xs text-teal-400 hover:text-teal-300 transition-colors"
+                  >
+                    {isExpanded ? "Show less" : "Show more"}
+                  </button>
+                )}
               </div>
             )}
         </div>
       </div>
-
-      {/* Dialog component is removed as it's no longer needed */}
     </>
   )
 }

@@ -260,12 +260,12 @@ export function LandingVexInterface() {
   }
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-slate-950 via-black to-teal-950">
+    <div className="flex flex-col lg:flex-row h-screen bg-gradient-to-br from-slate-950 via-black to-teal-950">
       {/* Fixed noise overlay */}
       <div className="fixed inset-0 bg-[url('/noise.png')] opacity-[0.03] mix-blend-soft-light pointer-events-none z-0"></div>
 
       {/* Main chat area */}
-      <div className="flex-1 flex flex-col relative z-10">
+      <div className="flex-1 flex flex-col relative z-10 min-h-0">
         {messages.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center px-4 pb-32">
             <div className="max-w-4xl w-full space-y-8">
@@ -447,7 +447,9 @@ export function LandingVexInterface() {
         )}
       </div>
 
-      <LandingVideoSidebar videos={uploadedVideos} onRemoveVideo={handleRemoveVideo} />
+      <div className="lg:w-96 lg:flex-shrink-0 lg:border-l lg:border-white/10">
+        <LandingVideoSidebar videos={uploadedVideos} onRemoveVideo={handleRemoveVideo} />
+      </div>
     </div>
   )
 }
