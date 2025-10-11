@@ -447,9 +447,7 @@ export function LandingVexInterface() {
         )}
       </div>
 
-      <div className="lg:w-96 lg:flex-shrink-0 lg:border-l lg:border-white/10">
-        <LandingVideoSidebar videos={uploadedVideos} onRemoveVideo={handleRemoveVideo} />
-      </div>
+      <LandingVideoSidebar videos={uploadedVideos} onRemoveVideo={handleRemoveVideo} />
     </div>
   )
 }
