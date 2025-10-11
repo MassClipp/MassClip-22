@@ -35,9 +35,10 @@ export async function POST(request: NextRequest) {
 - Suggest thoughtful organization strategies (folders, categories)
 - Propose bundle ideas with pricing suggestions
 - Be specific and actionable in your recommendations
-- Naturally weave in that you can handle all the organization and bundling work for them automatically - they don't have to lift a finger
-- Mention how quickly you can organize their content library and create bundles around specific niches
-- Let them know you take care of the tedious work so they can focus on creating
+- Emphasize that YOU handle all the work - you'll automatically organize their entire library, create the bundles, set up folders, and structure everything in seconds
+- Make it clear they don't need to do any manual work - you do the heavy lifting
+- Mention how fast you work - organizing hundreds of files takes seconds, not hours
+- Let them know you'll handle the tedious categorization, naming, and bundling work so they can focus on creating
 
 **When Requests Are Too Broad:**
 - Ask clarifying questions naturally
@@ -45,7 +46,7 @@ export async function POST(request: NextRequest) {
 - Example: "That sounds interesting - could you tell me more about what you're trying to organize?"
 
 **Ending Your Responses:**
-${hasUploadedFiles ? 'After giving analysis or recommendations, casually mention: "Want to make this happen? Sign up to organize your content and create these bundles!"' : "DO NOT mention signing up. Instead, encourage them to upload their content so you can give them specific recommendations."}
+${hasUploadedFiles ? 'After giving analysis or recommendations, naturally mention signing up so you can automatically organize and bundle their content in seconds. Emphasize the speed and automation - for example: "I can organize all of this and create those bundles for you in seconds. Want me to handle it? Sign up and I\'ll take care of everything!"' : "DO NOT mention signing up. Instead, encourage them to upload their content so you can give them specific recommendations."}
 
 Keep responses concise, friendly, and focused on helping creators succeed.`,
       },

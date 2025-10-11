@@ -260,7 +260,7 @@ export function LandingVexInterface() {
   }
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-black via-zinc-900 to-black">
+    <div className="flex h-screen bg-gradient-to-br from-slate-950 via-black to-teal-950">
       {/* Fixed noise overlay */}
       <div className="fixed inset-0 bg-[url('/noise.png')] opacity-[0.03] mix-blend-soft-light pointer-events-none z-0"></div>
 
@@ -376,7 +376,7 @@ export function LandingVexInterface() {
               <div className="h-32" />
             </ScrollArea>
 
-            <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black to-transparent pt-4 pb-3 px-4 z-40">
+            <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-slate-950 via-slate-950/95 to-transparent pt-4 pb-3 px-4 z-40 backdrop-blur-xl">
               <div className="max-w-4xl mx-auto">
                 {uploadedVideos.length > 0 && (
                   <div className="flex gap-2 flex-wrap mb-4">
@@ -404,37 +404,37 @@ export function LandingVexInterface() {
                   }}
                   className="flex gap-2"
                 >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="video/*,audio/*"
+                    multiple
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
+                  <Button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploading || uploadedVideos.length >= 5}
+                    size="icon"
+                    className="shrink-0 h-11 w-11 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 rounded-full"
+                  >
+                    {isUploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Upload className="h-5 w-5" />}
+                  </Button>
                   <div className="flex-1 relative">
                     <Input
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
                       placeholder="Message Vex"
-                      className="chat-input-container border-0 bg-transparent text-sm py-2 px-3 pr-10 resize-none focus:ring-1 focus:ring-ring"
+                      className="chat-input-container border-0 bg-zinc-800/50 text-sm py-2 px-3 pr-12 resize-none focus:ring-1 focus:ring-ring h-11"
                       disabled={isAnalyzing}
                       style={{ fontSize: "16px" }}
-                    />
-                    <Button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={isUploading || uploadedVideos.length >= 5}
-                      size="sm"
-                      className="absolute left-2 top-1/2 -translate-y-1/2 h-7 w-7 p-0 bg-transparent hover:bg-zinc-800"
-                    >
-                      {isUploading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
-                    </Button>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="video/*,audio/*"
-                      multiple
-                      onChange={handleFileUpload}
-                      className="hidden"
                     />
                     <Button
                       type="submit"
                       disabled={isAnalyzing || !input.trim()}
                       size="sm"
-                      className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 p-0 bg-foreground text-background hover:bg-foreground/90"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 p-0 bg-foreground text-background hover:bg-foreground/90 rounded-full"
                     >
                       <Send className="h-3 w-3" />
                     </Button>
