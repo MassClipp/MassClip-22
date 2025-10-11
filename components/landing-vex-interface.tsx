@@ -256,10 +256,8 @@ export function LandingVexInterface() {
             </div>
 
             <div className="relative group">
-              {/* Glow effect */}
               <div className="absolute -inset-1 bg-gradient-to-r from-teal-500/30 via-cyan-400/30 to-teal-500/30 rounded-3xl blur-xl opacity-60 group-hover:opacity-100 transition-opacity duration-500" />
-              
-              {/* Main input container with premium glassmorphism */}
+
               <div className="relative bg-white/[0.08] backdrop-blur-3xl border border-white/20 rounded-3xl p-4 shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] hover:shadow-[0_12px_48px_0_rgba(0,0,0,0.5)] transition-all duration-300">
                 <div className="flex gap-3 items-end">
                   <input
@@ -308,12 +306,12 @@ export function LandingVexInterface() {
               </div>
             </div>
 
-            <p className="text-sm text-white/50 text-center">
+            <p className="text-sm text-white/60 text-center">
               Upload up to 5 files without signup &bull; Sign up for unlimited uploads and to take action
             </p>
+          </div>
         ) : (
           <div className="max-w-4xl w-full flex flex-col h-[calc(100vh-160px)]">
-            {/* Chat messages container with custom scrollbar */}
             <div className="flex-1 overflow-y-auto space-y-6 pb-6 pr-2 scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent hover:scrollbar-thumb-white/30">
               {messages.map((message) => (
                 <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
@@ -326,7 +324,6 @@ export function LandingVexInterface() {
                   >
                     {message.role === "assistant" && (
                       <>
-                        {/* Subtle glow for AI messages */}
                         <div className="absolute -inset-[1px] bg-gradient-to-r from-teal-500/20 via-cyan-400/20 to-teal-500/20 rounded-2xl blur-sm -z-10" />
                         <div className="text-xs text-white/60 mb-2 font-medium tracking-wide">VEX AI</div>
                       </>
@@ -360,7 +357,6 @@ export function LandingVexInterface() {
               )}
             </div>
 
-            {/* Uploaded video chips */}
             {uploadedVideos.length > 0 && (
               <div className="flex gap-2 flex-wrap mb-4">
                 {uploadedVideos.map((video, index) => (
@@ -380,12 +376,9 @@ export function LandingVexInterface() {
               </div>
             )}
 
-            {/* Input container with premium glassmorphism */}
             <div className="relative group">
-              {/* Glow effect */}
               <div className="absolute -inset-1 bg-gradient-to-r from-teal-500/30 via-cyan-400/30 to-teal-500/30 rounded-3xl blur-xl opacity-60 group-hover:opacity-100 transition-opacity duration-500" />
-              
-              {/* Main input container */}
+
               <div className="relative bg-white/[0.08] backdrop-blur-3xl border border-white/20 rounded-3xl p-4 shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] hover:shadow-[0_12px_48px_0_rgba(0,0,0,0.5)] transition-all duration-300">
                 <div className="flex gap-3 items-end">
                   <input
@@ -439,8 +432,8 @@ export function LandingVexInterface() {
             </p>
           </div>
         )}
-      </div>\
+      </div>
       <LandingVideoSidebar videos={uploadedVideos} onRemoveVideo={handleRemoveVideo} />
     </div>
-  )\
+  )
 }
