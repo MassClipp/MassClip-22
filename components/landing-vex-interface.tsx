@@ -255,9 +255,8 @@ export function LandingVexInterface() {
               </p>
             </div>
 
-            <div className="relative group">
-              <div className="absolute -inset-1 bg-gradient-to-r from-teal-500/30 via-cyan-400/30 to-blue-500/30 rounded-3xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-              <div className="relative bg-white/[0.08] backdrop-blur-3xl border border-white/20 rounded-3xl p-4 shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] hover:shadow-[0_12px_48px_0_rgba(0,0,0,0.5)] transition-all duration-300 hover:border-white/30">
+            <div className="relative">
+              <div className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-2xl p-4">
                 <div className="flex gap-3 items-end">
                   <input
                     ref={fileInputRef}
@@ -273,7 +272,7 @@ export function LandingVexInterface() {
                     size="icon"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isUploading || uploadedVideos.length >= 5}
-                    className="shrink-0 hover:bg-white/10 transition-all duration-200"
+                    className="shrink-0 hover:bg-white/10"
                   >
                     {isUploading ? (
                       <Loader2 className="h-5 w-5 animate-spin text-white/60" />
@@ -297,7 +296,7 @@ export function LandingVexInterface() {
                     onClick={handleSendMessage}
                     disabled={!input.trim() || isAnalyzing}
                     size="icon"
-                    className="h-11 w-11 shrink-0 bg-gradient-to-r from-teal-500 to-cyan-400 hover:from-teal-600 hover:to-cyan-500 shadow-[0_0_20px_rgba(20,184,166,0.5)] hover:shadow-[0_0_30px_rgba(20,184,166,0.7)] transition-all duration-300"
+                    className="h-11 w-11 shrink-0 bg-teal-500 hover:bg-teal-600"
                   >
                     <Send className="h-5 w-5" />
                   </Button>
@@ -311,64 +310,58 @@ export function LandingVexInterface() {
           </div>
         ) : (
           <div className="max-w-4xl w-full flex flex-col h-[calc(100vh-160px)]">
-            // Premium glassmorphism chat messages container
-            <div className="relative group mb-6">
-              <div className="absolute -inset-1 bg-gradient-to-r from-teal-500/20 via-cyan-400/20 to-blue-500/20 rounded-3xl blur-2xl opacity-60" />
-              <div className="relative flex-1 overflow-y-auto space-y-6 p-6 bg-white/[0.06] backdrop-blur-3xl border border-white/20 rounded-3xl shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] max-h-[calc(100vh-360px)]">
-                {messages.map((message) => (
-                  <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
-                    <div
-                      className={`max-w-[80%] rounded-2xl px-5 py-4 ${
-                        message.role === "user"
-                          ? "bg-gradient-to-r from-teal-500 to-cyan-400 text-white shadow-[0_4px_20px_rgba(20,184,166,0.4)]"
-                          : "bg-white/[0.08] backdrop-blur-2xl border border-white/20 text-white shadow-[0_4px_20px_rgba(0,0,0,0.3)]"
-                      }`}
-                    >
-                      {message.role === "assistant" && (
-                        <div className="text-xs text-white/70 mb-2 font-medium tracking-wide">VEX AI</div>
-                      )}
-                      <div className="whitespace-pre-wrap break-words leading-relaxed text-[15px]">
-                        {message.content}
-                      </div>
-                    </div>
+            <div className="flex-1 overflow-y-auto space-y-4 mb-6 p-4 bg-gray-900/30 backdrop-blur-sm border border-gray-800 rounded-2xl max-h-[calc(100vh-360px)]">
+              {messages.map((message) => (
+                <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
+                  <div
+                    className={`max-w-[80%] rounded-xl px-4 py-3 ${
+                      message.role === "user"
+                        ? "bg-teal-500 text-white"
+                        : "bg-gray-800/80 backdrop-blur-sm border border-gray-700 text-white"
+                    }`}
+                  >
+                    {message.role === "assistant" && (
+                      <div className="text-xs text-white/60 mb-1 font-medium">VEX AI</div>
+                    )}
+                    <div className="whitespace-pre-wrap break-words leading-relaxed">{message.content}</div>
                   </div>
-                ))}
+                </div>
+              ))}
 
-                {isAnalyzing && (
-                  <div className="flex justify-start">
-                    <div className="bg-white/[0.08] backdrop-blur-2xl border border-white/20 rounded-2xl px-5 py-4 shadow-[0_4px_20px_rgba(0,0,0,0.3)]">
-                      <div className="text-xs text-white/70 mb-2 font-medium tracking-wide">VEX AI</div>
-                      <div className="flex gap-1.5">
-                        <div
-                          className="w-2 h-2 bg-white/70 rounded-full animate-bounce"
-                          style={{ animationDelay: "0ms" }}
-                        />
-                        <div
-                          className="w-2 h-2 bg-white/70 rounded-full animate-bounce"
-                          style={{ animationDelay: "150ms" }}
-                        />
-                        <div
-                          className="w-2 h-2 bg-white/70 rounded-full animate-bounce"
-                          style={{ animationDelay: "300ms" }}
-                        />
-                      </div>
+              {isAnalyzing && (
+                <div className="flex justify-start">
+                  <div className="bg-gray-800/80 backdrop-blur-sm border border-gray-700 rounded-xl px-4 py-3">
+                    <div className="text-xs text-white/60 mb-1 font-medium">VEX AI</div>
+                    <div className="flex gap-1">
+                      <div
+                        className="w-2 h-2 bg-white/60 rounded-full animate-bounce"
+                        style={{ animationDelay: "0ms" }}
+                      />
+                      <div
+                        className="w-2 h-2 bg-white/60 rounded-full animate-bounce"
+                        style={{ animationDelay: "150ms" }}
+                      />
+                      <div
+                        className="w-2 h-2 bg-white/60 rounded-full animate-bounce"
+                        style={{ animationDelay: "300ms" }}
+                      />
                     </div>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
-            // Enhanced video chips with glassmorphism
+
             {uploadedVideos.length > 0 && (
               <div className="flex gap-2 flex-wrap mb-4">
                 {uploadedVideos.map((video, index) => (
                   <div
                     key={index}
-                    className="flex items-center gap-2 bg-gradient-to-r from-teal-500/20 to-cyan-400/20 backdrop-blur-xl border border-teal-400/40 rounded-xl px-4 py-2.5 text-sm shadow-[0_4px_16px_rgba(20,184,166,0.2)] hover:shadow-[0_6px_24px_rgba(20,184,166,0.3)] transition-all duration-200"
+                    className="flex items-center gap-2 bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-sm"
                   >
-                    <span className="text-white font-medium truncate max-w-[150px]">{video.name}</span>
+                    <span className="text-white truncate max-w-[150px]">{video.name}</span>
                     <button
                       onClick={() => setUploadedVideos((prev) => prev.filter((_, i) => i !== index))}
-                      className="text-white/60 hover:text-white transition-colors"
+                      className="text-white/60 hover:text-white"
                     >
                       <X className="h-4 w-4" />
                     </button>
@@ -376,55 +369,54 @@ export function LandingVexInterface() {
                 ))}
               </div>
             )}
-            <div className="relative group">
-              <div className="absolute -inset-1 bg-gradient-to-r from-teal-500/30 via-cyan-400/30 to-blue-500/30 rounded-3xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-              <div className="relative bg-white/[0.08] backdrop-blur-3xl border border-white/20 rounded-3xl p-4 shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] hover:shadow-[0_12px_48px_0_rgba(0,0,0,0.5)] transition-all duration-300 hover:border-white/30">
-                <div className="flex gap-3 items-end">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="video/*,audio/*"
-                    multiple
-                    onChange={handleFileUpload}
-                    className="hidden"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isUploading || uploadedVideos.length >= 5}
-                    className="shrink-0 hover:bg-white/10 transition-all duration-200"
-                  >
-                    {isUploading ? (
-                      <Loader2 className="h-5 w-5 animate-spin text-white/60" />
-                    ) : (
-                      <Upload className="h-5 w-5 text-white/70" />
-                    )}
-                  </Button>
-                  <Textarea
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault()
-                        handleSendMessage()
-                      }
-                    }}
-                    placeholder="Message Vex"
-                    className="flex-1 min-h-[40px] max-h-[200px] bg-transparent border-0 focus-visible:ring-0 resize-none text-base placeholder:text-white/50 text-white"
-                  />
-                  <Button
-                    onClick={handleSendMessage}
-                    disabled={!input.trim() || isAnalyzing}
-                    size="icon"
-                    className="h-11 w-11 shrink-0 bg-gradient-to-r from-teal-500 to-cyan-400 hover:from-teal-600 hover:to-cyan-500 shadow-[0_0_20px_rgba(20,184,166,0.5)] hover:shadow-[0_0_30px_rgba(20,184,166,0.7)] transition-all duration-300"
-                  >
-                    <Send className="h-5 w-5" />
-                  </Button>
-                </div>
+
+            <div className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-2xl p-4">
+              <div className="flex gap-3 items-end">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="video/*,audio/*"
+                  multiple
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploading || uploadedVideos.length >= 5}
+                  className="shrink-0 hover:bg-white/10"
+                >
+                  {isUploading ? (
+                    <Loader2 className="h-5 w-5 animate-spin text-white/60" />
+                  ) : (
+                    <Upload className="h-5 w-5 text-white/70" />
+                  )}
+                </Button>
+                <Textarea
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault()
+                      handleSendMessage()
+                    }
+                  }}
+                  placeholder="Message Vex"
+                  className="flex-1 min-h-[40px] max-h-[200px] bg-transparent border-0 focus-visible:ring-0 resize-none text-base placeholder:text-white/50 text-white"
+                />
+                <Button
+                  onClick={handleSendMessage}
+                  disabled={!input.trim() || isAnalyzing}
+                  size="icon"
+                  className="h-11 w-11 shrink-0 bg-teal-500 hover:bg-teal-600"
+                >
+                  <Send className="h-5 w-5" />
+                </Button>
               </div>
             </div>
+
             <p className="text-xs text-white/50 text-center mt-3">
               Upload up to 5 files without signup • Sign up for unlimited uploads and to take action
             </p>
