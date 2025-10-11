@@ -5,7 +5,7 @@ import type React from "react"
 import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Upload, Send, X, Loader2 } from "lucide-react"
+import { Upload, Send, X } from "lucide-react"
 import { toast } from "sonner"
 import { LandingVideoSidebar, type UploadedVideo } from "@/components/landing-video-sidebar"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -36,6 +36,13 @@ export function LandingVexInterface() {
 
     if (uploadedVideos.length + files.length > 5) {
       toast.error("Maximum 5 files without signup")
+      return
+    }
+
+    const MAX_FILE_SIZE = 25 * 1024 * 1024 // 25MB limit for Groq Whisper API
+    const oversizedFiles = files.filter((file) => file.size > MAX_FILE_SIZE)
+    if (oversizedFiles.length > 0) {
+      toast.error(`Files must be under 25MB. ${oversizedFiles.map((f) => f.name).join(", ")} are too large.`)
       return
     }
 
@@ -107,11 +114,17 @@ export function LandingVexInterface() {
         if (file.type.startsWith("video/") || file.type.startsWith("audio/")) {
           console.log("[v0] Transcribing file...")
           try {
+            const controller = new AbortController()
+            const timeoutId = setTimeout(() => controller.abort(), 60000) // 60 second timeout
+
             const transcribeResponse = await fetch("/api/vex-landing-transcribe", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ url: publicUrl }),
+              signal: controller.signal,
             })
+
+            clearTimeout(timeoutId)
 
             if (transcribeResponse.ok) {
               const transcribeData = await transcribeResponse.json()
@@ -120,9 +133,13 @@ export function LandingVexInterface() {
               console.log("[v0] Transcription complete:", transcript.length, "characters")
             } else {
               console.error("[v0] Transcription failed:", transcribeResponse.status, transcribeResponse.statusText)
+              toast.warning(`${file.name} uploaded but transcription failed. You can still use it!`)
             }
           } catch (error) {
             console.error("[v0] Transcription error:", error)
+            if (error instanceof Error && error.name === "AbortError") {
+              toast.warning(`${file.name} transcription timed out. You can still use the video!`)
+            }
           }
         }
 
@@ -297,10 +314,37 @@ export function LandingVexInterface() {
                         size="icon"
                         onClick={() => fileInputRef.current?.click()}
                         disabled={isUploading || uploadedVideos.length >= 5}
-                        className="shrink-0 h-11 w-11 hover:bg-white/10 border border-white/20 rounded-full transition-all"
+                        className="shrink-0 h-11 w-11 hover:bg-white/10 border border-white/20 rounded-full transition-all relative"
                       >
                         {isUploading ? (
-                          <Loader2 className="h-5 w-5 animate-spin text-white/60" />
+                          <>
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                                <circle
+                                  cx="18"
+                                  cy="18"
+                                  r="16"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  className="text-teal-500/30"
+                                />
+                                <circle
+                                  cx="18"
+                                  cy="18"
+                                  r="16"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeDasharray={`${((uploadedVideos.find((v) => v.status !== "complete")?.progress || 0) * 100.5) / 100}, 100.5`}
+                                  className="text-teal-500 transition-all duration-300"
+                                />
+                              </svg>
+                            </div>
+                            <span className="text-xs text-teal-400 font-medium relative z-10">
+                              {Math.round(uploadedVideos.find((v) => v.status !== "complete")?.progress || 0)}%
+                            </span>
+                          </>
                         ) : (
                           <Upload className="h-5 w-5 text-white/60" />
                         )}
@@ -331,6 +375,10 @@ export function LandingVexInterface() {
 
                 <p className="text-sm text-white/40 text-center font-light">
                   Upload up to 5 files without signup • Sign up for unlimited uploads and to take action
+                </p>
+
+                <p className="lg:hidden text-xs text-white/30 text-center font-light mt-4">
+                  For the best experience, use desktop
                 </p>
               </div>
             </div>
@@ -421,10 +469,37 @@ export function LandingVexInterface() {
                       onClick={() => fileInputRef.current?.click()}
                       disabled={isUploading || uploadedVideos.length >= 5}
                       size="icon"
-                      className="shrink-0 h-11 w-11 bg-teal-600/20 hover:bg-teal-600/30 border border-teal-500/30 rounded-full transition-all"
+                      className="shrink-0 h-11 w-11 bg-teal-600/20 hover:bg-teal-600/30 border border-teal-500/30 rounded-full transition-all relative"
                     >
                       {isUploading ? (
-                        <Loader2 className="h-5 w-5 animate-spin text-teal-400" />
+                        <>
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                              <circle
+                                cx="18"
+                                cy="18"
+                                r="16"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                className="text-teal-500/30"
+                              />
+                              <circle
+                                cx="18"
+                                cy="18"
+                                r="16"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeDasharray={`${((uploadedVideos.find((v) => v.status !== "complete")?.progress || 0) * 100.5) / 100}, 100.5`}
+                                className="text-teal-500 transition-all duration-300"
+                              />
+                            </svg>
+                          </div>
+                          <span className="text-[10px] text-teal-400 font-medium relative z-10">
+                            {Math.round(uploadedVideos.find((v) => v.status !== "complete")?.progress || 0)}%
+                          </span>
+                        </>
                       ) : (
                         <Upload className="h-5 w-5 text-teal-400" />
                       )}
@@ -434,7 +509,7 @@ export function LandingVexInterface() {
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         placeholder="Message Vex"
-                        className="chat-input-container border-0 bg-zinc-800/50 text-sm py-2 px-3 pr-12 resize-none focus:ring-1 focus:ring-ring h-11"
+                        className="border-0 bg-zinc-800/50 text-sm py-2 px-3 pr-12 resize-none focus-visible:ring-0 focus-visible:ring-offset-0 h-11"
                         disabled={isAnalyzing}
                         style={{ fontSize: "16px" }}
                       />
@@ -471,23 +546,25 @@ export function LandingVexInterface() {
           <LandingVideoSidebar videos={uploadedVideos} onRemoveVideo={handleRemoveVideo} />
         </div>
 
-        {/* Mobile modal overlay */}
         {showSidebar && uploadedVideos.length > 0 && (
           <div
             className="lg:hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm"
             onClick={() => setShowSidebar(false)}
           >
             <div
-              className="absolute bottom-0 left-0 right-0 max-h-[80vh] bg-slate-900 rounded-t-3xl"
+              className="absolute bottom-0 left-0 right-0 max-h-[85vh] bg-slate-900 rounded-t-3xl flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="p-4 border-b border-white/20 flex items-center justify-between">
+              <div className="p-4 border-b border-white/20 flex items-center justify-between shrink-0">
                 <h3 className="text-sm font-medium text-white">Uploaded Videos ({uploadedVideos.length})</h3>
-                <button onClick={() => setShowSidebar(false)} className="text-white/60 hover:text-white">
+                <button
+                  onClick={() => setShowSidebar(false)}
+                  className="text-white/60 hover:text-white transition-colors p-1 hover:bg-white/10 rounded-full"
+                >
                   <X className="h-5 w-5" />
                 </button>
               </div>
-              <div className="overflow-y-auto max-h-[calc(80vh-60px)] p-4">
+              <div className="overflow-y-auto flex-1 p-4">
                 <LandingVideoSidebar videos={uploadedVideos} onRemoveVideo={handleRemoveVideo} />
               </div>
             </div>

@@ -26,6 +26,13 @@ export async function transcribeVideo(videoUrl: string): Promise<TranscriptionRe
     const buffer = Buffer.from(arrayBuffer)
     console.log(`✅ [Transcription] Downloaded ${buffer.length} bytes`)
 
+    const MAX_SIZE = 25 * 1024 * 1024 // 25MB limit for Groq Whisper API
+    if (buffer.length > MAX_SIZE) {
+      throw new Error(
+        `File too large for transcription (${(buffer.length / 1024 / 1024).toFixed(2)}MB). Maximum size is 25MB.`,
+      )
+    }
+
     // Create audio file for Groq
     const filename = videoUrl.split("/").pop() || "video.mp4"
     const audioFilename = filename.replace(/\.(mp4|mov|avi|mkv|webm)$/i, ".mp3")
