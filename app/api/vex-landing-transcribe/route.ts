@@ -17,7 +17,9 @@ export async function POST(request: NextRequest) {
     console.log(`[v0] Transcription complete: ${transcript.length} characters`)
 
     return NextResponse.json({
-      transcript,
+      transcript: transcript,
+      duration: result.duration,
+      language: result.language,
     })
   } catch (error) {
     console.error("[v0] Transcription error:", error)
