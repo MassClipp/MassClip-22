@@ -255,7 +255,7 @@ export function LandingVexInterface() {
               </p>
             </div>
 
-            <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-3 backdrop-blur-sm">
+            <div className="bg-white/10 backdrop-blur-2xl border border-white/30 rounded-2xl p-3 shadow-2xl">
               <div className="flex gap-3 items-end">
                 <input
                   ref={fileInputRef}
@@ -271,12 +271,12 @@ export function LandingVexInterface() {
                   size="icon"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isUploading || uploadedVideos.length >= 5}
-                  className="shrink-0"
+                  className="shrink-0 hover:bg-white/10"
                 >
                   {isUploading ? (
-                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                    <Loader2 className="h-5 w-5 animate-spin text-white/60" />
                   ) : (
-                    <Upload className="h-5 w-5 text-muted-foreground" />
+                    <Upload className="h-5 w-5 text-white/60" />
                   )}
                 </Button>
                 <Textarea
@@ -289,20 +289,20 @@ export function LandingVexInterface() {
                     }
                   }}
                   placeholder="Ask Vex to organize..."
-                  className="flex-1 min-h-[40px] max-h-[200px] bg-transparent border-0 focus-visible:ring-0 resize-none text-base placeholder:text-zinc-500"
+                  className="flex-1 min-h-[40px] max-h-[200px] bg-transparent border-0 focus-visible:ring-0 resize-none text-base placeholder:text-white/40 text-white"
                 />
                 <Button
                   onClick={handleSendMessage}
                   disabled={!input.trim() || isAnalyzing}
                   size="icon"
-                  className="h-10 w-10 shrink-0 bg-gradient-to-r from-teal-500 to-cyan-400 hover:from-teal-600 hover:to-cyan-500"
+                  className="h-10 w-10 shrink-0 bg-gradient-to-r from-teal-500 to-cyan-400 hover:from-teal-600 hover:to-cyan-500 shadow-lg shadow-teal-500/30"
                 >
                   <Send className="h-5 w-5" />
                 </Button>
               </div>
             </div>
 
-            <p className="text-sm text-zinc-500 text-center">
+            <p className="text-sm text-white/50 text-center">
               Upload up to 5 files without signup • Sign up for unlimited uploads and to take action
             </p>
           </div>
@@ -314,11 +314,11 @@ export function LandingVexInterface() {
                   <div
                     className={`max-w-[80%] rounded-2xl px-4 py-3 ${
                       message.role === "user"
-                        ? "bg-gradient-to-r from-teal-500 to-cyan-400 text-white"
-                        : "bg-zinc-900 border border-zinc-800 text-white shadow-lg"
+                        ? "bg-gradient-to-r from-teal-500 to-cyan-400 text-white shadow-lg shadow-teal-500/20"
+                        : "bg-white/10 backdrop-blur-2xl border border-white/30 text-white shadow-2xl"
                     }`}
                   >
-                    {message.role === "assistant" && <div className="text-xs text-zinc-400 mb-1">VEX AI</div>}
+                    {message.role === "assistant" && <div className="text-xs text-white/60 mb-1">VEX AI</div>}
                     <div className="whitespace-pre-wrap break-words leading-relaxed">{message.content}</div>
                   </div>
                 </div>
@@ -326,19 +326,19 @@ export function LandingVexInterface() {
 
               {isAnalyzing && (
                 <div className="flex justify-start">
-                  <div className="bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-3 shadow-lg">
-                    <div className="text-xs text-zinc-400 mb-1">VEX AI</div>
+                  <div className="bg-white/10 backdrop-blur-2xl border border-white/30 rounded-2xl px-4 py-3 shadow-2xl">
+                    <div className="text-xs text-white/60 mb-1">VEX AI</div>
                     <div className="flex gap-1">
                       <div
-                        className="w-2 h-2 bg-zinc-500 rounded-full animate-bounce"
+                        className="w-2 h-2 bg-white/60 rounded-full animate-bounce"
                         style={{ animationDelay: "0ms" }}
                       />
                       <div
-                        className="w-2 h-2 bg-zinc-500 rounded-full animate-bounce"
+                        className="w-2 h-2 bg-white/60 rounded-full animate-bounce"
                         style={{ animationDelay: "150ms" }}
                       />
                       <div
-                        className="w-2 h-2 bg-zinc-500 rounded-full animate-bounce"
+                        className="w-2 h-2 bg-white/60 rounded-full animate-bounce"
                         style={{ animationDelay: "300ms" }}
                       />
                     </div>
@@ -352,12 +352,12 @@ export function LandingVexInterface() {
                 {uploadedVideos.map((video, index) => (
                   <div
                     key={index}
-                    className="flex items-center gap-2 bg-gradient-to-r from-teal-500/20 to-cyan-400/20 border border-teal-500/30 rounded-lg px-3 py-2 text-sm"
+                    className="flex items-center gap-2 bg-gradient-to-r from-teal-500/20 to-cyan-400/20 backdrop-blur-xl border border-teal-500/40 rounded-lg px-3 py-2 text-sm shadow-lg"
                   >
                     <span className="text-white truncate max-w-[150px]">{video.name}</span>
                     <button
                       onClick={() => setUploadedVideos((prev) => prev.filter((_, i) => i !== index))}
-                      className="text-zinc-400 hover:text-white"
+                      className="text-white/60 hover:text-white"
                     >
                       <X className="h-4 w-4" />
                     </button>
@@ -366,7 +366,7 @@ export function LandingVexInterface() {
               </div>
             )}
 
-            <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-3 backdrop-blur-sm">
+            <div className="bg-white/10 backdrop-blur-2xl border border-white/30 rounded-2xl p-3 shadow-2xl">
               <div className="flex gap-3 items-end">
                 <input
                   ref={fileInputRef}
@@ -382,12 +382,12 @@ export function LandingVexInterface() {
                   size="icon"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isUploading || uploadedVideos.length >= 5}
-                  className="shrink-0"
+                  className="shrink-0 hover:bg-white/10"
                 >
                   {isUploading ? (
-                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                    <Loader2 className="h-5 w-5 animate-spin text-white/60" />
                   ) : (
-                    <Upload className="h-5 w-5 text-muted-foreground" />
+                    <Upload className="h-5 w-5 text-white/60" />
                   )}
                 </Button>
                 <Textarea
@@ -400,20 +400,20 @@ export function LandingVexInterface() {
                     }
                   }}
                   placeholder="Message Vex"
-                  className="flex-1 min-h-[40px] max-h-[200px] bg-transparent border-0 focus-visible:ring-0 resize-none text-base placeholder:text-zinc-500"
+                  className="flex-1 min-h-[40px] max-h-[200px] bg-transparent border-0 focus-visible:ring-0 resize-none text-base placeholder:text-white/40 text-white"
                 />
                 <Button
                   onClick={handleSendMessage}
                   disabled={!input.trim() || isAnalyzing}
                   size="icon"
-                  className="h-10 w-10 shrink-0 bg-gradient-to-r from-teal-500 to-cyan-400 hover:from-teal-600 hover:to-cyan-500"
+                  className="h-10 w-10 shrink-0 bg-gradient-to-r from-teal-500 to-cyan-400 hover:from-teal-600 hover:to-cyan-500 shadow-lg shadow-teal-500/30"
                 >
                   <Send className="h-5 w-5" />
                 </Button>
               </div>
             </div>
 
-            <p className="text-xs text-zinc-500 text-center mt-2">
+            <p className="text-xs text-white/50 text-center mt-2">
               Upload up to 5 files without signup • Sign up for unlimited uploads and to take action
             </p>
           </div>

@@ -19,8 +19,8 @@ const LandingPage = () => {
   }, [router])
 
   return (
-    <div className="min-h-screen bg-black flex flex-col">
-      <header className="sticky top-0 z-50 border-b border-white/10 bg-black/80 backdrop-blur-xl">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-black to-teal-950 flex flex-col">
+      <header className="sticky top-0 z-50 border-b border-white/20 bg-white/5 backdrop-blur-2xl shadow-lg">
         <nav className="flex items-center justify-between max-w-7xl mx-auto px-6 py-4 relative">
           <div className="text-white font-light text-2xl">
             <span className="font-league-spartan font-bold" style={{ fontFamily: "var(--font-league-spartan)" }}>
@@ -46,7 +46,7 @@ const LandingPage = () => {
             </Link>
             <Button
               onClick={() => router.push("/signup")}
-              className="bg-gradient-to-r from-teal-500 to-cyan-400 text-white hover:from-teal-600 hover:to-cyan-500 font-light rounded-full px-6 py-2 text-sm"
+              className="bg-gradient-to-r from-teal-500 to-cyan-400 text-white hover:from-teal-600 hover:to-cyan-500 font-light rounded-full px-6 py-2 text-sm shadow-lg shadow-teal-500/20"
             >
               Sign Up Free
             </Button>
@@ -68,8 +68,8 @@ const LandingPage = () => {
             </div>
 
             <div className="grid md:grid-cols-3 gap-8">
-              <div className="bg-white/5 border border-white/10 rounded-2xl p-8 hover:bg-white/10 transition-colors">
-                <div className="w-12 h-12 rounded-full bg-gradient-to-r from-teal-500 to-cyan-400 flex items-center justify-center mb-6">
+              <div className="bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 hover:bg-white/10 hover:border-white/30 transition-all shadow-xl hover:shadow-2xl hover:shadow-teal-500/10">
+                <div className="w-12 h-12 rounded-full bg-gradient-to-r from-teal-500 to-cyan-400 flex items-center justify-center mb-6 shadow-lg shadow-teal-500/30">
                   <Sparkles className="w-6 h-6 text-white" />
                 </div>
                 <h3 className="text-xl font-semibold text-white mb-3">AI-Powered Organization</h3>
@@ -78,8 +78,8 @@ const LandingPage = () => {
                 </p>
               </div>
 
-              <div className="bg-white/5 border border-white/10 rounded-2xl p-8 hover:bg-white/10 transition-colors">
-                <div className="w-12 h-12 rounded-full bg-gradient-to-r from-teal-500 to-cyan-400 flex items-center justify-center mb-6">
+              <div className="bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 hover:bg-white/10 hover:border-white/30 transition-all shadow-xl hover:shadow-2xl hover:shadow-cyan-500/10">
+                <div className="w-12 h-12 rounded-full bg-gradient-to-r from-teal-500 to-cyan-400 flex items-center justify-center mb-6 shadow-lg shadow-cyan-500/30">
                   <Package className="w-6 h-6 text-white" />
                 </div>
                 <h3 className="text-xl font-semibold text-white mb-3">Smart Bundling</h3>
@@ -88,8 +88,8 @@ const LandingPage = () => {
                 </p>
               </div>
 
-              <div className="bg-white/5 border border-white/10 rounded-2xl p-8 hover:bg-white/10 transition-colors">
-                <div className="w-12 h-12 rounded-full bg-gradient-to-r from-teal-500 to-cyan-400 flex items-center justify-center mb-6">
+              <div className="bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 hover:bg-white/10 hover:border-white/30 transition-all shadow-xl hover:shadow-2xl hover:shadow-teal-500/10">
+                <div className="w-12 h-12 rounded-full bg-gradient-to-r from-teal-500 to-cyan-400 flex items-center justify-center mb-6 shadow-lg shadow-teal-500/30">
                   <TrendingUp className="w-6 h-6 text-white" />
                 </div>
                 <h3 className="text-xl font-semibold text-white mb-3">Instant Storefront</h3>
@@ -101,7 +101,7 @@ const LandingPage = () => {
           </div>
         </section>
 
-        <section id="how-it-works" className="py-24 px-6 bg-white/5 border-t border-white/10">
+        <section id="how-it-works" className="py-24 px-6 border-t border-white/10">
           <div className="max-w-7xl mx-auto">
             <div className="text-center mb-16">
               <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">How VEX Works</h2>
@@ -109,8 +109,8 @@ const LandingPage = () => {
             </div>
 
             <div className="grid md:grid-cols-3 gap-12">
-              <div className="text-center">
-                <div className="w-16 h-16 rounded-full bg-gradient-to-r from-teal-500 to-cyan-400 flex items-center justify-center mx-auto mb-6 text-2xl font-bold text-white">
+              <div className="text-center bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 hover:bg-white/10 hover:border-white/30 transition-all shadow-xl">
+                <div className="w-16 h-16 rounded-full bg-gradient-to-r from-teal-500 to-cyan-400 flex items-center justify-center mx-auto mb-6 text-2xl font-bold text-white shadow-lg shadow-teal-500/30">
                   1
                 </div>
                 <h3 className="text-xl font-semibold text-white mb-3">Upload Your Content</h3>
@@ -119,8 +119,8 @@ const LandingPage = () => {
                 </p>
               </div>
 
-              <div className="text-center">
-                <div className="w-16 h-16 rounded-full bg-gradient-to-r from-teal-500 to-cyan-400 flex items-center justify-center mx-auto mb-6 text-2xl font-bold text-white">
+              <div className="text-center bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 hover:bg-white/10 hover:border-white/30 transition-all shadow-xl">
+                <div className="w-16 h-16 rounded-full bg-gradient-to-r from-teal-500 to-cyan-400 flex items-center justify-center mx-auto mb-6 text-2xl font-bold text-white shadow-lg shadow-cyan-500/30">
                   2
                 </div>
                 <h3 className="text-xl font-semibold text-white mb-3">Let VEX Analyze</h3>
@@ -129,8 +129,8 @@ const LandingPage = () => {
                 </p>
               </div>
 
-              <div className="text-center">
-                <div className="w-16 h-16 rounded-full bg-gradient-to-r from-teal-500 to-cyan-400 flex items-center justify-center mx-auto mb-6 text-2xl font-bold text-white">
+              <div className="text-center bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 hover:bg-white/10 hover:border-white/30 transition-all shadow-xl">
+                <div className="w-16 h-16 rounded-full bg-gradient-to-r from-teal-500 to-cyan-400 flex items-center justify-center mx-auto mb-6 text-2xl font-bold text-white shadow-lg shadow-teal-500/30">
                   3
                 </div>
                 <h3 className="text-xl font-semibold text-white mb-3">Start Selling</h3>
@@ -155,15 +155,15 @@ const LandingPage = () => {
               product, VEX makes it simple.
             </p>
             <div className="flex flex-wrap justify-center gap-8 mt-12">
-              <div className="text-center">
+              <div className="text-center bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-6 min-w-[180px] shadow-xl hover:bg-white/10 hover:border-white/30 transition-all">
                 <div className="text-3xl font-bold text-white mb-2">AI-Powered</div>
                 <div className="text-white/60">Smart recommendations</div>
               </div>
-              <div className="text-center">
+              <div className="text-center bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-6 min-w-[180px] shadow-xl hover:bg-white/10 hover:border-white/30 transition-all">
                 <div className="text-3xl font-bold text-white mb-2">Instant Setup</div>
                 <div className="text-white/60">No configuration needed</div>
               </div>
-              <div className="text-center">
+              <div className="text-center bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-6 min-w-[180px] shadow-xl hover:bg-white/10 hover:border-white/30 transition-all">
                 <div className="text-3xl font-bold text-white mb-2">Creator First</div>
                 <div className="text-white/60">Built for your success</div>
               </div>
@@ -171,9 +171,8 @@ const LandingPage = () => {
           </div>
         </section>
 
-        {/* CTA Section */}
-        <section className="py-24 px-6 bg-gradient-to-r from-teal-500/10 to-cyan-400/10 border-t border-white/10">
-          <div className="max-w-4xl mx-auto text-center">
+        <section className="py-24 px-6 border-t border-white/10">
+          <div className="max-w-4xl mx-auto text-center bg-gradient-to-r from-teal-500/10 to-cyan-400/10 backdrop-blur-xl border border-white/20 rounded-3xl p-12 shadow-2xl">
             <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">Ready to start selling?</h2>
             <p className="text-white/60 text-lg mb-8">
               Try VEX for free. Upload your content and see what VEX can do for you.
@@ -181,7 +180,7 @@ const LandingPage = () => {
             <Button
               onClick={() => router.push("/signup")}
               size="lg"
-              className="bg-gradient-to-r from-teal-500 to-cyan-400 text-white hover:from-teal-600 hover:to-cyan-500 font-light rounded-full px-8 py-6 text-lg"
+              className="bg-gradient-to-r from-teal-500 to-cyan-400 text-white hover:from-teal-600 hover:to-cyan-500 font-light rounded-full px-8 py-6 text-lg shadow-xl shadow-teal-500/30 hover:shadow-2xl hover:shadow-teal-500/40 transition-all"
             >
               Get Started For Free
             </Button>
@@ -189,7 +188,7 @@ const LandingPage = () => {
         </section>
       </main>
 
-      <footer className="border-t border-white/10 py-6">
+      <footer className="border-t border-white/20 bg-white/5 backdrop-blur-xl py-6">
         <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="text-white/60 font-light text-sm">© 2025 Vex. All rights reserved.</div>
           <div className="flex items-center gap-6 text-sm">
