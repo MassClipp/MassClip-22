@@ -1,6 +1,8 @@
 "use client"
 
-import { useState, useRef } from "react"
+import type React from "react"
+
+import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Upload, Send, X, Loader2 } from "lucide-react"
@@ -23,8 +25,7 @@ export function LandingVexInterface() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  const React = window.React // Assuming React is available globally
-  React.useEffect(() => {
+  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages, isAnalyzing])
 
