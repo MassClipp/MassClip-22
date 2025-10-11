@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
     const freeUser = await getFreeUser(userId)
     const hasUsedFreeTrial = freeUser?.hasUsedFreeTrial === true
 
-    // Get membership status
+    // Get membership status (this will return null if trial has expired)
     const membership = await getMembership(userId)
 
     console.log("[v0] Trial Status - Membership data:", {
@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
         isOnTrial: false,
         daysRemaining: 0,
         trialEndDate: null,
-        hasUsedFreeTrial: true, // They've effectively "used" the trial by having active subscription
+        hasUsedFreeTrial: true,
         hasActiveCreatorPro: true,
       })
     }
@@ -56,13 +56,11 @@ export async function GET(req: NextRequest) {
     let trialEndDate: Date | null = null
 
     if (membership.currentPeriodEnd) {
-      // Check if it's a Firestore Timestamp object
       if (typeof membership.currentPeriodEnd === "object" && "toDate" in membership.currentPeriodEnd) {
         trialEndDate = (membership.currentPeriodEnd as any).toDate()
       } else if (membership.currentPeriodEnd instanceof Date) {
         trialEndDate = membership.currentPeriodEnd
       } else if (typeof membership.currentPeriodEnd === "object" && "_seconds" in membership.currentPeriodEnd) {
-        // Handle Firestore Timestamp with _seconds property
         trialEndDate = new Date((membership.currentPeriodEnd as any)._seconds * 1000)
       }
     }

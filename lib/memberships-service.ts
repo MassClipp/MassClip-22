@@ -61,10 +61,39 @@ export async function getMembership(uid: string): Promise<MembershipDoc | null> 
       const data = docSnap.data() as MembershipDoc
 
       if (data.status === "trialing") {
+        const now = new Date()
+        let trialEndDate: Date | null = null
+
+        if (data.currentPeriodEnd) {
+          if (typeof data.currentPeriodEnd === "object" && "toDate" in data.currentPeriodEnd) {
+            trialEndDate = (data.currentPeriodEnd as any).toDate()
+          } else if (data.currentPeriodEnd instanceof Date) {
+            trialEndDate = data.currentPeriodEnd
+          } else if (typeof data.currentPeriodEnd === "object" && "_seconds" in data.currentPeriodEnd) {
+            trialEndDate = new Date((data.currentPeriodEnd as any)._seconds * 1000)
+          }
+        }
+
+        // If trial has expired, downgrade user to free plan immediately
+        if (trialEndDate && trialEndDate <= now) {
+          console.log("⚠️ Trial expired, downgrading user to free plan:", uid.substring(0, 8) + "...")
+
+          // Import the downgrade function
+          const { downgradeFreeUserFromTrial } = await import("./free-users-service")
+          await downgradeFreeUserFromTrial(uid)
+
+          // Delete the membership record since they're now free
+          await docRef.delete()
+
+          console.log("✅ User downgraded to free plan due to expired trial")
+          return null
+        }
+
         console.log("✅ Found trialing membership (no Stripe validation needed):", {
           plan: data.plan,
           status: data.status,
           isActive: data.isActive,
+          trialEndDate: trialEndDate?.toISOString(),
         })
         return data
       }

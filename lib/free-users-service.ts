@@ -24,6 +24,7 @@ export interface FreeUserDoc {
   hasLimitedOrganization: boolean
   // Permanent trial tracking field
   hasUsedFreeTrial?: boolean // Permanent flag - once true, never resets
+  trialActive?: boolean // Indicates if the user is currently in a trial period
   // Timestamps
   createdAt: any
   updatedAt: any
@@ -49,6 +50,7 @@ const FREE_TIER_DEFAULTS = {
   hasNoWatermark: false,
   hasPrioritySupport: false,
   hasLimitedOrganization: true,
+  trialActive: false,
 }
 
 export async function getFreeUser(uid: string): Promise<FreeUserDoc | null> {
@@ -250,6 +252,7 @@ export async function getFreeUserLimits(uid: string): Promise<{
   hasLimitedOrganization: boolean
   daysUntilReset: number
   hasUsedFreeTrial?: boolean
+  trialActive?: boolean
 }> {
   // Check and reset monthly limits if needed
   const freeUser = await checkAndResetMonthlyLimits(uid)
@@ -273,6 +276,7 @@ export async function getFreeUserLimits(uid: string): Promise<{
       ...FREE_TIER_DEFAULTS,
       daysUntilReset: 0,
       hasUsedFreeTrial: false,
+      trialActive: false,
     }
   }
 
@@ -302,6 +306,7 @@ export async function getFreeUserLimits(uid: string): Promise<{
     hasLimitedOrganization: freeUser.hasLimitedOrganization,
     daysUntilReset,
     hasUsedFreeTrial: freeUser.hasUsedFreeTrial ?? false,
+    trialActive: freeUser.trialActive ?? false,
   }
 }
 
@@ -323,6 +328,60 @@ export async function upgradeFreeUserToPro(uid: string): Promise<void> {
     console.log("✅ Free user marked as upgraded to pro")
   } catch (error) {
     console.error("❌ Error upgrading free user:", error)
+    throw error
+  }
+}
+
+export async function downgradeFreeUserFromTrial(uid: string): Promise<void> {
+  console.log("🔄 Downgrading user from trial to free plan:", uid.substring(0, 8) + "...")
+
+  try {
+    const docRef = adminDb.collection("freeUsers").doc(uid)
+    const docSnap = await docRef.get()
+
+    if (docSnap.exists) {
+      // Update existing freeUser record to remove trial permissions
+      await docRef.update({
+        trialActive: false,
+        canCreateBundles: false,
+        canAnalyzeTranscripts: false,
+        maxFolders: 2,
+        canCreateSubfolders: false,
+        bundlesLimit: 2,
+        maxVideosPerBundle: 10,
+        platformFeePercentage: 20,
+        updatedAt: FieldValue.serverTimestamp(),
+      })
+      console.log("✅ Updated existing freeUser record to free plan limits")
+    } else {
+      // Create new freeUser record with free plan limits
+      const freeUserDoc: Partial<FreeUserDoc> = {
+        uid,
+        email: "", // Will be updated when we have the email
+        downloadsUsed: 0,
+        bundlesCreated: 0,
+        ...FREE_TIER_DEFAULTS,
+        hasUsedFreeTrial: true, // Mark that they've used their trial
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        lastResetDate: FieldValue.serverTimestamp(),
+        currentPeriodStart: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+      }
+      await docRef.set(freeUserDoc)
+      console.log("✅ Created new freeUser record with free plan limits")
+    }
+
+    // Also update the users collection
+    const userRef = adminDb.collection("users").doc(uid)
+    await userRef.update({
+      trialActive: false,
+      plan: "free",
+      updatedAt: FieldValue.serverTimestamp(),
+    })
+
+    console.log("✅ User downgraded from trial to free plan successfully")
+  } catch (error) {
+    console.error("❌ Error downgrading user from trial:", error)
     throw error
   }
 }
