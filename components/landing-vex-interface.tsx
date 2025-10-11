@@ -376,7 +376,7 @@ export function LandingVexInterface() {
               <div className="h-32" />
             </ScrollArea>
 
-            <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-slate-950 via-slate-950/95 to-transparent pt-4 pb-3 px-4 z-40 backdrop-blur-xl">
+            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-slate-950 via-slate-950/95 to-transparent pt-4 pb-3 px-4 z-40 backdrop-blur-xl">
               <div className="max-w-4xl mx-auto">
                 {uploadedVideos.length > 0 && (
                   <div className="flex gap-2 flex-wrap mb-4">
