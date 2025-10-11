@@ -1,5 +1,7 @@
 "use client"
 
+import type React from "react"
+
 import { useState } from "react"
 import { X, Loader2, CheckCircle2, AlertCircle, Play } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
@@ -24,8 +26,8 @@ export function LandingVideoSidebar({ videos, onRemoveVideo }: LandingVideoSideb
   if (videos.length === 0) return null
 
   return (
-    <div className="w-80 border-l border-white/20 bg-white/5 backdrop-blur-2xl overflow-y-auto shadow-2xl">
-      <div className="p-4 border-b border-white/20 bg-white/5">
+    <div className="w-full lg:w-80 lg:border-l border-white/20 bg-white/5 backdrop-blur-2xl overflow-y-auto shadow-2xl">
+      <div className="hidden lg:block p-4 border-b border-white/20 bg-white/5">
         <h3 className="text-sm font-medium text-white">Uploaded Videos ({videos.length})</h3>
         <p className="text-xs text-white/60 mt-1">Videos are being processed for VEX analysis</p>
       </div>
@@ -43,6 +45,12 @@ function VideoUploadCard({ video, onRemove }: { video: UploadedVideo; onRemove: 
   const [isPlaying, setIsPlaying] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
 
+  const handleTranscriptToggle = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsExpanded(!isExpanded)
+  }
+
   return (
     <>
       <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-lg overflow-hidden hover:bg-white/15 hover:border-white/30 transition-all group shadow-xl">
@@ -55,6 +63,10 @@ function VideoUploadCard({ video, onRemove }: { video: UploadedVideo; onRemove: 
                 <div
                   className="absolute inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center cursor-pointer"
                   onClick={() => setIsPlaying(true)}
+                  onTouchEnd={(e) => {
+                    e.preventDefault()
+                    setIsPlaying(true)
+                  }}
                 >
                   <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-lg hover:bg-white/30 transition-colors">
                     <Play className="h-6 w-6 text-white ml-1" />
@@ -62,12 +74,16 @@ function VideoUploadCard({ video, onRemove }: { video: UploadedVideo; onRemove: 
                 </div>
               </>
             ) : (
-              <video src={video.url} controls autoPlay className="w-full h-full object-cover" />
+              <video src={video.url} controls autoPlay className="w-full h-full object-cover" playsInline />
             )}
 
             {/* Remove button overlay */}
             <button
               onClick={(e) => {
+                e.stopPropagation()
+                onRemove()
+              }}
+              onTouchEnd={(e) => {
                 e.stopPropagation()
                 onRemove()
               }}
@@ -136,7 +152,6 @@ function VideoUploadCard({ video, onRemove }: { video: UploadedVideo; onRemove: 
             </p>
           )}
 
-          {/* Transcript preview */}
           {video.status === "complete" &&
             video.transcript &&
             typeof video.transcript === "string" &&
@@ -153,8 +168,9 @@ function VideoUploadCard({ video, onRemove }: { video: UploadedVideo; onRemove: 
                 </div>
                 {video.transcript.length > 150 && (
                   <button
-                    onClick={() => setIsExpanded(!isExpanded)}
-                    className="mt-2 text-xs text-teal-400 hover:text-teal-300 transition-colors"
+                    onClick={handleTranscriptToggle}
+                    onTouchEnd={handleTranscriptToggle}
+                    className="mt-2 text-xs text-teal-400 hover:text-teal-300 transition-colors active:text-teal-200 touch-manipulation"
                   >
                     {isExpanded ? "Show less" : "Show more"}
                   </button>
