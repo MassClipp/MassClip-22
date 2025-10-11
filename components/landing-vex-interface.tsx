@@ -99,11 +99,8 @@ export function LandingVexInterface() {
             if (transcribeResponse.ok) {
               const transcribeData = await transcribeResponse.json()
               transcript = transcribeData.transcript || ""
-              console.log("[v0] Transcription status:", transcript ? "success" : "empty")
-              console.log("[v0] Transcription length:", transcript.length, "characters")
-              if (transcript) {
-                console.log("[v0] Transcript preview:", transcript.substring(0, 100))
-              }
+              console.log("[v0] Transcription status:", transcript ? "success" : "undefined")
+              console.log("[v0] Transcription complete:", transcript.length, "characters")
             } else {
               console.error("[v0] Transcription failed:", transcribeResponse.status, transcribeResponse.statusText)
             }
@@ -135,10 +132,6 @@ export function LandingVexInterface() {
       const completedFiles = await Promise.all(uploadPromises)
 
       console.log("[v0] All files uploaded, analyzing...")
-      console.log(
-        "[v0] Transcripts for analysis:",
-        completedFiles.map((f) => ({ name: f.name, transcriptLength: f.transcript?.length || 0 })),
-      )
 
       const uploadMessage: Message = {
         id: Date.now().toString(),
