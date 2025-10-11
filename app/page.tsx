@@ -35,9 +35,9 @@ const LandingPage = () => {
             <a href="#how-it-works" className="text-white/80 hover:text-white transition-colors font-light text-sm">
               How It Works
             </a>
-            <a href="#about" className="text-white/80 hover:text-white transition-colors font-light text-sm">
+            <Link href="/about" className="text-white/80 hover:text-white transition-colors font-light text-sm">
               About Us
-            </a>
+            </Link>
           </div>
 
           <div className="flex items-center gap-4">
