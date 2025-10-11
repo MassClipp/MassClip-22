@@ -308,25 +308,25 @@ export function LandingVexInterface() {
           </div>
         ) : (
           <div className="max-w-4xl w-full flex flex-col h-[calc(100vh-160px)]">
-            <div className="flex-1 overflow-y-auto space-y-6 pb-6">
+            <div className="flex-1 overflow-y-auto space-y-6 pb-6 pr-2">
               {messages.map((message) => (
                 <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
                   <div
                     className={`max-w-[80%] rounded-2xl px-4 py-3 ${
                       message.role === "user"
                         ? "bg-gradient-to-r from-teal-500 to-cyan-400 text-white"
-                        : "bg-zinc-900/50 border border-zinc-800 text-white"
+                        : "bg-zinc-900 border border-zinc-800 text-white shadow-lg"
                     }`}
                   >
                     {message.role === "assistant" && <div className="text-xs text-zinc-400 mb-1">VEX AI</div>}
-                    <div className="whitespace-pre-wrap">{message.content}</div>
+                    <div className="whitespace-pre-wrap break-words leading-relaxed">{message.content}</div>
                   </div>
                 </div>
               ))}
 
               {isAnalyzing && (
                 <div className="flex justify-start">
-                  <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl px-4 py-3">
+                  <div className="bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-3 shadow-lg">
                     <div className="text-xs text-zinc-400 mb-1">VEX AI</div>
                     <div className="flex gap-1">
                       <div
