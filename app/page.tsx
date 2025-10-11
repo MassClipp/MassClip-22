@@ -64,19 +64,20 @@ const LandingPage = () => {
               <div>
                 <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">HD Organized Folders</h2>
                 <p className="text-white/60 text-lg leading-relaxed mb-6">
-                  VEX automatically organizes your content into beautifully structured folders based on themes, topics,
-                  and content type. No more messy file systems or manual sorting.
+                  No more selling messy zip files. Every piece of content is delivered through a beautiful, HD interface
+                  that your customers will love. Professional folder organization that makes browsing and downloading
+                  seamless.
                 </p>
                 <p className="text-white/60 text-lg leading-relaxed">
-                  Every folder is optimized for selling, with smart naming conventions and logical groupings that make
-                  sense to your customers.
+                  VEX automatically structures your content with smart naming conventions and logical groupings. Your
+                  customers get a premium experience, not a confusing file dump.
                 </p>
               </div>
               <div className="relative">
                 <div className="bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 shadow-2xl hover:shadow-teal-500/10 transition-all">
                   <img
-                    src="/placeholder.svg?height=400&width=600"
-                    alt="HD Organized Folders"
+                    src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/7D123C64-C36B-4ACB-83ED-085BB60E2747.PNG-V4RkOLOzcrUKvamM8cZGlw9BRS9b5W.png"
+                    alt="HD Organized Folders Interface"
                     className="w-full rounded-lg shadow-lg"
                   />
                 </div>
@@ -132,14 +133,14 @@ const LandingPage = () => {
           <div className="max-w-7xl mx-auto">
             <div className="text-center mb-16">
               <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">How VEX Works</h2>
-              <p className="text-white/60 text-lg max-w-2xl mx-auto">From upload to sale in three simple steps</p>
+              <p className="text-white/60 text-lg max-w-2xl mx-auto">Organization and sellable bundles in seconds</p>
             </div>
 
             <div className="mb-16 max-w-4xl mx-auto">
               <div className="bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 shadow-2xl">
                 <img
-                  src="/placeholder.svg?height=500&width=800"
-                  alt="How VEX Works"
+                  src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/copy_ACAD5C9D-0800-434F-BC27-E3DE625779B1.JPEG-6TlHbPShOaerHSsdCOqseRiuPKglfX.jpeg"
+                  alt="VEX Chat Interface Example"
                   className="w-full rounded-lg shadow-lg"
                 />
               </div>
@@ -174,35 +175,6 @@ const LandingPage = () => {
                 <p className="text-white/60">
                   Create bundles, set prices, and share your storefront. Get paid instantly via Stripe.
                 </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section id="about" className="py-24 px-6 border-t border-white/10">
-          <div className="max-w-4xl mx-auto text-center">
-            <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">About VEX</h2>
-            <p className="text-white/60 text-lg leading-relaxed mb-8">
-              VEX is an AI-powered platform that helps content creators organize, bundle, and sell their digital content
-              effortlessly. We believe creators should spend their time creating, not managing files and storefronts.
-            </p>
-            <p className="text-white/60 text-lg leading-relaxed mb-8">
-              Our AI assistant, VEX, analyzes your content to provide intelligent recommendations for organization,
-              bundling strategies, and pricing. Whether you're selling courses, templates, videos, or any digital
-              product, VEX makes it simple.
-            </p>
-            <div className="flex flex-wrap justify-center gap-8 mt-12">
-              <div className="text-center bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-6 min-w-[180px] shadow-xl hover:bg-white/10 hover:border-white/30 transition-all">
-                <div className="text-3xl font-bold text-white mb-2">AI-Powered</div>
-                <div className="text-white/60">Smart recommendations</div>
-              </div>
-              <div className="text-center bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-6 min-w-[180px] shadow-xl hover:bg-white/10 hover:border-white/30 transition-all">
-                <div className="text-3xl font-bold text-white mb-2">Instant Setup</div>
-                <div className="text-white/60">No configuration needed</div>
-              </div>
-              <div className="text-center bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-6 min-w-[180px] shadow-xl hover:bg-white/10 hover:border-white/30 transition-all">
-                <div className="text-3xl font-bold text-white mb-2">Creator First</div>
-                <div className="text-white/60">Built for your success</div>
               </div>
             </div>
           </div>
