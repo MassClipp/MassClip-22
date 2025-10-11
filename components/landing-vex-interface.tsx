@@ -83,7 +83,16 @@ export function LandingVexInterface() {
         console.log("[v0] File uploaded to R2:", publicUrl)
 
         setUploadedVideos((prev) =>
-          prev.map((v) => (v.id === videoId ? { ...v, url: publicUrl, progress: 60, status: "transcribing" } : v)),
+          prev.map((v) =>
+            v.id === videoId
+              ? {
+                  ...v,
+                  url: publicUrl,
+                  progress: 60,
+                  status: "transcribing",
+                }
+              : v,
+          ),
         )
 
         let transcript = ""
@@ -245,7 +254,7 @@ export function LandingVexInterface() {
 
   return (
     <div className="flex h-screen">
-      <div className="flex-1 flex flex-col items-center justify-center min-h-[calc(100vh-80px)] px-4 py-16 relative">
+      <div className="flex-1 flex flex-col items-center justify-start min-h-[calc(100vh-80px)] px-4 pt-24 pb-16 relative">
         {messages.length === 0 ? (
           <div className="max-w-4xl w-full space-y-8">
             <div className="text-center space-y-4">

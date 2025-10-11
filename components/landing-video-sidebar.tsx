@@ -3,7 +3,6 @@
 import { useState } from "react"
 import { X, Loader2, CheckCircle2, AlertCircle, Play } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
-import { Dialog, DialogContent } from "@/components/ui/dialog"
 
 export interface UploadedVideo {
   id: string
@@ -41,6 +40,7 @@ export function LandingVideoSidebar({ videos, onRemoveVideo }: LandingVideoSideb
 }
 
 function VideoUploadCard({ video, onRemove }: { video: UploadedVideo; onRemove: () => void }) {
+  const [isPlaying, setIsPlaying] = useState(false)
   const [showPlayer, setShowPlayer] = useState(false)
 
   return (
@@ -48,13 +48,22 @@ function VideoUploadCard({ video, onRemove }: { video: UploadedVideo; onRemove: 
       <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-lg overflow-hidden hover:bg-white/15 hover:border-white/30 transition-all group shadow-xl">
         {/* Video Preview */}
         {video.status === "complete" && video.url ? (
-          <div className="relative aspect-video bg-black cursor-pointer" onClick={() => setShowPlayer(true)}>
-            <video src={video.url} className="w-full h-full object-cover" poster={video.thumbnailUrl} />
-            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-              <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-lg">
-                <Play className="h-6 w-6 text-white ml-1" />
-              </div>
-            </div>
+          <div className="relative aspect-video bg-black">
+            {!isPlaying ? (
+              <>
+                <video src={video.url} className="w-full h-full object-cover" poster={video.thumbnailUrl} />
+                <div
+                  className="absolute inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center cursor-pointer"
+                  onClick={() => setIsPlaying(true)}
+                >
+                  <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-lg hover:bg-white/30 transition-colors">
+                    <Play className="h-6 w-6 text-white ml-1" />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <video src={video.url} controls autoPlay className="w-full h-full object-cover" />
+            )}
 
             {/* Remove button overlay */}
             <button
@@ -62,7 +71,7 @@ function VideoUploadCard({ video, onRemove }: { video: UploadedVideo; onRemove: 
                 e.stopPropagation()
                 onRemove()
               }}
-              className="absolute top-2 right-2 p-1.5 bg-black/60 backdrop-blur-sm hover:bg-black/80 rounded-full transition-colors opacity-0 group-hover:opacity-100 shadow-lg"
+              className="absolute top-2 right-2 p-1.5 bg-black/60 backdrop-blur-sm hover:bg-black/80 rounded-full transition-colors opacity-0 group-hover:opacity-100 shadow-lg z-10"
               aria-label="Remove video"
             >
               <X className="h-4 w-4 text-white" />
@@ -140,11 +149,7 @@ function VideoUploadCard({ video, onRemove }: { video: UploadedVideo; onRemove: 
         </div>
       </div>
 
-      <Dialog open={showPlayer} onOpenChange={setShowPlayer}>
-        <DialogContent className="max-w-4xl bg-black/90 backdrop-blur-2xl border-white/20">
-          <video src={video.url} controls autoPlay className="w-full rounded-lg" />
-        </DialogContent>
-      </Dialog>
+      {/* Dialog component is removed as it's no longer needed */}
     </>
   )
 }

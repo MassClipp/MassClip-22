@@ -58,6 +58,33 @@ const LandingPage = () => {
         {/* VEX Interface Hero Section */}
         <LandingVexInterface />
 
+        <section className="py-24 px-6 border-t border-white/10">
+          <div className="max-w-7xl mx-auto">
+            <div className="grid md:grid-cols-2 gap-12 items-center">
+              <div>
+                <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">HD Organized Folders</h2>
+                <p className="text-white/60 text-lg leading-relaxed mb-6">
+                  VEX automatically organizes your content into beautifully structured folders based on themes, topics,
+                  and content type. No more messy file systems or manual sorting.
+                </p>
+                <p className="text-white/60 text-lg leading-relaxed">
+                  Every folder is optimized for selling, with smart naming conventions and logical groupings that make
+                  sense to your customers.
+                </p>
+              </div>
+              <div className="relative">
+                <div className="bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 shadow-2xl hover:shadow-teal-500/10 transition-all">
+                  <img
+                    src="/placeholder.svg?height=400&width=600"
+                    alt="HD Organized Folders"
+                    className="w-full rounded-lg shadow-lg"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section id="features" className="py-24 px-6 border-t border-white/10">
           <div className="max-w-7xl mx-auto">
             <div className="text-center mb-16">
@@ -106,6 +133,16 @@ const LandingPage = () => {
             <div className="text-center mb-16">
               <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">How VEX Works</h2>
               <p className="text-white/60 text-lg max-w-2xl mx-auto">From upload to sale in three simple steps</p>
+            </div>
+
+            <div className="mb-16 max-w-4xl mx-auto">
+              <div className="bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 shadow-2xl">
+                <img
+                  src="/placeholder.svg?height=500&width=800"
+                  alt="How VEX Works"
+                  className="w-full rounded-lg shadow-lg"
+                />
+              </div>
             </div>
 
             <div className="grid md:grid-cols-3 gap-12">
