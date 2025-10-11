@@ -1,17 +1,20 @@
 /**
  * Vex Metadata Intelligence Layer
  *
- * Makes Vex THINK about content using file metadata, not just keywords.
+ * Makes Vex THINK about content using file metadata and natural language understanding.
  * Analyzes:
  * - File extension (.mp4, .mp3, .wav, .pdf, etc.)
  * - Duration (short SFX vs long motivation videos)
  * - Description/transcript content
  * - Folder origin (where it was uploaded)
- * - Filename structure (patterns like "grind_speech_final.mp4")
+ * - Filename structure
  */
 
-import { analyzeContent } from "./vex-intelligence"
-import { analyzeCulturalPatterns } from "./vex-conversational-examples"
+import Groq from "groq-sdk"
+
+const groq = new Groq({
+  apiKey: process.env.GROQ_API_KEY,
+})
 
 export interface FileMetadata {
   filename: string
@@ -55,7 +58,7 @@ function analyzeFileExtension(
   // Audio-only formats are likely SFX or Voiceover
   if (["wav", "mp3", "aiff", "flac", "ogg", "m4a"].includes(ext)) {
     return {
-      likelyNiche: "sfx", // Default to SFX, will be refined by duration
+      likelyNiche: "audio", // Generic audio, will be refined by AI
       evidence: `File extension .${ext} indicates audio-only content`,
       confidence: 0.6,
     }
@@ -65,7 +68,7 @@ function analyzeFileExtension(
   if (["mp4", "mov", "avi", "webm", "mkv"].includes(ext)) {
     return {
       likelyNiche: null,
-      evidence: `File extension .${ext} indicates video content (needs further analysis)`,
+      evidence: `File extension .${ext} indicates video content`,
       confidence: 0.3,
     }
   }
@@ -73,101 +76,65 @@ function analyzeFileExtension(
   // Image formats could be memes
   if (["jpg", "jpeg", "png", "gif", "webp"].includes(ext)) {
     return {
-      likelyNiche: "memes",
-      evidence: `File extension .${ext} indicates image content (likely meme)`,
+      likelyNiche: "image",
+      evidence: `File extension .${ext} indicates image content`,
       confidence: 0.5,
     }
   }
 
   return {
     likelyNiche: null,
-    evidence: `File extension .${ext} is uncommon`,
+    evidence: `File extension .${ext}`,
     confidence: 0.1,
   }
 }
 
 /**
- * Analyze duration to determine content type
- * - SFX: typically 0.5-10 seconds
- * - Voiceover: typically 10-60 seconds
- * - Motivation: typically 30 seconds - 5 minutes
- * - Memes: typically 5-30 seconds
+ * Analyze duration to provide context
  */
 function analyzeDuration(
   duration: number | null | undefined,
   contentType: string,
 ): {
-  likelyNiche: string | null
   evidence: string
-  confidence: number
+  durationCategory: string
 } {
   if (!duration || duration === 0) {
     return {
-      likelyNiche: null,
       evidence: "No duration data available",
-      confidence: 0,
+      durationCategory: "unknown",
     }
   }
 
-  // SFX are typically very short
   if (duration < 10) {
     return {
-      likelyNiche: "sfx",
-      evidence: `Duration of ${duration}s is typical for sound effects (usually under 10s)`,
-      confidence: 0.8,
+      evidence: `Duration of ${duration}s (very short)`,
+      durationCategory: "very_short",
     }
   }
 
-  // Voiceovers are typically 10-60 seconds
-  if (duration >= 10 && duration < 60 && contentType === "audio") {
+  if (duration >= 10 && duration < 60) {
     return {
-      likelyNiche: "voiceover",
-      evidence: `Duration of ${duration}s with audio-only format suggests voiceover content`,
-      confidence: 0.7,
+      evidence: `Duration of ${duration}s (short)`,
+      durationCategory: "short",
     }
   }
 
-  // Short videos (5-30s) could be memes
-  if (duration >= 5 && duration < 30 && contentType === "video") {
+  if (duration >= 60 && duration <= 300) {
     return {
-      likelyNiche: "memes",
-      evidence: `Duration of ${duration}s is typical for short-form meme videos`,
-      confidence: 0.6,
-    }
-  }
-
-  // Medium videos (30s-5min) could be motivation
-  if (duration >= 30 && duration <= 300 && contentType === "video") {
-    return {
-      likelyNiche: "motivation",
-      evidence: `Duration of ${Math.floor(duration / 60)}m ${duration % 60}s is typical for motivational content`,
-      confidence: 0.6,
-    }
-  }
-
-  // Longer content
-  if (duration > 300) {
-    return {
-      likelyNiche: null,
-      evidence: `Duration of ${Math.floor(duration / 60)}m ${duration % 60}s suggests long-form content`,
-      confidence: 0.3,
+      evidence: `Duration of ${Math.floor(duration / 60)}m ${duration % 60}s (medium)`,
+      durationCategory: "medium",
     }
   }
 
   return {
-    likelyNiche: null,
-    evidence: `Duration of ${duration}s doesn't strongly indicate a specific niche`,
-    confidence: 0.2,
+    evidence: `Duration of ${Math.floor(duration / 60)}m ${duration % 60}s (long)`,
+    durationCategory: "long",
   }
 }
 
 /**
  * Analyze filename structure for patterns
- * Examples:
- * - "grind_speech_final.mp4" → motivation (keywords: grind, speech)
- * - "2819_rebellion.mp4" → unclear (numbers don't indicate content)
- * - "funny_cat_meme.mp4" → memes (keywords: funny, meme)
- * - "whoosh_transition_01.wav" → sfx (keywords: whoosh, transition)
  */
 function analyzeFilenameStructure(filename: string): {
   hasNumbers: boolean
@@ -175,30 +142,24 @@ function analyzeFilenameStructure(filename: string): {
   hasDashes: boolean
   hasDescriptiveWords: boolean
   evidence: string
-  confidence: number
 } {
   const nameWithoutExt = filename.replace(/\.[^/.]+$/, "")
-  const hasNumbers = /\d{3,}/.test(nameWithoutExt) // 3+ consecutive numbers
+  const hasNumbers = /\d{3,}/.test(nameWithoutExt)
   const hasUnderscores = nameWithoutExt.includes("_")
   const hasDashes = nameWithoutExt.includes("-")
 
-  // Check if filename has descriptive words (not just numbers)
   const words = nameWithoutExt.split(/[_\-\s]+/).filter((w) => w.length > 2)
   const descriptiveWords = words.filter((w) => !/^\d+$/.test(w))
   const hasDescriptiveWords = descriptiveWords.length > 0
 
   let evidence = ""
-  let confidence = 0.5
 
   if (hasNumbers && !hasDescriptiveWords) {
-    evidence = `Filename "${nameWithoutExt}" is mostly numbers with no descriptive words (unclear content type)`
-    confidence = 0.1
+    evidence = `Filename "${nameWithoutExt}" is mostly numbers`
   } else if (hasDescriptiveWords) {
-    evidence = `Filename "${nameWithoutExt}" contains descriptive words: ${descriptiveWords.join(", ")}`
-    confidence = 0.7
+    evidence = `Filename "${nameWithoutExt}" contains: ${descriptiveWords.slice(0, 5).join(", ")}`
   } else {
-    evidence = `Filename "${nameWithoutExt}" structure is unclear`
-    confidence = 0.3
+    evidence = `Filename "${nameWithoutExt}"`
   }
 
   return {
@@ -207,7 +168,6 @@ function analyzeFilenameStructure(filename: string): {
     hasDashes,
     hasDescriptiveWords,
     evidence,
-    confidence,
   }
 }
 
@@ -216,398 +176,121 @@ function analyzeFilenameStructure(filename: string): {
  */
 function analyzeFolderOrigin(folderName: string | null | undefined): {
   evidence: string
-  suggestedNiche: string | null
-  confidence: number
 } {
   if (!folderName) {
     return {
       evidence: "No folder assignment (uploaded to Main folder)",
-      suggestedNiche: null,
-      confidence: 0,
-    }
-  }
-
-  const normalized = folderName.toLowerCase()
-
-  // Check for niche-related folder names
-  const nicheKeywords: Record<string, string[]> = {
-    motivation: ["motivation", "motivational", "inspire", "success", "hustle", "grind"],
-    memes: ["meme", "memes", "funny", "comedy", "humor", "viral"],
-    sfx: ["sfx", "sound", "effects", "audio", "sounds"],
-    voiceover: ["voiceover", "voice", "vo", "narration", "speech"],
-    mindset: ["mindset", "mental", "psychology", "thinking", "philosophy"],
-    broll: ["broll", "b-roll", "footage", "cinematic", "stock"],
-    "background-videos": ["background", "backdrop", "loop", "animated background"],
-    faith: ["faith", "spiritual", "religion", "church", "bible"],
-    money: ["money", "wealth", "financial", "income", "profit"],
-  }
-
-  for (const [niche, keywords] of Object.entries(nicheKeywords)) {
-    for (const keyword of keywords) {
-      if (normalized.includes(keyword)) {
-        return {
-          evidence: `Uploaded to folder "${folderName}" which suggests ${niche} content`,
-          suggestedNiche: niche,
-          confidence: 0.8,
-        }
-      }
     }
   }
 
   return {
-    evidence: `Uploaded to folder "${folderName}" (no clear niche indication)`,
-    suggestedNiche: null,
-    confidence: 0.2,
+    evidence: `Uploaded to folder "${folderName}"`,
   }
 }
 
 /**
- * Analyze transcript content for deeper understanding
- * This is the MOST IMPORTANT signal for understanding video content
+ * Use AI to analyze content naturally without keyword constraints
  */
-function analyzeTranscript(transcript: string | undefined): {
-  likelyNiche: string | null
-  evidence: string
-  confidence: number
-  themes: string[]
-  isFaithBased: boolean
-  faithKeywords: string[]
-} {
-  if (!transcript || transcript.trim().length < 20) {
+async function analyzeContentWithAI(metadata: FileMetadata): Promise<{
+  detectedNiche: string | null
+  confidence: "very_high" | "high" | "medium" | "low"
+  reasoning: string
+  suggestedFolder: string | null
+}> {
+  try {
+    // Build context for AI
+    let context = `Analyze this content file:\n\n`
+    context += `Filename: ${metadata.filename}\n`
+    context += `Title: ${metadata.title}\n`
+
+    if (metadata.description) {
+      context += `Description: ${metadata.description}\n`
+    }
+
+    if (metadata.duration) {
+      const minutes = Math.floor(metadata.duration / 60)
+      const seconds = metadata.duration % 60
+      context += `Duration: ${minutes > 0 ? `${minutes}m ` : ""}${seconds}s\n`
+    }
+
+    context += `Content Type: ${metadata.contentType}\n`
+    context += `File Type: ${metadata.mimeType}\n`
+
+    if (metadata.folderName) {
+      context += `Current Folder: ${metadata.folderName}\n`
+    }
+
+    if (metadata.tags && metadata.tags.length > 0) {
+      context += `Tags: ${metadata.tags.join(", ")}\n`
+    }
+
+    if (metadata.transcript) {
+      const transcriptPreview = metadata.transcript.substring(0, 1500)
+      context += `\nTranscript: ${transcriptPreview}${metadata.transcript.length > 1500 ? "..." : ""}\n`
+    }
+
+    context += `\nBased on all this information, what is this content about? What niche or category does it belong to?`
+    context += `\nProvide your response in this exact JSON format:`
+    context += `\n{"niche": "the main category/niche", "confidence": "very_high|high|medium|low", "reasoning": "brief explanation", "suggestedFolder": "folder name suggestion"}`
+
+    const completion = await groq.chat.completions.create({
+      messages: [
+        {
+          role: "system",
+          content: `You are VEX, an AI that understands content deeply. Analyze content based on meaning and context, not just keywords. Be specific about what the content is actually about. Common niches include: motivation, faith/spirituality, business, money/finance, sports, lifestyle, education, entertainment, memes, music, sfx (sound effects), voiceover, b-roll, background videos, mindset, and more. Don't limit yourself to these - identify the true nature of the content.`,
+        },
+        {
+          role: "user",
+          content: context,
+        },
+      ],
+      model: "llama-3.3-70b-versatile",
+      temperature: 0.7,
+      max_tokens: 300,
+      response_format: { type: "json_object" },
+    })
+
+    const response = completion.choices[0]?.message?.content
+    if (!response) {
+      throw new Error("No response from AI")
+    }
+
+    const parsed = JSON.parse(response)
+
     return {
-      likelyNiche: null,
-      evidence: "No transcript available for analysis",
-      confidence: 0,
-      themes: [],
-      isFaithBased: false,
-      faithKeywords: [],
+      detectedNiche: parsed.niche || null,
+      confidence: parsed.confidence || "low",
+      reasoning: parsed.reasoning || "Unable to determine content type",
+      suggestedFolder: parsed.suggestedFolder || null,
     }
-  }
-
-  const lowerTranscript = transcript.toLowerCase()
-  const themes: string[] = []
-  const faithKeywords: string[] = []
-  let isFaithBased = false
-
-  const faithKeywordBank = [
-    // Core Christian terms
-    "jesus",
-    "christ",
-    "god",
-    "lord",
-    "holy spirit",
-    "father in heaven",
-    "son of god",
-    "trinity",
-    "savior",
-    "messiah",
-    // Biblical concepts
-    "bible",
-    "scripture",
-    "gospel",
-    "salvation",
-    "grace",
-    "mercy",
-    "faith in god",
-    "prayer",
-    "worship",
-    "praise god",
-    "praise the lord",
-    "blessing",
-    "blessed by god",
-    "amen",
-    "hallelujah",
-    // Christian life
-    "christian",
-    "christianity",
-    "believer",
-    "disciple",
-    "apostle",
-    "church",
-    "ministry",
-    "pastor",
-    "preacher",
-    "sermon",
-    // Spiritual concepts
-    "spiritual warfare",
-    "soul",
-    "spirit of god",
-    "heaven",
-    "eternal life",
-    "eternity",
-    "redemption",
-    "forgiveness of sins",
-    "repentance",
-    "sin",
-    "righteousness",
-    "holiness",
-    // Biblical events/concepts
-    "resurrection",
-    "crucifixion",
-    "cross of christ",
-    "sacrifice of jesus",
-    "covenant",
-    "prophecy",
-    "revelation",
-    "kingdom of god",
-    "kingdom of heaven",
-    // Religious practices
-    "baptism",
-    "communion",
-    "eucharist",
-    "testimony",
-    "witness for christ",
-    "evangelism",
-    "mission",
-    "missionary",
-    // Spiritual warfare (specific phrases only)
-    "armor of god",
-    "devil",
-    "satan",
-    "demon",
-    "demonic",
-    // Other religions
-    "allah",
-    "quran",
-    "koran",
-    "muslim",
-    "islam",
-    "buddhist",
-    "buddha",
-    "hindu",
-    "meditation on god",
-    "divine",
-  ]
-
-  // Check for faith keywords
-  for (const keyword of faithKeywordBank) {
-    if (lowerTranscript.includes(keyword)) {
-      faithKeywords.push(keyword)
+  } catch (error) {
+    console.error("[VEX AI Analysis] Error:", error)
+    // Fallback to basic analysis
+    return {
+      detectedNiche: null,
+      confidence: "low",
+      reasoning: `Unable to analyze "${metadata.filename}" - AI analysis unavailable`,
+      suggestedFolder: null,
     }
-  }
-
-  const veryExplicitKeywords = ["jesus", "christ", "god", "lord", "bible", "scripture", "prayer", "worship", "church"]
-  const hasVeryExplicitKeyword = faithKeywords.some((kw) => veryExplicitKeywords.includes(kw))
-
-  if (faithKeywords.length >= 2 || (faithKeywords.length >= 1 && hasVeryExplicitKeyword)) {
-    isFaithBased = true
-  }
-
-  const motivationKeywords = [
-    "motivational speech",
-    "inspirational",
-    "work ethic",
-    "hustle culture",
-    "grind mentality",
-    "success mindset",
-    "achieve your dreams",
-    "goal setting",
-    "ambition",
-    "dedication",
-    "perseverance",
-    "discipline yourself",
-    "stay focused",
-    "commitment",
-    "excellence",
-    "champion mindset",
-    "never give up",
-    "keep pushing",
-    "stay hungry",
-    "relentless",
-  ]
-
-  let motivationScore = 0
-  for (const keyword of motivationKeywords) {
-    if (lowerTranscript.includes(keyword)) {
-      motivationScore++
-    }
-  }
-
-  if (motivationScore >= 4) {
-    themes.push("motivation")
-  }
-
-  const sportsKeywords = [
-    "athlete",
-    "athletic performance",
-    "training camp",
-    "practice session",
-    "competition",
-    "championship",
-    "playoff",
-    "tournament",
-    "game day",
-    "sports team",
-    "coaching staff",
-    "locker room",
-    "stadium",
-    "arena",
-    "field goal",
-    "touchdown",
-    "home run",
-    "slam dunk",
-  ]
-
-  let sportsScore = 0
-  for (const keyword of sportsKeywords) {
-    if (lowerTranscript.includes(keyword)) {
-      sportsScore++
-    }
-  }
-
-  if (sportsScore >= 4) {
-    themes.push("sports")
-  }
-
-  const moneyKeywords = [
-    "make money",
-    "earn money",
-    "financial freedom",
-    "wealth building",
-    "get rich",
-    "millionaire mindset",
-    "billionaire",
-    "passive income",
-    "cash flow",
-    "net worth",
-    "broke mentality",
-    "financial literacy",
-    "money management",
-    "investment strategy",
-    "portfolio",
-    "assets",
-  ]
-
-  let moneyScore = 0
-  for (const keyword of moneyKeywords) {
-    if (lowerTranscript.includes(keyword)) {
-      moneyScore++
-    }
-  }
-
-  if (moneyScore >= 4) {
-    themes.push("money")
-  }
-
-  const businessKeywords = [
-    "start a business",
-    "entrepreneur",
-    "entrepreneurship",
-    "startup founder",
-    "business model",
-    "business strategy",
-    "market share",
-    "customer acquisition",
-    "revenue stream",
-    "profit margin",
-    "business growth",
-    "scale your business",
-    "venture capital",
-    "angel investor",
-  ]
-
-  let businessScore = 0
-  for (const keyword of businessKeywords) {
-    if (lowerTranscript.includes(keyword)) {
-      businessScore++
-    }
-  }
-
-  if (businessScore >= 4) {
-    themes.push("business")
-  }
-
-  let likelyNiche: string | null = null
-  let confidence = 0
-
-  if (isFaithBased) {
-    likelyNiche = "faith"
-    confidence = 0.85
-    themes.push("faith")
-  } else if (moneyScore >= 6) {
-    likelyNiche = "money"
-    confidence = 0.8
-  } else if (motivationScore >= 6) {
-    likelyNiche = "motivation"
-    confidence = 0.8
-  } else if (sportsScore >= 6) {
-    likelyNiche = "sports"
-    confidence = 0.75
-  } else if (businessScore >= 6) {
-    likelyNiche = "business"
-    confidence = 0.75
-  } else if (moneyScore >= 4) {
-    likelyNiche = "money"
-    confidence = 0.5
-  } else if (motivationScore >= 4) {
-    likelyNiche = "motivation"
-    confidence = 0.5
-  }
-
-  const transcriptLength = transcript.length
-  const transcriptPreview = transcript.substring(0, 150) + (transcriptLength > 150 ? "..." : "")
-
-  let evidence = `Transcript analysis (${transcriptLength} chars): "${transcriptPreview}"`
-
-  if (isFaithBased) {
-    evidence += ` | FAITH-BASED CONTENT DETECTED with keywords: ${faithKeywords.slice(0, 5).join(", ")}`
-  }
-
-  if (themes.length > 0) {
-    evidence += ` | Detected themes: ${themes.join(", ")}`
-  }
-
-  return {
-    likelyNiche,
-    evidence,
-    confidence,
-    themes,
-    isFaithBased,
-    faithKeywords,
   }
 }
 
 /**
- * Main metadata analysis function - makes Vex THINK
+ * Main metadata analysis function - makes Vex THINK naturally
  */
-export function analyzeMetadata(metadata: FileMetadata, existingFolders: string[] = []): MetadataReasoning {
+export async function analyzeMetadata(
+  metadata: FileMetadata,
+  existingFolders: string[] = [],
+): Promise<MetadataReasoning> {
   const evidence: string[] = []
-  const scores: Record<string, number> = {
-    motivation: 0,
-    memes: 0,
-    sfx: 0,
-    voiceover: 0,
-    mindset: 0,
-    broll: 0,
-    "background-videos": 0,
-    faith: 0,
-    sports: 0,
-    business: 0,
-    money: 0,
-  }
-
-  // Transcript analysis is now the PRIMARY signal (was 30x, now 50x)
-  const transcriptAnalysis = analyzeTranscript(metadata.transcript)
-  if (transcriptAnalysis.likelyNiche) {
-    evidence.push(`📜 ${transcriptAnalysis.evidence}`)
-    scores[transcriptAnalysis.likelyNiche] += transcriptAnalysis.confidence * 50 // LLM understanding is king
-  } else if (metadata.transcript) {
-    evidence.push(`📜 Transcript available but no clear niche detected`)
-  }
 
   // 1. Analyze file extension
   const extAnalysis = analyzeFileExtension(metadata.filename, metadata.mimeType)
   evidence.push(`📄 ${extAnalysis.evidence}`)
-  if (extAnalysis.likelyNiche) {
-    scores[extAnalysis.likelyNiche] += extAnalysis.confidence * 10
-  }
 
-  // 2. Analyze duration (critical for audio/video)
+  // 2. Analyze duration
   const durationAnalysis = analyzeDuration(metadata.duration, metadata.contentType)
   evidence.push(`⏱️ ${durationAnalysis.evidence}`)
-  if (durationAnalysis.likelyNiche) {
-    scores[durationAnalysis.likelyNiche] += durationAnalysis.confidence * 15
-  }
 
   // 3. Analyze filename structure
   const filenameAnalysis = analyzeFilenameStructure(metadata.filename)
@@ -616,123 +299,38 @@ export function analyzeMetadata(metadata: FileMetadata, existingFolders: string[
   // 4. Analyze folder origin
   const folderAnalysis = analyzeFolderOrigin(metadata.folderName)
   evidence.push(`📁 ${folderAnalysis.evidence}`)
-  if (folderAnalysis.suggestedNiche) {
-    scores[folderAnalysis.suggestedNiche] += folderAnalysis.confidence * 5
-  }
 
-  // 5. Analyze title/description with keyword intelligence
-  const keywordAnalysis = analyzeContent(metadata.title, existingFolders)
-  if (keywordAnalysis.primaryNiche) {
-    evidence.push(
-      `🔍 Title analysis detected "${keywordAnalysis.primaryNiche}" with ${Math.round(keywordAnalysis.confidence * 100)}% confidence`,
-    )
-    scores[keywordAnalysis.primaryNiche] += keywordAnalysis.confidence * 5
-  } else {
-    evidence.push(`🔍 Title "${metadata.title}" doesn't match any known content patterns`)
-  }
+  // 5. Use AI to understand the content naturally
+  const aiAnalysis = await analyzeContentWithAI(metadata)
 
-  // 6. Analyze description if available
-  if (metadata.description && metadata.description.length > 10) {
-    const descAnalysis = analyzeContent(metadata.description, existingFolders)
-    if (descAnalysis.primaryNiche) {
-      evidence.push(`📋 Description analysis supports "${descAnalysis.primaryNiche}" classification`)
-      scores[descAnalysis.primaryNiche] += descAnalysis.confidence * 3
-    }
-  }
-
-  // 7. Analyze tags if available
-  if (metadata.tags && metadata.tags.length > 0) {
-    const tagText = metadata.tags.join(" ")
-    const tagAnalysis = analyzeContent(tagText, existingFolders)
-    if (tagAnalysis.primaryNiche) {
-      evidence.push(`🏷️ Tags suggest "${tagAnalysis.primaryNiche}" content`)
-      scores[tagAnalysis.primaryNiche] += tagAnalysis.confidence * 3
-    }
-  }
-
-  const culturalAnalysis = analyzeCulturalPatterns(metadata.title)
-  if (culturalAnalysis.likelyNiche && culturalAnalysis.confidence > 30) {
-    evidence.push(
-      `💬 Conversational analysis detected "${culturalAnalysis.likelyNiche}" vibe (${Math.round(culturalAnalysis.confidence)}% confidence)`,
-    )
-    if (scores[culturalAnalysis.likelyNiche] !== undefined) {
-      scores[culturalAnalysis.likelyNiche] += (culturalAnalysis.confidence / 100) * 8
-    }
-  }
-  if (culturalAnalysis.detectedMarkers.length > 0) {
-    evidence.push(`🗣️ Cultural markers: ${culturalAnalysis.detectedMarkers.slice(0, 3).join(", ")}`)
-  }
-
-  // Determine final niche based on scores
-  const sortedNiches = Object.entries(scores)
-    .filter(([, score]) => score > 0)
-    .sort(([, a], [, b]) => b - a)
-
-  const detectedNiche = sortedNiches.length > 0 ? sortedNiches[0][0] : null
-  const topScore = sortedNiches.length > 0 ? sortedNiches[0][1] : 0
-  const secondScore = sortedNiches.length > 1 ? sortedNiches[1][1] : 0
-
-  // Determine confidence based on score and gap between top 2
-  let confidenceLevel: "very_high" | "high" | "medium" | "low" = "low"
-  const scoreGap = topScore - secondScore
-
-  if (topScore >= 30 && scoreGap >= 15) {
-    confidenceLevel = "very_high"
-  } else if (topScore >= 20 && scoreGap >= 10) {
-    confidenceLevel = "high"
-  } else if (topScore >= 10) {
-    confidenceLevel = "medium"
-  }
-
-  // Generate reasoning summary
-  let reasoning = ""
-  if (detectedNiche) {
-    reasoning = `This file is called "${metadata.filename}"`
-
-    if (metadata.duration) {
-      reasoning += `, is ${metadata.duration < 60 ? `${metadata.duration} seconds` : `${Math.floor(metadata.duration / 60)}m ${metadata.duration % 60}s`} long`
-    }
-
-    if (transcriptAnalysis.isFaithBased) {
-      reasoning += `, and the transcript contains faith-based content mentioning: ${transcriptAnalysis.faithKeywords.slice(0, 3).join(", ")}`
-    } else if (transcriptAnalysis.themes.length > 0) {
-      reasoning += `, and the transcript discusses themes of ${transcriptAnalysis.themes.join(", ")}`
-    } else if (keywordAnalysis.primaryNiche) {
-      const matchedKeywords = keywordAnalysis.allMatches[0]?.matchedKeywords.slice(0, 3).join(", ") || ""
-      if (matchedKeywords) {
-        reasoning += `, and includes keywords like "${matchedKeywords}"`
-      }
-    }
-
-    reasoning += `. Based on all evidence, it's likely ${detectedNiche} content.`
-  } else {
-    reasoning = `Unable to confidently categorize "${metadata.filename}". The file lacks clear indicators of content type.`
+  if (aiAnalysis.detectedNiche) {
+    evidence.push(`🤖 AI detected: ${aiAnalysis.detectedNiche} (${aiAnalysis.confidence} confidence)`)
   }
 
   return {
     evidence,
-    confidence: confidenceLevel,
-    reasoning,
-    detectedNiche,
-    suggestedFolder: keywordAnalysis.suggestedFolder,
-    culturalMarkers: culturalAnalysis.detectedMarkers,
-    conversationalTone: culturalAnalysis.likelyNiche || undefined,
+    confidence: aiAnalysis.confidence,
+    reasoning: aiAnalysis.reasoning,
+    detectedNiche: aiAnalysis.detectedNiche,
+    suggestedFolder: aiAnalysis.suggestedFolder,
   }
 }
 
 /**
  * Batch analyze multiple files
  */
-export function batchAnalyzeMetadata(
+export async function batchAnalyzeMetadata(
   files: FileMetadata[],
   existingFolders: string[] = [],
-): Map<string, MetadataReasoning> {
+): Promise<Map<string, MetadataReasoning>> {
   const results = new Map<string, MetadataReasoning>()
 
-  for (const file of files) {
-    const analysis = analyzeMetadata(file, existingFolders)
-    results.set(file.filename, analysis)
-  }
+  // Analyze files in parallel for speed
+  const analyses = await Promise.all(files.map((file) => analyzeMetadata(file, existingFolders)))
+
+  files.forEach((file, index) => {
+    results.set(file.filename, analyses[index])
+  })
 
   return results
 }
@@ -750,14 +348,6 @@ export function generateAnalysisSummary(analysis: MetadataReasoning): string {
 
   if (analysis.suggestedFolder) {
     summary += `\n**Suggested Folder:** ${analysis.suggestedFolder}`
-  }
-
-  if (analysis.culturalMarkers) {
-    summary += `\n**Cultural Markers:** ${analysis.culturalMarkers.join(", ")}` || ""
-  }
-
-  if (analysis.conversationalTone) {
-    summary += `\n**Conversational Tone:** ${analysis.conversationalTone}`
   }
 
   return summary

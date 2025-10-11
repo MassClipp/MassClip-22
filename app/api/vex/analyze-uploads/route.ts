@@ -36,7 +36,7 @@ interface Upload {
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("🔍 [Vex Analyze v3] Starting metadata-aware upload analysis...")
+    console.log("🔍 [Vex Analyze v3] Starting AI-powered upload analysis...")
 
     // Get authorization header
     const authHeader = request.headers.get("authorization")
@@ -133,7 +133,7 @@ export async function POST(request: NextRequest) {
           }
 
           // Analyze with metadata intelligence
-          const metadataAnalysis = analyzeMetadata(fileMetadata, existingFolderNames)
+          const metadataAnalysis = await analyzeMetadata(fileMetadata, existingFolderNames)
 
           console.log(`🧠 [Vex Analyze v3] ${doc.id}: ${metadataAnalysis.reasoning}`)
 
