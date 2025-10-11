@@ -158,7 +158,7 @@ function VideoUploadCard({ video, onRemove }: { video: UploadedVideo; onRemove: 
             video.transcript.length > 0 && (
               <div className="mt-3">
                 <div
-                  className={`p-2.5 bg-white/5 backdrop-blur-sm border border-white/20 rounded text-xs text-white/70 leading-relaxed transition-all ${
+                  className={`p-2.5 bg-white/90 backdrop-blur-sm border border-white/30 rounded text-xs text-slate-800 leading-relaxed transition-all ${
                     isExpanded ? "max-h-96 overflow-y-auto" : "max-h-20 overflow-hidden"
                   }`}
                 >
