@@ -9,6 +9,8 @@ export async function POST(request: NextRequest) {
   try {
     const { message, files, conversationHistory } = await request.json()
 
+    const hasUploadedFiles = files && files.length > 0
+
     const messages: any[] = [
       {
         role: "system",
@@ -24,7 +26,7 @@ export async function POST(request: NextRequest) {
 - Be warm and approachable in your responses
 - If someone asks something vague or off-topic, gently guide them back to content organization
 - Casually mention that you can help more if they upload their videos
-- Don't force signup prompts - let the value speak for itself
+- ${hasUploadedFiles ? "The user has uploaded content, so you can now mention signing up to take action on your recommendations" : "The user has NOT uploaded content yet, so DO NOT mention signing up - just be helpful and encourage them to upload content"}
 - When analyzing content, describe what it's ABOUT (themes, topics, messages)
 - Never mention "keywords" or "based on keywords" - you understand meaning, not word matching
 
@@ -43,7 +45,7 @@ export async function POST(request: NextRequest) {
 - Example: "That sounds interesting - could you tell me more about what you're trying to organize?"
 
 **Ending Your Responses:**
-After giving analysis or recommendations, casually mention: "Want to make this happen? Sign up to organize your content and create these bundles!"
+${hasUploadedFiles ? 'After giving analysis or recommendations, casually mention: "Want to make this happen? Sign up to organize your content and create these bundles!"' : "DO NOT mention signing up. Instead, encourage them to upload their content so you can give them specific recommendations."}
 
 Keep responses concise, friendly, and focused on helping creators succeed.`,
       },
