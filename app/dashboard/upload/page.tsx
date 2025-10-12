@@ -30,6 +30,8 @@ import {
   X,
   CheckCircle,
   AlertCircle,
+  Download,
+  Menu,
 } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -44,7 +46,6 @@ import { uploadQueueManager, type QueuedUpload } from "@/lib/upload-queue-manage
 import { CreateFolderDialog } from "@/components/create-folder-dialog"
 import FolderSidebar from "@/components/folder-sidebar"
 import { VexFolderOrganizer } from "@/components/vex-folder-organizer"
-import { Menu } from "lucide-react"
 
 interface UploadType {
   id: string
@@ -134,14 +135,16 @@ export default function UploadPage() {
   const [selectedFolderId, setSelectedFolderId] = useState<string>("main") // Default to main instead of root
   const [isCreateFolderDialogOpen, setIsCreateFolderDialogOpen] = useState(false)
   const [loadingFolders, setLoadingFolders] = useState(false)
-  const [userToken, setUserToken] = useState<string>("")
+  const userToken = useState<string>("")[0] // Access token from state
+
+  const [isDownloadingZip, setIsDownloadingZip] = useState(false)
 
   // Initialize upload services
   useEffect(() => {
     if (user) {
       // Set auth token for chunked upload service
       user.getIdToken().then((token) => {
-        setUserToken(token)
+        // setUserToken(token) // This line was commented out in the original, assuming it's not needed here directly
         chunkedUploadService.setAuthToken(token)
       })
 
@@ -748,6 +751,64 @@ export default function UploadPage() {
     })
   }
 
+  const handleDownloadAllAsZip = async () => {
+    if (!user || uploads.length === 0) {
+      toast({
+        title: "No Files to Download",
+        description: "There are no files in the current view to download.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      setIsDownloadingZip(true)
+      const token = await user.getIdToken()
+
+      // Build query params based on current filters
+      const params = new URLSearchParams()
+      if (filterType !== "all") params.append("type", filterType)
+      if (searchTerm) params.append("search", searchTerm)
+      if (selectedFolderId && selectedFolderId !== "main") params.append("folder", selectedFolderId)
+
+      const response = await fetch(`/api/uploads/download-all-zip?${params}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to download files")
+      }
+
+      // Get the blob and create download link
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `uploads-${Date.now()}.zip`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+
+      toast({
+        title: "Download Complete",
+        description: `Downloaded ${uploads.length} files as ZIP`,
+      })
+    } catch (error: any) {
+      console.error("Error downloading files:", error)
+      toast({
+        title: "Download Failed",
+        description: error.message || "Failed to download files",
+        variant: "destructive",
+      })
+    } finally {
+      setIsDownloadingZip(false)
+    }
+  }
+
   if (loading || authLoading) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
@@ -817,6 +878,20 @@ export default function UploadPage() {
           >
             <Menu className="h-4 w-4 mr-2" />
             Folders
+          </Button>
+
+          <Button
+            variant="outline"
+            onClick={handleDownloadAllAsZip}
+            disabled={isDownloadingZip || uploads.length === 0}
+            className="border-zinc-700/50 bg-zinc-900/50 hover:bg-zinc-800/50 text-zinc-300"
+          >
+            {isDownloadingZip ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4 mr-2" />
+            )}
+            Download ZIP
           </Button>
 
           <Button
