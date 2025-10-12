@@ -9,6 +9,7 @@ import { Upload, Send, X } from "lucide-react"
 import { toast } from "sonner"
 import { LandingVideoSidebar, type UploadedVideo } from "@/components/landing-video-sidebar"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { useRouter } from "next/navigation"
 
 interface Message {
   id: string
@@ -25,6 +26,7 @@ export function LandingVexInterface() {
   const [showSidebar, setShowSidebar] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const router = useRouter()
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -373,18 +375,19 @@ export function LandingVexInterface() {
                   </div>
                 </div>
 
-                <p className="text-sm text-white/40 text-center font-light">
-                  Upload up to 5 files without signup • Sign up for unlimited uploads and to take action
-                </p>
-
-                <div className="flex justify-start">
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                   <Button
-                    onClick={() => (window.location.href = "/signup")}
-                    className="bg-white hover:bg-white/90 text-slate-950 font-medium rounded-full px-8 py-6 text-base shadow-xl hover:shadow-2xl transition-all"
+                    onClick={() => router.push("/signup")}
+                    size="lg"
+                    className="bg-white text-slate-950 hover:bg-white/90 font-medium rounded-full px-8 py-6 text-base shadow-xl hover:shadow-2xl transition-all"
                   >
                     3 day Free Trial - No Credit Card Needed
                   </Button>
                 </div>
+
+                <p className="text-sm text-white/40 text-center font-light">
+                  Upload up to 5 files without signup • Sign up for unlimited uploads and to take action
+                </p>
 
                 <p className="lg:hidden text-xs text-white/30 text-center font-light mt-4">
                   For the best experience, use desktop
