@@ -89,7 +89,7 @@ export default function LandingHeader() {
           </Link>
           <Link href="/signup">
             <Button className="bg-crimson hover:bg-crimson-dark text-white text-sm px-6 py-2 rounded-none">
-              Sign up
+              Sign Up - FREE TRIAL
             </Button>
           </Link>
         </div>
@@ -190,7 +190,7 @@ export default function LandingHeader() {
               className="flex items-center justify-center w-full py-2.5 text-sm text-white bg-crimson hover:bg-crimson-dark rounded-lg transition-colors"
               onClick={() => setIsMenuOpen(false)}
             >
-              Sign up
+              Sign Up - FREE TRIAL
             </Link>
           </div>
         </div>
