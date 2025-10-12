@@ -43,7 +43,7 @@ export default function FolderNavigation({
   const [currentFolder, setCurrentFolder] = useState<FolderItem | null>(null)
   const [breadcrumbs, setBreadcrumbs] = useState<FolderItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [downloadingFolderId, setDownloadingFolderId] = useState<string | null>(null)
+  const [downloadingFolder, setDownloadingFolder] = useState<string | null>(null)
 
   const fetchFolders = async () => {
     if (!user) return
@@ -81,13 +81,11 @@ export default function FolderNavigation({
     }
   }, [user])
 
-  // Update current folder and breadcrumbs when currentFolderId changes
   useEffect(() => {
     if (currentFolderId) {
       const folder = folders.find((f) => f.id === currentFolderId)
       setCurrentFolder(folder || null)
 
-      // Build breadcrumbs
       if (folder) {
         const crumbs: FolderItem[] = []
         let current = folder
@@ -105,7 +103,6 @@ export default function FolderNavigation({
     }
   }, [currentFolderId, folders])
 
-  // Get child folders of current folder
   const getChildFolders = (parentId: string | null) => {
     return folders.filter((f) => f.parentId === parentId)
   }
@@ -113,7 +110,6 @@ export default function FolderNavigation({
   const handleFolderClick = (folderId: string | null) => {
     onFolderChange?.(folderId)
 
-    // Update URL if we're in a route that supports folder navigation
     const currentPath = window.location.pathname
     if (currentPath.includes("/dashboard/uploads") || currentPath.includes("/dashboard/free-content")) {
       const params = new URLSearchParams(searchParams.toString())
@@ -149,7 +145,6 @@ export default function FolderNavigation({
           description: "Folder deleted successfully",
         })
 
-        // Refresh folders
         fetchFolders()
       }
     } catch (error) {
@@ -166,14 +161,13 @@ export default function FolderNavigation({
     if (!user) return
 
     try {
-      setDownloadingFolderId(folderId)
-      const token = await user.getIdToken()
-
+      setDownloadingFolder(folderId)
       toast({
         title: "Preparing Download",
-        description: "Creating ZIP file for folder...",
+        description: "Creating ZIP file for your folder...",
       })
 
+      const token = await user.getIdToken()
       const response = await fetch(`/api/folders/${folderId}/download-zip`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -185,7 +179,6 @@ export default function FolderNavigation({
         throw new Error(errorData.error || "Failed to download folder")
       }
 
-      // Get the blob and create download link
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement("a")
@@ -198,7 +191,7 @@ export default function FolderNavigation({
 
       toast({
         title: "Download Complete",
-        description: `${folderName}.zip downloaded successfully`,
+        description: `${folderName}.zip has been downloaded`,
       })
     } catch (error) {
       console.error("Error downloading folder:", error)
@@ -208,7 +201,7 @@ export default function FolderNavigation({
         variant: "destructive",
       })
     } finally {
-      setDownloadingFolderId(null)
+      setDownloadingFolder(null)
     }
   }
 
@@ -228,7 +221,6 @@ export default function FolderNavigation({
 
   return (
     <div className={cn("space-y-4", className)}>
-      {/* Breadcrumbs */}
       {breadcrumbs.length > 0 && (
         <div className="flex items-center space-x-2 text-sm text-zinc-400">
           <Button
@@ -256,7 +248,6 @@ export default function FolderNavigation({
         </div>
       )}
 
-      {/* Current folder header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
           {currentFolder && (
@@ -297,7 +288,6 @@ export default function FolderNavigation({
         )}
       </div>
 
-      {/* Child folders grid */}
       {getChildFolders(currentFolderId || null).length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
           {getChildFolders(currentFolderId || null).map((folder) => (
@@ -314,7 +304,6 @@ export default function FolderNavigation({
                 </div>
               </div>
 
-              {/* Folder actions */}
               <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -333,10 +322,10 @@ export default function FolderNavigation({
                         e.stopPropagation()
                         handleDownloadFolder(folder.id, folder.name)
                       }}
-                      disabled={downloadingFolderId === folder.id}
+                      disabled={downloadingFolder === folder.id}
                     >
                       <Download className="h-4 w-4 mr-2" />
-                      {downloadingFolderId === folder.id ? "Downloading..." : "Download as ZIP"}
+                      {downloadingFolder === folder.id ? "Downloading..." : "Download as ZIP"}
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       onClick={(e) => {

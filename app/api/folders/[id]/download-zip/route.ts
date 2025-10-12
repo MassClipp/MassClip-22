@@ -57,12 +57,12 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     const folderData = folderRef.data()
 
-    // Check if user owns the folder
-    if (folderData.uid !== userUid) {
+    // Check if user owns this folder
+    if (folderData.userId !== userUid) {
       return NextResponse.json({ error: "You don't have access to this folder" }, { status: 403 })
     }
 
-    console.log(`✅ [Folder ZIP] User has access, fetching uploads in folder`)
+    console.log(`✅ [Folder ZIP] User has access, fetching content`)
 
     // Get all uploads in this folder
     const uploadsSnapshot = await db
@@ -75,7 +75,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ error: "No files found in folder" }, { status: 404 })
     }
 
-    console.log(`📦 [Folder ZIP] Found ${uploadsSnapshot.size} files in folder`)
+    console.log(`📦 [Folder ZIP] Found ${uploadsSnapshot.size} files`)
 
     const contentFiles = []
 
@@ -87,14 +87,14 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         contentFiles.push({
           url: fileUrl,
           filename: uploadData.title || uploadData.filename || uploadData.name || `file-${doc.id}`,
-          fileType: uploadData.mimeType?.split("/")[1] || uploadData.fileType || "mp4",
+          fileType: uploadData.fileType || "mp4",
         })
         console.log(`✅ [Folder ZIP] Found file: ${uploadData.title || doc.id}`)
       }
     }
 
     if (contentFiles.length === 0) {
-      return NextResponse.json({ error: "No downloadable files found in folder" }, { status: 404 })
+      return NextResponse.json({ error: "No downloadable files found" }, { status: 404 })
     }
 
     console.log(`📦 [Folder ZIP] Creating ZIP with ${contentFiles.length} files`)

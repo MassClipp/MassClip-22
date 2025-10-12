@@ -2,11 +2,12 @@ import type { Metadata } from "next"
 import AboutPageClient from "./AboutPageClient"
 
 export const metadata: Metadata = {
-  title: "About Vex AI - Your AI Content Assistant",
+  title: "About MassClip - AI-Powered Content Organization Platform",
   description:
-    "Learn about Vex AI, the intelligent assistant that helps creators organize, package, and sell content tools and resources. Discover how Vex analyzes your content and creates sellable bundles in seconds.",
+    "Learn about MassClip and Vex AI, the intelligent assistant that helps creators organize, package, and sell content tools and resources. Discover how Vex analyzes your content and creates sellable bundles in seconds.",
   keywords: [
-    "about vex ai",
+    "about massclip",
+    "vex ai",
     "AI content assistant",
     "content organization AI",
     "creator tools platform",
@@ -14,17 +15,17 @@ export const metadata: Metadata = {
     "AI bundling assistant",
   ],
   openGraph: {
-    title: "About Vex AI - Your AI Content Assistant",
+    title: "About MassClip - AI-Powered Content Organization Platform",
     description:
-      "Learn about Vex AI and how it helps creators organize and sell content tools and resources with intelligent AI analysis.",
+      "Learn about MassClip and how Vex AI helps creators organize and sell content tools and resources with intelligent AI analysis.",
     url: "https://massclip.pro/about",
-    siteName: "Vex AI",
+    siteName: "MassClip",
     images: [
       {
         url: "/og-image.jpg",
         width: 1200,
         height: 630,
-        alt: "About Vex AI - AI Content Assistant",
+        alt: "About MassClip - AI Content Platform",
       },
     ],
     locale: "en_US",
@@ -32,9 +33,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "About Vex AI - Your AI Content Assistant",
+    title: "About MassClip - AI-Powered Content Organization Platform",
     description:
-      "Learn about Vex AI and how it helps creators organize and sell content tools and resources with intelligent AI analysis.",
+      "Learn about MassClip and how Vex AI helps creators organize and sell content tools and resources with intelligent AI analysis.",
     images: ["/og-image.jpg"],
   },
   alternates: {
