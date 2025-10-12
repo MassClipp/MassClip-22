@@ -293,9 +293,12 @@ export function LandingVexInterface() {
             <div className="flex-1 flex flex-col items-center justify-center px-4 pb-32">
               <div className="max-w-4xl w-full space-y-8">
                 <div className="text-center space-y-4">
-                  <h1 className="text-5xl lg:text-7xl font-medium text-white tracking-tight">Have content to sell?</h1>
+                  <h1 className="text-5xl lg:text-7xl font-medium text-white tracking-tight">
+                    You Do Nothing, While Vex Does Everything.
+                  </h1>
                   <p className="text-lg lg:text-xl text-white/60 font-light max-w-3xl mx-auto">
-                    Upload your content to Vex, and watch it organize and bundle your content in seconds.
+                    Upload your content, type in your request, and let Vex handle the rest in seconds in an instant
+                    storefront to sell to your audience.
                   </p>
                 </div>
 

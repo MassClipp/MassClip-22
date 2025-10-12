@@ -62,7 +62,9 @@ const LandingPage = () => {
           <div className="max-w-7xl mx-auto">
             <div className="grid md:grid-cols-2 gap-12 items-center">
               <div>
-                <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">HD Organized Folders</h2>
+                <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
+                  Vex Organizes Your Content In Seconds
+                </h2>
                 <p className="text-white/60 text-lg leading-relaxed mb-6">
                   No more selling messy zip files. Every piece of content is delivered through a beautiful, HD interface
                   that your customers will love. Professional folder organization that makes browsing and downloading
@@ -173,7 +175,8 @@ const LandingPage = () => {
                 </div>
                 <h3 className="text-xl font-semibold text-white mb-3">Start Selling</h3>
                 <p className="text-white/60">
-                  Create bundles, set prices, and share your storefront. Get paid instantly via Stripe.
+                  Vex does everything for you. Create bundles, set prices, and share your storefront. Get paid instantly
+                  via Stripe.
                 </p>
               </div>
             </div>
