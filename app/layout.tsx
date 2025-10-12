@@ -27,14 +27,15 @@ const leagueSpartan = League_Spartan({
 
 export const metadata: Metadata = {
   title: {
-    default: "Vex AI - Organize & Sell Content with AI",
-    template: "%s | Vex AI",
+    default: "MassClip - Organize & Sell Content with AI",
+    template: "%s | MassClip",
   },
   description:
-    "Vex AI analyzes your content, organizes it intelligently, and helps you create sellable bundles in seconds. Upload videos, clips, templates, and resources—let Vex handle the organization, pricing, and packaging. The smartest way for creators to sell content tools and resources.",
+    "MassClip's AI assistant Vex analyzes your content, organizes it intelligently, and helps you create sellable bundles in seconds. Upload videos, clips, templates, and resources—let Vex handle the organization, pricing, and packaging. The smartest way for creators to sell content tools and resources.",
   keywords: [
     "AI content organization",
-    "Vex AI",
+    "MassClip",
+    "Vex AI assistant",
     "content creator tools",
     "sell video clips",
     "sell templates",
@@ -52,9 +53,9 @@ export const metadata: Metadata = {
     "smart content packaging",
     "creator resources",
   ],
-  authors: [{ name: "Vex AI" }],
-  creator: "Vex AI",
-  publisher: "Vex AI",
+  authors: [{ name: "MassClip" }],
+  creator: "MassClip",
+  publisher: "MassClip",
   robots: {
     index: true,
     follow: true,
@@ -70,27 +71,27 @@ export const metadata: Metadata = {
     type: "website",
     locale: "en_US",
     url: "https://massclip.pro",
-    siteName: "Vex AI",
-    title: "Vex AI - Your AI Content Assistant for Creators",
+    siteName: "MassClip",
+    title: "MassClip - Your AI Content Assistant for Creators",
     description:
-      "Vex AI analyzes your content, organizes it intelligently, and helps you create sellable bundles in seconds. Upload clips, templates, and resources—let Vex handle everything. The smartest way to sell content tools.",
+      "MassClip's AI assistant Vex analyzes your content, organizes it intelligently, and helps you create sellable bundles in seconds. Upload clips, templates, and resources—let Vex handle everything. The smartest way to sell content tools.",
     images: [
       {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Vex AI - AI Content Assistant for Creators",
+        alt: "MassClip - AI Content Assistant for Creators",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Vex AI - Your AI Content Assistant for Creators",
+    title: "MassClip - Your AI Content Assistant for Creators",
     description:
-      "Vex AI analyzes your content, organizes it intelligently, and helps you create sellable bundles in seconds. The smartest way for creators to sell content tools and resources.",
+      "MassClip's AI assistant Vex analyzes your content, organizes it intelligently, and helps you create sellable bundles in seconds. The smartest way for creators to sell content tools and resources.",
     images: ["/og-image.png"],
-    creator: "@vexai",
-    site: "@vexai",
+    creator: "@massclip",
+    site: "@massclip",
   },
   alternates: {
     canonical: "https://massclip.pro",
@@ -118,12 +119,12 @@ export default function RootLayout({
             __html: JSON.stringify({
               "@context": "https://schema.org",
               "@type": "Organization",
-              name: "Vex AI",
+              name: "MassClip",
               description:
                 "AI-powered content assistant that helps creators organize, package, and sell content tools and resources",
               url: "https://massclip.pro",
               logo: "https://massclip.pro/favicon.png",
-              sameAs: ["https://twitter.com/vexai"],
+              sameAs: ["https://twitter.com/massclip"],
               contactPoint: {
                 "@type": "ContactPoint",
                 contactType: "customer service",
@@ -151,7 +152,7 @@ export default function RootLayout({
             __html: JSON.stringify({
               "@context": "https://schema.org",
               "@type": "WebSite",
-              name: "Vex AI",
+              name: "MassClip",
               url: "https://massclip.pro",
               description:
                 "AI-powered content assistant that helps creators organize, package, and sell content tools and resources",
@@ -170,7 +171,7 @@ export default function RootLayout({
             __html: JSON.stringify({
               "@context": "https://schema.org",
               "@type": "SoftwareApplication",
-              name: "Vex AI",
+              name: "MassClip",
               applicationCategory: "BusinessApplication",
               operatingSystem: "Web Browser",
               description: "AI content assistant for creators to organize and sell content tools and resources",

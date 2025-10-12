@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Folder, FolderPlus, ChevronRight, Home, MoreVertical, Edit, Trash2, ArrowLeft } from "lucide-react"
+import { Folder, FolderPlus, ChevronRight, Home, MoreVertical, Edit, Trash2, ArrowLeft, Download } from "lucide-react"
 import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -43,6 +43,7 @@ export default function FolderNavigation({
   const [currentFolder, setCurrentFolder] = useState<FolderItem | null>(null)
   const [breadcrumbs, setBreadcrumbs] = useState<FolderItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [downloadingFolderId, setDownloadingFolderId] = useState<string | null>(null)
 
   const fetchFolders = async () => {
     if (!user) return
@@ -158,6 +159,56 @@ export default function FolderNavigation({
         description: `Failed to ${action} folder`,
         variant: "destructive",
       })
+    }
+  }
+
+  const handleDownloadFolder = async (folderId: string, folderName: string) => {
+    if (!user) return
+
+    try {
+      setDownloadingFolderId(folderId)
+      const token = await user.getIdToken()
+
+      toast({
+        title: "Preparing Download",
+        description: "Creating ZIP file for folder...",
+      })
+
+      const response = await fetch(`/api/folders/${folderId}/download-zip`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to download folder")
+      }
+
+      // Get the blob and create download link
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `${folderName}.zip`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+
+      toast({
+        title: "Download Complete",
+        description: `${folderName}.zip downloaded successfully`,
+      })
+    } catch (error) {
+      console.error("Error downloading folder:", error)
+      toast({
+        title: "Download Failed",
+        description: error instanceof Error ? error.message : "Failed to download folder",
+        variant: "destructive",
+      })
+    } finally {
+      setDownloadingFolderId(null)
     }
   }
 
@@ -277,6 +328,16 @@ export default function FolderNavigation({
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent className="bg-zinc-900 border-zinc-800">
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleDownloadFolder(folder.id, folder.name)
+                      }}
+                      disabled={downloadingFolderId === folder.id}
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      {downloadingFolderId === folder.id ? "Downloading..." : "Download as ZIP"}
+                    </DropdownMenuItem>
                     <DropdownMenuItem
                       onClick={(e) => {
                         e.stopPropagation()
