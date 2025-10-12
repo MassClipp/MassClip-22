@@ -1,4 +1,4 @@
-import { LandingPageClient } from "./(client)/page"
+import { LandingPageClient } from "@/components/landing-page-client"
 import type { Metadata } from "next"
 
 export const metadata: Metadata = {
