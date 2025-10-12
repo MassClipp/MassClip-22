@@ -66,7 +66,7 @@ export function LandingVexInterface() {
         const videoId = placeholderVideos[index].id
         console.log("[v0] Uploading file:", file.name)
 
-        setUploadedVideos((prev) => prev.map((v) => (v.id === videoId ? { ...v, progress: 10 } : v)))
+        setUploadedVideos((prev) => prev.map((v) => (v.id === videoId ? { ...v, progress: 20 } : v)))
 
         const urlResponse = await fetch("/api/vex-landing-get-upload-url", {
           method: "POST",
@@ -83,7 +83,7 @@ export function LandingVexInterface() {
 
         const { uploadUrl, publicUrl } = await urlResponse.json()
 
-        setUploadedVideos((prev) => prev.map((v) => (v.id === videoId ? { ...v, progress: 30 } : v)))
+        setUploadedVideos((prev) => prev.map((v) => (v.id === videoId ? { ...v, progress: 40 } : v)))
 
         const uploadResponse = await fetch(uploadUrl, {
           method: "PUT",
@@ -105,69 +105,58 @@ export function LandingVexInterface() {
               ? {
                   ...v,
                   url: publicUrl,
-                  progress: 60,
-                  status: "transcribing",
-                }
-              : v,
-          ),
-        )
-
-        let transcript = ""
-        if (file.type.startsWith("video/") || file.type.startsWith("audio/")) {
-          console.log("[v0] Transcribing file...")
-          try {
-            const controller = new AbortController()
-            const timeoutId = setTimeout(() => controller.abort(), 60000) // 60 second timeout
-
-            const transcribeResponse = await fetch("/api/vex-landing-transcribe", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ url: publicUrl }),
-              signal: controller.signal,
-            })
-
-            clearTimeout(timeoutId)
-
-            if (transcribeResponse.ok) {
-              const transcribeData = await transcribeResponse.json()
-              transcript = transcribeData.transcript || ""
-              console.log("[v0] Transcription status:", transcript ? "success" : "undefined")
-              console.log("[v0] Transcription complete:", transcript.length, "characters")
-            } else {
-              console.error("[v0] Transcription failed:", transcribeResponse.status, transcribeResponse.statusText)
-              toast.warning(`${file.name} uploaded but transcription failed. You can still use it!`)
-            }
-          } catch (error) {
-            console.error("[v0] Transcription error:", error)
-            if (error instanceof Error && error.name === "AbortError") {
-              toast.warning(`${file.name} transcription timed out. You can still use the video!`)
-            }
-          }
-        }
-
-        setUploadedVideos((prev) =>
-          prev.map((v) =>
-            v.id === videoId
-              ? {
-                  ...v,
-                  transcript,
-                  status: "complete",
                   progress: 100,
+                  status: "complete",
+                  transcript: "", // Will be updated when transcription completes
                 }
               : v,
           ),
         )
+
+        if (file.type.startsWith("video/") || file.type.startsWith("audio/")) {
+          console.log("[v0] Starting background transcription for:", file.name)
+
+          fetch("/api/vex-landing-transcribe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url: publicUrl }),
+          })
+            .then(async (transcribeResponse) => {
+              if (transcribeResponse.ok) {
+                const transcribeData = await transcribeResponse.json()
+                const transcript = transcribeData.transcript || ""
+                console.log("[v0] Background transcription complete:", transcript.length, "characters")
+
+                setUploadedVideos((prev) =>
+                  prev.map((v) =>
+                    v.id === videoId
+                      ? {
+                          ...v,
+                          transcript,
+                        }
+                      : v,
+                  ),
+                )
+              } else {
+                console.warn("[v0] Background transcription failed for:", file.name)
+              }
+            })
+            .catch((error) => {
+              console.warn("[v0] Background transcription error:", error)
+              // Silently fail - file is still usable
+            })
+        }
 
         return {
           id: videoId,
           name: file.name,
-          transcript,
+          transcript: "", // Will be populated by background transcription
         }
       })
 
       const completedFiles = await Promise.all(uploadPromises)
 
-      console.log("[v0] All files uploaded, analyzing...")
+      console.log("[v0] All files uploaded successfully")
 
       const uploadMessage: Message = {
         id: Date.now().toString(),
@@ -179,7 +168,7 @@ export function LandingVexInterface() {
 
       await analyzeUploads(completedFiles)
 
-      toast.success(`Uploaded ${completedFiles.length} file(s)`)
+      toast.success(`Uploaded ${completedFiles.length} file(s) successfully!`)
     } catch (error) {
       console.error("[v0] Upload error:", error)
       setUploadedVideos((prev) =>

@@ -24,8 +24,12 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("[v0] Transcription error:", error)
     return NextResponse.json(
-      { error: "Transcription failed", details: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 },
+      {
+        transcript: "",
+        error: "Transcription failed but file is still usable",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 200 }, // Return 200 so the file remains usable
     )
   }
 }

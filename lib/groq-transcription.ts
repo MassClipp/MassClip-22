@@ -16,15 +16,20 @@ export async function transcribeVideo(videoUrl: string): Promise<TranscriptionRe
   console.log("🎤 [Transcription] Starting transcription for:", videoUrl)
 
   try {
-    // Download video
-    const response = await fetch(videoUrl)
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 120000) // 2 minute timeout
+
+    // Download video with timeout
+    const response = await fetch(videoUrl, { signal: controller.signal })
+    clearTimeout(timeoutId)
+
     if (!response.ok) {
       throw new Error(`Failed to download video: ${response.statusText}`)
     }
 
     const arrayBuffer = await response.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
-    console.log(`✅ [Transcription] Downloaded ${buffer.length} bytes`)
+    console.log(`✅ [Transcription] Downloaded ${(buffer.length / 1024 / 1024).toFixed(2)}MB`)
 
     const MAX_SIZE = 25 * 1024 * 1024 // 25MB limit for Groq Whisper API
     if (buffer.length > MAX_SIZE) {
