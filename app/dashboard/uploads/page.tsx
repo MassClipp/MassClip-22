@@ -29,6 +29,7 @@ import {
   Loader2,
   PlusCircle,
   Move,
+  Download,
 } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -128,6 +129,7 @@ const UploadsPage = () => {
   const [showCreateFolderDialog, setShowCreateFolderDialog] = useState(false)
   const [showMoveFilesDialog, setShowMoveFilesDialog] = useState(false)
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(searchParams.get("folder") || null)
+  const [isDownloading, setIsDownloading] = useState(false)
 
   // Check if user has a profile
   const checkUserProfile = useCallback(async () => {
@@ -533,6 +535,65 @@ const UploadsPage = () => {
     }
   }
 
+  // Download all uploads as ZIP
+  const handleDownloadAllAsZip = async () => {
+    if (!user || uploads.length === 0) {
+      toast({
+        title: "No Files to Download",
+        description: "There are no files in the current view to download.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      setIsDownloading(true)
+      const token = await user.getIdToken()
+
+      // Build query params based on current filters
+      const params = new URLSearchParams()
+      if (filterType !== "all") params.append("type", filterType)
+      if (searchTerm) params.append("search", searchTerm)
+      if (currentFolderId) params.append("folder", currentFolderId)
+
+      const response = await fetch(`/api/uploads/download-all-zip?${params}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to download files")
+      }
+
+      // Get the blob and create download link
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `uploads-${Date.now()}.zip`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+
+      toast({
+        title: "Download Complete",
+        description: `Downloaded ${uploads.length} files as ZIP`,
+      })
+    } catch (error: any) {
+      console.error("Error downloading files:", error)
+      toast({
+        title: "Download Failed",
+        description: error.message || "Failed to download files",
+        variant: "destructive",
+      })
+    } finally {
+      setIsDownloading(false)
+    }
+  }
+
   // Filtered uploads
   const filteredUploads = uploads.filter((upload) => {
     const searchTermLower = searchTerm.toLowerCase()
@@ -664,6 +725,10 @@ const UploadsPage = () => {
           </Select>
           <Button variant="outline" onClick={() => setShowCreateFolderDialog(true)}>
             <PlusCircle className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" onClick={handleDownloadAllAsZip} disabled={isDownloading || uploads.length === 0}>
+            {isDownloading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+            Download ZIP
           </Button>
           <Button variant="outline" onClick={() => fetchUploads()}>
             <RefreshCw className="mr-2 h-4 w-4" />
