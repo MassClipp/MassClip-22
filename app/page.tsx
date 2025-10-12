@@ -48,7 +48,7 @@ const LandingPage = () => {
               onClick={() => router.push("/signup")}
               className="bg-gradient-to-r from-teal-500 to-cyan-400 text-white hover:from-teal-600 hover:to-cyan-500 font-light rounded-full px-6 py-2 text-sm shadow-lg shadow-teal-500/20"
             >
-              Sign Up - FREE TRIAL
+              Sign Up Free
             </Button>
           </div>
         </nav>

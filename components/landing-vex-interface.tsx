@@ -377,6 +377,15 @@ export function LandingVexInterface() {
                   Upload up to 5 files without signup • Sign up for unlimited uploads and to take action
                 </p>
 
+                <div className="flex justify-start">
+                  <Button
+                    onClick={() => (window.location.href = "/signup")}
+                    className="bg-white hover:bg-white/90 text-slate-950 font-medium rounded-full px-8 py-6 text-base shadow-xl hover:shadow-2xl transition-all"
+                  >
+                    3 day Free Trial - No Credit Card Needed
+                  </Button>
+                </div>
+
                 <p className="lg:hidden text-xs text-white/30 text-center font-light mt-4">
                   For the best experience, use desktop
                 </p>
