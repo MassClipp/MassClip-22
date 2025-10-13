@@ -57,6 +57,7 @@ export function LandingVexInterface() {
       url: "",
       status: "uploading",
       progress: 0,
+      transcriptionStatus: "pending",
     }))
 
     setUploadedVideos((prev) => [...prev, ...placeholderVideos])
@@ -108,6 +109,7 @@ export function LandingVexInterface() {
                   progress: 100,
                   status: "complete",
                   transcript: "", // Will be updated when transcription completes
+                  transcriptionStatus: "pending",
                 }
               : v,
           ),
@@ -115,6 +117,10 @@ export function LandingVexInterface() {
 
         if (file.type.startsWith("video/") || file.type.startsWith("audio/")) {
           console.log("[v0] Starting background transcription for:", file.name)
+
+          setUploadedVideos((prev) =>
+            prev.map((v) => (v.id === videoId ? { ...v, transcriptionStatus: "processing" } : v)),
+          )
 
           fetch("/api/vex-landing-transcribe", {
             method: "POST",
@@ -133,17 +139,29 @@ export function LandingVexInterface() {
                       ? {
                           ...v,
                           transcript,
+                          transcriptionStatus: transcript ? "complete" : "failed",
                         }
                       : v,
                   ),
                 )
+
+                if (transcript) {
+                  toast.success(`Transcript ready for ${file.name}`)
+                }
               } else {
                 console.warn("[v0] Background transcription failed for:", file.name)
+                setUploadedVideos((prev) =>
+                  prev.map((v) => (v.id === videoId ? { ...v, transcriptionStatus: "failed" } : v)),
+                )
+                toast.error(`Transcription failed for ${file.name}. File is still usable.`)
               }
             })
             .catch((error) => {
               console.warn("[v0] Background transcription error:", error)
-              // Silently fail - file is still usable
+              setUploadedVideos((prev) =>
+                prev.map((v) => (v.id === videoId ? { ...v, transcriptionStatus: "failed" } : v)),
+              )
+              toast.error(`Transcription failed for ${file.name}. File is still usable.`)
             })
         }
 
@@ -166,6 +184,7 @@ export function LandingVexInterface() {
       setMessages((prev) => [...prev, uploadMessage])
       setTimeout(scrollToBottom, 100)
 
+      await new Promise((resolve) => setTimeout(resolve, 2000))
       await analyzeUploads(completedFiles)
 
       toast.success(`Uploaded ${completedFiles.length} file(s) successfully!`)
@@ -191,15 +210,23 @@ export function LandingVexInterface() {
     setIsAnalyzing(true)
 
     try {
+      const filesWithTranscripts = files.map((f) => {
+        const video = uploadedVideos.find((v) => v.id === f.id)
+        return {
+          name: f.name,
+          transcript: video?.transcript || f.transcript || "",
+          transcriptionStatus: video?.transcriptionStatus || "unknown",
+        }
+      })
+
+      console.log("[v0] Analyzing with transcripts:", filesWithTranscripts)
+
       const response = await fetch("/api/vex-landing-analysis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: "Analyze these files",
-          files: files.map((f) => ({
-            name: f.name,
-            transcript: f.transcript,
-          })),
+          files: filesWithTranscripts,
           conversationHistory: messages,
         }),
       })

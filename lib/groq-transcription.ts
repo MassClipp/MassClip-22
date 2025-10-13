@@ -17,7 +17,7 @@ export async function transcribeVideo(videoUrl: string): Promise<TranscriptionRe
 
   try {
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 120000) // 2 minute timeout
+    const timeoutId = setTimeout(() => controller.abort(), 180000) // 3 minute timeout
 
     // Download video with timeout
     const response = await fetch(videoUrl, { signal: controller.signal })
@@ -63,7 +63,13 @@ export async function transcribeVideo(videoUrl: string): Promise<TranscriptionRe
     }
   } catch (error) {
     console.error("❌ [Transcription] Error:", error)
-    throw error
+    if (error instanceof Error) {
+      if (error.name === "AbortError") {
+        throw new Error("Transcription timeout - file may be too large or network too slow")
+      }
+      throw error
+    }
+    throw new Error("Unknown transcription error")
   }
 }
 
