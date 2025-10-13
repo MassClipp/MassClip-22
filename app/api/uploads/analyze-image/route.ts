@@ -26,9 +26,8 @@ export async function POST(request: NextRequest) {
 
     console.log(`[v0] Analyzing image for upload ${uploadId}`)
 
-    // Use Groq's vision model to analyze the image
     const completion = await groq.chat.completions.create({
-      model: "llama-3.2-11b-vision-preview",
+      model: "llama-3.2-90b-vision-preview",
       messages: [
         {
           role: "user",

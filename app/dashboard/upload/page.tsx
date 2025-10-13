@@ -433,7 +433,6 @@ export default function UploadPage() {
         uploadQueueManager.setProgressCallback(queueId, async (queuedUpload) => {
           console.log(`[v0] Upload progress callback triggered for: ${queuedUpload.file.name}`)
           console.log(`[v0] Status: ${queuedUpload.status}`)
-          console.log(`[v0] File type: ${queuedUpload.file.type}`)
           console.log(`[v0] Upload ID: ${queuedUpload.uploadId}`)
           console.log(`[v0] Firestore Doc ID: ${queuedUpload.firestoreDocId}`)
           console.log(`[v0] File URL: ${queuedUpload.fileUrl}`)
@@ -445,6 +444,7 @@ export default function UploadPage() {
             })
 
             const isVideo = queuedUpload.file.type.startsWith("video/")
+            const isImage = queuedUpload.file.type.startsWith("image/")
 
             if (isVideo && queuedUpload.firestoreDocId && queuedUpload.fileUrl) {
               console.log(
@@ -460,7 +460,7 @@ export default function UploadPage() {
                     Authorization: `Bearer ${token}`,
                   },
                   body: JSON.stringify({
-                    uploadId: queuedUpload.firestoreDocId, // Use Firestore document ID
+                    uploadId: queuedUpload.firestoreDocId,
                     videoUrl: queuedUpload.fileUrl,
                     mimeType: queuedUpload.file.type,
                   }),
@@ -480,6 +480,41 @@ export default function UploadPage() {
                 }
               } catch (error) {
                 console.error(`[v0] Failed to trigger transcription:`, error)
+              }
+            }
+
+            if (isImage && queuedUpload.firestoreDocId && queuedUpload.fileUrl) {
+              console.log(
+                `[v0] Image upload completed, triggering vision analysis for Firestore doc: ${queuedUpload.firestoreDocId}`,
+              )
+
+              try {
+                const token = await user.getIdToken()
+                const analyzeResponse = await fetch("/api/uploads/analyze-image", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                  },
+                  body: JSON.stringify({
+                    uploadId: queuedUpload.firestoreDocId,
+                    imageUrl: queuedUpload.fileUrl,
+                  }),
+                })
+
+                if (analyzeResponse.ok) {
+                  const result = await analyzeResponse.json()
+                  console.log(`[v0] Image analysis completed: ${result.description.substring(0, 100)}...`)
+                  toast({
+                    title: "Image Analyzed",
+                    description: "Vex has analyzed your image content.",
+                  })
+                } else {
+                  const error = await analyzeResponse.json()
+                  console.error(`[v0] Image analysis failed:`, error)
+                }
+              } catch (error) {
+                console.error(`[v0] Failed to trigger image analysis:`, error)
               }
             }
 
