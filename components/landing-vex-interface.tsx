@@ -210,61 +210,63 @@ export function LandingVexInterface() {
     setIsAnalyzing(true)
 
     try {
-      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
-      const maxWaitTime = isMobile ? 15000 : 8000 // 15s for mobile, 8s for desktop
-      const pollInterval = 1000 // Check every second
+      console.log("[v0] Waiting for transcripts to be ready...")
+
+      // Wait up to 10 seconds for transcripts to complete
+      const maxWaitTime = 10000 // 10 seconds
+      const checkInterval = 500 // Check every 500ms
       let waited = 0
 
-      console.log("[v0] Starting analysis, waiting for transcripts...")
-      console.log("[v0] Is mobile:", isMobile)
-      console.log("[v0] Current uploadedVideos state:", uploadedVideos)
-
-      // Poll until transcripts are ready or timeout
       while (waited < maxWaitTime) {
-        const filesWithTranscripts = files.map((f) => {
-          const video = uploadedVideos.find((v) => v.id === f.id)
-          return {
-            name: f.name,
-            transcript: video?.transcript || f.transcript || "",
-            transcriptionStatus: video?.transcriptionStatus || "unknown",
-          }
-        })
+        // Get the latest state of uploaded videos
+        const currentVideos = uploadedVideos.filter((v) => files.some((f) => f.id === v.id))
 
-        const allReady = filesWithTranscripts.every(
-          (f) => f.transcriptionStatus === "complete" || f.transcriptionStatus === "failed",
+        // Check if all videos have completed transcription (or failed/not applicable)
+        const allTranscriptsReady = currentVideos.every(
+          (v) =>
+            v.transcriptionStatus === "complete" ||
+            v.transcriptionStatus === "failed" ||
+            v.transcriptionStatus === "not_applicable",
         )
-        const hasTranscripts = filesWithTranscripts.some((f) => f.transcript && f.transcript.length > 0)
 
-        console.log("[v0] Poll check at", waited, "ms:", {
-          allReady,
-          hasTranscripts,
-          statuses: filesWithTranscripts.map((f) => f.transcriptionStatus),
-          transcriptLengths: filesWithTranscripts.map((f) => f.transcript?.length || 0),
-        })
-
-        if (allReady || hasTranscripts) {
-          console.log("[v0] Transcripts ready! Proceeding with analysis")
+        if (allTranscriptsReady) {
+          console.log("[v0] All transcripts ready, proceeding with analysis")
           break
         }
 
-        await new Promise((resolve) => setTimeout(resolve, pollInterval))
-        waited += pollInterval
+        // Wait before checking again
+        await new Promise((resolve) => setTimeout(resolve, checkInterval))
+        waited += checkInterval
+
+        console.log(`[v0] Waiting for transcripts... ${waited}ms elapsed`)
       }
 
-      // Get final transcript data
+      if (waited >= maxWaitTime) {
+        console.warn("[v0] Transcript wait timeout, analyzing with available data")
+      }
+
       const filesWithTranscripts = files.map((f) => {
         const video = uploadedVideos.find((v) => v.id === f.id)
+        const transcript = video?.transcript || f.transcript || ""
+        const transcriptionStatus = video?.transcriptionStatus || "unknown"
+
+        console.log(`[v0] File ${f.name}: transcript length = ${transcript.length}, status = ${transcriptionStatus}`)
+
         return {
           name: f.name,
-          transcript: video?.transcript || f.transcript || "",
-          transcriptionStatus: video?.transcriptionStatus || "unknown",
+          transcript,
+          transcriptionStatus,
         }
       })
 
-      console.log("[v0] Final files being sent to API:", filesWithTranscripts)
       console.log(
-        "[v0] Transcript lengths:",
-        filesWithTranscripts.map((f) => ({ name: f.name, length: f.transcript?.length || 0 })),
+        "[v0] Analyzing with transcripts:",
+        filesWithTranscripts.map((f) => ({
+          name: f.name,
+          hasTranscript: f.transcript.length > 0,
+          transcriptLength: f.transcript.length,
+          status: f.transcriptionStatus,
+        })),
       )
 
       const response = await fetch("/api/vex-landing-analysis", {
@@ -278,7 +280,6 @@ export function LandingVexInterface() {
       })
 
       const data = await response.json()
-      console.log("[v0] API response:", data)
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -287,7 +288,7 @@ export function LandingVexInterface() {
       }
       setMessages((prev) => [...prev, assistantMessage])
     } catch (error) {
-      console.error("[v0] Analysis error:", error)
+      console.error("Analysis error:", error)
       toast.error("Failed to analyze files")
     } finally {
       setIsAnalyzing(false)
@@ -309,7 +310,7 @@ export function LandingVexInterface() {
     setIsAnalyzing(true)
 
     try {
-      const filesWithLatestTranscripts = uploadedVideos
+      const filesWithTranscripts = uploadedVideos
         .filter((v) => v.status === "complete")
         .map((v) => ({
           name: v.name,
@@ -317,14 +318,22 @@ export function LandingVexInterface() {
           transcriptionStatus: v.transcriptionStatus,
         }))
 
-      console.log("[v0] Sending message with transcripts:", filesWithLatestTranscripts)
+      console.log(
+        "[v0] Sending message with files:",
+        filesWithTranscripts.map((f) => ({
+          name: f.name,
+          hasTranscript: f.transcript.length > 0,
+          transcriptLength: f.transcript.length,
+        })),
+      )
+      // </CHANGE>
 
       const response = await fetch("/api/vex-landing-analysis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: input,
-          files: filesWithLatestTranscripts,
+          files: filesWithTranscripts,
           conversationHistory: messages,
         }),
       })

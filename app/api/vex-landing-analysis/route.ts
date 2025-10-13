@@ -112,29 +112,14 @@ Keep responses concise, friendly, and focused on helping creators succeed.`
 
     let fileContext = ""
     if (files && files.length > 0) {
-      console.log(
-        "[v0 API] Received files:",
-        files.map((f: any) => ({
-          name: f.name,
-          hasTranscript: !!f.transcript,
-          transcriptLength: f.transcript?.length || 0,
-          transcriptionStatus: f.transcriptionStatus,
-        })),
-      )
-
       fileContext = `\n\nThe user has uploaded ${files.length} file(s):\n`
       files.forEach((file: any, index: number) => {
         fileContext += `${index + 1}. "${file.name}"\n`
 
         if (file.transcript && typeof file.transcript === "string" && file.transcript.length > 0) {
           fileContext += `   Content: ${file.transcript.substring(0, 1000)}${file.transcript.length > 1000 ? "..." : ""}\n`
-          console.log(`[v0 API] Including transcript for ${file.name}: ${file.transcript.length} characters`)
-        } else {
-          console.log(`[v0 API] No transcript for ${file.name}`)
         }
       })
-
-      console.log("[v0 API] Final file context being sent to AI:", fileContext.substring(0, 500))
     }
 
     messages.push({
