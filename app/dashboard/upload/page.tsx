@@ -855,59 +855,61 @@ export default function UploadPage() {
       {/* Index Setup Helper */}
       {hasIndexError && <FirestoreIndexHelper />}
 
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 pb-6 border-b border-zinc-800/50">
+      <div className="flex flex-col gap-4 pb-6 border-b border-zinc-800/50">
+        {/* Header section */}
         <div className="space-y-2">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-semibold text-white tracking-tight">Content Library</h1>
+          <h1 className="text-2xl font-semibold text-white tracking-tight">Upload</h1>
+          <div className="space-y-1">
+            <h2 className="text-lg font-medium text-white">Content Library</h2>
             {username && (
-              <div className="flex items-center gap-2 text-xs text-zinc-500">
+              <div className="flex items-center gap-2 text-xs text-zinc-500 flex-wrap">
                 <div className="w-1.5 h-1.5 bg-zinc-500 rounded-full"></div>
-                <span>Storage path: creators/{username}/</span>
+                <span className="break-all">Storage path: creators/{username}/</span>
               </div>
             )}
           </div>
-          <p className="text-zinc-400">Upload and manage your content files</p>
+          <p className="text-zinc-400 text-sm">Upload and manage your content files</p>
         </div>
 
-        <div className="flex items-center gap-3">
-          {/* Sidebar toggle button */}
+        {/* Button row - wraps on mobile */}
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="outline"
             onClick={() => setIsSidebarOpen(true)}
-            className="border-zinc-700/50 bg-zinc-900/50 hover:bg-zinc-800/50 text-zinc-300"
+            className="border-zinc-700/50 bg-zinc-900/50 hover:bg-zinc-800/50 text-zinc-300 flex-shrink-0"
           >
-            <Menu className="h-4 w-4 mr-2" />
-            Folders
+            <Menu className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Folders</span>
           </Button>
 
           <Button
             variant="outline"
             onClick={handleDownloadAllAsZip}
             disabled={isDownloadingZip || uploads.length === 0}
-            className="border-zinc-700/50 bg-zinc-900/50 hover:bg-zinc-800/50 text-zinc-300"
+            className="border-zinc-700/50 bg-zinc-900/50 hover:bg-zinc-800/50 text-zinc-300 flex-shrink-0"
           >
             {isDownloadingZip ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              <Loader2 className="h-4 w-4 sm:mr-2 animate-spin" />
             ) : (
-              <Download className="h-4 w-4 mr-2" />
+              <Download className="h-4 w-4 sm:mr-2" />
             )}
-            Download ZIP
+            <span className="hidden sm:inline">Download ZIP</span>
           </Button>
 
           <Button
             variant="outline"
             onClick={() => fetchUploads()}
-            className="border-zinc-700/50 bg-zinc-900/50 hover:bg-zinc-800/50 text-zinc-300"
+            className="border-zinc-700/50 bg-zinc-900/50 hover:bg-zinc-800/50 text-zinc-300 flex-shrink-0"
           >
             <RefreshCw className="h-4 w-4" />
           </Button>
 
           <Button
             onClick={() => fileInputRef.current?.click()}
-            className="bg-white text-black hover:bg-zinc-100 font-medium px-6"
+            className="bg-white text-black hover:bg-zinc-100 font-medium px-4 sm:px-6 flex-shrink-0"
           >
-            <Upload className="h-4 w-4 mr-2" />
-            Upload Files
+            <Upload className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Upload Files</span>
           </Button>
           <input
             ref={fileInputRef}
@@ -1012,14 +1014,13 @@ export default function UploadPage() {
         onDrop={handleDrop}
         onClick={() => fileInputRef.current?.click()}
       >
-        <div className="flex flex-col items-center justify-center py-12 px-6">
+        <div className="flex flex-col items-center justify-center py-12 px-4 sm:px-6">
           <div className="w-12 h-12 bg-zinc-800/50 rounded-lg flex items-center justify-center mb-4">
             <Upload className="h-6 w-6 text-zinc-400" />
           </div>
-          <h3 className="text-lg font-medium text-white mb-2">Upload your files</h3>
+          <h3 className="text-lg font-medium text-white mb-2 text-center">Upload your files</h3>
           <p className="text-zinc-400 text-center text-sm max-w-md">Drag and drop files here, or click to browse.</p>
-          {/* CHANGE: Made tip text wrap properly on mobile by removing max-w-md and adding proper text wrapping */}
-          <p className="text-zinc-500 text-center text-xs mt-3 px-4 leading-relaxed">
+          <p className="text-zinc-500 text-center text-xs mt-3 max-w-md leading-relaxed">
             Tip: Use descriptive titles with keywords so Vex can organize your content accurately
           </p>
         </div>
