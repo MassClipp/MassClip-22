@@ -11,6 +11,7 @@ export default function FreeTrialPage() {
   const { user, loading } = useAuth()
   const [startingTrial, setStartingTrial] = useState(false)
   const [checkingEligibility, setCheckingEligibility] = useState(true)
+  const [shouldRedirect, setShouldRedirect] = useState(false)
 
   console.log("[v0] Free trial page loaded, user:", user?.uid, "loading:", loading)
 
@@ -30,9 +31,9 @@ export default function FreeTrialPage() {
           const data = await response.json()
           console.log("[v0] Trial eligibility check:", data)
 
-          // If user has active Creator Pro or already used trial, redirect to dashboard
           if (data.hasActiveCreatorPro || data.hasUsedFreeTrial || data.isOnTrial) {
             console.log("[v0] User not eligible for trial, redirecting to dashboard")
+            setShouldRedirect(true)
             router.push("/dashboard")
             return
           }
@@ -109,11 +110,19 @@ export default function FreeTrialPage() {
     }
   }
 
-  if (loading || checkingEligibility) {
+  if (loading || checkingEligibility || shouldRedirect) {
     console.log("[v0] Free trial page still loading...")
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-white">Loading...</div>
+      <div className="min-h-screen bg-black flex items-center justify-center relative overflow-hidden">
+        {/* Background gradients */}
+        <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 via-transparent to-blue-500/5" />
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse" />
+
+        <div className="relative z-10 flex flex-col items-center gap-4">
+          <div className="w-16 h-16 border-4 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin" />
+          <p className="text-gray-400 text-lg">{shouldRedirect ? "Redirecting..." : "Checking eligibility..."}</p>
+        </div>
       </div>
     )
   }
