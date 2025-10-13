@@ -210,6 +210,8 @@ export function LandingVexInterface() {
     setIsAnalyzing(true)
 
     try {
+      await new Promise((resolve) => setTimeout(resolve, 3000))
+
       const filesWithTranscripts = files.map((f) => {
         const video = uploadedVideos.find((v) => v.id === f.id)
         return {
@@ -221,24 +223,60 @@ export function LandingVexInterface() {
 
       console.log("[v0] Analyzing with transcripts:", filesWithTranscripts)
 
-      const response = await fetch("/api/vex-landing-analysis", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: "Analyze these files",
-          files: filesWithTranscripts,
-          conversationHistory: messages,
-        }),
-      })
+      const stillProcessing = filesWithTranscripts.filter((f) => f.transcriptionStatus === "processing")
+      if (stillProcessing.length > 0) {
+        console.log("[v0] Some transcripts still processing, waiting longer...")
+        await new Promise((resolve) => setTimeout(resolve, 5000))
 
-      const data = await response.json()
+        const refreshedFiles = files.map((f) => {
+          const video = uploadedVideos.find((v) => v.id === f.id)
+          return {
+            name: f.name,
+            transcript: video?.transcript || f.transcript || "",
+            transcriptionStatus: video?.transcriptionStatus || "unknown",
+          }
+        })
 
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: data.analysis || "I can help with that! Sign up to take action.",
+        console.log("[v0] Refreshed transcripts:", refreshedFiles)
+
+        const response = await fetch("/api/vex-landing-analysis", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: "Analyze these files",
+            files: refreshedFiles,
+            conversationHistory: messages,
+          }),
+        })
+
+        const data = await response.json()
+
+        const assistantMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: data.analysis || "I can help with that! Sign up to take action.",
+        }
+        setMessages((prev) => [...prev, assistantMessage])
+      } else {
+        const response = await fetch("/api/vex-landing-analysis", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: "Analyze these files",
+            files: filesWithTranscripts,
+            conversationHistory: messages,
+          }),
+        })
+
+        const data = await response.json()
+
+        const assistantMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: data.analysis || "I can help with that! Sign up to take action.",
+        }
+        setMessages((prev) => [...prev, assistantMessage])
       }
-      setMessages((prev) => [...prev, assistantMessage])
     } catch (error) {
       console.error("Analysis error:", error)
       toast.error("Failed to analyze files")
@@ -262,17 +300,22 @@ export function LandingVexInterface() {
     setIsAnalyzing(true)
 
     try {
+      const filesWithLatestTranscripts = uploadedVideos
+        .filter((v) => v.status === "complete")
+        .map((v) => ({
+          name: v.name,
+          transcript: v.transcript || "",
+          transcriptionStatus: v.transcriptionStatus,
+        }))
+
+      console.log("[v0] Sending message with transcripts:", filesWithLatestTranscripts)
+
       const response = await fetch("/api/vex-landing-analysis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: input,
-          files: uploadedVideos
-            .filter((v) => v.status === "complete")
-            .map((v) => ({
-              name: v.name,
-              transcript: v.transcript,
-            })),
+          files: filesWithLatestTranscripts,
           conversationHistory: messages,
         }),
       })
