@@ -15,7 +15,6 @@ export interface UploadedVideo {
   status: "uploading" | "transcribing" | "complete" | "error"
   progress: number
   error?: string
-  transcriptionStatus?: "pending" | "processing" | "complete" | "failed"
 }
 
 interface LandingVideoSidebarProps {
@@ -125,15 +124,7 @@ function VideoUploadCard({ video, onRemove }: { video: UploadedVideo; onRemove: 
                 {video.status === "complete" && (
                   <>
                     <CheckCircle2 className="h-3 w-3 text-green-500" />
-                    <span className="text-xs text-green-400">
-                      {video.transcriptionStatus === "processing"
-                        ? "Transcribing..."
-                        : video.transcriptionStatus === "complete"
-                          ? "Ready"
-                          : video.transcriptionStatus === "failed"
-                            ? "Ready (no transcript)"
-                            : "Ready"}
-                    </span>
+                    <span className="text-xs text-green-400">Ready</span>
                   </>
                 )}
                 {video.status === "error" && (
@@ -159,13 +150,6 @@ function VideoUploadCard({ video, onRemove }: { video: UploadedVideo; onRemove: 
             <p className="text-xs text-red-400 mt-2 bg-red-500/10 backdrop-blur-sm border border-red-500/20 rounded p-2">
               {video.error}
             </p>
-          )}
-
-          {video.status === "complete" && video.transcriptionStatus === "processing" && (
-            <div className="mt-3 flex items-center gap-2 text-xs text-cyan-400">
-              <Loader2 className="h-3 w-3 animate-spin" />
-              <span>Generating transcript...</span>
-            </div>
           )}
 
           {video.status === "complete" &&

@@ -869,29 +869,29 @@ export default function UploadPage() {
           <p className="text-zinc-400">Upload and manage your content files</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+        <div className="flex items-center gap-3">
           {/* Sidebar toggle button */}
           <Button
             variant="outline"
             onClick={() => setIsSidebarOpen(true)}
-            className="border-zinc-700/50 bg-zinc-900/50 hover:bg-zinc-800/50 text-zinc-300 text-sm"
+            className="border-zinc-700/50 bg-zinc-900/50 hover:bg-zinc-800/50 text-zinc-300"
           >
-            <Menu className="h-4 w-4 sm:mr-2" />
-            <span className="hidden sm:inline">Folders</span>
+            <Menu className="h-4 w-4 mr-2" />
+            Folders
           </Button>
 
           <Button
             variant="outline"
             onClick={handleDownloadAllAsZip}
             disabled={isDownloadingZip || uploads.length === 0}
-            className="border-zinc-700/50 bg-zinc-900/50 hover:bg-zinc-800/50 text-zinc-300 text-sm"
+            className="border-zinc-700/50 bg-zinc-900/50 hover:bg-zinc-800/50 text-zinc-300"
           >
             {isDownloadingZip ? (
-              <Loader2 className="h-4 w-4 sm:mr-2 animate-spin" />
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
             ) : (
-              <Download className="h-4 w-4 sm:mr-2" />
+              <Download className="h-4 w-4 mr-2" />
             )}
-            <span className="hidden sm:inline">Download ZIP</span>
+            Download ZIP
           </Button>
 
           <Button
@@ -904,7 +904,7 @@ export default function UploadPage() {
 
           <Button
             onClick={() => fileInputRef.current?.click()}
-            className="bg-white text-black hover:bg-zinc-100 font-medium px-4 sm:px-6 text-sm flex-1 sm:flex-initial"
+            className="bg-white text-black hover:bg-zinc-100 font-medium px-6"
           >
             <Upload className="h-4 w-4 mr-2" />
             Upload Files
@@ -1018,7 +1018,7 @@ export default function UploadPage() {
           </div>
           <h3 className="text-lg font-medium text-white mb-2">Upload your files</h3>
           <p className="text-zinc-400 text-center text-sm max-w-md">Drag and drop files here, or click to browse.</p>
-          <p className="text-zinc-500 text-center text-xs max-w-md mt-3 leading-relaxed">
+          <p className="text-zinc-500 text-center text-xs max-w-md mt-3">
             Tip: Use descriptive titles with keywords so Vex can organize your content accurately
           </p>
         </div>
