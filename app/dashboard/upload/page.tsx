@@ -1018,7 +1018,8 @@ export default function UploadPage() {
           </div>
           <h3 className="text-lg font-medium text-white mb-2">Upload your files</h3>
           <p className="text-zinc-400 text-center text-sm max-w-md">Drag and drop files here, or click to browse.</p>
-          <p className="text-zinc-500 text-center text-xs max-w-md mt-3">
+          {/* CHANGE: Made tip text wrap properly on mobile by removing max-w-md and adding proper text wrapping */}
+          <p className="text-zinc-500 text-center text-xs mt-3 px-4 leading-relaxed">
             Tip: Use descriptive titles with keywords so Vex can organize your content accurately
           </p>
         </div>
