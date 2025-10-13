@@ -210,8 +210,48 @@ export function LandingVexInterface() {
     setIsAnalyzing(true)
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 3000))
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+      const maxWaitTime = isMobile ? 15000 : 8000 // 15s for mobile, 8s for desktop
+      const pollInterval = 1000 // Check every second
+      let waited = 0
 
+      console.log("[v0] Starting analysis, waiting for transcripts...")
+      console.log("[v0] Is mobile:", isMobile)
+      console.log("[v0] Current uploadedVideos state:", uploadedVideos)
+
+      // Poll until transcripts are ready or timeout
+      while (waited < maxWaitTime) {
+        const filesWithTranscripts = files.map((f) => {
+          const video = uploadedVideos.find((v) => v.id === f.id)
+          return {
+            name: f.name,
+            transcript: video?.transcript || f.transcript || "",
+            transcriptionStatus: video?.transcriptionStatus || "unknown",
+          }
+        })
+
+        const allReady = filesWithTranscripts.every(
+          (f) => f.transcriptionStatus === "complete" || f.transcriptionStatus === "failed",
+        )
+        const hasTranscripts = filesWithTranscripts.some((f) => f.transcript && f.transcript.length > 0)
+
+        console.log("[v0] Poll check at", waited, "ms:", {
+          allReady,
+          hasTranscripts,
+          statuses: filesWithTranscripts.map((f) => f.transcriptionStatus),
+          transcriptLengths: filesWithTranscripts.map((f) => f.transcript?.length || 0),
+        })
+
+        if (allReady || hasTranscripts) {
+          console.log("[v0] Transcripts ready! Proceeding with analysis")
+          break
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, pollInterval))
+        waited += pollInterval
+      }
+
+      // Get final transcript data
       const filesWithTranscripts = files.map((f) => {
         const video = uploadedVideos.find((v) => v.id === f.id)
         return {
@@ -221,64 +261,33 @@ export function LandingVexInterface() {
         }
       })
 
-      console.log("[v0] Analyzing with transcripts:", filesWithTranscripts)
+      console.log("[v0] Final files being sent to API:", filesWithTranscripts)
+      console.log(
+        "[v0] Transcript lengths:",
+        filesWithTranscripts.map((f) => ({ name: f.name, length: f.transcript?.length || 0 })),
+      )
 
-      const stillProcessing = filesWithTranscripts.filter((f) => f.transcriptionStatus === "processing")
-      if (stillProcessing.length > 0) {
-        console.log("[v0] Some transcripts still processing, waiting longer...")
-        await new Promise((resolve) => setTimeout(resolve, 5000))
+      const response = await fetch("/api/vex-landing-analysis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: "Analyze these files",
+          files: filesWithTranscripts,
+          conversationHistory: messages,
+        }),
+      })
 
-        const refreshedFiles = files.map((f) => {
-          const video = uploadedVideos.find((v) => v.id === f.id)
-          return {
-            name: f.name,
-            transcript: video?.transcript || f.transcript || "",
-            transcriptionStatus: video?.transcriptionStatus || "unknown",
-          }
-        })
+      const data = await response.json()
+      console.log("[v0] API response:", data)
 
-        console.log("[v0] Refreshed transcripts:", refreshedFiles)
-
-        const response = await fetch("/api/vex-landing-analysis", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            message: "Analyze these files",
-            files: refreshedFiles,
-            conversationHistory: messages,
-          }),
-        })
-
-        const data = await response.json()
-
-        const assistantMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          role: "assistant",
-          content: data.analysis || "I can help with that! Sign up to take action.",
-        }
-        setMessages((prev) => [...prev, assistantMessage])
-      } else {
-        const response = await fetch("/api/vex-landing-analysis", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            message: "Analyze these files",
-            files: filesWithTranscripts,
-            conversationHistory: messages,
-          }),
-        })
-
-        const data = await response.json()
-
-        const assistantMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          role: "assistant",
-          content: data.analysis || "I can help with that! Sign up to take action.",
-        }
-        setMessages((prev) => [...prev, assistantMessage])
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: data.analysis || "I can help with that! Sign up to take action.",
       }
+      setMessages((prev) => [...prev, assistantMessage])
     } catch (error) {
-      console.error("Analysis error:", error)
+      console.error("[v0] Analysis error:", error)
       toast.error("Failed to analyze files")
     } finally {
       setIsAnalyzing(false)
