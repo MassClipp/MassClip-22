@@ -1176,13 +1176,16 @@ export default function UploadPage() {
                                 src={upload.fileUrl || "/placeholder.svg"}
                                 alt={upload.title}
                                 className="w-full h-full object-cover"
+                                loading="lazy"
                                 onError={(e) => {
+                                  console.error("[v0] Image failed to load:", upload.fileUrl)
                                   const target = e.target as HTMLImageElement
                                   target.style.display = "none"
-                                  target.nextElementSibling?.classList.remove("hidden")
+                                  const fallback = target.nextElementSibling as HTMLElement
+                                  if (fallback) fallback.classList.remove("hidden")
                                 }}
                               />
-                              <div className="hidden absolute inset-0 flex items-center justify-center">
+                              <div className="hidden absolute inset-0 flex items-center justify-center bg-zinc-800/50">
                                 <IconComponent className={`h-8 w-8 ${colorClass}`} />
                               </div>
                             </div>
