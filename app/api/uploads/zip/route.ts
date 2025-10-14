@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { initializeFirebaseAdmin, db } from "@/lib/firebase/firebaseAdmin"
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3"
 import JSZip from "jszip"
+import { getContentTypeFromFilename, getFileCategoryFromMimeType } from "@/lib/mime-types"
 
 // Initialize Firebase Admin
 initializeFirebaseAdmin()
@@ -43,46 +44,6 @@ function generatePublicURL(key: string): string {
     return `${publicDomain}/${key}`
   }
   return `https://pub-${bucketName}.r2.dev/${key}`
-}
-
-function getContentType(filename: string): string {
-  const ext = filename.toLowerCase().split(".").pop()
-  const mimeTypes: Record<string, string> = {
-    // Images
-    jpg: "image/jpeg",
-    jpeg: "image/jpeg",
-    png: "image/png",
-    gif: "image/gif",
-    webp: "image/webp",
-
-    // Videos
-    mp4: "video/mp4",
-    mov: "video/quicktime",
-    avi: "video/x-msvideo",
-    webm: "video/webm",
-
-    // Audio
-    mp3: "audio/mpeg",
-    wav: "audio/wav",
-    m4a: "audio/mp4",
-    ogg: "audio/ogg",
-
-    // Documents
-    pdf: "application/pdf",
-    doc: "application/msword",
-    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    txt: "text/plain",
-  }
-
-  return mimeTypes[ext || ""] || "application/octet-stream"
-}
-
-function getFileCategory(mimeType: string): string {
-  if (mimeType.startsWith("image/")) return "image"
-  if (mimeType.startsWith("video/")) return "video"
-  if (mimeType.startsWith("audio/")) return "audio"
-  if (mimeType.includes("pdf") || mimeType.includes("document") || mimeType.startsWith("text/")) return "document"
-  return "other"
 }
 
 export async function POST(request: NextRequest) {
@@ -142,8 +103,8 @@ export async function POST(request: NextRequest) {
         // Get file content as buffer
         const fileBuffer = await zipEntry.async("uint8array")
         const filename = relativePath.split("/").pop() || relativePath
-        const mimeType = getContentType(filename)
-        const category = getFileCategory(mimeType)
+        const mimeType = getContentTypeFromFilename(filename)
+        const category = getFileCategoryFromMimeType(mimeType)
 
         // Generate unique key for R2
         const timestamp = Date.now()

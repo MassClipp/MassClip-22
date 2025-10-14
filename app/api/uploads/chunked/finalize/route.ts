@@ -39,7 +39,7 @@ async function verifyAuthToken(request: NextRequest) {
   }
 }
 
-async function combineChunksInR2(bucketName: string, r2Key: string, totalChunks: number) {
+async function combineChunksInR2(bucketName: string, r2Key: string, totalChunks: number, mimeType: string) {
   console.log(`🔄 [Combine Chunks] Starting combination for ${totalChunks} chunks`)
 
   try {
@@ -84,11 +84,11 @@ async function combineChunksInR2(bucketName: string, r2Key: string, totalChunks:
       Bucket: bucketName,
       Key: r2Key,
       Body: combinedBuffer,
-      ContentType: "video/mp4", // Default to mp4, should be determined from original file type
+      ContentType: mimeType,
     })
 
     await s3Client.send(putCommand)
-    console.log(`✅ [Combine Chunks] Uploaded combined file: ${r2Key}`)
+    console.log(`✅ [Combine Chunks] Uploaded combined file: ${r2Key} with Content-Type: ${mimeType}`)
 
     // Clean up chunk files
     for (let i = 0; i < totalChunks; i++) {
@@ -163,7 +163,7 @@ export async function POST(request: NextRequest) {
 
     try {
       // Combine chunks into final file
-      await combineChunksInR2(bucketName, sessionData.r2Key, sessionData.totalChunks)
+      await combineChunksInR2(bucketName, sessionData.r2Key, sessionData.totalChunks, sessionData.fileType)
 
       // Create upload record in database
       const uploadData = {
