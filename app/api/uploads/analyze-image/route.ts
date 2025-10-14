@@ -26,6 +26,18 @@ export async function POST(request: NextRequest) {
 
     console.log(`[v0] Analyzing image for upload ${uploadId}`)
 
+    const imageResponse = await fetch(imageUrl)
+    if (!imageResponse.ok) {
+      throw new Error(`Failed to fetch image: ${imageResponse.statusText}`)
+    }
+
+    const imageBuffer = await imageResponse.arrayBuffer()
+    const base64Image = Buffer.from(imageBuffer).toString("base64")
+
+    // Determine the image MIME type from the URL or response headers
+    const contentType = imageResponse.headers.get("content-type") || "image/png"
+    const base64DataUrl = `data:${contentType};base64,${base64Image}`
+
     const completion = await groq.chat.completions.create({
       model: "meta-llama/llama-4-scout-17b-16e-instruct",
       messages: [
@@ -39,7 +51,7 @@ export async function POST(request: NextRequest) {
             {
               type: "image_url",
               image_url: {
-                url: imageUrl,
+                url: base64DataUrl, // Use base64 data URL instead of direct URL
               },
             },
           ],
