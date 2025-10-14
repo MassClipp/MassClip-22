@@ -79,16 +79,24 @@ async function combineChunksInR2(bucketName: string, r2Key: string, totalChunks:
     const combinedBuffer = Buffer.concat(chunkBuffers)
     console.log(`🔗 [Combine Chunks] Combined ${chunkBuffers.length} chunks into ${combinedBuffer.length} bytes`)
 
-    // Upload combined file
+    // Upload combined file with proper headers
     const putCommand = new PutObjectCommand({
       Bucket: bucketName,
       Key: r2Key,
       Body: combinedBuffer,
       ContentType: mimeType,
+      CacheControl: "public, max-age=31536000, immutable",
+      Metadata: {
+        "uploaded-via": "chunked-upload",
+        "original-mime-type": mimeType,
+      },
     })
 
     await s3Client.send(putCommand)
-    console.log(`✅ [Combine Chunks] Uploaded combined file: ${r2Key} with Content-Type: ${mimeType}`)
+    console.log(`✅ [Combine Chunks] Uploaded combined file: ${r2Key}`)
+    console.log(`   Content-Type: ${mimeType}`)
+    console.log(`   Size: ${combinedBuffer.length} bytes`)
+    console.log(`   Cache-Control: public, max-age=31536000, immutable`)
 
     // Clean up chunk files
     for (let i = 0; i < totalChunks; i++) {

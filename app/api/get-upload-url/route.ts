@@ -161,8 +161,13 @@ export async function POST(request: NextRequest) {
     // Create the command to put an object in the bucket
     const command = new PutObjectCommand({
       Bucket: bucketName,
-      Key: fileKey, // Use the username-based path
+      Key: fileKey,
       ContentType: fileType,
+      CacheControl: "public, max-age=31536000, immutable",
+      Metadata: {
+        "uploaded-via": "direct-upload",
+        "original-mime-type": fileType,
+      },
     })
 
     console.log("🔍 [R2 Upload] Generating presigned URL...")
