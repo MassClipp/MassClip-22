@@ -422,7 +422,7 @@ export default function UploadPage() {
         const priority = file.size < 50 * 1024 * 1024 ? 1 : 0 // Prioritize smaller files
 
         console.log(
-          `📤 [v0] Adding file ${file.name} to queue with folderId: ${finalFolderId}, folderPath: ${folderPath}`,
+          ` saddas [v0] Adding file ${file.name} to queue with folderId: ${finalFolderId}, folderPath: ${folderPath}`,
         )
         console.log(`   File type: ${file.type || "empty/unknown"}`)
         console.log(`   File size: ${file.size} bytes`)
@@ -1212,8 +1212,15 @@ export default function UploadPage() {
                                 alt={upload.title}
                                 className="w-full h-full object-cover"
                                 loading="lazy"
+                                crossOrigin="anonymous"
+                                onLoad={(e) => {
+                                  console.log("[v0] Image loaded successfully:", upload.fileUrl)
+                                  const target = e.target as HTMLImageElement
+                                  target.style.display = "block"
+                                }}
                                 onError={(e) => {
                                   console.error("[v0] Image failed to load:", upload.fileUrl)
+                                  console.error("[v0] Image error event:", e)
                                   const target = e.target as HTMLImageElement
                                   target.style.display = "none"
                                   const fallback = target.nextElementSibling as HTMLElement
