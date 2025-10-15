@@ -380,7 +380,7 @@ export function LandingVexInterface() {
                             handleSendMessage()
                           }
                         }}
-                        placeholder="Upload your content and let Vex analyze and bundle it for you"
+                        placeholder="Upload your content"
                         className="flex-1 h-11 bg-transparent border-0 focus-visible:ring-0 text-base placeholder:text-white/50 text-white font-light"
                       />
                       <Button
