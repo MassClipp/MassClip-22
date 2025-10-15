@@ -63,6 +63,7 @@ export function LandingVexInterface() {
 
     try {
       const transcriptionPromises: Promise<{ id: string; transcript: string }>[] = []
+      const imageAnalysisPromises: Promise<{ id: string; analysis: string }>[] = []
 
       const uploadPromises = files.map(async (file, index) => {
         const videoId = placeholderVideos[index].id
@@ -115,7 +116,44 @@ export function LandingVexInterface() {
           ),
         )
 
-        if (file.type.startsWith("video/") || file.type.startsWith("audio/")) {
+        if (file.type.startsWith("image/")) {
+          console.log("[v0] Starting image analysis for:", file.name)
+
+          const imageAnalysisPromise = fetch("/api/vex-landing-analyze-image", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ imageUrl: publicUrl }),
+          })
+            .then(async (analysisResponse) => {
+              if (analysisResponse.ok) {
+                const analysisData = await analysisResponse.json()
+                const analysis = analysisData.analysis || ""
+                console.log("[v0] Image analysis complete for", file.name, ":", analysis.length, "characters")
+
+                setUploadedVideos((prev) =>
+                  prev.map((v) =>
+                    v.id === videoId
+                      ? {
+                          ...v,
+                          transcript: analysis,
+                        }
+                      : v,
+                  ),
+                )
+
+                return { id: videoId, analysis }
+              } else {
+                console.warn("[v0] Image analysis failed for:", file.name)
+                return { id: videoId, analysis: "" }
+              }
+            })
+            .catch((error) => {
+              console.warn("[v0] Image analysis error:", error)
+              return { id: videoId, analysis: "" }
+            })
+
+          imageAnalysisPromises.push(imageAnalysisPromise)
+        } else if (file.type.startsWith("video/") || file.type.startsWith("audio/")) {
           console.log("[v0] Starting transcription for:", file.name)
 
           const transcriptionPromise = fetch("/api/vex-landing-transcribe", {
@@ -173,20 +211,30 @@ export function LandingVexInterface() {
       setMessages((prev) => [...prev, uploadMessage])
       setTimeout(scrollToBottom, 100)
 
-      if (transcriptionPromises.length > 0) {
-        console.log("[v0] Waiting for", transcriptionPromises.length, "transcription(s) to complete...")
-        const transcriptionResults = await Promise.all(transcriptionPromises)
-        console.log("[v0] All transcriptions complete")
+      if (transcriptionPromises.length > 0 || imageAnalysisPromises.length > 0) {
+        console.log(
+          "[v0] Waiting for",
+          transcriptionPromises.length,
+          "transcription(s) and",
+          imageAnalysisPromises.length,
+          "image analysis to complete...",
+        )
+        const [transcriptionResults, imageAnalysisResults] = await Promise.all([
+          Promise.all(transcriptionPromises),
+          Promise.all(imageAnalysisPromises),
+        ])
+        console.log("[v0] All transcriptions and image analysis complete")
 
-        const filesWithTranscripts = completedFiles.map((file) => {
+        const filesWithContent = completedFiles.map((file) => {
           const transcriptionResult = transcriptionResults.find((t) => t.id === file.id)
+          const imageAnalysisResult = imageAnalysisResults.find((i) => i.id === file.id)
           return {
             ...file,
-            transcript: transcriptionResult?.transcript || "",
+            transcript: transcriptionResult?.transcript || imageAnalysisResult?.analysis || "",
           }
         })
 
-        await analyzeUploads(filesWithTranscripts)
+        await analyzeUploads(filesWithContent)
       } else {
         await analyzeUploads(completedFiles)
       }
@@ -325,7 +373,7 @@ export function LandingVexInterface() {
                       <input
                         ref={fileInputRef}
                         type="file"
-                        accept="video/*,audio/*"
+                        accept="video/*,audio/*,image/*"
                         multiple
                         onChange={handleFileUpload}
                         className="hidden"
@@ -491,7 +539,7 @@ export function LandingVexInterface() {
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept="video/*,audio/*"
+                      accept="video/*,audio/*,image/*"
                       multiple
                       onChange={handleFileUpload}
                       className="hidden"
