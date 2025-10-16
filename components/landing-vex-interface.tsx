@@ -48,41 +48,6 @@ export function LandingVexInterface() {
       return
     }
 
-    const MAX_VIDEO_DURATION = 180 // 3 minutes in seconds
-    const videoFiles = files.filter((file) => file.type.startsWith("video/"))
-
-    if (videoFiles.length > 0) {
-      try {
-        const durationChecks = await Promise.all(
-          videoFiles.map(
-            (file) =>
-              new Promise<{ file: File; duration: number }>((resolve) => {
-                const video = document.createElement("video")
-                video.preload = "metadata"
-                video.onloadedmetadata = () => {
-                  window.URL.revokeObjectURL(video.src)
-                  resolve({ file, duration: video.duration })
-                }
-                video.onerror = () => {
-                  resolve({ file, duration: 0 })
-                }
-                video.src = URL.createObjectURL(file)
-              }),
-          ),
-        )
-
-        const tooLongVideos = durationChecks.filter((check) => check.duration > MAX_VIDEO_DURATION)
-        if (tooLongVideos.length > 0) {
-          toast.error(
-            `Videos must be under 3 minutes. ${tooLongVideos.map((v) => v.file.name).join(", ")} ${tooLongVideos.length === 1 ? "is" : "are"} too long.`,
-          )
-          return
-        }
-      } catch (error) {
-        console.error("[v0] Error checking video duration:", error)
-      }
-    }
-
     setIsUploading(true)
     console.log("[v0] Starting file upload for", files.length, "files")
 
@@ -394,11 +359,10 @@ export function LandingVexInterface() {
               <div className="max-w-4xl w-full space-y-8">
                 <div className="text-center space-y-4">
                   <h1 className="text-5xl lg:text-7xl font-medium text-white tracking-tight">
-                    You Do Nothing, While Vex Does Everything.
+                    Earn Passive Income With Your Faceless Content.
                   </h1>
                   <p className="text-lg lg:text-xl text-white/60 font-light max-w-3xl mx-auto">
-                    Upload your content, type in your request, and let Vex handle the rest in seconds in an instant
-                    storefront to sell to your audience.
+                    AI builds your storefront and bundles your content automatically.
                   </p>
                 </div>
 
@@ -490,10 +454,6 @@ export function LandingVexInterface() {
 
                 <p className="text-sm text-white/40 text-center font-light">
                   Upload up to 5 files without signup • Sign up for unlimited uploads and to take action
-                </p>
-
-                <p className="text-xs text-white/30 text-center font-light">
-                  Videos must be under 3 minutes • Files must be under 25MB
                 </p>
 
                 <p className="lg:hidden text-xs text-white/30 text-center font-light mt-4">
