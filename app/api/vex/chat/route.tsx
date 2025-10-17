@@ -714,6 +714,34 @@ When organizing files, use the folder names exactly as shown above.
                 transcriptContext += "DO NOT say 'let me read the transcript' - you already have it!\n"
               }
 
+              const imagesWithDescriptions = uniqueUploads.filter(
+                (u: any) => u.imageDescription && u.imageDescription.length > 0,
+              )
+
+              if (imagesWithDescriptions.length > 0) {
+                transcriptContext += "\n\n🖼️ IMAGES WITH VISUAL ANALYSIS:\n"
+                transcriptContext +=
+                  "You have access to detailed visual analysis of these images. You ALREADY KNOW what they look like.\n"
+                transcriptContext +=
+                  "When users ask about these images, describe them naturally based on the analysis below.\n\n"
+
+                for (const image of imagesWithDescriptions) {
+                  const contentType = image.contentType || image.type || "image"
+
+                  transcriptContext += `**"${image.title}"** (${contentType})\n`
+                  transcriptContext += `Visual Analysis: ${image.imageDescription}\n`
+                  transcriptContext += `---\n\n`
+                }
+
+                transcriptContext += "\n**CRITICAL:** You have ALREADY SEEN these images through AI vision analysis. "
+                transcriptContext +=
+                  "When users ask 'what do my images look like?', describe them naturally and conversationally. "
+                transcriptContext +=
+                  "DO NOT use numbered lists or technical IDs. DO NOT say 'detected to be about' or mention confidence levels. "
+                transcriptContext += "Just describe what you see like you're talking to a friend!\n"
+              }
+              // </CHANGE>
+
               if (validUnorganizedContent.length > 0) {
                 folderContentsContext += `\n\n📋 UNORGANIZED CONTENT WITH INTELLIGENCE ANALYSIS (${validUnorganizedContent.length} items):\n`
 
@@ -727,14 +755,24 @@ When organizing files, use the folder names exactly as shown above.
                   const hasTranscript = item.transcript && item.transcript.length > 0
                   const transcriptPreview = hasTranscript ? item.transcript.substring(0, 200) : null
 
+                  const hasImageDescription = item.imageDescription && item.imageDescription.length > 0
+                  const imageDescriptionPreview = hasImageDescription ? item.imageDescription.substring(0, 200) : null
+                  // </CHANGE>
+
                   folderContentsContext += `\n"${title}" (${type})\n`
                   folderContentsContext += `  → Detected: ${detectedNiche} (${confidence} confidence)\n`
                   folderContentsContext += `  → Reasoning: ${reasoning}\n`
 
                   if (hasTranscript) {
                     folderContentsContext += `  → Transcript Preview: "${transcriptPreview}..."\n`
-                    folderContentsContext += `  → [Full transcript available for detailed analysis]\n`
                   }
+
+                  if (hasImageDescription) {
+                    folderContentsContext += `  → Visual Analysis: "${imageDescriptionPreview}..."\n`
+                  }
+                  // </CHANGE>
+
+                  folderContentsContext += `  → [Full transcript available for detailed analysis]\n`
                 }
 
                 if (validUnorganizedContent.length > 15) {
