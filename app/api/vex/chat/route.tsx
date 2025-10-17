@@ -985,23 +985,30 @@ You: "What's the outcome you want with this bundle? Views? Conversions? Vibe che
     const vaguePromptRegex2 = /^(?:organize|make|what do|tell me)\s+(?:my|some|stuff|things|content|videos|files)\s*$/i
     const vaguePromptRegex3 = /^(?:help|organize|make|what do|tell me)\s+me\s+to\s+(?:organize|make|do)\s*$/i
 
-    const isVague = formattedMessages.slice(1).some((msg) => {
-      const content = msg.content.toLowerCase()
-      return (
-        vaguePromptRegex.test(content) ||
-        vaguePromptRegex2.test(content) ||
-        vaguePromptRegex3.test(content) ||
-        content.trim() === "" ||
-        content.trim() === "hi" ||
-        content.trim() === "hello" ||
-        content.trim() === "yo" ||
-        content.trim() === "hey" ||
-        content.trim() === "sup"
-      )
-    })
+    // Only check the LAST user message to avoid duplicate processing
+    const lastUserMessage = formattedMessages[formattedMessages.length - 1]
+    const isVague =
+      lastUserMessage &&
+      lastUserMessage.role === "user" &&
+      (() => {
+        const content = lastUserMessage.content.toLowerCase().trim()
+        return (
+          vaguePromptRegex.test(content) ||
+          vaguePromptRegex2.test(content) ||
+          vaguePromptRegex3.test(content) ||
+          content === "" ||
+          content === "hi" ||
+          content === "hello" ||
+          content === "yo" ||
+          content === "hey" ||
+          content === "sup" ||
+          content === "what's up" ||
+          content === "whats up"
+        )
+      })()
 
     if (isVague) {
-      const vagueResponse = `Hey! What's up? Need help organizing your content or building a bundle?` // Updated greeting
+      const vagueResponse = `Hey! What's up? Need help organizing your content or building a bundle?`
       console.log("[v0] Detected vague prompt, sending canned response.")
       return NextResponse.json({
         message: {
@@ -1010,6 +1017,7 @@ You: "What's the outcome you want with this bundle? Views? Conversions? Vibe che
         },
       })
     }
+    // </CHANGE>
 
     console.log("[v0] Calling Groq API with", formattedMessages.length, "messages")
 
@@ -1146,7 +1154,7 @@ You: "What's the outcome you want with this bundle? Views? Conversions? Vibe che
 
         const analysisData = analysisDoc.data()!
         const uploads = analysisData.uploads || []
-        console.log(`[v0] 📊 Loaded ${uploads.length} uploads from analysis`)
+        console.log(`[v0] Loaded ${uploads.length} uploads from analysis`)
 
         // CHANGE: Verify all file IDs exist in the uploads array
         const validIds = new Set(uploads.map((u: any) => u.id))
@@ -1692,7 +1700,7 @@ async function organizeFilesDirectly(userId: string, organizeData: any) {
 
     const analysisData = analysisDoc.data()!
     const uploads = analysisData.uploads || []
-    console.log(`[v0] 📊 Loaded ${uploads.length} uploads from analysis`)
+    console.log(`[v0] Loaded ${uploads.length} uploads from analysis`)
 
     console.log(`[v0] 📋 ========== AVAILABLE UPLOADS ==========`)
     uploads.forEach((u: any, index: number) => {
