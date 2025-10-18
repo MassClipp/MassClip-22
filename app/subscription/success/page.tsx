@@ -46,6 +46,15 @@ export default function SubscriptionSuccess() {
         if (response.ok) {
           setStatus("success")
           setMessage("Your subscription has been activated successfully!")
+
+          if (typeof window !== "undefined" && (window as any).fbq) {
+            ;(window as any).fbq("track", "Purchase", {
+              value: 29.99,
+              currency: "USD",
+              content_name: "Creator Pro Subscription",
+              content_type: "subscription",
+            })
+          }
         } else {
           setStatus("error")
           setMessage("There was an issue verifying your subscription. Please contact support.")

@@ -89,6 +89,20 @@ export default function PurchaseSuccessPage() {
       if (data?.success) {
         setPurchaseData(data)
         console.log("✅ [Purchase Success] Verification successful")
+
+        if (typeof window !== "undefined" && (window as any).fbq) {
+          const amount = data.session?.amount || 0
+          const currency = data.session?.currency || "USD"
+          const itemTitle = data.item?.title || "Bundle"
+          ;(window as any).fbq("track", "Purchase", {
+            value: amount / 100, // Convert cents to dollars
+            currency: currency.toUpperCase(),
+            content_name: itemTitle,
+            content_type: "bundle",
+            content_ids: [data.item?.id || ""],
+            num_items: 1,
+          })
+        }
       } else {
         throw new Error(data?.error || "Verification failed")
       }
