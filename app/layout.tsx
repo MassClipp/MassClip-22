@@ -206,19 +206,6 @@ export default function RootLayout({
           type="text/javascript"
           dangerouslySetInnerHTML={{
             __html: `
-            (function(c,l,a,r,i,t,y){
-              c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
-              t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
-              y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-            })(window, document, "clarity", "script", "tr9t8yy9cv");
-            `,
-          }}
-        />
-
-        {/* Simple TikTok detection script */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
             // Detect TikTok browser and add class to html element
             (function() {
               try {
@@ -242,9 +229,10 @@ export default function RootLayout({
             {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
             n.callMethod.apply(n,arguments):n.queue.push(arguments)};
             if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-            n.queue=[];t=b.createElement(e);t.async=1;t.src="https://connect.facebook.net/en_US/fbevents.js";
-            y=l.getElementsByTagName(e)[0];y.parentNode.insertBefore(t,y)}(window, document,'script',
-            'https://www.clarity.ms/tag/'+i);
+            n.queue=[];t=b.createElement(e);t.async=!0;
+            t.src=v;s=b.getElementsByTagName(e)[0];
+            s.parentNode.insertBefore(t,s)}(window, document,'script',
+            'https://connect.facebook.net/en_US/fbevents.js');
             fbq('init', '1136266684699128');
             fbq('track', 'PageView');
             `,
