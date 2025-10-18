@@ -837,9 +837,9 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
           onClick={() => setIsSidebarOpen(true)}
           variant="ghost"
           size="sm"
-          className="fixed top-16 left-2 z-50 h-8 w-8 p-0 bg-zinc-950/90 backdrop-blur-sm border border-zinc-700 hover:bg-zinc-800 transform"
+          className="fixed top-16 left-2 z-50 h-9 w-9 p-0 bg-zinc-900/80 backdrop-blur-xl border border-white/10 hover:bg-zinc-800/80 hover:border-white/20 rounded-lg shadow-lg transition-all duration-200"
         >
-          <ChevronRight className="h-4 w-4" />
+          <ChevronRight className="h-4 w-4 text-zinc-400" />
         </Button>
       )}
 
@@ -848,10 +848,10 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
           onClick={() => setIsSidebarCollapsed(false)}
           variant="ghost"
           size="sm"
-          className="fixed top-1/2 left-0 -translate-y-1/2 z-50 h-12 w-6 p-0 bg-zinc-950/90 backdrop-blur-sm border border-zinc-700 hover:bg-zinc-800 rounded-r-md rounded-l-none"
+          className="fixed top-1/2 left-0 -translate-y-1/2 z-50 h-12 w-6 p-0 bg-zinc-900/80 backdrop-blur-xl border border-white/10 hover:bg-zinc-800/80 hover:border-white/20 rounded-r-lg rounded-l-none shadow-lg transition-all duration-200"
           title="Open Vex sidebar"
         >
-          <ChevronRight className="h-4 w-4" />
+          <ChevronRight className="h-4 w-4 text-zinc-400" />
         </Button>
       )}
 
@@ -859,18 +859,18 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
       {!isMobile && !(isUploadPage && isSidebarCollapsed) && (
         <div
           className={`fixed left-0 top-16 h-[calc(100vh-4rem)] z-40 transition-all duration-300 ${
-            isSidebarCollapsed ? "w-16" : "w-60"
-          } bg-zinc-950/95 backdrop-blur-sm border-r border-zinc-800`}
+            isSidebarCollapsed ? "w-16" : "w-64"
+          } bg-zinc-950/60 backdrop-blur-xl border-r border-white/10`}
         >
           {isSidebarCollapsed ? (
             // Icon-only sidebar
             <div className="flex flex-col h-full">
-              <div className="p-2 border-b border-zinc-800">
+              <div className="p-3 border-b border-white/5">
                 <Button
                   onClick={() => setIsSidebarCollapsed(false)}
                   variant="ghost"
                   size="sm"
-                  className="w-full h-10 p-0 text-zinc-400 hover:text-white"
+                  className="w-full h-10 p-0 text-zinc-400 hover:text-white hover:bg-white/5 rounded-lg transition-all duration-200"
                   title="Expand sidebar"
                 >
                   <ChevronRight className="h-4 w-4" />
@@ -884,7 +884,11 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                     onClick={() => handleNavigation(item.href)}
                     variant="ghost"
                     size="sm"
-                    className="w-full h-10 p-0 text-zinc-300 hover:text-white hover:bg-zinc-800/50"
+                    className={`w-full h-10 p-0 rounded-lg transition-all duration-200 ${
+                      item.highlight
+                        ? "bg-gradient-to-br from-blue-500/20 to-cyan-500/20 text-blue-400 hover:from-blue-500/30 hover:to-cyan-500/30 border border-blue-500/20"
+                        : "text-zinc-400 hover:text-white hover:bg-white/5"
+                    }`}
                     title={item.label}
                   >
                     <item.icon className="h-4 w-4" />
@@ -893,20 +897,19 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
               </div>
             </div>
           ) : (
-            // Full sidebar content (existing sidebar code)
+            // Full sidebar content
             <div className="flex flex-col h-full">
-              {/* Header with Logo */}
-              <div className="flex items-center justify-between p-3 border-b border-zinc-800">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
                 <div className="flex items-center gap-3">
                   <div className="flex flex-col">
-                    <span className="text-lg font-semibold text-white">MassClip</span>
+                    <span className="text-lg font-semibold text-white tracking-tight">MassClip</span>
                   </div>
                 </div>
                 <Button
                   onClick={() => setIsSidebarCollapsed(true)}
                   variant="ghost"
                   size="sm"
-                  className="h-8 w-8 p-0 text-zinc-400 hover:text-white"
+                  className="h-8 w-8 p-0 text-zinc-400 hover:text-white hover:bg-white/5 rounded-lg transition-all duration-200"
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
@@ -914,31 +917,31 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
 
               <ScrollArea className="flex-1">
                 <div className="flex flex-col h-full">
-                  {/* Vex Chat Section */}
-                  <div className="p-3 border-b border-zinc-800">
+                  <div className="px-3 py-4 border-b border-white/5">
                     <button
                       onClick={() => {
                         createNewChat()
                         router.push("/dashboard/vex")
                       }}
-                      className="flex items-center gap-2 mb-2 w-full text-left hover:bg-zinc-800/50 p-2 rounded-lg transition-colors"
+                      className="flex items-center gap-3 mb-3 w-full text-left hover:bg-white/5 px-3 py-2.5 rounded-lg transition-all duration-200 group"
                     >
-                      <MessageSquare className="h-4 w-4 text-blue-400" />
+                      <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500/20 to-cyan-500/20 border border-blue-500/20 group-hover:from-blue-500/30 group-hover:to-cyan-500/30 transition-all duration-200">
+                        <MessageSquare className="h-4 w-4 text-blue-400" />
+                      </div>
                       <span className="text-sm font-medium text-white">Vex AI</span>
                     </button>
 
-                    {/* Chat History */}
                     <div className="max-h-40 overflow-hidden">
                       <ScrollArea className="h-full">
                         <div className="space-y-1">
                           {isLoadingChats ? (
-                            <div className="text-center py-3 text-zinc-500">
-                              <Loader2 className="h-4 w-4 mx-auto mb-1 animate-spin" />
+                            <div className="text-center py-4 text-zinc-500">
+                              <Loader2 className="h-4 w-4 mx-auto mb-2 animate-spin" />
                               <p className="text-xs">Loading chats...</p>
                             </div>
                           ) : chatSessions.length === 0 ? (
-                            <div className="text-center py-3 text-zinc-500">
-                              <MessageSquare className="h-5 w-5 mx-auto mb-1 opacity-50" />
+                            <div className="text-center py-4 text-zinc-500">
+                              <MessageSquare className="h-5 w-5 mx-auto mb-2 opacity-50" />
                               <p className="text-xs">No chats yet</p>
                             </div>
                           ) : (
@@ -950,10 +953,10 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                                     router.push("/dashboard/vex")
                                   }}
                                   disabled={isLoadingCurrentChat}
-                                  className={`w-full text-left p-2 rounded-md text-xs transition-all duration-200 flex items-center gap-2 overflow-hidden ${
+                                  className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all duration-200 flex items-center gap-2 overflow-hidden ${
                                     currentChatId === chat.id
-                                      ? "bg-blue-600/20 text-blue-300 border border-blue-600/30"
-                                      : "text-zinc-400 hover:bg-zinc-800/50 hover:text-white"
+                                      ? "bg-blue-500/10 text-blue-300 border border-blue-500/20 shadow-sm"
+                                      : "text-zinc-400 hover:bg-white/5 hover:text-white"
                                   } ${isLoadingCurrentChat ? "opacity-50" : ""}`}
                                 >
                                   <MessageSquare className="h-3 w-3 flex-shrink-0" />
@@ -970,7 +973,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                                   }}
                                   size="sm"
                                   variant="ghost"
-                                  className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-all duration-200 h-6 w-6 p-0 text-zinc-500 hover:text-red-400 hover:bg-red-500/20 hover:scale-110 z-30 border border-transparent hover:border-red-500/30 shadow-lg"
+                                  className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-all duration-200 h-6 w-6 p-0 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-md z-30 border border-transparent hover:border-red-500/20"
                                   title="Delete chat"
                                 >
                                   <Trash2 className="h-3 w-3" />
@@ -983,39 +986,41 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                     </div>
                   </div>
 
-                  {/* Main Navigation */}
-                  <div className="flex-1 p-3">
-                    <div className="mb-2">
-                      <span className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Navigation</span>
+                  <div className="flex-1 px-3 py-4">
+                    <div className="mb-3 px-3">
+                      <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">
+                        Navigation
+                      </span>
                     </div>
                     <nav className="space-y-1">
                       {navigationItems.map((item) => (
                         <button
                           key={item.href}
                           onClick={() => handleNavigation(item.href)}
-                          className={`w-full flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all duration-200 ${
+                          className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-all duration-200 group ${
                             item.highlight
-                              ? "bg-gradient-to-br from-teal-400 via-teal-500 to-white text-gray-900 hover:from-teal-500 hover:via-teal-600 hover:to-white shadow-lg shadow-teal-500/30 hover:shadow-teal-500/40 font-medium hover:scale-[1.02] active:scale-[0.98]" // Updated to teal and white gradient
-                              : "text-zinc-300 hover:text-white hover:bg-zinc-800/50"
+                              ? "bg-gradient-to-br from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 font-medium"
+                              : "text-zinc-400 hover:text-white hover:bg-white/5"
                           }`}
                         >
-                          <item.icon className="h-4 w-4" />
-                          {item.label}
+                          <item.icon
+                            className={`h-4 w-4 ${item.highlight ? "" : "group-hover:scale-110 transition-transform duration-200"}`}
+                          />
+                          <span className="font-medium">{item.label}</span>
                         </button>
                       ))}
                     </nav>
                   </div>
 
-                  {/* Footer with Profile & Settings */}
-                  <div className="p-3 border-t border-zinc-800 space-y-2">
+                  <div className="px-3 py-4 border-t border-white/5 space-y-3">
                     {trialStatus?.isOnTrial ? (
-                      <div className="mb-2">
+                      <div>
                         <Badge
                           className={`w-full justify-center ${
                             trialStatus.daysRemaining <= 1
                               ? "bg-gradient-to-r from-orange-500 to-red-500"
                               : "bg-gradient-to-r from-cyan-500 to-blue-500"
-                          } text-white border-0 px-3 py-1.5`}
+                          } text-white border-0 px-3 py-2 shadow-lg`}
                         >
                           <Clock className="h-3 w-3 mr-1.5" />
                           Free Trial: {trialStatus.daysRemaining} {trialStatus.daysRemaining === 1 ? "day" : "days"}{" "}
@@ -1026,11 +1031,11 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                       !isLoadingMembershipStatus &&
                       !trialStatus?.hasUsedFreeTrial &&
                       !(membershipStatus?.plan === "creator_pro" && membershipStatus?.isActive) ? (
-                      <div className="mb-2">
+                      <div>
                         <Button
                           onClick={() => router.push("/welcome/free-trial")}
                           size="sm"
-                          className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white border-0 font-medium text-xs h-9"
+                          className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white border-0 font-medium text-xs h-9 shadow-lg shadow-cyan-500/20"
                         >
                           <Gift className="h-3 w-3 mr-1.5" />
                           Start Free Trial
@@ -1038,46 +1043,56 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                       </div>
                     ) : null}
 
-                    {/* Profile Section */}
-                    <div className="flex items-center gap-3 p-2 rounded-lg bg-zinc-900/50">
-                      <Avatar className="h-8 w-8">
+                    <div className="flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/5">
+                      <Avatar className="h-9 w-9 ring-2 ring-white/10">
                         <AvatarImage src={user?.photoURL || undefined} />
-                        <AvatarFallback className="bg-zinc-700 text-white text-xs">
-                          {user?.displayName?.[0] || user?.email?.[0] || "U"}
+                        <AvatarFallback className="bg-gradient-to-br from-zinc-700 to-zinc-800 text-white text-xs font-medium">
+                          {user?.displayName || username?.[0] || "U"}
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-white truncate">
+                        <p className="text-sm font-semibold text-white truncate">
                           {user?.displayName || username || "User"}
                         </p>
-                        <p className="text-xs text-zinc-400 truncate">{user?.email}</p>
+                        <p className="text-xs text-zinc-500 truncate">{user?.email}</p>
                       </div>
                     </div>
 
-                    {/* Action Buttons */}
                     <div className="space-y-2">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button
                             variant="outline"
                             size="sm"
-                            className="w-full border-zinc-700 hover:bg-zinc-800 text-xs bg-transparent h-8"
+                            className="w-full border-white/10 hover:bg-white/5 hover:border-white/20 text-xs bg-transparent h-9 text-zinc-400 hover:text-white transition-all duration-200"
                           >
-                            <Settings className="h-3 w-3 mr-1" />
+                            <Settings className="h-3 w-3 mr-2" />
                             Settings
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48 bg-zinc-900 border-zinc-700">
-                          <DropdownMenuItem onClick={() => handleNavigation("/dashboard/profile")}>
+                        <DropdownMenuContent
+                          align="end"
+                          className="w-48 bg-zinc-900/95 backdrop-blur-xl border-white/10"
+                        >
+                          <DropdownMenuItem
+                            onClick={() => handleNavigation("/dashboard/profile")}
+                            className="hover:bg-white/5"
+                          >
                             <User className="h-4 w-4 mr-2" />
                             Edit Profile
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleNavigation("/dashboard/security")}>
+                          <DropdownMenuItem
+                            onClick={() => handleNavigation("/dashboard/security")}
+                            className="hover:bg-white/5"
+                          >
                             <Settings className="h-4 w-4 mr-2" />
                             Security
                           </DropdownMenuItem>
-                          <DropdownMenuSeparator className="bg-zinc-700" />
-                          <DropdownMenuItem onClick={handleLogout} className="text-red-400 focus:text-red-300">
+                          <DropdownMenuSeparator className="bg-white/10" />
+                          <DropdownMenuItem
+                            onClick={handleLogout}
+                            className="text-red-400 focus:text-red-300 hover:bg-red-500/10"
+                          >
                             <LogOut className="h-4 w-4 mr-2" />
                             Sign Out
                           </DropdownMenuItem>
@@ -1093,9 +1108,9 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                           }
                         }}
                         size="sm"
-                        className="w-full bg-white text-black hover:bg-zinc-100 font-medium text-xs h-8"
+                        className="w-full bg-white text-black hover:bg-zinc-100 font-semibold text-xs h-9 shadow-lg transition-all duration-200"
                       >
-                        <User className="h-3 w-3 mr-1" />
+                        <User className="h-3 w-3 mr-2" />
                         View Profile
                       </Button>
                     </div>
@@ -1112,55 +1127,54 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
         <>
           {/* Mobile backdrop */}
           {isSidebarOpen && (
-            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-30" onClick={() => setIsSidebarOpen(false)} />
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-30" onClick={() => setIsSidebarOpen(false)} />
           )}
 
-          {/* Enhanced Sidebar with Full Navigation */}
           <div
             id="vex-sidebar"
             className={`
               fixed left-0 top-16 h-[calc(100vh-4rem)] w-80
-              bg-zinc-950/95 backdrop-blur-sm border-r border-zinc-800 flex flex-col z-40
+              bg-zinc-950/60 backdrop-blur-xl border-r border-white/10 flex flex-col z-40
               ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}
-              transition-all duration-300 ease-in-out overflow-hidden
+              transition-all duration-300 ease-in-out overflow-hidden shadow-2xl
             `}
           >
-            {/* Header with Logo - Only show branding, no close button */}
-            <div className="flex items-center justify-between p-3 border-b border-zinc-800">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
               <div className="flex items-center gap-3">
                 <div className="flex flex-col">
-                  <span className="text-lg font-semibold text-white">MassClip</span>
+                  <span className="text-lg font-semibold text-white tracking-tight">MassClip</span>
                 </div>
               </div>
             </div>
 
             <ScrollArea className="flex-1">
               <div className="flex flex-col h-full">
-                {/* Vex Chat Section */}
-                <div className="p-3 border-b border-zinc-800">
+                <div className="px-3 py-4 border-b border-white/5">
                   <button
                     onClick={() => {
                       createNewChat()
                       router.push("/dashboard/vex")
                     }}
-                    className="flex items-center gap-2 mb-2 w-full text-left hover:bg-zinc-800/50 p-2 rounded-lg transition-colors"
+                    className="flex items-center gap-3 mb-3 w-full text-left hover:bg-white/5 px-3 py-2.5 rounded-lg transition-all duration-200 group"
                   >
-                    <MessageSquare className="h-4 w-4 text-blue-400" />
+                    <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500/20 to-cyan-500/20 border border-blue-500/20 group-hover:from-blue-500/30 group-hover:to-cyan-500/30 transition-all duration-200">
+                      <MessageSquare className="h-4 w-4 text-blue-400" />
+                    </div>
                     <span className="text-sm font-medium text-white">Vex AI</span>
                   </button>
 
-                  {/* Chat History */}
+                  {/* Chat History - Same styling as desktop */}
                   <div className="max-h-40 overflow-hidden">
                     <ScrollArea className="h-full">
                       <div className="space-y-1">
                         {isLoadingChats ? (
-                          <div className="text-center py-3 text-zinc-500">
-                            <Loader2 className="h-4 w-4 mx-auto mb-1 animate-spin" />
+                          <div className="text-center py-4 text-zinc-500">
+                            <Loader2 className="h-4 w-4 mx-auto mb-2 animate-spin" />
                             <p className="text-xs">Loading chats...</p>
                           </div>
                         ) : chatSessions.length === 0 ? (
-                          <div className="text-center py-3 text-zinc-500">
-                            <MessageSquare className="h-5 w-5 mx-auto mb-1 opacity-50" />
+                          <div className="text-center py-4 text-zinc-500">
+                            <MessageSquare className="h-5 w-5 mx-auto mb-2 opacity-50" />
                             <p className="text-xs">No chats yet</p>
                           </div>
                         ) : (
@@ -1172,10 +1186,10 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                                   router.push("/dashboard/vex")
                                 }}
                                 disabled={isLoadingCurrentChat}
-                                className={`w-full text-left p-2 rounded-md text-xs transition-all duration-200 flex items-center gap-2 overflow-hidden ${
+                                className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all duration-200 flex items-center gap-2 overflow-hidden ${
                                   currentChatId === chat.id
-                                    ? "bg-blue-600/20 text-blue-300 border border-blue-600/30"
-                                    : "text-zinc-400 hover:bg-zinc-800/50 hover:text-white"
+                                    ? "bg-blue-500/10 text-blue-300 border border-blue-500/20 shadow-sm"
+                                    : "text-zinc-400 hover:bg-white/5 hover:text-white"
                                 } ${isLoadingCurrentChat ? "opacity-50" : ""}`}
                               >
                                 <MessageSquare className="h-3 w-3 flex-shrink-0" />
@@ -1192,7 +1206,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                                 }}
                                 size="sm"
                                 variant="ghost"
-                                className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-all duration-200 h-6 w-6 p-0 text-zinc-500 hover:text-red-400 hover:bg-red-500/20 hover:scale-110 z-30 border border-transparent hover:border-red-500/30 shadow-lg"
+                                className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-all duration-200 h-6 w-6 p-0 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-md z-30 border border-transparent hover:border-red-500/20"
                                 title="Delete chat"
                               >
                                 <Trash2 className="h-3 w-3" />
@@ -1205,39 +1219,39 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                   </div>
                 </div>
 
-                {/* Main Navigation */}
-                <div className="flex-1 p-3">
-                  <div className="mb-2">
-                    <span className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Navigation</span>
+                <div className="flex-1 px-3 py-4">
+                  <div className="mb-3 px-3">
+                    <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Navigation</span>
                   </div>
                   <nav className="space-y-1">
                     {navigationItems.map((item) => (
                       <button
                         key={item.href}
                         onClick={() => handleNavigation(item.href)}
-                        className={`w-full flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all duration-200 ${
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-all duration-200 group ${
                           item.highlight
-                            ? "bg-gradient-to-br from-teal-400 via-teal-500 to-white text-gray-900 hover:from-teal-500 hover:via-teal-600 hover:to-white shadow-lg shadow-teal-500/30 hover:shadow-teal-500/40 font-medium hover:scale-[1.02] active:scale-[0.98]" // Updated to teal and white gradient
-                            : "text-zinc-300 hover:text-white hover:bg-zinc-800/50"
+                            ? "bg-gradient-to-br from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 font-medium"
+                            : "text-zinc-400 hover:text-white hover:bg-white/5"
                         }`}
                       >
-                        <item.icon className="h-4 w-4" />
-                        {item.label}
+                        <item.icon
+                          className={`h-4 w-4 ${item.highlight ? "" : "group-hover:scale-110 transition-transform duration-200"}`}
+                        />
+                        <span className="font-medium">{item.label}</span>
                       </button>
                     ))}
                   </nav>
                 </div>
 
-                {/* Footer with Profile & Settings */}
-                <div className="p-3 border-t border-zinc-800 space-y-2">
+                <div className="px-3 py-4 border-t border-white/5 space-y-3">
                   {trialStatus?.isOnTrial ? (
-                    <div className="mb-2">
+                    <div>
                       <Badge
                         className={`w-full justify-center ${
                           trialStatus.daysRemaining <= 1
                             ? "bg-gradient-to-r from-orange-500 to-red-500"
                             : "bg-gradient-to-r from-cyan-500 to-blue-500"
-                        } text-white border-0 px-3 py-1.5`}
+                        } text-white border-0 px-3 py-2 shadow-lg`}
                       >
                         <Clock className="h-3 w-3 mr-1.5" />
                         Free Trial: {trialStatus.daysRemaining} {trialStatus.daysRemaining === 1 ? "day" : "days"} left
@@ -1247,11 +1261,11 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                     !isLoadingMembershipStatus &&
                     !trialStatus?.hasUsedFreeTrial &&
                     !(membershipStatus?.plan === "creator_pro" && membershipStatus?.isActive) ? (
-                    <div className="mb-2">
+                    <div>
                       <Button
                         onClick={() => router.push("/welcome/free-trial")}
                         size="sm"
-                        className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white border-0 font-medium text-xs h-9"
+                        className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white border-0 font-medium text-xs h-9 shadow-lg shadow-cyan-500/20"
                       >
                         <Gift className="h-3 w-3 mr-1.5" />
                         Start Free Trial
@@ -1260,18 +1274,18 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                   ) : null}
 
                   {/* Profile Section */}
-                  <div className="flex items-center gap-3 p-2 rounded-lg bg-zinc-900/50">
-                    <Avatar className="h-8 w-8">
+                  <div className="flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/5">
+                    <Avatar className="h-9 w-9 ring-2 ring-white/10">
                       <AvatarImage src={user?.photoURL || undefined} />
-                      <AvatarFallback className="bg-zinc-700 text-white text-xs">
+                      <AvatarFallback className="bg-gradient-to-br from-zinc-700 to-zinc-800 text-white text-xs font-medium">
                         {user?.displayName || username?.[0] || "U"}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-white truncate">
+                      <p className="text-sm font-semibold text-white truncate">
                         {user?.displayName || username || "User"}
                       </p>
-                      <p className="text-xs text-zinc-400 truncate">{user?.email}</p>
+                      <p className="text-xs text-zinc-500 truncate">{user?.email}</p>
                     </div>
                   </div>
 
@@ -1282,23 +1296,32 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                         <Button
                           variant="outline"
                           size="sm"
-                          className="w-full border-zinc-700 hover:bg-zinc-800 text-xs bg-transparent h-8"
+                          className="w-full border-white/10 hover:bg-white/5 hover:border-white/20 text-xs bg-transparent h-9 text-zinc-400 hover:text-white transition-all duration-200"
                         >
-                          <Settings className="h-3 w-3 mr-1" />
+                          <Settings className="h-3 w-3 mr-2" />
                           Settings
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-48 bg-zinc-900 border-zinc-700">
-                        <DropdownMenuItem onClick={() => handleNavigation("/dashboard/profile")}>
+                      <DropdownMenuContent align="end" className="w-48 bg-zinc-900/95 backdrop-blur-xl border-white/10">
+                        <DropdownMenuItem
+                          onClick={() => handleNavigation("/dashboard/profile")}
+                          className="hover:bg-white/5"
+                        >
                           <User className="h-4 w-4 mr-2" />
                           Edit Profile
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleNavigation("/dashboard/security")}>
+                        <DropdownMenuItem
+                          onClick={() => handleNavigation("/dashboard/security")}
+                          className="hover:bg-white/5"
+                        >
                           <Settings className="h-4 w-4 mr-2" />
                           Security
                         </DropdownMenuItem>
-                        <DropdownMenuSeparator className="bg-zinc-700" />
-                        <DropdownMenuItem onClick={handleLogout} className="text-red-400 focus:text-red-300">
+                        <DropdownMenuSeparator className="bg-white/10" />
+                        <DropdownMenuItem
+                          onClick={handleLogout}
+                          className="text-red-400 focus:text-red-300 hover:bg-red-500/10"
+                        >
                           <LogOut className="h-4 w-4 mr-2" />
                           Sign Out
                         </DropdownMenuItem>
@@ -1314,9 +1337,9 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                         }
                       }}
                       size="sm"
-                      className="w-full bg-white text-black hover:bg-zinc-100 font-medium text-xs h-8"
+                      className="w-full bg-white text-black hover:bg-zinc-100 font-semibold text-xs h-9 shadow-lg transition-all duration-200"
                     >
-                      <User className="h-3 w-3 mr-1" />
+                      <User className="h-3 w-3 mr-2" />
                       View Profile
                     </Button>
                   </div>
@@ -1330,7 +1353,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
       {isVexChatPage ? (
         /* Main Chat Area - Only show on /dashboard/vex */
         <div
-          className={`flex-col flex-1 min-h-screen pt-16 ${isMobile ? "ml-0" : isSidebarCollapsed ? "ml-16" : "ml-60"} ${isMobile && isSidebarOpen ? "blur-sm pointer-events-none" : ""} transition-all duration-300 relative z-10`}
+          className={`flex-col flex-1 min-h-screen pt-16 ${isMobile ? "ml-0" : isSidebarCollapsed ? "ml-16" : "ml-64"} ${isMobile && isSidebarOpen ? "blur-sm pointer-events-none" : ""} transition-all duration-300 relative z-10`}
         >
           {isLoadingCurrentChat && (
             <div className="flex items-center justify-center py-4 border-b border-zinc-800">
@@ -1430,7 +1453,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
           )}
 
           <div
-            className={`fixed bottom-0 ${isMobile ? "left-0 right-0" : isSidebarCollapsed ? "left-16 right-0" : "left-60 right-0"} bg-gradient-to-t from-black via-black to-transparent pt-4 pb-3 ${isMobile ? "px-3" : "px-4"} z-40 transition-all duration-300`}
+            className={`fixed bottom-0 ${isMobile ? "left-0 right-0" : isSidebarCollapsed ? "left-16 right-0" : "left-64 right-0"} bg-gradient-to-t from-black via-black to-transparent pt-4 pb-3 ${isMobile ? "px-3" : "px-4"} z-40 transition-all duration-300`}
           >
             <div className={`${isMobile ? "max-w-full" : "max-w-4xl mx-auto"}`}>
               {messages.length > 0 && (
@@ -1491,7 +1514,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                 ? "ml-0" // Upload page gets full width when sidebar collapsed
                 : isSidebarCollapsed
                   ? "ml-16"
-                  : "ml-60"
+                  : "ml-64"
           } ${isMobile && isSidebarOpen ? "blur-sm pointer-events-none" : ""} transition-all duration-300 relative z-10`}
         >
           {isUploadPage ? (
