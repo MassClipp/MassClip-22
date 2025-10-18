@@ -53,6 +53,22 @@ export default function UpgradePage() {
 
     if (success === "true" && sessionId) {
       setShowSuccessMessage(true)
+
+      if (typeof window !== "undefined" && (window as any).fbq) {
+        // Extract bundle info from URL if available
+        const bundleType = searchParams.get("bundle_type") || "bundle_capacity"
+        const bundleCount = searchParams.get("bundle_count") || "1"
+        const amount = searchParams.get("amount") || "3.99"
+        ;(window as any).fbq("track", "Purchase", {
+          value: Number.parseFloat(amount),
+          currency: "USD",
+          content_name: `${bundleCount} Extra Bundle${Number.parseInt(bundleCount) > 1 ? "s" : ""}`,
+          content_type: "bundle_capacity",
+          content_ids: [bundleType],
+          num_items: Number.parseInt(bundleCount),
+        })
+      }
+
       const newUrl = window.location.pathname
       window.history.replaceState({}, "", newUrl)
 
