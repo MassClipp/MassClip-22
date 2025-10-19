@@ -19,7 +19,6 @@ export function PaywallWrapper({ children }: PaywallWrapperProps) {
   const [hasAccess, setHasAccess] = useState<boolean | null>(null)
   const [loading, setLoading] = useState(true)
 
-  // Pages that are always accessible
   const alwaysAccessiblePaths = ["/dashboard/upgrade", "/dashboard/purchases", "/pricing", "/welcome"]
 
   useEffect(() => {
@@ -53,12 +52,6 @@ export function PaywallWrapper({ children }: PaywallWrapperProps) {
         })
         const membershipData = await membershipRes.json()
 
-        console.log("[v0] Paywall check:", {
-          isOnTrial: trialData.isOnTrial,
-          isActive: membershipData.isActive,
-          status: membershipData.status,
-        })
-
         const userHasAccess = trialData.isOnTrial || membershipData.isActive
 
         setHasAccess(userHasAccess)
@@ -89,7 +82,6 @@ export function PaywallWrapper({ children }: PaywallWrapperProps) {
         {/* Blurred content - positioned absolutely to fill the viewport */}
         <div className="absolute inset-0 blur-md pointer-events-none select-none overflow-hidden">{children}</div>
 
-        {/* Paywall overlay - covers entire viewport */}
         <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="max-w-md mx-auto text-center space-y-6 p-8">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-zinc-800/50 border border-zinc-700/50">
@@ -97,7 +89,7 @@ export function PaywallWrapper({ children }: PaywallWrapperProps) {
             </div>
 
             <div className="space-y-2">
-              <h2 className="text-2xl font-light text-white">Subscription Required</h2>
+              <h2 className="text-2xl font-semibold text-white">Subscription Required</h2>
               <p className="text-zinc-400">
                 This feature is only accessible for creators with an active subscription or free trial.
               </p>
@@ -105,7 +97,7 @@ export function PaywallWrapper({ children }: PaywallWrapperProps) {
 
             <Button
               onClick={() => router.push("/dashboard/upgrade")}
-              className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white"
+              className="bg-white text-black hover:bg-zinc-100 font-medium"
             >
               View Plans
             </Button>
