@@ -47,7 +47,7 @@ export default function MembershipPlansPage() {
         <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-8 mt-8">
           {/* Plans Grid */}
           <motion.div variants={itemVariants} className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-            {/* Free Plan */}
+            {/* Starter Plan */}
             <div
               className={`bg-zinc-900/30 rounded-lg overflow-hidden border ${!isProUser ? "border-red-600" : "border-zinc-800/50"} backdrop-blur-sm relative`}
             >
@@ -59,47 +59,31 @@ export default function MembershipPlansPage() {
               <div className="p-8">
                 <div className="flex items-center mb-4">
                   <Shield className="h-6 w-6 text-zinc-400 mr-2" />
-                  <h2 className="text-2xl font-medium text-white">Free</h2>
+                  <h2 className="text-2xl font-medium text-white">Starter</h2>
                 </div>
-                <p className="text-zinc-400 mb-6">Get started with basic features</p>
+                <p className="text-zinc-400 mb-6">For new creators testing the waters</p>
                 <p className="text-4xl font-semibold text-white mb-6">
-                  $0<span className="text-xl text-zinc-400">/month</span>
+                  $10<span className="text-xl text-zinc-400">/month</span>
                 </p>
 
                 <ul className="space-y-4 mb-8">
                   <li className="flex items-start">
                     <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
                     <span>
-                      <strong>50 downloads per month</strong>
+                      <strong>3 folders with subfolders</strong>
                     </span>
                   </li>
                   <li className="flex items-start">
                     <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                    <span>Access to all clips</span>
+                    <span>5 bundles max on storefront</span>
                   </li>
                   <li className="flex items-start">
                     <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                    <span>Standard video quality</span>
+                    <span>15 videos per bundle limit</span>
                   </li>
                   <li className="flex items-start">
                     <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                    <span>Dynamic content organization</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                    <span>2 folders max (no subfolders)</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                    <span>2 bundles max on storefront</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                    <span>10 videos per bundle limit</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                    <span>Basic Vex AI - content organization only</span>
+                    <span>Basic Vex AI - file metadata & folder organization</span>
                   </li>
                   <li className="flex items-start">
                     <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
@@ -141,10 +125,10 @@ export default function MembershipPlansPage() {
                   <Crown className="h-6 w-6 text-yellow-500 mr-2" />
                   <h2 className="text-2xl font-medium text-white">Creator Pro</h2>
                 </div>
-                <p className="text-zinc-400 mb-6">Everything you need to create amazing content</p>
+                <p className="text-zinc-400 mb-6">For creators who treat content like a business</p>
                 <div className="mb-6">
                   <p className="text-4xl font-semibold text-white">
-                    $3<span className="text-xl text-zinc-400">/first month</span>
+                    $3<span className="text-xl text-zinc-400">/first week</span>
                   </p>
                   <p className="text-lg text-zinc-500 mt-1">then $15/month</p>
                 </div>
@@ -153,28 +137,8 @@ export default function MembershipPlansPage() {
                   <li className="flex items-start">
                     <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
                     <span>
-                      <strong>Unlimited downloads</strong>
+                      <strong>Unlimited folders with subfolders</strong>
                     </span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                    <span>Access to all clips</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                    <span>High video quality</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                    <span>Priority support</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                    <span>Advanced organization features</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                    <span>Unlimited folders with subfolders</span>
                   </li>
                   <li className="flex items-start">
                     <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />

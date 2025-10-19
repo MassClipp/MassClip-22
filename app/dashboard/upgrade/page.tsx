@@ -159,100 +159,14 @@ export default function UpgradePage() {
         <h1 className="text-4xl font-light text-white">
           Choose Your{" "}
           <span className="bg-gradient-to-br from-slate-300 via-cyan-200 to-white bg-clip-text text-transparent">
-            Upgrade
-          </span>{" "}
-          Plan
+            Plan
+          </span>
         </h1>
-        <p className="text-lg text-white/70 max-w-2xl mx-auto">
-          Get extra bundles with one-time purchases or upgrade to Creator Pro for unlimited access
-        </p>
-      </div>
-
-      <div className="text-center space-y-2">
-        <h2 className="text-2xl font-light text-white">One-Time Bundle Purchases</h2>
-        <p className="text-white/60">Perfect for free users who want extra bundles without a subscription</p>
-      </div>
-
-      <div className="space-y-4">
-        {bundleOptions.map((option) => {
-          const Icon = option.icon
-          const isPurchasing = purchasingBundle === option.id
-
-          return (
-            <Card
-              key={option.id}
-              className={`relative overflow-hidden border transition-all ${
-                option.popular
-                  ? "border-cyan-400/50 shadow-lg shadow-cyan-500/20"
-                  : "border-zinc-700/50 hover:border-zinc-600/70"
-              } bg-gradient-to-br from-zinc-900/90 to-black/90`}
-            >
-              {option.popular && (
-                <div className="absolute right-0 top-0 bg-gradient-to-r from-cyan-400 to-blue-400 px-3 py-1 text-xs font-bold text-black">
-                  POPULAR
-                </div>
-              )}
-
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-400/30">
-                      <Icon className="h-5 w-5 text-cyan-300" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-light text-white">{option.name}</h3>
-                      <p className="text-zinc-400 text-sm">{option.description}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-2xl font-light text-white">${option.price}</p>
-                    <span className="text-xs text-zinc-400">one-time</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4 text-sm text-white/70">
-                    <div className="flex items-center gap-1">
-                      <CheckCircle2 className="h-4 w-4 text-cyan-400" />
-                      {option.bundles} extra bundle{option.bundles > 1 ? "s" : ""}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <CheckCircle2 className="h-4 w-4 text-cyan-400" />
-                      Instant activation
-                    </div>
-                  </div>
-
-                  <Button
-                    onClick={() => handleBundlePurchase(option.id)}
-                    disabled={isPurchasing}
-                    className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white"
-                  >
-                    {isPurchasing ? (
-                      <div className="flex items-center">
-                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
-                        Processing...
-                      </div>
-                    ) : (
-                      `Buy ${option.bundles} Bundle${option.bundles > 1 ? "s" : ""}`
-                    )}
-                  </Button>
-                </div>
-              </div>
-            </Card>
-          )
-        })}
-      </div>
-
-      <div className="text-center py-6">
-        <div className="inline-block p-1 bg-gradient-to-r from-cyan-500/20 to-blue-500/20 rounded-xl">
-          <div className="bg-zinc-900 rounded-lg p-6">
-            <h3 className="text-xl font-light text-white mb-2">Or Go Unlimited</h3>
-            <p className="text-white/60">Get unlimited bundles and premium features with Creator Pro</p>
-          </div>
-        </div>
+        <p className="text-lg text-white/70 max-w-2xl mx-auto">Select the plan that fits your content creation needs</p>
       </div>
 
       <div className="space-y-6">
+        {/* Starter Plan */}
         <Card className="relative overflow-hidden border border-zinc-700/50 bg-gradient-to-br from-zinc-900/90 to-black/90">
           {!isProUser && !loading && (
             <div className="absolute right-0 top-0 bg-gradient-to-r from-slate-400 to-cyan-400 px-3 py-1 text-xs font-medium text-black">
@@ -267,22 +181,22 @@ export default function UpgradePage() {
                   <Shield className="h-6 w-6 text-zinc-300" />
                 </div>
                 <div>
-                  <h2 className="text-2xl font-light text-white">Free</h2>
-                  <p className="text-zinc-400">Perfect for getting started</p>
+                  <h2 className="text-2xl font-light text-white">Starter</h2>
+                  <p className="text-zinc-400">For new creators testing the waters</p>
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-4xl font-light text-white">$0</p>
+                <p className="text-4xl font-light text-white">$10</p>
                 <span className="text-sm text-zinc-400">/month</span>
               </div>
             </div>
 
             <div className="space-y-2 mb-4">
               {[
-                { text: "2 folders max (no subfolders)", highlight: true },
-                { text: "2 bundles max on storefront", highlight: false },
-                { text: "10 videos per bundle limit", highlight: false },
-                { text: "Basic Vex AI - content organization only", highlight: false },
+                { text: "3 folders with subfolders", highlight: true },
+                { text: "5 bundles max on storefront", highlight: false },
+                { text: "15 videos per bundle limit", highlight: false },
+                { text: "Basic Vex AI - file metadata & folder organization", highlight: false },
                 { text: "20% platform fee on sales", highlight: false },
               ].map((feature, index) => (
                 <div key={index} className="flex items-center gap-2">
@@ -306,6 +220,7 @@ export default function UpgradePage() {
           </div>
         </Card>
 
+        {/* Creator Pro Plan */}
         <Card className="relative overflow-hidden border border-zinc-700/50 bg-gradient-to-br from-zinc-900/90 to-black/90">
           {!loading && (
             <div className="absolute right-0 top-0 bg-gradient-to-r from-cyan-400 to-blue-400 px-3 py-1 text-xs font-bold text-black">
@@ -321,12 +236,12 @@ export default function UpgradePage() {
                 </div>
                 <div>
                   <h2 className="text-2xl font-light text-white">Creator Pro</h2>
-                  <p className="text-zinc-400">Ready to take your monetization seriously?</p>
+                  <p className="text-zinc-400">For creators who treat content like a business</p>
                 </div>
               </div>
               <div className="text-right">
                 <p className="text-4xl font-light text-white">$3</p>
-                <span className="text-sm text-zinc-400">first month</span>
+                <span className="text-sm text-zinc-400">first week</span>
                 <p className="text-lg text-zinc-500 mt-1">then $15/month</p>
               </div>
             </div>

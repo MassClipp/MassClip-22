@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Crown, Sparkles, Zap, FolderTree, CheckCircle2, ArrowRight, Loader2 } from "lucide-react"
+import { Crown, Sparkles, Zap, FolderTree, CheckCircle2, ArrowRight, Loader2, Shield } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -10,7 +10,8 @@ export default function WelcomePage() {
   const router = useRouter()
   const { user } = useAuth()
   const [isStartingTrial, setIsStartingTrial] = useState(false)
-  const [isUpgrading, setIsUpgrading] = useState(false)
+  const [isUpgradingStarter, setIsUpgradingStarter] = useState(false)
+  const [isUpgradingPro, setIsUpgradingPro] = useState(false)
 
   useEffect(() => {
     // Redirect if not authenticated
@@ -59,13 +60,13 @@ export default function WelcomePage() {
 
   const handleUpgradeToPro = async () => {
     try {
-      setIsUpgrading(true)
+      setIsUpgradingPro(true)
       const idToken = await user?.getIdToken?.()
 
       const res = await fetch("/api/stripe/checkout/pricing", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken }),
+        body: JSON.stringify({ idToken, plan: "pro" }),
       })
 
       if (!res.ok) {
@@ -80,7 +81,34 @@ export default function WelcomePage() {
     } catch (err) {
       console.error("[Welcome] Error upgrading:", err)
     } finally {
-      setIsUpgrading(false)
+      setIsUpgradingPro(false)
+    }
+  }
+
+  const handleUpgradeToStarter = async () => {
+    try {
+      setIsUpgradingStarter(true)
+      const idToken = await user?.getIdToken?.()
+
+      const res = await fetch("/api/stripe/checkout/pricing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken, plan: "starter" }),
+      })
+
+      if (!res.ok) {
+        console.error("[Welcome] Failed to create checkout session")
+        return
+      }
+
+      const data = await res.json()
+      if (data?.url) {
+        window.location.href = data.url
+      }
+    } catch (err) {
+      console.error("[Welcome] Error upgrading:", err)
+    } finally {
+      setIsUpgradingStarter(false)
     }
   }
 
@@ -125,12 +153,12 @@ export default function WelcomePage() {
             </h1>
 
             <p className="text-xl text-white/60 max-w-2xl mx-auto leading-relaxed">
-              Start with a free trial or upgrade to Creator Pro to unlock unlimited bundles, AI-powered content
-              organization, and advanced monetization tools.
+              Start with a free trial or choose a paid plan to unlock AI-powered content organization and advanced
+              monetization tools.
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-6">
+          <div className="grid md:grid-cols-3 gap-6">
             {/* Free Trial Option */}
             <div className="p-6 rounded-2xl bg-gradient-to-br from-zinc-900/50 to-black/50 border border-zinc-800/50 hover:border-cyan-400/30 transition-all">
               <div className="flex items-center gap-3 mb-6">
@@ -156,9 +184,7 @@ export default function WelcomePage() {
                   </div>
                 ))}
               </div>
-              <p className="text-xs text-zinc-500 mb-4">
-                After 3 days, you'll be downgraded to the free plan unless you upgrade.
-              </p>
+              <p className="text-xs text-zinc-500 mb-4">After 3 days, choose a paid plan to continue using MassClip.</p>
               <Button
                 onClick={handleStartTrial}
                 disabled={isStartingTrial}
@@ -178,6 +204,51 @@ export default function WelcomePage() {
               </Button>
             </div>
 
+            {/* Starter Plan */}
+            <div className="p-6 rounded-2xl bg-gradient-to-br from-zinc-900/50 to-black/50 border border-zinc-800/50 hover:border-cyan-400/30 transition-all">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 rounded-lg bg-zinc-800/50 flex items-center justify-center">
+                  <Shield className="h-5 w-5 text-zinc-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-medium text-white">Starter</h3>
+                  <p className="text-sm text-zinc-400">$10/month</p>
+                </div>
+              </div>
+              <div className="space-y-3 mb-6">
+                {[
+                  "3 folders with subfolders",
+                  "5 bundles max",
+                  "15 videos per bundle",
+                  "Basic Vex AI",
+                  "20% platform fee",
+                ].map((feature, i) => (
+                  <div key={i} className="flex items-center gap-2 text-sm">
+                    <CheckCircle2 className="h-4 w-4 text-cyan-400 flex-shrink-0" />
+                    {feature}
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-zinc-500 mb-4">Perfect for new creators testing the waters.</p>
+              <Button
+                onClick={handleUpgradeToStarter}
+                disabled={isUpgradingStarter}
+                className="w-full bg-zinc-700 hover:bg-zinc-600 text-white"
+              >
+                {isUpgradingStarter ? (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Processing...
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    Get Starter
+                    <ArrowRight className="h-4 w-4" />
+                  </div>
+                )}
+              </Button>
+            </div>
+
             {/* Creator Pro Option */}
             <div className="p-6 rounded-2xl bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border border-cyan-400/30 relative overflow-hidden">
               <div className="absolute top-0 right-0 bg-gradient-to-r from-cyan-400 to-blue-400 px-3 py-1 text-xs font-bold text-black">
@@ -189,7 +260,7 @@ export default function WelcomePage() {
                 </div>
                 <div>
                   <h3 className="text-lg font-medium">Creator Pro</h3>
-                  <p className="text-sm text-cyan-300">$3 first month, then $15/month</p>
+                  <p className="text-sm text-cyan-300">$3 first week, then $15/month</p>
                 </div>
               </div>
               <div className="space-y-3 mb-6">
@@ -207,21 +278,21 @@ export default function WelcomePage() {
                 ))}
               </div>
               <p className="text-xs text-cyan-300/80 mb-4">
-                Pay just $3 for your first month, then $15/month. Cancel anytime.
+                Pay just $3 for your first week, then $15/month. Cancel anytime.
               </p>
               <Button
                 onClick={handleUpgradeToPro}
-                disabled={isUpgrading}
+                disabled={isUpgradingPro}
                 className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white border-0 shadow-lg shadow-cyan-500/25"
               >
-                {isUpgrading ? (
+                {isUpgradingPro ? (
                   <div className="flex items-center gap-2">
                     <Loader2 className="h-4 w-4 animate-spin" />
                     Processing...
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
-                    Upgrade to Creator Pro
+                    Get Creator Pro
                     <ArrowRight className="h-4 w-4" />
                   </div>
                 )}
