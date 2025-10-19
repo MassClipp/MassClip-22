@@ -46,6 +46,13 @@ export default function UpgradePage() {
   const { isProUser, loading } = useUserPlan()
   const [purchasingBundle, setPurchasingBundle] = useState<string | null>(null)
   const [showSuccessMessage, setShowSuccessMessage] = useState(false)
+  const [subscriptionStatus, setSubscriptionStatus] = useState<{
+    hasActiveSubscription: boolean
+    isOnTrial: boolean
+    currentPlan: "starter" | "creator_pro" | null
+    hasUsedFirstWeekDiscount: boolean
+  } | null>(null)
+  const [statusLoading, setStatusLoading] = useState(true)
 
   useEffect(() => {
     const success = searchParams.get("success")
@@ -55,7 +62,6 @@ export default function UpgradePage() {
       setShowSuccessMessage(true)
 
       if (typeof window !== "undefined" && (window as any).fbq) {
-        // Extract bundle info from URL if available
         const bundleType = searchParams.get("bundle_type") || "bundle_capacity"
         const bundleCount = searchParams.get("bundle_count") || "1"
         const amount = searchParams.get("amount") || "3.99"
@@ -77,6 +83,61 @@ export default function UpgradePage() {
       }, 5000)
     }
   }, [searchParams])
+
+  useEffect(() => {
+    const fetchSubscriptionStatus = async () => {
+      if (!user) {
+        setStatusLoading(false)
+        return
+      }
+
+      try {
+        const idToken = await user.getIdToken()
+
+        const trialRes = await fetch("/api/user/trial-status", {
+          headers: { Authorization: `Bearer ${idToken}` },
+        })
+        const trialData = await trialRes.json()
+
+        const membershipRes = await fetch("/api/membership-status", {
+          headers: { Authorization: `Bearer ${idToken}` },
+        })
+        const membershipData = await membershipRes.json()
+
+        const limitsRes = await fetch("/api/user/free-limits", {
+          headers: { Authorization: `Bearer ${idToken}` },
+        })
+        const limitsData = await limitsRes.json()
+
+        console.log("[v0] Subscription status:", {
+          trial: trialData,
+          membership: membershipData,
+          limits: limitsData,
+        })
+
+        const hasActiveSubscription = membershipData.isActive && membershipData.status === "active"
+        const isOnTrial = trialData.isOnTrial || membershipData.status === "trialing"
+
+        let currentPlan: "starter" | "creator_pro" | null = null
+        if (hasActiveSubscription || isOnTrial) {
+          currentPlan = membershipData.plan === "creator_pro" ? "creator_pro" : "starter"
+        }
+
+        setSubscriptionStatus({
+          hasActiveSubscription,
+          isOnTrial,
+          currentPlan,
+          hasUsedFirstWeekDiscount: limitsData.hasUsedFirstWeekDiscount || false,
+        })
+      } catch (error) {
+        console.error("[v0] Error fetching subscription status:", error)
+      } finally {
+        setStatusLoading(false)
+      }
+    }
+
+    fetchSubscriptionStatus()
+  }, [user])
 
   const handleBundlePurchase = async (bundleId: string) => {
     try {
@@ -116,13 +177,16 @@ export default function UpgradePage() {
     }
   }
 
-  const handleUpgradeClick = async () => {
+  const handleUpgradeClick = async (plan: "starter" | "creator_pro") => {
     try {
       const idToken = await user?.getIdToken?.()
       const res = await fetch("/api/stripe/checkout/pricing", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken }),
+        body: JSON.stringify({
+          idToken,
+          plan,
+        }),
       })
 
       if (!res.ok) {
@@ -138,6 +202,9 @@ export default function UpgradePage() {
       console.error("[Upgrade] Error starting membership checkout:", err)
     }
   }
+
+  const isPayingOrOnTrial = subscriptionStatus?.hasActiveSubscription || subscriptionStatus?.isOnTrial
+  const showFirstWeekPromo = !subscriptionStatus?.hasUsedFirstWeekDiscount
 
   return (
     <div className="space-y-8">
@@ -168,7 +235,7 @@ export default function UpgradePage() {
       <div className="space-y-6">
         {/* Starter Plan */}
         <Card className="relative overflow-hidden border border-zinc-700/50 bg-gradient-to-br from-zinc-900/90 to-black/90">
-          {!isProUser && !loading && (
+          {!statusLoading && subscriptionStatus?.currentPlan === "starter" && (
             <div className="absolute right-0 top-0 bg-gradient-to-r from-slate-400 to-cyan-400 px-3 py-1 text-xs font-medium text-black">
               CURRENT PLAN
             </div>
@@ -186,8 +253,18 @@ export default function UpgradePage() {
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-4xl font-light text-white">$10</p>
-                <span className="text-sm text-zinc-400">/month</span>
+                {showFirstWeekPromo ? (
+                  <>
+                    <p className="text-4xl font-light text-white">$3</p>
+                    <span className="text-sm text-zinc-400">first week</span>
+                    <p className="text-lg text-zinc-500 mt-1">then $10/month</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-4xl font-light text-white">$10</p>
+                    <span className="text-sm text-zinc-400">/month</span>
+                  </>
+                )}
               </div>
             </div>
 
@@ -206,25 +283,30 @@ export default function UpgradePage() {
               ))}
             </div>
 
-            <Button
-              onClick={() => router.push("/dashboard")}
-              variant="outline"
-              className={`w-full ${
-                isProUser
-                  ? "border-zinc-600 bg-zinc-800/30 text-white"
-                  : "border-cyan-400/50 bg-cyan-500/10 text-cyan-300"
-              }`}
-            >
-              {isProUser ? "Return to Dashboard" : "Current Plan"}
-            </Button>
+            {subscriptionStatus?.currentPlan === "starter" ? (
+              <Button
+                onClick={() => router.push("/dashboard/profile?tab=membership")}
+                variant="outline"
+                className="w-full border-cyan-400/50 bg-cyan-500/10 text-cyan-300"
+              >
+                Manage Subscription
+              </Button>
+            ) : (
+              <Button
+                onClick={() => handleUpgradeClick("starter")}
+                className="w-full bg-gradient-to-r from-slate-500 to-cyan-500 hover:from-slate-400 hover:to-cyan-400 text-white"
+              >
+                Get Starter
+              </Button>
+            )}
           </div>
         </Card>
 
         {/* Creator Pro Plan */}
         <Card className="relative overflow-hidden border border-zinc-700/50 bg-gradient-to-br from-zinc-900/90 to-black/90">
-          {!loading && (
+          {!statusLoading && (
             <div className="absolute right-0 top-0 bg-gradient-to-r from-cyan-400 to-blue-400 px-3 py-1 text-xs font-bold text-black">
-              {isProUser ? "CURRENT PLAN" : "RECOMMENDED"}
+              {subscriptionStatus?.currentPlan === "creator_pro" ? "CURRENT PLAN" : "RECOMMENDED"}
             </div>
           )}
 
@@ -240,9 +322,18 @@ export default function UpgradePage() {
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-4xl font-light text-white">$3</p>
-                <span className="text-sm text-zinc-400">first week</span>
-                <p className="text-lg text-zinc-500 mt-1">then $15/month</p>
+                {showFirstWeekPromo ? (
+                  <>
+                    <p className="text-4xl font-light text-white">$3</p>
+                    <span className="text-sm text-zinc-400">first week</span>
+                    <p className="text-lg text-zinc-500 mt-1">then $15/month</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-4xl font-light text-white">$15</p>
+                    <span className="text-sm text-zinc-400">/month</span>
+                  </>
+                )}
               </div>
             </div>
 
@@ -261,7 +352,7 @@ export default function UpgradePage() {
               ))}
             </div>
 
-            {isProUser ? (
+            {subscriptionStatus?.currentPlan === "creator_pro" ? (
               <Button
                 onClick={() => router.push("/dashboard/profile?tab=membership")}
                 variant="outline"
@@ -271,7 +362,7 @@ export default function UpgradePage() {
               </Button>
             ) : (
               <Button
-                onClick={handleUpgradeClick}
+                onClick={() => handleUpgradeClick("creator_pro")}
                 className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white"
               >
                 Upgrade to Creator Pro
@@ -280,6 +371,69 @@ export default function UpgradePage() {
           </div>
         </Card>
       </div>
+
+      {!isPayingOrOnTrial && !statusLoading && (
+        <div className="mt-12 space-y-6">
+          <div className="text-center space-y-2">
+            <h2 className="text-2xl font-light text-white">Or Purchase Extra Bundles</h2>
+            <p className="text-zinc-400">One-time purchases for additional bundle capacity</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {bundleOptions.map((option) => (
+              <Card
+                key={option.id}
+                className={`relative overflow-hidden border ${
+                  option.popular
+                    ? "border-cyan-400/50 bg-gradient-to-br from-cyan-500/10 to-blue-500/10"
+                    : "border-zinc-700/50 bg-gradient-to-br from-zinc-900/90 to-black/90"
+                }`}
+              >
+                {option.popular && (
+                  <div className="absolute right-0 top-0 bg-gradient-to-r from-cyan-400 to-blue-400 px-3 py-1 text-xs font-bold text-black">
+                    POPULAR
+                  </div>
+                )}
+
+                <div className="p-6 space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`p-2 rounded-lg ${
+                        option.popular
+                          ? "bg-cyan-500/20 border border-cyan-400/30"
+                          : "bg-zinc-800/50 border border-zinc-700/50"
+                      }`}
+                    >
+                      <option.icon className={`h-5 w-5 ${option.popular ? "text-cyan-300" : "text-zinc-300"}`} />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-medium text-white">{option.name}</h3>
+                      <p className="text-sm text-zinc-400">{option.description}</p>
+                    </div>
+                  </div>
+
+                  <div className="text-center py-2">
+                    <p className="text-3xl font-light text-white">${option.price}</p>
+                    <span className="text-sm text-zinc-400">one-time</span>
+                  </div>
+
+                  <Button
+                    onClick={() => handleBundlePurchase(option.id)}
+                    disabled={purchasingBundle === option.id}
+                    className={`w-full ${
+                      option.popular
+                        ? "bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400"
+                        : "bg-zinc-700 hover:bg-zinc-600"
+                    } text-white`}
+                  >
+                    {purchasingBundle === option.id ? "Processing..." : "Purchase"}
+                  </Button>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
