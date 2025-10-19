@@ -2,7 +2,7 @@ import { getFreeUser, createFreeUser, incrementFreeUserDownloads, incrementFreeU
 import { getMembership, incrementDownloads, incrementBundles, toTierInfo } from "./memberships-service"
 import { consumeBundleSlot } from "./bundle-slots-service"
 
-export type UserTier = "free" | "creator_pro"
+export type UserTier = "starter" | "creator_pro"
 
 export interface TierInfo {
   tier: UserTier
@@ -25,8 +25,8 @@ export async function getUserTier(uid: string): Promise<UserTier> {
     return "creator_pro"
   }
 
-  console.log("✅ User is free tier")
-  return "free"
+  console.log("✅ User is starter tier")
+  return "starter"
 }
 
 export async function getUserTierInfo(uid: string): Promise<TierInfo> {
@@ -38,12 +38,11 @@ export async function getUserTierInfo(uid: string): Promise<TierInfo> {
     return toTierInfo(membership)
   }
 
-  // User is free - get from freeUsers collection
-  console.log("🔄 Getting free user info...")
+  console.log("🔄 Getting starter user info...")
   let freeUser = await getFreeUser(uid)
 
   if (!freeUser) {
-    console.log("🔄 Creating new free user...")
+    console.log("🔄 Creating new starter user...")
     freeUser = await createFreeUser(uid, "")
   }
 
@@ -62,18 +61,18 @@ export async function getUserTierInfo(uid: string): Promise<TierInfo> {
   })
 
   const tierInfo: TierInfo = {
-    tier: "free",
+    tier: "starter", // Changed from "free" to "starter"
     downloadsUsed: freeUser.downloadsUsed,
     downloadsLimit: freeUser.downloadsLimit,
     bundlesCreated: actualBundlesCreated, // Use real-time count
-    bundlesLimit: freeUser.bundlesLimit, // This already includes base (2) + purchased slots
+    bundlesLimit: freeUser.bundlesLimit, // This already includes base (5) + purchased slots
     maxVideosPerBundle: freeUser.maxVideosPerBundle,
     platformFeePercentage: freeUser.platformFeePercentage,
     reachedDownloadLimit: freeUser.downloadsUsed >= freeUser.downloadsLimit,
     reachedBundleLimit: actualBundlesCreated >= freeUser.bundlesLimit, // Use real-time count
   }
 
-  console.log("✅ Returning free tier info:", {
+  console.log("✅ Returning starter tier info:", {
     bundlesCreated: tierInfo.bundlesCreated,
     bundlesLimit: tierInfo.bundlesLimit,
     maxVideosPerBundle: tierInfo.maxVideosPerBundle,
@@ -92,8 +91,8 @@ export async function incrementUserDownloads(uid: string): Promise<{ success: bo
     return { success: true }
   }
 
-  // User is free - check limits
-  console.log("🔄 Free user - checking limits...")
+  // User is starter - check limits
+  console.log("🔄 Starter user - checking limits...")
   return await incrementFreeUserDownloads(uid)
 }
 
@@ -107,21 +106,21 @@ export async function incrementUserBundles(uid: string): Promise<{ success: bool
     return { success: true }
   }
 
-  // User is free - check limits and consume bundle slots if needed
-  console.log("🔄 Free user - checking limits and bundle slots...")
+  // User is starter - check limits and consume bundle slots if needed
+  console.log("🔄 Starter user - checking limits and bundle slots...")
 
   const freeUser = await getFreeUser(uid)
   if (!freeUser) {
     return { success: false, reason: "User not found" }
   }
 
-  // Check if within base free limit
+  // Check if within base starter limit
   if (freeUser.bundlesCreated < freeUser.bundlesLimit) {
-    console.log("✅ Within base free limit, incrementing normally")
+    console.log("✅ Within base starter limit, incrementing normally")
     return await incrementFreeUserBundles(uid)
   }
 
-  console.log("🔄 Beyond free limit, checking bundle slots...")
+  console.log("🔄 Beyond starter limit, checking bundle slots...")
   const slotResult = await consumeBundleSlot(uid)
 
   if (!slotResult.success) {
@@ -157,10 +156,10 @@ export async function canUserAddVideoToBundle(
     return { allowed: true }
   }
 
-  // User is free - check video per bundle limit
+  // User is starter - check video per bundle limit
   const freeUser = await getFreeUser(uid)
   if (!freeUser) {
-    console.log("❌ Free user not found")
+    console.log("❌ Starter user not found")
     return { allowed: false, reason: "User not found" }
   }
 
@@ -168,7 +167,7 @@ export async function canUserAddVideoToBundle(
     console.log("❌ Video per bundle limit reached")
     return {
       allowed: false,
-      reason: `Free tier limited to ${freeUser.maxVideosPerBundle} videos per bundle. Upgrade to Creator Pro for unlimited videos.`,
+      reason: `Starter tier limited to ${freeUser.maxVideosPerBundle} videos per bundle. Upgrade to Creator Pro for unlimited videos.`,
     }
   }
 
