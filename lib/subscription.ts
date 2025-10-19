@@ -30,12 +30,12 @@ const STARTER_DEFAULTS = {
   premiumContent: false,
   noWatermark: false,
   prioritySupport: false,
-  platformFeePercentage: 20,
-  maxVideosPerBundle: 15, // Changed from 10 to 15
-  maxBundles: 5, // Changed from 2 to 5
-  maxFolders: 3, // Changed from 2 to 3
-  canCreateSubfolders: true, // Changed from false to true
-  canAnalyzeTranscripts: false,
+  platformFeePercentage: 20, // 20% for Starter
+  maxVideosPerBundle: 15, // 15 videos per bundle for Starter
+  maxBundles: 5, // 5 bundles for Starter
+  maxFolders: 3, // 3 folders for Starter
+  canCreateSubfolders: true, // Starter can create subfolders
+  canAnalyzeTranscripts: false, // Basic Vex AI only - no transcript analysis
   canCreateBundles: false,
 }
 
@@ -62,12 +62,12 @@ export async function checkSubscription(userId?: string): Promise<SubscriptionDa
           premiumContent: true,
           noWatermark: true,
           prioritySupport: true,
-          platformFeePercentage: 10,
-          maxVideosPerBundle: null,
-          maxBundles: null,
-          maxFolders: null,
+          platformFeePercentage: 10, // 10% for Creator Pro
+          maxVideosPerBundle: null, // Unlimited for Creator Pro
+          maxBundles: null, // Unlimited for Creator Pro
+          maxFolders: null, // Unlimited for Creator Pro
           canCreateSubfolders: true,
-          canAnalyzeTranscripts: true,
+          canAnalyzeTranscripts: true, // Full Vex AI with transcript analysis
           canCreateBundles: true,
         },
       }
@@ -143,16 +143,16 @@ export function getSubscriptionFeatures(plan: string) {
         premiumContent: true,
         noWatermark: true,
         prioritySupport: true,
-        platformFeePercentage: 10,
-        maxVideosPerBundle: null,
-        maxBundles: null,
-        maxFolders: null,
+        platformFeePercentage: 10, // 10% for Creator Pro
+        maxVideosPerBundle: null, // Unlimited for Creator Pro
+        maxBundles: null, // Unlimited for Creator Pro
+        maxFolders: null, // Unlimited for Creator Pro
         canCreateSubfolders: true,
-        canAnalyzeTranscripts: true,
+        canAnalyzeTranscripts: true, // Full Vex AI with transcript analysis
         canCreateBundles: true,
       }
     default:
-      return { ...STARTER_DEFAULTS } // Using STARTER_DEFAULTS
+      return { ...STARTER_DEFAULTS }
   }
 }
 

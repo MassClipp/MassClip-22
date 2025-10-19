@@ -24,8 +24,9 @@ export interface FreeUserDoc {
   // Permanent trial tracking field
   hasUsedFreeTrial?: boolean // Permanent flag - once true, never resets
   trialActive?: boolean // Indicates if the user is currently in a trial period
-  hasUsedFirstMonthDiscount?: boolean // Track if user has used $3 first month promo
-  firstMonthDiscountUsedDate?: any // When they used the discount
+  hasUsedFirstWeekDiscount?: boolean // Track if user has used $3 first week promo on ANY plan
+  firstWeekDiscountUsedDate?: any // When they used the discount
+  firstWeekDiscountPlan?: "starter" | "creator_pro" // Which plan they used it on
   // Timestamps
   createdAt: any
   updatedAt: any
@@ -232,7 +233,7 @@ export async function canUserAddVideoToBundle(
 }
 
 export async function getFreeUserLimits(uid: string): Promise<{
-  tier: "starter" // Changed from "free" to "starter"
+  tier: "starter"
   downloadsUsed: number
   downloadsLimit: number
   bundlesCreated: number
@@ -253,7 +254,7 @@ export async function getFreeUserLimits(uid: string): Promise<{
   daysUntilReset: number
   hasUsedFreeTrial?: boolean
   trialActive?: boolean
-  hasUsedFirstMonthDiscount?: boolean // Added
+  hasUsedFirstWeekDiscount?: boolean
 }> {
   // Check and reset monthly limits if needed
   const freeUser = await checkAndResetMonthlyLimits(uid)
@@ -261,7 +262,7 @@ export async function getFreeUserLimits(uid: string): Promise<{
   if (!freeUser) {
     // Return default limits if no record exists
     return {
-      tier: "starter", // Changed from "free" to "starter"
+      tier: "starter",
       downloadsUsed: 0,
       downloadsLimit: STARTER_TIER_DEFAULTS.downloadsLimit,
       bundlesCreated: 0,
@@ -278,7 +279,7 @@ export async function getFreeUserLimits(uid: string): Promise<{
       daysUntilReset: 0,
       hasUsedFreeTrial: false,
       trialActive: false,
-      hasUsedFirstMonthDiscount: false, // Added
+      hasUsedFirstWeekDiscount: false,
     }
   }
 
@@ -288,7 +289,7 @@ export async function getFreeUserLimits(uid: string): Promise<{
   const daysUntilReset = Math.ceil((nextMonth.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
 
   return {
-    tier: "starter", // Changed from "free" to "starter"
+    tier: "starter",
     downloadsUsed: freeUser.downloadsUsed,
     downloadsLimit: freeUser.downloadsLimit,
     bundlesCreated: freeUser.bundlesCreated,
@@ -309,7 +310,7 @@ export async function getFreeUserLimits(uid: string): Promise<{
     daysUntilReset,
     hasUsedFreeTrial: freeUser.hasUsedFreeTrial ?? false,
     trialActive: freeUser.trialActive ?? false,
-    hasUsedFirstMonthDiscount: freeUser.hasUsedFirstMonthDiscount ?? false, // Added
+    hasUsedFirstWeekDiscount: freeUser.hasUsedFirstWeekDiscount ?? false,
   }
 }
 

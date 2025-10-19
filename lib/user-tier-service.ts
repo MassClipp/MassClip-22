@@ -163,11 +163,11 @@ export async function canUserAddVideoToBundle(
     return { allowed: false, reason: "User not found" }
   }
 
-  if (currentVideoCount >= freeUser.maxVideosPerBundle) {
+  if (currentVideoCount >= 15) {
     console.log("❌ Video per bundle limit reached")
     return {
       allowed: false,
-      reason: `Starter tier limited to ${freeUser.maxVideosPerBundle} videos per bundle. Upgrade to Creator Pro for unlimited videos.`,
+      reason: `Starter tier limited to 15 videos per bundle. Upgrade to Creator Pro for unlimited videos.`,
     }
   }
 
