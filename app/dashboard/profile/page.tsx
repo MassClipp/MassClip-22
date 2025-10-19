@@ -732,7 +732,7 @@ export default function ProfilePage() {
                           ? "Creator Pro (Trial)"
                           : subscriptionData?.plan === "creator_pro" && subscriptionData?.isActive
                             ? "Creator Pro"
-                            : "Free"}
+                            : "Starter"}
                       </Badge>
                     </div>
 
@@ -757,7 +757,7 @@ export default function ProfilePage() {
                                 <p className="text-amber-200 text-sm font-medium mb-1">Subscription Canceled</p>
                                 <p className="text-amber-300/80 text-xs leading-relaxed">
                                   Your Pro access continues until {safelyFormatDate(subscriptionData.currentPeriodEnd)}.
-                                  After this date, your account will automatically switch to the Free plan.
+                                  After this date, your account will automatically switch to the Starter plan.
                                 </p>
                               </div>
                             </div>
@@ -814,27 +814,25 @@ export default function ProfilePage() {
                         <>
                           <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
                             <div className="w-1.5 h-1.5 rounded-full bg-zinc-500"></div>
-                            <span className="text-sm text-zinc-300">2 folders max (no subfolders)</span>
+                            <span className="text-sm text-zinc-300">3 folders with subfolders</span>
                           </div>
                           <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
                             <div className="w-1.5 h-1.5 rounded-full bg-zinc-500"></div>
-                            <span className="text-sm text-zinc-300">2 bundles max on storefront</span>
+                            <span className="text-sm text-zinc-300">5 bundles max on storefront</span>
                           </div>
                           <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
                             <div className="w-1.5 h-1.5 rounded-full bg-zinc-500"></div>
-                            <span className="text-sm text-zinc-300">10 videos per bundle limit</span>
+                            <span className="text-sm text-zinc-300">15 videos per bundle limit</span>
                           </div>
                           <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
                             <div className="w-1.5 h-1.5 rounded-full bg-zinc-500"></div>
-                            <span className="text-sm text-zinc-300">Basic Vex AI - Organization Only</span>
+                            <span className="text-sm text-zinc-300">
+                              Basic Vex AI - file metadata & folder organization
+                            </span>
                           </div>
                           <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
                             <div className="w-1.5 h-1.5 rounded-full bg-zinc-500"></div>
-                            <span className="text-sm text-zinc-300">No Bundle Creation</span>
-                          </div>
-                          <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
-                            <div className="w-1.5 h-1.5 rounded-full bg-zinc-500"></div>
-                            <span className="text-sm text-zinc-300">20% Platform Fee</span>
+                            <span className="text-sm text-zinc-300">20% Platform Fee on sales</span>
                           </div>
                         </>
                       )}

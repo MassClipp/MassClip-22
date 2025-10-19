@@ -20,13 +20,7 @@ export function PaywallWrapper({ children }: PaywallWrapperProps) {
   const [loading, setLoading] = useState(true)
 
   // Pages that are always accessible
-  const alwaysAccessiblePaths = [
-    "/dashboard/upgrade",
-    "/dashboard/purchases",
-    "/dashboard/profile",
-    "/pricing",
-    "/welcome",
-  ]
+  const alwaysAccessiblePaths = ["/dashboard/upgrade", "/dashboard/purchases", "/pricing", "/welcome"]
 
   useEffect(() => {
     const checkAccess = async () => {
@@ -91,11 +85,11 @@ export function PaywallWrapper({ children }: PaywallWrapperProps) {
   // Show paywall if no access
   if (!hasAccess) {
     return (
-      <div className="relative min-h-[600px]">
-        {/* Blurred content */}
-        <div className="blur-md pointer-events-none select-none">{children}</div>
+      <div className="fixed inset-0 z-40 overflow-hidden">
+        {/* Blurred content - positioned absolutely to fill the viewport */}
+        <div className="absolute inset-0 blur-md pointer-events-none select-none overflow-hidden">{children}</div>
 
-        {/* Paywall overlay */}
+        {/* Paywall overlay - covers entire viewport */}
         <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="max-w-md mx-auto text-center space-y-6 p-8">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-zinc-800/50 border border-zinc-700/50">
