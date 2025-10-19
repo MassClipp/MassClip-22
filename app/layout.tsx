@@ -27,7 +27,7 @@ const leagueSpartan = League_Spartan({
 
 export const metadata: Metadata = {
   title: {
-    default: "MassClip - Organize & Sell Content with AI",
+    default: "MassClip - Passive Income From Your Faceless Content",
     template: "%s | MassClip",
   },
   description:
