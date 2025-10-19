@@ -62,28 +62,28 @@ export async function GET(request: NextRequest) {
       downloadsLimit: tierInfo.downloadsLimit,
     })
 
-    const baseBundleLimit = tierInfo.tier === "free" ? 2 : null
+    const baseBundleLimit = tierInfo.tier === "starter" ? 5 : null // Changed from "free" with 2 bundles to "starter" with 5 bundles
     const totalBundleLimit = tierInfo.bundlesLimit || baseBundleLimit
-    const extraBundleSlots = tierInfo.tier === "free" && totalBundleLimit ? totalBundleLimit - 2 : 0
+    const extraBundleSlots = tierInfo.tier === "starter" && totalBundleLimit ? totalBundleLimit - 5 : 0 // Changed base from 2 to 5
     const bundlesCreated = tierInfo.bundlesCreated || 0
     const bundlesRemaining = totalBundleLimit ? totalBundleLimit - bundlesCreated : null
 
     const bundleLimits = {
       bundlesCreated,
       bundlesLimit: totalBundleLimit,
-      baseBundleLimit, // Base free tier limit (2) or null for pro
+      baseBundleLimit, // Base Starter tier limit (5) or null for pro
       extraBundleSlots, // Additional purchased slots
       bundlesRemaining,
-      maxVideosPerBundle: tierInfo.maxVideosPerBundle || (tierInfo.tier === "free" ? 10 : null),
+      maxVideosPerBundle: tierInfo.maxVideosPerBundle || (tierInfo.tier === "starter" ? 15 : null), // Changed from 10 to 15 for Starter
       reachedBundleLimit: tierInfo.reachedBundleLimit || false,
       tier: tierInfo.tier,
       canCreateBundle: !tierInfo.reachedBundleLimit,
       upgradeMessage: tierInfo.reachedBundleLimit
-        ? `You've reached your limit of ${totalBundleLimit || 2} bundles. ${tierInfo.tier === "free" ? "Upgrade to Creator Pro for unlimited bundles or purchase extra bundle slots." : "Please contact support."}`
+        ? `You've reached your limit of ${totalBundleLimit || 5} bundles. ${tierInfo.tier === "starter" ? "Upgrade to Creator Pro ($15/month) for unlimited bundles." : "Please contact support."}` // Updated messaging
         : null,
       limitBreakdown:
-        tierInfo.tier === "free"
-          ? `Free tier: ${baseBundleLimit} bundles${extraBundleSlots > 0 ? ` + ${extraBundleSlots} purchased extra slots = ${totalBundleLimit} total` : ""}`
+        tierInfo.tier === "starter"
+          ? `Starter Plan: ${baseBundleLimit} bundles${extraBundleSlots > 0 ? ` + ${extraBundleSlots} purchased extra slots = ${totalBundleLimit} total` : ""}` // Updated tier name
           : "Creator Pro: Unlimited bundles",
     }
 

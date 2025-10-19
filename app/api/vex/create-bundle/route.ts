@@ -47,13 +47,13 @@ export async function POST(request: Request) {
     })
 
     const tierInfo = await getUserTierInfo(userId)
-    const userPlan = tierInfo.tier || "free"
+    const userPlan = tierInfo.tier || "starter" // Changed default from "free" to "starter"
 
     if (!canUserCreateBundles(userPlan)) {
       return NextResponse.json(
         {
           error: "Bundle creation requires Creator Pro",
-          details: "Upgrade to Creator Pro to create bundles with Vex AI.",
+          details: "Upgrade to Creator Pro ($15/month) to create bundles with Full Vex AI.", // Updated pricing
           code: "BUNDLE_CREATION_NOT_ALLOWED",
         },
         { status: 403 },

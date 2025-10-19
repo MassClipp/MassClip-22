@@ -40,6 +40,11 @@ export function PaywallWrapper({ children }: PaywallWrapperProps) {
       try {
         const idToken = await user.getIdToken()
 
+        const purchaseRes = await fetch("/api/user/purchase-status", {
+          headers: { Authorization: `Bearer ${idToken}` },
+        })
+        const purchaseData = await purchaseRes.json()
+
         // Check trial status
         const trialRes = await fetch("/api/user/trial-status", {
           headers: { Authorization: `Bearer ${idToken}` },
@@ -52,7 +57,14 @@ export function PaywallWrapper({ children }: PaywallWrapperProps) {
         })
         const membershipData = await membershipRes.json()
 
-        const userHasAccess = trialData.isOnTrial || membershipData.isActive
+        const userHasAccess = purchaseData.hasPurchased || trialData.isOnTrial || membershipData.isActive
+
+        console.log("[v0] Access check:", {
+          hasPurchased: purchaseData.hasPurchased,
+          isOnTrial: trialData.isOnTrial,
+          isActive: membershipData.isActive,
+          finalAccess: userHasAccess,
+        })
 
         setHasAccess(userHasAccess)
       } catch (error) {
