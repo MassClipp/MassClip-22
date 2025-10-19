@@ -329,7 +329,7 @@ export async function POST(request: Request) {
     let bundleLimitsContext = ""
     let folderContext = ""
     let planPermissionsContext = ""
-    let userPlan = "free" // Default to free
+    let userPlan = "starter" // Default to starter
     let subscriptionData: any = {} // Initialize subscriptionData
     let trialStatus: any = null
     // </CHANGE>
@@ -350,7 +350,7 @@ export async function POST(request: Request) {
             console.log("[v0] User authenticated:", userId)
 
             const tierInfoData = await getUserTierInfo(userId)
-            userPlan = tierInfoData.tier || "free"
+            userPlan = tierInfoData.tier || "starter"
             subscriptionData = await checkSubscription(userId)
 
             try {
@@ -383,34 +383,34 @@ export async function POST(request: Request) {
 
 ===== YOUR PLAN PERMISSIONS =====
 
-Current Plan: ${userPlan === "creator_pro" ? "Creator Pro" : "Free"}${trialStatus?.isOnTrial ? ` (FREE TRIAL - ${trialStatus.daysRemaining} days remaining)` : ""}
+Current Plan: ${userPlan === "creator_pro" ? "Creator Pro" : "Starter Plan"}${trialStatus?.isOnTrial ? ` (FREE TRIAL - ${trialStatus.daysRemaining} days remaining)` : ""}
 
 ${
-  userPlan === "free"
+  userPlan === "starter"
     ? `
-**FREE PLAN LIMITS:**
-• Folders: ${subscriptionData.features.maxFolders} folders maximum (NO subfolders allowed)
+**STARTER PLAN LIMITS:**
+• Folders: ${subscriptionData.features.maxFolders} folders with subfolders allowed
 • Bundles: ${subscriptionData.features.maxBundles} bundles maximum on storefront
 • Videos per bundle: ${subscriptionData.features.maxVideosPerBundle} videos maximum
-• Vex AI: Basic content organization only
+• Vex AI: Basic file metadata & folder organization only
 • Transcript Analysis: NOT AVAILABLE (Creator Pro only)
 • Bundle Creation via Vex: NOT AVAILABLE (Creator Pro only)
 • Platform Fee: ${subscriptionData.features.platformFeePercentage}% on sales
 
 ⚠️ IMPORTANT RESTRICTIONS:
-- You CANNOT create subfolders for free users
-- You CANNOT analyze or reference transcript content for free users
-- You CANNOT create bundles via Vex for free users (they must create manually)
-- Free users can only organize content into their ${subscriptionData.features.maxFolders} root-level folders
+- You CAN create subfolders for Starter users (up to ${subscriptionData.features.maxFolders} folders total)
+- You CANNOT analyze or reference transcript content for Starter users
+- You CANNOT create bundles via Vex for Starter users (they must create manually)
+- Starter users can organize content into ${subscriptionData.features.maxFolders} folders with subfolders
 
-If user asks about these features, tell them to upgrade to Creator Pro.
+If user asks about transcript analysis or bundle creation, tell them to upgrade to Creator Pro.
 `
     : `
 **CREATOR PRO FEATURES:**${trialStatus?.isOnTrial ? ` (FREE TRIAL - ${trialStatus.daysRemaining} days remaining)` : ""}
 • Folders: UNLIMITED folders with subfolders
 • Bundles: UNLIMITED bundles on storefront
 • Videos per bundle: UNLIMITED videos
-• Vex AI: Full capabilities including bundle creation
+• Vex AI: Full capabilities including bundle creation & transcript analysis
 • Transcript Analysis: AVAILABLE - You can analyze and reference video transcripts
 • Bundle Creation via Vex: AVAILABLE - You can create bundles for users
 • Platform Fee: ${subscriptionData.features.platformFeePercentage}% on sales (reduced from 20%)
@@ -425,13 +425,13 @@ If user asks about these features, tell them to upgrade to Creator Pro.
 
 BUNDLE LIMITS:
 Current bundles: ${tierInfoData.bundlesCreated || 0}
-Bundle limit: ${tierInfoData.bundlesLimit === null ? "unlimited" : tierInfoData.bundlesLimit || 2}
+Bundle limit: ${tierInfoData.bundlesLimit === null ? "unlimited" : tierInfoData.bundlesLimit || 5}
 Can create bundles: ${!tierInfoData.reachedBundleLimit && subscriptionData.features.canCreateBundles ? "YES" : "NO"}
-User tier: ${tierInfoData.tier || "free"}
-Max videos per bundle: ${tierInfoData.maxVideosPerBundle === null ? "unlimited" : tierInfoData.maxVideosPerBundle || 10}
+User tier: ${tierInfoData.tier || "starter"}
+Max videos per bundle: ${tierInfoData.maxVideosPerBundle === null ? "unlimited" : tierInfoData.maxVideosPerBundle || 15}
 
-${tierInfoData.reachedBundleLimit ? `⚠️ BUNDLE LIMIT REACHED: User has reached their limit of ${tierInfoData.bundlesLimit || 2} bundles. ${(tierInfoData.tier || "free") === "free" ? "They need to upgrade to Creator Pro for unlimited bundles or purchase extra bundle slots." : "They should contact support."}` : ""}
-${!subscriptionData.features.canCreateBundles ? `⚠️ BUNDLE CREATION DISABLED: Free users cannot create bundles via Vex. Direct them to upgrade to Creator Pro.` : ""}
+${tierInfoData.reachedBundleLimit ? `⚠️ BUNDLE LIMIT REACHED: User has reached their limit of ${tierInfoData.bundlesLimit || 5} bundles. ${(tierInfoData.tier || "starter") === "starter" ? "They need to upgrade to Creator Pro for unlimited bundles." : "They should contact support."}` : ""}
+${!subscriptionData.features.canCreateBundles ? `⚠️ BUNDLE CREATION DISABLED: Starter users cannot create bundles via Vex. Direct them to upgrade to Creator Pro.` : ""}
 `
 
             try {
@@ -888,9 +888,9 @@ REFRESH_ANALYSIS: true
 **1. CREATE FOLDERS**
 
 ${
-  userPlan === "free"
-    ? `⚠️ FREE PLAN: User can only create ${subscriptionData.features.maxFolders} root-level folders (NO subfolders).
-Check folder count before creating. If at limit, tell them to upgrade to Creator Pro.
+  userPlan === "starter"
+    ? `⚠️ STARTER PLAN: User can create up to ${subscriptionData.features.maxFolders} folders (subfolders ARE allowed).
+Check folder count before creating. If at limit, tell them to upgrade to Creator Pro for unlimited folders.
 
 `
     : ""
@@ -936,10 +936,10 @@ ORGANIZE_FILES: {"targetFolder": "Mindset", "fileIds": ["Tykwondoe", "AZ Compass
 
 ${
   !subscriptionData.features.canCreateBundles
-    ? `⚠️ BUNDLE CREATION DISABLED: Free users cannot create bundles via Vex.
+    ? `⚠️ BUNDLE CREATION DISABLED: Starter users cannot create bundles via Vex.
 Tell them: "Bundle creation via Vex is a Creator Pro feature. You can upgrade to unlock this, or create bundles manually in your dashboard."
 
-DO NOT output CREATE_BUNDLE for free users.
+DO NOT output CREATE_BUNDLE for Starter users.
 
 `
     : ""
@@ -1103,7 +1103,7 @@ You: "What's the outcome you want with this bundle? Views? Conversions? Vibe che
         console.log("[v0] Validating CREATE_BUNDLE action...")
 
         const tierInfo = await getUserTierInfo(userId)
-        const userPlan = tierInfo.tier || "free"
+        const userPlan = tierInfo.tier || "starter"
         const subscriptionData = await checkSubscription(userId)
 
         if (!canUserCreateBundles(userPlan) || !subscriptionData.features.canCreateBundles) {
@@ -1393,7 +1393,7 @@ async function createBundleDirectly(userId: string, bundleData: any) {
     console.log("[v0] Checking bundle limits...")
     const tierInfo = await getUserTierInfo(userId)
     const subscriptionData = await checkSubscription(userId)
-    const userPlan = tierInfo.tier || "free"
+    const userPlan = tierInfo.tier || "starter"
 
     if (tierInfo.reachedBundleLimit && userPlan !== "creator_pro") {
       return {
@@ -1409,11 +1409,11 @@ async function createBundleDirectly(userId: string, bundleData: any) {
       }
     }
 
-    const maxVideosPerBundle = tierInfo.maxVideosPerBundle || (tierInfo.tier === "free" ? 10 : null)
-    if (tierInfo.tier === "free" && maxVideosPerBundle && contentIds.length > maxVideosPerBundle) {
+    const maxVideosPerBundle = tierInfo.maxVideosPerBundle || (tierInfo.tier === "starter" ? 15 : null)
+    if (tierInfo.tier === "starter" && maxVideosPerBundle && contentIds.length > maxVideosPerBundle) {
       return {
         success: false,
-        error: `Free users can only include up to ${maxVideosPerBundle} videos per bundle. This bundle has ${contentIds.length} items. Please upgrade to Creator Pro for unlimited videos per bundle.`,
+        error: `Starter users can only include up to ${maxVideosPerBundle} videos per bundle. This bundle has ${contentIds.length} items. Please upgrade to Creator Pro for unlimited videos per bundle.`,
       }
     }
 
