@@ -1,5 +1,10 @@
 import { VexChat } from "@/components/vex-chat"
+import { PaywallWrapper } from "@/components/paywall-wrapper"
 
 export default function VexPage() {
-  return <VexChat />
+  return (
+    <PaywallWrapper>
+      <VexChat />
+    </PaywallWrapper>
+  )
 }

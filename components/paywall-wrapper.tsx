@@ -65,8 +65,7 @@ export function PaywallWrapper({ children }: PaywallWrapperProps) {
           status: membershipData.status,
         })
 
-        // User has access if they're on trial OR have active subscription
-        const userHasAccess = trialData.isOnTrial || (membershipData.isActive && membershipData.status === "active")
+        const userHasAccess = trialData.isOnTrial || membershipData.isActive
 
         setHasAccess(userHasAccess)
       } catch (error) {

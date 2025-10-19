@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { PaywallWrapper } from "@/components/paywall-wrapper"
 import {
   DollarSign,
   CreditCard,
@@ -306,7 +307,11 @@ function EarningsPage() {
 }
 
 function EarningsPageWithHeader() {
-  return <EarningsPage />
+  return (
+    <PaywallWrapper>
+      <EarningsPage />
+    </PaywallWrapper>
+  )
 }
 
 export default EarningsPageWithHeader

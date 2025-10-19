@@ -1,5 +1,7 @@
 "use client"
 
+import { PaywallWrapper } from "@/components/paywall-wrapper"
+
 import { useRef } from "react"
 
 import { useState, useEffect } from "react"
@@ -1096,25 +1098,220 @@ export default function BundlesPage() {
   }
 
   return (
-    <div className="p-6">
-      <div className="max-w-7xl mx-auto">
-        <div className="space-y-6">
-          {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-light text-white mb-2">
-                Bundles{" "}
-                <span className="text-zinc-500 text-lg font-normal">
-                  {productBoxes.length}/{isProUser ? "∞" : bundleLimit}
-                </span>
-              </h1>
-              {/* </CHANGE> */}
-              <p className="text-zinc-400 text-sm">Create and manage premium content packages for your audience</p>
+    <PaywallWrapper>
+      <div className="p-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="space-y-6">
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-light text-white mb-2">
+                  Bundles{" "}
+                  <span className="text-zinc-500 text-lg font-normal">
+                    {productBoxes.length}/{isProUser ? "∞" : bundleLimit}
+                  </span>
+                </h1>
+                {/* </CHANGE> */}
+                <p className="text-zinc-400 text-sm">Create and manage premium content packages for your audience</p>
+              </div>
+
+              <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
+                <DialogTrigger asChild>
+                  {/* Make the Create Bundle button clickable and redirect to upgrade when at limit */}
+                  <Button
+                    onClick={() => {
+                      if (!isProUser && productBoxes.length >= bundleLimit) {
+                        router.push("/dashboard/upgrade")
+                      } else {
+                        setShowCreateModal(true)
+                      }
+                      // </CHANGE>
+                    }}
+                    className="bg-white text-black hover:bg-zinc-200"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    {!isProUser && productBoxes.length >= bundleLimit ? "Want more bundles?" : "Create Bundle"}
+                    {/* </CHANGE> */}
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="bg-zinc-900 border-zinc-800 text-white">
+                  <DialogHeader>
+                    <DialogTitle>Create New Bundle</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="title">Title *</Label>
+                      <Input
+                        id="title"
+                        value={createForm.title}
+                        onChange={(e) => setCreateForm((prev) => ({ ...prev, title: e.target.value }))}
+                        placeholder="Enter bundle title"
+                        className="bg-zinc-800 border-zinc-700"
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="description">Description</Label>
+                      <Textarea
+                        id="description"
+                        value={createForm.description}
+                        onChange={(e) => setCreateForm((prev) => ({ ...prev, description: e.target.value }))}
+                        placeholder="Describe your bundle"
+                        className="bg-zinc-800 border-zinc-700"
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="price">Price (USD) *</Label>
+                      <Input
+                        id="price"
+                        type="number"
+                        step="0.01"
+                        min="0.50"
+                        value={createForm.price}
+                        onChange={(e) => setCreateForm((prev) => ({ ...prev, price: e.target.value }))}
+                        placeholder="9.99"
+                        className="bg-zinc-800 border-zinc-700"
+                      />
+                    </div>
+
+                    {/* Enhanced Thumbnail Section */}
+                    <div className="space-y-4">
+                      <Label>Bundle Thumbnail (Optional)</Label>
+
+                      {/* Thumbnail Preview */}
+                      {createForm.thumbnail && (
+                        <div className="relative">
+                          <div className="aspect-square w-32 h-32 rounded-lg overflow-hidden border border-zinc-700">
+                            <img
+                              src={URL.createObjectURL(createForm.thumbnail) || "/placeholder.svg"}
+                              alt="Thumbnail preview"
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setCreateForm((prev) => ({ ...prev, thumbnail: null }))}
+                            className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-red-600 hover:bg-red-700 text-white p-0"
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                          <p className="text-xs text-zinc-400 mt-2">{createForm.thumbnail.name}</p>
+                        </div>
+                      )}
+
+                      {/* Upload Area */}
+                      {!createForm.thumbnail && (
+                        <div
+                          className="border-2 border-dashed border-zinc-700 rounded-lg p-8 text-center hover:border-zinc-600 transition-colors cursor-pointer"
+                          onClick={() => document.getElementById("thumbnail-upload")?.click()}
+                          onDragOver={(e) => {
+                            e.preventDefault()
+                            e.currentTarget.classList.add("border-zinc-500")
+                          }}
+                          onDragLeave={(e) => {
+                            e.preventDefault()
+                            e.currentTarget.classList.remove("border-zinc-500")
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault()
+                            e.currentTarget.classList.remove("border-zinc-500")
+                            const files = e.dataTransfer.files
+                            if (files.length > 0) {
+                              const file = files[0]
+                              if (file.type.startsWith("image/")) {
+                                setCreateForm((prev) => ({ ...prev, thumbnail: file }))
+                              }
+                            }
+                          }}
+                        >
+                          <div className="space-y-3">
+                            <div className="w-16 h-16 mx-auto bg-zinc-800 rounded-lg flex items-center justify-center">
+                              <Upload className="h-8 w-8 text-zinc-500" />
+                            </div>
+                            <div>
+                              <p className="text-sm text-zinc-300 font-medium">Upload bundle thumbnail</p>
+                              <p className="text-xs text-zinc-500 mt-1">
+                                Drag and drop an image here, or click to browse
+                              </p>
+                            </div>
+                            <div className="text-xs text-zinc-600">
+                              Supports: JPEG, PNG, WebP • Max size: 5MB • Recommended: 400x400px
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Hidden File Input */}
+                      <input
+                        id="thumbnail-upload"
+                        type="file"
+                        accept="image/jpeg,image/jpg,image/png,image/webp"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          if (file) {
+                            // Validate file type
+                            const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"]
+                            if (!allowedTypes.includes(file.type)) {
+                              toast({
+                                title: "Invalid File Type",
+                                description: "Please select a JPEG, PNG, or WebP image",
+                                variant: "destructive",
+                              })
+                              return
+                            }
+
+                            // Validate file size (5MB max)
+                            const maxSize = 5 * 1024 * 1024
+                            if (file.size > maxSize) {
+                              toast({
+                                title: "File Too Large",
+                                description: "Please select an image smaller than 5MB",
+                                variant: "destructive",
+                              })
+                              return
+                            }
+
+                            setCreateForm((prev) => ({ ...prev, thumbnail: file }))
+                          }
+                        }}
+                      />
+                    </div>
+
+                    <div className="flex justify-end gap-3 pt-4">
+                      <Button variant="outline" onClick={() => setShowCreateModal(false)} className="border-zinc-700">
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={handleCreateBundle}
+                        disabled={createLoading}
+                        className="bg-white text-black hover:bg-zinc-200"
+                      >
+                        {createLoading ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Creating...
+                          </>
+                        ) : (
+                          "Create Bundle"
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
             </div>
 
-            <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
-              <DialogTrigger asChild>
-                {/* Make the Create Bundle button clickable and redirect to upgrade when at limit */}
+            {/* Product Boxes */}
+            {productBoxes.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="text-6xl mb-4">📦</div>
+                <h3 className="text-xl font-medium text-white mb-2">No Bundles Yet</h3>
+                <p className="text-zinc-400 mb-4">Create your first premium content bundle to get started</p>
+                {/* Update the empty state button to redirect to upgrade when at limit */}
                 <Button
                   onClick={() => {
                     if (!isProUser && productBoxes.length >= bundleLimit) {
@@ -1127,753 +1324,568 @@ export default function BundlesPage() {
                   className="bg-white text-black hover:bg-zinc-200"
                 >
                   <Plus className="h-4 w-4 mr-2" />
-                  {!isProUser && productBoxes.length >= bundleLimit ? "Want more bundles?" : "Create Bundle"}
+                  {!isProUser && productBoxes.length >= bundleLimit ? "Want more bundles?" : "Create Your First Bundle"}
                   {/* </CHANGE> */}
                 </Button>
-              </DialogTrigger>
-              <DialogContent className="bg-zinc-900 border-zinc-800 text-white">
-                <DialogHeader>
-                  <DialogTitle>Create New Bundle</DialogTitle>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {productBoxes.map((productBox, index) => {
+                  const boxContent = contentItems[productBox.id] || []
+                  const isContentLoading = contentLoading[productBox.id] || false
+                  const isContentVisible = showContent[productBox.id] || false
+
+                  return (
+                    <motion.div
+                      key={productBox.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3, delay: index * 0.1 }}
+                    >
+                      <Card className="bg-black border-zinc-800 overflow-hidden relative">
+                        <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none" />
+                        <CardHeader className="relative z-10">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3 mb-2">
+                                <CardTitle className="text-xl text-white">{productBox.title}</CardTitle>
+                                <Badge
+                                  variant={productBox.active ? "default" : "secondary"}
+                                  className={
+                                    productBox.active
+                                      ? "bg-white text-black hover:bg-zinc-200"
+                                      : "bg-zinc-700 text-zinc-300 hover:bg-zinc-600"
+                                  }
+                                >
+                                  {productBox.active ? "Active" : "Inactive"}
+                                </Badge>
+                              </div>
+                              <p className="text-zinc-400 mb-3">{productBox.description}</p>
+                              <div className="flex items-center gap-4">
+                                <span className="text-2xl font-light text-white">${productBox.price.toFixed(2)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </CardHeader>
+
+                        <CardContent>
+                          {/* Content Section Header */}
+                          <div className="flex items-center justify-between mb-4">
+                            <span className="text-sm text-zinc-400">Content ({boxContent.length})</span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => toggleContentVisibility(productBox.id)}
+                              className="text-xs text-zinc-400 hover:text-white hover:bg-zinc-800"
+                            >
+                              {isContentVisible ? (
+                                <>
+                                  <EyeOff className="h-3 w-3 mr-1" />
+                                  Hide
+                                </>
+                              ) : (
+                                <>
+                                  <Eye className="h-3 w-3 mr-1" />
+                                  Show Content
+                                </>
+                              )}
+                            </Button>
+                          </div>
+
+                          {/* Content Grid */}
+                          <AnimatePresence>
+                            {isContentVisible && (
+                              <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: "auto" }}
+                                exit={{ opacity: 0, height: 0 }}
+                                transition={{ duration: 0.3 }}
+                                className="space-y-4"
+                              >
+                                {isContentLoading ? (
+                                  <div className="flex items-center justify-center py-8">
+                                    <Loader2 className="h-5 w-5 text-zinc-500 animate-spin" />
+                                    <span className="ml-2 text-sm text-zinc-400">Loading content...</span>
+                                  </div>
+                                ) : boxContent.length > 0 ? (
+                                  <>
+                                    <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+                                      {boxContent.slice(0, BUNDLE_DISPLAY_LIMIT).map((item) => (
+                                        <div key={item.id} className="group relative">
+                                          <div className="relative aspect-[9/16] bg-zinc-900 rounded-lg overflow-hidden shadow-md border border-transparent hover:border-white/20 transition-all duration-300">
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation()
+                                                handleRemoveContentFromBundle(productBox.id, item.id)
+                                              }}
+                                              className="absolute top-2 right-2 z-30 w-6 h-6 bg-black/80 hover:bg-black rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 shadow-lg"
+                                              title="Remove from bundle"
+                                            >
+                                              <X className="w-3 h-3 text-white" />
+                                            </button>
+
+                                            {item.contentType === "video" ? (
+                                              <video
+                                                src={item.fileUrl}
+                                                className="w-full h-full object-cover cursor-pointer"
+                                                muted
+                                                preload="metadata"
+                                                poster={item.thumbnailUrl}
+                                                onMouseEnter={(e) => {
+                                                  const video = e.target as HTMLVideoElement
+                                                  video.play().catch(() => {})
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                  const video = e.target as HTMLVideoElement
+                                                  video.pause()
+                                                  video.currentTime = 0
+                                                }}
+                                                onClick={() => window.open(item.fileUrl, "_blank")}
+                                              />
+                                            ) : (
+                                              <div className="w-full h-full flex items-center justify-center cursor-pointer bg-zinc-800">
+                                                <div className="text-center">
+                                                  <div className="text-2xl mb-1">
+                                                    {item.contentType === "audio"
+                                                      ? "🎵"
+                                                      : item.contentType === "image"
+                                                        ? "🖼️"
+                                                        : "📄"}
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            )}
+
+                                            {/* Play overlay for videos */}
+                                            {item.contentType === "video" && (
+                                              <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
+                                            )}
+                                          </div>
+
+                                          {/* File info */}
+                                          <div className="mt-2">
+                                            <p className="text-xs text-zinc-300 truncate font-light">{item.title}</p>
+                                          </div>
+                                        </div>
+                                      ))}
+
+                                      {/* Add Content Placeholder - Only show when there's existing content */}
+                                      <div
+                                        className="aspect-[9/16] bg-zinc-800/50 rounded-lg border-2 border-dashed border-zinc-700 flex flex-col items-center justify-center cursor-pointer hover:border-zinc-600 hover:bg-zinc-800/70 transition-all duration-200"
+                                        onClick={() => {
+                                          fetchUserUploads()
+                                          setShowAddContentModal(productBox.id)
+                                        }}
+                                      >
+                                        <Plus className="w-6 h-6 text-zinc-500 mb-1" />
+                                        <p className="text-xs text-zinc-500 text-center px-1">Add Content</p>
+                                      </div>
+                                    </div>
+
+                                    {boxContent.length > BUNDLE_DISPLAY_LIMIT && (
+                                      <div className="flex justify-center pt-4">
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="border-zinc-700 text-zinc-300 bg-transparent hover:bg-zinc-800"
+                                          onClick={() => router.push(`/dashboard/bundles/${productBox.id}/content`)}
+                                        >
+                                          See all {boxContent.length} items
+                                          <ArrowRight className="h-3 w-3 ml-1" />
+                                        </Button>
+                                      </div>
+                                    )}
+                                  </>
+                                ) : (
+                                  // Empty state - Show centered Add Content button
+                                  <div className="text-center py-8">
+                                    <div className="text-4xl mb-2">📹</div>
+                                    <p className="text-sm text-zinc-500 mb-4">No content added yet</p>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="border-zinc-700 text-zinc-300 bg-transparent hover:bg-zinc-800"
+                                      onClick={() => {
+                                        fetchUserUploads()
+                                        setShowAddContentModal(productBox.id)
+                                      }}
+                                    >
+                                      <Plus className="h-4 w-4 mr-2" />
+                                      Add Content
+                                    </Button>
+                                  </div>
+                                )}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+
+                          {/* Mobile Controls Section - Separated by border */}
+                          <div className="mt-6 pt-4 border-t border-zinc-800">
+                            <div className="flex items-center justify-between gap-4">
+                              {/* Toggle Switch */}
+                              <div className="flex items-center gap-3">
+                                <Switch
+                                  checked={productBox.active}
+                                  onCheckedChange={() => handleToggleActive(productBox.id)}
+                                  className="data-[state=checked]:bg-white data-[state=unchecked]:bg-zinc-700"
+                                />
+                                <span className="text-sm text-zinc-400">
+                                  {productBox.active ? "Active" : "Inactive"}
+                                </span>
+                              </div>
+
+                              {/* Action Buttons */}
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="hover:bg-zinc-800 text-zinc-400 hover:text-white"
+                                  onClick={() => openEditModal(productBox)}
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="hover:bg-zinc-800 text-zinc-400 hover:text-white"
+                                  onClick={() => handleDelete(productBox.id)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </motion.div>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* Edit Bundle Modal */}
+            <Dialog open={!!showEditModal} onOpenChange={() => setShowEditModal(null)}>
+              <DialogContent className="bg-zinc-900 border-zinc-800 text-white max-w-2xl max-h-[90vh] flex flex-col">
+                <DialogHeader className="flex-shrink-0">
+                  <DialogTitle>Edit Bundle</DialogTitle>
                 </DialogHeader>
-                <div className="space-y-4">
+                <div className="space-y-4 overflow-y-auto flex-1 pr-2">
                   <div>
-                    <Label htmlFor="title">Title *</Label>
+                    <Label htmlFor="edit-title">Title *</Label>
                     <Input
-                      id="title"
-                      value={createForm.title}
-                      onChange={(e) => setCreateForm((prev) => ({ ...prev, title: e.target.value }))}
+                      id="edit-title"
+                      value={editForm.title}
+                      onChange={(e) => setEditForm((prev) => ({ ...prev, title: e.target.value }))}
                       placeholder="Enter bundle title"
                       className="bg-zinc-800 border-zinc-700"
                     />
                   </div>
 
                   <div>
-                    <Label htmlFor="description">Description</Label>
+                    <Label htmlFor="edit-description">Description</Label>
                     <Textarea
-                      id="description"
-                      value={createForm.description}
-                      onChange={(e) => setCreateForm((prev) => ({ ...prev, description: e.target.value }))}
+                      id="edit-description"
+                      value={editForm.description}
+                      onChange={(e) => setEditForm((prev) => ({ ...prev, description: e.target.value }))}
                       placeholder="Describe your bundle"
                       className="bg-zinc-800 border-zinc-700"
                     />
                   </div>
 
                   <div>
-                    <Label htmlFor="price">Price (USD) *</Label>
+                    <Label htmlFor="edit-price">Price (USD) *</Label>
                     <Input
-                      id="price"
+                      id="edit-price"
                       type="number"
                       step="0.01"
                       min="0.50"
-                      value={createForm.price}
-                      onChange={(e) => setCreateForm((prev) => ({ ...prev, price: e.target.value }))}
+                      value={editForm.price}
+                      onChange={(e) => setEditForm((prev) => ({ ...prev, price: e.target.value }))}
                       placeholder="9.99"
                       className="bg-zinc-800 border-zinc-700"
+                      required
                     />
                   </div>
 
-                  {/* Enhanced Thumbnail Section */}
-                  <div className="space-y-4">
-                    <Label>Bundle Thumbnail (Optional)</Label>
+                  {/* Thumbnail Upload Section */}
+                  <div className="space-y-3">
+                    <Label>Bundle Thumbnail</Label>
 
-                    {/* Thumbnail Preview */}
-                    {createForm.thumbnail && (
+                    {/* Current Thumbnail Preview */}
+                    {editForm.coverImage && (
                       <div className="relative">
-                        <div className="aspect-square w-32 h-32 rounded-lg overflow-hidden border border-zinc-700">
-                          <img
-                            src={URL.createObjectURL(createForm.thumbnail) || "/placeholder.svg"}
-                            alt="Thumbnail preview"
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
+                        <img
+                          src={editForm.coverImage || "/placeholder.svg"}
+                          alt="Bundle thumbnail"
+                          className="w-full h-48 object-cover rounded-lg border border-zinc-700"
+                        />
                         <Button
-                          type="button"
                           variant="ghost"
                           size="sm"
-                          onClick={() => setCreateForm((prev) => ({ ...prev, thumbnail: null }))}
-                          className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-red-600 hover:bg-red-700 text-white p-0"
+                          onClick={() => setEditForm((prev) => ({ ...prev, coverImage: "" }))}
+                          className="absolute top-2 right-2 bg-black/50 hover:bg-black/70 text-white"
                         >
-                          <X className="h-3 w-3" />
+                          <X className="h-4 w-4" />
                         </Button>
-                        <p className="text-xs text-zinc-400 mt-2">{createForm.thumbnail.name}</p>
                       </div>
                     )}
 
-                    {/* Upload Area */}
-                    {!createForm.thumbnail && (
-                      <div
-                        className="border-2 border-dashed border-zinc-700 rounded-lg p-8 text-center hover:border-zinc-600 transition-colors cursor-pointer"
-                        onClick={() => document.getElementById("thumbnail-upload")?.click()}
-                        onDragOver={(e) => {
-                          e.preventDefault()
-                          e.currentTarget.classList.add("border-zinc-500")
-                        }}
-                        onDragLeave={(e) => {
-                          e.preventDefault()
-                          e.currentTarget.classList.remove("border-zinc-500")
-                        }}
-                        onDrop={(e) => {
-                          e.preventDefault()
-                          e.currentTarget.classList.remove("border-zinc-500")
-                          const files = e.dataTransfer.files
-                          if (files.length > 0) {
-                            const file = files[0]
-                            if (file.type.startsWith("image/")) {
-                              setCreateForm((prev) => ({ ...prev, thumbnail: file }))
-                            }
-                          }
-                        }}
-                      >
-                        <div className="space-y-3">
-                          <div className="w-16 h-16 mx-auto bg-zinc-800 rounded-lg flex items-center justify-center">
-                            <Upload className="h-8 w-8 text-zinc-500" />
-                          </div>
-                          <div>
-                            <p className="text-sm text-zinc-300 font-medium">Upload bundle thumbnail</p>
-                            <p className="text-xs text-zinc-500 mt-1">
-                              Drag and drop an image here, or click to browse
-                            </p>
-                          </div>
-                          <div className="text-xs text-zinc-600">
-                            Supports: JPEG, PNG, WebP • Max size: 5MB • Recommended: 400x400px
-                          </div>
+                    {/* Upload Options */}
+                    <div className="space-y-3">
+                      {/* URL Input */}
+                      <Input
+                        placeholder="Enter thumbnail URL or upload a file below"
+                        value={editForm.coverImage}
+                        onChange={(e) => setEditForm((prev) => ({ ...prev, coverImage: e.target.value }))}
+                        className="bg-zinc-800 border-zinc-700 text-white"
+                      />
+
+                      {/* File Upload */}
+                      <div className="flex items-center gap-3">
+                        <div className="relative flex-1">
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/jpg,image/png,image/webp"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0]
+                              if (file && showEditModal) {
+                                // Validate file type
+                                const allowedTypes = ["image/jpeg", "image/jpg,image/png", "image/webp"]
+                                if (!allowedTypes.includes(file.type)) {
+                                  toast({
+                                    title: "Invalid File Type",
+                                    description: "Please select a JPEG, PNG, or WebP image",
+                                    variant: "destructive",
+                                  })
+                                  return
+                                }
+
+                                // Validate file size (5MB max)
+                                const maxSize = 5 * 1024 * 1024
+                                if (file.size > maxSize) {
+                                  toast({
+                                    title: "File Too Large",
+                                    description: "Please select an image smaller than 5MB",
+                                    variant: "destructive",
+                                  })
+                                  return
+                                }
+
+                                handleThumbnailUpload(file, showEditModal)
+                              }
+                            }}
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                            disabled={thumbnailUploading}
+                          />
+                          <Button
+                            variant="outline"
+                            disabled={thumbnailUploading}
+                            className="w-full border-zinc-700 hover:bg-zinc-800 bg-transparent"
+                          >
+                            {thumbnailUploading ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Uploading...
+                              </>
+                            ) : (
+                              <>
+                                <Upload className="h-4 w-4 mr-2" />
+                                Upload New Thumbnail
+                              </>
+                            )}
+                          </Button>
                         </div>
                       </div>
+
+                      <p className="text-xs text-zinc-500">
+                        Supported formats: JPEG, PNG, WebP. Maximum size: 5MB. Recommended size: 1280x720px
+                      </p>
+                    </div>
+
+                    {/* No Thumbnail State */}
+                    {!editForm.coverImage && (
+                      <div className="border-2 border-dashed border-zinc-700 rounded-lg p-8 text-center">
+                        <ImageIcon className="h-12 w-12 text-zinc-600 mx-auto mb-3" />
+                        <p className="text-zinc-400 mb-2">No thumbnail selected</p>
+                        <p className="text-xs text-zinc-500">Upload an image or enter a URL above</p>
+                      </div>
                     )}
-
-                    {/* Hidden File Input */}
-                    <input
-                      id="thumbnail-upload"
-                      type="file"
-                      accept="image/jpeg,image/jpg,image/png,image/webp"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0]
-                        if (file) {
-                          // Validate file type
-                          const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"]
-                          if (!allowedTypes.includes(file.type)) {
-                            toast({
-                              title: "Invalid File Type",
-                              description: "Please select a JPEG, PNG, or WebP image",
-                              variant: "destructive",
-                            })
-                            return
-                          }
-
-                          // Validate file size (5MB max)
-                          const maxSize = 5 * 1024 * 1024
-                          if (file.size > maxSize) {
-                            toast({
-                              title: "File Too Large",
-                              description: "Please select an image smaller than 5MB",
-                              variant: "destructive",
-                            })
-                            return
-                          }
-
-                          setCreateForm((prev) => ({ ...prev, thumbnail: file }))
-                        }
-                      }}
-                    />
                   </div>
 
                   <div className="flex justify-end gap-3 pt-4">
-                    <Button variant="outline" onClick={() => setShowCreateModal(false)} className="border-zinc-700">
+                    <Button variant="outline" onClick={() => setShowEditModal(null)} className="border-zinc-700">
                       Cancel
                     </Button>
                     <Button
-                      onClick={handleCreateBundle}
-                      disabled={createLoading}
-                      className="bg-white text-black hover:bg-zinc-200"
+                      onClick={() => showEditModal && handleEditBundle(showEditModal)}
+                      disabled={editLoading || thumbnailUploading}
+                      className="bg-red-600 hover:bg-red-700"
                     >
-                      {createLoading ? (
+                      {editLoading ? (
                         <>
                           <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Creating...
+                          Updating...
                         </>
                       ) : (
-                        "Create Bundle"
+                        "Update Bundle"
                       )}
                     </Button>
                   </div>
                 </div>
               </DialogContent>
             </Dialog>
-          </div>
 
-          {/* Product Boxes */}
-          {productBoxes.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="text-6xl mb-4">📦</div>
-              <h3 className="text-xl font-medium text-white mb-2">No Bundles Yet</h3>
-              <p className="text-zinc-400 mb-4">Create your first premium content bundle to get started</p>
-              {/* Update the empty state button to redirect to upgrade when at limit */}
-              <Button
-                onClick={() => {
-                  if (!isProUser && productBoxes.length >= bundleLimit) {
-                    router.push("/dashboard/upgrade")
-                  } else {
-                    setShowCreateModal(true)
-                  }
-                  // </CHANGE>
-                }}
-                className="bg-white text-black hover:bg-zinc-200"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                {!isProUser && productBoxes.length >= bundleLimit ? "Want more bundles?" : "Create Your First Bundle"}
-                {/* </CHANGE> */}
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {productBoxes.map((productBox, index) => {
-                const boxContent = contentItems[productBox.id] || []
-                const isContentLoading = contentLoading[productBox.id] || false
-                const isContentVisible = showContent[productBox.id] || false
-
-                return (
-                  <motion.div
-                    key={productBox.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3, delay: index * 0.1 }}
-                  >
-                    <Card className="bg-black border-zinc-800 overflow-hidden relative">
-                      <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none" />
-                      <CardHeader className="relative z-10">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-2">
-                              <CardTitle className="text-xl text-white">{productBox.title}</CardTitle>
-                              <Badge
-                                variant={productBox.active ? "default" : "secondary"}
-                                className={
-                                  productBox.active
-                                    ? "bg-white text-black hover:bg-zinc-200"
-                                    : "bg-zinc-700 text-zinc-300 hover:bg-zinc-600"
-                                }
-                              >
-                                {productBox.active ? "Active" : "Inactive"}
-                              </Badge>
-                            </div>
-                            <p className="text-zinc-400 mb-3">{productBox.description}</p>
-                            <div className="flex items-center gap-4">
-                              <span className="text-2xl font-light text-white">${productBox.price.toFixed(2)}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </CardHeader>
-
-                      <CardContent>
-                        {/* Content Section Header */}
-                        <div className="flex items-center justify-between mb-4">
-                          <span className="text-sm text-zinc-400">Content ({boxContent.length})</span>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => toggleContentVisibility(productBox.id)}
-                            className="text-xs text-zinc-400 hover:text-white hover:bg-zinc-800"
-                          >
-                            {isContentVisible ? (
-                              <>
-                                <EyeOff className="h-3 w-3 mr-1" />
-                                Hide
-                              </>
-                            ) : (
-                              <>
-                                <Eye className="h-3 w-3 mr-1" />
-                                Show Content
-                              </>
-                            )}
-                          </Button>
-                        </div>
-
-                        {/* Content Grid */}
-                        <AnimatePresence>
-                          {isContentVisible && (
-                            <motion.div
-                              initial={{ opacity: 0, height: 0 }}
-                              animate={{ opacity: 1, height: "auto" }}
-                              exit={{ opacity: 0, height: 0 }}
-                              transition={{ duration: 0.3 }}
-                              className="space-y-4"
-                            >
-                              {isContentLoading ? (
-                                <div className="flex items-center justify-center py-8">
-                                  <Loader2 className="h-5 w-5 text-zinc-500 animate-spin" />
-                                  <span className="ml-2 text-sm text-zinc-400">Loading content...</span>
-                                </div>
-                              ) : boxContent.length > 0 ? (
-                                <>
-                                  <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-                                    {boxContent.slice(0, BUNDLE_DISPLAY_LIMIT).map((item) => (
-                                      <div key={item.id} className="group relative">
-                                        <div className="relative aspect-[9/16] bg-zinc-900 rounded-lg overflow-hidden shadow-md border border-transparent hover:border-white/20 transition-all duration-300">
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation()
-                                              handleRemoveContentFromBundle(productBox.id, item.id)
-                                            }}
-                                            className="absolute top-2 right-2 z-30 w-6 h-6 bg-black/80 hover:bg-black rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 shadow-lg"
-                                            title="Remove from bundle"
-                                          >
-                                            <X className="w-3 h-3 text-white" />
-                                          </button>
-
-                                          {item.contentType === "video" ? (
-                                            <video
-                                              src={item.fileUrl}
-                                              className="w-full h-full object-cover cursor-pointer"
-                                              muted
-                                              preload="metadata"
-                                              poster={item.thumbnailUrl}
-                                              onMouseEnter={(e) => {
-                                                const video = e.target as HTMLVideoElement
-                                                video.play().catch(() => {})
-                                              }}
-                                              onMouseLeave={(e) => {
-                                                const video = e.target as HTMLVideoElement
-                                                video.pause()
-                                                video.currentTime = 0
-                                              }}
-                                              onClick={() => window.open(item.fileUrl, "_blank")}
-                                            />
-                                          ) : (
-                                            <div className="w-full h-full flex items-center justify-center cursor-pointer bg-zinc-800">
-                                              <div className="text-center">
-                                                <div className="text-2xl mb-1">
-                                                  {item.contentType === "audio"
-                                                    ? "🎵"
-                                                    : item.contentType === "image"
-                                                      ? "🖼️"
-                                                      : "📄"}
-                                                </div>
-                                              </div>
-                                            </div>
-                                          )}
-
-                                          {/* Play overlay for videos */}
-                                          {item.contentType === "video" && (
-                                            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
-                                          )}
-                                        </div>
-
-                                        {/* File info */}
-                                        <div className="mt-2">
-                                          <p className="text-xs text-zinc-300 truncate font-light">{item.title}</p>
-                                        </div>
-                                      </div>
-                                    ))}
-
-                                    {/* Add Content Placeholder - Only show when there's existing content */}
-                                    <div
-                                      className="aspect-[9/16] bg-zinc-800/50 rounded-lg border-2 border-dashed border-zinc-700 flex flex-col items-center justify-center cursor-pointer hover:border-zinc-600 hover:bg-zinc-800/70 transition-all duration-200"
-                                      onClick={() => {
-                                        fetchUserUploads()
-                                        setShowAddContentModal(productBox.id)
-                                      }}
-                                    >
-                                      <Plus className="w-6 h-6 text-zinc-500 mb-1" />
-                                      <p className="text-xs text-zinc-500 text-center px-1">Add Content</p>
-                                    </div>
-                                  </div>
-
-                                  {boxContent.length > BUNDLE_DISPLAY_LIMIT && (
-                                    <div className="flex justify-center pt-4">
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="border-zinc-700 text-zinc-300 bg-transparent hover:bg-zinc-800"
-                                        onClick={() => router.push(`/dashboard/bundles/${productBox.id}/content`)}
-                                      >
-                                        See all {boxContent.length} items
-                                        <ArrowRight className="h-3 w-3 ml-1" />
-                                      </Button>
-                                    </div>
-                                  )}
-                                </>
-                              ) : (
-                                // Empty state - Show centered Add Content button
-                                <div className="text-center py-8">
-                                  <div className="text-4xl mb-2">📹</div>
-                                  <p className="text-sm text-zinc-500 mb-4">No content added yet</p>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="border-zinc-700 text-zinc-300 bg-transparent hover:bg-zinc-800"
-                                    onClick={() => {
-                                      fetchUserUploads()
-                                      setShowAddContentModal(productBox.id)
-                                    }}
-                                  >
-                                    <Plus className="h-4 w-4 mr-2" />
-                                    Add Content
-                                  </Button>
-                                </div>
-                              )}
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-
-                        {/* Mobile Controls Section - Separated by border */}
-                        <div className="mt-6 pt-4 border-t border-zinc-800">
-                          <div className="flex items-center justify-between gap-4">
-                            {/* Toggle Switch */}
-                            <div className="flex items-center gap-3">
-                              <Switch
-                                checked={productBox.active}
-                                onCheckedChange={() => handleToggleActive(productBox.id)}
-                                className="data-[state=checked]:bg-white data-[state=unchecked]:bg-zinc-700"
-                              />
-                              <span className="text-sm text-zinc-400">{productBox.active ? "Active" : "Inactive"}</span>
-                            </div>
-
-                            {/* Action Buttons */}
-                            <div className="flex items-center gap-2">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="hover:bg-zinc-800 text-zinc-400 hover:text-white"
-                                onClick={() => openEditModal(productBox)}
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="hover:bg-zinc-800 text-zinc-400 hover:text-white"
-                                onClick={() => handleDelete(productBox.id)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                )
-              })}
-            </div>
-          )}
-
-          {/* Edit Bundle Modal */}
-          <Dialog open={!!showEditModal} onOpenChange={() => setShowEditModal(null)}>
-            <DialogContent className="bg-zinc-900 border-zinc-800 text-white max-w-2xl max-h-[90vh] flex flex-col">
-              <DialogHeader className="flex-shrink-0">
-                <DialogTitle>Edit Bundle</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 overflow-y-auto flex-1 pr-2">
-                <div>
-                  <Label htmlFor="edit-title">Title *</Label>
-                  <Input
-                    id="edit-title"
-                    value={editForm.title}
-                    onChange={(e) => setEditForm((prev) => ({ ...prev, title: e.target.value }))}
-                    placeholder="Enter bundle title"
-                    className="bg-zinc-800 border-zinc-700"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="edit-description">Description</Label>
-                  <Textarea
-                    id="edit-description"
-                    value={editForm.description}
-                    onChange={(e) => setEditForm((prev) => ({ ...prev, description: e.target.value }))}
-                    placeholder="Describe your bundle"
-                    className="bg-zinc-800 border-zinc-700"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="edit-price">Price (USD) *</Label>
-                  <Input
-                    id="edit-price"
-                    type="number"
-                    step="0.01"
-                    min="0.50"
-                    value={editForm.price}
-                    onChange={(e) => setEditForm((prev) => ({ ...prev, price: e.target.value }))}
-                    placeholder="9.99"
-                    className="bg-zinc-800 border-zinc-700"
-                    required
-                  />
-                </div>
-
-                {/* Thumbnail Upload Section */}
-                <div className="space-y-3">
-                  <Label>Bundle Thumbnail</Label>
-
-                  {/* Current Thumbnail Preview */}
-                  {editForm.coverImage && (
-                    <div className="relative">
-                      <img
-                        src={editForm.coverImage || "/placeholder.svg"}
-                        alt="Bundle thumbnail"
-                        className="w-full h-48 object-cover rounded-lg border border-zinc-700"
-                      />
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setEditForm((prev) => ({ ...prev, coverImage: "" }))}
-                        className="absolute top-2 right-2 bg-black/50 hover:bg-black/70 text-white"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
+            {/* Add Content Modal */}
+            <Dialog open={!!showAddContentModal} onOpenChange={() => setShowAddContentModal(null)}>
+              <DialogContent className="bg-zinc-900 border-zinc-800 text-white max-w-4xl h-[80vh] flex flex-col">
+                <DialogHeader className="flex-shrink-0">
+                  <DialogTitle>Add Content to Bundle</DialogTitle>
+                  {!isProUser && (
+                    <p className="text-xs text-zinc-500 mt-1">
+                      Free plan limit: {CONTENT_LIMIT_FREE} items per bundle.
+                    </p>
                   )}
+                </DialogHeader>
+                <div className="flex flex-col flex-1 min-h-0 space-y-4">
+                  <p className="text-sm text-zinc-400 flex-shrink-0">
+                    Select content from your uploads to add to this bundle:
+                  </p>
 
-                  {/* Upload Options */}
-                  <div className="space-y-3">
-                    {/* URL Input */}
-                    <Input
-                      placeholder="Enter thumbnail URL or upload a file below"
-                      value={editForm.coverImage}
-                      onChange={(e) => setEditForm((prev) => ({ ...prev, coverImage: e.target.value }))}
-                      className="bg-zinc-800 border-zinc-700 text-white"
+                  <div className="flex-shrink-0">
+                    <NewFolderSelector
+                      selectedFolderId={selectedFolderId}
+                      onFolderSelect={setSelectedFolderId}
+                      className="w-full"
                     />
+                  </div>
 
-                    {/* File Upload */}
-                    <div className="flex items-center gap-3">
-                      <div className="relative flex-1">
-                        <input
-                          type="file"
-                          accept="image/jpeg,image/jpg,image/png,image/webp"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0]
-                            if (file && showEditModal) {
-                              // Validate file type
-                              const allowedTypes = ["image/jpeg", "image/jpg,image/png", "image/webp"]
-                              if (!allowedTypes.includes(file.type)) {
-                                toast({
-                                  title: "Invalid File Type",
-                                  description: "Please select a JPEG, PNG, or WebP image",
-                                  variant: "destructive",
-                                })
-                                return
-                              }
-
-                              // Validate file size (5MB max)
-                              const maxSize = 5 * 1024 * 1024
-                              if (file.size > maxSize) {
-                                toast({
-                                  title: "File Too Large",
-                                  description: "Please select an image smaller than 5MB",
-                                  variant: "destructive",
-                                })
-                                return
-                              }
-
-                              handleThumbnailUpload(file, showEditModal)
-                            }
-                          }}
-                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                          disabled={thumbnailUploading}
-                        />
-                        <Button
-                          variant="outline"
-                          disabled={thumbnailUploading}
-                          className="w-full border-zinc-700 hover:bg-zinc-800 bg-transparent"
-                        >
-                          {thumbnailUploading ? (
-                            <>
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              Uploading...
-                            </>
-                          ) : (
-                            <>
-                              <Upload className="h-4 w-4 mr-2" />
-                              Upload New Thumbnail
-                            </>
-                          )}
-                        </Button>
+                  {uploadsLoading ? (
+                    <div className="flex items-center justify-center py-8 flex-1">
+                      <Loader2 className="h-5 w-5 text-zinc-500 animate-spin" />
+                      <span className="ml-2 text-sm text-zinc-400">Loading uploads...</span>
+                    </div>
+                  ) : filteredUploads.length === 0 ? (
+                    <div className="text-center py-8 flex-1 flex items-center justify-center">
+                      <div className="space-y-2">
+                        <p className="text-zinc-500">
+                          {selectedFolderId
+                            ? "No uploads in selected folder."
+                            : "No uploads available. Upload some content first."}
+                        </p>
+                        {selectedFolderId && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setSelectedFolderId(null)}
+                            className="border-zinc-700 text-zinc-300"
+                          >
+                            Show All Folders
+                          </Button>
+                        )}
                       </div>
                     </div>
-
-                    <p className="text-xs text-zinc-500">
-                      Supported formats: JPEG, PNG, WebP. Maximum size: 5MB. Recommended size: 1280x720px
-                    </p>
-                  </div>
-
-                  {/* No Thumbnail State */}
-                  {!editForm.coverImage && (
-                    <div className="border-2 border-dashed border-zinc-700 rounded-lg p-8 text-center">
-                      <ImageIcon className="h-12 w-12 text-zinc-600 mx-auto mb-3" />
-                      <p className="text-zinc-400 mb-2">No thumbnail selected</p>
-                      <p className="text-xs text-zinc-500">Upload an image or enter a URL above</p>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex justify-end gap-3 pt-4">
-                  <Button variant="outline" onClick={() => setShowEditModal(null)} className="border-zinc-700">
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={() => showEditModal && handleEditBundle(showEditModal)}
-                    disabled={editLoading || thumbnailUploading}
-                    className="bg-red-600 hover:bg-red-700"
-                  >
-                    {editLoading ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Updating...
-                      </>
-                    ) : (
-                      "Update Bundle"
-                    )}
-                  </Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
-
-          {/* Add Content Modal */}
-          <Dialog open={!!showAddContentModal} onOpenChange={() => setShowAddContentModal(null)}>
-            <DialogContent className="bg-zinc-900 border-zinc-800 text-white max-w-4xl h-[80vh] flex flex-col">
-              <DialogHeader className="flex-shrink-0">
-                <DialogTitle>Add Content to Bundle</DialogTitle>
-                {!isProUser && (
-                  <p className="text-xs text-zinc-500 mt-1">Free plan limit: {CONTENT_LIMIT_FREE} items per bundle.</p>
-                )}
-              </DialogHeader>
-              <div className="flex flex-col flex-1 min-h-0 space-y-4">
-                <p className="text-sm text-zinc-400 flex-shrink-0">
-                  Select content from your uploads to add to this bundle:
-                </p>
-
-                <div className="flex-shrink-0">
-                  <NewFolderSelector
-                    selectedFolderId={selectedFolderId}
-                    onFolderSelect={setSelectedFolderId}
-                    className="w-full"
-                  />
-                </div>
-
-                {uploadsLoading ? (
-                  <div className="flex items-center justify-center py-8 flex-1">
-                    <Loader2 className="h-5 w-5 text-zinc-500 animate-spin" />
-                    <span className="ml-2 text-sm text-zinc-400">Loading uploads...</span>
-                  </div>
-                ) : filteredUploads.length === 0 ? (
-                  <div className="text-center py-8 flex-1 flex items-center justify-center">
-                    <div className="space-y-2">
-                      <p className="text-zinc-500">
-                        {selectedFolderId
-                          ? "No uploads in selected folder."
-                          : "No uploads available. Upload some content first."}
-                      </p>
-                      {selectedFolderId && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setSelectedFolderId(null)}
-                          className="border-zinc-700 text-zinc-300"
-                        >
-                          Show All Folders
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex-1 overflow-y-auto">
-                    <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-3 pb-4">
-                      {filteredUploads.map((item) => (
-                        <div key={item.id} className="group relative">
-                          <div
-                            className={`relative aspect-[9/16] bg-zinc-800 rounded-lg overflow-hidden cursor-pointer border-2 transition-all duration-200 ${
-                              selectedContentIds.includes(item.id)
-                                ? "border-red-500 ring-2 ring-red-500/50"
-                                : "border-transparent hover:border-zinc-600"
-                            }`}
-                            onClick={() => {
-                              setSelectedContentIds((prev) =>
-                                prev.includes(item.id) ? prev.filter((id) => id !== item.id) : [...prev, item.id],
-                              )
-                            }}
-                          >
-                            {item.contentType === "video" ? (
-                              <video
-                                src={item.fileUrl}
-                                className="w-full h-full object-cover"
-                                muted
-                                preload="metadata"
-                                poster={item.thumbnailUrl}
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center">
-                                <div className="text-center">
-                                  <div className="text-xl mb-1">
-                                    {item.contentType === "audio" ? "🎵" : item.contentType === "image" ? "🖼️" : "📄"}
+                  ) : (
+                    <div className="flex-1 overflow-y-auto">
+                      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-3 pb-4">
+                        {filteredUploads.map((item) => (
+                          <div key={item.id} className="group relative">
+                            <div
+                              className={`relative aspect-[9/16] bg-zinc-800 rounded-lg overflow-hidden cursor-pointer border-2 transition-all duration-200 ${
+                                selectedContentIds.includes(item.id)
+                                  ? "border-red-500 ring-2 ring-red-500/50"
+                                  : "border-transparent hover:border-zinc-600"
+                              }`}
+                              onClick={() => {
+                                setSelectedContentIds((prev) =>
+                                  prev.includes(item.id) ? prev.filter((id) => id !== item.id) : [...prev, item.id],
+                                )
+                              }}
+                            >
+                              {item.contentType === "video" ? (
+                                <video
+                                  src={item.fileUrl}
+                                  className="w-full h-full object-cover"
+                                  muted
+                                  preload="metadata"
+                                  poster={item.thumbnailUrl}
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center">
+                                  <div className="text-center">
+                                    <div className="text-xl mb-1">
+                                      {item.contentType === "audio" ? "🎵" : item.contentType === "image" ? "🖼️" : "📄"}
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                            )}
+                              )}
 
-                            {/* Selection indicator */}
-                            {selectedContentIds.includes(item.id) && (
-                              <div className="absolute inset-0 bg-red-500/20 flex items-center justify-center">
-                                <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center">
-                                  <Check className="w-4 h-4 text-white" />
+                              {/* Selection indicator */}
+                              {selectedContentIds.includes(item.id) && (
+                                <div className="absolute inset-0 bg-red-500/20 flex items-center justify-center">
+                                  <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center">
+                                    <Check className="w-4 h-4 text-white" />
+                                  </div>
                                 </div>
-                              </div>
-                            )}
+                              )}
+                            </div>
+                            <p className="text-xs text-zinc-400 mt-1 truncate">{item.title}</p>
                           </div>
-                          <p className="text-xs text-zinc-400 mt-1 truncate">{item.title}</p>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between items-center pt-4 border-t border-zinc-800 flex-shrink-0">
+                    <p className="text-sm text-zinc-400">{selectedContentIds.length} item(s) selected</p>
+                    <div className="flex gap-3">
+                      <Button
+                        variant="outline"
+                        onClick={() => setShowAddContentModal(null)}
+                        className="border-zinc-700"
+                      >
+                        Cancel
+                      </Button>
+                      {(() => {
+                        const targetBox = productBoxes.find((box) => box.id === showAddContentModal)
+                        const existingCount = targetBox
+                          ? (targetBox.detailedContentItems?.length ??
+                            targetBox.contentItems?.length ??
+                            contentItems[targetBox.id]?.length ??
+                            0)
+                          : 0
+                        const maxPerBundle = isProUser ? Number.POSITIVE_INFINITY : CONTENT_LIMIT_FREE
+                        const remaining = Math.max(0, (maxPerBundle as number) - existingCount)
+                        const overLimit = !isProUser && selectedContentIds.length > remaining
+
+                        return (
+                          <Button
+                            onClick={() => showAddContentModal && handleAddContentToBundle(showAddContentModal)}
+                            disabled={
+                              selectedContentIds.length === 0 || addContentLoading || (remaining <= 0 && !isProUser)
+                            }
+                            className="bg-red-600 hover:bg-red-700"
+                          >
+                            {addContentLoading ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Adding...
+                              </>
+                            ) : remaining === Number.POSITIVE_INFINITY ? (
+                              `Add ${selectedContentIds.length} Item${selectedContentIds.length !== 1 ? "s" : ""}`
+                            ) : (
+                              `Add ${Math.min(selectedContentIds.length, remaining)} Item${Math.min(selectedContentIds.length, remaining) !== 1 ? "s" : ""} (${remaining} remaining)`
+                            )}
+                          </Button>
+                        )
+                      })()}
                     </div>
                   </div>
-                )}
-
-                <div className="flex justify-between items-center pt-4 border-t border-zinc-800 flex-shrink-0">
-                  <p className="text-sm text-zinc-400">{selectedContentIds.length} item(s) selected</p>
-                  <div className="flex gap-3">
-                    <Button variant="outline" onClick={() => setShowAddContentModal(null)} className="border-zinc-700">
-                      Cancel
-                    </Button>
-                    {(() => {
-                      const targetBox = productBoxes.find((box) => box.id === showAddContentModal)
-                      const existingCount = targetBox
-                        ? (targetBox.detailedContentItems?.length ??
-                          targetBox.contentItems?.length ??
-                          contentItems[targetBox.id]?.length ??
-                          0)
-                        : 0
-                      const maxPerBundle = isProUser ? Number.POSITIVE_INFINITY : CONTENT_LIMIT_FREE
-                      const remaining = Math.max(0, (maxPerBundle as number) - existingCount)
-                      const overLimit = !isProUser && selectedContentIds.length > remaining
-
-                      return (
-                        <Button
-                          onClick={() => showAddContentModal && handleAddContentToBundle(showAddContentModal)}
-                          disabled={
-                            selectedContentIds.length === 0 || addContentLoading || (remaining <= 0 && !isProUser)
-                          }
-                          className="bg-red-600 hover:bg-red-700"
-                        >
-                          {addContentLoading ? (
-                            <>
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              Adding...
-                            </>
-                          ) : remaining === Number.POSITIVE_INFINITY ? (
-                            `Add ${selectedContentIds.length} Item${selectedContentIds.length !== 1 ? "s" : ""}`
-                          ) : (
-                            `Add ${Math.min(selectedContentIds.length, remaining)} Item${Math.min(selectedContentIds.length, remaining) !== 1 ? "s" : ""} (${remaining} remaining)`
-                          )}
-                        </Button>
-                      )
-                    })()}
-                  </div>
                 </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
       </div>
-    </div>
+    </PaywallWrapper>
   )
 }

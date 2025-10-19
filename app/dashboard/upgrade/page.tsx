@@ -248,7 +248,7 @@ export default function UpgradePage() {
                   <Shield className="h-6 w-6 text-zinc-300" />
                 </div>
                 <div>
-                  <h2 className="text-2xl font-light text-white">Starter</h2>
+                  <h2 className="text-2xl font-light text-white">Starter Plan</h2>
                   <p className="text-zinc-400">For new creators testing the waters</p>
                 </div>
               </div>
@@ -296,7 +296,7 @@ export default function UpgradePage() {
                 onClick={() => handleUpgradeClick("starter")}
                 className="w-full bg-gradient-to-r from-slate-500 to-cyan-500 hover:from-slate-400 hover:to-cyan-400 text-white"
               >
-                Get Starter
+                Get Started
               </Button>
             )}
           </div>
