@@ -23,7 +23,10 @@ export function PaywallWrapper({ children }: PaywallWrapperProps) {
 
   useEffect(() => {
     const checkAccess = async () => {
+      console.log("[v0] PaywallWrapper: Starting access check for path:", pathname)
+
       if (!user) {
+        console.log("[v0] PaywallWrapper: No user found, denying access")
         setLoading(false)
         setHasAccess(false)
         return
@@ -32,6 +35,7 @@ export function PaywallWrapper({ children }: PaywallWrapperProps) {
       // Check if current path is always accessible
       const isAlwaysAccessible = alwaysAccessiblePaths.some((path) => pathname?.startsWith(path))
       if (isAlwaysAccessible) {
+        console.log("[v0] PaywallWrapper: Path is always accessible:", pathname)
         setHasAccess(true)
         setLoading(false)
         return
@@ -40,27 +44,23 @@ export function PaywallWrapper({ children }: PaywallWrapperProps) {
       try {
         const idToken = await user.getIdToken()
 
-        const purchaseRes = await fetch("/api/user/purchase-status", {
-          headers: { Authorization: `Bearer ${idToken}` },
-        })
-        const purchaseData = await purchaseRes.json()
-
         // Check trial status
         const trialRes = await fetch("/api/user/trial-status", {
           headers: { Authorization: `Bearer ${idToken}` },
         })
         const trialData = await trialRes.json()
+        console.log("[v0] PaywallWrapper: Trial status:", trialData)
 
         // Check membership status
         const membershipRes = await fetch("/api/membership-status", {
           headers: { Authorization: `Bearer ${idToken}` },
         })
         const membershipData = await membershipRes.json()
+        console.log("[v0] PaywallWrapper: Membership status:", membershipData)
 
-        const userHasAccess = purchaseData.hasPurchased || trialData.isOnTrial || membershipData.isActive
+        const userHasAccess = trialData.isOnTrial || membershipData.isActive
 
-        console.log("[v0] Access check:", {
-          hasPurchased: purchaseData.hasPurchased,
+        console.log("[v0] PaywallWrapper: Final access decision:", {
           isOnTrial: trialData.isOnTrial,
           isActive: membershipData.isActive,
           finalAccess: userHasAccess,
@@ -68,7 +68,7 @@ export function PaywallWrapper({ children }: PaywallWrapperProps) {
 
         setHasAccess(userHasAccess)
       } catch (error) {
-        console.error("[v0] Error checking access:", error)
+        console.error("[v0] PaywallWrapper: Error checking access:", error)
         setHasAccess(false)
       } finally {
         setLoading(false)

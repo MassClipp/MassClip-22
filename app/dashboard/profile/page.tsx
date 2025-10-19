@@ -25,6 +25,7 @@ import {
   CheckCircle,
   ExternalLink,
   RefreshCw,
+  Lock,
 } from "lucide-react"
 import ReactCrop, { type Crop, centerCrop, makeAspectCrop } from "react-image-crop"
 import "react-image-crop/dist/ReactCrop.css"
@@ -669,209 +670,232 @@ export default function ProfilePage() {
                 </div>
               ) : (
                 <div className="space-y-8">
-                  {trialStatus?.isOnTrial && (
-                    <div
-                      className={`p-4 rounded-lg border ${
-                        trialStatus.daysRemaining <= 1
-                          ? "bg-orange-900/20 border-orange-500/30"
-                          : "bg-cyan-900/20 border-cyan-500/30"
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
+                  {!subscriptionData?.isActive && !trialStatus?.isOnTrial ? (
+                    <div className="flex flex-col items-center justify-center py-12 space-y-6">
+                      <div className="w-16 h-16 rounded-full bg-zinc-800/50 flex items-center justify-center">
+                        <Lock className="h-8 w-8 text-zinc-400" />
+                      </div>
+                      <div className="text-center space-y-2">
+                        <h3 className="text-xl font-semibold text-white">Start Selling Your Content</h3>
+                        <p className="text-zinc-400 max-w-md">
+                          Upgrade to a paid plan to unlock all features and start monetizing your content.
+                        </p>
+                      </div>
+                      <Button
+                        onClick={() => router.push("/dashboard/upgrade")}
+                        className="bg-white hover:bg-gray-100 text-black font-medium px-8 py-6 text-lg"
+                      >
+                        Upgrade to Start Selling
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      {trialStatus?.isOnTrial && (
                         <div
-                          className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
-                            trialStatus.daysRemaining <= 1 ? "bg-orange-500" : "bg-cyan-500"
+                          className={`p-4 rounded-lg border ${
+                            trialStatus.daysRemaining <= 1
+                              ? "bg-orange-900/20 border-orange-500/30"
+                              : "bg-cyan-900/20 border-cyan-500/30"
                           }`}
-                        ></div>
-                        <div className="flex-1">
-                          <p
-                            className={`font-medium mb-1 ${
-                              trialStatus.daysRemaining <= 1 ? "text-orange-200" : "text-cyan-200"
+                        >
+                          <div className="flex items-start gap-3">
+                            <div
+                              className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
+                                trialStatus.daysRemaining <= 1 ? "bg-orange-500" : "bg-cyan-500"
+                              }`}
+                            ></div>
+                            <div className="flex-1">
+                              <p
+                                className={`font-medium mb-1 ${
+                                  trialStatus.daysRemaining <= 1 ? "text-orange-200" : "text-cyan-200"
+                                }`}
+                              >
+                                Free Trial Active
+                              </p>
+                              <p
+                                className={`text-sm leading-relaxed ${
+                                  trialStatus.daysRemaining <= 1 ? "text-orange-300/80" : "text-cyan-300/80"
+                                }`}
+                              >
+                                You have {trialStatus.daysRemaining} {trialStatus.daysRemaining === 1 ? "day" : "days"}{" "}
+                                remaining in your 3-day Creator Pro trial. Your trial ends on{" "}
+                                {trialStatus.trialEndDate
+                                  ? new Date(trialStatus.trialEndDate).toLocaleDateString("en-US", {
+                                      month: "long",
+                                      day: "numeric",
+                                      year: "numeric",
+                                    })
+                                  : "soon"}
+                                .
+                              </p>
+                              {trialStatus.daysRemaining <= 1 && (
+                                <p className="text-sm text-orange-200 mt-2 font-medium">
+                                  ⚠️ Your trial is ending soon! Upgrade now to keep your Creator Pro features.
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-lg font-medium text-white">Current Plan</h3>
+                          <Badge
+                            variant={subscriptionData?.isActive ? "default" : "secondary"}
+                            className={`px-3 py-1 font-medium ${
+                              subscriptionData?.isActive
+                                ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                                : "bg-zinc-600 hover:bg-zinc-700 text-zinc-200"
                             }`}
                           >
-                            Free Trial Active
-                          </p>
-                          <p
-                            className={`text-sm leading-relaxed ${
-                              trialStatus.daysRemaining <= 1 ? "text-orange-300/80" : "text-cyan-300/80"
-                            }`}
-                          >
-                            You have {trialStatus.daysRemaining} {trialStatus.daysRemaining === 1 ? "day" : "days"}{" "}
-                            remaining in your 3-day Creator Pro trial. Your trial ends on{" "}
-                            {trialStatus.trialEndDate
-                              ? new Date(trialStatus.trialEndDate).toLocaleDateString("en-US", {
-                                  month: "long",
-                                  day: "numeric",
-                                  year: "numeric",
-                                })
-                              : "soon"}
-                            .
-                          </p>
-                          {trialStatus.daysRemaining <= 1 && (
-                            <p className="text-sm text-orange-200 mt-2 font-medium">
-                              ⚠️ Your trial is ending soon! Upgrade now to keep your Creator Pro features.
-                            </p>
+                            {trialStatus?.isOnTrial
+                              ? "Creator Pro (Trial)"
+                              : subscriptionData?.plan === "creator_pro" && subscriptionData?.isActive
+                                ? "Creator Pro"
+                                : "Starter"}
+                          </Badge>
+                        </div>
+
+                        {subscriptionData?.currentPeriodEnd && (
+                          <div className="p-4 rounded-lg border border-zinc-700/50 bg-zinc-800/20">
+                            <div className="flex justify-between items-center mb-3">
+                              <span className="text-sm font-medium text-zinc-300">
+                                {subscriptionData?.cancelAtPeriodEnd || subscriptionData?.status === "canceled"
+                                  ? "Access Ends"
+                                  : "Next Billing"}
+                              </span>
+                              <span className="text-sm font-mono text-white">
+                                {safelyFormatDate(subscriptionData.currentPeriodEnd)}
+                              </span>
+                            </div>
+
+                            {subscriptionData?.cancelAtPeriodEnd || subscriptionData?.status === "canceled" ? (
+                              <div className="p-3 rounded-md bg-amber-900/20 border border-amber-500/30">
+                                <div className="flex items-start gap-3">
+                                  <div className="w-2 h-2 rounded-full bg-amber-500 mt-2 flex-shrink-0"></div>
+                                  <div>
+                                    <p className="text-amber-200 text-sm font-medium mb-1">Subscription Canceled</p>
+                                    <p className="text-amber-300/80 text-xs leading-relaxed">
+                                      Your Pro access continues until{" "}
+                                      {safelyFormatDate(subscriptionData.currentPeriodEnd)}. After this date, your
+                                      account will automatically switch to the Starter plan.
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            ) : subscriptionData?.isActive ? (
+                              <div className="p-3 rounded-md bg-emerald-900/20 border border-emerald-500/30">
+                                <div className="flex items-start gap-3">
+                                  <div className="w-2 h-2 rounded-full bg-emerald-500 mt-2 flex-shrink-0"></div>
+                                  <div>
+                                    <p className="text-emerald-200 text-sm font-medium mb-1">Active Subscription</p>
+                                    <p className="text-emerald-300/80 text-xs leading-relaxed">
+                                      Your subscription will automatically renew on{" "}
+                                      {safelyFormatDate(subscriptionData.currentPeriodEnd)}.
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            ) : null}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="space-y-4">
+                        <h3 className="text-lg font-medium text-white">Plan Features</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {subscriptionData?.plan === "creator_pro" && subscriptionData?.isActive ? (
+                            <>
+                              <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
+                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                                <span className="text-sm text-zinc-200">Unlimited Folders with Subfolders</span>
+                              </div>
+                              <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
+                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                                <span className="text-sm text-zinc-200">Unlimited Bundles</span>
+                              </div>
+                              <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
+                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                                <span className="text-sm text-zinc-200">Unlimited Videos per Bundle</span>
+                              </div>
+                              <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
+                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                                <span className="text-sm text-zinc-200">Full Vex AI - Bundle Creation</span>
+                              </div>
+                              <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
+                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                                <span className="text-sm text-zinc-200">Transcript Analysis</span>
+                              </div>
+                              <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
+                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                                <span className="text-sm text-zinc-200">Only 10% Platform Fee</span>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
+                                <div className="w-1.5 h-1.5 rounded-full bg-zinc-500"></div>
+                                <span className="text-sm text-zinc-300">3 folders with subfolders</span>
+                              </div>
+                              <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
+                                <div className="w-1.5 h-1.5 rounded-full bg-zinc-500"></div>
+                                <span className="text-sm text-zinc-300">5 bundles max on storefront</span>
+                              </div>
+                              <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
+                                <div className="w-1.5 h-1.5 rounded-full bg-zinc-500"></div>
+                                <span className="text-sm text-zinc-300">15 videos per bundle limit</span>
+                              </div>
+                              <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
+                                <div className="w-1.5 h-1.5 rounded-full bg-zinc-500"></div>
+                                <span className="text-sm text-zinc-300">
+                                  Basic Vex AI - file metadata & folder organization
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
+                                <div className="w-1.5 h-1.5 rounded-full bg-zinc-500"></div>
+                                <span className="text-sm text-zinc-300">20% Platform Fee on sales</span>
+                              </div>
+                            </>
                           )}
                         </div>
                       </div>
-                    </div>
-                  )}
 
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-medium text-white">Current Plan</h3>
-                      <Badge
-                        variant={subscriptionData?.isActive ? "default" : "secondary"}
-                        className={`px-3 py-1 font-medium ${
-                          subscriptionData?.isActive
-                            ? "bg-emerald-600 hover:bg-emerald-700 text-white"
-                            : "bg-zinc-600 hover:bg-zinc-700 text-zinc-200"
-                        }`}
-                      >
-                        {trialStatus?.isOnTrial
-                          ? "Creator Pro (Trial)"
-                          : subscriptionData?.plan === "creator_pro" && subscriptionData?.isActive
-                            ? "Creator Pro"
-                            : "Starter"}
-                      </Badge>
-                    </div>
-
-                    {subscriptionData?.currentPeriodEnd && (
-                      <div className="p-4 rounded-lg border border-zinc-700/50 bg-zinc-800/20">
-                        <div className="flex justify-between items-center mb-3">
-                          <span className="text-sm font-medium text-zinc-300">
-                            {subscriptionData?.cancelAtPeriodEnd || subscriptionData?.status === "canceled"
-                              ? "Access Ends"
-                              : "Next Billing"}
-                          </span>
-                          <span className="text-sm font-mono text-white">
-                            {safelyFormatDate(subscriptionData.currentPeriodEnd)}
-                          </span>
-                        </div>
-
-                        {subscriptionData?.cancelAtPeriodEnd || subscriptionData?.status === "canceled" ? (
-                          <div className="p-3 rounded-md bg-amber-900/20 border border-amber-500/30">
-                            <div className="flex items-start gap-3">
-                              <div className="w-2 h-2 rounded-full bg-amber-500 mt-2 flex-shrink-0"></div>
-                              <div>
-                                <p className="text-amber-200 text-sm font-medium mb-1">Subscription Canceled</p>
-                                <p className="text-amber-300/80 text-xs leading-relaxed">
-                                  Your Pro access continues until {safelyFormatDate(subscriptionData.currentPeriodEnd)}.
-                                  After this date, your account will automatically switch to the Starter plan.
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        ) : subscriptionData?.isActive ? (
-                          <div className="p-3 rounded-md bg-emerald-900/20 border border-emerald-500/30">
-                            <div className="flex items-start gap-3">
-                              <div className="w-2 h-2 rounded-full bg-emerald-500 mt-2 flex-shrink-0"></div>
-                              <div>
-                                <p className="text-emerald-200 text-sm font-medium mb-1">Active Subscription</p>
-                                <p className="text-emerald-300/80 text-xs leading-relaxed">
-                                  Your subscription will automatically renew on{" "}
-                                  {safelyFormatDate(subscriptionData.currentPeriodEnd)}.
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        ) : null}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-medium text-white">Plan Features</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {subscriptionData?.plan === "creator_pro" && subscriptionData?.isActive ? (
-                        <>
-                          <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
-                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-                            <span className="text-sm text-zinc-200">Unlimited Folders with Subfolders</span>
-                          </div>
-                          <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
-                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-                            <span className="text-sm text-zinc-200">Unlimited Bundles</span>
-                          </div>
-                          <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
-                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-                            <span className="text-sm text-zinc-200">Unlimited Videos per Bundle</span>
-                          </div>
-                          <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
-                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-                            <span className="text-sm text-zinc-200">Full Vex AI - Bundle Creation</span>
-                          </div>
-                          <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
-                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-                            <span className="text-sm text-zinc-200">Transcript Analysis</span>
-                          </div>
-                          <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
-                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-                            <span className="text-sm text-zinc-200">Only 10% Platform Fee</span>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
-                            <div className="w-1.5 h-1.5 rounded-full bg-zinc-500"></div>
-                            <span className="text-sm text-zinc-300">3 folders with subfolders</span>
-                          </div>
-                          <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
-                            <div className="w-1.5 h-1.5 rounded-full bg-zinc-500"></div>
-                            <span className="text-sm text-zinc-300">5 bundles max on storefront</span>
-                          </div>
-                          <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
-                            <div className="w-1.5 h-1.5 rounded-full bg-zinc-500"></div>
-                            <span className="text-sm text-zinc-300">15 videos per bundle limit</span>
-                          </div>
-                          <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
-                            <div className="w-1.5 h-1.5 rounded-full bg-zinc-500"></div>
-                            <span className="text-sm text-zinc-300">
-                              Basic Vex AI - file metadata & folder organization
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
-                            <div className="w-1.5 h-1.5 rounded-full bg-zinc-500"></div>
-                            <span className="text-sm text-zinc-300">20% Platform Fee on sales</span>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap gap-3 pt-4 border-t border-zinc-800/50">
-                    {subscriptionData?.plan !== "creator_pro" || !subscriptionData?.isActive ? (
-                      <Button
-                        onClick={() => router.push("/dashboard/upgrade")}
-                        className="bg-white hover:bg-gray-100 text-black font-medium px-6"
-                      >
-                        Upgrade to Pro
-                      </Button>
-                    ) : (
-                      <>
-                        <Button
-                          variant="outline"
-                          onClick={() => fetchSubscriptionData(user, setSubscriptionData, setLoadingSubscription)}
-                          disabled={loadingSubscription}
-                          className="border-zinc-600 hover:bg-zinc-800 bg-transparent text-zinc-200 font-medium"
-                        >
-                          <RefreshCw className={`h-4 w-4 mr-2 ${loadingSubscription ? "animate-spin" : ""}`} />
-                          Refresh Status
-                        </Button>
-
-                        {subscriptionData?.cancelAtPeriodEnd || subscriptionData?.status === "canceled" ? (
+                      <div className="flex flex-wrap gap-3 pt-4 border-t border-zinc-800/50">
+                        {subscriptionData?.plan !== "creator_pro" || !subscriptionData?.isActive ? (
                           <Button
                             onClick={() => router.push("/dashboard/upgrade")}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-6"
+                            className="bg-white hover:bg-gray-100 text-black font-medium px-6"
                           >
-                            Reactivate Subscription
+                            Upgrade to Pro
                           </Button>
                         ) : (
-                          <CancelSubscriptionButton />
+                          <>
+                            <Button
+                              variant="outline"
+                              onClick={() => fetchSubscriptionData(user, setSubscriptionData, setLoadingSubscription)}
+                              disabled={loadingSubscription}
+                              className="border-zinc-600 hover:bg-zinc-800 bg-transparent text-zinc-200 font-medium"
+                            >
+                              <RefreshCw className={`h-4 w-4 mr-2 ${loadingSubscription ? "animate-spin" : ""}`} />
+                              Refresh Status
+                            </Button>
+
+                            {subscriptionData?.cancelAtPeriodEnd || subscriptionData?.status === "canceled" ? (
+                              <Button
+                                onClick={() => router.push("/dashboard/upgrade")}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-6"
+                              >
+                                Reactivate Subscription
+                              </Button>
+                            ) : (
+                              <CancelSubscriptionButton />
+                            )}
+                          </>
                         )}
-                      </>
-                    )}
-                  </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
             </CardContent>
