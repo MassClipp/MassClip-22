@@ -325,8 +325,9 @@ export default function UpgradePage() {
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-4xl font-light text-white">$15</p>
-                <span className="text-sm text-zinc-400">/month</span>
+                <p className="text-4xl font-light text-white">$3</p>
+                <span className="text-sm text-zinc-400">first month</span>
+                <p className="text-lg text-zinc-500 mt-1">then $15/month</p>
               </div>
             </div>
 

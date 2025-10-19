@@ -142,9 +142,12 @@ export default function MembershipPlansPage() {
                   <h2 className="text-2xl font-medium text-white">Creator Pro</h2>
                 </div>
                 <p className="text-zinc-400 mb-6">Everything you need to create amazing content</p>
-                <p className="text-4xl font-semibold text-white mb-6">
-                  $19<span className="text-xl text-zinc-400">/month</span>
-                </p>
+                <div className="mb-6">
+                  <p className="text-4xl font-semibold text-white">
+                    $3<span className="text-xl text-zinc-400">/first month</span>
+                  </p>
+                  <p className="text-lg text-zinc-500 mt-1">then $15/month</p>
+                </div>
 
                 <ul className="space-y-4 mb-8">
                   <li className="flex items-start">
