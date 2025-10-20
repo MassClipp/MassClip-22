@@ -101,17 +101,15 @@ export function PaywallWrapper({ children }: PaywallWrapperProps) {
             </div>
 
             <div className="space-y-2">
-              <h2 className="text-2xl font-semibold text-white">Subscription Required</h2>
-              <p className="text-zinc-400">
-                This feature is only accessible for creators with an active subscription or free trial.
-              </p>
+              <h2 className="text-2xl font-semibold text-white">Membership Required</h2>
+              <p className="text-zinc-400">Ready to sell your content?</p>
             </div>
 
             <Button
               onClick={() => router.push("/dashboard/upgrade")}
               className="bg-white text-black hover:bg-zinc-100 font-medium"
             >
-              View Plans
+              Get Started for $3/month
             </Button>
           </div>
         </div>

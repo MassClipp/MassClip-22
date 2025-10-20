@@ -91,17 +91,15 @@ export function PaywallOverlay({ children, allowPurchases = false }: PaywallOver
               </div>
             </div>
             <div className="space-y-2">
-              <h2 className="text-2xl font-bold">Subscription Required</h2>
-              <p className="text-muted-foreground">
-                This feature is only accessible for creators with an active subscription or free trial.
-              </p>
+              <h2 className="text-2xl font-bold">Membership Required</h2>
+              <p className="text-muted-foreground">Ready to sell your content?</p>
             </div>
             <div className="space-y-3">
               <Button onClick={() => router.push("/dashboard/upgrade")} size="lg" className="w-full">
-                View Plans
+                Get Started for $3/month
               </Button>
               <p className="text-sm text-muted-foreground">
-                Start with a 3-day free trial or get your first week for just $3
+                Start with our affordable Starter Plan or try Creator VIP free for 3 days
               </p>
             </div>
           </div>

@@ -1030,10 +1030,31 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                     ) : !isLoadingTrialStatus &&
                       !isLoadingMembershipStatus &&
                       !trialStatus?.hasUsedFreeTrial &&
-                      !(membershipStatus?.plan === "creator_pro" && membershipStatus?.isActive) ? (
+                      !(membershipStatus?.plan === "creator_vip" && membershipStatus?.isActive) ? (
                       <div>
                         <Button
-                          onClick={() => router.push("/welcome/free-trial")}
+                          onClick={async () => {
+                            try {
+                              const idToken = await user?.getIdToken?.()
+                              const res = await fetch("/api/stripe/checkout/pricing", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                  idToken,
+                                  plan: "creator_vip",
+                                }),
+                              })
+
+                              if (res.ok) {
+                                const data = (await res.json()) as { url?: string }
+                                if (data?.url) {
+                                  window.location.href = data.url
+                                }
+                              }
+                            } catch (err) {
+                              console.error("[Sidebar] Error starting checkout:", err)
+                            }
+                          }}
                           size="sm"
                           className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white border-0 font-medium text-xs h-9 shadow-lg shadow-cyan-500/20"
                         >
@@ -1260,10 +1281,31 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                   ) : !isLoadingTrialStatus &&
                     !isLoadingMembershipStatus &&
                     !trialStatus?.hasUsedFreeTrial &&
-                    !(membershipStatus?.plan === "creator_pro" && membershipStatus?.isActive) ? (
+                    !(membershipStatus?.plan === "creator_vip" && membershipStatus?.isActive) ? (
                     <div>
                       <Button
-                        onClick={() => router.push("/welcome/free-trial")}
+                        onClick={async () => {
+                          try {
+                            const idToken = await user?.getIdToken?.()
+                            const res = await fetch("/api/stripe/checkout/pricing", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                idToken,
+                                plan: "creator_vip",
+                              }),
+                            })
+
+                            if (res.ok) {
+                              const data = (await res.json()) as { url?: string }
+                              if (data?.url) {
+                                window.location.href = data.url
+                              }
+                            }
+                          } catch (err) {
+                            console.error("[Sidebar] Error starting checkout:", err)
+                          }
+                        }}
                         size="sm"
                         className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white border-0 font-medium text-xs h-9 shadow-lg shadow-cyan-500/20"
                       >
