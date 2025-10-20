@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
       plan: plan === "creator_pro" ? "creator_vip" : plan || "creator_vip", // Map creator_pro to creator_vip
       contentType: "membership",
       source: "dashboard_membership_upgrade",
-      isFirstTimeTrial: (!hasUsedTrial && trialPeriodDays).toString(),
+      isFirstTimeTrial: (trialPeriodDays !== undefined && !hasUsedTrial).toString(),
     }
     console.log("📋 [Membership Checkout] Constructed metadata for Stripe:", metadata)
 
