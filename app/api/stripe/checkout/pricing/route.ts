@@ -7,7 +7,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
 })
 
-const STARTER_PRICE_ID = "price_1SKKFPDheyb0pkWFBT6lf7V7" // $3/month flat (no trial)
+const STARTER_PRICE_ID = "price_1SKMsFDheyb0pkWFpYFHnfks" // $3/month flat (no trial) - TEST PRODUCT
 const CREATOR_VIP_FIRST_TIME_PRICE_ID = "price_1SK7SzDheyb0pkWFaKOzIOzf" // $15/month with 3-day trial
 const CREATOR_VIP_REGULAR_PRICE_ID = "price_1SK7SzDheyb0pkWFaKOzIOzf" // $15/month no trial
 
