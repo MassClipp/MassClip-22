@@ -8,10 +8,9 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 })
 
 const STARTER_FIRST_WEEK_PRICE_ID = "price_1SK6rgDheyb0pkWFkH8b2KCJ" // $3 for first week, then $10/month
-const STARTER_REGULAR_PRICE_ID = process.env.STRIPE_STARTER_REGULAR_PRICE_ID || "price_1SK6rgDheyb0pkWFkH8b2KCJ" // $10/month upfront
-const CREATOR_PRO_FIRST_WEEK_PRICE_ID =
-  process.env.STRIPE_CREATOR_PRO_FIRST_WEEK_PRICE_ID || "price_1SK6rgDheyb0pkWFkH8b2KCJ" // $3 for first week, then $15/month
-const CREATOR_PRO_REGULAR_PRICE_ID = process.env.STRIPE_CREATOR_PRO_REGULAR_PRICE_ID || "price_1SK6rgDheyb0pkWFkH8b2KCJ" // $15/month upfront
+const STARTER_REGULAR_PRICE_ID = "price_1SK7PDDheyb0pkWFJmVMvxMR" // $10/month upfront
+const CREATOR_PRO_FIRST_WEEK_PRICE_ID = "price_1SK7ReDheyb0pkWFRGQkQ3rI" // $3 for first week, then $15/month
+const CREATOR_PRO_REGULAR_PRICE_ID = "price_1SK7SzDheyb0pkWFaKOzIOzf" // $15/month upfront
 
 export async function POST(request: NextRequest) {
   console.log("🚀 [Membership Checkout] Starting session creation...")
