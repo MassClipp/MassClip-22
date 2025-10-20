@@ -44,25 +44,18 @@ export function PaywallWrapper({ children }: PaywallWrapperProps) {
       try {
         const idToken = await user.getIdToken()
 
-        // Check trial status
-        const trialRes = await fetch("/api/user/trial-status", {
-          headers: { Authorization: `Bearer ${idToken}` },
-        })
-        const trialData = await trialRes.json()
-        console.log("[v0] PaywallWrapper: Trial status:", trialData)
-
-        // Check membership status
         const membershipRes = await fetch("/api/membership-status", {
           headers: { Authorization: `Bearer ${idToken}` },
         })
         const membershipData = await membershipRes.json()
         console.log("[v0] PaywallWrapper: Membership status:", membershipData)
 
-        const userHasAccess = trialData.isOnTrial || membershipData.isActive
+        // User must have an active paid subscription (Starter or Creator VIP)
+        const userHasAccess = membershipData.isActive
 
         console.log("[v0] PaywallWrapper: Final access decision:", {
-          isOnTrial: trialData.isOnTrial,
           isActive: membershipData.isActive,
+          plan: membershipData.plan,
           finalAccess: userHasAccess,
         })
 
