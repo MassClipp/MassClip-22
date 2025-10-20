@@ -1,14 +1,17 @@
 import { type NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
-import { auth, isFirebaseAdminInitialized } from "@/lib/firebase-admin"
+import { auth, isFirebaseAdminInitialized, adminDb } from "@/lib/firebase-admin"
 
 // Initialize Stripe with the secret key from environment variables
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
 })
 
-// Fallback Price ID for testing if the environment variable is not set
-const FALLBACK_TEST_PRICE_ID = "price_1P0jL4H6aJg9jZ4Y6yZ4jZ4Y" // Replace with a valid test price ID if needed
+const STARTER_FIRST_WEEK_PRICE_ID = "price_1SK6rgDheyb0pkWFkH8b2KCJ" // $3 for first week, then $10/month
+const STARTER_REGULAR_PRICE_ID = process.env.STRIPE_STARTER_REGULAR_PRICE_ID || "price_1SK6rgDheyb0pkWFkH8b2KCJ" // $10/month upfront
+const CREATOR_PRO_FIRST_WEEK_PRICE_ID =
+  process.env.STRIPE_CREATOR_PRO_FIRST_WEEK_PRICE_ID || "price_1SK6rgDheyb0pkWFkH8b2KCJ" // $3 for first week, then $15/month
+const CREATOR_PRO_REGULAR_PRICE_ID = process.env.STRIPE_CREATOR_PRO_REGULAR_PRICE_ID || "price_1SK6rgDheyb0pkWFkH8b2KCJ" // $15/month upfront
 
 export async function POST(request: NextRequest) {
   console.log("🚀 [Membership Checkout] Starting session creation...")
@@ -20,8 +23,8 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { idToken, overridePriceId } = body
-    console.log("📝 [Membership Checkout] Request body received:", { hasIdToken: !!idToken, overridePriceId })
+    const { idToken, plan } = body
+    console.log("📝 [Membership Checkout] Request body received:", { hasIdToken: !!idToken, plan })
 
     if (!idToken) {
       console.error("❌ [Membership Checkout] Authentication error: Missing idToken.")
@@ -38,25 +41,49 @@ export async function POST(request: NextRequest) {
     }
 
     const { uid, email, name } = decodedToken
-    console.log("✅ [Membership Checkout] User authenticated:", { uid, email })
+    console.log("✅ [Membership Checkout] User authenticated:", { uid, email, plan })
 
-    // --- Determine Stripe Price ID ---
-    const priceId = overridePriceId || process.env.STRIPE_PRICE_ID || FALLBACK_TEST_PRICE_ID
-    if (!priceId) {
-      console.error("❌ [Membership Checkout] Configuration error: Missing Stripe Price ID.")
-      return NextResponse.json({ error: "Stripe Price ID is not configured." }, { status: 500 })
+    let hasUsedFirstWeekDiscount = false
+    try {
+      const freeUserDoc = await adminDb.collection("freeUsers").doc(uid).get()
+      if (freeUserDoc.exists) {
+        const freeUserData = freeUserDoc.data()
+        hasUsedFirstWeekDiscount = freeUserData?.hasUsedFirstWeekDiscount || false
+        console.log(`📊 [Membership Checkout] User first week discount status: ${hasUsedFirstWeekDiscount}`)
+      }
+    } catch (error) {
+      console.error("⚠️ [Membership Checkout] Error checking first week discount status:", error)
+      // Continue with checkout even if check fails - default to no discount used
     }
+
+    let priceId: string
+    if (plan === "starter") {
+      priceId = hasUsedFirstWeekDiscount ? STARTER_REGULAR_PRICE_ID : STARTER_FIRST_WEEK_PRICE_ID
+      console.log(
+        `💲 [Membership Checkout] Starter Plan - Using ${hasUsedFirstWeekDiscount ? "regular" : "promotional"} pricing`,
+      )
+    } else if (plan === "creator_pro") {
+      priceId = hasUsedFirstWeekDiscount ? CREATOR_PRO_REGULAR_PRICE_ID : CREATOR_PRO_FIRST_WEEK_PRICE_ID
+      console.log(
+        `💲 [Membership Checkout] Creator Pro - Using ${hasUsedFirstWeekDiscount ? "regular" : "promotional"} pricing`,
+      )
+    } else {
+      // Default to Creator Pro if no plan specified
+      priceId = hasUsedFirstWeekDiscount ? CREATOR_PRO_REGULAR_PRICE_ID : CREATOR_PRO_FIRST_WEEK_PRICE_ID
+      console.log(`💲 [Membership Checkout] No plan specified, defaulting to Creator Pro`)
+    }
+
     console.log(`💲 [Membership Checkout] Using Stripe Price ID: ${priceId}`)
 
     // --- Construct Metadata ---
-    // This metadata is CRITICAL for the webhook to identify the user
     const metadata = {
-      buyerUid: uid, // The most important piece of data
+      buyerUid: uid,
       buyerEmail: email || "",
       buyerName: name || email?.split("@")[0] || "",
-      plan: "creator_pro",
-      contentType: "membership", // Differentiates from bundle purchases
+      plan: plan || "creator_pro",
+      contentType: "membership",
       source: "dashboard_membership_upgrade",
+      isFirstTimeDiscount: (!hasUsedFirstWeekDiscount).toString(), // Track if this is using promotional pricing
     }
     console.log("📋 [Membership Checkout] Constructed metadata for Stripe:", metadata)
 
@@ -76,14 +103,10 @@ export async function POST(request: NextRequest) {
           quantity: 1,
         },
       ],
-      // Use the authenticated user's email
       customer_email: email,
-      // Set success and cancel URLs
       success_url: `${siteUrl}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${siteUrl}/dashboard`,
-      // Attach the critical metadata
+      cancel_url: `${siteUrl}/dashboard/upgrade`,
       metadata: metadata,
-      // Also attach metadata to the subscription for easier debugging
       subscription_data: {
         metadata: metadata,
       },

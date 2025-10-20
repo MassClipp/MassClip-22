@@ -3,7 +3,7 @@ import { adminDb as db } from "@/lib/firebase-admin"
 import { FieldValue } from "firebase-admin/firestore"
 
 // --- Types ---
-type MembershipPlan = "free" | "creator_pro"
+type MembershipPlan = "free" | "creator_pro" | "starter"
 type MembershipStatus = "active" | "inactive" | "canceled" | "past_due" | "trialing"
 
 const PRO_FEATURES = {
@@ -24,6 +24,19 @@ const FREE_FEATURES = {
   platformFeePercentage: 20,
   maxVideosPerBundle: 10,
   maxBundles: 2,
+}
+
+const STARTER_FEATURES = {
+  unlimitedDownloads: false,
+  premiumContent: false,
+  noWatermark: false,
+  prioritySupport: false,
+  platformFeePercentage: 20,
+  maxVideosPerBundle: 15,
+  maxBundles: 5,
+  maxFolders: 3,
+  canCreateSubfolders: true,
+  canAnalyzeTranscripts: false,
 }
 
 // --- Helper Functions ---
@@ -52,6 +65,8 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
   const userId = session.metadata?.buyerUid
   const customerId = typeof session.customer === "string" ? session.customer : session.customer?.id
   const subscriptionId = typeof session.subscription === "string" ? session.subscription : session.subscription?.id
+  const plan = session.metadata?.plan || "creator_pro"
+  const isFirstTimeDiscount = session.metadata?.isFirstTimeDiscount === "true"
 
   if (!userId) {
     throw new Error(`Missing buyerUid in checkout session metadata. Session ID: ${session.id}`)
@@ -66,17 +81,38 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!)
   const subscription = await stripe.subscriptions.retrieve(subscriptionId)
 
+  const features = plan === "starter" ? STARTER_FEATURES : PRO_FEATURES
+
   await setMembership(userId, {
     uid: userId,
-    plan: "creator_pro",
+    plan: plan as "starter" | "creator_pro",
     status: subscription.status,
     isActive: subscription.status === "active" || subscription.status === "trialing",
     stripeCustomerId: customerId,
     stripeSubscriptionId: subscription.id,
     currentPeriodEnd: new Date(subscription.current_period_end * 1000),
     priceId: subscription.items.data[0]?.price.id,
-    features: PRO_FEATURES,
+    features: features,
   })
+
+  if (isFirstTimeDiscount) {
+    try {
+      const freeUserRef = db.collection("freeUsers").doc(userId)
+      await freeUserRef.set(
+        {
+          hasUsedFirstWeekDiscount: true,
+          firstWeekDiscountUsedDate: FieldValue.serverTimestamp(),
+          firstWeekDiscountPlan: plan,
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      )
+      console.log(`✅ [Webhook] Marked first week discount as used for user ${userId} on ${plan} plan`)
+    } catch (error) {
+      console.error(`⚠️ [Webhook] Failed to mark first week discount as used:`, error)
+      // Don't fail the entire webhook if this update fails
+    }
+  }
 }
 
 export async function processSubscriptionUpdated(subscription: Stripe.Subscription) {
