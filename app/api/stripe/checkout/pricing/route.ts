@@ -7,10 +7,9 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
 })
 
-const STARTER_FIRST_WEEK_PRICE_ID = "price_1SK6rgDheyb0pkWFkH8b2KCJ" // $3 for first week, then $10/month
-const STARTER_REGULAR_PRICE_ID = "price_1SK7PDDheyb0pkWFJmVMvxMR" // $10/month upfront
-const CREATOR_PRO_FIRST_WEEK_PRICE_ID = "price_1SK7ReDheyb0pkWFRGQkQ3rI" // $3 for first week, then $15/month
-const CREATOR_PRO_REGULAR_PRICE_ID = "price_1SK7SzDheyb0pkWFaKOzIOzf" // $15/month upfront
+const STARTER_PRICE_ID = "price_1SK7PDDheyb0pkWFJmVMvxMR" // $3/month flat (no trial)
+const CREATOR_VIP_FIRST_TIME_PRICE_ID = "price_1SK7SzDheyb0pkWFaKOzIOzf" // $15/month with 3-day trial
+const CREATOR_VIP_REGULAR_PRICE_ID = "price_1SK7SzDheyb0pkWFaKOzIOzf" // $15/month no trial
 
 export async function POST(request: NextRequest) {
   console.log("🚀 [Membership Checkout] Starting session creation...")
@@ -42,62 +41,50 @@ export async function POST(request: NextRequest) {
     const { uid, email, name } = decodedToken
     console.log("✅ [Membership Checkout] User authenticated:", { uid, email, plan })
 
-    let hasUsedFirstWeekDiscount = false
+    let hasUsedTrial = false
     try {
       const freeUserDoc = await adminDb.collection("freeUsers").doc(uid).get()
       if (freeUserDoc.exists) {
         const freeUserData = freeUserDoc.data()
-        hasUsedFirstWeekDiscount = freeUserData?.hasUsedFirstWeekDiscount || false
-        console.log(`📊 [Membership Checkout] User first week discount status: ${hasUsedFirstWeekDiscount}`)
+        hasUsedTrial = freeUserData?.hasUsedFirstWeekDiscount || false
+        console.log(`📊 [Membership Checkout] User trial status: ${hasUsedTrial}`)
       }
     } catch (error) {
-      console.error("⚠️ [Membership Checkout] Error checking first week discount status:", error)
+      console.error("⚠️ [Membership Checkout] Error checking trial status:", error)
     }
 
     let priceId: string
-    let isPromotionalPricing = false
+    let trialPeriodDays: number | undefined = undefined
 
     if (plan === "starter") {
-      if (hasUsedFirstWeekDiscount) {
-        priceId = STARTER_REGULAR_PRICE_ID
-        console.log(`💲 [Membership Checkout] Starter Plan - Using regular pricing ($10/month)`)
-      } else {
-        priceId = STARTER_FIRST_WEEK_PRICE_ID
-        isPromotionalPricing = true
-        console.log(`💲 [Membership Checkout] Starter Plan - Using promotional pricing ($3 first week)`)
-      }
-    } else if (plan === "creator_pro") {
-      if (hasUsedFirstWeekDiscount) {
-        priceId = CREATOR_PRO_REGULAR_PRICE_ID
-        console.log(`💲 [Membership Checkout] Creator Pro - Using regular pricing ($15/month)`)
-      } else {
-        priceId = CREATOR_PRO_FIRST_WEEK_PRICE_ID
-        isPromotionalPricing = true
-        console.log(`💲 [Membership Checkout] Creator Pro - Using promotional pricing ($3 first week)`)
-      }
-    } else {
-      // Default to Creator Pro if no plan specified
-      if (hasUsedFirstWeekDiscount) {
-        priceId = CREATOR_PRO_REGULAR_PRICE_ID
-      } else {
-        priceId = CREATOR_PRO_FIRST_WEEK_PRICE_ID
-        isPromotionalPricing = true
-      }
-      console.log(`💲 [Membership Checkout] No plan specified, defaulting to Creator Pro`)
+      priceId = STARTER_PRICE_ID
+      console.log(`💲 [Membership Checkout] Starter Plan - $3/month (no trial)`)
+    } else if (plan === "creator_vip" || plan === "creator_pro") {
+      priceId = hasUsedTrial ? CREATOR_VIP_REGULAR_PRICE_ID : CREATOR_VIP_FIRST_TIME_PRICE_ID
+      trialPeriodDays = hasUsedTrial ? undefined : 3
+      console.log(
+        `💲 [Membership Checkout] Creator VIP - ${hasUsedTrial ? "$15/month (no trial)" : "3-day free trial then $15/month"}`,
+      )
+    }
+    // Default to Creator VIP
+    else {
+      priceId = hasUsedTrial ? CREATOR_VIP_REGULAR_PRICE_ID : CREATOR_VIP_FIRST_TIME_PRICE_ID
+      trialPeriodDays = hasUsedTrial ? undefined : 3
+      console.log(`💲 [Membership Checkout] No plan specified, defaulting to Creator VIP`)
     }
 
     console.log(`💲 [Membership Checkout] Using Stripe Price ID: ${priceId}`)
-    console.log(`💲 [Membership Checkout] Is promotional pricing: ${isPromotionalPricing}`)
+    console.log(`💲 [Membership Checkout] Trial period days: ${trialPeriodDays || "none"}`)
 
     // --- Construct Metadata ---
     const metadata = {
       buyerUid: uid,
       buyerEmail: email || "",
       buyerName: name || email?.split("@")[0] || "",
-      plan: plan || "creator_pro",
+      plan: plan === "creator_pro" ? "creator_vip" : plan || "creator_vip", // Map creator_pro to creator_vip
       contentType: "membership",
       source: "dashboard_membership_upgrade",
-      isFirstTimeDiscount: isPromotionalPricing.toString(),
+      isFirstTimeTrial: (!hasUsedTrial && trialPeriodDays).toString(),
     }
     console.log("📋 [Membership Checkout] Constructed metadata for Stripe:", metadata)
 
@@ -123,6 +110,7 @@ export async function POST(request: NextRequest) {
       metadata: metadata,
       subscription_data: {
         metadata: metadata,
+        ...(trialPeriodDays && { trial_period_days: trialPeriodDays }), // Add trial period if applicable
       },
     }
 

@@ -49,7 +49,7 @@ export default function UpgradePage() {
   const [subscriptionStatus, setSubscriptionStatus] = useState<{
     hasActiveSubscription: boolean
     isOnTrial: boolean
-    currentPlan: "starter" | "creator_pro" | null
+    currentPlan: "starter" | "creator_vip" | null
     hasUsedFirstWeekDiscount: boolean
   } | null>(null)
   const [statusLoading, setStatusLoading] = useState(true)
@@ -118,9 +118,10 @@ export default function UpgradePage() {
         const hasActiveSubscription = membershipData.isActive && membershipData.status === "active"
         const isOnTrial = trialData.isOnTrial || membershipData.status === "trialing"
 
-        let currentPlan: "starter" | "creator_pro" | null = null
+        let currentPlan: "starter" | "creator_vip" | null = null
         if (hasActiveSubscription || isOnTrial) {
-          currentPlan = membershipData.plan === "creator_pro" ? "creator_pro" : "starter"
+          currentPlan =
+            membershipData.plan === "creator_pro" || membershipData.plan === "creator_vip" ? "creator_vip" : "starter"
         }
 
         setSubscriptionStatus({
@@ -177,7 +178,7 @@ export default function UpgradePage() {
     }
   }
 
-  const handleUpgradeClick = async (plan: "starter" | "creator_pro") => {
+  const handleUpgradeClick = async (plan: "starter" | "creator_vip") => {
     try {
       const idToken = await user?.getIdToken?.()
       const res = await fetch("/api/stripe/checkout/pricing", {
@@ -253,18 +254,8 @@ export default function UpgradePage() {
                 </div>
               </div>
               <div className="text-right">
-                {showFirstWeekPromo ? (
-                  <>
-                    <p className="text-4xl font-light text-white">$3</p>
-                    <span className="text-sm text-zinc-400">first week</span>
-                    <p className="text-lg text-zinc-500 mt-1">then $10/month</p>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-4xl font-light text-white">$10</p>
-                    <span className="text-sm text-zinc-400">/month</span>
-                  </>
-                )}
+                <p className="text-4xl font-light text-white">$3</p>
+                <span className="text-sm text-zinc-400">/month</span>
               </div>
             </div>
 
@@ -302,11 +293,11 @@ export default function UpgradePage() {
           </div>
         </Card>
 
-        {/* Creator Pro Plan */}
+        {/* Creator VIP Plan */}
         <Card className="relative overflow-hidden border border-zinc-700/50 bg-gradient-to-br from-zinc-900/90 to-black/90">
           {!statusLoading && (
             <div className="absolute right-0 top-0 bg-gradient-to-r from-cyan-400 to-blue-400 px-3 py-1 text-xs font-bold text-black">
-              {subscriptionStatus?.currentPlan === "creator_pro" ? "CURRENT PLAN" : "RECOMMENDED"}
+              {subscriptionStatus?.currentPlan === "creator_vip" ? "CURRENT PLAN" : "RECOMMENDED"}
             </div>
           )}
 
@@ -317,15 +308,15 @@ export default function UpgradePage() {
                   <Crown className="h-6 w-6 text-cyan-300" />
                 </div>
                 <div>
-                  <h2 className="text-2xl font-light text-white">Creator Pro</h2>
+                  <h2 className="text-2xl font-light text-white">Creator VIP</h2>
                   <p className="text-zinc-400">For creators who treat content like a business</p>
                 </div>
               </div>
               <div className="text-right">
                 {showFirstWeekPromo ? (
                   <>
-                    <p className="text-4xl font-light text-white">$3</p>
-                    <span className="text-sm text-zinc-400">first week</span>
+                    <p className="text-4xl font-light text-white">3 days</p>
+                    <span className="text-sm text-zinc-400">free trial</span>
                     <p className="text-lg text-zinc-500 mt-1">then $15/month</p>
                   </>
                 ) : (
@@ -352,7 +343,7 @@ export default function UpgradePage() {
               ))}
             </div>
 
-            {subscriptionStatus?.currentPlan === "creator_pro" ? (
+            {subscriptionStatus?.currentPlan === "creator_vip" ? (
               <Button
                 onClick={() => router.push("/dashboard/profile?tab=membership")}
                 variant="outline"
@@ -362,10 +353,10 @@ export default function UpgradePage() {
               </Button>
             ) : (
               <Button
-                onClick={() => handleUpgradeClick("creator_pro")}
+                onClick={() => handleUpgradeClick("creator_vip")}
                 className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white"
               >
-                Upgrade to Creator Pro
+                Upgrade to Creator VIP
               </Button>
             )}
           </div>
