@@ -257,6 +257,17 @@ export default function FreeTrialPage() {
         <p className="text-center text-sm text-gray-500 mt-8">
           All plans require payment information. Cancel anytime during the trial period.
         </p>
+
+        {/* Skip button */}
+        <div className="flex justify-center mt-6">
+          <Button
+            variant="ghost"
+            onClick={() => router.push("/dashboard")}
+            className="text-gray-400 hover:text-gray-300 hover:bg-gray-800/50"
+          >
+            I don&apos;t want to sell yet
+          </Button>
+        </div>
       </div>
     </div>
   )
