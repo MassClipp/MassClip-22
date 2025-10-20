@@ -52,27 +52,42 @@ export async function POST(request: NextRequest) {
       }
     } catch (error) {
       console.error("⚠️ [Membership Checkout] Error checking first week discount status:", error)
-      // Continue with checkout even if check fails - default to no discount used
     }
 
     let priceId: string
+    let isPromotionalPricing = false
+
     if (plan === "starter") {
-      priceId = hasUsedFirstWeekDiscount ? STARTER_REGULAR_PRICE_ID : STARTER_FIRST_WEEK_PRICE_ID
-      console.log(
-        `💲 [Membership Checkout] Starter Plan - Using ${hasUsedFirstWeekDiscount ? "regular" : "promotional"} pricing`,
-      )
+      if (hasUsedFirstWeekDiscount) {
+        priceId = STARTER_REGULAR_PRICE_ID
+        console.log(`💲 [Membership Checkout] Starter Plan - Using regular pricing ($10/month)`)
+      } else {
+        priceId = STARTER_FIRST_WEEK_PRICE_ID
+        isPromotionalPricing = true
+        console.log(`💲 [Membership Checkout] Starter Plan - Using promotional pricing ($3 first week)`)
+      }
     } else if (plan === "creator_pro") {
-      priceId = hasUsedFirstWeekDiscount ? CREATOR_PRO_REGULAR_PRICE_ID : CREATOR_PRO_FIRST_WEEK_PRICE_ID
-      console.log(
-        `💲 [Membership Checkout] Creator Pro - Using ${hasUsedFirstWeekDiscount ? "regular" : "promotional"} pricing`,
-      )
+      if (hasUsedFirstWeekDiscount) {
+        priceId = CREATOR_PRO_REGULAR_PRICE_ID
+        console.log(`💲 [Membership Checkout] Creator Pro - Using regular pricing ($15/month)`)
+      } else {
+        priceId = CREATOR_PRO_FIRST_WEEK_PRICE_ID
+        isPromotionalPricing = true
+        console.log(`💲 [Membership Checkout] Creator Pro - Using promotional pricing ($3 first week)`)
+      }
     } else {
       // Default to Creator Pro if no plan specified
-      priceId = hasUsedFirstWeekDiscount ? CREATOR_PRO_REGULAR_PRICE_ID : CREATOR_PRO_FIRST_WEEK_PRICE_ID
+      if (hasUsedFirstWeekDiscount) {
+        priceId = CREATOR_PRO_REGULAR_PRICE_ID
+      } else {
+        priceId = CREATOR_PRO_FIRST_WEEK_PRICE_ID
+        isPromotionalPricing = true
+      }
       console.log(`💲 [Membership Checkout] No plan specified, defaulting to Creator Pro`)
     }
 
     console.log(`💲 [Membership Checkout] Using Stripe Price ID: ${priceId}`)
+    console.log(`💲 [Membership Checkout] Is promotional pricing: ${isPromotionalPricing}`)
 
     // --- Construct Metadata ---
     const metadata = {
@@ -82,7 +97,7 @@ export async function POST(request: NextRequest) {
       plan: plan || "creator_pro",
       contentType: "membership",
       source: "dashboard_membership_upgrade",
-      isFirstTimeDiscount: (!hasUsedFirstWeekDiscount).toString(), // Track if this is using promotional pricing
+      isFirstTimeDiscount: isPromotionalPricing.toString(),
     }
     console.log("📋 [Membership Checkout] Constructed metadata for Stripe:", metadata)
 
@@ -91,9 +106,9 @@ export async function POST(request: NextRequest) {
     const protocol = process.env.NODE_ENV === "development" ? "http" : "https"
     const siteUrl = `${protocol}://${host}`
 
-    // --- Create Stripe Checkout Session ---
     console.log("🔄 [Membership Checkout] Creating Stripe session on PLATFORM account...")
-    const session = await stripe.checkout.sessions.create({
+
+    const sessionParams: Stripe.Checkout.SessionCreateParams = {
       payment_method_types: ["card"],
       mode: "subscription",
       line_items: [
@@ -109,7 +124,19 @@ export async function POST(request: NextRequest) {
       subscription_data: {
         metadata: metadata,
       },
-    })
+    }
+
+    if (isPromotionalPricing) {
+      sessionParams.subscription_data!.trial_period_days = 7
+      sessionParams.subscription_data!.trial_settings = {
+        end_behavior: {
+          missing_payment_method: "cancel",
+        },
+      }
+      console.log("🎁 [Membership Checkout] Added 7-day trial period for promotional pricing")
+    }
+
+    const session = await stripe.checkout.sessions.create(sessionParams)
 
     console.log("✅ [Membership Checkout] Stripe session created successfully!")
     console.log(`   - Session ID: ${session.id}`)
