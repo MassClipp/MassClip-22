@@ -127,24 +127,19 @@ export async function POST(request: NextRequest) {
     }
 
     if (isPromotionalPricing) {
-      sessionParams.invoice_creation = {
-        enabled: true,
-        invoice_data: {
-          description: "First week trial - MassClip Membership",
-        },
-      }
-
-      sessionParams.line_items!.push({
-        price_data: {
-          currency: "usd",
-          product_data: {
-            name: "First Week Trial Fee",
-            description: "One-time charge for your first 7 days",
+      sessionParams.subscription_data!.add_invoice_items = [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: "First Week Trial Fee",
+              description: "One-time charge for your first 7 days",
+            },
+            unit_amount: 300, // $3.00 in cents
           },
-          unit_amount: 300, // $3.00 in cents
+          quantity: 1,
         },
-        quantity: 1,
-      })
+      ]
 
       sessionParams.subscription_data!.trial_period_days = 7
       sessionParams.subscription_data!.trial_settings = {
