@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { CheckCircle2, Crown, Shield, Package } from "lucide-react"
+import { CheckCircle2, Crown, Shield, Package, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { useAuth } from "@/contexts/auth-context"
@@ -199,7 +199,18 @@ export default function UpgradePage() {
   }
 
   const isPayingOrOnTrial = subscriptionStatus?.hasActiveSubscription || subscriptionStatus?.isOnTrial
-  const showFirstWeekPromo = !subscriptionStatus?.hasUsedFreeTrial && !subscriptionStatus?.isOnTrial
+  const showFirstWeekPromo = subscriptionStatus && !subscriptionStatus.hasUsedFreeTrial && !subscriptionStatus.isOnTrial
+
+  if (statusLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center space-y-3">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto text-cyan-400" />
+          <p className="text-zinc-400">Loading plans...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-8">
@@ -230,7 +241,7 @@ export default function UpgradePage() {
       <div className="space-y-6">
         {/* Starter Plan */}
         <Card className="relative overflow-hidden border border-zinc-700/50 bg-gradient-to-br from-zinc-900/90 to-black/90">
-          {!statusLoading && subscriptionStatus?.currentPlan === "starter" && (
+          {subscriptionStatus?.currentPlan === "starter" && (
             <div className="absolute right-0 top-0 bg-gradient-to-r from-slate-400 to-cyan-400 px-3 py-1 text-xs font-medium text-black">
               CURRENT PLAN
             </div>
@@ -307,7 +318,7 @@ export default function UpgradePage() {
                 </div>
               </div>
               <div className="text-right">
-                {!statusLoading && showFirstWeekPromo ? (
+                {showFirstWeekPromo ? (
                   <>
                     <p className="text-4xl font-light text-white">3 days</p>
                     <span className="text-sm text-zinc-400">free trial</span>

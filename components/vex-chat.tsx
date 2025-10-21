@@ -829,14 +829,15 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
     return () => document.removeEventListener("keydown", handleEscape)
   }, [isSidebarOpen])
 
-  // Calculate if trial button should show - only if NOT loading and user hasn't used trial or has active VIP
   const shouldShowTrialButton =
     !isLoadingTrialStatus &&
     !isLoadingMembershipStatus &&
-    !trialStatus?.hasUsedFreeTrial &&
-    !trialStatus?.hasActiveCreatorVIP && // Check for active creator VIP
-    !trialStatus?.isOnTrial &&
-    !(membershipStatus?.plan === "creator_vip" && membershipStatus?.isActive)
+    trialStatus !== null &&
+    membershipStatus !== null &&
+    !trialStatus.hasUsedFreeTrial &&
+    !trialStatus.hasActiveCreatorVIP &&
+    !trialStatus.isOnTrial &&
+    !(membershipStatus.plan === "creator_vip" && membershipStatus.isActive)
 
   return (
     <div className="flex min-h-screen relative bg-gradient-to-br from-black via-zinc-900 to-black">
@@ -1031,53 +1032,57 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                   </div>
 
                   <div className="px-3 py-4 border-t border-white/5 space-y-3">
-                    {!isLoadingTrialStatus && trialStatus?.isOnTrial && trialStatus.daysRemaining > 0 ? (
-                      <div>
-                        <Badge
-                          className={`w-full justify-center ${
-                            trialStatus.daysRemaining <= 1
-                              ? "bg-gradient-to-r from-orange-500 to-red-500"
-                              : "bg-gradient-to-r from-cyan-500 to-blue-500"
-                          } text-white border-0 px-3 py-2 shadow-lg`}
-                        >
-                          <Clock className="h-3 w-3 mr-1.5" />
-                          Free Trial: {trialStatus.daysRemaining} {trialStatus.daysRemaining === 1 ? "day" : "days"}
-                          left
-                        </Badge>
-                      </div>
-                    ) : shouldShowTrialButton ? (
-                      <div>
-                        <Button
-                          onClick={async () => {
-                            try {
-                              const idToken = await user?.getIdToken?.()
-                              const res = await fetch("/api/stripe/checkout/pricing", {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({
-                                  idToken,
-                                  plan: "creator_vip",
-                                }),
-                              })
+                    {!isLoadingTrialStatus && !isLoadingMembershipStatus && (
+                      <>
+                        {trialStatus?.isOnTrial && trialStatus.daysRemaining > 0 ? (
+                          <div>
+                            <Badge
+                              className={`w-full justify-center ${
+                                trialStatus.daysRemaining <= 1
+                                  ? "bg-gradient-to-r from-orange-500 to-red-500"
+                                  : "bg-gradient-to-r from-cyan-500 to-blue-500"
+                              } text-white border-0 px-3 py-2 shadow-lg`}
+                            >
+                              <Clock className="h-3 w-3 mr-1.5" />
+                              Free Trial: {trialStatus.daysRemaining} {trialStatus.daysRemaining === 1 ? "day" : "days"}
+                              left
+                            </Badge>
+                          </div>
+                        ) : shouldShowTrialButton ? (
+                          <div>
+                            <Button
+                              onClick={async () => {
+                                try {
+                                  const idToken = await user?.getIdToken?.()
+                                  const res = await fetch("/api/stripe/checkout/pricing", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({
+                                      idToken,
+                                      plan: "creator_vip",
+                                    }),
+                                  })
 
-                              if (res.ok) {
-                                const data = (await res.json()) as { url?: string }
-                                if (data?.url) {
-                                  window.location.href = data.url
+                                  if (res.ok) {
+                                    const data = (await res.json()) as { url?: string }
+                                    if (data?.url) {
+                                      window.location.href = data.url
+                                    }
+                                  }
+                                } catch (err) {
+                                  console.error("[Sidebar] Error starting checkout:", err)
                                 }
-                              }
-                            } catch (err) {
-                              console.error("[Sidebar] Error starting checkout:", err)
-                            }
-                          }}
-                          size="sm"
-                          className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white border-0 font-medium text-xs h-9 shadow-lg shadow-cyan-500/20"
-                        >
-                          <Gift className="h-3 w-3 mr-1.5" />
-                          Start Free Trial
-                        </Button>
-                      </div>
-                    ) : null}
+                              }}
+                              size="sm"
+                              className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white border-0 font-medium text-xs h-9 shadow-lg shadow-cyan-500/20"
+                            >
+                              <Gift className="h-3 w-3 mr-1.5" />
+                              Start Free Trial
+                            </Button>
+                          </div>
+                        ) : null}
+                      </>
+                    )}
 
                     <div className="flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/5">
                       <Avatar className="h-9 w-9 ring-2 ring-white/10">
@@ -1280,52 +1285,57 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                 </div>
 
                 <div className="px-3 py-4 border-t border-white/5 space-y-3">
-                  {!isLoadingTrialStatus && trialStatus?.isOnTrial && trialStatus.daysRemaining > 0 ? (
-                    <div>
-                      <Badge
-                        className={`w-full justify-center ${
-                          trialStatus.daysRemaining <= 1
-                            ? "bg-gradient-to-r from-orange-500 to-red-500"
-                            : "bg-gradient-to-r from-cyan-500 to-blue-500"
-                        } text-white border-0 px-3 py-2 shadow-lg`}
-                      >
-                        <Clock className="h-3 w-3 mr-1.5" />
-                        Free Trial: {trialStatus.daysRemaining} {trialStatus.daysRemaining === 1 ? "day" : "days"} left
-                      </Badge>
-                    </div>
-                  ) : shouldShowTrialButton ? (
-                    <div>
-                      <Button
-                        onClick={async () => {
-                          try {
-                            const idToken = await user?.getIdToken?.()
-                            const res = await fetch("/api/stripe/checkout/pricing", {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({
-                                idToken,
-                                plan: "creator_vip",
-                              }),
-                            })
+                  {!isLoadingTrialStatus && !isLoadingMembershipStatus && (
+                    <>
+                      {trialStatus?.isOnTrial && trialStatus.daysRemaining > 0 ? (
+                        <div>
+                          <Badge
+                            className={`w-full justify-center ${
+                              trialStatus.daysRemaining <= 1
+                                ? "bg-gradient-to-r from-orange-500 to-red-500"
+                                : "bg-gradient-to-r from-cyan-500 to-blue-500"
+                            } text-white border-0 px-3 py-2 shadow-lg`}
+                          >
+                            <Clock className="h-3 w-3 mr-1.5" />
+                            Free Trial: {trialStatus.daysRemaining} {trialStatus.daysRemaining === 1 ? "day" : "days"}{" "}
+                            left
+                          </Badge>
+                        </div>
+                      ) : shouldShowTrialButton ? (
+                        <div>
+                          <Button
+                            onClick={async () => {
+                              try {
+                                const idToken = await user?.getIdToken?.()
+                                const res = await fetch("/api/stripe/checkout/pricing", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    idToken,
+                                    plan: "creator_vip",
+                                  }),
+                                })
 
-                            if (res.ok) {
-                              const data = (await res.json()) as { url?: string }
-                              if (data?.url) {
-                                window.location.href = data.url
+                                if (res.ok) {
+                                  const data = (await res.json()) as { url?: string }
+                                  if (data?.url) {
+                                    window.location.href = data.url
+                                  }
+                                }
+                              } catch (err) {
+                                console.error("[Sidebar] Error starting checkout:", err)
                               }
-                            }
-                          } catch (err) {
-                            console.error("[Sidebar] Error starting checkout:", err)
-                          }
-                        }}
-                        size="sm"
-                        className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white border-0 font-medium text-xs h-9 shadow-lg shadow-cyan-500/20"
-                      >
-                        <Gift className="h-3 w-3 mr-1.5" />
-                        Start Free Trial
-                      </Button>
-                    </div>
-                  ) : null}
+                            }}
+                            size="sm"
+                            className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white border-0 font-medium text-xs h-9 shadow-lg shadow-cyan-500/20"
+                          >
+                            <Gift className="h-3 w-3 mr-1.5" />
+                            Start Free Trial
+                          </Button>
+                        </div>
+                      ) : null}
+                    </>
+                  )}
 
                   {/* Profile Section */}
                   <div className="flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/5">
