@@ -246,7 +246,7 @@ export default function UserDashboardPage() {
                           <h3 className="text-lg font-light text-white mb-3">
                             Current Plan:{" "}
                             <span className={isProUser ? "text-yellow-500" : "text-zinc-400"}>
-                              {isProUser ? "Creator Pro" : "Free"}
+                              {isProUser ? "Creator VIP" : "Free"}
                             </span>
                           </h3>
                           <ul className="space-y-2 text-sm">
@@ -290,7 +290,7 @@ export default function UserDashboardPage() {
 
                         {!isProUser && (
                           <div className="bg-zinc-900/50 p-6 rounded-lg border border-zinc-800/50 backdrop-blur-sm">
-                            <h3 className="text-lg font-light text-white mb-3">Upgrade to Pro</h3>
+                            <h3 className="text-lg font-light text-white mb-3">Upgrade to VIP</h3>
                             <p className="text-zinc-300 mb-3 font-light">
                               Get unlimited access to all premium features
                             </p>

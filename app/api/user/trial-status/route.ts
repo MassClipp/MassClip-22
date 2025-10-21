@@ -65,7 +65,10 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const daysRemaining = trialEndDate ? Math.ceil((trialEndDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : 0
+    // Using Math.max to ensure at least 1 day shows on the first day of trial
+    const daysRemaining = trialEndDate
+      ? Math.max(1, Math.ceil((trialEndDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)))
+      : 0
 
     console.log("[v0] Trial Status - Calculated:", {
       trialEndDate,

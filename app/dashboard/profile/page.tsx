@@ -718,7 +718,7 @@ export default function ProfilePage() {
                                 }`}
                               >
                                 You have {trialStatus.daysRemaining} {trialStatus.daysRemaining === 1 ? "day" : "days"}{" "}
-                                remaining in your 3-day Creator Pro trial. Your trial ends on{" "}
+                                remaining in your 3-day Creator VIP trial. Your trial ends on{" "}
                                 {trialStatus.trialEndDate
                                   ? new Date(trialStatus.trialEndDate).toLocaleDateString("en-US", {
                                       month: "long",
@@ -730,7 +730,7 @@ export default function ProfilePage() {
                               </p>
                               {trialStatus.daysRemaining <= 1 && (
                                 <p className="text-sm text-orange-200 mt-2 font-medium">
-                                  ⚠️ Your trial is ending soon! Upgrade now to keep your Creator Pro features.
+                                  ⚠️ Your trial is ending soon! Upgrade now to keep your Creator VIP features.
                                 </p>
                               )}
                             </div>
@@ -750,9 +750,9 @@ export default function ProfilePage() {
                             }`}
                           >
                             {trialStatus?.isOnTrial
-                              ? "Creator Pro (Trial)"
+                              ? "Creator VIP (Trial)"
                               : subscriptionData?.plan === "creator_pro" && subscriptionData?.isActive
-                                ? "Creator Pro"
+                                ? "Creator VIP"
                                 : "Starter"}
                           </Badge>
                         </div>
@@ -777,7 +777,7 @@ export default function ProfilePage() {
                                   <div>
                                     <p className="text-amber-200 text-sm font-medium mb-1">Subscription Canceled</p>
                                     <p className="text-amber-300/80 text-xs leading-relaxed">
-                                      Your Pro access continues until{" "}
+                                      Your VIP access continues until{" "}
                                       {safelyFormatDate(subscriptionData.currentPeriodEnd)}. After this date, your
                                       account will automatically switch to the Starter plan.
                                     </p>
