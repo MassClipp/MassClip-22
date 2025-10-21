@@ -50,7 +50,7 @@ export default function UpgradePage() {
     hasActiveSubscription: boolean
     isOnTrial: boolean
     currentPlan: "starter" | "creator_vip" | null
-    hasUsedFirstWeekDiscount: boolean
+    hasUsedFreeTrial: boolean
   } | null>(null)
   const [statusLoading, setStatusLoading] = useState(true)
 
@@ -104,15 +104,9 @@ export default function UpgradePage() {
         })
         const membershipData = await membershipRes.json()
 
-        const limitsRes = await fetch("/api/user/free-limits", {
-          headers: { Authorization: `Bearer ${idToken}` },
-        })
-        const limitsData = await limitsRes.json()
-
         console.log("[v0] Subscription status:", {
           trial: trialData,
           membership: membershipData,
-          limits: limitsData,
         })
 
         const hasActiveSubscription = membershipData.isActive && membershipData.status === "active"
@@ -128,7 +122,7 @@ export default function UpgradePage() {
           hasActiveSubscription,
           isOnTrial,
           currentPlan,
-          hasUsedFirstWeekDiscount: limitsData.hasUsedFirstWeekDiscount || trialData.hasUsedFreeTrial || false,
+          hasUsedFreeTrial: trialData.hasUsedFreeTrial || trialData.hasActiveCreatorVIP || false,
         })
       } catch (error) {
         console.error("[v0] Error fetching subscription status:", error)
@@ -205,7 +199,7 @@ export default function UpgradePage() {
   }
 
   const isPayingOrOnTrial = subscriptionStatus?.hasActiveSubscription || subscriptionStatus?.isOnTrial
-  const showFirstWeekPromo = !subscriptionStatus?.hasUsedFirstWeekDiscount && !subscriptionStatus?.isOnTrial
+  const showFirstWeekPromo = !subscriptionStatus?.hasUsedFreeTrial && !subscriptionStatus?.isOnTrial
 
   return (
     <div className="space-y-8">
@@ -313,7 +307,7 @@ export default function UpgradePage() {
                 </div>
               </div>
               <div className="text-right">
-                {showFirstWeekPromo ? (
+                {!statusLoading && showFirstWeekPromo ? (
                   <>
                     <p className="text-4xl font-light text-white">3 days</p>
                     <span className="text-sm text-zinc-400">free trial</span>

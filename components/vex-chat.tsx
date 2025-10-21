@@ -90,6 +90,7 @@ function VexChat({ children }: VexChatProps) {
     daysRemaining: number
     trialEndDate: string | null
     hasUsedFreeTrial?: boolean
+    hasActiveCreatorVIP?: boolean // Added this field
   } | null>(null)
   const [membershipStatus, setMembershipStatus] = useState<{
     plan: string
@@ -729,7 +730,10 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
 
   useEffect(() => {
     const fetchTrialStatus = async () => {
-      if (!user) return
+      if (!user) {
+        setIsLoadingTrialStatus(false) // Ensure loading state is false if no user
+        return
+      }
 
       setIsLoadingTrialStatus(true)
       try {
@@ -742,6 +746,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
 
         if (response.ok) {
           const data = await response.json()
+          console.log("[v0] Trial status loaded:", data)
           setTrialStatus(data)
         }
       } catch (error) {
@@ -758,7 +763,10 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
 
   useEffect(() => {
     const fetchMembershipStatus = async () => {
-      if (!user) return
+      if (!user) {
+        setIsLoadingMembershipStatus(false) // Ensure loading state is false if no user
+        return
+      }
 
       setIsLoadingMembershipStatus(true)
       try {
@@ -771,6 +779,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
 
         if (response.ok) {
           const data = await response.json()
+          console.log("[v0] Membership status loaded:", data)
           setMembershipStatus({
             plan: data.plan || "free",
             isActive: data.isActive || false,
@@ -819,6 +828,15 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
     document.addEventListener("keydown", handleEscape)
     return () => document.removeEventListener("keydown", handleEscape)
   }, [isSidebarOpen])
+
+  // Calculate if trial button should show - only if NOT loading and user hasn't used trial or has active VIP
+  const shouldShowTrialButton =
+    !isLoadingTrialStatus &&
+    !isLoadingMembershipStatus &&
+    !trialStatus?.hasUsedFreeTrial &&
+    !trialStatus?.hasActiveCreatorVIP && // Check for active creator VIP
+    !trialStatus?.isOnTrial &&
+    !(membershipStatus?.plan === "creator_vip" && membershipStatus?.isActive)
 
   return (
     <div className="flex min-h-screen relative bg-gradient-to-br from-black via-zinc-900 to-black">
@@ -1013,7 +1031,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                   </div>
 
                   <div className="px-3 py-4 border-t border-white/5 space-y-3">
-                    {trialStatus?.isOnTrial ? (
+                    {!isLoadingTrialStatus && trialStatus?.isOnTrial && trialStatus.daysRemaining > 0 ? (
                       <div>
                         <Badge
                           className={`w-full justify-center ${
@@ -1023,14 +1041,11 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                           } text-white border-0 px-3 py-2 shadow-lg`}
                         >
                           <Clock className="h-3 w-3 mr-1.5" />
-                          Free Trial: {trialStatus.daysRemaining} {trialStatus.daysRemaining === 1 ? "day" : "days"}{" "}
+                          Free Trial: {trialStatus.daysRemaining} {trialStatus.daysRemaining === 1 ? "day" : "days"}
                           left
                         </Badge>
                       </div>
-                    ) : !isLoadingTrialStatus &&
-                      !isLoadingMembershipStatus &&
-                      !trialStatus?.hasUsedFreeTrial &&
-                      !(membershipStatus?.plan === "creator_vip" && membershipStatus?.isActive) ? (
+                    ) : shouldShowTrialButton ? (
                       <div>
                         <Button
                           onClick={async () => {
@@ -1265,7 +1280,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                 </div>
 
                 <div className="px-3 py-4 border-t border-white/5 space-y-3">
-                  {trialStatus?.isOnTrial ? (
+                  {!isLoadingTrialStatus && trialStatus?.isOnTrial && trialStatus.daysRemaining > 0 ? (
                     <div>
                       <Badge
                         className={`w-full justify-center ${
@@ -1278,10 +1293,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                         Free Trial: {trialStatus.daysRemaining} {trialStatus.daysRemaining === 1 ? "day" : "days"} left
                       </Badge>
                     </div>
-                  ) : !isLoadingTrialStatus &&
-                    !isLoadingMembershipStatus &&
-                    !trialStatus?.hasUsedFreeTrial &&
-                    !(membershipStatus?.plan === "creator_vip" && membershipStatus?.isActive) ? (
+                  ) : shouldShowTrialButton ? (
                     <div>
                       <Button
                         onClick={async () => {
