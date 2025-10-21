@@ -13,36 +13,46 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
+export const maxDuration = 60
 
 export async function POST(request: NextRequest) {
   console.log("🔔 [Webhook-4] ========== NEW WEBHOOK EVENT RECEIVED ==========")
-
-  const body = await request.text()
-  const signature = request.headers.get("stripe-signature")
-
-  if (!signature) {
-    console.error("❌ [Webhook-4] Missing Stripe signature header")
-    return NextResponse.json({ error: "Missing signature" }, { status: 400 })
-  }
-
-  const webhookSecret = process.env.STARTER_PLAN_WH || process.env.STRIPE_WEBHOOK_SECRET
-  console.log(`🔐 [Webhook-4] Using webhook secret: ${webhookSecret ? "FOUND" : "MISSING"}`)
-  console.log(`🔐 [Webhook-4] Secret starts with: ${webhookSecret?.substring(0, 10)}...`)
-
-  let event: Stripe.Event
+  console.log("🔔 [Webhook-4] Request method:", request.method)
+  console.log("🔔 [Webhook-4] Request URL:", request.url)
 
   try {
-    event = stripe.webhooks.constructEvent(body, signature, webhookSecret!)
-    console.log(`✅ [Webhook-4] Event verified successfully: ${event.type}`)
-  } catch (err: any) {
-    console.error(`❌ [Webhook-4] Webhook signature verification failed:`, err.message)
-    return NextResponse.json({ error: `Webhook Error: ${err.message}` }, { status: 400 })
-  }
+    const body = await request.text()
+    console.log("📦 [Webhook-4] Body length:", body.length)
 
-  console.log(`📋 [Webhook-4] Event Type: ${event.type}`)
-  console.log(`📋 [Webhook-4] Event ID: ${event.id}`)
+    const signature = request.headers.get("stripe-signature")
+    console.log("🔐 [Webhook-4] Signature present:", !!signature)
 
-  try {
+    if (!signature) {
+      console.error("❌ [Webhook-4] Missing Stripe signature header")
+      return NextResponse.json({ error: "Missing signature" }, { status: 400 })
+    }
+
+    const webhookSecret = process.env.STARTER_PLAN_WH
+    console.log(`🔐 [Webhook-4] Using STARTER_PLAN_WH: ${webhookSecret ? "FOUND" : "MISSING"}`)
+
+    if (!webhookSecret) {
+      console.error("❌ [Webhook-4] STARTER_PLAN_WH environment variable not set")
+      return NextResponse.json({ error: "Webhook secret not configured" }, { status: 500 })
+    }
+
+    let event: Stripe.Event
+
+    try {
+      event = stripe.webhooks.constructEvent(body, signature, webhookSecret)
+      console.log(`✅ [Webhook-4] Event verified successfully: ${event.type}`)
+    } catch (err: any) {
+      console.error(`❌ [Webhook-4] Webhook signature verification failed:`, err.message)
+      return NextResponse.json({ error: `Webhook Error: ${err.message}` }, { status: 400 })
+    }
+
+    console.log(`📋 [Webhook-4] Event Type: ${event.type}`)
+    console.log(`📋 [Webhook-4] Event ID: ${event.id}`)
+
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session
@@ -109,7 +119,7 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(`✅ [Webhook-4] ========== WEBHOOK EVENT COMPLETED ==========`)
-    return NextResponse.json({ received: true, eventType: event.type })
+    return NextResponse.json({ received: true, eventType: event.type }, { status: 200 })
   } catch (error: any) {
     console.error(`❌ [Webhook-4] Error processing webhook:`, error)
     console.error(`   - Error message: ${error.message}`)
@@ -118,11 +128,21 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      Allow: "POST, OPTIONS",
+    },
+  })
+}
+
 export async function GET() {
   return NextResponse.json({
     message: "Starter Plan Webhook Endpoint",
     endpoint: "/api/webhook-handler-4",
-    methods: ["POST"],
+    methods: ["POST", "OPTIONS"],
     status: "active",
+    webhookSecretConfigured: !!process.env.STARTER_PLAN_WH,
   })
 }
