@@ -778,8 +778,8 @@ export default function ProfilePage() {
                                     <p className="text-amber-200 text-sm font-medium mb-1">Subscription Canceled</p>
                                     <p className="text-amber-300/80 text-xs leading-relaxed">
                                       Your VIP access continues until{" "}
-                                      {safelyFormatDate(subscriptionData.currentPeriodEnd)}. After this date, your
-                                      account will automatically switch to the Starter plan.
+                                      {safelyFormatDate(subscriptionData.currentPeriodEnd)}. After this date, you will
+                                      lose access to selling features and your storefront will be disabled.
                                     </p>
                                   </div>
                                 </div>
