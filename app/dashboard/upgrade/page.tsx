@@ -128,7 +128,7 @@ export default function UpgradePage() {
           hasActiveSubscription,
           isOnTrial,
           currentPlan,
-          hasUsedFirstWeekDiscount: limitsData.hasUsedFirstWeekDiscount || false,
+          hasUsedFirstWeekDiscount: limitsData.hasUsedFirstWeekDiscount || trialData.hasUsedFreeTrial || false,
         })
       } catch (error) {
         console.error("[v0] Error fetching subscription status:", error)

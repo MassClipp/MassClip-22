@@ -30,27 +30,29 @@ export async function GET(req: NextRequest) {
       hasUsedFreeTrial,
     })
 
-    const hasActiveCreatorPro = membership?.status === "active" && membership?.plan === "creator_pro"
+    const hasActiveCreatorVIP =
+      membership?.status === "active" && (membership?.plan === "creator_pro" || membership?.plan === "creator_vip")
 
-    if (!membership || (membership.status !== "trialing" && !hasActiveCreatorPro)) {
+    if (!membership || (membership.status !== "trialing" && !hasActiveCreatorVIP)) {
       return NextResponse.json({
         isOnTrial: false,
         daysRemaining: 0,
         trialEndDate: null,
         hasUsedFreeTrial,
-        hasActiveCreatorPro: false,
+        hasActiveCreatorVIP: false,
       })
     }
 
-    if (hasActiveCreatorPro) {
+    if (hasActiveCreatorVIP) {
       return NextResponse.json({
         isOnTrial: false,
         daysRemaining: 0,
         trialEndDate: null,
         hasUsedFreeTrial: true,
-        hasActiveCreatorPro: true,
+        hasActiveCreatorVIP: true,
       })
     }
+    // </CHANGE>
 
     const now = new Date()
     let trialEndDate: Date | null = null
@@ -65,13 +67,13 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Calculate days remaining - if trial end date is in the past, return 0
     let daysRemaining = 0
     if (trialEndDate) {
       const timeRemaining = trialEndDate.getTime() - now.getTime()
       if (timeRemaining > 0) {
-        // Round up to show full days (e.g., 2.1 days = 3 days)
-        daysRemaining = Math.ceil(timeRemaining / (1000 * 60 * 60 * 24))
+        // Calculate days remaining and ensure at least 1 day shows on first day
+        const calculatedDays = timeRemaining / (1000 * 60 * 60 * 24)
+        daysRemaining = Math.max(1, Math.ceil(calculatedDays))
       }
     }
     // </CHANGE>
@@ -81,7 +83,7 @@ export async function GET(req: NextRequest) {
       daysRemaining,
       isOnTrial: daysRemaining > 0,
       hasUsedFreeTrial,
-      hasActiveCreatorPro: false,
+      hasActiveCreatorVIP,
     })
 
     return NextResponse.json({
@@ -89,9 +91,8 @@ export async function GET(req: NextRequest) {
       daysRemaining: Math.max(0, daysRemaining),
       trialEndDate: trialEndDate,
       hasUsedFreeTrial,
-      hasActiveCreatorPro: false,
+      hasActiveCreatorVIP,
     })
-    // </CHANGE>
   } catch (error) {
     console.error("[Trial Status] Error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
