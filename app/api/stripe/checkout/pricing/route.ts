@@ -7,9 +7,9 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
 })
 
-const STARTER_PRICE_ID = "price_1SKKFPDheyb0pkWFBT6lf7V7" // $3/month flat (no trial)
-const CREATOR_VIP_FIRST_TIME_PRICE_ID = "price_1SK7SzDheyb0pkWFaKOzIOzf" // $15/month with 3-day trial
-const CREATOR_VIP_REGULAR_PRICE_ID = "price_1SK7SzDheyb0pkWFaKOzIOzf" // $15/month no trial
+const STARTER_PRICE_ID = process.env.STARTER_PLAN_REGULAR || "price_1SKKFPDheyb0pkWFBT6lf7V7"
+const CREATOR_VIP_FIRST_TIME_PRICE_ID = process.env.CREATOR_PRO_FIRST || "price_1SK7SzDheyb0pkWFaKOzIOzf"
+const CREATOR_VIP_REGULAR_PRICE_ID = process.env.CREATOR_PRO_REGULAR || "price_1SK7SzDheyb0pkWFaKOzIOzf"
 
 export async function POST(request: NextRequest) {
   console.log("🚀 [Membership Checkout] Starting session creation...")
