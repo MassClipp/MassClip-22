@@ -40,8 +40,14 @@ export default function SubscriptionSuccess() {
     // Verify the subscription
     const verifySubscription = async () => {
       try {
+        const token = await user.getIdToken()
+
         // Call an API to verify the subscription
-        const response = await fetch(`/api/verify-subscription?sessionId=${sessionId}&userId=${user.uid}`)
+        const response = await fetch(`/api/verify-subscription?sessionId=${sessionId}&userId=${user.uid}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
 
         if (response.ok) {
           setStatus("success")

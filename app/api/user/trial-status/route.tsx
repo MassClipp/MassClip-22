@@ -65,26 +65,33 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Using Math.max to ensure at least 1 day shows on the first day of trial
-    const daysRemaining = trialEndDate
-      ? Math.max(1, Math.ceil((trialEndDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)))
-      : 0
+    // Calculate days remaining - if trial end date is in the past, return 0
+    let daysRemaining = 0
+    if (trialEndDate) {
+      const timeRemaining = trialEndDate.getTime() - now.getTime()
+      if (timeRemaining > 0) {
+        // Round up to show full days (e.g., 2.1 days = 3 days)
+        daysRemaining = Math.ceil(timeRemaining / (1000 * 60 * 60 * 24))
+      }
+    }
+    // </CHANGE>
 
     console.log("[v0] Trial Status - Calculated:", {
       trialEndDate,
       daysRemaining,
-      isOnTrial: true,
+      isOnTrial: daysRemaining > 0,
       hasUsedFreeTrial,
       hasActiveCreatorPro: false,
     })
 
     return NextResponse.json({
-      isOnTrial: true,
+      isOnTrial: daysRemaining > 0,
       daysRemaining: Math.max(0, daysRemaining),
       trialEndDate: trialEndDate,
       hasUsedFreeTrial,
       hasActiveCreatorPro: false,
     })
+    // </CHANGE>
   } catch (error) {
     console.error("[Trial Status] Error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

@@ -205,7 +205,7 @@ export default function UpgradePage() {
   }
 
   const isPayingOrOnTrial = subscriptionStatus?.hasActiveSubscription || subscriptionStatus?.isOnTrial
-  const showFirstWeekPromo = !subscriptionStatus?.hasUsedFirstWeekDiscount
+  const showFirstWeekPromo = !subscriptionStatus?.hasUsedFirstWeekDiscount && !subscriptionStatus?.isOnTrial
 
   return (
     <div className="space-y-8">

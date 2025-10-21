@@ -383,18 +383,18 @@ export async function POST(request: Request) {
 
 ===== YOUR PLAN PERMISSIONS =====
 
-Current Plan: ${userPlan === "creator_pro" ? "Creator Pro ($15/month)" : "Starter Plan ($10/month)"}${trialStatus?.isOnTrial ? ` (FREE TRIAL - ${trialStatus.daysRemaining} days remaining)` : ""}
+Current Plan: ${userPlan === "creator_pro" ? "Creator VIP ($15/month)" : "Starter Plan ($3/month)"}${trialStatus?.isOnTrial ? ` (FREE TRIAL - ${trialStatus.daysRemaining} days remaining)` : ""}
 
 ${
   userPlan === "starter"
     ? `
-**STARTER PLAN LIMITS ($10/month):**
+**STARTER PLAN LIMITS ($3/month):**
 • Folders: ${subscriptionData.features.maxFolders} folders with subfolders allowed
 • Bundles: ${subscriptionData.features.maxBundles} bundles maximum on storefront
 • Videos per bundle: ${subscriptionData.features.maxVideosPerBundle} videos maximum
 • Vex AI: Basic Vex AI - file metadata & folder organization only
-• Transcript Analysis: NOT AVAILABLE (Creator Pro only - Full Vex AI feature)
-• Bundle Creation via Vex: NOT AVAILABLE (Creator Pro only - Full Vex AI feature)
+• Transcript Analysis: NOT AVAILABLE (Creator VIP only - Full Vex AI feature)
+• Bundle Creation via Vex: NOT AVAILABLE (Creator VIP only - Full Vex AI feature)
 • Platform Fee: ${subscriptionData.features.platformFeePercentage}% on sales
 
 ⚠️ IMPORTANT RESTRICTIONS:
@@ -403,10 +403,10 @@ ${
 - You CANNOT create bundles via Vex for Starter users (they must create manually)
 - Starter users can organize content into their ${subscriptionData.features.maxFolders} folders with subfolders
 
-If user asks about transcript analysis or bundle creation, tell them to upgrade to Creator Pro ($15/month) for Full Vex AI.
+If user asks about transcript analysis or bundle creation, tell them to upgrade to Creator VIP ($15/month) for Full Vex AI.
 `
     : `
-**CREATOR PRO FEATURES ($15/month):**${trialStatus?.isOnTrial ? ` (FREE TRIAL - ${trialStatus.daysRemaining} days remaining)` : ""}
+**CREATOR VIP FEATURES ($15/month):**${trialStatus?.isOnTrial ? ` (FREE TRIAL - ${trialStatus.daysRemaining} days remaining)` : ""}
 • Folders: UNLIMITED folders with subfolders
 • Bundles: UNLIMITED bundles on storefront
 • Videos per bundle: UNLIMITED videos
@@ -430,7 +430,7 @@ Can create bundles: ${!tierInfoData.reachedBundleLimit && subscriptionData.featu
 User tier: ${tierInfoData.tier || "starter"}
 Max videos per bundle: ${tierInfoData.maxVideosPerBundle === null ? "unlimited" : tierInfoData.maxVideosPerBundle || 15}
 
-${tierInfoData.reachedBundleLimit ? `⚠️ BUNDLE LIMIT REACHED: User has reached their limit of ${tierInfoData.bundlesLimit || 5} bundles. ${(tierInfoData.tier || "starter") === "starter" ? "They need to upgrade to Creator Pro ($15/month) for unlimited bundles." : "They should contact support."}` : ""}
+${tierInfoData.reachedBundleLimit ? `⚠️ BUNDLE LIMIT REACHED: User has reached their limit of ${tierInfoData.bundlesLimit || 5} bundles. ${(tierInfoData.tier || "starter") === "starter" ? "They need to upgrade to Creator VIP ($15/month) for unlimited bundles." : "They should contact support."}` : ""}
 `
             // </CHANGE>
 
@@ -890,7 +890,7 @@ REFRESH_ANALYSIS: true
 ${
   userPlan === "starter"
     ? `⚠️ STARTER PLAN: User can create ${subscriptionData.features.maxFolders} folders with subfolders.
-Check folder count before creating. If at limit, tell them to upgrade to Creator Pro ($15/month).
+Check folder count before creating. If at limit, tell them to upgrade to Creator VIP ($15/month).
 
 `
     : ""
@@ -937,7 +937,7 @@ ORGANIZE_FILES: {"targetFolder": "Mindset", "fileIds": ["Tykwondoe", "AZ Compass
 ${
   !subscriptionData.features.canCreateBundles
     ? `⚠️ BUNDLE CREATION DISABLED: Starter Plan users cannot create bundles via Vex (Basic Vex AI only).
-Tell them: "Bundle creation via Vex is a Creator Pro feature ($15/month with Full Vex AI). You can upgrade to unlock this, or create bundles manually in your dashboard."
+Tell them: "Bundle creation via Vex is a Creator VIP feature ($15/month with Full Vex AI). You can upgrade to unlock this, or create bundles manually in your dashboard."
 
 DO NOT output CREATE_BUNDLE for Starter Plan users.
 
@@ -1107,7 +1107,7 @@ You: "What's the outcome you want with this bundle? Views? Conversions? Vibe che
         const subscriptionData = await checkSubscription(userId)
 
         if (!canUserCreateBundles(userPlan) || !subscriptionData.features.canCreateBundles) {
-          const errorMessage = `❌ Bundle creation via Vex is a Creator Pro feature ($15/month with Full Vex AI). You can upgrade to unlock this, or create bundles manually in your dashboard.`
+          const errorMessage = `❌ Bundle creation via Vex is a Creator VIP feature ($15/month with Full Vex AI). You can upgrade to unlock this, or create bundles manually in your dashboard.`
           assistantMessage = assistantMessage.replace(/CREATE_BUNDLE:\s*{.*?}/s, errorMessage)
 
           return NextResponse.json({
@@ -1405,7 +1405,7 @@ async function createBundleDirectly(userId: string, bundleData: any) {
     if (!subscriptionData.features.canCreateBundles) {
       return {
         success: false,
-        error: "Bundle creation via Vex is a Creator Pro feature. Please upgrade your plan.",
+        error: "Bundle creation via Vex is a Creator VIP feature. Please upgrade your plan.",
       }
     }
 
@@ -1413,7 +1413,7 @@ async function createBundleDirectly(userId: string, bundleData: any) {
     if (tierInfo.tier === "starter" && maxVideosPerBundle && contentIds.length > maxVideosPerBundle) {
       return {
         success: false,
-        error: `Starter Plan users can only include up to ${maxVideosPerBundle} videos per bundle. This bundle has ${contentIds.length} items. Please upgrade to Creator Pro ($15/month) for unlimited videos per bundle.`,
+        error: `Starter Plan users can only include up to ${maxVideosPerBundle} videos per bundle. This bundle has ${contentIds.length} items. Please upgrade to Creator VIP ($15/month) for unlimited videos per bundle.`,
       }
     }
 
