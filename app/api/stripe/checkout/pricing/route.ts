@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
       plan: plan === "starter" ? "starter" : "creator_pro",
       contentType: "membership",
       source: "dashboard_membership_upgrade",
-      isFirstTimeTrial: (trialPeriodDays !== undefined && !hasUsedTrial).toString(),
+      isFirstTimeDiscount: (trialPeriodDays !== undefined && !hasUsedTrial).toString(),
     }
     console.log("📋 [Membership Checkout] Constructed metadata for Stripe:", metadata)
 
