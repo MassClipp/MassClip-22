@@ -4,9 +4,11 @@ import { useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
-import { CheckCircle, ArrowRight, Sparkles, Crown, Zap } from "lucide-react"
+import { CheckCircle, ArrowRight, Sparkles, Crown, Zap, Shield, Folder, Package } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { getSiteUrl } from "@/lib/url-utils"
+
+type PlanType = "starter" | "creator_vip" | "unknown"
 
 export default function SubscriptionSuccess() {
   const { user } = useAuth()
@@ -15,6 +17,7 @@ export default function SubscriptionSuccess() {
   const [isVerifying, setIsVerifying] = useState(true)
   const [status, setStatus] = useState<"success" | "error" | "loading">("loading")
   const [message, setMessage] = useState("Verifying your subscription...")
+  const [planType, setPlanType] = useState<PlanType>("unknown")
 
   // Get the site URL safely
   const siteUrl = getSiteUrl()
@@ -50,14 +53,19 @@ export default function SubscriptionSuccess() {
         })
 
         if (response.ok) {
+          const data = await response.json()
+
+          const plan = data.plan || "creator_vip"
+          setPlanType(plan === "starter" ? "starter" : "creator_vip")
+
           setStatus("success")
           setMessage("Your subscription has been activated successfully!")
 
           if (typeof window !== "undefined" && (window as any).fbq) {
             ;(window as any).fbq("track", "Purchase", {
-              value: 29.99,
+              value: plan === "starter" ? 3.0 : 15.0,
               currency: "USD",
-              content_name: "Creator VIP Subscription",
+              content_name: plan === "starter" ? "Starter Plan Subscription" : "Creator VIP Subscription",
               content_type: "subscription",
             })
           }
@@ -87,6 +95,59 @@ export default function SubscriptionSuccess() {
   if (!user) {
     return null
   }
+
+  const planContent = {
+    starter: {
+      title: "Welcome to Starter Plan!",
+      description: "Your subscription is now active. Start building your content library!",
+      features: [
+        {
+          icon: Folder,
+          title: "3 Folders",
+          description: "Organize your content",
+          color: "emerald",
+        },
+        {
+          icon: Package,
+          title: "5 Bundles",
+          description: "Create and sell bundles",
+          color: "cyan",
+        },
+        {
+          icon: Shield,
+          title: "20% Platform Fee",
+          description: "Standard creator rate",
+          color: "purple",
+        },
+      ],
+    },
+    creator_vip: {
+      title: "Welcome to Creator VIP!",
+      description: "Your subscription is now active. Get ready to unlock unlimited creative potential!",
+      features: [
+        {
+          icon: Crown,
+          title: "Unlimited Access",
+          description: "All premium features unlocked",
+          color: "emerald",
+        },
+        {
+          icon: Zap,
+          title: "10% Platform Fee",
+          description: "Keep more of your earnings",
+          color: "cyan",
+        },
+        {
+          icon: Sparkles,
+          title: "Full Vex AI",
+          description: "AI-powered bundle creation",
+          color: "purple",
+        },
+      ],
+    },
+  }
+
+  const content = planType === "starter" ? planContent.starter : planContent.creator_vip
 
   return (
     <div className="relative min-h-screen bg-gradient-to-br from-black via-zinc-900 to-black text-white flex items-center justify-center overflow-hidden">
@@ -126,11 +187,7 @@ export default function SubscriptionSuccess() {
               transition={{ delay: 0.3, duration: 0.5 }}
               className="text-3xl md:text-4xl font-bold mb-3 bg-gradient-to-r from-white via-emerald-100 to-cyan-100 bg-clip-text text-transparent"
             >
-              {status === "success"
-                ? "Welcome to Creator VIP!"
-                : status === "error"
-                  ? "Subscription Issue"
-                  : "Processing..."}
+              {status === "success" ? content.title : status === "error" ? "Subscription Issue" : "Processing..."}
             </motion.h1>
 
             <motion.p
@@ -139,9 +196,7 @@ export default function SubscriptionSuccess() {
               transition={{ delay: 0.4, duration: 0.5 }}
               className="text-zinc-300 text-lg mb-8 leading-relaxed"
             >
-              {status === "success"
-                ? "Your subscription is now active. Get ready to unlock unlimited creative potential!"
-                : message}
+              {status === "success" ? content.description : message}
             </motion.p>
 
             {status === "success" && (
@@ -151,35 +206,28 @@ export default function SubscriptionSuccess() {
                 transition={{ delay: 0.5, duration: 0.5 }}
                 className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8"
               >
-                <div className="bg-zinc-800/40 backdrop-blur-sm rounded-xl p-4 border border-zinc-700/50">
-                  <div className="flex justify-center mb-2">
-                    <div className="p-2 bg-emerald-500/10 rounded-lg">
-                      <Crown className="h-6 w-6 text-emerald-400" />
+                {content.features.map((feature, index) => {
+                  const Icon = feature.icon
+                  const colorClasses = {
+                    emerald: "bg-emerald-500/10 text-emerald-400",
+                    cyan: "bg-cyan-500/10 text-cyan-400",
+                    purple: "bg-purple-500/10 text-purple-400",
+                  }
+                  return (
+                    <div
+                      key={index}
+                      className="bg-zinc-800/40 backdrop-blur-sm rounded-xl p-4 border border-zinc-700/50"
+                    >
+                      <div className="flex justify-center mb-2">
+                        <div className={`p-2 rounded-lg ${colorClasses[feature.color as keyof typeof colorClasses]}`}>
+                          <Icon className="h-6 w-6" />
+                        </div>
+                      </div>
+                      <h3 className="font-semibold text-white mb-1">{feature.title}</h3>
+                      <p className="text-sm text-zinc-400">{feature.description}</p>
                     </div>
-                  </div>
-                  <h3 className="font-semibold text-white mb-1">Unlimited Access</h3>
-                  <p className="text-sm text-zinc-400">All premium features unlocked</p>
-                </div>
-
-                <div className="bg-zinc-800/40 backdrop-blur-sm rounded-xl p-4 border border-zinc-700/50">
-                  <div className="flex justify-center mb-2">
-                    <div className="p-2 bg-cyan-500/10 rounded-lg">
-                      <Zap className="h-6 w-6 text-cyan-400" />
-                    </div>
-                  </div>
-                  <h3 className="font-semibold text-white mb-1">10% Platform Fee</h3>
-                  <p className="text-sm text-zinc-400">Keep more of your earnings</p>
-                </div>
-
-                <div className="bg-zinc-800/40 backdrop-blur-sm rounded-xl p-4 border border-zinc-700/50">
-                  <div className="flex justify-center mb-2">
-                    <div className="p-2 bg-purple-500/10 rounded-lg">
-                      <Sparkles className="h-6 w-6 text-purple-400" />
-                    </div>
-                  </div>
-                  <h3 className="font-semibold text-white mb-1">Full Vex AI</h3>
-                  <p className="text-sm text-zinc-400">AI-powered bundle creation</p>
-                </div>
+                  )
+                })}
               </motion.div>
             )}
 

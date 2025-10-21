@@ -36,8 +36,14 @@ export async function GET(request: Request) {
         if (userDoc.exists) {
           const userData = userDoc.data()
 
-          if (userData?.plan === "creator_pro" || userData?.plan === "creator-pro") {
-            return NextResponse.json({ success: true, status: "active" })
+          if (
+            userData?.plan === "creator_pro" ||
+            userData?.plan === "creator-pro" ||
+            userData?.plan === "creator_vip"
+          ) {
+            return NextResponse.json({ success: true, status: "active", plan: "creator_vip" })
+          } else if (userData?.plan === "starter") {
+            return NextResponse.json({ success: true, status: "active", plan: "starter" })
           } else {
             // User exists but hasn't been upgraded yet
             // This could happen if the webhook hasn't processed yet
@@ -55,22 +61,25 @@ export async function GET(request: Request) {
             const session = await stripe.checkout.sessions.retrieve(sessionId)
 
             if (session.payment_status === "paid") {
+              const planFromMetadata = session.metadata?.plan || "creator_vip"
+              const planToSet = planFromMetadata === "starter" ? "starter" : "creator_pro"
+
               // Session is paid, but webhook hasn't processed yet
               // Let's upgrade the user manually
               await db
                 .collection("users")
                 .doc(userId)
                 .update({
-                  plan: "creator_pro", // CHANGED: Using underscore instead of hyphen
+                  plan: planToSet,
                   permissions: {
                     download: true,
-                    premium: true,
+                    premium: planToSet !== "starter",
                   },
                   updatedAt: new Date(),
                   paymentStatus: "active",
                 })
 
-              return NextResponse.json({ success: true, status: "activated" })
+              return NextResponse.json({ success: true, status: "activated", plan: planFromMetadata })
             } else {
               return NextResponse.json({ success: false, status: "pending" })
             }
@@ -99,6 +108,9 @@ export async function GET(request: Request) {
         const session = await stripe.checkout.sessions.retrieve(sessionId)
 
         if (session.payment_status === "paid") {
+          const planFromMetadata = session.metadata?.plan || "creator_vip"
+          const planToSet = planFromMetadata === "starter" ? "starter" : "creator_pro"
+
           // Session is paid, but we don't have a record of it
           // Let's create a record and upgrade the user
 
@@ -106,6 +118,7 @@ export async function GET(request: Request) {
             userId,
             sessionId,
             status: "completed",
+            plan: planFromMetadata,
             createdAt: new Date(),
             completedAt: new Date(),
           })
@@ -114,16 +127,16 @@ export async function GET(request: Request) {
             .collection("users")
             .doc(userId)
             .update({
-              plan: "creator_pro", // CHANGED: Using underscore instead of hyphen
+              plan: planToSet,
               permissions: {
                 download: true,
-                premium: true,
+                premium: planToSet !== "starter",
               },
               updatedAt: new Date(),
               paymentStatus: "active",
             })
 
-          return NextResponse.json({ success: true, status: "activated" })
+          return NextResponse.json({ success: true, status: "activated", plan: planFromMetadata })
         } else {
           return NextResponse.json({ success: false, status: "pending" })
         }
