@@ -369,6 +369,8 @@ export async function POST(request: Request) {
 
         if (contentType === "membership" || (!contentType && !bundleId)) {
           debugTrace.push(`Processing membership checkout with plan: ${metadata.plan || "not specified"}`)
+          debugTrace.push(`Price ID from session: ${session.subscription ? "subscription-based" : "one-time"}`)
+          console.log(`[v0] ${debugTrace[debugTrace.length - 2]}`)
           console.log(`[v0] ${debugTrace[debugTrace.length - 1]}`)
         }
 
@@ -380,6 +382,7 @@ export async function POST(request: Request) {
         } else {
           // Handle subscription (Creator Pro upgrade)
           await processCheckoutSessionCompleted(session)
+          debugTrace.push(`Membership checkout completed for plan: ${metadata.plan || "creator_pro"}`)
         }
         break
 
@@ -390,6 +393,7 @@ export async function POST(request: Request) {
         console.log(`[v0] ${debugTrace[debugTrace.length - 1]}`)
 
         await processSubscriptionUpdated(subscription)
+        debugTrace.push(`Subscription updated successfully`)
         break
 
       case "customer.subscription.deleted":
