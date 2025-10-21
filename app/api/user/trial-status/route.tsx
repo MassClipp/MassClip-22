@@ -33,7 +33,19 @@ export async function GET(req: NextRequest) {
     const hasActiveCreatorVIP =
       membership?.status === "active" && (membership?.plan === "creator_pro" || membership?.plan === "creator_vip")
 
-    if (!membership || (membership.status !== "trialing" && !hasActiveCreatorVIP)) {
+    if (hasActiveCreatorVIP) {
+      console.log("[v0] Trial Status - User has active Creator VIP, returning hasUsedFreeTrial: true")
+      return NextResponse.json({
+        isOnTrial: false,
+        daysRemaining: 0,
+        trialEndDate: null,
+        hasUsedFreeTrial: true, // Always true for active VIP users
+        hasActiveCreatorVIP: true,
+      })
+    }
+    // </CHANGE>
+
+    if (!membership || membership.status !== "trialing") {
       return NextResponse.json({
         isOnTrial: false,
         daysRemaining: 0,
@@ -42,17 +54,6 @@ export async function GET(req: NextRequest) {
         hasActiveCreatorVIP: false,
       })
     }
-
-    if (hasActiveCreatorVIP) {
-      return NextResponse.json({
-        isOnTrial: false,
-        daysRemaining: 0,
-        trialEndDate: null,
-        hasUsedFreeTrial: true,
-        hasActiveCreatorVIP: true,
-      })
-    }
-    // </CHANGE>
 
     const now = new Date()
     let trialEndDate: Date | null = null

@@ -839,6 +839,18 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
     !trialStatus.isOnTrial &&
     !(membershipStatus.plan === "creator_vip" && membershipStatus.isActive)
 
+  useEffect(() => {
+    if (!isLoadingTrialStatus && !isLoadingMembershipStatus) {
+      console.log("[v0] Trial Button Visibility Check:", {
+        shouldShowTrialButton,
+        trialStatus,
+        membershipStatus,
+        isLoadingTrialStatus,
+        isLoadingMembershipStatus,
+      })
+    }
+  }, [shouldShowTrialButton, trialStatus, membershipStatus, isLoadingTrialStatus, isLoadingMembershipStatus])
+
   return (
     <div className="flex min-h-screen relative bg-gradient-to-br from-black via-zinc-900 to-black">
       {/* Fixed noise overlay */}
