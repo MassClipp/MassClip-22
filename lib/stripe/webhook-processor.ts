@@ -39,9 +39,18 @@ const STARTER_FEATURES = {
   canAnalyzeTranscripts: false,
 }
 
-// --- Constants ---
-const STARTER_PRICE_ID = "price_1SKKFPDheyb0pkWFBT6lf7V7"
-const CREATOR_VIP_PRICE_IDS = ["price_1SK7SzDheyb0pkWFaKOzIOzf"] // Can add more VIP price IDs here
+const PRICE_ID_TO_PLAN_CONFIG = {
+  price_1SKKFPDheyb0pkWFBT6lf7V7: {
+    plan: "starter" as MembershipPlan,
+    features: STARTER_FEATURES,
+    displayName: "Starter Plan",
+  },
+  price_1SK7SzDheyb0pkWFaKOzIOzf: {
+    plan: "creator_pro" as MembershipPlan,
+    features: PRO_FEATURES,
+    displayName: "Creator VIP",
+  },
+} as const
 
 // --- Helper Functions ---
 
@@ -63,16 +72,19 @@ async function setMembership(uid: string, data: object) {
   console.log(`Updated membership for user ${uid}`)
 }
 
-function getPlanFromPriceId(priceId: string): MembershipPlan {
-  if (priceId === STARTER_PRICE_ID) {
-    return "starter"
+function getPlanConfigFromPriceId(priceId: string) {
+  console.log(`[v0] 🔍 Looking up price ID: ${priceId}`)
+
+  const config = PRICE_ID_TO_PLAN_CONFIG[priceId as keyof typeof PRICE_ID_TO_PLAN_CONFIG]
+
+  if (!config) {
+    console.error(`[v0] ❌ UNKNOWN PRICE ID: ${priceId}`)
+    console.error(`[v0] ❌ Known price IDs:`, Object.keys(PRICE_ID_TO_PLAN_CONFIG))
+    throw new Error(`Unknown Stripe price ID: ${priceId}. Cannot determine plan.`)
   }
-  if (CREATOR_VIP_PRICE_IDS.includes(priceId)) {
-    return "creator_pro"
-  }
-  // Default to creator_pro for unknown price IDs
-  console.log(`⚠️ [Webhook] Unknown price ID: ${priceId}, defaulting to creator_pro`)
-  return "creator_pro"
+
+  console.log(`[v0] ✅ Price ID ${priceId} → ${config.displayName} (${config.plan})`)
+  return config
 }
 
 // --- Exported Processing Functions ---
@@ -80,12 +92,15 @@ function getPlanFromPriceId(priceId: string): MembershipPlan {
 export async function processCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
   const userId = session.metadata?.buyerUid
   const customerId = typeof session.customer === "string" ? session.customer : session.customer?.id
+
+  if (!userId) {
+    throw new Error(`Missing buyerUid in checkout session metadata. Session ID: ${session.id}`)
+  }
+  if (!customerId) {
+    throw new Error(`Missing customerId in checkout session. Session ID: ${session.id}`)
+  }
+
   const subscriptionId = typeof session.subscription === "string" ? session.subscription : session.subscription?.id
-
-  console.log(`[v0] [Webhook] Session metadata:`, JSON.stringify(session.metadata, null, 2))
-
-  const metadataPlan = session.metadata?.plan
-  console.log(`[v0] [Webhook] Plan from metadata: ${metadataPlan}`)
 
   if (!subscriptionId) {
     throw new Error(`Missing subscriptionId in checkout session. Session ID: ${session.id}`)
@@ -95,46 +110,36 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
   const subscription = await stripe.subscriptions.retrieve(subscriptionId)
   const priceId = subscription.items.data[0]?.price.id
 
-  console.log(`[v0] [Webhook] Price ID from subscription: ${priceId}`)
-
-  const planFromPriceId = getPlanFromPriceId(priceId)
-  console.log(`[v0] [Webhook] Plan from price ID: ${planFromPriceId}`)
-
-  const plan = metadataPlan || planFromPriceId
-  console.log(`[v0] [Webhook] Final plan decision: ${plan} (from ${metadataPlan ? "metadata" : "price ID"})`)
-
-  const isFirstTimeDiscount = session.metadata?.isFirstTimeDiscount === "true"
-
-  if (!userId) {
-    throw new Error(`Missing buyerUid in checkout session metadata. Session ID: ${session.id}`)
-  }
-  if (!customerId) {
-    throw new Error(`Missing customerId in checkout session. Session ID: ${session.id}`)
+  if (!priceId) {
+    throw new Error(`Missing price ID in subscription ${subscriptionId}`)
   }
 
-  const features = plan === "starter" ? STARTER_FEATURES : PRO_FEATURES
-  console.log(`[v0] [Webhook] Assigning ${plan} features to user ${userId}:`, JSON.stringify(features, null, 2))
+  console.log(`[v0] 📋 Processing checkout for user ${userId}`)
+  console.log(`[v0] 💳 Subscription ID: ${subscriptionId}`)
+  console.log(`[v0] 💰 Price ID: ${priceId}`)
+
+  const { plan, features, displayName } = getPlanConfigFromPriceId(priceId)
+
+  console.log(`[v0] 🎯 Assigning ${displayName}:`)
+  console.log(`[v0]    - plan: "${plan}"`)
+  console.log(`[v0]    - platformFeePercentage: ${features.platformFeePercentage}%`)
+  console.log(`[v0]    - maxBundles: ${features.maxBundles || "unlimited"}`)
+  console.log(`[v0]    - maxVideosPerBundle: ${features.maxVideosPerBundle || "unlimited"}`)
+  console.log(`[v0]    - unlimitedDownloads: ${features.unlimitedDownloads}`)
 
   await setMembership(userId, {
     uid: userId,
-    plan: plan as "starter" | "creator_pro",
+    plan: plan,
     status: subscription.status,
     isActive: subscription.status === "active" || subscription.status === "trialing",
     stripeCustomerId: customerId,
     stripeSubscriptionId: subscription.id,
     currentPeriodEnd: new Date(subscription.current_period_end * 1000),
     priceId: priceId,
-    ...features, // Spread features directly into the document
+    ...features, // Spread all features directly into the document
   })
 
-  console.log(
-    `[v0] ✅ [Webhook] memberships/${userId} set to ${plan} with ${plan === "starter" ? "Starter" : "VIP"} features`,
-  )
-  console.log(`[v0] [Webhook] Membership document should now have:`)
-  console.log(`[v0]   - plan: "${plan}"`)
-  console.log(`[v0]   - platformFeePercentage: ${features.platformFeePercentage}`)
-  console.log(`[v0]   - maxBundles: ${features.maxBundles}`)
-  console.log(`[v0]   - unlimitedDownloads: ${features.unlimitedDownloads}`)
+  console.log(`[v0] ✅ Successfully set memberships/${userId} to ${displayName}`)
 }
 
 export async function processSubscriptionUpdated(subscription: Stripe.Subscription) {
@@ -146,12 +151,17 @@ export async function processSubscriptionUpdated(subscription: Stripe.Subscripti
   }
 
   const priceId = subscription.items.data[0]?.price.id
-  const plan = getPlanFromPriceId(priceId)
-  const features = plan === "starter" ? STARTER_FEATURES : PRO_FEATURES
 
-  console.log(`[Webhook] Updating subscription for user ${userId}`)
-  console.log(`[Webhook] Price ID: ${priceId} → Plan: ${plan}`)
-  console.log(`[Webhook] Assigning features:`, features)
+  if (!priceId) {
+    throw new Error(`Missing price ID in subscription ${subscription.id}`)
+  }
+
+  console.log(`[v0] 🔄 Updating subscription for user ${userId}`)
+  console.log(`[v0] 💰 Price ID: ${priceId}`)
+
+  const { plan, features, displayName } = getPlanConfigFromPriceId(priceId)
+
+  console.log(`[v0] 🎯 Updating to ${displayName} (${plan})`)
 
   await setMembership(userId, {
     plan: plan,
@@ -159,9 +169,10 @@ export async function processSubscriptionUpdated(subscription: Stripe.Subscripti
     isActive: subscription.status === "active" || subscription.status === "trialing",
     priceId: priceId,
     currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-    features: features,
-    ...features,
+    ...features, // Spread all features directly
   })
+
+  console.log(`[v0] ✅ Successfully updated memberships/${userId} to ${displayName}`)
 }
 
 export async function processSubscriptionDeleted(subscription: Stripe.Subscription) {
@@ -180,10 +191,10 @@ export async function processSubscriptionDeleted(subscription: Stripe.Subscripti
     plan: "free",
     status: "canceled",
     isActive: false,
-    features: FREE_FEATURES,
     stripeSubscriptionId: null,
     currentPeriodEnd: null,
     priceId: null,
+    ...FREE_FEATURES, // Spread free features directly
   })
 }
 
