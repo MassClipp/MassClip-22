@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import Stripe from "stripe"
 import { adminDb } from "@/lib/firebase-admin"
-import { setCreatorPro } from "@/lib/memberships-service"
+import { setCreatorPro, setStarter } from "@/lib/memberships-service"
 
 type DebugTrace = string[]
 
@@ -18,6 +18,21 @@ function firstNonEmpty(...vals: Array<string | null | undefined>): string | null
   return null
 }
 
+const PRICE_ID_TO_PLAN_CONFIG = {
+  // Starter Plan price IDs
+  price_1SKKFPDheyb0pkWFBT6lf7V7: {
+    plan: "starter" as const,
+    setMembership: setStarter,
+  },
+  // Add other Starter Plan price IDs here if you have multiple (e.g., annual, monthly)
+
+  // Creator Pro (VIP) price IDs - add your actual VIP price IDs here
+  // price_YOUR_VIP_PRICE_ID: {
+  //   plan: "creator_pro" as const,
+  //   setMembership: setCreatorPro,
+  // },
+}
+
 async function upsertMembership(opts: {
   uid: string
   email?: string | null
@@ -25,7 +40,7 @@ async function upsertMembership(opts: {
   stripeSubscriptionId?: string | null
   priceId?: string | null
   currentPeriodEnd?: Date | null
-  status?: "active" | "trialing" | "past_due" | "canceled"
+  status?: "active" | "trialing" | "past_due" | "canceled" | "incomplete"
   source: string
   debugTrace: DebugTrace
 }) {
@@ -45,7 +60,23 @@ async function upsertMembership(opts: {
     `upsertMembership(uid=${uid}, status=${status}, customer=${stripeCustomerId ?? "null"}, sub=${stripeSubscriptionId ?? "null"}, price=${priceId ?? "null"}) [${source}]`,
   )
 
-  if (stripeCustomerId && stripeSubscriptionId) {
+  if (!stripeCustomerId || !stripeSubscriptionId) {
+    debugTrace.push(
+      `Skipping membership setup - missing Stripe IDs (customer: ${stripeCustomerId}, sub: ${stripeSubscriptionId})`,
+    )
+    return
+  }
+
+  if (!priceId) {
+    debugTrace.push("⚠️ No price ID provided - cannot determine plan")
+    return
+  }
+
+  const planConfig = PRICE_ID_TO_PLAN_CONFIG[priceId as keyof typeof PRICE_ID_TO_PLAN_CONFIG]
+
+  if (!planConfig) {
+    debugTrace.push(`⚠️ Unknown price ID: ${priceId} - defaulting to Creator Pro`)
+    // Default to Creator Pro for unknown price IDs (backwards compatibility)
     await setCreatorPro(uid, {
       email: email ?? undefined,
       stripeCustomerId: stripeCustomerId,
@@ -54,13 +85,20 @@ async function upsertMembership(opts: {
       priceId: priceId ?? undefined,
       status,
     })
-    debugTrace.push(`memberships/${uid} set to creator_pro with Stripe IDs`)
-  } else {
-    debugTrace.push(
-      `Skipping Creator Pro setup - missing Stripe IDs (customer: ${stripeCustomerId}, sub: ${stripeSubscriptionId})`,
-    )
+    debugTrace.push(`memberships/${uid} set to creator_pro (unknown price ID fallback)`)
     return
   }
+
+  debugTrace.push(`✅ Matched price ID ${priceId} to plan: ${planConfig.plan}`)
+  await planConfig.setMembership(uid, {
+    email: email ?? undefined,
+    stripeCustomerId: stripeCustomerId,
+    stripeSubscriptionId: stripeSubscriptionId,
+    currentPeriodEnd: currentPeriodEnd,
+    priceId: priceId ?? undefined,
+    status,
+  })
+  debugTrace.push(`memberships/${uid} set to ${planConfig.plan} with Stripe IDs`)
 }
 
 async function moveToFreeUsers(uid: string, debugTrace: DebugTrace) {

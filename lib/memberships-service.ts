@@ -1,8 +1,8 @@
 import { adminDb } from "@/lib/firebase-admin"
 import { FieldValue } from "firebase-admin/firestore"
 
-export type MembershipPlan = "creator_pro"
-export type MembershipStatus = "active" | "inactive" | "canceled" | "past_due" | "trialing"
+export type MembershipPlan = "creator_pro" | "starter"
+export type MembershipStatus = "active" | "inactive" | "canceled" | "past_due" | "trialing" | "incomplete"
 
 export interface MembershipFeatures {
   unlimitedDownloads: boolean
@@ -38,6 +38,16 @@ export interface MembershipDoc {
   // Metadata
   createdAt: any
   updatedAt: any
+}
+
+const STARTER_FEATURES: MembershipFeatures = {
+  unlimitedDownloads: false,
+  premiumContent: false,
+  noWatermark: false,
+  prioritySupport: false,
+  platformFeePercentage: 20,
+  maxVideosPerBundle: 15,
+  maxBundles: 5,
 }
 
 const PRO_FEATURES: MembershipFeatures = {
@@ -176,7 +186,7 @@ export async function setCreatorPro(
     email: params.email || null,
     plan: "creator_pro",
     status: params.status || "active",
-    isActive: true,
+    isActive: params.status === "active" || params.status === "trialing",
     stripeCustomerId: params.stripeCustomerId,
     stripeSubscriptionId: params.stripeSubscriptionId,
     currentPeriodEnd: params.currentPeriodEnd || null,
@@ -191,6 +201,42 @@ export async function setCreatorPro(
 
   await adminDb.collection("memberships").doc(uid).set(membershipData)
   console.log("✅ Creator Pro membership created successfully")
+}
+
+export async function setStarter(
+  uid: string,
+  params: {
+    email?: string | null
+    stripeCustomerId: string
+    stripeSubscriptionId: string
+    currentPeriodEnd?: Date | null
+    priceId?: string | null
+    connectedAccountId?: string
+    status?: Exclude<MembershipStatus, "inactive">
+  },
+) {
+  console.log("🔄 Creating Starter membership for:", uid.substring(0, 8) + "...")
+
+  const membershipData: Partial<MembershipDoc> = {
+    uid,
+    email: params.email || null,
+    plan: "starter",
+    status: params.status || "active",
+    isActive: params.status === "active" || params.status === "trialing",
+    stripeCustomerId: params.stripeCustomerId,
+    stripeSubscriptionId: params.stripeSubscriptionId,
+    currentPeriodEnd: params.currentPeriodEnd || null,
+    priceId: params.priceId || null,
+    connectedAccountId: params.connectedAccountId || null,
+    downloadsUsed: 0,
+    bundlesCreated: 0,
+    features: { ...STARTER_FEATURES },
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }
+
+  await adminDb.collection("memberships").doc(uid).set(membershipData)
+  console.log("✅ Starter membership created successfully")
 }
 
 export async function setCreatorProStatus(uid: string, status: MembershipStatus, updates?: Partial<MembershipDoc>) {
@@ -243,12 +289,12 @@ export async function incrementBundles(uid: string) {
 export function toTierInfo(m: MembershipDoc) {
   // This should only be called for active pro users
   return {
-    tier: "creator_pro" as const,
+    tier: m.plan as const,
     downloadsUsed: m.downloadsUsed ?? 0,
-    downloadsLimit: null, // unlimited
+    downloadsLimit: m.features.unlimitedDownloads ? null : m.features.maxVideosPerBundle,
     bundlesCreated: m.bundlesCreated ?? 0,
-    bundlesLimit: null, // unlimited
-    maxVideosPerBundle: null, // unlimited
+    bundlesLimit: m.features.unlimitedDownloads ? null : m.features.maxBundles,
+    maxVideosPerBundle: m.features.maxVideosPerBundle,
     platformFeePercentage: m.features.platformFeePercentage,
     reachedDownloadLimit: false, // never reached for pro
     reachedBundleLimit: false, // never reached for pro
