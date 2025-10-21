@@ -65,7 +65,10 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
   const userId = session.metadata?.buyerUid
   const customerId = typeof session.customer === "string" ? session.customer : session.customer?.id
   const subscriptionId = typeof session.subscription === "string" ? session.subscription : session.subscription?.id
+
   const plan = session.metadata?.plan || "creator_pro"
+  console.log(`[Webhook] Processing checkout for user ${userId} with plan: ${plan}`)
+
   const isFirstTimeDiscount = session.metadata?.isFirstTimeDiscount === "true"
 
   if (!userId) {
@@ -82,6 +85,7 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
   const subscription = await stripe.subscriptions.retrieve(subscriptionId)
 
   const features = plan === "starter" ? STARTER_FEATURES : PRO_FEATURES
+  console.log(`[Webhook] Assigning ${plan} features to user ${userId}`)
 
   await setMembership(userId, {
     uid: userId,

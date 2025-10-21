@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
       buyerUid: uid,
       buyerEmail: email || "",
       buyerName: name || email?.split("@")[0] || "",
-      plan: plan === "creator_pro" ? "creator_vip" : plan || "creator_vip", // Map creator_pro to creator_vip
+      plan: plan === "starter" ? "starter" : "creator_pro",
       contentType: "membership",
       source: "dashboard_membership_upgrade",
       isFirstTimeTrial: (trialPeriodDays !== undefined && !hasUsedTrial).toString(),
