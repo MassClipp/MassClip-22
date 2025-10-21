@@ -328,8 +328,10 @@ export async function POST(request: Request) {
     return new NextResponse(`Webhook Error: ${err.message}`, { status: 400 })
   }
 
-  console.log(`✅ [Bundle Webhook] Received event: ${event.type} (${event.id})`)
-  console.log(`📋 [Bundle Webhook] Event metadata:`, event.data.object.metadata || {})
+  console.log(`✅ [Webhook] Received event: ${event.type} (${event.id})`)
+  if (event.data.object.metadata) {
+    console.log(`📋 [Webhook] Event metadata:`, event.data.object.metadata)
+  }
 
   try {
     // Test Firebase connection with a simple operation
@@ -354,6 +356,8 @@ export async function POST(request: Request) {
       console.error("Failed to store raw stripe event", error)
     })
 
+  const debugTrace: string[] = []
+
   try {
     switch (event.type) {
       case "checkout.session.completed":
@@ -362,6 +366,11 @@ export async function POST(request: Request) {
         const metadata = session.metadata || {}
         const contentType = metadata.contentType
         const bundleId = metadata.bundleId || metadata.productBoxId
+
+        if (contentType === "membership" || (!contentType && !bundleId)) {
+          debugTrace.push(`Processing membership checkout with plan: ${metadata.plan || "not specified"}`)
+          console.log(`[v0] ${debugTrace[debugTrace.length - 1]}`)
+        }
 
         if (contentType === "download_purchase") {
           await processDownloadPurchase(session)
@@ -375,18 +384,26 @@ export async function POST(request: Request) {
         break
 
       case "customer.subscription.updated":
-        await processSubscriptionUpdated(event.data.object as Stripe.Subscription)
+        const subscription = event.data.object as Stripe.Subscription
+        const priceId = subscription.items.data[0]?.price.id
+        debugTrace.push(`Updating subscription with price ID: ${priceId}`)
+        console.log(`[v0] ${debugTrace[debugTrace.length - 1]}`)
+
+        await processSubscriptionUpdated(subscription)
         break
+
       case "customer.subscription.deleted":
         await processSubscriptionDeleted(event.data.object as Stripe.Subscription)
         break
+
       default:
         console.log(`Unhandled event type ${event.type}`)
     }
+
+    return NextResponse.json({ received: true, debugTrace })
   } catch (error: any) {
     console.error(`Webhook handler failed for event ${event.type}.`, error)
-    return NextResponse.json({ error: "Webhook handler failed", details: error.message }, { status: 500 })
+    debugTrace.push(`Error: ${error.message}`)
+    return NextResponse.json({ error: "Webhook handler failed", details: error.message, debugTrace }, { status: 500 })
   }
-
-  return NextResponse.json({ received: true })
 }

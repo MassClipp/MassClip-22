@@ -39,6 +39,10 @@ const STARTER_FEATURES = {
   canAnalyzeTranscripts: false,
 }
 
+// --- Constants ---
+const STARTER_PRICE_ID = "price_1SKKFPDheyb0pkWFBT6lf7V7"
+const CREATOR_VIP_PRICE_IDS = ["price_1SK7SzDheyb0pkWFaKOzIOzf"] // Can add more VIP price IDs here
+
 // --- Helper Functions ---
 
 async function findUserByCustomerId(customerId: string): Promise<string | null> {
@@ -57,6 +61,18 @@ async function setMembership(uid: string, data: object) {
   const docRef = db.collection("memberships").doc(uid)
   await docRef.set({ ...data, updatedAt: FieldValue.serverTimestamp() }, { merge: true })
   console.log(`Updated membership for user ${uid}`)
+}
+
+function getPlanFromPriceId(priceId: string): MembershipPlan {
+  if (priceId === STARTER_PRICE_ID) {
+    return "starter"
+  }
+  if (CREATOR_VIP_PRICE_IDS.includes(priceId)) {
+    return "creator_pro"
+  }
+  // Default to creator_pro for unknown price IDs
+  console.log(`⚠️ [Webhook] Unknown price ID: ${priceId}, defaulting to creator_pro`)
+  return "creator_pro"
 }
 
 // --- Exported Processing Functions ---
@@ -97,7 +113,6 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
     stripeSubscriptionId: subscription.id,
     currentPeriodEnd: new Date(subscription.current_period_end * 1000),
     priceId: subscription.items.data[0]?.price.id,
-    ...features,
     features: features,
   })
 
@@ -129,11 +144,22 @@ export async function processSubscriptionUpdated(subscription: Stripe.Subscripti
     throw new Error(`Webhook Error: User not found for customer ID: ${customerId}`)
   }
 
+  const priceId = subscription.items.data[0]?.price.id
+  const plan = getPlanFromPriceId(priceId)
+  const features = plan === "starter" ? STARTER_FEATURES : PRO_FEATURES
+
+  console.log(`[Webhook] Updating subscription for user ${userId}`)
+  console.log(`[Webhook] Price ID: ${priceId} → Plan: ${plan}`)
+  console.log(`[Webhook] Assigning features:`, features)
+
   await setMembership(userId, {
+    plan: plan,
     status: subscription.status,
     isActive: subscription.status === "active" || subscription.status === "trialing",
-    priceId: subscription.items.data[0]?.price.id,
+    priceId: priceId,
     currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+    features: features,
+    ...features,
   })
 }
 
@@ -154,7 +180,6 @@ export async function processSubscriptionDeleted(subscription: Stripe.Subscripti
     status: "canceled",
     isActive: false,
     features: FREE_FEATURES,
-    // We keep stripe IDs for historical purposes but nullify the subscription specific fields
     stripeSubscriptionId: null,
     currentPeriodEnd: null,
     priceId: null,
