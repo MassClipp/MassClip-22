@@ -368,10 +368,11 @@ export async function POST(request: Request) {
         const bundleId = metadata.bundleId || metadata.productBoxId
 
         if (contentType === "membership" || (!contentType && !bundleId)) {
-          debugTrace.push(`Processing membership checkout with plan: ${metadata.plan || "not specified"}`)
-          debugTrace.push(`Price ID from session: ${session.subscription ? "subscription-based" : "one-time"}`)
-          console.log(`[v0] ${debugTrace[debugTrace.length - 2]}`)
-          console.log(`[v0] ${debugTrace[debugTrace.length - 1]}`)
+          console.log(`[v0] [Webhook] Processing membership checkout`)
+          console.log(`[v0] [Webhook] Metadata plan: ${metadata.plan}`)
+          console.log(`[v0] [Webhook] Session ID: ${session.id}`)
+          console.log(`[v0] [Webhook] Subscription ID: ${session.subscription}`)
+          debugTrace.push(`Processing membership checkout with metadata plan: ${metadata.plan || "not specified"}`)
         }
 
         if (contentType === "download_purchase") {
@@ -382,15 +383,17 @@ export async function POST(request: Request) {
         } else {
           // Handle subscription (Creator Pro upgrade)
           await processCheckoutSessionCompleted(session)
-          debugTrace.push(`Membership checkout completed for plan: ${metadata.plan || "creator_pro"}`)
+          debugTrace.push(`Membership checkout completed`)
         }
         break
 
       case "customer.subscription.updated":
         const subscription = event.data.object as Stripe.Subscription
         const priceId = subscription.items.data[0]?.price.id
+        console.log(`[v0] [Webhook] Subscription updated event`)
+        console.log(`[v0] [Webhook] Price ID: ${priceId}`)
+        console.log(`[v0] [Webhook] Subscription status: ${subscription.status}`)
         debugTrace.push(`Updating subscription with price ID: ${priceId}`)
-        console.log(`[v0] ${debugTrace[debugTrace.length - 1]}`)
 
         await processSubscriptionUpdated(subscription)
         debugTrace.push(`Subscription updated successfully`)

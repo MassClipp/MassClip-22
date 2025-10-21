@@ -82,9 +82,26 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
   const customerId = typeof session.customer === "string" ? session.customer : session.customer?.id
   const subscriptionId = typeof session.subscription === "string" ? session.subscription : session.subscription?.id
 
-  const plan = session.metadata?.plan || "creator_pro"
-  console.log(`[Webhook] Processing checkout for user ${userId} with plan: ${plan}`)
-  console.log(`[Webhook] Session metadata:`, session.metadata)
+  console.log(`[v0] [Webhook] Session metadata:`, JSON.stringify(session.metadata, null, 2))
+
+  const metadataPlan = session.metadata?.plan
+  console.log(`[v0] [Webhook] Plan from metadata: ${metadataPlan}`)
+
+  if (!subscriptionId) {
+    throw new Error(`Missing subscriptionId in checkout session. Session ID: ${session.id}`)
+  }
+
+  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!)
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId)
+  const priceId = subscription.items.data[0]?.price.id
+
+  console.log(`[v0] [Webhook] Price ID from subscription: ${priceId}`)
+
+  const planFromPriceId = getPlanFromPriceId(priceId)
+  console.log(`[v0] [Webhook] Plan from price ID: ${planFromPriceId}`)
+
+  const plan = metadataPlan || planFromPriceId
+  console.log(`[v0] [Webhook] Final plan decision: ${plan} (from ${metadataPlan ? "metadata" : "price ID"})`)
 
   const isFirstTimeDiscount = session.metadata?.isFirstTimeDiscount === "true"
 
@@ -94,15 +111,9 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
   if (!customerId) {
     throw new Error(`Missing customerId in checkout session. Session ID: ${session.id}`)
   }
-  if (!subscriptionId) {
-    throw new Error(`Missing subscriptionId in checkout session. Session ID: ${session.id}`)
-  }
-
-  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!)
-  const subscription = await stripe.subscriptions.retrieve(subscriptionId)
 
   const features = plan === "starter" ? STARTER_FEATURES : PRO_FEATURES
-  console.log(`[Webhook] Assigning ${plan} features to user ${userId}:`, features)
+  console.log(`[v0] [Webhook] Assigning ${plan} features to user ${userId}:`, JSON.stringify(features, null, 2))
 
   await setMembership(userId, {
     uid: userId,
@@ -112,32 +123,18 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
     stripeCustomerId: customerId,
     stripeSubscriptionId: subscription.id,
     currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-    priceId: subscription.items.data[0]?.price.id,
+    priceId: priceId,
     ...features, // Spread features directly into the document
   })
 
   console.log(
-    `✅ [Webhook] memberships/${userId} set to ${plan} with ${plan === "starter" ? "Starter" : "VIP"} features`,
+    `[v0] ✅ [Webhook] memberships/${userId} set to ${plan} with ${plan === "starter" ? "Starter" : "VIP"} features`,
   )
-
-  if (isFirstTimeDiscount) {
-    try {
-      const freeUserRef = db.collection("freeUsers").doc(userId)
-      await freeUserRef.set(
-        {
-          hasUsedFirstWeekDiscount: true,
-          firstWeekDiscountUsedDate: FieldValue.serverTimestamp(),
-          firstWeekDiscountPlan: plan,
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true },
-      )
-      console.log(`✅ [Webhook] Marked first week discount as used for user ${userId} on ${plan} plan`)
-    } catch (error) {
-      console.error(`⚠️ [Webhook] Failed to mark first week discount as used:`, error)
-      // Don't fail the entire webhook if this update fails
-    }
-  }
+  console.log(`[v0] [Webhook] Membership document should now have:`)
+  console.log(`[v0]   - plan: "${plan}"`)
+  console.log(`[v0]   - platformFeePercentage: ${features.platformFeePercentage}`)
+  console.log(`[v0]   - maxBundles: ${features.maxBundles}`)
+  console.log(`[v0]   - unlimitedDownloads: ${features.unlimitedDownloads}`)
 }
 
 export async function processSubscriptionUpdated(subscription: Stripe.Subscription) {
