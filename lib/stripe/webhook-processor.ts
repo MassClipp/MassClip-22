@@ -97,6 +97,7 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
     stripeSubscriptionId: subscription.id,
     currentPeriodEnd: new Date(subscription.current_period_end * 1000),
     priceId: subscription.items.data[0]?.price.id,
+    ...features,
     features: features,
   })
 

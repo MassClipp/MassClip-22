@@ -11,6 +11,9 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
 })
 
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
+
 export async function POST(request: NextRequest) {
   console.log("🔔 [Webhook-4] ========== NEW WEBHOOK EVENT RECEIVED ==========")
 
@@ -24,6 +27,7 @@ export async function POST(request: NextRequest) {
 
   const webhookSecret = process.env.STARTER_PLAN_WH || process.env.STRIPE_WEBHOOK_SECRET
   console.log(`🔐 [Webhook-4] Using webhook secret: ${webhookSecret ? "FOUND" : "MISSING"}`)
+  console.log(`🔐 [Webhook-4] Secret starts with: ${webhookSecret?.substring(0, 10)}...`)
 
   let event: Stripe.Event
 
@@ -112,4 +116,13 @@ export async function POST(request: NextRequest) {
     console.error(`   - Error stack:`, error.stack)
     return NextResponse.json({ error: "Webhook handler failed", details: error.message }, { status: 500 })
   }
+}
+
+export async function GET() {
+  return NextResponse.json({
+    message: "Starter Plan Webhook Endpoint",
+    endpoint: "/api/webhook-handler-4",
+    methods: ["POST"],
+    status: "active",
+  })
 }
