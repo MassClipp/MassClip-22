@@ -51,25 +51,43 @@ export async function checkSubscription(userId?: string): Promise<SubscriptionDa
 
     const membership = await getMembership(userId)
     if (membership && membership.isActive) {
+      const isStarterPlan = membership.plan === "starter"
+
       return {
         isActive: true,
-        plan: "creator_pro",
+        plan: membership.plan as "starter" | "pro" | "creator_pro",
         stripeCustomerId: membership.stripeCustomerId,
         stripeSubscriptionId: membership.stripeSubscriptionId,
         currentPeriodEnd: membership.currentPeriodEnd,
-        features: {
-          unlimitedDownloads: true,
-          premiumContent: true,
-          noWatermark: true,
-          prioritySupport: true,
-          platformFeePercentage: 10, // 10% for Creator Pro
-          maxVideosPerBundle: null, // Unlimited for Creator Pro
-          maxBundles: null, // Unlimited for Creator Pro
-          maxFolders: null, // Unlimited for Creator Pro
-          canCreateSubfolders: true,
-          canAnalyzeTranscripts: true, // Full Vex AI with transcript analysis
-          canCreateBundles: true,
-        },
+        features: isStarterPlan
+          ? {
+              // Starter plan features
+              unlimitedDownloads: false,
+              premiumContent: false,
+              noWatermark: false,
+              prioritySupport: false,
+              platformFeePercentage: 20,
+              maxVideosPerBundle: 15,
+              maxBundles: 5,
+              maxFolders: 3,
+              canCreateSubfolders: true,
+              canAnalyzeTranscripts: false,
+              canCreateBundles: false,
+            }
+          : {
+              // Creator Pro features
+              unlimitedDownloads: true,
+              premiumContent: true,
+              noWatermark: true,
+              prioritySupport: true,
+              platformFeePercentage: 10,
+              maxVideosPerBundle: null,
+              maxBundles: null,
+              maxFolders: null,
+              canCreateSubfolders: true,
+              canAnalyzeTranscripts: true,
+              canCreateBundles: true,
+            },
       }
     }
 
