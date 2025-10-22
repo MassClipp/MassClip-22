@@ -18,6 +18,8 @@ const PLAN_CONFIGS = {
       platformFeePercentage: 20,
       maxVideosPerBundle: 15,
       maxBundles: 5,
+      maxFolders: 3,
+      isActive: true,
     },
   },
   // Creator Pro (VIP)
@@ -31,6 +33,8 @@ const PLAN_CONFIGS = {
       platformFeePercentage: 10,
       maxVideosPerBundle: null,
       maxBundles: null,
+      maxFolders: null,
+      isActive: true,
     },
   },
 }
@@ -89,20 +93,26 @@ async function updateMembership(opts: {
   const planConfig = PLAN_CONFIGS[planKey]
   debugTrace.push(`✅ Matched price ID to plan: ${planKey}`)
 
+  // Determine if subscription is active
+  const isActive = status === "active" || status === "trialing"
+
   // Build complete membership document
   const membershipData = {
     uid,
     email: email || null,
     plan: planConfig.plan,
     status,
-    isActive: status === "active" || status === "trialing",
+    isActive,
     stripeCustomerId,
     stripeSubscriptionId,
     currentPeriodEnd: currentPeriodEnd || null,
     priceId,
     downloadsUsed: 0,
     bundlesCreated: 0,
-    features: { ...planConfig.features },
+    features: {
+      ...planConfig.features,
+      isActive, // Override with actual subscription status
+    },
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   }
@@ -111,7 +121,9 @@ async function updateMembership(opts: {
   debugTrace.push(`  plan: ${membershipData.plan}`)
   debugTrace.push(`  status: ${membershipData.status}`)
   debugTrace.push(`  isActive: ${membershipData.isActive}`)
+  debugTrace.push(`  features.isActive: ${membershipData.features.isActive}`)
   debugTrace.push(`  features.maxBundles: ${membershipData.features.maxBundles}`)
+  debugTrace.push(`  features.maxFolders: ${membershipData.features.maxFolders}`)
   debugTrace.push(`  features.platformFeePercentage: ${membershipData.features.platformFeePercentage}`)
 
   // ALWAYS use .set() to do complete replacement (never partial updates)

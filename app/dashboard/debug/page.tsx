@@ -9,7 +9,6 @@ import { Loader2, RefreshCw, AlertTriangle, CheckCircle, XCircle } from "lucide-
 import { doc, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 
-// Plan configurations for comparison
 const PLAN_CONFIGS = {
   starter: {
     plan: "starter",
@@ -28,9 +27,9 @@ const PLAN_CONFIGS = {
   creator_pro: {
     plan: "creator_pro",
     features: {
-      maxBundles: -1,
-      maxVideosPerBundle: -1,
-      maxFolders: -1,
+      maxBundles: null,
+      maxVideosPerBundle: null,
+      maxFolders: null,
       noWatermark: true,
       platformFeePercentage: 10,
       premiumContent: true,
@@ -39,6 +38,10 @@ const PLAN_CONFIGS = {
       isActive: true,
     },
   },
+}
+
+const PRICE_ID_TO_PLAN: Record<string, keyof typeof PLAN_CONFIGS> = {
+  price_1SKKFPDheyb0pkWFBT6lf7V7: "starter",
 }
 
 export default function DebugPage() {
@@ -65,21 +68,13 @@ export default function DebugPage() {
         // Analyze issues
         const foundIssues: string[] = []
 
-        // Check if plan matches priceId
         const priceId = data.priceId
         if (priceId) {
-          const starterPrices = [
-            process.env.NEXT_PUBLIC_STARTER_PLAN_FIRST,
-            process.env.NEXT_PUBLIC_STARTER_PLAN_REGULAR,
-          ]
-          const vipPrices = [process.env.NEXT_PUBLIC_CREATOR_PRO_FIRST, process.env.NEXT_PUBLIC_CREATOR_PRO_REGULAR]
-
-          if (starterPrices.includes(priceId) && data.plan !== "starter") {
-            foundIssues.push(`Price ID ${priceId} is for Starter plan, but plan field is "${data.plan}"`)
-          }
-
-          if (vipPrices.includes(priceId) && data.plan !== "creator_pro") {
-            foundIssues.push(`Price ID ${priceId} is for VIP plan, but plan field is "${data.plan}"`)
+          const expectedPlan = PRICE_ID_TO_PLAN[priceId]
+          if (expectedPlan && data.plan !== expectedPlan) {
+            foundIssues.push(`Price ID ${priceId} maps to "${expectedPlan}" plan, but plan field is "${data.plan}"`)
+          } else if (!expectedPlan) {
+            foundIssues.push(`Unknown price ID: ${priceId}`)
           }
         }
 
@@ -155,13 +150,7 @@ export default function DebugPage() {
     )
   }
 
-  const expectedPlan = membershipData?.priceId
-    ? [process.env.NEXT_PUBLIC_STARTER_PLAN_FIRST, process.env.NEXT_PUBLIC_STARTER_PLAN_REGULAR].includes(
-        membershipData.priceId,
-      )
-      ? "starter"
-      : "creator_pro"
-    : null
+  const expectedPlan = membershipData?.priceId ? PRICE_ID_TO_PLAN[membershipData.priceId] : null
 
   return (
     <div className="space-y-6">
