@@ -328,10 +328,14 @@ export async function POST(request: Request) {
     return new NextResponse(`Webhook Error: ${err.message}`, { status: 400 })
   }
 
-  console.log(`✅ [Webhook] Received event: ${event.type} (${event.id})`)
+  console.log(`\n========== WEBHOOK EVENT RECEIVED ==========`)
+  console.log(`[v0] ✅ Event Type: ${event.type}`)
+  console.log(`[v0] 📋 Event ID: ${event.id}`)
+  console.log(`[v0] ⏰ Timestamp: ${new Date().toISOString()}`)
   if (event.data.object.metadata) {
-    console.log(`📋 [Webhook] Event metadata:`, event.data.object.metadata)
+    console.log(`[v0] 📦 Metadata:`, JSON.stringify(event.data.object.metadata, null, 2))
   }
+  console.log(`==========================================\n`)
 
   try {
     // Test Firebase connection with a simple operation
@@ -368,10 +372,13 @@ export async function POST(request: Request) {
         const bundleId = metadata.bundleId || metadata.productBoxId
 
         if (contentType === "membership" || (!contentType && !bundleId)) {
-          console.log(`[v0] [Webhook] Processing membership checkout`)
-          console.log(`[v0] [Webhook] Metadata plan: ${metadata.plan}`)
-          console.log(`[v0] [Webhook] Session ID: ${session.id}`)
-          console.log(`[v0] [Webhook] Subscription ID: ${session.subscription}`)
+          console.log(`\n========== MEMBERSHIP CHECKOUT ==========`)
+          console.log(`[v0] 📋 Metadata plan: ${metadata.plan || "NOT SPECIFIED"}`)
+          console.log(`[v0] 🆔 Session ID: ${session.id}`)
+          console.log(`[v0] 💳 Subscription ID: ${session.subscription}`)
+          console.log(`[v0] 👤 Buyer UID: ${metadata.buyerUid}`)
+          console.log(`[v0] 📧 Buyer Email: ${metadata.buyerEmail}`)
+          console.log(`==========================================\n`)
           debugTrace.push(`Processing membership checkout with metadata plan: ${metadata.plan || "not specified"}`)
         }
 
@@ -382,7 +389,9 @@ export async function POST(request: Request) {
           await processBundlePurchase(session)
         } else {
           // Handle subscription (Creator Pro upgrade)
+          console.log(`[v0] 🚀 Calling processCheckoutSessionCompleted...`)
           await processCheckoutSessionCompleted(session)
+          console.log(`[v0] ✅ processCheckoutSessionCompleted completed`)
           debugTrace.push(`Membership checkout completed`)
         }
         break
@@ -390,16 +399,26 @@ export async function POST(request: Request) {
       case "customer.subscription.updated":
         const subscription = event.data.object as Stripe.Subscription
         const priceId = subscription.items.data[0]?.price.id
-        console.log(`[v0] [Webhook] Subscription updated event`)
-        console.log(`[v0] [Webhook] Price ID: ${priceId}`)
-        console.log(`[v0] [Webhook] Subscription status: ${subscription.status}`)
+
+        console.log(`\n========== SUBSCRIPTION UPDATED ==========`)
+        console.log(`[v0] 💰 Price ID: ${priceId}`)
+        console.log(`[v0] 📊 Status: ${subscription.status}`)
+        console.log(`[v0] 🆔 Subscription ID: ${subscription.id}`)
+        console.log(`[v0] 👤 Customer ID: ${subscription.customer}`)
+        console.log(`[v0] 📋 Metadata:`, JSON.stringify(subscription.metadata, null, 2))
+        console.log(`==========================================\n`)
         debugTrace.push(`Updating subscription with price ID: ${priceId}`)
 
+        console.log(`[v0] 🚀 Calling processSubscriptionUpdated...`)
         await processSubscriptionUpdated(subscription)
+        console.log(`[v0] ✅ processSubscriptionUpdated completed`)
         debugTrace.push(`Subscription updated successfully`)
         break
 
       case "customer.subscription.deleted":
+        console.log(`\n========== SUBSCRIPTION DELETED ==========`)
+        console.log(`[v0] 🗑️ Subscription ID: ${(event.data.object as Stripe.Subscription).id}`)
+        console.log(`==========================================\n`)
         await processSubscriptionDeleted(event.data.object as Stripe.Subscription)
         break
 
@@ -407,9 +426,18 @@ export async function POST(request: Request) {
         console.log(`Unhandled event type ${event.type}`)
     }
 
+    console.log(`\n========== WEBHOOK RESPONSE ==========`)
+    console.log(`[v0] ✅ Webhook processed successfully`)
+    console.log(`[v0] 📋 Debug trace:`, debugTrace)
+    console.log(`==========================================\n`)
+
     return NextResponse.json({ received: true, debugTrace })
   } catch (error: any) {
-    console.error(`Webhook handler failed for event ${event.type}.`, error)
+    console.error(`\n========== WEBHOOK ERROR ==========`)
+    console.error(`[v0] ❌ Event type: ${event.type}`)
+    console.error(`[v0] ❌ Error message: ${error.message}`)
+    console.error(`[v0] ❌ Stack trace:`, error.stack)
+    console.error(`==========================================\n`)
     debugTrace.push(`Error: ${error.message}`)
     return NextResponse.json({ error: "Webhook handler failed", details: error.message, debugTrace }, { status: 500 })
   }

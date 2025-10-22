@@ -73,10 +73,15 @@ async function setMembership(uid: string, data: any) {
   if (!db) throw new Error("Firestore not initialized")
   const docRef = db.collection("memberships").doc(uid)
 
-  console.log(`[v0] 💾 Writing complete membership document for ${uid}`)
-  console.log(`[v0]    - plan: ${data.plan}`)
-  console.log(`[v0]    - status: ${data.status}`)
-  console.log(`[v0]    - isActive: ${data.isActive}`)
+  console.log(`[v0] 💾 ========== WRITING TO FIRESTORE ==========`)
+  console.log(`[v0] 💾 User ID: ${uid}`)
+  console.log(`[v0] 💾 Plan: ${data.plan}`)
+  console.log(`[v0] 💾 Status: ${data.status}`)
+  console.log(`[v0] 💾 IsActive: ${data.isActive}`)
+  console.log(`[v0] 💾 Price ID: ${data.priceId}`)
+  console.log(`[v0] 💾 Features:`, JSON.stringify(data.features, null, 2))
+  console.log(`[v0] 💾 Full Document:`, JSON.stringify(data, null, 2))
+  console.log(`[v0] 💾 ==========================================`)
 
   // ALWAYS use .set() without merge to do complete replacement
   await docRef.set({
