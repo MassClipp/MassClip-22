@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, RefreshCw, AlertTriangle, CheckCircle, XCircle } from "lucide-react"
+import { Loader2, RefreshCw, AlertTriangle, CheckCircle, XCircle, Wrench } from "lucide-react"
 import { doc, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 
@@ -47,6 +47,7 @@ const PRICE_ID_TO_PLAN: Record<string, keyof typeof PLAN_CONFIGS> = {
 export default function DebugPage() {
   const { user } = useAuth()
   const [loading, setLoading] = useState(true)
+  const [fixing, setFixing] = useState(false)
   const [membershipData, setMembershipData] = useState<any>(null)
   const [webhookEvents, setWebhookEvents] = useState<any[]>([])
   const [issues, setIssues] = useState<string[]>([])
@@ -128,6 +129,38 @@ export default function DebugPage() {
     }
   }
 
+  const fixMembership = async () => {
+    if (!user) return
+
+    setFixing(true)
+    try {
+      const token = await user.getIdToken()
+      const response = await fetch("/api/debug/fix-membership", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ uid: user.uid }),
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        // Refresh the debug data
+        await fetchDebugData()
+        alert("Membership fixed successfully!")
+      } else {
+        alert(`Error: ${result.error}`)
+      }
+    } catch (error) {
+      console.error("[v0] Error fixing membership:", error)
+      alert(`Error: ${error}`)
+    } finally {
+      setFixing(false)
+    }
+  }
+
   useEffect(() => {
     if (user) {
       fetchDebugData()
@@ -159,15 +192,28 @@ export default function DebugPage() {
           <h1 className="text-2xl font-semibold text-white">Membership Debug</h1>
           <p className="text-zinc-400 mt-1">Diagnose membership and webhook issues</p>
         </div>
-        <Button
-          onClick={fetchDebugData}
-          disabled={loading}
-          variant="outline"
-          className="border-zinc-700 bg-transparent"
-        >
-          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
-          Refresh
-        </Button>
+        <div className="flex gap-2">
+          {issues.length > 0 && (
+            <Button
+              onClick={fixMembership}
+              disabled={fixing}
+              variant="default"
+              className="bg-emerald-600 hover:bg-emerald-700"
+            >
+              <Wrench className={`h-4 w-4 mr-2 ${fixing ? "animate-spin" : ""}`} />
+              Fix Membership Now
+            </Button>
+          )}
+          <Button
+            onClick={fetchDebugData}
+            disabled={loading}
+            variant="outline"
+            className="border-zinc-700 bg-transparent"
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Issues Summary */}
