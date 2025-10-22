@@ -71,7 +71,9 @@ export async function POST(request: Request) {
   try {
     console.log("=== STARTER PLAN WEBHOOK RECEIVED ===")
 
-    if (!process.env.STRIPE_WEBHOOK_SECRET) {
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET_STARTER || process.env.STRIPE_WEBHOOK_SECRET
+
+    if (!webhookSecret) {
       return NextResponse.json({ error: "Missing webhook secret" }, { status: 500 })
     }
 
@@ -85,7 +87,7 @@ export async function POST(request: Request) {
 
     let event: Stripe.Event
     try {
-      event = stripe.webhooks.constructEvent(payload, sig, process.env.STRIPE_WEBHOOK_SECRET)
+      event = stripe.webhooks.constructEvent(payload, sig, webhookSecret)
       console.log(`[STARTER WEBHOOK] Event: ${event.type} (${event.id})`)
     } catch (err: any) {
       console.error(`[STARTER WEBHOOK] Signature verification failed: ${err.message}`)
