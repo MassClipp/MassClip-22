@@ -5,6 +5,8 @@ import { FieldValue } from "firebase-admin/firestore"
 
 // VIP/CREATOR PRO WEBHOOK - Only handles Creator Pro subscriptions
 
+const CREATOR_PRO_PRICE_IDS = [process.env.CREATOR_PRO_FIRST, process.env.CREATOR_PRO_REGULAR].filter(Boolean)
+
 const CREATOR_PRO_CONFIG = {
   plan: "creator_pro" as const,
   features: {
@@ -115,6 +117,11 @@ export async function POST(request: Request) {
           return NextResponse.json({ received: true })
         }
 
+        if (!CREATOR_PRO_PRICE_IDS.includes(priceId)) {
+          console.log(`[VIP WEBHOOK] Ignoring non-Creator-Pro price: ${priceId}`)
+          return NextResponse.json({ received: true })
+        }
+
         await updateCreatorProMembership({
           uid,
           email,
@@ -140,6 +147,11 @@ export async function POST(request: Request) {
 
         if (!uid || !priceId || !customerId) {
           console.log("[VIP WEBHOOK] Missing required fields")
+          return NextResponse.json({ received: true })
+        }
+
+        if (!CREATOR_PRO_PRICE_IDS.includes(priceId)) {
+          console.log(`[VIP WEBHOOK] Ignoring non-Creator-Pro price: ${priceId}`)
           return NextResponse.json({ received: true })
         }
 

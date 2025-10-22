@@ -5,6 +5,8 @@ import { FieldValue } from "firebase-admin/firestore"
 
 // STARTER PLAN WEBHOOK - Only handles Starter subscriptions
 
+const STARTER_PRICE_IDS = [process.env.STARTER_PLAN_FIRST, process.env.STARTER_PLAN_REGULAR].filter(Boolean)
+
 const STARTER_PLAN_CONFIG = {
   plan: "starter" as const,
   features: {
@@ -117,6 +119,11 @@ export async function POST(request: Request) {
           return NextResponse.json({ received: true })
         }
 
+        if (!STARTER_PRICE_IDS.includes(priceId)) {
+          console.log(`[STARTER WEBHOOK] Ignoring non-Starter price: ${priceId}`)
+          return NextResponse.json({ received: true })
+        }
+
         await updateStarterMembership({
           uid,
           email,
@@ -142,6 +149,11 @@ export async function POST(request: Request) {
 
         if (!uid || !priceId || !customerId) {
           console.log("[STARTER WEBHOOK] Missing required fields")
+          return NextResponse.json({ received: true })
+        }
+
+        if (!STARTER_PRICE_IDS.includes(priceId)) {
+          console.log(`[STARTER WEBHOOK] Ignoring non-Starter price: ${priceId}`)
           return NextResponse.json({ received: true })
         }
 
