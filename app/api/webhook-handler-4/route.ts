@@ -180,8 +180,15 @@ export async function POST(request: Request) {
       case "customer.subscription.updated": {
         const sub = event.data.object as Stripe.Subscription
         const uid = sub.metadata?.buyerUid
+        const priceId = sub.items?.data?.[0]?.price?.id
 
         if (!uid) {
+          return NextResponse.json({ received: true })
+        }
+
+        // Only process if this is a Starter subscription
+        if (!priceId || !STARTER_PRICE_IDS.includes(priceId)) {
+          console.log(`[STARTER WEBHOOK] Ignoring non-Starter subscription update: ${priceId}`)
           return NextResponse.json({ received: true })
         }
 

@@ -178,8 +178,15 @@ export async function POST(request: Request) {
       case "customer.subscription.updated": {
         const sub = event.data.object as Stripe.Subscription
         const uid = sub.metadata?.buyerUid
+        const priceId = sub.items?.data?.[0]?.price?.id
 
         if (!uid) {
+          return NextResponse.json({ received: true })
+        }
+
+        // Only process if this is a Creator Pro subscription
+        if (!priceId || !CREATOR_PRO_PRICE_IDS.includes(priceId)) {
+          console.log(`[VIP WEBHOOK] Ignoring non-Creator-Pro subscription update: ${priceId}`)
           return NextResponse.json({ received: true })
         }
 
