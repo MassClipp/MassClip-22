@@ -74,7 +74,7 @@ export async function POST(request: Request) {
     const webhookSecret = process.env.STARTER_PLAN_WH
 
     if (!webhookSecret) {
-      return NextResponse.json({ error: "Missing webhook secret" }, { status: 500 })
+      return NextResponse.json({ error: "Missing STARTER_PLAN_WH webhook secret" }, { status: 500 })
     }
 
     const stripe = getStripe()
