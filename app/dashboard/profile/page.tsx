@@ -99,7 +99,8 @@ export default function ProfilePage() {
     trialEndDate: string | null
   } | null>(null)
 
-  const isProUser = subscriptionData?.plan === "creator_pro" && subscriptionData?.isActive
+  const isProUser =
+    (subscriptionData?.plan === "creator_pro" || subscriptionData?.plan === "creator_vip") && subscriptionData?.isActive
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true)
@@ -751,9 +752,11 @@ export default function ProfilePage() {
                           >
                             {trialStatus?.isOnTrial
                               ? "Creator VIP (Trial)"
-                              : subscriptionData?.plan === "creator_pro" && subscriptionData?.isActive
+                              : subscriptionData?.plan === "creator_pro" || subscriptionData?.plan === "creator_vip"
                                 ? "Creator VIP"
-                                : "Starter"}
+                                : subscriptionData?.plan === "starter"
+                                  ? "Starter"
+                                  : "Free"}
                           </Badge>
                         </div>
 
@@ -805,7 +808,8 @@ export default function ProfilePage() {
                       <div className="space-y-4">
                         <h3 className="text-lg font-medium text-white">Plan Features</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          {subscriptionData?.plan === "creator_pro" && subscriptionData?.isActive ? (
+                          {(subscriptionData?.plan === "creator_pro" || subscriptionData?.plan === "creator_vip") &&
+                          subscriptionData?.isActive ? (
                             <>
                               <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
                                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
@@ -862,7 +866,8 @@ export default function ProfilePage() {
                       </div>
 
                       <div className="flex flex-wrap gap-3 pt-4 border-t border-zinc-800/50">
-                        {subscriptionData?.plan !== "creator_pro" || !subscriptionData?.isActive ? (
+                        {(subscriptionData?.plan !== "creator_pro" && subscriptionData?.plan !== "creator_vip") ||
+                        !subscriptionData?.isActive ? (
                           <Button
                             onClick={() => router.push("/dashboard/upgrade")}
                             className="bg-white hover:bg-gray-100 text-black font-medium px-6"

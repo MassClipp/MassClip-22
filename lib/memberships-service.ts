@@ -236,7 +236,7 @@ export async function setStarter(
   }
 
   await adminDb.collection("memberships").doc(uid).set(membershipData)
-  console.log("✅ Starter membership created successfully")
+  console.log("✅ Starter membership created successfully with plan: starter")
 }
 
 export async function setCreatorProStatus(uid: string, status: MembershipStatus, updates?: Partial<MembershipDoc>) {

@@ -115,7 +115,11 @@ export default function UpgradePage() {
         let currentPlan: "starter" | "creator_vip" | null = null
         if (hasActiveSubscription || isOnTrial) {
           currentPlan =
-            membershipData.plan === "creator_pro" || membershipData.plan === "creator_vip" ? "creator_vip" : "starter"
+            membershipData.plan === "creator_pro" || membershipData.plan === "creator_vip"
+              ? "creator_vip"
+              : membershipData.plan === "starter"
+                ? "starter"
+                : null
         }
 
         setSubscriptionStatus({

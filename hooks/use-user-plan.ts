@@ -5,7 +5,7 @@ import { doc, getDoc, updateDoc, setDoc, Timestamp, increment } from "firebase/f
 import { db } from "@/lib/firebase"
 import { useAuth } from "@/contexts/auth-context"
 
-export type UserPlan = "free" | "creator_pro"
+export type UserPlan = "free" | "creator_pro" | "starter"
 
 export interface UserPlanData {
   plan: UserPlan
@@ -50,10 +50,18 @@ export function useUserPlan() {
           const membershipData = await membershipResponse.json()
           console.log("[v0] useUserPlan - Membership data:", JSON.stringify(membershipData, null, 2))
 
-          // Simple check - if membership is active, user is pro
           if (membershipData.isActive) {
-            finalPlan = "creator_pro"
-            console.log("[v0] useUserPlan - User is active (pro or trial), setting plan to creator_pro")
+            // If plan is creator_pro or creator_vip, set to creator_pro for backwards compatibility
+            // If plan is starter, set to starter
+            if (membershipData.plan === "creator_pro" || membershipData.plan === "creator_vip") {
+              finalPlan = "creator_pro"
+              console.log("[v0] useUserPlan - User is VIP (creator_pro/creator_vip), setting plan to creator_pro")
+            } else if (membershipData.plan === "starter") {
+              finalPlan = "starter" as UserPlan
+              console.log("[v0] useUserPlan - User is Starter, setting plan to starter")
+            } else {
+              console.log("[v0] useUserPlan - Unknown plan:", membershipData.plan, "defaulting to free")
+            }
           } else {
             console.log(
               "[v0] useUserPlan - User is not active (isActive:",
@@ -68,14 +76,14 @@ export function useUserPlan() {
 
         console.log("[v0] useUserPlan - Final plan determined:", finalPlan)
 
-        if (finalPlan === "creator_pro") {
+        if (finalPlan === "creator_pro" || finalPlan === "starter") {
           setPlanData({
             plan: finalPlan,
             downloads: 0,
             downloadsLimit: Number.POSITIVE_INFINITY,
             lastReset: null,
           })
-          console.log("[v0] useUserPlan - Set plan data for creator_pro")
+          console.log("[v0] useUserPlan - Set plan data for", finalPlan)
         } else {
           // Free user - get download tracking from user document
           const userDocRef = doc(db, "users", user.uid)
@@ -134,7 +142,7 @@ export function useUserPlan() {
   const recordDownload = useCallback(async () => {
     if (!user || !planData) return { success: false, message: "User not authenticated" }
 
-    if (planData.plan === "creator_pro") return { success: true }
+    if (planData.plan === "creator_pro" || planData.plan === "starter") return { success: true }
 
     try {
       if (planData.downloads >= planData.downloadsLimit) {
