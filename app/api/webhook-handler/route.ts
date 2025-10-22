@@ -68,14 +68,78 @@ async function upsertMembership(opts: {
   }
 
   if (!priceId) {
-    debugTrace.push("⚠️ No price ID provided - cannot determine plan")
+    debugTrace.push("⚠️ No price ID provided - checking existing membership")
+
+    try {
+      const existingDoc = await adminDb.collection("memberships").doc(uid).get()
+      if (existingDoc.exists) {
+        const existingData = existingDoc.data()
+        const existingPriceId = existingData?.priceId
+        const existingPlan = existingData?.plan
+
+        debugTrace.push(`Found existing membership with plan: ${existingPlan}, priceId: ${existingPriceId}`)
+
+        // If existing membership has a valid price ID and plan, preserve it
+        if (existingPriceId && existingPlan) {
+          debugTrace.push(`✅ Preserving existing plan "${existingPlan}" - not overwriting without price ID`)
+
+          // Only update status and period end if provided
+          const updateData: any = {
+            updatedAt: new Date().toISOString(),
+          }
+          if (status) updateData.status = status
+          if (currentPeriodEnd) updateData.currentPeriodEnd = currentPeriodEnd
+
+          await adminDb.collection("memberships").doc(uid).update(updateData)
+          debugTrace.push(`Updated membership status/period without changing plan`)
+          return
+        }
+      }
+    } catch (error: any) {
+      debugTrace.push(`Error checking existing membership: ${error.message}`)
+    }
+
+    debugTrace.push("⚠️ No price ID and no existing valid membership - cannot determine plan")
     return
   }
 
   const planConfig = PRICE_ID_TO_PLAN_CONFIG[priceId as keyof typeof PRICE_ID_TO_PLAN_CONFIG]
 
   if (!planConfig) {
-    debugTrace.push(`⚠️ Unknown price ID: ${priceId} - defaulting to Creator Pro`)
+    debugTrace.push(`⚠️ Unknown price ID: ${priceId} - checking existing membership before defaulting`)
+
+    try {
+      const existingDoc = await adminDb.collection("memberships").doc(uid).get()
+      if (existingDoc.exists) {
+        const existingData = existingDoc.data()
+        const existingPlan = existingData?.plan
+
+        debugTrace.push(`Found existing membership with plan: ${existingPlan}`)
+
+        // If existing membership has a valid plan, preserve it
+        if (existingPlan === "starter" || existingPlan === "creator_pro") {
+          debugTrace.push(`✅ Preserving existing plan "${existingPlan}" - not overwriting with unknown price ID`)
+
+          // Only update Stripe IDs and status
+          const updateData: any = {
+            stripeCustomerId,
+            stripeSubscriptionId,
+            priceId,
+            status,
+            updatedAt: new Date().toISOString(),
+          }
+          if (currentPeriodEnd) updateData.currentPeriodEnd = currentPeriodEnd
+
+          await adminDb.collection("memberships").doc(uid).update(updateData)
+          debugTrace.push(`Updated Stripe IDs without changing plan`)
+          return
+        }
+      }
+    } catch (error: any) {
+      debugTrace.push(`Error checking existing membership: ${error.message}`)
+    }
+
+    debugTrace.push(`Defaulting to Creator Pro for unknown price ID: ${priceId}`)
     // Default to Creator Pro for unknown price IDs (backwards compatibility)
     await setCreatorPro(uid, {
       email: email ?? undefined,
@@ -247,9 +311,11 @@ async function handleInvoicePaid(stripe: Stripe, event: Stripe.Event, debugTrace
     )
     if (buyerUid && !uid) uid = buyerUid
 
-    // attempt various line shapes for price id
-    const p = (line as any)?.price?.id || (line as any)?.pricing?.price_details?.price
-    if (typeof p === "string" && !priceId) priceId = p
+    const p = (line as any)?.price?.id || (line as any)?.pricing?.price_details?.price || (line as any)?.plan?.id
+    if (typeof p === "string" && !priceId) {
+      priceId = p
+      debugTrace.push(`Extracted price ID from invoice line: ${priceId}`)
+    }
 
     if (uid && priceId) break
   }
@@ -276,7 +342,12 @@ async function handleInvoicePaid(stripe: Stripe, event: Stripe.Event, debugTrace
           (sub.metadata as any)?.userId,
         )
       }
-      if (!priceId) priceId = sub.items?.data?.[0]?.price?.id ?? null
+      if (!priceId) {
+        priceId = sub.items?.data?.[0]?.price?.id ?? null
+        if (priceId) {
+          debugTrace.push(`Extracted price ID from subscription: ${priceId}`)
+        }
+      }
       if (sub.current_period_end) currentPeriodEnd = new Date(sub.current_period_end * 1000)
 
       if (!email) {
@@ -295,6 +366,8 @@ async function handleInvoicePaid(stripe: Stripe, event: Stripe.Event, debugTrace
     debugTrace.push("No uid resolved from invoice/subscription")
     return NextResponse.json({ error: "Could not find user ID", debugTrace }, { status: 400 })
   }
+
+  debugTrace.push(`Final extracted values - uid: ${uid}, priceId: ${priceId}, customerId: ${customerId}`)
 
   await upsertMembership({
     uid,
