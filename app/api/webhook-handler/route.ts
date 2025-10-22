@@ -1,9 +1,48 @@
 import { NextResponse } from "next/server"
 import Stripe from "stripe"
 import { adminDb } from "@/lib/firebase-admin"
-import { setCreatorPro, setStarter } from "@/lib/memberships-service"
+import { FieldValue } from "firebase-admin/firestore"
 
 type DebugTrace = string[]
+
+// Plan configuration - single source of truth
+const PLAN_CONFIGS = {
+  // Starter Plan
+  starter: {
+    plan: "starter" as const,
+    features: {
+      unlimitedDownloads: false,
+      premiumContent: false,
+      noWatermark: false,
+      prioritySupport: false,
+      platformFeePercentage: 20,
+      maxVideosPerBundle: 15,
+      maxBundles: 5,
+    },
+  },
+  // Creator Pro (VIP)
+  creator_pro: {
+    plan: "creator_pro" as const,
+    features: {
+      unlimitedDownloads: true,
+      premiumContent: true,
+      noWatermark: true,
+      prioritySupport: true,
+      platformFeePercentage: 10,
+      maxVideosPerBundle: null,
+      maxBundles: null,
+    },
+  },
+}
+
+// Price ID to Plan mapping - add your price IDs here
+const PRICE_ID_TO_PLAN: Record<string, keyof typeof PLAN_CONFIGS> = {
+  // Starter Plan price IDs
+  price_1SKKFPDheyb0pkWFBT6lf7V7: "starter",
+
+  // Creator Pro price IDs - add your VIP price IDs here
+  // price_YOUR_VIP_PRICE_ID: "creator_pro",
+}
 
 function getStripe(): Stripe {
   const key = process.env.STRIPE_SECRET_KEY
@@ -18,271 +57,171 @@ function firstNonEmpty(...vals: Array<string | null | undefined>): string | null
   return null
 }
 
-const PRICE_ID_TO_PLAN_CONFIG = {
-  // Starter Plan price IDs
-  price_1SKKFPDheyb0pkWFBT6lf7V7: {
-    plan: "starter" as const,
-    setMembership: setStarter,
-  },
-  // Add other Starter Plan price IDs here if you have multiple (e.g., annual, monthly)
-
-  // Creator Pro (VIP) price IDs - add your actual VIP price IDs here
-  // price_YOUR_VIP_PRICE_ID: {
-  //   plan: "creator_pro" as const,
-  //   setMembership: setCreatorPro,
-  // },
-}
-
-async function upsertMembership(opts: {
+// Single function to update membership - always does COMPLETE updates
+async function updateMembership(opts: {
   uid: string
   email?: string | null
-  stripeCustomerId?: string | null
-  stripeSubscriptionId?: string | null
-  priceId?: string | null
+  priceId: string
+  stripeCustomerId: string
+  stripeSubscriptionId: string
   currentPeriodEnd?: Date | null
-  status?: "active" | "trialing" | "past_due" | "canceled" | "incomplete"
+  status: "active" | "trialing" | "past_due" | "canceled" | "incomplete"
   source: string
   debugTrace: DebugTrace
 }) {
-  const {
+  const { uid, email, priceId, stripeCustomerId, stripeSubscriptionId, currentPeriodEnd, status, source, debugTrace } =
+    opts
+
+  debugTrace.push(`[${source}] updateMembership called for uid: ${uid}`)
+  debugTrace.push(`  priceId: ${priceId}`)
+  debugTrace.push(`  status: ${status}`)
+  debugTrace.push(`  stripeCustomerId: ${stripeCustomerId}`)
+  debugTrace.push(`  stripeSubscriptionId: ${stripeSubscriptionId}`)
+
+  // Look up plan from price ID
+  const planKey = PRICE_ID_TO_PLAN[priceId]
+  if (!planKey) {
+    debugTrace.push(`❌ ERROR: Unknown price ID: ${priceId}`)
+    debugTrace.push(`  Available price IDs: ${Object.keys(PRICE_ID_TO_PLAN).join(", ")}`)
+    throw new Error(`Unknown price ID: ${priceId}`)
+  }
+
+  const planConfig = PLAN_CONFIGS[planKey]
+  debugTrace.push(`✅ Matched price ID to plan: ${planKey}`)
+
+  // Build complete membership document
+  const membershipData = {
     uid,
-    email,
+    email: email || null,
+    plan: planConfig.plan,
+    status,
+    isActive: status === "active" || status === "trialing",
     stripeCustomerId,
     stripeSubscriptionId,
+    currentPeriodEnd: currentPeriodEnd || null,
     priceId,
-    currentPeriodEnd,
-    status = "active",
-    source,
-    debugTrace,
-  } = opts
-
-  debugTrace.push(
-    `upsertMembership(uid=${uid}, status=${status}, customer=${stripeCustomerId ?? "null"}, sub=${stripeSubscriptionId ?? "null"}, price=${priceId ?? "null"}) [${source}]`,
-  )
-
-  if (!stripeCustomerId || !stripeSubscriptionId) {
-    debugTrace.push(
-      `Skipping membership setup - missing Stripe IDs (customer: ${stripeCustomerId}, sub: ${stripeSubscriptionId})`,
-    )
-    return
+    downloadsUsed: 0,
+    bundlesCreated: 0,
+    features: { ...planConfig.features },
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
   }
 
-  if (!priceId) {
-    debugTrace.push("⚠️ No price ID provided - checking existing membership")
+  debugTrace.push(`Writing to Firestore:`)
+  debugTrace.push(`  plan: ${membershipData.plan}`)
+  debugTrace.push(`  status: ${membershipData.status}`)
+  debugTrace.push(`  isActive: ${membershipData.isActive}`)
+  debugTrace.push(`  features.maxBundles: ${membershipData.features.maxBundles}`)
+  debugTrace.push(`  features.platformFeePercentage: ${membershipData.features.platformFeePercentage}`)
 
-    try {
-      const existingDoc = await adminDb.collection("memberships").doc(uid).get()
-      if (existingDoc.exists) {
-        const existingData = existingDoc.data()
-        const existingPriceId = existingData?.priceId
-        const existingPlan = existingData?.plan
+  // ALWAYS use .set() to do complete replacement (never partial updates)
+  await adminDb.collection("memberships").doc(uid).set(membershipData)
 
-        debugTrace.push(`Found existing membership with plan: ${existingPlan}, priceId: ${existingPriceId}`)
-
-        // If existing membership has a valid price ID and plan, preserve it
-        if (existingPriceId && existingPlan) {
-          debugTrace.push(`✅ Preserving existing plan "${existingPlan}" - not overwriting without price ID`)
-
-          // Only update status and period end if provided
-          const updateData: any = {
-            updatedAt: new Date().toISOString(),
-          }
-          if (status) updateData.status = status
-          if (currentPeriodEnd) updateData.currentPeriodEnd = currentPeriodEnd
-
-          await adminDb.collection("memberships").doc(uid).update(updateData)
-          debugTrace.push(`Updated membership status/period without changing plan`)
-          return
-        }
-      }
-    } catch (error: any) {
-      debugTrace.push(`Error checking existing membership: ${error.message}`)
-    }
-
-    debugTrace.push("⚠️ No price ID and no existing valid membership - cannot determine plan")
-    return
-  }
-
-  const planConfig = PRICE_ID_TO_PLAN_CONFIG[priceId as keyof typeof PRICE_ID_TO_PLAN_CONFIG]
-
-  if (!planConfig) {
-    debugTrace.push(`⚠️ Unknown price ID: ${priceId} - checking existing membership before defaulting`)
-
-    try {
-      const existingDoc = await adminDb.collection("memberships").doc(uid).get()
-      if (existingDoc.exists) {
-        const existingData = existingDoc.data()
-        const existingPlan = existingData?.plan
-
-        debugTrace.push(`Found existing membership with plan: ${existingPlan}`)
-
-        // If existing membership has a valid plan, preserve it
-        if (existingPlan === "starter" || existingPlan === "creator_pro") {
-          debugTrace.push(`✅ Preserving existing plan "${existingPlan}" - not overwriting with unknown price ID`)
-
-          // Only update Stripe IDs and status
-          const updateData: any = {
-            stripeCustomerId,
-            stripeSubscriptionId,
-            priceId,
-            status,
-            updatedAt: new Date().toISOString(),
-          }
-          if (currentPeriodEnd) updateData.currentPeriodEnd = currentPeriodEnd
-
-          await adminDb.collection("memberships").doc(uid).update(updateData)
-          debugTrace.push(`Updated Stripe IDs without changing plan`)
-          return
-        }
-      }
-    } catch (error: any) {
-      debugTrace.push(`Error checking existing membership: ${error.message}`)
-    }
-
-    debugTrace.push(`Defaulting to Creator Pro for unknown price ID: ${priceId}`)
-    // Default to Creator Pro for unknown price IDs (backwards compatibility)
-    await setCreatorPro(uid, {
-      email: email ?? undefined,
-      stripeCustomerId: stripeCustomerId,
-      stripeSubscriptionId: stripeSubscriptionId,
-      currentPeriodEnd: currentPeriodEnd,
-      priceId: priceId ?? undefined,
-      status,
-    })
-    debugTrace.push(`memberships/${uid} set to creator_pro (unknown price ID fallback)`)
-    return
-  }
-
-  debugTrace.push(`✅ Matched price ID ${priceId} to plan: ${planConfig.plan}`)
-  await planConfig.setMembership(uid, {
-    email: email ?? undefined,
-    stripeCustomerId: stripeCustomerId,
-    stripeSubscriptionId: stripeSubscriptionId,
-    currentPeriodEnd: currentPeriodEnd,
-    priceId: priceId ?? undefined,
-    status,
-  })
-  debugTrace.push(`memberships/${uid} set to ${planConfig.plan} with Stripe IDs`)
+  debugTrace.push(`✅ Membership updated successfully in Firestore`)
 }
 
-async function moveToFreeUsers(uid: string, debugTrace: DebugTrace) {
-  try {
-    // Remove from memberships collection
-    await adminDb.collection("memberships").doc(uid).delete()
-    debugTrace.push(`Removed ${uid} from memberships collection`)
+// Update membership status only (for cancellations)
+async function updateMembershipStatus(opts: {
+  uid: string
+  status: "canceled"
+  currentPeriodEnd?: Date | null
+  source: string
+  debugTrace: DebugTrace
+}) {
+  const { uid, status, currentPeriodEnd, source, debugTrace } = opts
 
-    // Add to freeUsers collection
+  debugTrace.push(`[${source}] updateMembershipStatus called for uid: ${uid}`)
+  debugTrace.push(`  status: ${status}`)
+
+  // Get existing membership to preserve plan and features
+  const existingDoc = await adminDb.collection("memberships").doc(uid).get()
+  if (!existingDoc.exists) {
+    debugTrace.push(`⚠️ No existing membership found for uid: ${uid}`)
+    return
+  }
+
+  const existingData = existingDoc.data()
+  debugTrace.push(`  existing plan: ${existingData?.plan}`)
+
+  // Update only status and period end, preserve everything else
+  await adminDb
+    .collection("memberships")
+    .doc(uid)
+    .update({
+      status,
+      isActive: false,
+      currentPeriodEnd: currentPeriodEnd || null,
+      updatedAt: FieldValue.serverTimestamp(),
+    })
+
+  debugTrace.push(`✅ Membership status updated to: ${status}`)
+}
+
+// Move user to free tier
+async function moveToFreeUsers(uid: string, debugTrace: DebugTrace) {
+  debugTrace.push(`Moving user ${uid} to freeUsers collection`)
+
+  try {
+    // Remove from memberships
+    await adminDb.collection("memberships").doc(uid).delete()
+    debugTrace.push(`  Removed from memberships collection`)
+
+    // Add to freeUsers
     await adminDb.collection("freeUsers").doc(uid).set({
       uid,
       plan: "free",
       downloadsUsed: 0,
       bundlesCreated: 0,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     })
-    debugTrace.push(`Added ${uid} to freeUsers collection`)
+    debugTrace.push(`  Added to freeUsers collection`)
   } catch (error: any) {
-    debugTrace.push(`Error moving user to freeUsers: ${error.message}`)
+    debugTrace.push(`❌ Error moving to freeUsers: ${error.message}`)
     throw error
   }
 }
 
+// Extract user ID from various sources
+function extractUid(metadata: any, clientReferenceId?: string | null): string | null {
+  return firstNonEmpty(metadata?.buyerUid, metadata?.firebaseUid, metadata?.userId, clientReferenceId)
+}
+
+// Event Handlers
+
 async function handleCheckoutCompleted(stripe: Stripe, event: Stripe.Event, debugTrace: DebugTrace) {
   const session = event.data.object as Stripe.Checkout.Session
-  debugTrace.push(`Handling checkout.session.completed: ${session.id}`)
+  debugTrace.push(`\n=== checkout.session.completed: ${session.id} ===`)
 
-  const md = session.metadata || {}
-  const uid =
-    firstNonEmpty((md as any).buyerUid, (md as any).firebaseUid, (md as any).userId) ||
-    firstNonEmpty(session.client_reference_id || undefined)
-  const email = firstNonEmpty((md as any).buyerEmail, session.customer_email || undefined)
-  const subscriptionId =
-    (typeof session.subscription === "string" ? session.subscription : session.subscription?.id) || null
-  const customerId = (typeof session.customer === "string" ? session.customer : session.customer?.id) || null
-  const priceId = firstNonEmpty((md as any).priceId)
+  const uid = extractUid(session.metadata, session.client_reference_id)
+  const email = firstNonEmpty(session.metadata?.buyerEmail, session.customer_email)
+  const subscriptionId = typeof session.subscription === "string" ? session.subscription : session.subscription?.id
+  const customerId = typeof session.customer === "string" ? session.customer : session.customer?.id
+  const priceId = session.metadata?.priceId
 
   if (!uid) {
-    debugTrace.push("No uid resolved from session metadata/client_reference_id")
-    return NextResponse.json({ error: "Could not find user ID", debugTrace }, { status: 400 })
+    debugTrace.push("❌ No uid found in session")
+    return NextResponse.json({ error: "No user ID", debugTrace }, { status: 400 })
   }
 
-  const downloadCount = (md as any).downloadCount
-  const source = (md as any).source
-
-  if (downloadCount && source === "dashboard_download_purchase") {
-    debugTrace.push(`Processing download purchase: ${downloadCount} downloads for user ${uid}`)
-
-    try {
-      // Record the download purchase
-      await adminDb.collection("downloadPurchases").add({
-        uid,
-        email,
-        downloadCount: Number.parseInt(downloadCount),
-        priceId,
-        stripeSessionId: session.id,
-        stripeCustomerId: customerId,
-        amount: session.amount_total,
-        currency: session.currency,
-        purchasedAt: new Date(),
-        status: "completed",
-      })
-      debugTrace.push(`Recorded download purchase in downloadPurchases collection`)
-
-      // Add downloads to user account
-      const memberDoc = await adminDb.collection("memberships").doc(uid).get()
-      if (memberDoc.exists) {
-        // User is a member - add to memberships collection
-        await adminDb
-          .collection("memberships")
-          .doc(uid)
-          .update({
-            additionalDownloads: adminDb.FieldValue.increment(Number.parseInt(downloadCount)),
-            updatedAt: new Date().toISOString(),
-          })
-        debugTrace.push(`Added ${downloadCount} downloads to member ${uid}`)
-      } else {
-        // User is free - add to freeUsers collection
-        const freeUserDoc = await adminDb.collection("freeUsers").doc(uid).get()
-        if (freeUserDoc.exists) {
-          await adminDb
-            .collection("freeUsers")
-            .doc(uid)
-            .update({
-              additionalDownloads: adminDb.FieldValue.increment(Number.parseInt(downloadCount)),
-              updatedAt: new Date().toISOString(),
-            })
-        } else {
-          // Create new free user record
-          await adminDb
-            .collection("freeUsers")
-            .doc(uid)
-            .set({
-              uid,
-              plan: "free",
-              downloadsUsed: 0,
-              bundlesCreated: 0,
-              additionalDownloads: Number.parseInt(downloadCount),
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            })
-        }
-        debugTrace.push(`Added ${downloadCount} downloads to free user ${uid}`)
-      }
-
-      return NextResponse.json({ received: true, downloadPurchase: true, debugTrace })
-    } catch (error: any) {
-      debugTrace.push(`Error processing download purchase: ${error.message}`)
-      return NextResponse.json({ error: "Failed to process download purchase", debugTrace }, { status: 500 })
-    }
+  // Handle download purchases (not subscriptions)
+  if (session.metadata?.source === "dashboard_download_purchase") {
+    debugTrace.push("This is a download purchase, not a subscription")
+    // Handle download purchase logic here if needed
+    return NextResponse.json({ received: true, debugTrace })
   }
 
-  await upsertMembership({
+  if (!subscriptionId || !customerId || !priceId) {
+    debugTrace.push("⚠️ Missing required fields for subscription")
+    return NextResponse.json({ received: true, debugTrace })
+  }
+
+  await updateMembership({
     uid,
     email,
+    priceId,
     stripeCustomerId: customerId,
     stripeSubscriptionId: subscriptionId,
-    priceId,
-    currentPeriodEnd: null,
     status: "active",
     source: "checkout.session.completed",
     debugTrace,
@@ -291,132 +230,42 @@ async function handleCheckoutCompleted(stripe: Stripe, event: Stripe.Event, debu
   return NextResponse.json({ received: true, debugTrace })
 }
 
-async function handleInvoicePaid(stripe: Stripe, event: Stripe.Event, debugTrace: DebugTrace) {
-  const invoice = event.data.object as Stripe.Invoice
-  debugTrace.push(`Handling invoice.payment_succeeded: ${invoice.id}`)
-
-  const subscriptionId =
-    (typeof invoice.subscription === "string" ? invoice.subscription : invoice.subscription?.id) || null
-  const customerId = (typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id) || null
-  let email = firstNonEmpty(invoice.customer_email || undefined)
-
-  // Try to resolve uid and priceId from invoice line metadata
-  let uid: string | null = null
-  let priceId: string | null = null
-  for (const line of invoice.lines?.data || []) {
-    const buyerUid = firstNonEmpty(
-      (line.metadata as any)?.buyerUid,
-      (line.metadata as any)?.firebaseUid,
-      (line.metadata as any)?.userId,
-    )
-    if (buyerUid && !uid) uid = buyerUid
-
-    const p = (line as any)?.price?.id || (line as any)?.pricing?.price_details?.price || (line as any)?.plan?.id
-    if (typeof p === "string" && !priceId) {
-      priceId = p
-      debugTrace.push(`Extracted price ID from invoice line: ${priceId}`)
-    }
-
-    if (uid && priceId) break
-  }
-
-  // Some APIs expose parent.subscription_details.metadata in the invoice
-  if (!uid) {
-    const parent = (invoice as any).parent
-    const subMeta = parent?.subscription_details?.metadata
-    if (subMeta) {
-      uid = firstNonEmpty(subMeta.buyerUid, subMeta.firebaseUid, subMeta.userId)
-      if (uid) debugTrace.push(`Found uid from invoice.parent.subscription_details.metadata: ${uid}`)
-    }
-  }
-
-  // If still missing, load the subscription and read metadata/email/period
-  let currentPeriodEnd: Date | null = null
-  if (subscriptionId && (!uid || !email || !priceId)) {
-    try {
-      const sub = await stripe.subscriptions.retrieve(subscriptionId)
-      if (!uid) {
-        uid = firstNonEmpty(
-          (sub.metadata as any)?.buyerUid,
-          (sub.metadata as any)?.firebaseUid,
-          (sub.metadata as any)?.userId,
-        )
-      }
-      if (!priceId) {
-        priceId = sub.items?.data?.[0]?.price?.id ?? null
-        if (priceId) {
-          debugTrace.push(`Extracted price ID from subscription: ${priceId}`)
-        }
-      }
-      if (sub.current_period_end) currentPeriodEnd = new Date(sub.current_period_end * 1000)
-
-      if (!email) {
-        const custId = typeof sub.customer === "string" ? sub.customer : sub.customer?.id
-        if (custId) {
-          const cust = await stripe.customers.retrieve(custId)
-          if (!("deleted" in cust)) email = firstNonEmpty(cust.email || undefined)
-        }
-      }
-    } catch (e: any) {
-      debugTrace.push(`Failed to retrieve subscription ${subscriptionId}: ${e.message}`)
-    }
-  }
-
-  if (!uid) {
-    debugTrace.push("No uid resolved from invoice/subscription")
-    return NextResponse.json({ error: "Could not find user ID", debugTrace }, { status: 400 })
-  }
-
-  debugTrace.push(`Final extracted values - uid: ${uid}, priceId: ${priceId}, customerId: ${customerId}`)
-
-  await upsertMembership({
-    uid,
-    email,
-    stripeCustomerId: customerId,
-    stripeSubscriptionId: subscriptionId,
-    priceId,
-    currentPeriodEnd,
-    status: "active",
-    source: "invoice.payment_succeeded",
-    debugTrace,
-  })
-
-  return NextResponse.json({ received: true, debugTrace })
-}
-
 async function handleSubscriptionCreated(stripe: Stripe, event: Stripe.Event, debugTrace: DebugTrace) {
   const sub = event.data.object as Stripe.Subscription
-  debugTrace.push(`Handling customer.subscription.created: ${sub.id}`)
+  debugTrace.push(`\n=== customer.subscription.created: ${sub.id} ===`)
 
-  const md = sub.metadata || {}
-  const uid = firstNonEmpty((md as any)?.buyerUid, (md as any)?.firebaseUid, (md as any)?.userId)
-  const priceId = sub.items?.data?.[0]?.price?.id ?? null
-  const customerId = (typeof sub.customer === "string" ? sub.customer : sub.customer?.id) || null
+  const uid = extractUid(sub.metadata)
+  const priceId = sub.items?.data?.[0]?.price?.id
+  const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer?.id
   const currentPeriodEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000) : null
 
-  let email: string | null = null
-  if (customerId) {
-    try {
-      const cust = await stripe.customers.retrieve(customerId)
-      if (!("deleted" in cust)) email = firstNonEmpty(cust.email || undefined)
-    } catch {
-      // ignore
-    }
-  }
-
   if (!uid) {
-    debugTrace.push("No uid on subscription.metadata")
-    return NextResponse.json({ error: "Could not find user ID", debugTrace }, { status: 400 })
+    debugTrace.push("❌ No uid found in subscription metadata")
+    return NextResponse.json({ error: "No user ID", debugTrace }, { status: 400 })
   }
 
-  await upsertMembership({
+  if (!priceId || !customerId) {
+    debugTrace.push("⚠️ Missing priceId or customerId")
+    return NextResponse.json({ received: true, debugTrace })
+  }
+
+  // Get customer email
+  let email: string | null = null
+  try {
+    const cust = await stripe.customers.retrieve(customerId)
+    if (!("deleted" in cust)) email = cust.email
+  } catch (e: any) {
+    debugTrace.push(`Could not retrieve customer email: ${e.message}`)
+  }
+
+  await updateMembership({
     uid,
     email,
+    priceId,
     stripeCustomerId: customerId,
     stripeSubscriptionId: sub.id,
-    priceId,
     currentPeriodEnd,
-    status: (sub.status as any) ?? "active",
+    status: sub.status as any,
     source: "customer.subscription.created",
     debugTrace,
   })
@@ -426,69 +275,29 @@ async function handleSubscriptionCreated(stripe: Stripe, event: Stripe.Event, de
 
 async function handleSubscriptionUpdated(stripe: Stripe, event: Stripe.Event, debugTrace: DebugTrace) {
   const sub = event.data.object as Stripe.Subscription
-  debugTrace.push(`Handling customer.subscription.updated: ${sub.id}`)
+  debugTrace.push(`\n=== customer.subscription.updated: ${sub.id} ===`)
+  debugTrace.push(`  status: ${sub.status}`)
+  debugTrace.push(`  cancel_at_period_end: ${sub.cancel_at_period_end}`)
 
-  debugTrace.push(`Full subscription object keys: ${Object.keys(sub).join(", ")}`)
-  debugTrace.push(`Subscription status: ${sub.status}`)
-  debugTrace.push(`Cancel at period end: ${sub.cancel_at_period_end}`)
-  debugTrace.push(`Current period end timestamp: ${sub.current_period_end}`)
-  debugTrace.push(`Current period start timestamp: ${(sub as any).current_period_start}`)
-  debugTrace.push(`Canceled at: ${(sub as any).canceled_at}`)
-  debugTrace.push(`Cancel at: ${(sub as any).cancel_at}`)
-  debugTrace.push(`Period end from items: ${sub.items?.data?.[0]?.period?.end}`)
-
-  // Log the entire subscription object (truncated for safety)
-  const subString = JSON.stringify(sub, null, 2)
-  debugTrace.push(`Full subscription object (first 1000 chars): ${subString.substring(0, 1000)}`)
-
-  debugTrace.push(
-    `Current period end date: ${sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : "null"}`,
-  )
-
-  const md = sub.metadata || {}
-  const uid = firstNonEmpty((md as any)?.buyerUid, (md as any)?.firebaseUid, (md as any)?.userId)
-
+  const uid = extractUid(sub.metadata)
   if (!uid) {
-    debugTrace.push("No uid on subscription.metadata")
-    return NextResponse.json({ error: "Could not find user ID", debugTrace }, { status: 400 })
+    debugTrace.push("❌ No uid found in subscription metadata")
+    return NextResponse.json({ error: "No user ID", debugTrace }, { status: 400 })
   }
 
-  // Check if subscription is canceled (cancel_at_period_end = true)
+  // Only handle cancellations
   if (sub.cancel_at_period_end) {
-    debugTrace.push(`Subscription ${sub.id} is set to cancel at period end`)
+    const currentPeriodEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000) : null
 
-    let currentPeriodEnd: Date | null = null
-
-    if (sub.current_period_end) {
-      currentPeriodEnd = new Date(sub.current_period_end * 1000)
-      debugTrace.push(`Using current_period_end: ${currentPeriodEnd.toISOString()}`)
-    } else if ((sub as any).cancel_at) {
-      currentPeriodEnd = new Date((sub as any).cancel_at * 1000)
-      debugTrace.push(`Using cancel_at: ${currentPeriodEnd.toISOString()}`)
-    } else if (sub.items?.data?.[0]?.period?.end) {
-      currentPeriodEnd = new Date(sub.items.data[0].period.end * 1000)
-      debugTrace.push(`Using items[0].period.end: ${currentPeriodEnd.toISOString()}`)
-    } else {
-      debugTrace.push("No period end date found in subscription object")
-    }
-
-    const customerId = (typeof sub.customer === "string" ? sub.customer : sub.customer?.id) || null
-    const priceId = sub.items?.data?.[0]?.price?.id ?? null
-
-    debugTrace.push(`Extracted currentPeriodEnd: ${currentPeriodEnd ? currentPeriodEnd.toISOString() : "null"}`)
-    debugTrace.push(`Extracted customerId: ${customerId}`)
-    debugTrace.push(`Extracted priceId: ${priceId}`)
-
-    await upsertMembership({
+    await updateMembershipStatus({
       uid,
-      stripeCustomerId: customerId,
-      stripeSubscriptionId: sub.id,
-      priceId,
-      currentPeriodEnd,
       status: "canceled",
+      currentPeriodEnd,
       source: "customer.subscription.updated",
       debugTrace,
     })
+  } else {
+    debugTrace.push("No action needed - subscription not being canceled")
   }
 
   return NextResponse.json({ received: true, debugTrace })
@@ -496,89 +305,149 @@ async function handleSubscriptionUpdated(stripe: Stripe, event: Stripe.Event, de
 
 async function handleSubscriptionDeleted(stripe: Stripe, event: Stripe.Event, debugTrace: DebugTrace) {
   const sub = event.data.object as Stripe.Subscription
-  debugTrace.push(`Handling customer.subscription.deleted: ${sub.id}`)
+  debugTrace.push(`\n=== customer.subscription.deleted: ${sub.id} ===`)
 
-  const md = sub.metadata || {}
-  const uid = firstNonEmpty((md as any)?.buyerUid, (md as any)?.firebaseUid, (md as any)?.userId)
-
+  const uid = extractUid(sub.metadata)
   if (!uid) {
-    debugTrace.push("No uid on subscription.metadata")
-    return NextResponse.json({ error: "Could not find user ID", debugTrace }, { status: 400 })
+    debugTrace.push("❌ No uid found in subscription metadata")
+    return NextResponse.json({ error: "No user ID", debugTrace }, { status: 400 })
   }
 
-  // Move user back to freeUsers collection
   await moveToFreeUsers(uid, debugTrace)
 
   return NextResponse.json({ received: true, debugTrace })
 }
 
+async function handleInvoicePaid(stripe: Stripe, event: Stripe.Event, debugTrace: DebugTrace) {
+  const invoice = event.data.object as Stripe.Invoice
+  debugTrace.push(`\n=== invoice.payment_succeeded: ${invoice.id} ===`)
+
+  const subscriptionId = typeof invoice.subscription === "string" ? invoice.subscription : invoice.subscription?.id
+  const customerId = typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id
+
+  if (!subscriptionId) {
+    debugTrace.push("No subscription ID - skipping")
+    return NextResponse.json({ received: true, debugTrace })
+  }
+
+  // Get subscription details
+  let uid: string | null = null
+  let priceId: string | null = null
+  let currentPeriodEnd: Date | null = null
+  let email: string | null = null
+
+  try {
+    const sub = await stripe.subscriptions.retrieve(subscriptionId)
+    uid = extractUid(sub.metadata)
+    priceId = sub.items?.data?.[0]?.price?.id ?? null
+    currentPeriodEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000) : null
+
+    if (customerId) {
+      const cust = await stripe.customers.retrieve(customerId)
+      if (!("deleted" in cust)) email = cust.email
+    }
+  } catch (e: any) {
+    debugTrace.push(`❌ Error retrieving subscription: ${e.message}`)
+    return NextResponse.json({ received: true, debugTrace })
+  }
+
+  if (!uid || !priceId || !customerId) {
+    debugTrace.push("⚠️ Missing required fields")
+    return NextResponse.json({ received: true, debugTrace })
+  }
+
+  await updateMembership({
+    uid,
+    email,
+    priceId,
+    stripeCustomerId: customerId,
+    stripeSubscriptionId: subscriptionId,
+    currentPeriodEnd,
+    status: "active",
+    source: "invoice.payment_succeeded",
+    debugTrace,
+  })
+
+  return NextResponse.json({ received: true, debugTrace })
+}
+
+// Main webhook handler
 export async function POST(request: Request) {
   const debugTrace: DebugTrace = []
+
   try {
+    debugTrace.push("=== WEBHOOK RECEIVED ===")
+    debugTrace.push(`Time: ${new Date().toISOString()}`)
+
+    // Verify environment
     if (!process.env.STRIPE_WEBHOOK_SECRET) {
-      debugTrace.push("Missing STRIPE_WEBHOOK_SECRET")
+      debugTrace.push("❌ Missing STRIPE_WEBHOOK_SECRET")
       return NextResponse.json({ error: "Server configuration error", debugTrace }, { status: 500 })
     }
 
+    // Verify Firebase
     try {
       await adminDb.collection("test").limit(1).get()
-      debugTrace.push("Firebase initialized successfully")
+      debugTrace.push("✅ Firebase connected")
     } catch (error: any) {
-      debugTrace.push(`Firebase initialization failed: ${error.message}`)
+      debugTrace.push(`❌ Firebase error: ${error.message}`)
       return NextResponse.json({ error: "Firestore not initialized", debugTrace }, { status: 500 })
     }
 
     const stripe = getStripe()
 
+    // Verify webhook signature
     const payload = await request.text()
     const sig = request.headers.get("stripe-signature")
     if (!sig) {
-      debugTrace.push("Missing stripe-signature header")
-      return NextResponse.json({ error: "Missing stripe-signature header", debugTrace }, { status: 400 })
+      debugTrace.push("❌ Missing stripe-signature header")
+      return NextResponse.json({ error: "Missing signature", debugTrace }, { status: 400 })
     }
 
     let event: Stripe.Event
     try {
       event = stripe.webhooks.constructEvent(payload, sig, process.env.STRIPE_WEBHOOK_SECRET)
-      debugTrace.push(`Verified signature for event ${event.id} (${event.type})`)
+      debugTrace.push(`✅ Signature verified`)
+      debugTrace.push(`Event ID: ${event.id}`)
+      debugTrace.push(`Event Type: ${event.type}`)
     } catch (err: any) {
-      debugTrace.push(`Signature verification failed: ${err.message}`)
-      return NextResponse.json(
-        { error: `Webhook signature verification failed: ${err.message}`, debugTrace },
-        { status: 400 },
-      )
+      debugTrace.push(`❌ Signature verification failed: ${err.message}`)
+      return NextResponse.json({ error: "Invalid signature", debugTrace }, { status: 400 })
     }
 
-    // Store raw event for diagnostics (best-effort)
+    // Store raw event for debugging
     try {
       await adminDb.collection("stripeWebhookEvents").add({
         eventType: event.type,
         eventId: event.id,
-        receivedAt: new Date(),
+        receivedAt: FieldValue.serverTimestamp(),
         rawEvent: JSON.parse(payload),
       })
-    } catch (e) {
-      console.warn("Failed to store raw event:", e)
+      debugTrace.push("✅ Event stored in stripeWebhookEvents collection")
+    } catch (e: any) {
+      debugTrace.push(`⚠️ Could not store event: ${e.message}`)
     }
 
+    // Route to appropriate handler
     switch (event.type) {
       case "checkout.session.completed":
         return await handleCheckoutCompleted(stripe, event, debugTrace)
-      case "invoice.payment_succeeded":
-        return await handleInvoicePaid(stripe, event, debugTrace)
       case "customer.subscription.created":
         return await handleSubscriptionCreated(stripe, event, debugTrace)
       case "customer.subscription.updated":
         return await handleSubscriptionUpdated(stripe, event, debugTrace)
       case "customer.subscription.deleted":
         return await handleSubscriptionDeleted(stripe, event, debugTrace)
+      case "invoice.payment_succeeded":
+        return await handleInvoicePaid(stripe, event, debugTrace)
       default:
-        debugTrace.push(`No-op for event ${event.type}`)
+        debugTrace.push(`ℹ️ Unhandled event type: ${event.type}`)
         return NextResponse.json({ received: true, debugTrace })
     }
   } catch (error: any) {
     console.error("Webhook error:", error)
-    debugTrace.push(`Webhook error: ${error.message}`)
-    return NextResponse.json({ error: error?.message || "Unknown error", debugTrace }, { status: 500 })
+    debugTrace.push(`❌ FATAL ERROR: ${error.message}`)
+    debugTrace.push(`Stack: ${error.stack}`)
+    return NextResponse.json({ error: error.message, debugTrace }, { status: 500 })
   }
 }
