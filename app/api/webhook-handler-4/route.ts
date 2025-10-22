@@ -71,7 +71,7 @@ export async function POST(request: Request) {
   try {
     console.log("=== STARTER PLAN WEBHOOK RECEIVED ===")
 
-    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET_STARTER || process.env.STRIPE_WEBHOOK_SECRET
+    const webhookSecret = process.env.STARTER_PLAN_WH
 
     if (!webhookSecret) {
       return NextResponse.json({ error: "Missing webhook secret" }, { status: 500 })
