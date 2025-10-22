@@ -3,19 +3,19 @@ import Stripe from "stripe"
 import { adminDb } from "@/lib/firebase-admin"
 import { FieldValue } from "firebase-admin/firestore"
 
-// VIP/CREATOR PRO WEBHOOK - Only handles Creator Pro subscriptions
+// STARTER PLAN WEBHOOK - Only handles Starter subscriptions
 
-const CREATOR_PRO_CONFIG = {
-  plan: "creator_pro" as const,
+const STARTER_PLAN_CONFIG = {
+  plan: "starter" as const,
   features: {
-    unlimitedDownloads: true,
-    premiumContent: true,
-    noWatermark: true,
-    prioritySupport: true,
-    platformFeePercentage: 10,
-    maxVideosPerBundle: null,
-    maxBundles: null,
-    maxFolders: null,
+    unlimitedDownloads: false,
+    premiumContent: false,
+    noWatermark: false,
+    prioritySupport: false,
+    platformFeePercentage: 20,
+    maxVideosPerBundle: 15,
+    maxBundles: 5,
+    maxFolders: 3,
     isActive: true,
   },
 }
@@ -26,7 +26,7 @@ function getStripe(): Stripe {
   return new Stripe(key, { apiVersion: "2023-10-16" })
 }
 
-async function updateCreatorProMembership(opts: {
+async function updateStarterMembership(opts: {
   uid: string
   email?: string | null
   priceId: string
@@ -37,7 +37,7 @@ async function updateCreatorProMembership(opts: {
 }) {
   const { uid, email, priceId, stripeCustomerId, stripeSubscriptionId, currentPeriodEnd, status } = opts
 
-  console.log(`[VIP WEBHOOK] Updating membership for ${uid}`)
+  console.log(`[STARTER WEBHOOK] Updating membership for ${uid}`)
   console.log(`  Status: ${status}`)
   console.log(`  Price ID: ${priceId}`)
 
@@ -46,7 +46,7 @@ async function updateCreatorProMembership(opts: {
   const membershipData = {
     uid,
     email: email || null,
-    plan: CREATOR_PRO_CONFIG.plan,
+    plan: STARTER_PLAN_CONFIG.plan,
     status,
     isActive,
     stripeCustomerId,
@@ -56,7 +56,7 @@ async function updateCreatorProMembership(opts: {
     downloadsUsed: 0,
     bundlesCreated: 0,
     features: {
-      ...CREATOR_PRO_CONFIG.features,
+      ...STARTER_PLAN_CONFIG.features,
       isActive,
     },
     createdAt: FieldValue.serverTimestamp(),
@@ -64,12 +64,12 @@ async function updateCreatorProMembership(opts: {
   }
 
   await adminDb.collection("memberships").doc(uid).set(membershipData)
-  console.log(`[VIP WEBHOOK] ✅ Membership updated successfully`)
+  console.log(`[STARTER WEBHOOK] ✅ Membership updated successfully`)
 }
 
 export async function POST(request: Request) {
   try {
-    console.log("=== VIP/CREATOR PRO WEBHOOK RECEIVED ===")
+    console.log("=== STARTER PLAN WEBHOOK RECEIVED ===")
 
     if (!process.env.STRIPE_WEBHOOK_SECRET) {
       return NextResponse.json({ error: "Missing webhook secret" }, { status: 500 })
@@ -86,9 +86,9 @@ export async function POST(request: Request) {
     let event: Stripe.Event
     try {
       event = stripe.webhooks.constructEvent(payload, sig, process.env.STRIPE_WEBHOOK_SECRET)
-      console.log(`[VIP WEBHOOK] Event: ${event.type} (${event.id})`)
+      console.log(`[STARTER WEBHOOK] Event: ${event.type} (${event.id})`)
     } catch (err: any) {
-      console.error(`[VIP WEBHOOK] Signature verification failed: ${err.message}`)
+      console.error(`[STARTER WEBHOOK] Signature verification failed: ${err.message}`)
       return NextResponse.json({ error: "Invalid signature" }, { status: 400 })
     }
 
@@ -98,7 +98,7 @@ export async function POST(request: Request) {
       eventId: event.id,
       receivedAt: FieldValue.serverTimestamp(),
       rawEvent: JSON.parse(payload),
-      webhook: "creator-pro",
+      webhook: "starter-plan",
     })
 
     switch (event.type) {
@@ -111,11 +111,11 @@ export async function POST(request: Request) {
         const priceId = session.metadata?.priceId
 
         if (!uid || !subscriptionId || !customerId || !priceId) {
-          console.log("[VIP WEBHOOK] Missing required fields")
+          console.log("[STARTER WEBHOOK] Missing required fields")
           return NextResponse.json({ received: true })
         }
 
-        await updateCreatorProMembership({
+        await updateStarterMembership({
           uid,
           email,
           priceId,
@@ -139,7 +139,7 @@ export async function POST(request: Request) {
         const currentPeriodEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000) : null
 
         if (!uid || !priceId || !customerId) {
-          console.log("[VIP WEBHOOK] Missing required fields")
+          console.log("[STARTER WEBHOOK] Missing required fields")
           return NextResponse.json({ received: true })
         }
 
@@ -148,10 +148,10 @@ export async function POST(request: Request) {
           const cust = await stripe.customers.retrieve(customerId)
           if (!("deleted" in cust)) email = cust.email
         } catch (e) {
-          console.log("[VIP WEBHOOK] Could not retrieve customer email")
+          console.log("[STARTER WEBHOOK] Could not retrieve customer email")
         }
 
-        await updateCreatorProMembership({
+        await updateStarterMembership({
           uid,
           email,
           priceId,
@@ -179,7 +179,7 @@ export async function POST(request: Request) {
             currentPeriodEnd,
             updatedAt: FieldValue.serverTimestamp(),
           })
-          console.log(`[VIP WEBHOOK] Subscription canceled for ${uid}`)
+          console.log(`[STARTER WEBHOOK] Subscription canceled for ${uid}`)
         }
         break
       }
@@ -201,17 +201,17 @@ export async function POST(request: Request) {
           createdAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         })
-        console.log(`[VIP WEBHOOK] User ${uid} moved to free tier`)
+        console.log(`[STARTER WEBHOOK] User ${uid} moved to free tier`)
         break
       }
 
       default:
-        console.log(`[VIP WEBHOOK] Unhandled event: ${event.type}`)
+        console.log(`[STARTER WEBHOOK] Unhandled event: ${event.type}`)
     }
 
     return NextResponse.json({ received: true })
   } catch (error: any) {
-    console.error("[VIP WEBHOOK] Error:", error)
+    console.error("[STARTER WEBHOOK] Error:", error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
