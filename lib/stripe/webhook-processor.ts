@@ -6,51 +6,55 @@ import { FieldValue } from "firebase-admin/firestore"
 type MembershipPlan = "free" | "creator_pro" | "starter"
 type MembershipStatus = "active" | "inactive" | "canceled" | "past_due" | "trialing"
 
-const PRO_FEATURES = {
-  unlimitedDownloads: true,
-  premiumContent: true,
-  noWatermark: true,
-  prioritySupport: true,
-  platformFeePercentage: 10,
-  maxVideosPerBundle: null,
-  maxBundles: null,
-}
-
-const FREE_FEATURES = {
-  unlimitedDownloads: false,
-  premiumContent: false,
-  noWatermark: false,
-  prioritySupport: false,
-  platformFeePercentage: 20,
-  maxVideosPerBundle: 10,
-  maxBundles: 2,
-}
-
-const STARTER_FEATURES = {
-  unlimitedDownloads: false,
-  premiumContent: false,
-  noWatermark: false,
-  prioritySupport: false,
-  platformFeePercentage: 20,
-  maxVideosPerBundle: 15,
-  maxBundles: 5,
-  maxFolders: 3,
-  canCreateSubfolders: true,
-  canAnalyzeTranscripts: false,
-}
-
-const PRICE_ID_TO_PLAN_CONFIG = {
-  price_1SKKFPDheyb0pkWFBT6lf7V7: {
-    plan: "starter" as MembershipPlan,
-    features: STARTER_FEATURES,
-    displayName: "Starter Plan",
+const PLAN_CONFIGS = {
+  starter: {
+    plan: "starter" as const,
+    features: {
+      maxBundles: 5,
+      maxVideosPerBundle: 15,
+      maxFolders: 3,
+      noWatermark: false,
+      platformFeePercentage: 20,
+      premiumContent: false,
+      prioritySupport: false,
+      unlimitedDownloads: false,
+      isActive: true,
+    },
   },
-  price_1SK7SzDheyb0pkWFaKOzIOzf: {
-    plan: "creator_pro" as MembershipPlan,
-    features: PRO_FEATURES,
-    displayName: "Creator VIP",
+  creator_pro: {
+    plan: "creator_pro" as const,
+    features: {
+      maxBundles: null,
+      maxVideosPerBundle: null,
+      maxFolders: null,
+      noWatermark: true,
+      platformFeePercentage: 10,
+      premiumContent: true,
+      prioritySupport: true,
+      unlimitedDownloads: true,
+      isActive: true,
+    },
   },
-} as const
+  free: {
+    plan: "free" as const,
+    features: {
+      maxBundles: 2,
+      maxVideosPerBundle: 10,
+      maxFolders: 1,
+      noWatermark: false,
+      platformFeePercentage: 20,
+      premiumContent: false,
+      prioritySupport: false,
+      unlimitedDownloads: false,
+      isActive: false,
+    },
+  },
+}
+
+const PRICE_ID_TO_PLAN: Record<string, keyof typeof PLAN_CONFIGS> = {
+  price_1SKKFPDheyb0pkWFBT6lf7V7: "starter",
+  price_1SK7SzDheyb0pkWFaKOzIOzf: "creator_pro",
+}
 
 // --- Helper Functions ---
 
@@ -65,25 +69,40 @@ async function findUserByCustomerId(customerId: string): Promise<string | null> 
   return snapshot.docs[0].id
 }
 
-async function setMembership(uid: string, data: object) {
+async function setMembership(uid: string, data: any) {
   if (!db) throw new Error("Firestore not initialized")
   const docRef = db.collection("memberships").doc(uid)
-  await docRef.set({ ...data, updatedAt: FieldValue.serverTimestamp() }, { merge: true })
-  console.log(`Updated membership for user ${uid}`)
+
+  console.log(`[v0] 💾 Writing complete membership document for ${uid}`)
+  console.log(`[v0]    - plan: ${data.plan}`)
+  console.log(`[v0]    - status: ${data.status}`)
+  console.log(`[v0]    - isActive: ${data.isActive}`)
+
+  // ALWAYS use .set() without merge to do complete replacement
+  await docRef.set({
+    ...data,
+    updatedAt: FieldValue.serverTimestamp(),
+  })
+
+  console.log(`[v0] ✅ Membership document written successfully`)
 }
 
-function getPlanConfigFromPriceId(priceId: string) {
+function getPlanConfig(priceId: string) {
   console.log(`[v0] 🔍 Looking up price ID: ${priceId}`)
+  console.log(`[v0] 📋 Available price IDs:`, Object.keys(PRICE_ID_TO_PLAN))
 
-  const config = PRICE_ID_TO_PLAN_CONFIG[priceId as keyof typeof PRICE_ID_TO_PLAN_CONFIG]
+  const planKey = PRICE_ID_TO_PLAN[priceId]
 
-  if (!config) {
+  if (!planKey) {
     console.error(`[v0] ❌ UNKNOWN PRICE ID: ${priceId}`)
-    console.error(`[v0] ❌ Known price IDs:`, Object.keys(PRICE_ID_TO_PLAN_CONFIG))
     throw new Error(`Unknown Stripe price ID: ${priceId}. Cannot determine plan.`)
   }
 
-  console.log(`[v0] ✅ Price ID ${priceId} → ${config.displayName} (${config.plan})`)
+  const config = PLAN_CONFIGS[planKey]
+  console.log(`[v0] ✅ Price ID ${priceId} → ${planKey}`)
+  console.log(`[v0]    - maxBundles: ${config.features.maxBundles}`)
+  console.log(`[v0]    - platformFeePercentage: ${config.features.platformFeePercentage}%`)
+
   return config
 }
 
@@ -118,28 +137,30 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
   console.log(`[v0] 💳 Subscription ID: ${subscriptionId}`)
   console.log(`[v0] 💰 Price ID: ${priceId}`)
 
-  const { plan, features, displayName } = getPlanConfigFromPriceId(priceId)
+  const planConfig = getPlanConfig(priceId)
+  const isActive = subscription.status === "active" || subscription.status === "trialing"
 
-  console.log(`[v0] 🎯 Assigning ${displayName}:`)
-  console.log(`[v0]    - plan: "${plan}"`)
-  console.log(`[v0]    - platformFeePercentage: ${features.platformFeePercentage}%`)
-  console.log(`[v0]    - maxBundles: ${features.maxBundles || "unlimited"}`)
-  console.log(`[v0]    - maxVideosPerBundle: ${features.maxVideosPerBundle || "unlimited"}`)
-  console.log(`[v0]    - unlimitedDownloads: ${features.unlimitedDownloads}`)
-
-  await setMembership(userId, {
+  const membershipData = {
     uid: userId,
-    plan: plan,
+    plan: planConfig.plan,
     status: subscription.status,
-    isActive: subscription.status === "active" || subscription.status === "trialing",
+    isActive,
     stripeCustomerId: customerId,
     stripeSubscriptionId: subscription.id,
     currentPeriodEnd: new Date(subscription.current_period_end * 1000),
     priceId: priceId,
-    ...features, // Spread all features directly into the document
-  })
+    downloadsUsed: 0,
+    bundlesCreated: 0,
+    features: {
+      ...planConfig.features,
+      isActive, // Override with actual subscription status
+    },
+    createdAt: FieldValue.serverTimestamp(),
+  }
 
-  console.log(`[v0] ✅ Successfully set memberships/${userId} to ${displayName}`)
+  await setMembership(userId, membershipData)
+
+  console.log(`[v0] ✅ Successfully set membership for ${userId} to ${planConfig.plan}`)
 }
 
 export async function processSubscriptionUpdated(subscription: Stripe.Subscription) {
@@ -158,21 +179,31 @@ export async function processSubscriptionUpdated(subscription: Stripe.Subscripti
 
   console.log(`[v0] 🔄 Updating subscription for user ${userId}`)
   console.log(`[v0] 💰 Price ID: ${priceId}`)
+  console.log(`[v0] 📊 Status: ${subscription.status}`)
 
-  const { plan, features, displayName } = getPlanConfigFromPriceId(priceId)
+  const planConfig = getPlanConfig(priceId)
+  const isActive = subscription.status === "active" || subscription.status === "trialing"
 
-  console.log(`[v0] 🎯 Updating to ${displayName} (${plan})`)
-
-  await setMembership(userId, {
-    plan: plan,
+  const membershipData = {
+    uid: userId,
+    plan: planConfig.plan,
     status: subscription.status,
-    isActive: subscription.status === "active" || subscription.status === "trialing",
-    priceId: priceId,
+    isActive,
+    stripeCustomerId: customerId,
+    stripeSubscriptionId: subscription.id,
     currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-    ...features, // Spread all features directly
-  })
+    priceId: priceId,
+    downloadsUsed: 0,
+    bundlesCreated: 0,
+    features: {
+      ...planConfig.features,
+      isActive, // Override with actual subscription status
+    },
+  }
 
-  console.log(`[v0] ✅ Successfully updated memberships/${userId} to ${displayName}`)
+  await setMembership(userId, membershipData)
+
+  console.log(`[v0] ✅ Successfully updated membership for ${userId} to ${planConfig.plan}`)
 }
 
 export async function processSubscriptionDeleted(subscription: Stripe.Subscription) {
@@ -180,22 +211,28 @@ export async function processSubscriptionDeleted(subscription: Stripe.Subscripti
   const userId = await findUserByCustomerId(customerId)
 
   if (!userId) {
-    // This can happen if a user is deleted from the app but not from Stripe.
     console.log(
       `Webhook Info: Received subscription deleted event for a user not found in DB. Customer ID: ${customerId}`,
     )
     return
   }
 
-  await setMembership(userId, {
+  console.log(`[v0] 🗑️ Moving user ${userId} to freeUsers collection`)
+
+  // Remove from memberships
+  await db.collection("memberships").doc(userId).delete()
+
+  // Add to freeUsers
+  await db.collection("freeUsers").doc(userId).set({
+    uid: userId,
     plan: "free",
-    status: "canceled",
-    isActive: false,
-    stripeSubscriptionId: null,
-    currentPeriodEnd: null,
-    priceId: null,
-    ...FREE_FEATURES, // Spread free features directly
+    downloadsUsed: 0,
+    bundlesCreated: 0,
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
   })
+
+  console.log(`[v0] ✅ User ${userId} moved to freeUsers`)
 }
 
 export async function processPaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent) {
