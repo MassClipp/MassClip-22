@@ -159,7 +159,7 @@ export default function FolderSidebar({
         await fetchFolders()
         onFolderCreated()
         const rootFolderCount = folders.filter((f) => !f.parentId).length + 1
-        if (subscription?.maxFolders) {
+        if (subscription?.maxFolders !== null && subscription?.maxFolders !== undefined) {
           toast({
             title: "Folder Created",
             description: `${rootFolderCount}/${subscription.maxFolders} folders used`,
@@ -454,7 +454,7 @@ export default function FolderSidebar({
         </Button>
       </div>
 
-      {subscription && subscription.maxFolders !== null && (
+      {subscription?.maxFolders !== null && subscription?.maxFolders !== undefined && (
         <div className="px-4 py-3 border-b border-zinc-800/50 bg-zinc-900/30">
           <div className="flex items-center justify-between text-sm">
             <span className="text-zinc-400">Folders</span>
@@ -526,7 +526,11 @@ export default function FolderSidebar({
             variant="outline"
             size="sm"
             onClick={() => setCreatingFolder("root")}
-            disabled={subscription?.maxFolders !== null && rootFolderCount >= subscription.maxFolders}
+            disabled={
+              subscription?.maxFolders !== null &&
+              subscription?.maxFolders !== undefined &&
+              rootFolderCount >= subscription.maxFolders
+            }
             className="w-full h-8 border-zinc-700 bg-zinc-900/50 hover:bg-zinc-800/50 text-zinc-300 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Plus className="h-3 w-3 mr-2" />
