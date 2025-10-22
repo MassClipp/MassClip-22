@@ -62,7 +62,12 @@ export async function GET(request: Request) {
 
             if (session.payment_status === "paid") {
               const planFromMetadata = session.metadata?.plan || "creator_vip"
-              const planToSet = planFromMetadata === "starter" ? "starter" : "creator_pro"
+              const planToSet =
+                planFromMetadata === "starter"
+                  ? "starter"
+                  : planFromMetadata === "creator_vip"
+                    ? "creator_pro"
+                    : "creator_pro"
 
               // Session is paid, but webhook hasn't processed yet
               // Let's upgrade the user manually
@@ -109,7 +114,12 @@ export async function GET(request: Request) {
 
         if (session.payment_status === "paid") {
           const planFromMetadata = session.metadata?.plan || "creator_vip"
-          const planToSet = planFromMetadata === "starter" ? "starter" : "creator_pro"
+          const planToSet =
+            planFromMetadata === "starter"
+              ? "starter"
+              : planFromMetadata === "creator_vip"
+                ? "creator_pro"
+                : "creator_pro"
 
           // Session is paid, but we don't have a record of it
           // Let's create a record and upgrade the user
