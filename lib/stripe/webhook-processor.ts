@@ -52,8 +52,14 @@ const PLAN_CONFIGS = {
 }
 
 const PRICE_ID_TO_PLAN: Record<string, keyof typeof PLAN_CONFIGS> = {
+  // Hardcoded Starter price (for backwards compatibility)
   price_1SKKFPDheyb0pkWFBT6lf7V7: "starter",
-  price_1SK7SzDheyb0pkWFaKOzIOzf: "creator_pro",
+
+  // Environment variable price IDs
+  [process.env.STARTER_PLAN_FIRST || ""]: "starter",
+  [process.env.STARTER_PLAN_REGULAR || ""]: "starter",
+  [process.env.CREATOR_PRO_FIRST || ""]: "creator_pro",
+  [process.env.CREATOR_PRO_REGULAR || ""]: "creator_pro",
 }
 
 // --- Helper Functions ---
