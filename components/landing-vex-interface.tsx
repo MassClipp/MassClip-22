@@ -380,7 +380,7 @@ export function LandingVexInterface() {
                         size="icon"
                         onClick={() => fileInputRef.current?.click()}
                         disabled={isUploading || uploadedVideos.length >= 5}
-                        className="shrink-0 h-10 w-10 hover:bg-white/10 rounded-xl transition-all relative bg-white/5 border border-white/10"
+                        className="shrink-0 h-10 w-10 hover:bg-teal-600/30 rounded-xl transition-all relative bg-teal-600/20 border border-teal-500/30"
                       >
                         {isUploading ? (
                           <>
@@ -403,16 +403,16 @@ export function LandingVexInterface() {
                                   stroke="currentColor"
                                   strokeWidth="2"
                                   strokeDasharray={`${((uploadedVideos.find((v) => v.status !== "complete")?.progress || 0) * 100.5) / 100}, 100.5`}
-                                  className="text-white transition-all duration-300"
+                                  className="text-teal-400 transition-all duration-300"
                                 />
                               </svg>
                             </div>
-                            <span className="text-xs text-white font-medium relative z-10">
+                            <span className="text-xs text-teal-400 font-medium relative z-10">
                               {Math.round(uploadedVideos.find((v) => v.status !== "complete")?.progress || 0)}%
                             </span>
                           </>
                         ) : (
-                          <Upload className="h-5 w-5 text-white/60" />
+                          <Upload className="h-5 w-5 text-teal-400" />
                         )}
                       </Button>
                       <Input
@@ -545,7 +545,7 @@ export function LandingVexInterface() {
                       onClick={() => fileInputRef.current?.click()}
                       disabled={isUploading || uploadedVideos.length >= 5}
                       size="icon"
-                      className="shrink-0 h-11 w-11 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full transition-all relative"
+                      className="shrink-0 h-11 w-11 bg-teal-600/20 hover:bg-teal-600/30 border border-teal-500/30 rounded-full transition-all relative"
                     >
                       {isUploading ? (
                         <>
@@ -568,16 +568,16 @@ export function LandingVexInterface() {
                                 stroke="currentColor"
                                 strokeWidth="2"
                                 strokeDasharray={`${((uploadedVideos.find((v) => v.status !== "complete")?.progress || 0) * 100.5) / 100}, 100.5`}
-                                className="text-white transition-all duration-300"
+                                className="text-teal-400 transition-all duration-300"
                               />
                             </svg>
                           </div>
-                          <span className="text-[10px] text-white font-medium relative z-10">
+                          <span className="text-[10px] text-teal-400 font-medium relative z-10">
                             {Math.round(uploadedVideos.find((v) => v.status !== "complete")?.progress || 0)}%
                           </span>
                         </>
                       ) : (
-                        <Upload className="h-5 w-5 text-white/60" />
+                        <Upload className="h-5 w-5 text-teal-400" />
                       )}
                     </Button>
                     <div className="flex-1 relative">
