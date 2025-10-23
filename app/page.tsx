@@ -39,9 +39,7 @@ const LandingPage = () => {
       </div>
 
       <div className="relative z-10 flex flex-col min-h-screen">
-        <header
-          className={`sticky top-0 z-50 border-b border-white/20 bg-white/5 backdrop-blur-2xl shadow-lg transition-all duration-300 ${scrolled ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-full pointer-events-none"}`}
-        >
+        <header className="sticky top-0 z-50 bg-black/80 backdrop-blur-xl">
           <nav className="flex items-center justify-between max-w-7xl mx-auto px-6 py-4 relative">
             <div className="text-white font-light text-2xl">
               <span className="font-league-spartan font-bold" style={{ fontFamily: "var(--font-league-spartan)" }}>

@@ -26,7 +26,7 @@ export function LandingVideoSidebar({ videos, onRemoveVideo }: LandingVideoSideb
   if (videos.length === 0) return null
 
   return (
-    <div className="w-full lg:w-80 lg:border-l border-white/20 bg-white/5 backdrop-blur-2xl overflow-y-auto shadow-2xl">
+    <div className="w-full lg:w-80 h-screen lg:border-l border-white/20 bg-white/5 backdrop-blur-2xl overflow-y-auto shadow-2xl">
       <div className="hidden lg:block p-4 border-b border-white/20 bg-white/5">
         <h3 className="text-sm font-medium text-white">Uploaded Videos ({videos.length})</h3>
         <p className="text-xs text-white/60 mt-1">Videos are being processed for VEX analysis</p>
