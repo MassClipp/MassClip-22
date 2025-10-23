@@ -2,13 +2,13 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { LandingVexInterface } from "@/components/landing-vex-interface"
 import { Sparkles, Package, TrendingUp } from "lucide-react"
-import ShaderBackground from "@/components/shader-background"
 
 const LandingPage = () => {
   const router = useRouter()
+  const [scrolled, setScrolled] = useState(false)
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -19,13 +19,29 @@ const LandingPage = () => {
     return () => clearTimeout(timer)
   }, [router])
 
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 100)
+    }
+
+    window.addEventListener("scroll", handleScroll)
+    return () => window.removeEventListener("scroll", handleScroll)
+  }, [])
+
   return (
     <div className="min-h-screen flex flex-col relative overflow-hidden bg-black">
-      <ShaderBackground />
+      <div className="fixed inset-0 z-0">
+        <div className="absolute inset-0 bg-black" />
 
-      {/* Content layer with glassmorphism */}
+        <div className="absolute top-1/4 right-1/4 w-[600px] h-[600px] bg-teal-500/5 rounded-full blur-[120px]" />
+        <div className="absolute bottom-1/3 left-1/4 w-[500px] h-[500px] bg-cyan-500/5 rounded-full blur-[100px]" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] bg-teal-400/3 rounded-full blur-[80px]" />
+      </div>
+
       <div className="relative z-10 flex flex-col min-h-screen">
-        <header className="sticky top-0 z-50 border-b border-white/20 bg-white/5 backdrop-blur-2xl shadow-lg">
+        <header
+          className={`sticky top-0 z-50 border-b border-white/20 bg-white/5 backdrop-blur-2xl shadow-lg transition-all duration-300 ${scrolled ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-full pointer-events-none"}`}
+        >
           <nav className="flex items-center justify-between max-w-7xl mx-auto px-6 py-4 relative">
             <div className="text-white font-light text-2xl">
               <span className="font-league-spartan font-bold" style={{ fontFamily: "var(--font-league-spartan)" }}>

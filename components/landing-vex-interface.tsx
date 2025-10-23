@@ -348,11 +348,8 @@ export function LandingVexInterface() {
 
   return (
     <div className="flex flex-col h-screen relative overflow-hidden">
-      {/* Fixed noise overlay */}
-      <div className="fixed inset-0 bg-[url('/noise.png')] opacity-[0.03] mix-blend-soft-light pointer-events-none z-0"></div>
-
+      {/* Main chat area */}
       <div className="flex-1 flex flex-col lg:flex-row relative z-10 min-h-0">
-        {/* Main chat area */}
         <div className="flex-1 flex flex-col relative min-h-0">
           {messages.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center px-4 pb-32">
@@ -367,8 +364,8 @@ export function LandingVexInterface() {
                 </div>
 
                 <div className="relative">
-                  <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl p-6 shadow-2xl">
-                    <div className="flex gap-3 items-end">
+                  <div className="relative bg-white/[0.02] backdrop-blur-sm border border-white/10 rounded-2xl p-1.5 shadow-2xl hover:border-white/20 transition-all">
+                    <div className="flex gap-2 items-center bg-black/40 rounded-xl p-3">
                       <input
                         ref={fileInputRef}
                         type="file"
@@ -383,7 +380,7 @@ export function LandingVexInterface() {
                         size="icon"
                         onClick={() => fileInputRef.current?.click()}
                         disabled={isUploading || uploadedVideos.length >= 5}
-                        className="shrink-0 h-11 w-11 hover:bg-white/10 border border-white/20 rounded-full transition-all relative"
+                        className="shrink-0 h-10 w-10 hover:bg-white/5 rounded-xl transition-all relative"
                       >
                         {isUploading ? (
                           <>
@@ -415,7 +412,7 @@ export function LandingVexInterface() {
                             </span>
                           </>
                         ) : (
-                          <Upload className="h-5 w-5 text-white/60" />
+                          <Upload className="h-5 w-5 text-white/40" />
                         )}
                       </Button>
                       <Input
@@ -428,15 +425,15 @@ export function LandingVexInterface() {
                           }
                         }}
                         placeholder="Upload your content"
-                        className="flex-1 h-11 bg-transparent border-0 focus-visible:ring-0 text-base placeholder:text-white/50 text-white font-light"
+                        className="flex-1 h-10 bg-transparent border-0 focus-visible:ring-0 text-base placeholder:text-white/30 text-white font-light"
                       />
                       <Button
                         onClick={handleSendMessage}
                         disabled={!input.trim() || isAnalyzing}
                         size="icon"
-                        className="h-11 w-11 shrink-0 bg-black hover:bg-black/80 text-white rounded-full transition-all shadow-lg"
+                        className="h-10 w-10 shrink-0 bg-white hover:bg-white/90 text-black rounded-xl transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        <Send className="h-5 w-5" />
+                        <Send className="h-4 w-4" />
                       </Button>
                     </div>
                   </div>
@@ -446,7 +443,7 @@ export function LandingVexInterface() {
                   <Button
                     onClick={() => router.push("/signup")}
                     size="lg"
-                    className="bg-white text-slate-950 hover:bg-white/90 font-medium rounded-full px-8 py-6 text-base shadow-xl hover:shadow-2xl transition-all"
+                    className="bg-white text-black hover:bg-white/90 font-medium rounded-full px-8 py-6 text-base shadow-xl hover:shadow-2xl transition-all"
                   >
                     Free Trial
                   </Button>
