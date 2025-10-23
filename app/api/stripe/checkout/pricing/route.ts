@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
       const freeUserDoc = await adminDb.collection("freeUsers").doc(uid).get()
       if (freeUserDoc.exists) {
         const freeUserData = freeUserDoc.data()
-        hasUsedTrial = freeUserData?.hasUsedFirstWeekDiscount || false
+        hasUsedTrial = freeUserData?.hasUsedFreeTrial || false // Changed from hasUsedFirstWeekDiscount
         console.log(`📊 [Membership Checkout] User trial status: ${hasUsedTrial}`)
       }
     } catch (error) {
