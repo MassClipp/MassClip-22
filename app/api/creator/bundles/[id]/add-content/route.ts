@@ -60,23 +60,29 @@ function getContentType(mimeType: string): ContentType {
 
 async function getTierInfoSafe(uid: string): Promise<{ maxVideosPerBundle: number | null; maxBundles: number | null }> {
   try {
+    console.log("[v0] ===== TIER INFO DEBUG =====")
+    console.log("[v0] Getting tier info for uid:", uid)
+
     // Use the proper tier service that handles free, starter, and creator_pro
     const tierInfo = await getUserTierInfo(uid)
 
-    console.log("📊 [Bundle Limit] Tier info from service:", {
+    console.log("[v0] Tier info from service:", {
       tier: tierInfo.tier,
       maxVideosPerBundle: tierInfo.maxVideosPerBundle,
       bundlesLimit: tierInfo.bundlesLimit,
+      isUnlimited: tierInfo.maxVideosPerBundle === null,
     })
+    console.log("[v0] Full tierInfo object:", JSON.stringify(tierInfo, null, 2))
+    console.log("[v0] ==============================")
 
     return {
       maxVideosPerBundle: tierInfo.maxVideosPerBundle,
       maxBundles: tierInfo.bundlesLimit,
     }
   } catch (e) {
-    console.error("❌ [Bundle Limit] Error getting tier info:", e)
+    console.error("[v0] ❌ Error getting tier info:", e)
     // Fallback to starter limits (not free limits)
-    console.log("📝 [Bundle Limit] Fallback to Starter tier limits - 15 videos per bundle, 5 bundles max")
+    console.log("[v0] 📝 Fallback to Starter tier limits - 15 videos per bundle, 5 bundles max")
     return { maxVideosPerBundle: 15, maxBundles: 5 }
   }
 }
@@ -288,22 +294,34 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     // Enforce tier limits
     const tier = await getTierInfoSafe(uid)
 
+    console.log("[v0] ===== BUNDLE CONTENT LIMIT DEBUG =====")
+    console.log("[v0] Bundle ID:", bundleId)
+    console.log("[v0] User ID:", uid)
+    console.log("[v0] Tier limits:", tier)
+
     const existingDetailed = Array.isArray(bundleData.detailedContentItems) ? bundleData.detailedContentItems : []
     const currentCount = existingDetailed.length
+
+    console.log("[v0] Current bundle content:", {
+      currentCount,
+      maxAllowed: tier.maxVideosPerBundle,
+      isUnlimited: tier.maxVideosPerBundle === null,
+    })
 
     // Simplified logic: null means unlimited, period
     let remaining: number
     if (tier.maxVideosPerBundle === null) {
       remaining = Number.POSITIVE_INFINITY // Creator Pro = unlimited
-      console.log("🚀 [Bundle Limit] Creator Pro user - NO LIMITS APPLIED")
+      console.log("[v0] 🚀 Creator Pro user - NO LIMITS APPLIED")
     } else {
       remaining = Math.max(0, tier.maxVideosPerBundle - currentCount)
-      console.log("📊 [Bundle Limit] Free user limits applied:", {
+      console.log("[v0] 📊 Tier limits applied:", {
         limit: tier.maxVideosPerBundle,
         current: currentCount,
         remaining: remaining,
       })
     }
+    console.log("[v0] ========================================")
 
     const existingIds = new Set(
       existingDetailed
@@ -472,7 +490,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       },
     })
   } catch (error: any) {
-    console.error("❌ [Add Content] Unhandled error:", error)
+    console.error("[v0] ❌ Unhandled error:", error)
     const message = typeof error?.message === "string" ? error.message : "Failed to add content to bundle"
     return NextResponse.json({ error: message }, { status: 500 })
   }

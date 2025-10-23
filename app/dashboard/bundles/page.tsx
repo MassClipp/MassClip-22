@@ -115,13 +115,32 @@ export default function BundlesPage() {
   const tierName = freeTierLimits?.tier || "starter"
 
   useEffect(() => {
-    console.log("[v0] Bundles page - User plan data:", {
+    console.log("[v0] ===== BUNDLE LIMITS DEBUG =====")
+    console.log("[v0] User plan data:", {
       planData,
       isProUser,
       freeTierLimits,
       limitsLoading,
     })
-  }, [planData, isProUser, freeTierLimits, limitsLoading])
+    console.log("[v0] Calculated limits:", {
+      bundleLimit,
+      videosPerBundleLimit,
+      tierName,
+      currentBundleCount: productBoxes.length,
+      isAtLimit: !isProUser && productBoxes.length >= bundleLimit,
+    })
+    console.log("[v0] Raw freeTierLimits object:", JSON.stringify(freeTierLimits, null, 2))
+    console.log("[v0] ================================")
+  }, [
+    planData,
+    isProUser,
+    freeTierLimits,
+    limitsLoading,
+    bundleLimit,
+    videosPerBundleLimit,
+    tierName,
+    productBoxes.length,
+  ])
 
   const isAtBundleLimit = !isProUser && productBoxes.length >= bundleLimit
 
