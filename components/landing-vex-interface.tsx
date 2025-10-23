@@ -348,21 +348,6 @@ export function LandingVexInterface() {
 
   return (
     <div className="flex flex-col h-screen bg-gradient-to-br from-slate-950 via-black to-teal-950 relative overflow-hidden">
-      {/* Abstract background elements */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-        {/* Large circle top right */}
-        <div className="absolute -top-40 -right-40 w-96 h-96 bg-gradient-to-br from-teal-500/20 to-cyan-500/10 rounded-full blur-3xl"></div>
-
-        {/* Medium circle bottom left */}
-        <div className="absolute -bottom-32 -left-32 w-80 h-80 bg-gradient-to-tr from-teal-600/15 to-blue-500/10 rounded-full blur-3xl"></div>
-
-        {/* Small accent top left */}
-        <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-gradient-to-br from-cyan-400/10 to-teal-500/5 rounded-full blur-2xl"></div>
-
-        {/* Diagonal line accent */}
-        <div className="absolute top-0 right-1/4 w-1 h-full bg-gradient-to-b from-transparent via-teal-500/20 to-transparent transform rotate-12"></div>
-      </div>
-
       {/* Fixed noise overlay */}
       <div className="fixed inset-0 bg-[url('/noise.png')] opacity-[0.03] mix-blend-soft-light pointer-events-none z-0"></div>
 
