@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { CheckCircle, Eye, RefreshCw, AlertCircle, CreditCard, Calendar, User, Package } from "lucide-react"
+import { CheckCircle, Eye, RefreshCw, AlertCircle, CreditCard, Calendar, User, Package, Download } from "lucide-react"
 import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 import Link from "next/link"
 
@@ -52,6 +52,7 @@ export default function PurchaseSuccessPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [retryCount, setRetryCount] = useState(0)
+  const [downloading, setDownloading] = useState(false)
   const sessionId = searchParams?.get("session_id")
 
   const verifyPurchase = async () => {
@@ -120,9 +121,66 @@ export default function PurchaseSuccessPage() {
     }
   }, [sessionId, authLoading])
 
+  useEffect(() => {
+    if (sessionId && typeof window !== "undefined") {
+      localStorage.setItem("lastPurchaseSessionId", sessionId)
+    }
+  }, [sessionId])
+
   const handleRetry = () => {
     setRetryCount((prev) => prev + 1)
     verifyPurchase()
+  }
+
+  const handleDownloadZip = async () => {
+    if (!itemId || !sessionId) {
+      alert("Missing required information to download")
+      return
+    }
+
+    try {
+      setDownloading(true)
+      console.log("[v0] Starting ZIP download for bundle:", itemId)
+
+      const headers: HeadersInit = {
+        "Content-Type": "application/json",
+      }
+
+      // Add auth token if user is logged in
+      if (user) {
+        const token = await user.getIdToken()
+        headers["Authorization"] = `Bearer ${token}`
+      }
+
+      const response = await fetch(`/api/bundles/${itemId}/download-zip-buyer`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ sessionId }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || "Failed to download ZIP")
+      }
+
+      // Download the ZIP file
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `${itemTitle.replace(/[^\w\s-]/gi, "")}.zip`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+
+      console.log("[v0] ZIP download completed successfully")
+    } catch (error) {
+      console.error("[v0] ZIP download failed:", error)
+      alert(error instanceof Error ? error.message : "Failed to download ZIP")
+    } finally {
+      setDownloading(false)
+    }
   }
 
   const formatAmount = (amount = 0, currency = "usd") => {
@@ -377,6 +435,29 @@ export default function PurchaseSuccessPage() {
               </Link>
             </Button>
           </div>
+
+          {/* Download ZIP Button */}
+          {purchase.type === "bundle" && itemId && (
+            <Button
+              onClick={handleDownloadZip}
+              disabled={downloading}
+              size="lg"
+              variant="outline"
+              className="w-full border-teal-300 text-teal-700 hover:bg-teal-50 bg-white shadow-lg"
+            >
+              {downloading ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Preparing Download...
+                </>
+              ) : (
+                <>
+                  <Download className="h-4 w-4 mr-2" />
+                  Download All as ZIP
+                </>
+              )}
+            </Button>
+          )}
 
           {/* Additional Information */}
           <Card className="bg-gray-50/90 border-gray-200 shadow-xl backdrop-blur-sm">
