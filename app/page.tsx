@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { useEffect } from "react"
 import { LandingVexInterface } from "@/components/landing-vex-interface"
 import { Sparkles, Package, TrendingUp } from "lucide-react"
+import ShaderBackground from "@/components/shader-background"
 
 const LandingPage = () => {
   const router = useRouter()
@@ -20,106 +21,7 @@ const LandingPage = () => {
 
   return (
     <div className="min-h-screen flex flex-col relative overflow-hidden bg-black">
-      {/* Abstract Vector Background */}
-      <div className="fixed inset-0 z-0">
-        {/* Base dark gradient */}
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-black to-slate-900" />
-
-        {/* Hexagonal dot pattern overlay */}
-        <div
-          className="absolute inset-0 opacity-30"
-          style={{
-            backgroundImage: `radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px)`,
-            backgroundSize: "20px 20px",
-          }}
-        />
-
-        {/* Geometric shapes with teal glow */}
-        <svg className="absolute inset-0 w-full h-full" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <linearGradient id="tealGlow" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" style={{ stopColor: "#14b8a6", stopOpacity: 0.8 }} />
-              <stop offset="100%" style={{ stopColor: "#06b6d4", stopOpacity: 0.8 }} />
-            </linearGradient>
-            <filter id="glow">
-              <feGaussianBlur stdDeviation="4" result="coloredBlur" />
-              <feMerge>
-                <feMergeNode in="coloredBlur" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
-          </defs>
-
-          {/* Large diagonal geometric shape - top right */}
-          <polygon
-            points="60,0 100,0 100,40 80,60"
-            fill="rgba(15,23,42,0.8)"
-            stroke="url(#tealGlow)"
-            strokeWidth="2"
-            filter="url(#glow)"
-            vectorEffect="non-scaling-stroke"
-            style={{ transform: "scale(10)", transformOrigin: "top right" }}
-          />
-
-          {/* Medium geometric shape - center left */}
-          <polygon
-            points="0,30 20,30 25,50 5,60"
-            fill="rgba(15,23,42,0.9)"
-            stroke="url(#tealGlow)"
-            strokeWidth="2"
-            filter="url(#glow)"
-            vectorEffect="non-scaling-stroke"
-            style={{ transform: "scale(10)", transformOrigin: "center left" }}
-          />
-
-          {/* Bottom right accent shape */}
-          <polygon
-            points="70,80 100,70 100,100 80,100"
-            fill="rgba(15,23,42,0.85)"
-            stroke="url(#tealGlow)"
-            strokeWidth="2"
-            filter="url(#glow)"
-            vectorEffect="non-scaling-stroke"
-            style={{ transform: "scale(10)", transformOrigin: "bottom right" }}
-          />
-
-          {/* Glowing accent lines */}
-          <line
-            x1="0"
-            y1="50%"
-            x2="30%"
-            y2="20%"
-            stroke="url(#tealGlow)"
-            strokeWidth="3"
-            filter="url(#glow)"
-            opacity="0.6"
-          />
-          <line
-            x1="70%"
-            y1="80%"
-            x2="100%"
-            y2="60%"
-            stroke="url(#tealGlow)"
-            strokeWidth="3"
-            filter="url(#glow)"
-            opacity="0.6"
-          />
-          <line
-            x1="40%"
-            y1="0"
-            x2="60%"
-            y2="40%"
-            stroke="url(#tealGlow)"
-            strokeWidth="2"
-            filter="url(#glow)"
-            opacity="0.4"
-          />
-        </svg>
-
-        {/* Additional glow spots for depth */}
-        <div className="absolute top-1/4 right-1/4 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/3 left-1/4 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl" />
-      </div>
+      <ShaderBackground />
 
       {/* Content layer with glassmorphism */}
       <div className="relative z-10 flex flex-col min-h-screen">
