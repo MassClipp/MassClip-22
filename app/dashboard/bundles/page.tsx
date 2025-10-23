@@ -110,6 +110,10 @@ export default function BundlesPage() {
   const { limits: freeTierLimits, loading: limitsLoading } = useFreeTierLimits()
   const { planData, isProUser } = useUserPlan()
 
+  const bundleLimit = isProUser ? Number.POSITIVE_INFINITY : freeTierLimits?.bundlesLimit || 5
+  const videosPerBundleLimit = isProUser ? Number.POSITIVE_INFINITY : freeTierLimits?.maxVideosPerBundle || 15
+  const tierName = freeTierLimits?.tier || "starter"
+
   useEffect(() => {
     console.log("[v0] Bundles page - User plan data:", {
       planData,
@@ -118,9 +122,7 @@ export default function BundlesPage() {
       limitsLoading,
     })
   }, [planData, isProUser, freeTierLimits, limitsLoading])
-  // </CHANGE>
 
-  const bundleLimit = isProUser ? Number.POSITIVE_INFINITY : freeTierLimits?.bundlesLimit || 2
   const isAtBundleLimit = !isProUser && productBoxes.length >= bundleLimit
 
   const [availableUploads, setAvailableUploads] = useState<ContentItem[]>([])
@@ -1111,7 +1113,6 @@ export default function BundlesPage() {
                     {productBoxes.length}/{isProUser ? "∞" : bundleLimit}
                   </span>
                 </h1>
-                {/* </CHANGE> */}
                 <p className="text-zinc-400 text-sm">Create and manage premium content packages for your audience</p>
               </div>
 
@@ -1125,13 +1126,11 @@ export default function BundlesPage() {
                       } else {
                         setShowCreateModal(true)
                       }
-                      // </CHANGE>
                     }}
                     className="bg-white text-black hover:bg-zinc-200"
                   >
                     <Plus className="h-4 w-4 mr-2" />
                     {!isProUser && productBoxes.length >= bundleLimit ? "Want more bundles?" : "Create Bundle"}
-                    {/* </CHANGE> */}
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="bg-zinc-900 border-zinc-800 text-white">
@@ -1319,13 +1318,11 @@ export default function BundlesPage() {
                     } else {
                       setShowCreateModal(true)
                     }
-                    // </CHANGE>
                   }}
                   className="bg-white text-black hover:bg-zinc-200"
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   {!isProUser && productBoxes.length >= bundleLimit ? "Want more bundles?" : "Create Your First Bundle"}
-                  {/* </CHANGE> */}
                 </Button>
               </div>
             ) : (
@@ -1742,7 +1739,8 @@ export default function BundlesPage() {
                   <DialogTitle>Add Content to Bundle</DialogTitle>
                   {!isProUser && (
                     <p className="text-xs text-zinc-500 mt-1">
-                      Free plan limit: {CONTENT_LIMIT_FREE} items per bundle.
+                      {tierName.charAt(0).toUpperCase() + tierName.slice(1)} plan limit: {videosPerBundleLimit} items
+                      per bundle.
                     </p>
                   )}
                 </DialogHeader>
@@ -1853,7 +1851,7 @@ export default function BundlesPage() {
                             contentItems[targetBox.id]?.length ??
                             0)
                           : 0
-                        const maxPerBundle = isProUser ? Number.POSITIVE_INFINITY : CONTENT_LIMIT_FREE
+                        const maxPerBundle = isProUser ? Number.POSITIVE_INFINITY : videosPerBundleLimit
                         const remaining = Math.max(0, (maxPerBundle as number) - existingCount)
                         const overLimit = !isProUser && selectedContentIds.length > remaining
 

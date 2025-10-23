@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { cert, getApps, initializeApp } from "firebase-admin/app"
 import { getAuth } from "firebase-admin/auth"
 import { getFirestore, Timestamp } from "firebase-admin/firestore"
-import { getMembership } from "@/lib/memberships-service"
+import { getUserTierInfo } from "@/lib/user-tier-service"
 
 // Initialize Firebase Admin with only the required fields to avoid missing env crashes
 if (!getApps().length) {
@@ -60,23 +60,25 @@ function getContentType(mimeType: string): ContentType {
 
 async function getTierInfoSafe(uid: string): Promise<{ maxVideosPerBundle: number | null; maxBundles: number | null }> {
   try {
-    const membership = await getMembership(uid)
+    // Use the proper tier service that handles free, starter, and creator_pro
+    const tierInfo = await getUserTierInfo(uid)
 
-    // Dead simple logic: If they have an active Creator Pro membership, unlimited everything
-    if (membership && membership.isActive && membership.plan === "creator_pro") {
-      console.log("🚀 [Bundle Limit] Creator Pro user - UNLIMITED EVERYTHING")
-      return {
-        maxVideosPerBundle: null, // Unlimited videos per bundle
-        maxBundles: null, // Unlimited bundles
-      }
+    console.log("📊 [Bundle Limit] Tier info from service:", {
+      tier: tierInfo.tier,
+      maxVideosPerBundle: tierInfo.maxVideosPerBundle,
+      bundlesLimit: tierInfo.bundlesLimit,
+    })
+
+    return {
+      maxVideosPerBundle: tierInfo.maxVideosPerBundle,
+      maxBundles: tierInfo.bundlesLimit,
     }
   } catch (e) {
-    console.error("❌ [Bundle Limit] Error checking membership:", e)
+    console.error("❌ [Bundle Limit] Error getting tier info:", e)
+    // Fallback to starter limits (not free limits)
+    console.log("📝 [Bundle Limit] Fallback to Starter tier limits - 15 videos per bundle, 5 bundles max")
+    return { maxVideosPerBundle: 15, maxBundles: 5 }
   }
-
-  // Everyone else gets free tier limits
-  console.log("📝 [Bundle Limit] Free user - 10 videos per bundle, 2 bundles max")
-  return { maxVideosPerBundle: 10, maxBundles: 2 }
 }
 
 async function buildDetailedItemsForIds(idsToAdd: string[]) {
@@ -463,7 +465,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       durationMs: Date.now() - startedAt,
       debug: {
         uid,
-        membershipFound: tier.maxVideosPerBundle !== 10, // If not 10, membership was found
+        membershipFound: tier.maxVideosPerBundle !== 15, // If not 15, membership was found
         isUnlimited: tier.maxVideosPerBundle === null,
         tierInfo: tier,
         validationErrors: validationErrors.length > 0 ? validationErrors : undefined, // Include validation errors in debug
