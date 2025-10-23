@@ -1,85 +1,137 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@import "tw-animate-css";
 
 /* Import Inter font */
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap");
 
-@layer base {
-  :root {
-    --background: 0 0% 7%;
-    --foreground: 0 0% 95%;
+@custom-variant dark (&:is(.dark *));
 
-    --card: 0 0% 9%;
-    --card-foreground: 0 0% 95%;
+/* Converted user's HSL colors to oklch for Tailwind v4 compatibility */
+:root {
+  --background: oklch(0.27 0 0);
+  --foreground: oklch(0.95 0 0);
+  --card: oklch(0.32 0 0);
+  --card-foreground: oklch(0.95 0 0);
+  --popover: oklch(0.32 0 0);
+  --popover-foreground: oklch(0.95 0 0);
+  --primary: oklch(0.95 0 0);
+  --primary-foreground: oklch(0.27 0 0);
+  --secondary: oklch(0.42 0 0);
+  --secondary-foreground: oklch(0.95 0 0);
+  --muted: oklch(0.52 0 0);
+  --muted-foreground: oklch(0.72 0 0);
+  --accent: oklch(0.52 0 0);
+  --accent-foreground: oklch(0.95 0 0);
+  --destructive: oklch(0.45 0.15 25);
+  --destructive-foreground: oklch(0.95 0 0);
+  --border: oklch(0.52 0 0);
+  --input: oklch(0.42 0 0);
+  --ring: oklch(0.62 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --radius: 0.5rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
 
-    --popover: 0 0% 9%;
-    --popover-foreground: 0 0% 95%;
+  /* Modern chat-specific colors */
+  --chat-background: oklch(0.27 0 0);
+  --chat-sidebar: oklch(0.18 0 0);
+  --chat-message-user: oklch(0.52 0 0);
+  --chat-message-assistant: oklch(0.32 0 0);
+  --chat-input: oklch(0.42 0 0);
+  --chat-border: oklch(0.62 0 0);
+}
 
-    --primary: 0 0% 95%;
-    --primary-foreground: 0 0% 7%;
+.dark {
+  --background: oklch(0.18 0 0);
+  --foreground: oklch(0.98 0 0);
+  --card: oklch(0.18 0 0);
+  --card-foreground: oklch(0.98 0 0);
+  --popover: oklch(0.18 0 0);
+  --popover-foreground: oklch(0.98 0 0);
+  --primary: oklch(0.98 0 0);
+  --primary-foreground: oklch(0.32 0 0);
+  --secondary: oklch(0.52 0 0);
+  --secondary-foreground: oklch(0.98 0 0);
+  --muted: oklch(0.52 0 0);
+  --muted-foreground: oklch(0.72 0 0);
+  --accent: oklch(0.52 0 0);
+  --accent-foreground: oklch(0.98 0 0);
+  --destructive: oklch(0.45 0.15 25);
+  --destructive-foreground: oklch(0.98 0 0);
+  --border: oklch(0.52 0 0);
+  --input: oklch(0.52 0 0);
+  --ring: oklch(0.85 0 0);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(0.269 0 0);
+  --sidebar-ring: oklch(0.439 0 0);
+}
 
-    --secondary: 0 0% 12%;
-    --secondary-foreground: 0 0% 95%;
-
-    --muted: 0 0% 15%;
-    --muted-foreground: 0 0% 65%;
-
-    --accent: 0 0% 15%;
-    --accent-foreground: 0 0% 95%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 95%;
-
-    --border: 0 0% 15%;
-    --input: 0 0% 12%;
-    --ring: 0 0% 20%;
-
-    --radius: 0.5rem;
-
-    /* Modern chat-specific colors */
-    --chat-background: 0 0% 7%;
-    --chat-sidebar: 0 0% 4%;
-    --chat-message-user: 0 0% 15%;
-    --chat-message-assistant: 0 0% 9%;
-    --chat-input: 0 0% 12%;
-    --chat-border: 0 0% 20%;
-  }
-
-  .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
-  }
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-maroon: oklch(0.35 0.15 15);
+  --color-crimson: oklch(0.55 0.25 25);
+  --color-crimson-dark: oklch(0.45 0.22 25);
+  --color-crimson-light: oklch(0.65 0.28 25);
 }
 
 @layer base {
   * {
-    @apply border-border;
+    @apply border-border outline-ring/50;
   }
 
   html {
@@ -100,21 +152,22 @@
   h4,
   h5,
   h6 {
-    @apply font-light tracking-tight;
+    font-weight: 300;
+    letter-spacing: -0.02em;
   }
 }
 
 /* Custom colors */
 .text-crimson {
-  color: hsl(348, 83%, 47%);
+  color: oklch(0.55 0.25 25);
 }
 
 .bg-crimson {
-  background-color: hsl(348, 83%, 47%);
+  background-color: oklch(0.55 0.25 25);
 }
 
 .border-crimson {
-  border-color: hsl(348, 83%, 47%);
+  border-color: oklch(0.55 0.25 25);
 }
 
 /* Premium Gradient Background */
@@ -127,7 +180,7 @@
 }
 
 .accent-gradient {
-  background: linear-gradient(135deg, hsl(348, 83%, 47%) 0%, hsl(348, 83%, 37%) 100%);
+  background: linear-gradient(135deg, oklch(0.55 0.25 25) 0%, oklch(0.45 0.22 25) 100%);
 }
 
 /* Premium Button Styles */
@@ -213,7 +266,7 @@
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: hsl(348, 83%, 47%);
+  background-color: oklch(0.55 0.25 25);
   transform: translateX(-100%);
   animation: reveal 1.5s ease forwards;
 }
@@ -324,7 +377,7 @@
   left: 50%;
   width: 0;
   height: 0;
-  background: rgba(220, 20, 60, 0.15); /* Crimson with low opacity */
+  background: rgba(220, 20, 60, 0.15);
   transform: translate(-50%, -50%);
   transition: width 0.4s ease, height 0.4s ease;
   z-index: -1;
@@ -358,15 +411,6 @@
   animation: shine 1.5s ease-in-out;
 }
 
-@keyframes shine {
-  0% {
-    left: -100%;
-  }
-  100% {
-    left: 200%;
-  }
-}
-
 /* Pull In Effect Animation */
 .pull-in-effect {
   animation: pullInEffect 1s cubic-bezier(0.645, 0.045, 0.355, 1.0) forwards;
@@ -392,7 +436,7 @@
   }
   40%,
   60% {
-    transform: translateX(calc(-100% + 160px)); /* Width of the container */
+    transform: translateX(calc(-100% + 160px));
   }
   90%,
   100% {
@@ -405,7 +449,7 @@
   overflow: hidden;
   position: relative;
   animation: autoScroll 8s ease-in-out infinite;
-  padding-right: 20px; /* Add some padding to ensure text doesn't touch the edge */
+  padding-right: 20px;
 }
 
 /* Netflix-style category hover effect */
@@ -435,12 +479,12 @@
 }
 
 .picker-container {
-  -webkit-overflow-scrolling: touch; /* For smooth scrolling on iOS */
-  overscroll-behavior: none; /* Prevent browser pull-to-refresh */
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: none;
 }
 
 .picker-item {
-  user-select: none; /* Prevent text selection during dragging */
+  user-select: none;
 }
 
 /* Enhance the gradient overlays */
@@ -509,8 +553,6 @@
   transform: scale(1.02);
 }
 
-/* Add these styles for high-quality video thumbnails */
-
 /* Video card premium styling */
 .video-card-thumbnail {
   background-size: cover;
@@ -550,12 +592,10 @@
   transition: opacity 0.3s ease;
 }
 
-/* Make watermark more visible on hover */
 .video-container:hover .video-watermark {
   opacity: 0.9;
 }
 
-/* Ensure watermark stays visible in fullscreen */
 :fullscreen .video-watermark,
 :-webkit-full-screen .video-watermark,
 :-moz-full-screen .video-watermark,
@@ -565,7 +605,6 @@
   padding: 0.5rem 0.75rem !important;
 }
 
-/* Responsive watermark positioning */
 @media (max-width: 640px) {
   .video-watermark {
     font-size: 0.75rem;
@@ -575,7 +614,7 @@
   }
 }
 
-/* Zoom prevention for free users - ENHANCED VERSION */
+/* Zoom prevention for free users */
 .prevent-zoom {
   touch-action: pan-x pan-y !important;
   -ms-touch-action: pan-x pan-y !important;
@@ -591,12 +630,10 @@
   text-size-adjust: 100% !important;
 }
 
-/* Additional zoom prevention */
 .prevent-zoom * {
   max-height: 100% !important;
 }
 
-/* Force fixed size for elements to prevent zoom */
 .prevent-zoom img,
 .prevent-zoom video,
 .prevent-zoom iframe {
@@ -604,38 +641,24 @@
   object-fit: contain !important;
 }
 
-/* Disable text selection which can trigger zoom on some mobile browsers */
-.prevent-zoom {
-  -webkit-touch-callout: none !important;
-  -webkit-user-select: none !important;
-  -khtml-user-select: none !important;
-  -moz-user-select: none !important;
-  -ms-user-select: none !important;
-  user-select: none !important;
-}
-
-/* Disable pinch gestures */
 .prevent-zoom {
   touch-action: manipulation !important;
 }
 
 @media (max-width: 768px) {
   .prevent-zoom {
-    /* Additional mobile-specific zoom prevention */
     -webkit-text-size-adjust: 100% !important;
     -moz-text-size-adjust: 100% !important;
     text-size-adjust: 100% !important;
-    font-size: 16px !important; /* Force consistent font size */
+    font-size: 16px !important;
   }
 
-  /* Force fixed layout on mobile */
   .prevent-zoom body {
     width: 100vw !important;
     min-height: 100vh !important;
     overflow-x: hidden !important;
   }
 
-  /* Prevent iOS Safari zoom on input focus */
   .prevent-zoom input,
   .prevent-zoom select,
   .prevent-zoom textarea {
@@ -689,16 +712,13 @@
   letter-spacing: 0.5px;
 }
 
-/* Add padding to the bottom of the page on mobile to account for the navigation bar */
 @media (max-width: 768px) {
   .page-content {
     padding-bottom: 64px;
   }
 }
 
-/* Fix for category boxes to ensure text stays inside */
 @media (max-width: 640px) {
-  /* Make category text smaller on mobile */
   .category-title {
     font-size: 1rem !important;
     line-height: 1.2 !important;
@@ -708,32 +728,24 @@
     white-space: nowrap;
   }
 
-  /* Ensure proper padding in category boxes */
   .category-box {
     padding: 0.5rem !important;
   }
 
-  /* Reduce text size in category boxes */
   .category-box h3 {
     font-size: 1rem !important;
     line-height: 1.2 !important;
     margin-bottom: 0.25rem !important;
   }
 
-  /* Make explore text smaller */
   .category-box .explore-text {
     font-size: 0.75rem !important;
   }
 
-  /* Ensure proper spacing */
   .category-grid {
     gap: 0.5rem !important;
   }
-}
 
-/* Add these specific category fixes near the end of the file */
-@media (max-width: 640px) {
-  /* Fix dashboard category buttons */
   .dashboard-category-button {
     padding: 0.5rem !important;
   }
@@ -754,7 +766,6 @@
   }
 }
 
-/* Ensure text doesn't overflow containers */
 .text-truncate {
   white-space: nowrap;
   overflow: hidden;
@@ -762,7 +773,6 @@
   max-width: 100%;
 }
 
-/* Fix for mobile menu */
 .mobile-menu {
   position: fixed !important;
   top: 60px !important;
@@ -770,11 +780,7 @@
   overflow-y: auto !important;
 }
 
-/* Add these specific mobile menu fixes at the end of the file */
-
-/* Ensure mobile menu is always visible and properly positioned */
 @media (max-width: 767px) {
-  /* Prevent body scroll when mobile menu is open */
   body.menu-open {
     overflow: hidden;
     position: fixed;
@@ -782,7 +788,6 @@
     height: 100%;
   }
 
-  /* Ensure menu is always visible */
   .mobile-menu-container {
     display: flex !important;
     flex-direction: column;
@@ -798,14 +803,12 @@
     overflow: hidden;
   }
 
-  /* Ensure content is scrollable */
   .mobile-menu-content {
     flex: 1;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
   }
 
-  /* Ensure backdrop is always visible */
   .mobile-menu-backdrop {
     position: fixed;
     inset: 0;
@@ -816,7 +819,6 @@
   }
 }
 
-/* Add this to your globals.css file if it's not already there */
 .text-gradient-accent {
   background: linear-gradient(to right, #cbd5e1, #a5f3fc, #dbeafe, #ffffff);
   -webkit-background-clip: text;
@@ -825,7 +827,6 @@
   display: inline-block;
 }
 
-/* Add this at the end of the file */
 .group:hover .group-hover\:visible {
   visibility: visible;
 }
@@ -834,7 +835,6 @@
   opacity: 1;
 }
 
-/* New gradient background utility classes */
 .bg-gradient-accent {
   background: linear-gradient(135deg, #cbd5e1, #a5f3fc, #dbeafe, #ffffff);
 }
@@ -843,7 +843,6 @@
   border-image: linear-gradient(135deg, #cbd5e1, #a5f3fc, #dbeafe, #ffffff) 1;
 }
 
-/* Slide in animations for landing page */
 @keyframes slideInRight {
   from {
     opacity: 0;
@@ -866,7 +865,6 @@
   }
 }
 
-/* CSS-only scroll animations */
 .slide-in-right {
   animation: slideInRight 1s ease-out 0.3s both;
 }
@@ -882,7 +880,6 @@
   transform: translateY(0);
 }
 
-/* Staggered animation delays for grid items */
 .scroll-animate[style*="0.1s"] {
   transition-delay: 0.1s;
 }
@@ -899,14 +896,12 @@
   transition-delay: 0.4s;
 }
 
-/* Performance optimized animations */
 .animate-performance {
   will-change: transform, opacity;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
 }
 
-/* Reduce motion for accessibility */
 @media (prefers-reduced-motion: reduce) {
   .slide-in-right,
   .scroll-animate {
@@ -917,46 +912,44 @@
   }
 }
 
-/* Modern chat interface styles */
 .chat-container {
-  background-color: hsl(var(--chat-background));
-  color: hsl(var(--foreground));
+  background-color: var(--chat-background);
+  color: var(--foreground);
 }
 
 .chat-sidebar {
-  background-color: hsl(var(--chat-sidebar));
-  border-right: 1px solid hsl(var(--chat-border));
+  background-color: var(--chat-sidebar);
+  border-right: 1px solid var(--chat-border);
 }
 
 .chat-message-user {
-  background-color: hsl(var(--chat-message-user));
-  color: hsl(var(--foreground));
+  background-color: var(--chat-message-user);
+  color: var(--foreground);
 }
 
 .chat-message-assistant {
-  background-color: hsl(var(--chat-message-assistant));
-  color: hsl(var(--foreground));
+  background-color: var(--chat-message-assistant);
+  color: var(--foreground);
 }
 
 .chat-input-container {
-  background-color: hsl(var(--chat-input));
-  border: 1px solid hsl(var(--chat-border));
+  background-color: var(--chat-input);
+  border: 1px solid var(--chat-border);
 }
 
 .chat-suggestion {
   background-color: transparent;
-  border: 1px solid hsl(var(--chat-border));
-  color: hsl(var(--muted-foreground));
+  border: 1px solid var(--chat-border);
+  color: var(--muted-foreground);
   transition: all 0.2s ease;
 }
 
 .chat-suggestion:hover {
-  background-color: hsl(var(--chat-message-assistant));
-  color: hsl(var(--foreground));
-  border-color: hsl(var(--ring));
+  background-color: var(--chat-message-assistant);
+  color: var(--foreground);
+  border-color: var(--ring);
 }
 
-/* Typography improvements for chat */
 .chat-typography {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   line-height: 1.6;
@@ -970,10 +963,9 @@
 
 .chat-subtitle {
   font-weight: 400;
-  color: hsl(var(--muted-foreground));
+  color: var(--muted-foreground);
 }
 
-/* Smooth animations for modern feel */
 .chat-fade-in {
   animation: chatFadeIn 0.3s ease-out;
 }
