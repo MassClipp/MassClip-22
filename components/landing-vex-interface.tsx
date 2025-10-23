@@ -347,7 +347,7 @@ export function LandingVexInterface() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-gradient-to-br from-slate-950 via-black to-teal-950 relative overflow-hidden">
+    <div className="flex flex-col h-screen relative overflow-hidden">
       {/* Fixed noise overlay */}
       <div className="fixed inset-0 bg-[url('/noise.png')] opacity-[0.03] mix-blend-soft-light pointer-events-none z-0"></div>
 
