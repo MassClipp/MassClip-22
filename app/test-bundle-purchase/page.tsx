@@ -1,15 +1,17 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { Package, ShoppingCart, CheckCircle, AlertCircle } from "lucide-react"
+import { Package, ShoppingCart, CheckCircle, AlertCircle, RefreshCw } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 
 export default function TestBundlePurchasePage() {
   const router = useRouter()
   const [isProcessing, setIsProcessing] = useState(false)
+  const [loadingVideos, setLoadingVideos] = useState(true)
+  const [testContent, setTestContent] = useState<any[]>([])
   const [testResult, setTestResult] = useState<{
     success: boolean
     sessionId?: string
@@ -29,48 +31,33 @@ export default function TestBundlePurchasePage() {
     creatorName: "Test Creator",
   }
 
-  // Test content items with placeholder URLs
-  const testContent = [
-    {
-      id: "content-1",
-      title: "Sample Video 1",
-      fileUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-      downloadUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-      thumbnailUrl: "/placeholder.svg?height=720&width=405",
-      contentType: "video",
-      mimeType: "video/mp4",
-      fileType: "mp4",
-      size: 5253880,
-      duration: 596,
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: "content-2",
-      title: "Sample Video 2",
-      fileUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-      downloadUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-      thumbnailUrl: "/placeholder.svg?height=720&width=405",
-      contentType: "video",
-      mimeType: "video/mp4",
-      fileType: "mp4",
-      size: 4855000,
-      duration: 653,
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: "content-3",
-      title: "Sample Video 3",
-      fileUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-      downloadUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-      thumbnailUrl: "/placeholder.svg?height=720&width=405",
-      contentType: "video",
-      mimeType: "video/mp4",
-      fileType: "mp4",
-      size: 2299653,
-      duration: 15,
-      createdAt: new Date().toISOString(),
-    },
-  ]
+  useEffect(() => {
+    fetchRandomVideos()
+  }, [])
+
+  const fetchRandomVideos = async () => {
+    setLoadingVideos(true)
+    try {
+      const response = await fetch("/api/test/get-random-videos")
+      const data = await response.json()
+
+      if (data.success && data.videos) {
+        setTestContent(data.videos)
+        console.log("[Test] Loaded real videos:", data.videos.length)
+      } else {
+        throw new Error("Failed to fetch videos")
+      }
+    } catch (error) {
+      console.error("[Test] Error fetching videos:", error)
+      toast({
+        title: "Warning",
+        description: "Could not load real videos, using fallback data",
+        variant: "destructive",
+      })
+    } finally {
+      setLoadingVideos(false)
+    }
+  }
 
   const simulatePurchase = async () => {
     setIsProcessing(true)
@@ -135,6 +122,19 @@ export default function TestBundlePurchasePage() {
     } finally {
       setIsProcessing(false)
     }
+  }
+
+  if (loadingVideos) {
+    return (
+      <div className="min-h-screen bg-black text-white p-6 flex items-center justify-center">
+        <Card className="bg-white/5 border-white/20 p-8">
+          <div className="flex flex-col items-center gap-4">
+            <RefreshCw className="w-8 h-8 animate-spin text-teal-400" />
+            <p className="text-lg">Loading real videos from Firestore...</p>
+          </div>
+        </Card>
+      </div>
+    )
   }
 
   return (

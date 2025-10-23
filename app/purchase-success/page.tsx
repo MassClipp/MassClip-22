@@ -211,12 +211,12 @@ export default function PurchaseSuccessPage() {
 
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-700 to-white flex items-center justify-center p-4">
-        <Card className="w-full max-w-md border-gray-200 shadow-xl bg-white/95 backdrop-blur-sm">
+      <div className="min-h-screen bg-black flex items-center justify-center p-4">
+        <Card className="w-full max-w-md border-white/20 shadow-2xl bg-white/5 backdrop-blur-xl">
           <CardContent className="flex flex-col items-center justify-center p-8">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mb-4"></div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Verifying Your Purchase</h3>
-            <p className="text-sm text-gray-700 text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-400 mb-4"></div>
+            <h3 className="text-lg font-semibold text-white mb-2">Verifying Your Purchase</h3>
+            <p className="text-sm text-gray-400 text-center">
               Please wait while we confirm your payment and set up your access...
             </p>
           </CardContent>
@@ -227,25 +227,25 @@ export default function PurchaseSuccessPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-700 to-white flex items-center justify-center p-4">
-        <Card className="w-full max-w-md border-red-300 shadow-xl bg-white/95 backdrop-blur-sm">
+      <div className="min-h-screen bg-black flex items-center justify-center p-4">
+        <Card className="w-full max-w-md border-red-500/50 shadow-2xl bg-white/5 backdrop-blur-xl">
           <CardHeader className="text-center">
-            <div className="mx-auto w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-4">
-              <AlertCircle className="h-6 w-6 text-red-600" />
+            <div className="mx-auto w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center mb-4">
+              <AlertCircle className="h-6 w-6 text-red-400" />
             </div>
-            <CardTitle className="text-gray-900">Verification Failed</CardTitle>
-            <CardDescription className="text-gray-700">Failed to verify session</CardDescription>
+            <CardTitle className="text-white">Verification Failed</CardTitle>
+            <CardDescription className="text-gray-400">Failed to verify session</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-              <p className="text-sm text-red-800">
+            <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+              <p className="text-sm text-red-300">
                 <strong>Details:</strong> {error}
               </p>
             </div>
             <div className="flex flex-col gap-2">
               <Button
                 onClick={handleRetry}
-                className="w-full bg-gray-900 hover:bg-gray-800 text-white"
+                className="w-full bg-teal-600 hover:bg-teal-700 text-white"
                 disabled={loading}
               >
                 <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
@@ -253,7 +253,7 @@ export default function PurchaseSuccessPage() {
               </Button>
               <Button
                 variant="outline"
-                className="w-full border-gray-300 text-gray-700 hover:bg-gray-50 bg-white"
+                className="w-full border-white/20 text-white hover:bg-white/10 bg-transparent"
                 asChild
               >
                 <Link href="/dashboard/purchases">
@@ -270,18 +270,18 @@ export default function PurchaseSuccessPage() {
 
   if (!purchaseData) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-700 to-white flex items-center justify-center p-4">
-        <Card className="w-full max-w-md shadow-xl bg-white/95 backdrop-blur-sm">
+      <div className="min-h-screen bg-black flex items-center justify-center p-4">
+        <Card className="w-full max-w-md shadow-2xl bg-white/5 backdrop-blur-xl border-white/20">
           <CardContent className="flex flex-col items-center justify-center p-8">
             <AlertCircle className="h-12 w-12 text-gray-500 mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">No Purchase Data</h3>
-            <p className="text-sm text-gray-700 text-center mb-4">
+            <h3 className="text-lg font-semibold text-white mb-2">No Purchase Data</h3>
+            <p className="text-sm text-gray-400 text-center mb-4">
               We couldn't find any purchase information for this session.
             </p>
             <Button
               onClick={handleRetry}
               variant="outline"
-              className="border-gray-300 text-gray-700 hover:bg-gray-50 bg-transparent"
+              className="border-white/20 text-white hover:bg-white/10 bg-transparent"
             >
               <RefreshCw className="h-4 w-4 mr-2" />
               Try Again
@@ -310,26 +310,31 @@ export default function PurchaseSuccessPage() {
   const itemId = item.id || ""
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-700 to-white">
-      <div className="container mx-auto px-4 py-8">
+    <div className="min-h-screen bg-black">
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl" />
+      </div>
+
+      <div className="container mx-auto px-4 py-8 relative z-10">
         <div className="max-w-2xl mx-auto space-y-6">
           {/* Success Header */}
-          <Card className="border-gray-200 bg-white/95 backdrop-blur-sm shadow-xl">
+          <Card className="border-white/20 bg-white/5 backdrop-blur-xl shadow-2xl">
             <CardHeader className="text-center">
-              <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
-                <CheckCircle className="h-8 w-8 text-green-600" />
+              <div className="mx-auto w-16 h-16 bg-teal-500/20 rounded-full flex items-center justify-center mb-4">
+                <CheckCircle className="h-8 w-8 text-teal-400" />
               </div>
-              <CardTitle className="text-2xl text-gray-900">Purchase Successful!</CardTitle>
-              <CardDescription className="text-gray-700 text-lg">
+              <CardTitle className="text-2xl text-white">Purchase Successful!</CardTitle>
+              <CardDescription className="text-gray-400 text-lg">
                 Thank you for your purchase. Your content is now available.
               </CardDescription>
             </CardHeader>
           </Card>
 
           {/* Purchase Details */}
-          <Card className="shadow-xl bg-white/95 backdrop-blur-sm">
+          <Card className="shadow-2xl bg-white/5 backdrop-blur-xl border-white/20">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-gray-900">
+              <CardTitle className="flex items-center gap-2 text-white">
                 <Package className="h-5 w-5" />
                 Purchase Details
               </CardTitle>
@@ -341,19 +346,19 @@ export default function PurchaseSuccessPage() {
                   <img
                     src={itemThumbnailUrl || "/placeholder.svg"}
                     alt={itemTitle}
-                    className="w-20 h-20 rounded-lg object-cover border border-gray-200"
+                    className="w-20 h-20 rounded-lg object-cover border border-white/20"
                     onError={(e) => {
                       e.currentTarget.src = "/placeholder.svg"
                     }}
                   />
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-semibold text-lg text-gray-900">{itemTitle}</h3>
-                  {itemDescription && <p className="text-gray-700 text-sm mt-1 line-clamp-2">{itemDescription}</p>}
+                  <h3 className="font-semibold text-lg text-white">{itemTitle}</h3>
+                  {itemDescription && <p className="text-gray-400 text-sm mt-1 line-clamp-2">{itemDescription}</p>}
                   {creatorName && (
                     <div className="flex items-center gap-2 mt-2">
                       <User className="h-4 w-4 text-gray-500" />
-                      <span className="text-sm text-gray-700">
+                      <span className="text-sm text-gray-400">
                         by {creatorName}
                         {creatorUsername && <span className="text-gray-500"> (@{creatorUsername})</span>}
                       </span>
@@ -362,29 +367,29 @@ export default function PurchaseSuccessPage() {
                 </div>
               </div>
 
-              <Separator className="bg-gray-200" />
+              <Separator className="bg-white/20" />
 
               {/* Payment Information */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-700 flex items-center gap-2">
+                    <span className="text-sm text-gray-400 flex items-center gap-2">
                       <CreditCard className="h-4 w-4" />
                       Amount Paid
                     </span>
-                    <span className="font-semibold text-lg text-gray-900">
+                    <span className="font-semibold text-lg text-white">
                       {formatAmount(sessionAmount, sessionCurrency)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-700">Payment Status</span>
-                    <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200">
+                    <span className="text-sm text-gray-400">Payment Status</span>
+                    <Badge variant="secondary" className="bg-teal-500/20 text-teal-400 border-teal-500/30">
                       {sessionPaymentStatus}
                     </Badge>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-700">Content Type</span>
-                    <Badge variant="outline" className="border-gray-300 text-gray-700">
+                    <span className="text-sm text-gray-400">Content Type</span>
+                    <Badge variant="outline" className="border-white/30 text-gray-300">
                       {purchase.type === "bundle" ? "Bundle" : "Product Box"}
                     </Badge>
                   </div>
@@ -392,21 +397,21 @@ export default function PurchaseSuccessPage() {
 
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-700 flex items-center gap-2">
+                    <span className="text-sm text-gray-400 flex items-center gap-2">
                       <Calendar className="h-4 w-4" />
                       Purchase Date
                     </span>
-                    <span className="text-sm font-medium text-gray-900">{formatDate(sessionCreated)}</span>
+                    <span className="text-sm font-medium text-white">{formatDate(sessionCreated)}</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-700">Transaction ID</span>
-                    <span className="text-xs font-mono bg-gray-100 px-2 py-1 rounded border">
+                    <span className="text-sm text-gray-400">Transaction ID</span>
+                    <span className="text-xs font-mono bg-white/10 px-2 py-1 rounded border border-white/20 text-gray-300">
                       {sessionId ? sessionId.slice(-8) : "N/A"}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-700">Access Status</span>
-                    <Badge className="bg-blue-100 text-blue-800 border-blue-200">Active</Badge>
+                    <span className="text-sm text-gray-400">Access Status</span>
+                    <Badge className="bg-cyan-500/20 text-cyan-400 border-cyan-500/30">Active</Badge>
                   </div>
                 </div>
               </div>
@@ -416,7 +421,7 @@ export default function PurchaseSuccessPage() {
           {/* Action Buttons */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {itemId && (
-              <Button asChild size="lg" className="bg-gray-900 hover:bg-gray-800 text-white shadow-lg">
+              <Button asChild size="lg" className="bg-teal-600 hover:bg-teal-700 text-white shadow-lg">
                 <Link href={`/${purchase.type === "bundle" ? "bundles" : "product-box"}/${itemId}/content`}>
                   <Eye className="h-4 w-4 mr-2" />
                   View Content
@@ -427,7 +432,7 @@ export default function PurchaseSuccessPage() {
               asChild
               variant="outline"
               size="lg"
-              className="border-gray-300 text-gray-700 hover:bg-gray-50 bg-white shadow-lg"
+              className="border-white/20 text-white hover:bg-white/10 bg-transparent shadow-lg"
             >
               <Link href="/dashboard/purchases">
                 <Package className="h-4 w-4 mr-2" />
@@ -443,7 +448,7 @@ export default function PurchaseSuccessPage() {
               disabled={downloading}
               size="lg"
               variant="outline"
-              className="w-full border-teal-300 text-teal-700 hover:bg-teal-50 bg-white shadow-lg"
+              className="w-full border-teal-500/50 text-teal-400 hover:bg-teal-500/10 bg-transparent shadow-lg"
             >
               {downloading ? (
                 <>
@@ -460,15 +465,15 @@ export default function PurchaseSuccessPage() {
           )}
 
           {/* Additional Information */}
-          <Card className="bg-gray-50/90 border-gray-200 shadow-xl backdrop-blur-sm">
+          <Card className="bg-white/5 border-white/20 shadow-2xl backdrop-blur-xl">
             <CardContent className="pt-6">
               <div className="flex items-start gap-3">
-                <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 border">
-                  <CheckCircle className="h-4 w-4 text-gray-700" />
+                <div className="w-8 h-8 bg-teal-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 border border-teal-500/30">
+                  <CheckCircle className="h-4 w-4 text-teal-400" />
                 </div>
                 <div>
-                  <h4 className="font-semibold text-gray-900 mb-2">What's Next?</h4>
-                  <ul className="text-sm text-gray-700 space-y-1">
+                  <h4 className="font-semibold text-white mb-2">What's Next?</h4>
+                  <ul className="text-sm text-gray-400 space-y-1">
                     <li>• Your content is now available in your purchases</li>
                     <li>• You can access it anytime from your dashboard</li>
                     <li>
