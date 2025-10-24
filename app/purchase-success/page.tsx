@@ -96,7 +96,7 @@ export default function PurchaseSuccessPage() {
           const currency = data.session?.currency || "USD"
           const itemTitle = data.item?.title || "Bundle"
           ;(window as any).fbq("track", "Purchase", {
-            value: amount / 100, // Convert cents to dollars
+            value: amount / 100,
             currency: currency.toUpperCase(),
             content_name: itemTitle,
             content_type: "bundle",
@@ -133,14 +133,17 @@ export default function PurchaseSuccessPage() {
   }
 
   const handleDownloadZip = async () => {
-    if (!itemId || !sessionId) {
+    if (!purchaseData?.item?.id || !sessionId) {
       alert("Missing required information to download")
       return
     }
 
+    const bundleId = purchaseData.item.id
+    const bundleTitle = purchaseData.item.title || "bundle"
+
     try {
       setDownloading(true)
-      console.log("[v0] Starting ZIP download for bundle:", itemId)
+      console.log("[v0] Starting ZIP download for bundle:", bundleId)
 
       const headers: HeadersInit = {
         "Content-Type": "application/json",
@@ -152,7 +155,7 @@ export default function PurchaseSuccessPage() {
         headers["Authorization"] = `Bearer ${token}`
       }
 
-      const response = await fetch(`/api/bundles/${itemId}/download-zip-buyer`, {
+      const response = await fetch(`/api/bundles/${bundleId}/download-zip-buyer`, {
         method: "POST",
         headers,
         body: JSON.stringify({ sessionId }),
@@ -168,7 +171,7 @@ export default function PurchaseSuccessPage() {
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
-      a.download = `${itemTitle.replace(/[^\w\s-]/gi, "")}.zip`
+      a.download = `${bundleTitle.replace(/[^\w\s-]/gi, "")}.zip`
       document.body.appendChild(a)
       a.click()
       window.URL.revokeObjectURL(url)
