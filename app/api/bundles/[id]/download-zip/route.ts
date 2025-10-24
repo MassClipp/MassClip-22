@@ -100,6 +100,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
               contentFiles.push({
                 url: fileUrl,
                 filename: videoData.title || videoData.filename || videoData.name || `file-${contentId}`,
+                contentType: videoData.contentType || videoData.type || "video",
                 fileType: videoData.fileType || "mp4",
               })
               console.log(`✅ [ZIP Download] Found file: ${videoData.title || contentId}`)
@@ -118,6 +119,27 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     console.log(`📦 [ZIP Download] Creating ZIP with ${contentFiles.length} files`)
 
+    const getFileExtension = (contentType: string, fileType: string, url: string): string => {
+      // Try to extract extension from URL first
+      const urlMatch = url.match(/\.([a-zA-Z0-9]+)(\?|$)/)
+      if (urlMatch && urlMatch[1]) {
+        return urlMatch[1].toLowerCase()
+      }
+
+      // Determine extension based on content type
+      const type = contentType.toLowerCase()
+      if (type.includes("image")) {
+        return fileType || "jpg"
+      } else if (type.includes("audio")) {
+        return fileType || "mp3"
+      } else if (type.includes("video")) {
+        return fileType || "mp4"
+      }
+
+      // Default fallback
+      return fileType || "mp4"
+    }
+
     // Create ZIP file
     const zip = new JSZip()
 
@@ -135,9 +157,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
         const arrayBuffer = await response.arrayBuffer()
         const cleanFilename = file.filename.replace(/[^\w\s.-]/gi, "")
-        const filenameWithExt = cleanFilename.includes(".")
-          ? cleanFilename
-          : `${cleanFilename}.${file.fileType || "mp4"}`
+
+        const extension = getFileExtension(file.contentType, file.fileType, file.url)
+        const filenameWithExt = cleanFilename.includes(".") ? cleanFilename : `${cleanFilename}.${extension}`
 
         zip.file(filenameWithExt, arrayBuffer)
         console.log(`✅ [ZIP Download] Added to ZIP: ${filenameWithExt}`)

@@ -18,6 +18,28 @@ if (!getApps().length) {
 const auth = getAuth()
 const db = getFirestore()
 
+// Helper function to get proper file extension based on content type
+const getFileExtension = (contentType: string, fileType: string, url: string): string => {
+  // Try to extract extension from URL first
+  const urlMatch = url.match(/\.([a-zA-Z0-9]+)(\?|$)/)
+  if (urlMatch && urlMatch[1]) {
+    return urlMatch[1].toLowerCase()
+  }
+
+  // Determine extension based on content type
+  const type = contentType.toLowerCase()
+  if (type.includes("image")) {
+    return fileType || "jpg"
+  } else if (type.includes("audio")) {
+    return fileType || "mp3"
+  } else if (type.includes("video")) {
+    return fileType || "mp4"
+  }
+
+  // Default fallback
+  return fileType || "mp4"
+}
+
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const bundleId = params.id
@@ -26,65 +48,46 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ error: "Bundle ID is required" }, { status: 400 })
     }
 
-    console.log(`📦 [Buyer ZIP Download] Starting ZIP creation for bundle: ${bundleId}`)
-
     const body = await request.json()
     const { sessionId } = body
 
-    let userUid: string | null = null
-    let purchaseDoc: any = null
+    if (!sessionId) {
+      return NextResponse.json({ error: "Session ID is required" }, { status: 400 })
+    }
 
-    // Try to authenticate with Firebase token first (for logged-in users)
+    console.log(`📦 [Buyer ZIP Download] Starting ZIP creation for bundle: ${bundleId}`)
+
+    // Get the authorization header (optional for buyers)
     const authHeader = request.headers.get("Authorization")
+    let userUid = null
+
     if (authHeader && authHeader.startsWith("Bearer ")) {
       const token = authHeader.split("Bearer ")[1]
       try {
         const decodedToken = await auth.verifyIdToken(token)
         userUid = decodedToken.uid
-        console.log(`👤 [Buyer ZIP Download] Authenticated user: ${userUid}`)
+        console.log(`👤 [Buyer ZIP Download] User UID: ${userUid}`)
       } catch (error) {
-        console.log(`⚠️ [Buyer ZIP Download] Token verification failed, will try sessionId`)
+        console.log("⚠️ [Buyer ZIP Download] Token verification failed, continuing without auth")
       }
     }
 
-    // If authenticated, find purchase by user ID
-    if (userUid) {
-      const purchasesQuery = await db
-        .collection("bundlePurchases")
-        .where("buyerUid", "==", userUid)
-        .where("bundleId", "==", bundleId)
-        .where("status", "==", "completed")
-        .limit(1)
-        .get()
+    // Verify purchase access
+    const purchaseQuery = await db
+      .collection("purchases")
+      .where("bundleId", "==", bundleId)
+      .where("sessionId", "==", sessionId)
+      .where("status", "==", "completed")
+      .limit(1)
+      .get()
 
-      if (!purchasesQuery.empty) {
-        purchaseDoc = purchasesQuery.docs[0]
-        console.log(`✅ [Buyer ZIP Download] Found purchase for authenticated user`)
-      }
+    if (purchaseQuery.empty) {
+      return NextResponse.json({ error: "Purchase not found or not completed" }, { status: 404 })
     }
 
-    // If not found via auth, try sessionId (for non-authenticated users)
-    if (!purchaseDoc && sessionId) {
-      console.log(`🔍 [Buyer ZIP Download] Looking up purchase by sessionId: ${sessionId}`)
-      const sessionPurchaseDoc = await db.collection("bundlePurchases").doc(sessionId).get()
+    console.log(`✅ [Buyer ZIP Download] Purchase verified, fetching content`)
 
-      if (sessionPurchaseDoc.exists) {
-        const purchaseData = sessionPurchaseDoc.data()
-        if (purchaseData?.bundleId === bundleId && purchaseData?.status === "completed") {
-          purchaseDoc = sessionPurchaseDoc
-          console.log(`✅ [Buyer ZIP Download] Found purchase via sessionId`)
-        }
-      }
-    }
-
-    // If still no purchase found, deny access
-    if (!purchaseDoc) {
-      return NextResponse.json({ error: "Purchase not found or you don't have access to this bundle" }, { status: 403 })
-    }
-
-    console.log(`✅ [Buyer ZIP Download] User has access, fetching content from bundle`)
-
-    // Get bundle document to fetch fresh content
+    // Get bundle document
     const bundleRef = await db.collection("bundles").doc(bundleId).get()
 
     if (!bundleRef.exists) {
@@ -93,7 +96,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     const bundleData = bundleRef.data()
 
-    // Get content IDs from bundle
+    // Get content IDs
     const detailedContentItems = bundleData.detailedContentItems || []
     const contentItems = bundleData.contentItems || []
     const content = bundleData.content || []
@@ -113,7 +116,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     console.log(`📦 [Buyer ZIP Download] Found ${contentIds.length} content items`)
 
-    // Fetch content documents from Firestore
+    // Fetch content documents
     const collectionsToCheck = ["uploads", "videos", "content", "free_content", "creatorUploads", "userUploads"]
     const contentFiles = []
 
@@ -129,6 +132,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
               contentFiles.push({
                 url: fileUrl,
                 filename: videoData.title || videoData.filename || videoData.name || `file-${contentId}`,
+                contentType: videoData.contentType || videoData.type || "video",
                 fileType: videoData.fileType || "mp4",
               })
               console.log(`✅ [Buyer ZIP Download] Found file: ${videoData.title || contentId}`)
@@ -146,7 +150,6 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     console.log(`📦 [Buyer ZIP Download] Creating ZIP with ${contentFiles.length} files`)
-    // </CHANGE>
 
     // Create ZIP file
     const zip = new JSZip()
@@ -165,9 +168,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
         const arrayBuffer = await response.arrayBuffer()
         const cleanFilename = file.filename.replace(/[^\w\s.-]/gi, "")
-        const filenameWithExt = cleanFilename.includes(".")
-          ? cleanFilename
-          : `${cleanFilename}.${file.fileType || "mp4"}`
+
+        // Use proper file extension based on content type
+        const extension = getFileExtension(file.contentType, file.fileType, file.url)
+        const filenameWithExt = cleanFilename.includes(".") ? cleanFilename : `${cleanFilename}.${extension}`
 
         zip.file(filenameWithExt, arrayBuffer)
         console.log(`✅ [Buyer ZIP Download] Added to ZIP: ${filenameWithExt}`)
