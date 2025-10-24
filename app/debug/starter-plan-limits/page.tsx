@@ -74,12 +74,11 @@ export default function StarterPlanLimitsDebug() {
         })
         const tierInfoAPI = await tierInfoRes.json()
 
-        // Calculate expected vs actual
-        const isStarter = membershipStatus?.tier === "starter" || membershipStatus?.subscriptionStatus === "active"
-        const expectedBundleLimit = isStarter ? 5 : 2
-        const expectedVideoLimit = isStarter ? 15 : 10
-        const actualBundleLimit = freeUsersDoc?.data?.bundlesLimit || 0
-        const actualVideoLimit = freeUsersDoc?.data?.maxVideosPerBundle || 0
+        const expectedBundleLimit = 5 // Starter plan limit
+        const expectedVideoLimit = 15 // Starter plan limit
+        const actualBundleLimit = membershipStatus?.features?.maxBundles || freeUsersDoc?.data?.bundlesLimit || 0
+        const actualVideoLimit =
+          membershipStatus?.features?.maxVideosPerBundle || freeUsersDoc?.data?.maxVideosPerBundle || 0
 
         setDebugData({
           userUid: user.uid,

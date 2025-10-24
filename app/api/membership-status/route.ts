@@ -3,6 +3,7 @@ import { initializeFirebaseAdmin } from "@/lib/firebase-admin"
 import { getStripeSubscriptionStatus } from "@/lib/stripe-subscription-service"
 import { getAuth } from "firebase-admin/auth"
 import { getMembership } from "@/lib/memberships-service"
+import { getFreeUserLimits } from "@/lib/free-users-service"
 
 initializeFirebaseAdmin()
 const auth = getAuth()
@@ -30,8 +31,10 @@ export async function GET(request: NextRequest) {
     const membership = await getMembership(userId)
 
     if (!membership) {
+      const starterLimits = await getFreeUserLimits(userId)
+
       return NextResponse.json({
-        plan: "free",
+        plan: "starter",
         isActive: false,
         status: "inactive",
         features: {
@@ -40,8 +43,8 @@ export async function GET(request: NextRequest) {
           noWatermark: false,
           prioritySupport: false,
           platformFeePercentage: 20,
-          maxVideosPerBundle: 10,
-          maxBundles: 2,
+          maxVideosPerBundle: starterLimits.maxVideosPerBundle, // 15 for Starter
+          maxBundles: starterLimits.bundlesLimit, // 5 for Starter
         },
       })
     }
@@ -49,6 +52,20 @@ export async function GET(request: NextRequest) {
     // Check if user is on trial or has active Creator Pro
     const isCreatorPro = membership.plan === "creator_pro" || membership.status === "trialing"
     const platformFee = isCreatorPro ? 10 : 20
+
+    let maxVideosPerBundle: number | null = null
+    let maxBundles: number | null = null
+
+    if (isCreatorPro) {
+      // Creator Pro has unlimited
+      maxVideosPerBundle = null
+      maxBundles = null
+    } else {
+      // Starter plan - get actual limits (5 bundles, 15 videos per bundle)
+      const starterLimits = await getFreeUserLimits(userId)
+      maxVideosPerBundle = starterLimits.maxVideosPerBundle
+      maxBundles = starterLimits.bundlesLimit
+    }
 
     return NextResponse.json({
       plan: membership.plan,
@@ -62,8 +79,8 @@ export async function GET(request: NextRequest) {
         noWatermark: isCreatorPro,
         prioritySupport: isCreatorPro,
         platformFeePercentage: platformFee,
-        maxVideosPerBundle: isCreatorPro ? null : 10,
-        maxBundles: isCreatorPro ? null : 2,
+        maxVideosPerBundle,
+        maxBundles,
       },
     })
   } catch (error) {
@@ -80,7 +97,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing userId" }, { status: 400 })
     }
 
-    // Initialize Firebase Admin
     initializeFirebaseAdmin()
 
     const stripeStatus = await getStripeSubscriptionStatus(userId)
