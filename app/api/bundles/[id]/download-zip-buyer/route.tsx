@@ -82,64 +82,108 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ error: "Purchase not found or you don't have access to this bundle" }, { status: 403 })
     }
 
-    const purchaseData = purchaseDoc.data()
-    const bundleContent = purchaseData.bundleContent || []
+    console.log(`✅ [Buyer ZIP Download] User has access, fetching content from bundle`)
 
-    if (bundleContent.length === 0) {
-      return NextResponse.json({ error: "No content found in this purchase" }, { status: 404 })
+    // Get bundle document to fetch fresh content
+    const bundleRef = await db.collection("bundles").doc(bundleId).get()
+
+    if (!bundleRef.exists) {
+      return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
     }
 
-    console.log(`📦 [Buyer ZIP Download] Found ${bundleContent.length} content items`)
+    const bundleData = bundleRef.data()
+
+    // Get content IDs from bundle
+    const detailedContentItems = bundleData.detailedContentItems || []
+    const contentItems = bundleData.contentItems || []
+    const content = bundleData.content || []
+
+    let contentIds = []
+    if (detailedContentItems.length > 0) {
+      contentIds = detailedContentItems.map((item) => item.id || item)
+    } else if (contentItems.length > 0) {
+      contentIds = contentItems.map((item) => item.id || item)
+    } else if (content.length > 0) {
+      contentIds = content.map((item) => item.id || item)
+    }
+
+    if (contentIds.length === 0) {
+      return NextResponse.json({ error: "No content found in bundle" }, { status: 404 })
+    }
+
+    console.log(`📦 [Buyer ZIP Download] Found ${contentIds.length} content items`)
+
+    // Fetch content documents from Firestore
+    const collectionsToCheck = ["uploads", "videos", "content", "free_content", "creatorUploads", "userUploads"]
+    const contentFiles = []
+
+    for (const contentId of contentIds) {
+      for (const collectionName of collectionsToCheck) {
+        try {
+          const videoDoc = await db.collection(collectionName).doc(contentId).get()
+          if (videoDoc.exists) {
+            const videoData = videoDoc.data()
+            const fileUrl = videoData.fileUrl || videoData.url || videoData.publicUrl || videoData.downloadUrl || ""
+
+            if (fileUrl) {
+              contentFiles.push({
+                url: fileUrl,
+                filename: videoData.title || videoData.filename || videoData.name || `file-${contentId}`,
+                fileType: videoData.fileType || "mp4",
+              })
+              console.log(`✅ [Buyer ZIP Download] Found file: ${videoData.title || contentId}`)
+            }
+            break
+          }
+        } catch (error) {
+          console.log(`⚠️ [Buyer ZIP Download] Error checking ${collectionName}:`, error)
+        }
+      }
+    }
+
+    if (contentFiles.length === 0) {
+      return NextResponse.json({ error: "No downloadable files found" }, { status: 404 })
+    }
+
+    console.log(`📦 [Buyer ZIP Download] Creating ZIP with ${contentFiles.length} files`)
+    // </CHANGE>
 
     // Create ZIP file
     const zip = new JSZip()
-    let successCount = 0
 
     // Download and add each file to ZIP
-    for (let i = 0; i < bundleContent.length; i++) {
-      const item = bundleContent[i]
-      const fileUrl = item.fileUrl || item.url || item.publicUrl || item.downloadUrl
-
-      if (!fileUrl) {
-        console.log(`⚠️ [Buyer ZIP Download] No URL for item ${i + 1}`)
-        continue
-      }
-
+    for (let i = 0; i < contentFiles.length; i++) {
+      const file = contentFiles[i]
       try {
-        console.log(`⬇️ [Buyer ZIP Download] Downloading file ${i + 1}/${bundleContent.length}: ${item.title}`)
+        console.log(`⬇️ [Buyer ZIP Download] Downloading file ${i + 1}/${contentFiles.length}: ${file.filename}`)
 
-        const response = await fetch(fileUrl)
+        const response = await fetch(file.url)
         if (!response.ok) {
-          console.error(`❌ [Buyer ZIP Download] Failed to download ${item.title}`)
+          console.error(`❌ [Buyer ZIP Download] Failed to download ${file.filename}`)
           continue
         }
 
         const arrayBuffer = await response.arrayBuffer()
-        const cleanFilename = (item.title || `file-${i + 1}`).replace(/[^\w\s.-]/gi, "")
-        const fileType = item.fileType || item.type || "mp4"
-        const filenameWithExt = cleanFilename.includes(".") ? cleanFilename : `${cleanFilename}.${fileType}`
+        const cleanFilename = file.filename.replace(/[^\w\s.-]/gi, "")
+        const filenameWithExt = cleanFilename.includes(".")
+          ? cleanFilename
+          : `${cleanFilename}.${file.fileType || "mp4"}`
 
         zip.file(filenameWithExt, arrayBuffer)
-        successCount++
         console.log(`✅ [Buyer ZIP Download] Added to ZIP: ${filenameWithExt}`)
       } catch (error) {
-        console.error(`❌ [Buyer ZIP Download] Error adding ${item.title} to ZIP:`, error)
+        console.error(`❌ [Buyer ZIP Download] Error adding ${file.filename} to ZIP:`, error)
       }
     }
 
-    if (successCount === 0) {
-      return NextResponse.json({ error: "Failed to download any files" }, { status: 500 })
-    }
-
     // Generate ZIP
-    console.log(`📦 [Buyer ZIP Download] Generating ZIP file with ${successCount} files`)
+    console.log(`📦 [Buyer ZIP Download] Generating ZIP file`)
     const zipBuffer = await zip.generateAsync({ type: "nodebuffer" })
 
     console.log(`✅ [Buyer ZIP Download] ZIP created successfully, size: ${zipBuffer.length} bytes`)
 
-    // Get bundle title for filename
-    const bundleRef = await db.collection("bundles").doc(bundleId).get()
-    const bundleTitle = bundleRef.exists ? bundleRef.data()?.title || "bundle" : "bundle"
+    // Return ZIP file
+    const bundleTitle = bundleData.title || "bundle"
     const cleanBundleTitle = bundleTitle.replace(/[^\w\s-]/gi, "")
     const zipFilename = `${cleanBundleTitle}.zip`
 
