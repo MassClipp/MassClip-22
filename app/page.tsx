@@ -33,11 +33,9 @@ const LandingPage = () => {
       <div className="fixed inset-0 z-0">
         <div className="absolute inset-0 bg-black" />
 
-        <div className="absolute top-0 right-0 w-[1400px] h-[1400px] bg-teal-500/20 rounded-full blur-[200px] translate-x-1/3 -translate-y-1/3" />
-        <div className="absolute bottom-0 left-0 w-[1600px] h-[1600px] bg-cyan-500/15 rounded-full blur-[220px] -translate-x-1/4 translate-y-1/4" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1200px] h-[1200px] bg-teal-400/10 rounded-full blur-[180px]" />
-        <div className="absolute top-1/3 left-0 w-[1000px] h-[1000px] bg-cyan-400/12 rounded-full blur-[160px] -translate-x-1/3" />
-        <div className="absolute bottom-1/4 right-0 w-[1100px] h-[1100px] bg-teal-300/8 rounded-full blur-[190px] translate-x-1/4" />
+        <div className="absolute top-1/4 right-1/4 w-[900px] h-[500px] bg-teal-500/8 rounded-full blur-[140px]" />
+        <div className="absolute bottom-1/3 left-1/4 w-[800px] h-[450px] bg-cyan-500/8 rounded-full blur-[120px]" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[400px] bg-teal-400/6 rounded-full blur-[100px]" />
       </div>
 
       <div className="relative z-10 flex flex-col min-h-screen">
