@@ -283,6 +283,63 @@ export async function getFreeUserLimits(uid: string): Promise<{
     }
   }
 
+  // Check if user has old FREE tier limits (2 bundles, 10 videos) and update to STARTER limits (5 bundles, 15 videos)
+  const needsUpdate =
+    freeUser.bundlesLimit === 2 ||
+    freeUser.maxVideosPerBundle === 10 ||
+    freeUser.maxFolders === 2 ||
+    freeUser.canCreateSubfolders === false
+
+  if (needsUpdate) {
+    console.log("🔄 Auto-updating outdated limits to Starter plan defaults for user:", uid.substring(0, 8) + "...")
+
+    const docRef = adminDb.collection("freeUsers").doc(uid)
+    await docRef.update({
+      bundlesLimit: STARTER_TIER_DEFAULTS.bundlesLimit, // 5
+      maxVideosPerBundle: STARTER_TIER_DEFAULTS.maxVideosPerBundle, // 15
+      maxFolders: STARTER_TIER_DEFAULTS.maxFolders, // 3
+      canCreateSubfolders: STARTER_TIER_DEFAULTS.canCreateSubfolders, // true
+      platformFeePercentage: STARTER_TIER_DEFAULTS.platformFeePercentage, // 20
+      updatedAt: FieldValue.serverTimestamp(),
+    })
+
+    console.log("✅ Updated user limits to Starter plan defaults")
+
+    // Fetch the updated document
+    const updatedDoc = await docRef.get()
+    const updatedFreeUser = updatedDoc.data() as FreeUserDoc
+
+    // Calculate days until next reset
+    const now = new Date()
+    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+    const daysUntilReset = Math.ceil((nextMonth.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+
+    return {
+      tier: "starter",
+      downloadsUsed: updatedFreeUser.downloadsUsed,
+      downloadsLimit: updatedFreeUser.downloadsLimit,
+      bundlesCreated: updatedFreeUser.bundlesCreated,
+      bundlesLimit: updatedFreeUser.bundlesLimit,
+      maxVideosPerBundle: updatedFreeUser.maxVideosPerBundle,
+      platformFeePercentage: updatedFreeUser.platformFeePercentage,
+      maxFolders: updatedFreeUser.maxFolders,
+      canCreateSubfolders: updatedFreeUser.canCreateSubfolders,
+      canAnalyzeTranscripts: updatedFreeUser.canAnalyzeTranscripts,
+      canCreateBundles: updatedFreeUser.canCreateBundles,
+      reachedDownloadLimit: updatedFreeUser.downloadsUsed >= updatedFreeUser.downloadsLimit,
+      reachedBundleLimit: updatedFreeUser.bundlesCreated >= updatedFreeUser.bundlesLimit,
+      hasUnlimitedDownloads: updatedFreeUser.hasUnlimitedDownloads,
+      hasPremiumContent: updatedFreeUser.hasPremiumContent,
+      hasNoWatermark: updatedFreeUser.hasNoWatermark,
+      hasPrioritySupport: updatedFreeUser.hasPrioritySupport,
+      hasLimitedOrganization: updatedFreeUser.hasLimitedOrganization,
+      daysUntilReset,
+      hasUsedFreeTrial: updatedFreeUser.hasUsedFreeTrial ?? false,
+      trialActive: updatedFreeUser.trialActive ?? false,
+      hasUsedFirstWeekDiscount: updatedFreeUser.hasUsedFirstWeekDiscount ?? false,
+    }
+  }
+
   // Calculate days until next reset
   const now = new Date()
   const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
