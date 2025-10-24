@@ -53,5 +53,5 @@ export function useAuth() {
   return context
 }
 
-// Export as useAuthContext for compatibility
 export const useAuthContext = useAuth
+export const useFirebaseAuth = useAuth
