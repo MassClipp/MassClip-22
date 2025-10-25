@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { useEffect, useState } from "react"
 import { LandingVexInterface } from "@/components/landing-vex-interface"
-import { Sparkles, Package, TrendingUp } from "lucide-react"
+import { Sparkles, Package, TrendingUp, Instagram } from "lucide-react"
 
 const LandingPage = () => {
   const router = useRouter()
@@ -77,37 +77,35 @@ const LandingPage = () => {
           {/* VEX Interface Hero Section */}
           <LandingVexInterface />
 
-          <section className="py-24 px-6 border-t border-white/10">
-            <div className="max-w-7xl mx-auto">
-              <div className="grid md:grid-cols-2 gap-12 items-center">
-                <div>
-                  <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
-                    Vex Organizes Your Content In Seconds
-                  </h2>
-                  <p className="text-white/60 text-lg leading-relaxed mb-6">
-                    No more selling messy zip files. Every piece of content is delivered through a beautiful, HD
-                    interface that your customers will love. Professional folder organization that makes browsing and
-                    downloading seamless.
-                  </p>
-                  <p className="text-white/60 text-lg leading-relaxed">
-                    VEX automatically structures your content with smart naming conventions and logical groupings. Your
-                    customers get a premium experience, not a confusing file dump.
-                  </p>
-                </div>
-                <div className="relative">
-                  <div className="bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 shadow-2xl hover:shadow-teal-500/10 transition-all">
-                    <img
-                      src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/7D123C64-C36B-4ACB-83ED-085BB60E2747.PNG-V4RkOLOzcrUKvamM8cZGlw9BRS9b5W.png"
-                      alt="HD Organized Folders Interface"
-                      className="w-full rounded-lg shadow-lg"
-                    />
+          {/* Minimal Review Section */}
+          <section className="py-16 px-6">
+            <div className="max-w-3xl mx-auto">
+              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-lg p-8 relative group hover:border-white/20 transition-all">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <p className="text-white/90 text-base leading-relaxed mb-4">
+                      "Mann I rock with the website heavy, was my first time actually trying a monetization method on my
+                      page and it did great. Everything was super easy and simple and also can't forget the help you
+                      guys provided. Definitely a great way to monetize quickly 🤝💯"
+                    </p>
+                    <div className="flex items-center gap-3">
+                      <span className="text-white/60 text-sm font-light">@hustlmyndset</span>
+                      <a
+                        href="https://www.instagram.com/hustlmyndset?igsh=MWo5aGZtOGwxYzE4Zg=="
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-white/40 hover:text-white/80 transition-colors"
+                      >
+                        <Instagram className="w-4 h-4" />
+                      </a>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </section>
 
-          <section id="features" className="py-24 px-6 border-t border-white/10">
+          <section className="py-24 px-6 border-t border-white/10">
             <div className="max-w-7xl mx-auto">
               <div className="text-center mb-16">
                 <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">Everything you need to sell content</h2>
