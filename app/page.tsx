@@ -105,6 +105,30 @@ const LandingPage = () => {
             </div>
           </section>
 
+          {/* Vex Organizes section with image */}
+          <section className="py-24 px-6 border-t border-white/10">
+            <div className="max-w-7xl mx-auto">
+              <div className="text-center mb-16">
+                <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
+                  Vex Organizes Your Content In Seconds
+                </h2>
+                <p className="text-white/60 text-lg max-w-2xl mx-auto">
+                  Chat with VEX to organize your content and create sellable bundles instantly
+                </p>
+              </div>
+
+              <div className="mb-16 max-w-4xl mx-auto">
+                <div className="bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 shadow-2xl">
+                  <img
+                    src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/copy_ACAD5C9D-0800-434F-BC27-E3DE625779B1.JPEG-6TlHbPShOaerHSsdCOqseRiuPKglfX.jpeg"
+                    alt="VEX Chat Interface Example"
+                    className="w-full rounded-lg shadow-lg"
+                  />
+                </div>
+              </div>
+            </div>
+          </section>
+
           <section className="py-24 px-6 border-t border-white/10">
             <div className="max-w-7xl mx-auto">
               <div className="text-center mb-16">
