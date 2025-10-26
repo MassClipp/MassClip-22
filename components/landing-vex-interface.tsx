@@ -359,7 +359,7 @@ export function LandingVexInterface() {
                     Earn Passive Income With Your Faceless Content.
                   </h1>
                   <p className="text-lg lg:text-xl text-white/60 font-light max-w-3xl mx-auto">
-                    Join community of thousands of creators who are monetizing faster with AI.
+                    Thousands of creators generate daily revenue selling content. Why not join them?
                   </p>
                 </div>
 
