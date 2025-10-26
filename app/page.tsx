@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { useEffect, useState } from "react"
 import { LandingVexInterface } from "@/components/landing-vex-interface"
 import { LandingReview } from "@/components/landing-review"
+import { LandingVideoCarousel } from "@/components/landing-video-carousel"
 import { Sparkles, Package, TrendingUp } from "lucide-react"
 
 const LandingPage = () => {
@@ -77,6 +78,8 @@ const LandingPage = () => {
         <main className="flex-1 flex flex-col">
           {/* VEX Interface Hero Section */}
           <LandingVexInterface />
+
+          <LandingVideoCarousel />
 
           {/* Review Section */}
           <LandingReview />
