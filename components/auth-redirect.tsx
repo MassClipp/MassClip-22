@@ -2,7 +2,6 @@
 
 import { useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
-import { Loader2 } from "lucide-react"
 
 interface AuthRedirectProps {
   to: string
@@ -50,11 +49,12 @@ export function AuthRedirect({ to, message = "Redirecting..." }: AuthRedirectPro
   return (
     <div className="min-h-screen bg-black flex items-center justify-center">
       <div className="text-center">
-        <Loader2 className="h-8 w-8 animate-spin text-white mx-auto mb-4" />
-        <p className="text-gray-400 mb-2">{message}</p>
-        <p className="text-xs text-gray-500">
+        {/* Minimal white spinner */}
+        <div className="h-8 w-8 mx-auto mb-6 rounded-full border-2 border-white/20 border-t-white animate-spin" />
+        <p className="text-white/60 text-sm mb-2">{message}</p>
+        <p className="text-xs text-white/30">
           If you're not redirected,{" "}
-          <a href={to} className="text-red-500 underline">
+          <a href={to} className="text-white/60 hover:text-white underline transition-colors">
             click here
           </a>
         </p>

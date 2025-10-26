@@ -295,6 +295,8 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
             </div>
           </div>
 
+          <div className="hidden md:block absolute left-1/2 top-1/4 bottom-1/4 w-px bg-white/10" />
+
           <div className="hidden md:flex items-center justify-center p-12 relative overflow-hidden">
             <div className="relative z-10 text-center space-y-8">
               <div className="space-y-4">
