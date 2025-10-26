@@ -82,15 +82,15 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
   return (
     <div
       className={cn(
-        "min-h-screen bg-gradient-to-br from-black via-gray-900 to-white flex items-center justify-center p-4 md:p-8 relative overflow-hidden",
+        "min-h-screen bg-black flex items-center justify-center p-4 md:p-8 relative overflow-hidden",
         className,
       )}
       {...props}
     >
       <div className="fixed inset-0 z-0">
-        <div className="absolute top-1/4 right-1/4 w-[700px] h-[700px] bg-teal-500/10 rounded-full blur-[140px]" />
-        <div className="absolute bottom-1/3 left-1/4 w-[600px] h-[600px] bg-cyan-500/10 rounded-full blur-[120px]" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-teal-400/8 rounded-full blur-[100px]" />
+        <div className="absolute top-1/4 right-1/4 w-[700px] h-[700px] bg-white/[0.08] rounded-full blur-[140px]" />
+        <div className="absolute bottom-1/3 left-1/4 w-[600px] h-[600px] bg-white/[0.06] rounded-full blur-[120px]" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-white/[0.05] rounded-full blur-[100px]" />
       </div>
 
       <div className="absolute top-6 left-6 z-20">
@@ -104,8 +104,8 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
       </div>
 
       <div className="relative z-10 w-full max-w-6xl">
-        <div className="grid md:grid-cols-2 gap-0 bg-white/5 backdrop-blur-xl border border-white/20 rounded-3xl overflow-hidden shadow-2xl">
-          <div className="p-8 md:p-12 bg-white/10">
+        <div className="grid md:grid-cols-2 gap-0 bg-white/[0.02] backdrop-blur-md border border-white/10 rounded-3xl overflow-hidden shadow-2xl">
+          <div className="p-8 md:p-12">
             <div className="space-y-6">
               <div className="space-y-2">
                 <h1 className="text-3xl md:text-4xl font-bold text-white">Log In</h1>
@@ -295,8 +295,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
             </div>
           </div>
 
-          <div className="hidden md:flex items-center justify-center bg-gradient-to-br from-teal-500/20 to-cyan-400/20 p-12 relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-teal-500/10 to-cyan-400/10" />
+          <div className="hidden md:flex items-center justify-center p-12 relative overflow-hidden">
             <div className="relative z-10 text-center space-y-8">
               <div className="space-y-4">
                 <h2 className="text-5xl md:text-6xl font-bold text-white leading-tight">
