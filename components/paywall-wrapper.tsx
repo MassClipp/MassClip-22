@@ -139,8 +139,8 @@ export function PaywallWrapper({ children }: PaywallWrapperProps) {
             </div>
 
             <div className="space-y-2">
-              <h2 className="text-2xl font-semibold text-white">Membership Required</h2>
-              <p className="text-zinc-400">Ready to sell your content?</p>
+              <h2 className="text-2xl font-semibold text-white">Content Sellers Only</h2>
+              <p className="text-zinc-400">Want to become one?</p>
             </div>
 
             <Button
@@ -154,7 +154,7 @@ export function PaywallWrapper({ children }: PaywallWrapperProps) {
                   <span>Loading...</span>
                 </div>
               ) : (
-                "Start Free Trial Now"
+                "Your Passive Income Starts Here"
               )}
             </Button>
           </div>
