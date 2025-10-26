@@ -7,18 +7,31 @@ export interface BehavioralEmailUser {
   uid: string
   email: string
   displayName?: string
+  createdAt?: Date
   lastStripeEmailSent?: Date
   lastBundleEmailSent?: Date
   lastFreeContentEmailSent?: Date
   lastContentEmailSent?: Date
+  lastFirstUploadEmailSent?: Date
+  lastGettingStartedEmailSent?: Date
   unsubscribed: boolean
 }
 
 export interface BehavioralEmailTemplate {
-  type: "stripe" | "bundles" | "free-content" | "content" | "stripe-connected" | "bundle-purchased" | "bundle-sold"
+  type:
+    | "stripe"
+    | "bundles"
+    | "free-content"
+    | "content"
+    | "stripe-connected"
+    | "bundle-purchased"
+    | "bundle-sold"
+    | "first-upload"
+    | "getting-started"
   subject: string
   html: string
   resendAfterDays?: number // Optional for one-time emails
+  delayHours?: number // For time-based triggers after signup
 }
 
 const BEHAVIORAL_EMAIL_TEMPLATES: BehavioralEmailTemplate[] = [
@@ -39,6 +52,11 @@ const BEHAVIORAL_EMAIL_TEMPLATES: BehavioralEmailTemplate[] = [
           <p>The good news? It only takes 2 minutes to set up, and then you'll be ready to start making money from day one!</p>
           <p><a href="https://www.massclip.pro/dashboard/earnings" style="color: #007BFF; text-decoration: underline;">Connect your Stripe account here and start earning!</a></p>
           <p>Can't wait to see your first sale!<br>The MassClip Team</p>
+          <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;" />
+          <p style="font-size: 12px; color: #999; text-align: center;">
+            If you no longer want to receive emails from MassClip, you can 
+            <a href="${process.env.NEXT_PUBLIC_SITE_URL || "https://www.massclip.pro"}/api/unsubscribe?email=${encodeURIComponent("{{EMAIL}}")}" style="color: #999;">unsubscribe here</a>.
+          </p>
         </body>
       </html>
     `,
@@ -60,6 +78,11 @@ const BEHAVIORAL_EMAIL_TEMPLATES: BehavioralEmailTemplate[] = [
           <p>Think of bundles as your product packages - they're what people will see and want to buy. Once you create one, your storefront comes to life and customers have something exciting to purchase!</p>
           <p><a href="https://www.massclip.pro/dashboard/bundles" style="color: #007BFF; text-decoration: underline;">Create your first bundle here - it's easier than you think!</a></p>
           <p>You've got this!<br>The MassClip Team</p>
+          <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;" />
+          <p style="font-size: 12px; color: #999; text-align: center;">
+            If you no longer want to receive emails from MassClip, you can 
+            <a href="${process.env.NEXT_PUBLIC_SITE_URL || "https://www.massclip.pro"}/api/unsubscribe?email=${encodeURIComponent("{{EMAIL}}")}" style="color: #999;">unsubscribe here</a>.
+          </p>
         </body>
       </html>
     `,
@@ -81,6 +104,11 @@ const BEHAVIORAL_EMAIL_TEMPLATES: BehavioralEmailTemplate[] = [
           <p>Even just one free upload can make all the difference. It shows people what you're capable of and gets them excited to buy your premium stuff!</p>
           <p><a href="https://www.massclip.pro/dashboard/free-content" style="color: #007BFF; text-decoration: underline;">Upload some free content and watch the magic happen!</a></p>
           <p>Your audience is waiting!<br>The MassClip Team</p>
+          <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;" />
+          <p style="font-size: 12px; color: #999; text-align: center;">
+            If you no longer want to receive emails from MassClip, you can 
+            <a href="${process.env.NEXT_PUBLIC_SITE_URL || "https://www.massclip.pro"}/api/unsubscribe?email=${encodeURIComponent("{{EMAIL}}")}" style="color: #999;">unsubscribe here</a>.
+          </p>
         </body>
       </html>
     `,
@@ -88,7 +116,7 @@ const BEHAVIORAL_EMAIL_TEMPLATES: BehavioralEmailTemplate[] = [
   {
     type: "content",
     subject: "Time to share your awesome content! 🎬",
-    resendAfterDays: 7,
+    delayHours: 72,
     html: `
       <!DOCTYPE html>
       <html lang="en">
@@ -98,10 +126,32 @@ const BEHAVIORAL_EMAIL_TEMPLATES: BehavioralEmailTemplate[] = [
         </head>
         <body style="font-family: Arial, sans-serif; font-size: 16px; line-height: 1.5; color: #000;">
           <p>Hey there!</p>
-          <p>Your content is waiting to shine! 🎬 Uploading your first piece is the exciting first step toward building bundles, sharing previews, and creating a storefront that people will love.</p>
-          <p>We know you've got amazing content to share - let's get it out there for the world to see!</p>
-          <p><a href="https://www.massclip.pro/dashboard" style="color: #007BFF; text-decoration: underline;">Upload your content here and get started!</a></p>
-          <p>The world needs to see what you've created!<br>The MassClip Team</p>
+          <p>I noticed you haven't uploaded any content yet, and I wanted to check in. Sometimes getting started is the hardest part, so I'm here to help. 🤝</p>
+          <p><strong>Here are answers to the most common questions we get:</strong></p>
+          <h3 style="margin-top: 25px; margin-bottom: 10px; font-size: 16px;">What type of content should I upload?</h3>
+          <p>Anything your audience finds valuable! This could be:</p>
+          <ul style="line-height: 1.8;">
+            <li>Video tutorials or courses</li>
+            <li>Templates and guides</li>
+            <li>Exclusive clips or behind-the-scenes content</li>
+            <li>Digital products like eBooks or worksheets</li>
+            <li>Any other content your audience would pay for</li>
+          </ul>
+          <h3 style="margin-top: 25px; margin-bottom: 10px; font-size: 16px;">Do I need to organize my content before uploading?</h3>
+          <p>Nope! That's what Vex AI is for. Just upload your content, and Vex will organize it, bundle it, and even suggest pricing for you. It all happens in seconds.</p>
+          <h3 style="margin-top: 25px; margin-bottom: 10px; font-size: 16px;">How does pricing work?</h3>
+          <p>Vex AI analyzes your content and suggests optimal pricing based on what similar creators charge. You can always adjust it, but Vex gives you a smart starting point so you don't have to guess.</p>
+          <h3 style="margin-top: 25px; margin-bottom: 10px; font-size: 16px;">What if I need help?</h3>
+          <p>We're here for you! Just reply to this email and we'll help you get everything set up. We want to see you succeed.</p>
+          <p style="margin-top: 30px;"><strong>The hardest part is starting. Once you upload your first piece of content, everything else falls into place.</strong></p>
+          <p><a href="https://www.massclip.pro/dashboard" style="display: inline-block; background-color: #000; color: #fff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; margin: 20px 0;">Upload Your First Content</a></p>
+          <p>Your audience is waiting. Let's give them something worth paying for.</p>
+          <p>Best,<br>The MassClip Team</p>
+          <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;" />
+          <p style="font-size: 12px; color: #999; text-align: center;">
+            If you no longer want to receive emails from MassClip, you can 
+            <a href="${process.env.NEXT_PUBLIC_SITE_URL || "https://www.massclip.pro"}/api/unsubscribe?email=${encodeURIComponent("{{EMAIL}}")}" style="color: #999;">unsubscribe here</a>.
+          </p>
         </body>
       </html>
     `,
@@ -122,6 +172,11 @@ const BEHAVIORAL_EMAIL_TEMPLATES: BehavioralEmailTemplate[] = [
           <p>This is huge - you can now accept payments, track your earnings, and watch your business grow. Every bundle you create and every piece of content you upload can now turn into real money in your pocket.</p>
           <p><a href="https://www.massclip.pro/dashboard/earnings" style="color: #007BFF; text-decoration: underline;">Check out your earnings dashboard and start making money!</a></p>
           <p>Here's to your first sale!<br>The MassClip Team</p>
+          <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;" />
+          <p style="font-size: 12px; color: #999; text-align: center;">
+            If you no longer want to receive emails from MassClip, you can 
+            <a href="${process.env.NEXT_PUBLIC_SITE_URL || "https://www.massclip.pro"}/api/unsubscribe?email=${encodeURIComponent("{{EMAIL}}")}" style="color: #999;">unsubscribe here</a>.
+          </p>
         </body>
       </html>
     `,
@@ -142,6 +197,11 @@ const BEHAVIORAL_EMAIL_TEMPLATES: BehavioralEmailTemplate[] = [
           <p>Your bundle is ready for download and we know you're going to love what's inside. The creator put their heart into making this content just for people like you!</p>
           <p><a href="https://www.massclip.pro/dashboard/purchases" style="color: #007BFF; text-decoration: underline;">Access your purchased content here</a></p>
           <p>Enjoy your new content!<br>The MassClip Team</p>
+          <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;" />
+          <p style="font-size: 12px; color: #999; text-align: center;">
+            If you no longer want to receive emails from MassClip, you can 
+            <a href="${process.env.NEXT_PUBLIC_SITE_URL || "https://www.massclip.pro"}/api/unsubscribe?email=${encodeURIComponent("{{EMAIL}}")}" style="color: #999;">unsubscribe here</a>.
+          </p>
         </body>
       </html>
     `,
@@ -162,6 +222,85 @@ const BEHAVIORAL_EMAIL_TEMPLATES: BehavioralEmailTemplate[] = [
           <p>Your earnings have been updated and the payment is on its way to your connected Stripe account. Keep creating amazing content because people clearly love what you're doing!</p>
           <p><a href="https://www.massclip.pro/dashboard/earnings" style="color: #007BFF; text-decoration: underline;">Check your earnings and celebrate this win!</a></p>
           <p>Here's to many more sales!<br>The MassClip Team</p>
+          <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;" />
+          <p style="font-size: 12px; color: #999; text-align: center;">
+            If you no longer want to receive emails from MassClip, you can 
+            <a href="${process.env.NEXT_PUBLIC_SITE_URL || "https://www.massclip.pro"}/api/unsubscribe?email=${encodeURIComponent("{{EMAIL}}")}" style="color: #999;">unsubscribe here</a>.
+          </p>
+        </body>
+      </html>
+    `,
+  },
+  {
+    type: "first-upload",
+    subject: "Ready to upload your first content? 🚀",
+    delayHours: 2,
+    html: `
+      <!DOCTYPE html>
+      <html lang="en">
+        <head>
+          <meta charset="UTF-8" />
+          <title>Upload Your First Content</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; font-size: 16px; line-height: 1.5; color: #000;">
+          <p>Hey there!</p>
+          <p>You're just one upload away from getting started with MassClip. 🚀</p>
+          <p>The first step is simple: upload the content you want to sell. It could be videos, guides, templates, courses, or anything else your audience values. Once you upload it, Vex AI takes over and does the heavy lifting for you.</p>
+          <p><strong>Here's what happens next:</strong></p>
+          <ul style="line-height: 1.8;">
+            <li>Vex AI analyzes your content</li>
+            <li>Organizes it into sellable bundles</li>
+            <li>Suggests optimal pricing</li>
+            <li>Creates your storefront automatically</li>
+          </ul>
+          <p>All you have to do is upload. The rest happens in seconds.</p>
+          <p><a href="https://www.massclip.pro/dashboard" style="display: inline-block; background-color: #000; color: #fff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; margin: 20px 0;">Upload Your First Content</a></p>
+          <p>Your audience is waiting. Let's give them something worth paying for.</p>
+          <p>Best,<br>The MassClip Team</p>
+          <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;" />
+          <p style="font-size: 12px; color: #999; text-align: center;">
+            If you no longer want to receive emails from MassClip, you can 
+            <a href="${process.env.NEXT_PUBLIC_SITE_URL || "https://www.massclip.pro"}/api/unsubscribe?email=${encodeURIComponent("{{EMAIL}}")}" style="color: #999;">unsubscribe here</a>.
+          </p>
+        </body>
+      </html>
+    `,
+  },
+  {
+    type: "getting-started",
+    subject: "Here's exactly how to start earning with MassClip 💸",
+    delayHours: 24,
+    html: `
+      <!DOCTYPE html>
+      <html lang="en">
+        <head>
+          <meta charset="UTF-8" />
+          <title>Getting Started with MassClip</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; font-size: 16px; line-height: 1.5; color: #000;">
+          <p>Hey there!</p>
+          <p>Let's get you set up to start earning passive income from your faceless content. 💸</p>
+          <p>I know getting started with a new platform can feel overwhelming, so I'm going to break it down into simple steps. Follow these, and you'll be making money in no time:</p>
+          <h3 style="margin-top: 30px; margin-bottom: 15px; font-size: 18px;">Step 1: Connect Your Stripe Account</h3>
+          <p>This is how you'll receive payouts when people buy your content. It takes about 2 minutes to set up, and once it's done, you're ready to get paid automatically.</p>
+          <p><a href="https://www.massclip.pro/dashboard/earnings" style="color: #007BFF; text-decoration: underline;">Connect Stripe here →</a></p>
+          <h3 style="margin-top: 30px; margin-bottom: 15px; font-size: 18px;">Step 2: Upload Your Content</h3>
+          <p>Upload the videos, guides, templates, or any other content you want to sell. Don't worry about organizing it yet—that's what Vex AI is for.</p>
+          <p><a href="https://www.massclip.pro/dashboard" style="color: #007BFF; text-decoration: underline;">Upload content here →</a></p>
+          <h3 style="margin-top: 30px; margin-bottom: 15px; font-size: 18px;">Step 3: Let Vex AI Bundle Your Content</h3>
+          <p>Once your content is uploaded, just tell Vex AI how you want it bundled. It could be by topic, by skill level, by format—whatever makes sense for your audience. Vex will organize everything, suggest pricing, and create your bundles in seconds.</p>
+          <p><a href="https://www.massclip.pro/dashboard/vex" style="color: #007BFF; text-decoration: underline;">Talk to Vex AI here →</a></p>
+          <h3 style="margin-top: 30px; margin-bottom: 15px; font-size: 18px;">Step 4: Start Earning Passive Income</h3>
+          <p>That's it. Once your bundles are live and your Stripe is connected, you're officially in business. Share your storefront link with your audience, and watch the sales roll in while you sleep.</p>
+          <p style="margin-top: 30px;"><strong>Your audience is already waiting to pay for your content.</strong> All you have to do is give them a way to buy it.</p>
+          <p><a href="https://www.massclip.pro/dashboard" style="display: inline-block; background-color: #000; color: #fff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; margin: 20px 0;">Complete Your Setup Now</a></p>
+          <p>Let's turn your content into income.</p>
+          <p>Best,<br>The MassClip Team</p>
+          <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;" />
+          <p style="font-size: 12px; color: #999; text-align: center;">
+            If you no longer want to receive emails from MassClip, you can 
+            <a href="${process.env.NEXT_PUBLIC_SITE_URL || "https://www.massclip.pro"}/api/unsubscribe?email=${encodeURIComponent("{{EMAIL}}")}" style="color: #999;">unsubscribe here</a>.
+          </p>
         </body>
       </html>
     `,
@@ -220,6 +359,7 @@ export class BehavioralEmailService {
         uid,
         email,
         displayName,
+        createdAt: new Date(),
         unsubscribed: false,
       }
 
@@ -233,7 +373,6 @@ export class BehavioralEmailService {
 
   static async checkAndSendBehavioralEmails(): Promise<void> {
     try {
-      // Get all users who haven't unsubscribed
       const behavioralSnapshot = await adminDb.collection("behavioralEmails").where("unsubscribed", "==", false).get()
 
       const users = behavioralSnapshot.docs.map((doc) => doc.data() as BehavioralEmailUser)
@@ -245,8 +384,6 @@ export class BehavioralEmailService {
 
         await this.checkUserAndSendEmails(user)
 
-        // Add delay between users to prevent rate limiting
-        // Wait 1 second between each user to be safe (allows up to 4 emails per user if needed)
         if (i < users.length - 1) {
           console.log(`⏳ Waiting 1 second before processing next user...`)
           await new Promise((resolve) => setTimeout(resolve, 1000))
@@ -266,38 +403,49 @@ export class BehavioralEmailService {
 
       const emailsToSend: BehavioralEmailTemplate["type"][] = []
 
-      // Check Stripe connection
+      if (user.createdAt) {
+        const userCreatedAt = user.createdAt instanceof Date ? user.createdAt : new Date(user.createdAt)
+        const hoursSinceSignup = (now.getTime() - userCreatedAt.getTime()) / (1000 * 60 * 60)
+
+        const totalContentCount = await this.getTotalContentCount(user.uid)
+        if (totalContentCount === 0 && hoursSinceSignup >= 2 && !user.lastFirstUploadEmailSent) {
+          emailsToSend.push("first-upload")
+        }
+
+        if (totalContentCount === 0 && hoursSinceSignup >= 24 && !user.lastGettingStartedEmailSent) {
+          emailsToSend.push("getting-started")
+        }
+
+        if (
+          totalContentCount === 0 &&
+          hoursSinceSignup >= 72 &&
+          (!user.lastContentEmailSent || user.lastContentEmailSent < sevenDaysAgo)
+        ) {
+          emailsToSend.push("content")
+        }
+      }
+
       const hasStripe = await this.hasStripeConnected(user.uid)
       if (!hasStripe && (!user.lastStripeEmailSent || user.lastStripeEmailSent < sevenDaysAgo)) {
         emailsToSend.push("stripe")
       }
 
-      // Check bundle count
       const bundleCount = await this.getBundleCount(user.uid)
       if (bundleCount === 0 && (!user.lastBundleEmailSent || user.lastBundleEmailSent < sevenDaysAgo)) {
         emailsToSend.push("bundles")
       }
 
-      // Check free content
       const freeContentCount = await this.getFreeContentCount(user.uid)
       if (freeContentCount === 0 && (!user.lastFreeContentEmailSent || user.lastFreeContentEmailSent < sevenDaysAgo)) {
         emailsToSend.push("free-content")
       }
 
-      // Check total content
-      const totalContentCount = await this.getTotalContentCount(user.uid)
-      if (totalContentCount === 0 && (!user.lastContentEmailSent || user.lastContentEmailSent < sevenDaysAgo)) {
-        emailsToSend.push("content")
-      }
-
-      // Send emails with delays between each one
       for (let i = 0; i < emailsToSend.length; i++) {
         const emailType = emailsToSend[i]
         console.log(`📤 Sending ${emailType} email to ${user.email}`)
 
         await this.sendBehavioralEmail(user, emailType)
 
-        // Wait 500ms between emails for the same user (2 requests per second = 500ms apart)
         if (i < emailsToSend.length - 1) {
           await new Promise((resolve) => setTimeout(resolve, 500))
         }
@@ -322,8 +470,9 @@ export class BehavioralEmailService {
         return false
       }
 
-      // Add unsubscribe link to all emails
-      const htmlWithUnsubscribe = template.html.replace(
+      const htmlWithEmail = template.html.replace(/\{\{EMAIL\}\}/g, user.email)
+
+      const htmlWithUnsubscribe = htmlWithEmail.replace(
         "</body>",
         `
           <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;" />
@@ -346,8 +495,30 @@ export class BehavioralEmailService {
         return false
       }
 
-      // Update last sent timestamp
-      const updateField = `last${emailType.charAt(0).toUpperCase() + emailType.slice(1).replace("-", "")}EmailSent`
+      let updateField: string
+      switch (emailType) {
+        case "first-upload":
+          updateField = "lastFirstUploadEmailSent"
+          break
+        case "getting-started":
+          updateField = "lastGettingStartedEmailSent"
+          break
+        case "stripe":
+          updateField = "lastStripeEmailSent"
+          break
+        case "bundles":
+          updateField = "lastBundleEmailSent"
+          break
+        case "free-content":
+          updateField = "lastFreeContentEmailSent"
+          break
+        case "content":
+          updateField = "lastContentEmailSent"
+          break
+        default:
+          updateField = `last${emailType.charAt(0).toUpperCase() + emailType.slice(1).replace("-", "")}EmailSent`
+      }
+
       await adminDb
         .collection("behavioralEmails")
         .doc(user.uid)

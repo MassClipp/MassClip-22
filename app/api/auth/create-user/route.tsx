@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
           const welcomeEmailResult = await resend.emails.send({
             from: "MassClip <contact@massclip.pro>",
             to: email,
-            subject: "Welcome to MassClip",
+            subject: "Your Content is Worth More Than You Think 💰",
             html: `
               <!DOCTYPE html>
               <html lang="en">
@@ -106,12 +106,32 @@ export async function POST(request: NextRequest) {
                   <title>Welcome to MassClip</title>
                 </head>
                 <body style="font-family: Arial, sans-serif; font-size: 16px; line-height: 1.5; color: #000;">
-                  <p>Hi there,</p>
-                  <p>Welcome to MassClip. We built this platform because we believe selling content should be taken more seriously and treated as a real business. Many creators are left with tools that don't feel professional or make it difficult to earn consistently.</p>
-                  <p>MassClip is designed to give you a simple and structured way to share your work and build steady income.</p>
-                  <p>Over the next few days, we'll guide you step by step so you can get everything set up.</p>
-                  <p><a href="https://www.massclip.pro/dashboard" style="color: #007BFF; text-decoration: underline;">You can take a look around the platform here.</a></p>
-                  <p>Best,<br>MassClip</p>
+                  <p>Hey ${displayName || username || "there"},</p>
+                  
+                  <p>Welcome to MassClip. You just took the first step toward turning your faceless content into a real income stream.</p>
+                  
+                  <p>Here's the truth: your audience is already waiting to pay for your content. They want the value you create, the insights you share, and the work you put in. The only thing standing between you and passive income is getting your content in front of them the right way.</p>
+                  
+                  <p>That's exactly what MassClip does. We help you organize, bundle, and sell your content so you can start earning while you sleep. No complicated setup. No endless manual work. Just upload your content, let our AI handle the rest, and watch the sales come in.</p>
+                  
+                  <p><strong>Your content has value. It's time to get paid for it.</strong></p>
+                  
+                  <p>Over the next few days, we'll walk you through exactly how to set everything up so you can start earning as quickly as possible. But if you're ready to dive in right now, here's what to do:</p>
+                  
+                  <ol style="line-height: 1.8;">
+                    <li>Upload your first piece of content</li>
+                    <li>Let Vex AI organize and bundle it for you</li>
+                    <li>Connect your payment account</li>
+                    <li>Start earning passive income</li>
+                  </ol>
+                  
+                  <p><a href="https://www.massclip.pro/dashboard" style="display: inline-block; background-color: #000; color: #fff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; margin: 20px 0;">Get Started Now</a></p>
+                  
+                  <p>Are you ready to let your content pay you in your sleep?</p>
+                  
+                  <p>Let's make it happen.</p>
+                  
+                  <p>Best,<br>The MassClip Team</p>
                   
                   <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;" />
                   <p style="font-size: 12px; color: #999; text-align: center;">
