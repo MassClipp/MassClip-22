@@ -151,6 +151,7 @@ export function SignupForm() {
       const additionalUserInfo = getAdditionalUserInfo(result)
 
       if (!additionalUserInfo?.isNewUser) {
+        // This is an existing account trying to sign up
         console.log("[v0] Existing user tried to sign up, logging them out and redirecting")
         await auth.signOut()
 
@@ -217,15 +218,13 @@ export function SignupForm() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-black p-4">
+    <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-white flex items-center justify-center p-4 md:p-8 relative overflow-hidden">
       <div className="fixed inset-0 z-0">
-        <div className="absolute inset-0 bg-black" />
-        <div className="absolute top-1/4 right-1/4 w-[1000px] h-[1000px] bg-teal-500/20 rounded-full blur-[160px]" />
-        <div className="absolute bottom-1/4 left-1/4 w-[900px] h-[900px] bg-cyan-500/15 rounded-full blur-[140px]" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-teal-400/10 rounded-full blur-[120px]" />
+        <div className="absolute top-1/4 right-1/4 w-[700px] h-[700px] bg-teal-500/10 rounded-full blur-[140px]" />
+        <div className="absolute bottom-1/3 left-1/4 w-[600px] h-[600px] bg-cyan-500/10 rounded-full blur-[120px]" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-teal-400/8 rounded-full blur-[100px]" />
       </div>
 
-      {/* Logo - top left */}
       <div className="absolute top-6 left-6 z-20">
         <Link href="/" className="inline-block cursor-pointer transition-transform hover:scale-105">
           <div className="text-white font-light text-2xl">
@@ -237,28 +236,24 @@ export function SignupForm() {
       </div>
 
       <div className="relative z-10 w-full max-w-6xl">
-        <div className="flex flex-col md:flex-row rounded-3xl overflow-hidden backdrop-blur-xl bg-white/5 border border-white/10 shadow-2xl">
-          {/* Left side - Form with white background */}
-          <div className="w-full md:w-1/2 bg-white p-8 md:p-12 flex items-center justify-center">
-            <div className="w-full max-w-md space-y-6">
-              {/* Header */}
+        <div className="grid md:grid-cols-2 gap-0 bg-white/5 backdrop-blur-xl border border-white/20 rounded-3xl overflow-hidden shadow-2xl">
+          <div className="p-8 md:p-12 bg-white/10">
+            <div className="space-y-6">
               <div className="space-y-2">
-                <h1 className="text-3xl md:text-4xl font-semibold text-gray-900">Create Account</h1>
-                <p className="text-gray-600">Sign up to start using Vex</p>
+                <h1 className="text-3xl md:text-4xl font-bold text-white">Create Account</h1>
+                <p className="text-white/60">Sign up to start using Vex</p>
               </div>
 
-              {/* Error Message */}
               {error && (
-                <Alert variant="destructive" className="border-red-300 bg-red-50">
-                  <AlertDescription className="text-red-800">{error}</AlertDescription>
+                <Alert variant="destructive" className="border-red-800 bg-red-900/20 backdrop-blur-sm">
+                  <AlertDescription className="text-red-400">{error}</AlertDescription>
                 </Alert>
               )}
 
-              {/* Google Sign Up */}
               <Button
                 type="button"
                 onClick={handleGoogleSignup}
-                className="w-full h-12 bg-white hover:bg-gray-50 text-gray-900 font-medium rounded-lg transition-all duration-200 flex items-center justify-center space-x-3 border border-gray-300"
+                className="w-full h-12 bg-white hover:bg-gray-100 text-gray-900 font-medium rounded-lg transition-all duration-200 flex items-center justify-center space-x-3"
                 disabled={loading}
               >
                 {loading ? (
@@ -288,79 +283,72 @@ export function SignupForm() {
                 )}
               </Button>
 
-              {/* Divider */}
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-300" />
+                  <div className="w-full border-t border-white/20" />
                 </div>
                 <div className="relative flex justify-center text-sm">
-                  <span className="px-4 bg-white text-gray-500">OR CONTINUE WITH EMAIL</span>
+                  <span className="px-4 bg-transparent text-white/60">OR CONTINUE WITH EMAIL</span>
                 </div>
               </div>
 
-              {/* Email Form */}
               <form onSubmit={handleEmailSignup} className="space-y-4">
-                {/* Username Field */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700">Username (optional)</label>
+                  <label className="text-sm font-medium text-white/80">Username (optional)</label>
                   <Input
                     type="text"
                     placeholder="Enter your username"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    className="h-12 bg-white border-gray-300 text-gray-900 placeholder-gray-400 focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                    className="h-11 bg-white/10 border-white/20 text-white placeholder-white/40 focus:border-teal-400 focus:ring-1 focus:ring-teal-400"
                     disabled={loading}
                   />
                 </div>
 
-                {/* Email Field */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700">Email</label>
+                  <label className="text-sm font-medium text-white/80">Email</label>
                   <Input
                     type="email"
                     placeholder="vex@gmail.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="h-12 bg-white border-gray-300 text-gray-900 placeholder-gray-400 focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                    className="h-11 bg-white/10 border-white/20 text-white placeholder-white/40 focus:border-teal-400 focus:ring-1 focus:ring-teal-400"
                     required
                     disabled={loading}
                   />
                 </div>
 
-                {/* Password Field */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700">Password</label>
+                  <label className="text-sm font-medium text-white/80">Password</label>
                   <Input
                     type="password"
                     placeholder="••••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="h-12 bg-white border-gray-300 text-gray-900 placeholder-gray-400 focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                    className="h-11 bg-white/10 border-white/20 text-white placeholder-white/40 focus:border-teal-400 focus:ring-1 focus:ring-teal-400"
                     required
                     disabled={loading}
                     minLength={6}
                   />
                 </div>
 
-                {/* Confirm Password Field */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700">Confirm Password</label>
+                  <label className="text-sm font-medium text-white/80">Confirm Password</label>
                   <Input
                     type="password"
                     placeholder="Confirm your password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="h-12 bg-white border-gray-300 text-gray-900 placeholder-gray-400 focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                    className="h-11 bg-white/10 border-white/20 text-white placeholder-white/40 focus:border-teal-400 focus:ring-1 focus:ring-teal-400"
                     required
                     disabled={loading}
                     minLength={6}
                   />
                 </div>
 
-                {/* Create Account Button */}
                 <Button
                   type="submit"
-                  className="w-full h-12 bg-gradient-to-r from-teal-500 to-cyan-400 hover:from-teal-600 hover:to-cyan-500 text-white font-medium rounded-lg transition-all duration-200"
+                  className="w-full h-11 bg-gradient-to-r from-teal-500 to-cyan-400 text-white font-medium rounded-lg transition-all duration-200 hover:from-teal-600 hover:to-cyan-500"
                   disabled={loading}
                 >
                   {loading ? (
@@ -372,19 +360,14 @@ export function SignupForm() {
                     "Create Account"
                   )}
                 </Button>
-
-                {/* Mobile slogan */}
-                <div className="md:hidden text-center pt-2">
-                  <p className="text-gray-600 text-sm font-medium">Stop Consuming, Start Producing</p>
-                </div>
               </form>
 
-              {/* Sign In Link */}
-              <div className="text-center text-sm">
-                <span className="text-gray-600">Already have an account? </span>
+              <div className="text-center pt-2">
+                <span className="text-white/60">Already have an account? </span>
                 <Button
                   variant="link"
-                  className="h-auto p-0 text-teal-600 hover:text-teal-700 font-medium"
+                  size="sm"
+                  className="h-auto p-0 text-sm text-teal-400 hover:text-teal-300 font-medium"
                   onClick={() => router.push("/login")}
                   disabled={loading}
                 >
@@ -392,12 +375,12 @@ export function SignupForm() {
                 </Button>
               </div>
 
-              {/* Terms */}
-              <div className="text-center text-xs text-gray-500">
+              <div className="text-center text-xs text-white/40 pt-2">
                 By continuing, you agree to our{" "}
                 <Button
                   variant="link"
-                  className="h-auto p-0 text-xs text-gray-600 hover:text-gray-700 underline"
+                  size="sm"
+                  className="h-auto p-0 text-xs text-white/60 hover:text-white underline"
                   onClick={() => router.push("/terms")}
                   type="button"
                 >
@@ -406,7 +389,8 @@ export function SignupForm() {
                 and{" "}
                 <Button
                   variant="link"
-                  className="h-auto p-0 text-xs text-gray-600 hover:text-gray-700 underline"
+                  size="sm"
+                  className="h-auto p-0 text-xs text-white/60 hover:text-white underline"
                   onClick={() => router.push("/privacy")}
                   type="button"
                 >
@@ -417,19 +401,30 @@ export function SignupForm() {
             </div>
           </div>
 
-          <div className="hidden md:flex w-1/2 bg-gradient-to-br from-teal-500 via-teal-400 to-cyan-400 items-center justify-center relative p-12">
-            <div className="flex flex-col items-center justify-center space-y-6 text-center">
-              <div className="space-y-2">
-                <h2 className="text-7xl font-bold text-black leading-tight">Stop</h2>
-                <h2 className="text-7xl font-bold text-black leading-tight">Consuming</h2>
+          <div className="hidden md:flex items-center justify-center bg-gradient-to-br from-teal-500/20 to-cyan-400/20 p-12 relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-teal-500/10 to-cyan-400/10" />
+            <div className="relative z-10 text-center space-y-8">
+              <div className="space-y-4">
+                <h2 className="text-5xl md:text-6xl font-bold text-white leading-tight">
+                  Stop
+                  <br />
+                  Consuming
+                </h2>
               </div>
-              <div className="w-20 h-1 bg-black/20 rounded-full" />
-              <div className="space-y-2">
-                <h2 className="text-7xl font-bold text-black leading-tight">Start</h2>
-                <h2 className="text-7xl font-bold text-black leading-tight">Producing</h2>
+              <div className="h-px w-24 bg-white/40 mx-auto" />
+              <div className="space-y-4">
+                <h2 className="text-5xl md:text-6xl font-bold text-white leading-tight">
+                  Start
+                  <br />
+                  Producing
+                </h2>
               </div>
             </div>
           </div>
+        </div>
+
+        <div className="md:hidden text-center mt-6">
+          <p className="text-white/60 text-lg font-medium">Stop Consuming, Start Producing</p>
         </div>
       </div>
     </div>
