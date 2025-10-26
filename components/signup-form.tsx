@@ -217,13 +217,12 @@ export function SignupForm() {
   }
 
   return (
-    <div className="min-h-screen flex relative overflow-hidden bg-black">
-      {/* Enhanced background ambiance */}
+    <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-black p-4">
       <div className="fixed inset-0 z-0">
         <div className="absolute inset-0 bg-black" />
-        <div className="absolute top-1/4 right-1/4 w-[800px] h-[800px] bg-teal-500/10 rounded-full blur-[140px]" />
-        <div className="absolute bottom-1/3 left-1/4 w-[700px] h-[700px] bg-cyan-500/10 rounded-full blur-[120px]" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-teal-400/8 rounded-full blur-[100px]" />
+        <div className="absolute top-1/4 right-1/4 w-[1000px] h-[1000px] bg-teal-500/20 rounded-full blur-[160px]" />
+        <div className="absolute bottom-1/4 left-1/4 w-[900px] h-[900px] bg-cyan-500/15 rounded-full blur-[140px]" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-teal-400/10 rounded-full blur-[120px]" />
       </div>
 
       {/* Logo - top left */}
@@ -237,196 +236,199 @@ export function SignupForm() {
         </Link>
       </div>
 
-      {/* Left side - Form */}
-      <div className="w-full md:w-1/2 flex items-center justify-center p-6 md:p-12 relative z-10">
-        <div className="w-full max-w-md space-y-6">
-          {/* Header */}
-          <div className="space-y-2">
-            <h1 className="text-3xl md:text-4xl font-semibold text-white">Create Account</h1>
-            <p className="text-gray-400">Sign up to start using Vex</p>
-          </div>
+      <div className="relative z-10 w-full max-w-6xl">
+        <div className="flex flex-col md:flex-row rounded-3xl overflow-hidden backdrop-blur-xl bg-white/5 border border-white/10 shadow-2xl">
+          {/* Left side - Form with white background */}
+          <div className="w-full md:w-1/2 bg-white p-8 md:p-12 flex items-center justify-center">
+            <div className="w-full max-w-md space-y-6">
+              {/* Header */}
+              <div className="space-y-2">
+                <h1 className="text-3xl md:text-4xl font-semibold text-gray-900">Create Account</h1>
+                <p className="text-gray-600">Sign up to start using Vex</p>
+              </div>
 
-          {/* Error Message */}
-          {error && (
-            <Alert variant="destructive" className="border-red-800 bg-red-900/20">
-              <AlertDescription className="text-red-400">{error}</AlertDescription>
-            </Alert>
-          )}
-
-          {/* Google Sign Up */}
-          <Button
-            type="button"
-            onClick={handleGoogleSignup}
-            className="w-full h-12 bg-white hover:bg-gray-100 text-gray-900 font-medium rounded-lg transition-all duration-200 flex items-center justify-center space-x-3"
-            disabled={loading}
-          >
-            {loading ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
-            ) : (
-              <>
-                <svg className="w-5 h-5" viewBox="0 0 24 24">
-                  <path
-                    fill="#4285F4"
-                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                  />
-                  <path
-                    fill="#EA4335"
-                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                  />
-                </svg>
-                <span>Continue with Google</span>
-              </>
-            )}
-          </Button>
-
-          {/* Divider */}
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-700" />
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-4 bg-black text-gray-400">OR CONTINUE WITH EMAIL</span>
-            </div>
-          </div>
-
-          {/* Email Form */}
-          <form onSubmit={handleEmailSignup} className="space-y-4">
-            {/* Username Field */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-300">Username (optional)</label>
-              <Input
-                type="text"
-                placeholder="Enter your username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="h-12 bg-gray-900/50 border-gray-700 text-white placeholder-gray-500 focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
-                disabled={loading}
-              />
-            </div>
-
-            {/* Email Field */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-300">Email</label>
-              <Input
-                type="email"
-                placeholder="vex@gmail.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="h-12 bg-gray-900/50 border-gray-700 text-white placeholder-gray-500 focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
-                required
-                disabled={loading}
-              />
-            </div>
-
-            {/* Password Field */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-300">Password</label>
-              <Input
-                type="password"
-                placeholder="••••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="h-12 bg-gray-900/50 border-gray-700 text-white placeholder-gray-500 focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
-                required
-                disabled={loading}
-                minLength={6}
-              />
-            </div>
-
-            {/* Confirm Password Field */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-300">Confirm Password</label>
-              <Input
-                type="password"
-                placeholder="Confirm your password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="h-12 bg-gray-900/50 border-gray-700 text-white placeholder-gray-500 focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
-                required
-                disabled={loading}
-                minLength={6}
-              />
-            </div>
-
-            {/* Create Account Button */}
-            <Button
-              type="submit"
-              className="w-full h-12 bg-gradient-to-r from-teal-500 to-cyan-400 hover:from-teal-600 hover:to-cyan-500 text-white font-medium rounded-lg transition-all duration-200"
-              disabled={loading}
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Creating Account...
-                </>
-              ) : (
-                "Create Account"
+              {/* Error Message */}
+              {error && (
+                <Alert variant="destructive" className="border-red-300 bg-red-50">
+                  <AlertDescription className="text-red-800">{error}</AlertDescription>
+                </Alert>
               )}
-            </Button>
 
-            {/* Mobile slogan */}
-            <div className="md:hidden text-center pt-2">
-              <p className="text-white/50 text-sm">Stop Consuming, Start Producing</p>
+              {/* Google Sign Up */}
+              <Button
+                type="button"
+                onClick={handleGoogleSignup}
+                className="w-full h-12 bg-white hover:bg-gray-50 text-gray-900 font-medium rounded-lg transition-all duration-200 flex items-center justify-center space-x-3 border border-gray-300"
+                disabled={loading}
+              >
+                {loading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <>
+                    <svg className="w-5 h-5" viewBox="0 0 24 24">
+                      <path
+                        fill="#4285F4"
+                        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                      />
+                      <path
+                        fill="#34A853"
+                        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                      />
+                      <path
+                        fill="#FBBC05"
+                        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                      />
+                      <path
+                        fill="#EA4335"
+                        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                      />
+                    </svg>
+                    <span>Continue with Google</span>
+                  </>
+                )}
+              </Button>
+
+              {/* Divider */}
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-300" />
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-4 bg-white text-gray-500">OR CONTINUE WITH EMAIL</span>
+                </div>
+              </div>
+
+              {/* Email Form */}
+              <form onSubmit={handleEmailSignup} className="space-y-4">
+                {/* Username Field */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Username (optional)</label>
+                  <Input
+                    type="text"
+                    placeholder="Enter your username"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    className="h-12 bg-white border-gray-300 text-gray-900 placeholder-gray-400 focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                    disabled={loading}
+                  />
+                </div>
+
+                {/* Email Field */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Email</label>
+                  <Input
+                    type="email"
+                    placeholder="vex@gmail.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="h-12 bg-white border-gray-300 text-gray-900 placeholder-gray-400 focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                    required
+                    disabled={loading}
+                  />
+                </div>
+
+                {/* Password Field */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Password</label>
+                  <Input
+                    type="password"
+                    placeholder="••••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="h-12 bg-white border-gray-300 text-gray-900 placeholder-gray-400 focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                    required
+                    disabled={loading}
+                    minLength={6}
+                  />
+                </div>
+
+                {/* Confirm Password Field */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Confirm Password</label>
+                  <Input
+                    type="password"
+                    placeholder="Confirm your password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="h-12 bg-white border-gray-300 text-gray-900 placeholder-gray-400 focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                    required
+                    disabled={loading}
+                    minLength={6}
+                  />
+                </div>
+
+                {/* Create Account Button */}
+                <Button
+                  type="submit"
+                  className="w-full h-12 bg-gradient-to-r from-teal-500 to-cyan-400 hover:from-teal-600 hover:to-cyan-500 text-white font-medium rounded-lg transition-all duration-200"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Creating Account...
+                    </>
+                  ) : (
+                    "Create Account"
+                  )}
+                </Button>
+
+                {/* Mobile slogan */}
+                <div className="md:hidden text-center pt-2">
+                  <p className="text-gray-600 text-sm font-medium">Stop Consuming, Start Producing</p>
+                </div>
+              </form>
+
+              {/* Sign In Link */}
+              <div className="text-center text-sm">
+                <span className="text-gray-600">Already have an account? </span>
+                <Button
+                  variant="link"
+                  className="h-auto p-0 text-teal-600 hover:text-teal-700 font-medium"
+                  onClick={() => router.push("/login")}
+                  disabled={loading}
+                >
+                  Sign in
+                </Button>
+              </div>
+
+              {/* Terms */}
+              <div className="text-center text-xs text-gray-500">
+                By continuing, you agree to our{" "}
+                <Button
+                  variant="link"
+                  className="h-auto p-0 text-xs text-gray-600 hover:text-gray-700 underline"
+                  onClick={() => router.push("/terms")}
+                  type="button"
+                >
+                  Terms of Service
+                </Button>{" "}
+                and{" "}
+                <Button
+                  variant="link"
+                  className="h-auto p-0 text-xs text-gray-600 hover:text-gray-700 underline"
+                  onClick={() => router.push("/privacy")}
+                  type="button"
+                >
+                  Privacy Policy
+                </Button>
+                .
+              </div>
             </div>
-          </form>
-
-          {/* Sign In Link */}
-          <div className="text-center text-sm">
-            <span className="text-gray-400">Already have an account? </span>
-            <Button
-              variant="link"
-              className="h-auto p-0 text-teal-400 hover:text-teal-300"
-              onClick={() => router.push("/login")}
-              disabled={loading}
-            >
-              Sign in
-            </Button>
           </div>
 
-          {/* Terms */}
-          <div className="text-center text-xs text-gray-500">
-            By continuing, you agree to our{" "}
-            <Button
-              variant="link"
-              className="h-auto p-0 text-xs text-gray-400 hover:text-gray-300 underline"
-              onClick={() => router.push("/terms")}
-              type="button"
-            >
-              Terms of Service
-            </Button>{" "}
-            and{" "}
-            <Button
-              variant="link"
-              className="h-auto p-0 text-xs text-gray-400 hover:text-gray-300 underline"
-              onClick={() => router.push("/privacy")}
-              type="button"
-            >
-              Privacy Policy
-            </Button>
-            .
-          </div>
-        </div>
-      </div>
-
-      {/* Right side - Slogan with teal gradient (hidden on mobile) */}
-      <div className="hidden md:flex w-1/2 bg-gradient-to-br from-teal-600 via-teal-500 to-cyan-500 items-center justify-center relative z-10">
-        <div className="flex flex-col items-center justify-center space-y-8 text-center px-12">
-          <div className="space-y-4">
-            <h2 className="text-6xl font-bold text-white leading-tight">Stop</h2>
-            <h2 className="text-6xl font-bold text-white leading-tight">Consuming</h2>
-          </div>
-          <div className="w-24 h-1 bg-white/30 rounded-full" />
-          <div className="space-y-4">
-            <h2 className="text-6xl font-bold text-white leading-tight">Start</h2>
-            <h2 className="text-6xl font-bold text-white leading-tight">Producing</h2>
+          <div className="hidden md:flex w-1/2 bg-gradient-to-br from-teal-500 via-teal-400 to-cyan-400 items-center justify-center relative p-12">
+            <div className="flex flex-col items-center justify-center space-y-6 text-center">
+              <div className="space-y-2">
+                <h2 className="text-7xl font-bold text-black leading-tight">Stop</h2>
+                <h2 className="text-7xl font-bold text-black leading-tight">Consuming</h2>
+              </div>
+              <div className="w-20 h-1 bg-black/20 rounded-full" />
+              <div className="space-y-2">
+                <h2 className="text-7xl font-bold text-black leading-tight">Start</h2>
+                <h2 className="text-7xl font-bold text-black leading-tight">Producing</h2>
+              </div>
+            </div>
           </div>
         </div>
       </div>
