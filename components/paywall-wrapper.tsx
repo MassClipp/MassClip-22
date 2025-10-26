@@ -18,6 +18,7 @@ export function PaywallWrapper({ children }: PaywallWrapperProps) {
   const pathname = usePathname()
   const [hasAccess, setHasAccess] = useState<boolean | null>(null)
   const [loading, setLoading] = useState(true)
+  const [checkoutLoading, setCheckoutLoading] = useState(false)
 
   const alwaysAccessiblePaths = ["/dashboard/upgrade", "/dashboard/purchases", "/pricing", "/welcome"]
 
@@ -78,6 +79,43 @@ export function PaywallWrapper({ children }: PaywallWrapperProps) {
     checkAccess()
   }, [user, pathname])
 
+  const handleStartTrial = async () => {
+    if (!user) return
+
+    try {
+      setCheckoutLoading(true)
+
+      const idToken = await user.getIdToken()
+
+      // Create VIP checkout session directly
+      const response = await fetch("/api/stripe/checkout/pricing", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          idToken,
+          plan: "creator_vip", // Explicitly request Creator VIP plan
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to create checkout session")
+      }
+
+      const data = await response.json()
+      if (data.url) {
+        window.location.href = data.url
+      }
+    } catch (error) {
+      console.error("Error creating checkout session:", error)
+      // Fallback to upgrade page
+      router.push("/dashboard/upgrade")
+    } finally {
+      setCheckoutLoading(false)
+    }
+  }
+
   // Show loading state
   if (loading) {
     return (
@@ -106,10 +144,18 @@ export function PaywallWrapper({ children }: PaywallWrapperProps) {
             </div>
 
             <Button
-              onClick={() => router.push("/dashboard/upgrade")}
+              onClick={handleStartTrial}
+              disabled={checkoutLoading}
               className="bg-white text-black hover:bg-zinc-100 font-medium"
             >
-              Get Started for $3/month
+              {checkoutLoading ? (
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                  <span>Loading...</span>
+                </div>
+              ) : (
+                "Start Free Trial Now"
+              )}
             </Button>
           </div>
         </div>
