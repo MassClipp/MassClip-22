@@ -359,7 +359,7 @@ export function LandingVexInterface() {
                     Earn Passive Income With Your Faceless Content.
                   </h1>
                   <p className="text-lg lg:text-xl text-white/60 font-light max-w-3xl mx-auto">
-                    AI builds your storefront and bundles your content automatically.
+                    Join community of thousands of creators who are monetizing faster with AI.
                   </p>
                 </div>
 
@@ -445,7 +445,7 @@ export function LandingVexInterface() {
                     size="lg"
                     className="bg-white text-black hover:bg-white/90 font-medium rounded-full px-8 py-6 text-base shadow-xl hover:shadow-2xl transition-all"
                   >
-                    Free Trial
+                    Join Now
                   </Button>
                 </div>
 
