@@ -19,7 +19,7 @@ export function LandingVideoCarousel({ videos }: LandingVideoCarouselProps) {
   ]
 
   const videoList = videos || defaultVideos
-  const duplicatedVideos = [...videoList, ...videoList, ...videoList]
+  const duplicatedVideos = [...videoList, ...videoList, ...videoList, ...videoList, ...videoList]
 
   return (
     <div className="w-full overflow-hidden py-12 relative">
@@ -45,14 +45,14 @@ export function LandingVideoCarousel({ videos }: LandingVideoCarouselProps) {
             transform: translateX(0);
           }
           100% {
-            /* Calculate based on one-third of content for seamless loop */
-            transform: translateX(calc(-100% / 3));
+            /* Move exactly 20% (1/5th) for seamless loop with 5x duplication */
+            transform: translateX(-20%);
           }
         }
 
         .animate-scroll-right {
-          /* Reduced from 30s to 40s for faster scroll, using will-change for better mobile performance */
-          animation: scroll-right 40s linear infinite;
+          /* Reduced to 20s for faster scroll speed */
+          animation: scroll-right 20s linear infinite;
           will-change: transform;
         }
       `}</style>
