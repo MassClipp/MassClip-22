@@ -219,11 +219,12 @@ export function SignupForm() {
 
   return (
     <div className="min-h-screen bg-black flex flex-col relative overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-tl from-white/3 via-white/1 to-transparent" />
-      <div className="absolute inset-0 bg-gradient-to-br from-transparent via-white/1 to-white/2" />
-      <div className="absolute inset-0 bg-gradient-radial from-white/4 via-white/2 to-transparent" />
-      <div className="absolute top-0 left-1/4 w-96 h-96 bg-white/3 rounded-full blur-3xl opacity-20" />
-      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-white/3 rounded-full blur-3xl opacity-20" />
+      <div className="fixed inset-0 z-0">
+        <div className="absolute inset-0 bg-black" />
+        <div className="absolute top-1/4 right-1/4 w-[600px] h-[600px] bg-teal-500/5 rounded-full blur-[120px]" />
+        <div className="absolute bottom-1/3 left-1/4 w-[500px] h-[500px] bg-cyan-500/5 rounded-full blur-[100px]" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] bg-teal-400/3 rounded-full blur-[80px]" />
+      </div>
 
       {/* Content */}
       <div className="relative z-10 flex flex-col min-h-screen">
@@ -236,6 +237,11 @@ export function SignupForm() {
               </span>
             </div>
           </Link>
+        </div>
+
+        <div className="hidden md:flex absolute top-1/2 left-0 right-0 -translate-y-1/2 justify-between px-12 pointer-events-none z-0">
+          <div className="text-white/10 text-6xl font-bold">Stop Consuming</div>
+          <div className="text-white/10 text-6xl font-bold">Start Producing</div>
         </div>
 
         {/* Main Content */}
@@ -373,6 +379,10 @@ export function SignupForm() {
                     "Create Account"
                   )}
                 </Button>
+
+                <div className="md:hidden text-center pt-2">
+                  <p className="text-white/40 text-lg font-medium">Stop Consuming, Start Producing</p>
+                </div>
               </form>
             </div>
 
