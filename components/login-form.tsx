@@ -88,9 +88,9 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
       {...props}
     >
       <div className="fixed inset-0 z-0">
-        <div className="absolute top-1/4 right-1/4 w-[700px] h-[700px] bg-white/[0.08] rounded-full blur-[140px]" />
-        <div className="absolute bottom-1/3 left-1/4 w-[600px] h-[600px] bg-white/[0.06] rounded-full blur-[120px]" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-white/[0.05] rounded-full blur-[100px]" />
+        <div className="absolute top-1/4 right-1/4 w-[700px] h-[700px] bg-teal-400/[0.15] rounded-full blur-[140px]" />
+        <div className="absolute bottom-1/3 left-1/4 w-[600px] h-[600px] bg-cyan-400/[0.12] rounded-full blur-[120px]" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-teal-400/[0.1] rounded-full blur-[100px]" />
       </div>
 
       <div className="absolute top-6 left-6 z-20">
