@@ -18,6 +18,8 @@ export function useObjectives() {
   const navButtonRefs = useRef<Map<string, HTMLElement>>(new Map())
   const [refreshCounter, setRefreshCounter] = useState(0)
 
+  const currentObjective = objectives?.objectives.find((obj) => !obj.completed) || null
+
   useEffect(() => {
     const loadObjectives = async () => {
       if (!user) {
@@ -41,19 +43,17 @@ export function useObjectives() {
   useEffect(() => {
     if (!objectives || objectives.percentageComplete === 100) return
 
-    const currentObjective = objectives.objectives.find((obj) => !obj.completed)
-    if (!currentObjective) return
+    const targetHref = currentObjective?.id
+      ? {
+          customize_storefront: "/dashboard/view-storefront",
+          upload_content: "/dashboard/upload",
+          add_free_content: "/dashboard/free-content",
+          connect_stripe: "/dashboard/earnings",
+          create_bundle: "/dashboard/bundles",
+          go_live: "/dashboard/view-storefront",
+        }[currentObjective.id]
+      : null
 
-    const mapping: Record<string, string> = {
-      customize_storefront: "/dashboard/view-storefront",
-      upload_content: "/dashboard/upload",
-      add_free_content: "/dashboard/free-content",
-      connect_stripe: "/dashboard/earnings",
-      create_bundle: "/dashboard/bundles",
-      go_live: "/dashboard/view-storefront",
-    }
-
-    const targetHref = mapping[currentObjective.id]
     if (!targetHref) return
 
     // Wait a bit for the DOM to be ready
@@ -109,5 +109,6 @@ export function useObjectives() {
     refreshObjectives,
     reopenPopup,
     registerNavButton,
+    currentObjective, // Export current objective
   }
 }

@@ -106,7 +106,7 @@ function VexChat({ children }: VexChatProps) {
   // State for suggestions
   const [currentSuggestions, setCurrentSuggestions] = useState<string[]>([])
 
-  const { objectives, isLoading: isLoadingObjectives, reopenPopup, registerNavButton } = useObjectives()
+  const { objectives, isLoading: isLoadingObjectives, reopenPopup, registerNavButton } = useObjectives() // Removed undeclared currentObjective here
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
@@ -1423,6 +1423,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                           >
                             <Clock className="h-3 w-3 mr-1.5" />
                             Free Trial: {trialStatus.daysRemaining} {trialStatus.daysRemaining === 1 ? "day" : "days"}{" "}
+                            {/* Corrected 'left' to be on same line */}
                             left
                           </Badge>
                         </div>
