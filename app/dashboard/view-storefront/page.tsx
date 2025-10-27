@@ -4,8 +4,8 @@ import { useState, useEffect } from "react"
 import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { Input } from "@/components/ui/input"
 import {
   Loader2,
   Plus,
@@ -15,11 +15,12 @@ import {
   Edit2,
   Check,
   X,
-  Package,
-  Upload,
   Calendar,
   Users,
   Heart,
+  Package,
+  Play,
+  UploadIcon,
 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
@@ -31,8 +32,12 @@ interface ContentItem {
   title: string
   thumbnailUrl: string
   fileUrl: string
-  type: string
+  duration: string
+  views: number
+  type: "video" | "audio" | "image" | "bundle"
   isPremium: boolean
+  price?: number
+  contentCount?: number
 }
 
 export default function ViewStorefrontPage() {
@@ -44,16 +49,25 @@ export default function ViewStorefrontPage() {
   const [displayName, setDisplayName] = useState("")
   const [bio, setBio] = useState("")
   const [profilePic, setProfilePic] = useState("")
-  const [socialLinks, setSocialLinks] = useState({ instagram: "", twitter: "", website: "" })
+  const [socialLinks, setSocialLinks] = useState<{
+    instagram?: string
+    twitter?: string
+    website?: string
+  }>({})
   const [freeContent, setFreeContent] = useState<ContentItem[]>([])
   const [premiumContent, setPremiumContent] = useState<ContentItem[]>([])
+  const [activeTab, setActiveTab] = useState<"free" | "premium">("free")
   const [createdAt, setCreatedAt] = useState<string>("")
 
   // Editing states
   const [isEditingBio, setIsEditingBio] = useState(false)
   const [isEditingSocials, setIsEditingSocials] = useState(false)
   const [tempBio, setTempBio] = useState("")
-  const [tempSocials, setTempSocials] = useState({ instagram: "", twitter: "", website: "" })
+  const [tempSocials, setTempSocials] = useState<{
+    instagram?: string
+    twitter?: string
+    website?: string
+  }>({})
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -76,7 +90,7 @@ export default function ViewStorefrontPage() {
           setDisplayName(profileData.displayName || profileData.username)
           setBio(profileData.bio || "")
           setProfilePic(profileData.profilePic || profileData.photoURL || "")
-          setSocialLinks(profileData.socialLinks || { instagram: "", twitter: "", website: "" })
+          setSocialLinks(profileData.socialLinks || {})
           setCreatedAt(profileData.createdAt || "")
         }
 
@@ -115,7 +129,10 @@ export default function ViewStorefrontPage() {
 
     try {
       const userDocRef = doc(db, "users", user.uid)
-      await updateDoc(userDocRef, { bio: tempBio })
+      await updateDoc(userDocRef, {
+        bio: tempBio,
+      })
+
       setBio(tempBio)
       setIsEditingBio(false)
       toast({
@@ -137,7 +154,10 @@ export default function ViewStorefrontPage() {
 
     try {
       const userDocRef = doc(db, "users", user.uid)
-      await updateDoc(userDocRef, { socialLinks: tempSocials })
+      await updateDoc(userDocRef, {
+        socialLinks: tempSocials,
+      })
+
       setSocialLinks(tempSocials)
       setIsEditingSocials(false)
       toast({
@@ -167,6 +187,7 @@ export default function ViewStorefrontPage() {
       } else {
         date = new Date(createdAt)
       }
+
       if (!isNaN(date.getTime())) {
         return date.toLocaleDateString("en-US", { month: "long", year: "numeric" })
       }
@@ -193,16 +214,18 @@ export default function ViewStorefrontPage() {
     )
   }
 
+  const currentContent = activeTab === "free" ? freeContent : premiumContent
+
   return (
-    <div className="min-h-screen bg-black relative -m-6">
-      {/* Background gradients */}
+    <div className="min-h-screen bg-black fixed inset-0 overflow-y-auto">
+      {/* Enhanced subtle gradient background */}
       <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-black to-zinc-800/20 pointer-events-none" />
       <div className="absolute inset-0 bg-gradient-to-t from-zinc-900/30 via-transparent to-zinc-800/10 pointer-events-none" />
 
       <div className="relative max-w-6xl mx-auto px-4 sm:px-8 py-8 sm:py-16">
-        {/* Header */}
+        {/* Header with inline editing */}
         <div className="mb-8 sm:mb-16">
-          <div className="flex items-start justify-between">
+          <div className="flex items-start justify-between gap-8">
             <div className="flex items-center gap-8">
               <div className="relative group">
                 <Avatar
@@ -234,7 +257,7 @@ export default function ViewStorefrontPage() {
                       value={tempBio}
                       onChange={(e) => setTempBio(e.target.value)}
                       placeholder="Write your bio..."
-                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-md"
+                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-md resize-none"
                       rows={3}
                     />
                     <div className="flex gap-2">
@@ -279,33 +302,24 @@ export default function ViewStorefrontPage() {
 
                 {isEditingSocials ? (
                   <div className="space-y-2">
-                    <div className="flex gap-2 items-center">
-                      <Instagram className="w-4 h-4 text-zinc-400" />
-                      <Input
-                        value={tempSocials.instagram}
-                        onChange={(e) => setTempSocials({ ...tempSocials, instagram: e.target.value })}
-                        placeholder="Instagram username"
-                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm h-8"
-                      />
-                    </div>
-                    <div className="flex gap-2 items-center">
-                      <Twitter className="w-4 h-4 text-zinc-400" />
-                      <Input
-                        value={tempSocials.twitter}
-                        onChange={(e) => setTempSocials({ ...tempSocials, twitter: e.target.value })}
-                        placeholder="Twitter username"
-                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm h-8"
-                      />
-                    </div>
-                    <div className="flex gap-2 items-center">
-                      <Globe className="w-4 h-4 text-zinc-400" />
-                      <Input
-                        value={tempSocials.website}
-                        onChange={(e) => setTempSocials({ ...tempSocials, website: e.target.value })}
-                        placeholder="Website URL"
-                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm h-8"
-                      />
-                    </div>
+                    <Input
+                      value={tempSocials.instagram || ""}
+                      onChange={(e) => setTempSocials({ ...tempSocials, instagram: e.target.value })}
+                      placeholder="Instagram username"
+                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                    />
+                    <Input
+                      value={tempSocials.twitter || ""}
+                      onChange={(e) => setTempSocials({ ...tempSocials, twitter: e.target.value })}
+                      placeholder="Twitter username"
+                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                    />
+                    <Input
+                      value={tempSocials.website || ""}
+                      onChange={(e) => setTempSocials({ ...tempSocials, website: e.target.value })}
+                      placeholder="Website URL"
+                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                    />
                     <div className="flex gap-2">
                       <Button size="sm" onClick={handleSaveSocials} className="bg-white text-black hover:bg-zinc-100">
                         <Check className="w-4 h-4 mr-1" />
@@ -394,87 +408,93 @@ export default function ViewStorefrontPage() {
         {/* Tabs */}
         <div className="mb-8">
           <div className="flex items-center gap-8 border-b border-zinc-800/50">
-            <div className="pb-4 text-sm font-medium text-white relative">
+            <button
+              onClick={() => setActiveTab("free")}
+              className={`pb-4 text-sm font-medium transition-all duration-200 relative ${
+                activeTab === "free" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
+              }`}
+            >
               Free Content
-              <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />
-            </div>
+              {activeTab === "free" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
+            </button>
+            <button
+              onClick={() => setActiveTab("premium")}
+              className={`pb-4 text-sm font-medium transition-all duration-200 relative ${
+                activeTab === "premium" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
+              }`}
+            >
+              Premium Content
+              {activeTab === "premium" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
+            </button>
           </div>
         </div>
 
-        <div className="mb-16">
-          {freeContent.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {freeContent.map((item) => (
-                <div key={item.id} className="relative aspect-[9/16] rounded-lg overflow-hidden bg-zinc-900">
+        {/* Content with action buttons */}
+        <div className="pt-8">
+          {currentContent.length > 0 ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
+              <div
+                className="aspect-[9/16] rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer flex flex-col items-center justify-center gap-3 group"
+                onClick={() => router.push(activeTab === "free" ? "/dashboard/upload" : "/dashboard/bundles")}
+              >
+                <div className="w-12 h-12 rounded-full bg-zinc-800 group-hover:bg-zinc-700 transition-colors flex items-center justify-center">
+                  {activeTab === "free" ? (
+                    <UploadIcon className="w-6 h-6 text-zinc-400 group-hover:text-white transition-colors" />
+                  ) : (
+                    <Package className="w-6 h-6 text-zinc-400 group-hover:text-white transition-colors" />
+                  )}
+                </div>
+                <p className="text-sm text-zinc-400 group-hover:text-zinc-300 transition-colors font-medium">
+                  {activeTab === "free" ? "Add Content" : "Create Bundle"}
+                </p>
+              </div>
+
+              {currentContent.map((item) => (
+                <div key={item.id} className="aspect-[9/16] rounded-lg overflow-hidden bg-zinc-900 relative group">
                   <img
                     src={item.thumbnailUrl || "/placeholder.svg"}
                     alt={item.title}
                     className="w-full h-full object-cover"
                   />
-                </div>
-              ))}
-              <button
-                onClick={() => router.push("/dashboard/upload")}
-                className="aspect-[9/16] rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors flex flex-col items-center justify-center gap-2 group"
-              >
-                <Upload className="w-8 h-8 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
-                <span className="text-sm text-zinc-600 group-hover:text-zinc-400 transition-colors">Add Content</span>
-              </button>
-            </div>
-          ) : (
-            <div className="text-center py-16">
-              <Button
-                onClick={() => router.push("/dashboard/upload")}
-                className="bg-white text-black hover:bg-zinc-100"
-              >
-                <Upload className="w-4 h-4 mr-2" />
-                Upload Your First Content
-              </Button>
-            </div>
-          )}
-        </div>
-
-        {/* Premium Content Section */}
-        <div className="mb-8">
-          <div className="flex items-center gap-8 border-b border-zinc-800/50">
-            <div className="pb-4 text-sm font-medium text-white relative">
-              Premium Content
-              <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />
-            </div>
-          </div>
-        </div>
-
-        <div>
-          {premiumContent.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-              {premiumContent.map((item) => (
-                <div key={item.id} className="bg-zinc-900/30 border border-zinc-800/30 rounded-lg p-4">
-                  <div className="aspect-video rounded-lg overflow-hidden bg-zinc-800 mb-3">
-                    <img
-                      src={item.thumbnailUrl || "/placeholder.svg"}
-                      alt={item.title}
-                      className="w-full h-full object-cover"
-                    />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="absolute bottom-0 left-0 right-0 p-3">
+                      <p className="text-white text-sm font-medium line-clamp-2">{item.title}</p>
+                    </div>
                   </div>
-                  <h3 className="text-white font-medium mb-1">{item.title}</h3>
                 </div>
               ))}
-              <button
-                onClick={() => router.push("/dashboard/bundles")}
-                className="bg-zinc-900/30 border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors rounded-lg p-4 flex flex-col items-center justify-center gap-2 group min-h-[200px]"
-              >
-                <Package className="w-8 h-8 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
-                <span className="text-sm text-zinc-600 group-hover:text-zinc-400 transition-colors">Create Bundle</span>
-              </button>
             </div>
           ) : (
-            <div className="text-center py-16">
-              <Button
-                onClick={() => router.push("/dashboard/bundles")}
-                className="bg-white text-black hover:bg-zinc-100"
+            <div className="text-center py-24">
+              <div
+                className="w-24 h-24 mx-auto mb-6 bg-zinc-900 rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer flex items-center justify-center group"
+                onClick={() => router.push(activeTab === "free" ? "/dashboard/upload" : "/dashboard/bundles")}
               >
-                <Package className="w-4 h-4 mr-2" />
-                Create Your First Bundle
+                {activeTab === "premium" ? (
+                  <Package className="w-8 h-8 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
+                ) : (
+                  <Play className="w-8 h-8 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
+                )}
+              </div>
+              <h3 className="text-lg font-medium text-white mb-2">No {activeTab} content yet</h3>
+              <p className="text-zinc-500 text-sm mb-6">
+                {activeTab === "free" ? "Upload your first piece of content" : "Create your first bundle"}
+              </p>
+              <Button
+                onClick={() => router.push(activeTab === "free" ? "/dashboard/upload" : "/dashboard/bundles")}
+                className="bg-white text-black hover:bg-zinc-100 font-medium"
+              >
+                {activeTab === "free" ? (
+                  <>
+                    <UploadIcon className="w-4 h-4 mr-2" />
+                    Upload Content
+                  </>
+                ) : (
+                  <>
+                    <Package className="w-4 h-4 mr-2" />
+                    Create Bundle
+                  </>
+                )}
               </Button>
             </div>
           )}
