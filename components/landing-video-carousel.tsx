@@ -52,14 +52,14 @@ export function LandingVideoCarousel({ videos }: LandingVideoCarouselProps) {
             transform: translateX(0);
           }
           100% {
-            /* Move 40% (2/5th) to show 2 full rotations before loop */
-            transform: translateX(-40%);
+            /* Move 60% (3/5th) to show all 17 videos 3 times before seamless loop */
+            transform: translateX(-60%);
           }
         }
 
         .animate-scroll-right {
-          /* 25s duration for 2 rotations - faster scrolling speed */
-          animation: scroll-right 25s linear infinite;
+          /* 40s duration for 3 full rotations - smooth but noticeable speed */
+          animation: scroll-right 40s linear infinite;
           will-change: transform;
         }
       `}</style>
