@@ -93,26 +93,25 @@ export default function ViewStorefrontPage() {
 
         if (profileResponse.ok) {
           const profileData = await profileResponse.json()
-          console.log("[v0] Profile data:", profileData)
           setUsername(profileData.username)
           setDisplayName(profileData.displayName || profileData.username)
           setBio(profileData.bio || "")
-          setProfilePic(profileData.profilePic || profileData.photoURL || "")
+          setTempBio(profileData.bio || "")
           setSocialLinks(profileData.socialLinks || {})
+          setTempSocials(profileData.socialLinks || {})
+          setProfilePic(profileData.profilePic || profileData.photoURL || "")
           setCreatedAt(profileData.createdAt || "")
         }
 
         const freeResponse = await fetch(`/api/creator/${user.uid}/free-content`)
         if (freeResponse.ok) {
           const freeData = await freeResponse.json()
-          console.log("[v0] Free content data:", freeData)
           setFreeContent(freeData.content || [])
         }
 
         const premiumResponse = await fetch(`/api/creator/${user.uid}/premium-content`)
         if (premiumResponse.ok) {
           const premiumData = await premiumResponse.json()
-          console.log("[v0] Premium content data:", premiumData)
           setPremiumContent(premiumData.content || [])
         }
       } catch (error) {
@@ -453,7 +452,7 @@ export default function ViewStorefrontPage() {
                     ? "w-full max-w-sm aspect-[3/4] rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer flex flex-col items-center justify-center gap-3 group"
                     : "aspect-[9/16] rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer flex flex-col items-center justify-center gap-3 group"
                 }
-                onClick={() => router.push(activeTab === "free" ? "/dashboard/upload" : "/dashboard/bundles")}
+                onClick={() => router.push(activeTab === "free" ? "/dashboard/free-content" : "/dashboard/bundles")}
               >
                 <div className="w-12 h-12 rounded-full bg-zinc-800 group-hover:bg-zinc-700 transition-colors flex items-center justify-center">
                   {activeTab === "free" ? (
@@ -484,7 +483,7 @@ export default function ViewStorefrontPage() {
             <div className="text-center py-24">
               <div
                 className="w-24 h-24 mx-auto mb-6 bg-zinc-900 rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer flex items-center justify-center group"
-                onClick={() => router.push(activeTab === "free" ? "/dashboard/upload" : "/dashboard/bundles")}
+                onClick={() => router.push(activeTab === "free" ? "/dashboard/free-content" : "/dashboard/bundles")}
               >
                 {activeTab === "premium" ? (
                   <Package className="w-8 h-8 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
@@ -497,7 +496,7 @@ export default function ViewStorefrontPage() {
                 {activeTab === "free" ? "Upload your first piece of content" : "Create your first bundle"}
               </p>
               <Button
-                onClick={() => router.push(activeTab === "free" ? "/dashboard/upload" : "/dashboard/bundles")}
+                onClick={() => router.push(activeTab === "free" ? "/dashboard/free-content" : "/dashboard/bundles")}
                 className="bg-white text-black hover:bg-zinc-100 font-medium"
               >
                 {activeTab === "free" ? (

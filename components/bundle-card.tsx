@@ -74,8 +74,8 @@ export default function BundleCard({ item, user, creatorId, creatorUsername, isP
       return
     }
 
-    if (isPreview) {
-      router.push(`/dashboard/bundles?edit=${item.id}`)
+    if (isPreview && creatorUsername) {
+      router.push(`/creator/${creatorUsername}/bundle/${item.id}`)
     } else if (creatorUsername) {
       router.push(`/creator/${creatorUsername}/bundle/${item.id}`)
     }
@@ -132,7 +132,9 @@ export default function BundleCard({ item, user, creatorId, creatorUsername, isP
             <button
               onClick={(e) => {
                 e.stopPropagation()
-                router.push(`/dashboard/bundles?edit=${item.id}`)
+                if (creatorUsername) {
+                  router.push(`/creator/${creatorUsername}/bundle/${item.id}`)
+                }
               }}
               className="w-full border border-white/20 text-white hover:bg-white/5 rounded-md font-medium text-sm px-4 py-2.5 transition-colors"
             >
