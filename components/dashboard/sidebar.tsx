@@ -98,8 +98,8 @@ const navItems = [
         icon: Package,
       },
       {
-        title: "Storefront Preview",
-        href: "/dashboard/storefront-preview",
+        title: "View Storefront",
+        href: "/dashboard/view-storefront",
         icon: Store,
       },
     ],

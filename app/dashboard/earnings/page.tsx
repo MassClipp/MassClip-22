@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { PaywallWrapper } from "@/components/paywall-wrapper"
 import {
   DollarSign,
   CreditCard,
@@ -100,220 +99,210 @@ function EarningsPage() {
   // Show loading while checking auth or Stripe status
   if (loading || checkingStripe) {
     return (
-      <PaywallWrapper>
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="text-center">
-            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-white" />
-            <p className="text-gray-400">{loading ? "Loading..." : "Checking Stripe connection..."}</p>
-          </div>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-white" />
+          <p className="text-gray-400">{loading ? "Loading..." : "Checking Stripe connection..."}</p>
         </div>
-      </PaywallWrapper>
+      </div>
     )
   }
 
   // Show login prompt if not authenticated
   if (!user) {
     return (
-      <PaywallWrapper>
-        <div className="flex items-center justify-center min-h-screen">
-          <Card className="w-full max-w-md bg-gray-800 border-gray-700">
-            <CardContent className="pt-6">
-              <p className="text-center text-gray-400">Please log in to continue</p>
-            </CardContent>
-          </Card>
-        </div>
-      </PaywallWrapper>
+      <div className="flex items-center justify-center min-h-screen">
+        <Card className="w-full max-w-md bg-gray-800 border-gray-700">
+          <CardContent className="pt-6">
+            <p className="text-center text-gray-400">Please log in to continue</p>
+          </CardContent>
+        </Card>
+      </div>
     )
   }
 
   // Show Stripe connection setup if not connected or not fully set up
   if (!stripeStatus?.connected || !stripeStatus?.chargesEnabled || !stripeStatus?.detailsSubmitted) {
     return (
-      <PaywallWrapper>
-        <div className="space-y-8">
-          {/* Header */}
-          <div className="text-center space-y-3">
-            <div className="inline-flex items-center justify-center w-12 h-12 bg-gradient-to-br from-blue-500 via-purple-600 to-purple-700 rounded-full shadow-lg">
-              <CreditCard className="w-6 h-6 text-white" />
-            </div>
-            <h1 className="text-2xl font-light text-white">Connect Your Stripe Account</h1>
-            <p className="text-white/70">Start accepting payments and track your earnings</p>
+      <div className="space-y-8">
+        {/* Header */}
+        <div className="text-center space-y-3">
+          <div className="inline-flex items-center justify-center w-12 h-12 bg-gradient-to-br from-blue-500 via-purple-600 to-purple-700 rounded-full shadow-lg">
+            <CreditCard className="w-6 h-6 text-white" />
           </div>
+          <h1 className="text-2xl font-light text-white">Connect Your Stripe Account</h1>
+          <p className="text-white/70">Start accepting payments and track your earnings</p>
+        </div>
 
-          {/* Benefits */}
-          <div className="space-y-4">
-            <h2 className="text-lg font-light text-white text-center">Why Connect Stripe?</h2>
-            <div className="space-y-3">
-              <div className="flex items-center gap-3 p-3 border border-gray-700/50 rounded-lg bg-transparent">
-                <DollarSign className="w-6 h-6 text-blue-400 flex-shrink-0" />
-                <div>
-                  <h3 className="font-medium text-white">Accept Payments</h3>
-                  <p className="text-gray-400 text-sm">Process payments from customers worldwide</p>
-                </div>
+        {/* Benefits */}
+        <div className="space-y-4">
+          <h2 className="text-lg font-light text-white text-center">Why Connect Stripe?</h2>
+          <div className="space-y-3">
+            <div className="flex items-center gap-3 p-3 border border-gray-700/50 rounded-lg bg-transparent">
+              <DollarSign className="w-6 h-6 text-blue-400 flex-shrink-0" />
+              <div>
+                <h3 className="font-medium text-white">Accept Payments</h3>
+                <p className="text-gray-400 text-sm">Process payments from customers worldwide</p>
               </div>
+            </div>
 
-              <div className="flex items-center gap-3 p-3 border border-gray-700/50 rounded-lg bg-transparent">
-                <Globe className="w-6 h-6 text-purple-400 flex-shrink-0" />
-                <div>
-                  <h3 className="font-medium text-white">Global Reach</h3>
-                  <p className="text-gray-400 text-sm">Supported in 40+ countries</p>
-                </div>
+            <div className="flex items-center gap-3 p-3 border border-gray-700/50 rounded-lg bg-transparent">
+              <Globe className="w-6 h-6 text-purple-400 flex-shrink-0" />
+              <div>
+                <h3 className="font-medium text-white">Global Reach</h3>
+                <p className="text-gray-400 text-sm">Supported in 40+ countries</p>
               </div>
+            </div>
 
-              <div className="flex items-center gap-3 p-3 border border-gray-700/50 rounded-lg bg-transparent">
-                <Shield className="w-6 h-6 text-blue-400 flex-shrink-0" />
-                <div>
-                  <h3 className="font-medium text-white">Secure & Reliable</h3>
-                  <p className="text-gray-400 text-sm">Bank-level security and encryption</p>
-                </div>
+            <div className="flex items-center gap-3 p-3 border border-gray-700/50 rounded-lg bg-transparent">
+              <Shield className="w-6 h-6 text-blue-400 flex-shrink-0" />
+              <div>
+                <h3 className="font-medium text-white">Secure & Reliable</h3>
+                <p className="text-gray-400 text-sm">Bank-level security and encryption</p>
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Connection Card */}
-          <Card className="bg-gray-800/30 border-purple-500/30">
-            <CardContent className="p-6 space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 via-purple-600 to-purple-700 rounded-lg flex items-center justify-center">
-                  <ExternalLink className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-medium text-white">Connect Your Stripe Account</h3>
-                  <p className="text-gray-400 text-sm">
-                    Securely connect through Stripe Connect. If you don't have an account, Stripe will help you create
-                    one.
-                  </p>
-                </div>
+        {/* Connection Card */}
+        <Card className="bg-gray-800/30 border-purple-500/30">
+          <CardContent className="p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 via-purple-600 to-purple-700 rounded-lg flex items-center justify-center">
+                <ExternalLink className="w-5 h-5 text-white" />
               </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-blue-400" />
-                  <span className="text-gray-300 text-sm">Secure OAuth connection</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-purple-400" />
-                  <span className="text-gray-300 text-sm">Quick 5-minute setup</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-blue-400" />
-                  <span className="text-gray-300 text-sm">2.9% + 30¢ per transaction</span>
-                </div>
+              <div>
+                <h3 className="text-lg font-medium text-white">Connect Your Stripe Account</h3>
+                <p className="text-gray-400 text-sm">
+                  Securely connect through Stripe Connect. If you don't have an account, Stripe will help you create
+                  one.
+                </p>
               </div>
+            </div>
 
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-blue-400" />
+                <span className="text-gray-300 text-sm">Secure OAuth connection</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-purple-400" />
+                <span className="text-gray-300 text-sm">Quick 5-minute setup</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-blue-400" />
+                <span className="text-gray-300 text-sm">2.9% + 30¢ per transaction</span>
+              </div>
+            </div>
+
+            <Button
+              onClick={async () => {
+                try {
+                  setConnectionError(null)
+                  const idToken = await user.getIdToken()
+                  const response = await fetch("/api/stripe/connect/oauth", {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      Authorization: `Bearer ${idToken}`,
+                    },
+                    body: JSON.stringify({ userId: user.uid }),
+                  })
+                  const data = await response.json()
+                  if (!response.ok) throw new Error(data.error || "Failed to connect Stripe account")
+                  if (data.authUrl) window.location.href = data.authUrl
+                } catch (err) {
+                  setConnectionError(err instanceof Error ? err.message : "Failed to connect account")
+                }
+              }}
+              disabled={loading}
+              className="w-full bg-gradient-to-r from-blue-600 via-purple-600 to-purple-700 hover:from-blue-700 hover:via-purple-700 hover:to-purple-800 text-white py-3"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Connecting...
+                </>
+              ) : (
+                <>
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  Connect with Stripe
+                </>
+              )}
+            </Button>
+
+            <p className="text-xs text-gray-500 text-center">
+              You'll be redirected to Stripe to complete setup. If you don't have a Stripe account, one will be created
+              for you automatically.
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* How It Works */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-center gap-2">
+            <Info className="w-5 h-5 text-purple-400" />
+            <h2 className="text-lg font-light text-white">How It Works</h2>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 via-purple-600 to-purple-700 rounded-full flex items-center justify-center text-sm font-bold text-white">
+                1
+              </div>
+              <div>
+                <h3 className="font-medium text-white">Click Connect</h3>
+                <p className="text-gray-400 text-sm">Start the secure connection process with Stripe</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 via-purple-600 to-purple-700 rounded-full flex items-center justify-center text-sm font-bold text-white">
+                2
+              </div>
+              <div>
+                <h3 className="font-medium text-white">Complete Setup</h3>
+                <p className="text-gray-400 text-sm">Follow Stripe's secure onboarding process</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 via-purple-600 to-purple-700 rounded-full flex items-center justify-center text-sm font-bold text-white">
+                3
+              </div>
+              <div>
+                <h3 className="font-medium text-white">Start Earning</h3>
+                <p className="text-gray-400 text-sm">Begin accepting payments immediately</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Error Display */}
+        {connectionError && (
+          <Card className="border-red-600/50 bg-red-900/20">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3 text-red-400">
+                <AlertCircle className="h-5 w-5" />
+                <span className="text-sm">Error: {connectionError}</span>
+              </div>
               <Button
-                onClick={async () => {
-                  try {
-                    setConnectionError(null)
-                    const idToken = await user.getIdToken()
-                    const response = await fetch("/api/stripe/connect/oauth", {
-                      method: "POST",
-                      headers: {
-                        "Content-Type": "application/json",
-                        Authorization: `Bearer ${idToken}`,
-                      },
-                      body: JSON.stringify({ userId: user.uid }),
-                    })
-                    const data = await response.json()
-                    if (!response.ok) throw new Error(data.error || "Failed to connect Stripe account")
-                    if (data.authUrl) window.location.href = data.authUrl
-                  } catch (err) {
-                    setConnectionError(err instanceof Error ? err.message : "Failed to connect account")
-                  }
-                }}
-                disabled={loading}
-                className="w-full bg-gradient-to-r from-blue-600 via-purple-600 to-purple-700 hover:from-blue-700 hover:via-purple-700 hover:to-purple-800 text-white py-3"
+                onClick={() => setConnectionError(null)}
+                variant="outline"
+                size="sm"
+                className="mt-3 border-red-600/50 text-red-400 hover:bg-red-900/40"
               >
-                {loading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Connecting...
-                  </>
-                ) : (
-                  <>
-                    <ExternalLink className="mr-2 h-4 w-4" />
-                    Connect with Stripe
-                  </>
-                )}
+                Dismiss
               </Button>
-
-              <p className="text-xs text-gray-500 text-center">
-                You'll be redirected to Stripe to complete setup. If you don't have a Stripe account, one will be
-                created for you automatically.
-              </p>
             </CardContent>
           </Card>
-
-          {/* How It Works */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-center gap-2">
-              <Info className="w-5 h-5 text-purple-400" />
-              <h2 className="text-lg font-light text-white">How It Works</h2>
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 via-purple-600 to-purple-700 rounded-full flex items-center justify-center text-sm font-bold text-white">
-                  1
-                </div>
-                <div>
-                  <h3 className="font-medium text-white">Click Connect</h3>
-                  <p className="text-gray-400 text-sm">Start the secure connection process with Stripe</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 via-purple-600 to-purple-700 rounded-full flex items-center justify-center text-sm font-bold text-white">
-                  2
-                </div>
-                <div>
-                  <h3 className="font-medium text-white">Complete Setup</h3>
-                  <p className="text-gray-400 text-sm">Follow Stripe's secure onboarding process</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 via-purple-600 to-purple-700 rounded-full flex items-center justify-center text-sm font-bold text-white">
-                  3
-                </div>
-                <div>
-                  <h3 className="font-medium text-white">Start Earning</h3>
-                  <p className="text-gray-400 text-sm">Begin accepting payments immediately</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Error Display */}
-          {connectionError && (
-            <Card className="border-red-600/50 bg-red-900/20">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3 text-red-400">
-                  <AlertCircle className="h-5 w-5" />
-                  <span className="text-sm">Error: {connectionError}</span>
-                </div>
-                <Button
-                  onClick={() => setConnectionError(null)}
-                  variant="outline"
-                  size="sm"
-                  className="mt-3 border-red-600/50 text-red-400 hover:bg-red-900/40"
-                >
-                  Dismiss
-                </Button>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      </PaywallWrapper>
+        )}
+      </div>
     )
   }
 
   // Show the earnings dashboard if connected and set up
-  return (
-    <PaywallWrapper>
-      <EarningsContent />
-    </PaywallWrapper>
-  )
+  return <EarningsContent />
 }
 
 function EarningsPageWithHeader() {

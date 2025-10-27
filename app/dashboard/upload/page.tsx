@@ -46,7 +46,7 @@ import { uploadQueueManager, type QueuedUpload } from "@/lib/upload-queue-manage
 import { CreateFolderDialog } from "@/components/create-folder-dialog"
 import FolderSidebar from "@/components/folder-sidebar"
 import { VexFolderOrganizer } from "@/components/vex-folder-organizer"
-import { PaywallWrapper } from "@/components/paywall-wrapper"
+// import { PaywallWrapper } from "@/components/paywall-wrapper"
 
 interface UploadType {
   id: string
@@ -875,504 +875,404 @@ export default function UploadPage() {
   }
 
   return (
-    <PaywallWrapper>
-      <div className="space-y-6">
-        {/* Folder Sidebar */}
-        <FolderSidebar
-          isOpen={isSidebarOpen}
-          onClose={() => setIsSidebarOpen(false)}
-          selectedFolderId={selectedFolderId}
-          onFolderSelect={handleFolderSelect}
-          onFolderCreated={handleFolderCreated}
-        />
+    // <PaywallWrapper>
+    <div className="space-y-6">
+      {/* Folder Sidebar */}
+      <FolderSidebar
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+        selectedFolderId={selectedFolderId}
+        onFolderSelect={handleFolderSelect}
+        onFolderCreated={handleFolderCreated}
+      />
 
-        {/* Overlay when sidebar is open */}
-        {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setIsSidebarOpen(false)} />}
+      {/* Overlay when sidebar is open */}
+      {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setIsSidebarOpen(false)} />}
 
-        {/* Index Setup Helper */}
-        {hasIndexError && <FirestoreIndexHelper />}
+      {/* Index Setup Helper */}
+      {hasIndexError && <FirestoreIndexHelper />}
 
-        <div className="flex flex-col gap-4 pb-6 border-b border-zinc-800/50">
-          {/* Header section */}
-          <div className="space-y-2">
-            <h1 className="text-2xl font-semibold text-white tracking-tight">Upload</h1>
-            <div className="space-y-1">
-              <h2 className="text-lg font-medium text-white">Content Library</h2>
-              {username && (
-                <div className="flex items-center gap-2 text-xs text-zinc-500 flex-wrap">
-                  <div className="w-1.5 h-1.5 bg-zinc-500 rounded-full"></div>
-                  <span className="break-all">Storage path: creators/{username}/</span>
-                </div>
-              )}
-            </div>
-            <p className="text-zinc-400 text-sm">Upload and manage your content files</p>
+      <div className="flex flex-col gap-4 pb-6 border-b border-zinc-800/50">
+        {/* Header section */}
+        <div className="space-y-2">
+          <h1 className="text-2xl font-semibold text-white tracking-tight">Upload</h1>
+          <div className="space-y-1">
+            <h2 className="text-lg font-medium text-white">Content Library</h2>
+            {username && (
+              <div className="flex items-center gap-2 text-xs text-zinc-500 flex-wrap">
+                <div className="w-1.5 h-1.5 bg-zinc-500 rounded-full"></div>
+                <span className="break-all">Storage path: creators/{username}/</span>
+              </div>
+            )}
           </div>
-
-          {/* Button row - wraps on mobile */}
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setIsSidebarOpen(true)}
-              className="border-zinc-700/50 bg-zinc-900/50 hover:bg-zinc-800/50 text-zinc-300 flex-shrink-0"
-            >
-              <Menu className="h-4 w-4 sm:mr-2" />
-              <span className="hidden sm:inline">Folders</span>
-            </Button>
-
-            <Button
-              variant="outline"
-              onClick={handleDownloadAllAsZip}
-              disabled={isDownloadingZip || uploads.length === 0}
-              className="border-zinc-700/50 bg-zinc-900/50 hover:bg-zinc-800/50 text-zinc-300 flex-shrink-0"
-            >
-              {isDownloadingZip ? (
-                <Loader2 className="h-4 w-4 sm:mr-2 animate-spin" />
-              ) : (
-                <Download className="h-4 w-4 sm:mr-2" />
-              )}
-              <span className="hidden sm:inline">Download ZIP</span>
-            </Button>
-
-            <Button
-              variant="outline"
-              onClick={() => fetchUploads()}
-              className="border-zinc-700/50 bg-zinc-900/50 hover:bg-zinc-800/50 text-zinc-300 flex-shrink-0"
-            >
-              <RefreshCw className="h-4 w-4" />
-            </Button>
-
-            <Button
-              onClick={() => fileInputRef.current?.click()}
-              className="bg-white text-black hover:bg-zinc-100 font-medium px-4 sm:px-6 flex-shrink-0"
-            >
-              <Upload className="h-4 w-4 sm:mr-2" />
-              <span className="hidden sm:inline">Upload Files</span>
-            </Button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              onChange={(e) => e.target.files && handleFileUpload(e.target.files)}
-              className="hidden"
-              accept="video/*,audio/*,image/*,.pdf,.doc,.docx,.txt,.zip,application/zip,application/x-zip-compressed"
-            />
-          </div>
+          <p className="text-zinc-400 text-sm">Upload and manage your content files</p>
         </div>
 
-        {uploadQueue.length > 0 && (
-          <div className="bg-zinc-900/30 border border-zinc-800/30 rounded-lg">
-            <div className="flex items-center justify-between p-4 border-b border-zinc-800/30">
-              <div className="flex items-center gap-3">
-                <h3 className="font-medium text-white">Upload Progress</h3>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-zinc-400">{queueStats.total} files</span>
-                  <div className="w-1 h-1 bg-zinc-600 rounded-full"></div>
-                  <span className="text-xs text-zinc-400">{queueStats.uploading} active</span>
-                </div>
-              </div>
-              {queueStats.completed > 0 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={clearCompletedUploads}
-                  className="text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 text-xs transition-colors"
-                >
-                  Clear Completed
-                </Button>
-              )}
-            </div>
-            <div className="p-4">
-              <div className="space-y-3 max-h-80 overflow-y-auto">
-                {uploadQueue.map((queuedUpload) => {
-                  const StatusIcon = STATUS_ICONS[queuedUpload.status]
-                  const progress = queuedUpload.progress
+        {/* Button row - wraps on mobile */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setIsSidebarOpen(true)}
+            className="border-zinc-700/50 bg-zinc-900/50 hover:bg-zinc-800/50 text-zinc-300 flex-shrink-0"
+          >
+            <Menu className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Folders</span>
+          </Button>
 
-                  return (
-                    <div key={queuedUpload.id} className="flex items-center gap-4 p-3 bg-zinc-800/20 rounded-md">
-                      <StatusIcon
-                        className={`h-4 w-4 text-zinc-400 ${queuedUpload.status === "uploading" ? "animate-spin" : ""}`}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm font-medium text-white truncate">{queuedUpload.file.name}</span>
-                          <span className="text-xs text-zinc-400">{formatFileSize(queuedUpload.file.size)}</span>
-                        </div>
-                        {progress && (
-                          <div className="space-y-1">
-                            <Progress value={progress.percentage} className="h-2 bg-zinc-800/60" />
-                            <div className="flex justify-between text-xs text-zinc-500">
-                              <span>{Math.round(progress.percentage)}%</span>
-                              {progress.speed > 0 && <span>{formatSpeed(progress.speed)}</span>}
-                            </div>
-                          </div>
-                        )}
+          <Button
+            variant="outline"
+            onClick={handleDownloadAllAsZip}
+            disabled={isDownloadingZip || uploads.length === 0}
+            className="border-zinc-700/50 bg-zinc-900/50 hover:bg-zinc-800/50 text-zinc-300 flex-shrink-0"
+          >
+            {isDownloadingZip ? (
+              <Loader2 className="h-4 w-4 sm:mr-2 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4 sm:mr-2" />
+            )}
+            <span className="hidden sm:inline">Download ZIP</span>
+          </Button>
+
+          <Button
+            variant="outline"
+            onClick={() => fetchUploads()}
+            className="border-zinc-700/50 bg-zinc-900/50 hover:bg-zinc-800/50 text-zinc-300 flex-shrink-0"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+
+          <Button
+            onClick={() => fileInputRef.current?.click()}
+            className="bg-white text-black hover:bg-zinc-100 font-medium px-4 sm:px-6 flex-shrink-0"
+          >
+            <Upload className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Upload Files</span>
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            onChange={(e) => e.target.files && handleFileUpload(e.target.files)}
+            className="hidden"
+            accept="video/*,audio/*,image/*,.pdf,.doc,.docx,.txt,.zip,application/zip,application/x-zip-compressed"
+          />
+        </div>
+      </div>
+
+      {uploadQueue.length > 0 && (
+        <div className="bg-zinc-900/30 border border-zinc-800/30 rounded-lg">
+          <div className="flex items-center justify-between p-4 border-b border-zinc-800/30">
+            <div className="flex items-center gap-3">
+              <h3 className="font-medium text-white">Upload Progress</h3>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-zinc-400">{queueStats.total} files</span>
+                <div className="w-1 h-1 bg-zinc-600 rounded-full"></div>
+                <span className="text-xs text-zinc-400">{queueStats.uploading} active</span>
+              </div>
+            </div>
+            {queueStats.completed > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearCompletedUploads}
+                className="text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 text-xs transition-colors"
+              >
+                Clear Completed
+              </Button>
+            )}
+          </div>
+          <div className="p-4">
+            <div className="space-y-3 max-h-80 overflow-y-auto">
+              {uploadQueue.map((queuedUpload) => {
+                const StatusIcon = STATUS_ICONS[queuedUpload.status]
+                const progress = queuedUpload.progress
+
+                return (
+                  <div key={queuedUpload.id} className="flex items-center gap-4 p-3 bg-zinc-800/20 rounded-md">
+                    <StatusIcon
+                      className={`h-4 w-4 text-zinc-400 ${queuedUpload.status === "uploading" ? "animate-spin" : ""}`}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm font-medium text-white truncate">{queuedUpload.file.name}</span>
+                        <span className="text-xs text-zinc-400">{formatFileSize(queuedUpload.file.size)}</span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {queuedUpload.status === "uploading" && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => uploadQueueManager.pauseUpload(queuedUpload.id)}
-                            className="h-8 w-8 p-0"
-                          >
-                            <Pause className="h-3 w-3" />
-                          </Button>
-                        )}
-                        {queuedUpload.status === "paused" && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => uploadQueueManager.resumeUpload(queuedUpload.id)}
-                            className="h-8 w-8 p-0"
-                          >
-                            <Play className="h-3 w-3" />
-                          </Button>
-                        )}
+                      {progress && (
+                        <div className="space-y-1">
+                          <Progress value={progress.percentage} className="h-2 bg-zinc-800/60" />
+                          <div className="flex justify-between text-xs text-zinc-500">
+                            <span>{Math.round(progress.percentage)}%</span>
+                            {progress.speed > 0 && <span>{formatSpeed(progress.speed)}</span>}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {queuedUpload.status === "uploading" && (
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => uploadQueueManager.cancelUpload(queuedUpload.id)}
-                          className="h-8 w-8 p-0 text-zinc-500 hover:text-red-400"
+                          onClick={() => uploadQueueManager.pauseUpload(queuedUpload.id)}
+                          className="h-8 w-8 p-0"
                         >
-                          <X className="h-3 w-3" />
+                          <Pause className="h-3 w-3" />
                         </Button>
-                      </div>
+                      )}
+                      {queuedUpload.status === "paused" && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => uploadQueueManager.resumeUpload(queuedUpload.id)}
+                          className="h-8 w-8 p-0"
+                        >
+                          <Play className="h-3 w-3" />
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => uploadQueueManager.cancelUpload(queuedUpload.id)}
+                        className="h-8 w-8 p-0 text-zinc-500 hover:text-red-400"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
                     </div>
-                  )
-                })}
-              </div>
+                  </div>
+                )
+              })}
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        <div
-          className="border-2 border-dashed border-zinc-700/50 rounded-lg bg-zinc-900/20 hover:border-zinc-600/50 hover:bg-zinc-900/30 transition-all duration-200 cursor-pointer"
-          onDragOver={handleDragOver}
-          onDrop={handleDrop}
-          onClick={() => fileInputRef.current?.click()}
-        >
-          <div className="flex flex-col items-center justify-center py-12 px-4 sm:px-6">
-            <div className="w-12 h-12 bg-zinc-800/50 rounded-lg flex items-center justify-center mb-4">
-              <Upload className="h-6 w-6 text-zinc-400" />
+      <div
+        className="border-2 border-dashed border-zinc-700/50 rounded-lg bg-zinc-900/20 hover:border-zinc-600/50 hover:bg-zinc-900/30 transition-all duration-200 cursor-pointer"
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+        onClick={() => fileInputRef.current?.click()}
+      >
+        <div className="flex flex-col items-center justify-center py-12 px-4 sm:px-6">
+          <div className="w-12 h-12 bg-zinc-800/50 rounded-lg flex items-center justify-center mb-4">
+            <Upload className="h-6 w-6 text-zinc-400" />
+          </div>
+          <h3 className="text-lg font-medium text-white mb-2 text-center">Upload your files</h3>
+          <p className="text-zinc-400 text-center text-sm max-w-md">Drag and drop files here, or click to browse.</p>
+          <p className="text-zinc-500 text-center text-xs mt-3 max-w-md leading-relaxed">
+            Tip: Use descriptive titles with keywords so Vex can organize your content accurately
+          </p>
+        </div>
+      </div>
+
+      {/* Selected Items Actions */}
+      {selectedUploads.length > 0 && (
+        <div className="space-y-4">
+          {/* Vex Folder Organizer */}
+          {userToken && (
+            <VexFolderOrganizer
+              selectedFiles={selectedUploads}
+              onOrganizeComplete={handleVexOrganizeComplete}
+              userToken={userToken}
+            />
+          )}
+
+          <div className="flex items-center justify-between bg-zinc-900/80 border border-zinc-800 rounded-lg p-4">
+            <div className="text-sm text-zinc-300">
+              <span className="font-medium">{selectedUploads.length}</span> item(s) selected
             </div>
-            <h3 className="text-lg font-medium text-white mb-2 text-center">Upload your files</h3>
-            <p className="text-zinc-400 text-center text-sm max-w-md">Drag and drop files here, or click to browse.</p>
-            <p className="text-zinc-500 text-center text-xs mt-3 max-w-md leading-relaxed">
-              Tip: Use descriptive titles with keywords so Vex can organize your content accurately
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-zinc-700 bg-transparent"
+                onClick={() => setSelectedUploads([])}
+              >
+                Clear Selection
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-zinc-700 bg-transparent"
+                onClick={() => setShowAddToFreeContentDialog(true)}
+              >
+                <PlusCircle className="h-4 w-4 mr-2" />
+                Add to Free Content
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { label: "Total Files", value: stats.total, color: "text-white" },
+          { label: "Videos", value: stats.video, color: "text-white" },
+          { label: "Audio", value: stats.audio, color: "text-white" },
+          { label: "Images", value: stats.image, color: "text-white" },
+        ].map((stat, index) => (
+          <div key={index} className="bg-zinc-900/30 border border-zinc-800/30 rounded-lg p-4">
+            <div className={`text-2xl font-semibold ${stat.color} mb-1`}>{stat.value}</div>
+            <div className="text-xs text-white uppercase tracking-wide">{stat.label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+        <div className="flex items-center gap-4 w-full md:w-auto">
+          <div className="relative flex-1 md:w-80">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-500 h-4 w-4" />
+            <Input
+              placeholder="Search files..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 bg-zinc-900/30 border-zinc-800/30 text-white placeholder:text-zinc-500"
+            />
+          </div>
+
+          <Select value={filterType} onValueChange={setFilterType}>
+            <SelectTrigger className="w-36 bg-zinc-900/30 border-zinc-800/30 text-white">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="bg-zinc-900 border-zinc-800">
+              <SelectItem value="all">All Types</SelectItem>
+              <SelectItem value="video">Videos</SelectItem>
+              <SelectItem value="audio">Audio</SelectItem>
+              <SelectItem value="image">Images</SelectItem>
+              <SelectItem value="document">Documents</SelectItem>
+              <SelectItem value="other">Other</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex items-center gap-1 bg-zinc-900/30 border border-zinc-800/30 rounded-md p-1">
+          <Button
+            variant={viewMode === "grid" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setViewMode("grid")}
+            className={viewMode === "grid" ? "bg-white text-black" : "text-zinc-400 hover:text-white"}
+          >
+            <Grid3X3 className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={viewMode === "list" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setViewMode("list")}
+            className={viewMode === "list" ? "bg-white text-black" : "text-zinc-400 hover:text-white"}
+          >
+            <List className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Content */}
+      {uploads.length === 0 ? (
+        <div className="bg-zinc-900/20 border border-zinc-800/30 rounded-lg">
+          <div className="flex flex-col items-center justify-center py-16 px-6">
+            <div className="w-16 h-16 bg-zinc-800/50 rounded-lg flex items-center justify-center mb-6">
+              <Upload className="h-8 w-8 text-zinc-500" />
+            </div>
+            <h3 className="text-xl font-medium text-white mb-2">
+              {selectedFolderId === "main" ? "No content yet" : "No content in this folder"}
+            </h3>
+            <p className="text-zinc-400 text-center mb-8 max-w-md text-sm">
+              {selectedFolderId === "main"
+                ? "Upload files to get started with your content library."
+                : "Upload files to this folder to organize your content."}
             </p>
           </div>
         </div>
+      ) : (
+        <AnimatePresence>
+          {viewMode === "grid" ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+              {uploads.map((upload, index) => {
+                const IconComponent = FILE_TYPE_ICONS[upload.type]
+                const colorClass = FILE_TYPE_COLORS[upload.type]
+                const isSelected = selectedUploads.includes(upload.id)
 
-        {/* Selected Items Actions */}
-        {selectedUploads.length > 0 && (
-          <div className="space-y-4">
-            {/* Vex Folder Organizer */}
-            {userToken && (
-              <VexFolderOrganizer
-                selectedFiles={selectedUploads}
-                onOrganizeComplete={handleVexOrganizeComplete}
-                userToken={userToken}
-              />
-            )}
-
-            <div className="flex items-center justify-between bg-zinc-900/80 border border-zinc-800 rounded-lg p-4">
-              <div className="text-sm text-zinc-300">
-                <span className="font-medium">{selectedUploads.length}</span> item(s) selected
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="border-zinc-700 bg-transparent"
-                  onClick={() => setSelectedUploads([])}
-                >
-                  Clear Selection
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="border-zinc-700 bg-transparent"
-                  onClick={() => setShowAddToFreeContentDialog(true)}
-                >
-                  <PlusCircle className="h-4 w-4 mr-2" />
-                  Add to Free Content
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[
-            { label: "Total Files", value: stats.total, color: "text-white" },
-            { label: "Videos", value: stats.video, color: "text-white" },
-            { label: "Audio", value: stats.audio, color: "text-white" },
-            { label: "Images", value: stats.image, color: "text-white" },
-          ].map((stat, index) => (
-            <div key={index} className="bg-zinc-900/30 border border-zinc-800/30 rounded-lg p-4">
-              <div className={`text-2xl font-semibold ${stat.color} mb-1`}>{stat.value}</div>
-              <div className="text-xs text-white uppercase tracking-wide">{stat.label}</div>
-            </div>
-          ))}
-        </div>
-
-        <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-          <div className="flex items-center gap-4 w-full md:w-auto">
-            <div className="relative flex-1 md:w-80">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-500 h-4 w-4" />
-              <Input
-                placeholder="Search files..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 bg-zinc-900/30 border-zinc-800/30 text-white placeholder:text-zinc-500"
-              />
-            </div>
-
-            <Select value={filterType} onValueChange={setFilterType}>
-              <SelectTrigger className="w-36 bg-zinc-900/30 border-zinc-800/30 text-white">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-zinc-900 border-zinc-800">
-                <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="video">Videos</SelectItem>
-                <SelectItem value="audio">Audio</SelectItem>
-                <SelectItem value="image">Images</SelectItem>
-                <SelectItem value="document">Documents</SelectItem>
-                <SelectItem value="other">Other</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex items-center gap-1 bg-zinc-900/30 border border-zinc-800/30 rounded-md p-1">
-            <Button
-              variant={viewMode === "grid" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setViewMode("grid")}
-              className={viewMode === "grid" ? "bg-white text-black" : "text-zinc-400 hover:text-white"}
-            >
-              <Grid3X3 className="h-4 w-4" />
-            </Button>
-            <Button
-              variant={viewMode === "list" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setViewMode("list")}
-              className={viewMode === "list" ? "bg-white text-black" : "text-zinc-400 hover:text-white"}
-            >
-              <List className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-
-        {/* Content */}
-        {uploads.length === 0 ? (
-          <div className="bg-zinc-900/20 border border-zinc-800/30 rounded-lg">
-            <div className="flex flex-col items-center justify-center py-16 px-6">
-              <div className="w-16 h-16 bg-zinc-800/50 rounded-lg flex items-center justify-center mb-6">
-                <Upload className="h-8 w-8 text-zinc-500" />
-              </div>
-              <h3 className="text-xl font-medium text-white mb-2">
-                {selectedFolderId === "main" ? "No content yet" : "No content in this folder"}
-              </h3>
-              <p className="text-zinc-400 text-center mb-8 max-w-md text-sm">
-                {selectedFolderId === "main"
-                  ? "Upload files to get started with your content library."
-                  : "Upload files to this folder to organize your content."}
-              </p>
-            </div>
-          </div>
-        ) : (
-          <AnimatePresence>
-            {viewMode === "grid" ? (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-                {uploads.map((upload, index) => {
-                  const IconComponent = FILE_TYPE_ICONS[upload.type]
-                  const colorClass = FILE_TYPE_COLORS[upload.type]
-                  const isSelected = selectedUploads.includes(upload.id)
-
-                  return (
-                    <motion.div
-                      key={upload.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -20 }}
-                      transition={{ duration: 0.2, delay: index * 0.02 }}
+                return (
+                  <motion.div
+                    key={upload.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.2, delay: index * 0.02 }}
+                  >
+                    <div
+                      className={`bg-zinc-900/30 border border-zinc-800/30 rounded-lg hover:border-zinc-700/50 transition-all duration-200 cursor-pointer group ${
+                        isSelected ? "ring-2 ring-white/20 border-white/20" : ""
+                      }`}
+                      onClick={() => toggleUploadSelection(upload.id)}
                     >
-                      <div
-                        className={`bg-zinc-900/30 border border-zinc-800/30 rounded-lg hover:border-zinc-700/50 transition-all duration-200 cursor-pointer group ${
-                          isSelected ? "ring-2 ring-white/20 border-white/20" : ""
-                        }`}
-                        onClick={() => toggleUploadSelection(upload.id)}
-                      >
-                        <div className="p-3">
-                          <div className="mb-3 relative">
-                            {upload.type === "video" ? (
-                              <VideoPreviewPlayer videoUrl={upload.fileUrl} title={upload.title} />
-                            ) : upload.type === "image" ? (
-                              <div className="aspect-square bg-zinc-800/50 rounded-md flex items-center justify-center relative overflow-hidden">
-                                <img
-                                  src={upload.fileUrl || "/placeholder.svg"}
-                                  alt={upload.title}
-                                  className="w-full h-full object-cover"
-                                  loading="lazy"
-                                  crossOrigin="anonymous"
-                                  onLoad={(e) => {
-                                    console.log("[v0] Image loaded successfully:", upload.fileUrl)
-                                    const target = e.target as HTMLImageElement
-                                    target.style.display = "block"
-                                  }}
-                                  onError={(e) => {
-                                    console.error("[v0] Image failed to load:", upload.fileUrl)
-                                    console.error("[v0] Image error event:", e)
-                                    const target = e.target as HTMLImageElement
-                                    target.style.display = "none"
-                                    const fallback = target.nextElementSibling as HTMLElement
-                                    if (fallback) fallback.classList.remove("hidden")
-                                  }}
-                                />
-                                <div className="hidden absolute inset-0 flex items-center justify-center bg-zinc-800/50">
-                                  <IconComponent className={`h-8 w-8 ${colorClass}`} />
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="aspect-square bg-zinc-800/50 rounded-md flex items-center justify-center">
+                      <div className="p-3">
+                        <div className="mb-3 relative">
+                          {upload.type === "video" ? (
+                            <VideoPreviewPlayer videoUrl={upload.fileUrl} title={upload.title} />
+                          ) : upload.type === "image" ? (
+                            <div className="aspect-square bg-zinc-800/50 rounded-md flex items-center justify-center relative overflow-hidden">
+                              <img
+                                src={upload.fileUrl || "/placeholder.svg"}
+                                alt={upload.title}
+                                className="w-full h-full object-cover"
+                                loading="lazy"
+                                crossOrigin="anonymous"
+                                onLoad={(e) => {
+                                  console.log("[v0] Image loaded successfully:", upload.fileUrl)
+                                  const target = e.target as HTMLImageElement
+                                  target.style.display = "block"
+                                }}
+                                onError={(e) => {
+                                  console.error("[v0] Image failed to load:", upload.fileUrl)
+                                  console.error("[v0] Image error event:", e)
+                                  const target = e.target as HTMLImageElement
+                                  target.style.display = "none"
+                                  const fallback = target.nextElementSibling as HTMLElement
+                                  if (fallback) fallback.classList.remove("hidden")
+                                }}
+                              />
+                              <div className="hidden absolute inset-0 flex items-center justify-center bg-zinc-800/50">
                                 <IconComponent className={`h-8 w-8 ${colorClass}`} />
                               </div>
-                            )}
-                          </div>
-
-                          <div className="space-y-2">
-                            <h3 className="font-medium text-white text-sm truncate">{upload.title}</h3>
-                            <div className="flex items-center justify-between text-xs text-zinc-500">
-                              <span className="uppercase tracking-wide">{upload.type}</span>
-                              <span>{formatFileSize(upload.size)}</span>
                             </div>
-                          </div>
-
-                          <div className="flex items-center justify-between mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <span className="text-xs text-zinc-500">
-                              {formatDistanceToNow(upload.createdAt, { addSuffix: true })}
-                            </span>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="h-6 w-6 p-0"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <MoreVertical className="h-3 w-3" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent className="bg-zinc-900 border-zinc-800">
-                                <DropdownMenuItem
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    window.open(upload.fileUrl, "_blank")
-                                  }}
-                                >
-                                  <Eye className="h-4 w-4 mr-2" />
-                                  View
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    setSelectedUpload(upload)
-                                    setNewTitle(upload.title)
-                                    setIsRenameDialogOpen(true)
-                                  }}
-                                >
-                                  <Edit2 className="h-4 w-4 mr-2" />
-                                  Rename
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    copyToClipboard(upload.fileUrl)
-                                  }}
-                                >
-                                  <Copy className="h-4 w-4 mr-2" />
-                                  Copy URL
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    handleDelete(upload)
-                                  }}
-                                  className="text-red-400"
-                                >
-                                  <Trash2 className="h-4 w-4 mr-2" />
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        </div>
-                      </div>
-                    </motion.div>
-                  )
-                })}
-              </div>
-            ) : (
-              <div className="bg-zinc-900/30 border border-zinc-800/30 rounded-lg">
-                <div className="divide-y divide-zinc-800/30">
-                  {uploads.map((upload, index) => {
-                    const IconComponent = FILE_TYPE_ICONS[upload.type]
-                    const colorClass = FILE_TYPE_COLORS[upload.type]
-                    const isSelected = selectedUploads.includes(upload.id)
-
-                    return (
-                      <motion.div
-                        key={upload.id}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: 20 }}
-                        transition={{ duration: 0.2, delay: index * 0.01 }}
-                        className={`flex items-center gap-4 p-4 hover:bg-zinc-800/20 transition-colors cursor-pointer ${
-                          isSelected ? "bg-zinc-800/30" : ""
-                        }`}
-                        onClick={() => toggleUploadSelection(upload.id)}
-                      >
-                        <div className="w-10 h-10 bg-zinc-800/50 rounded-md flex items-center justify-center">
-                          {isSelected ? (
-                            <CheckCircle className="h-5 w-5 text-white" />
                           ) : (
-                            <IconComponent className={`h-5 w-5 ${colorClass}`} />
+                            <div className="aspect-square bg-zinc-800/50 rounded-md flex items-center justify-center">
+                              <IconComponent className={`h-8 w-8 ${colorClass}`} />
+                            </div>
                           )}
                         </div>
 
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-medium text-white truncate">{upload.title}</h3>
-                          <div className="flex items-center gap-4 text-xs text-zinc-500 mt-1">
+                        <div className="space-y-2">
+                          <h3 className="font-medium text-white text-sm truncate">{upload.title}</h3>
+                          <div className="flex items-center justify-between text-xs text-zinc-500">
                             <span className="uppercase tracking-wide">{upload.type}</span>
                             <span>{formatFileSize(upload.size)}</span>
-                            <span>{formatDistanceToNow(upload.createdAt, { addSuffix: true })}</span>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              window.open(upload.fileUrl, "_blank")
-                            }}
-                            className="text-zinc-400 hover:text-white"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
+                        <div className="flex items-center justify-between mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <span className="text-xs text-zinc-500">
+                            {formatDistanceToNow(upload.createdAt, { addSuffix: true })}
+                          </span>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button
                                 size="sm"
                                 variant="ghost"
+                                className="h-6 w-6 p-0"
                                 onClick={(e) => e.stopPropagation()}
-                                className="text-zinc-400 hover:text-white"
                               >
-                                <MoreVertical className="h-4 w-4" />
+                                <MoreVertical className="h-3 w-3" />
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent className="bg-zinc-900 border-zinc-800">
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  window.open(upload.fileUrl, "_blank")
+                                }}
+                              >
+                                <Eye className="h-4 w-4 mr-2" />
+                                View
+                              </DropdownMenuItem>
                               <DropdownMenuItem
                                 onClick={(e) => {
                                   e.stopPropagation()
@@ -1406,81 +1306,181 @@ export default function UploadPage() {
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
-                      </motion.div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-          </AnimatePresence>
-        )}
+                      </div>
+                    </div>
+                  </motion.div>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="bg-zinc-900/30 border border-zinc-800/30 rounded-lg">
+              <div className="divide-y divide-zinc-800/30">
+                {uploads.map((upload, index) => {
+                  const IconComponent = FILE_TYPE_ICONS[upload.type]
+                  const colorClass = FILE_TYPE_COLORS[upload.type]
+                  const isSelected = selectedUploads.includes(upload.id)
 
-        <Dialog open={isRenameDialogOpen} onOpenChange={setIsRenameDialogOpen}>
-          <DialogContent className="bg-zinc-900 border-zinc-800">
-            <DialogHeader>
-              <DialogTitle className="text-white">Rename Upload</DialogTitle>
-              <DialogDescription className="text-zinc-400">Enter a new title for this upload.</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <Input
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="Enter new title..."
-                className="bg-zinc-800/50 border-zinc-700 text-white"
-              />
-              <div className="flex justify-end gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setIsRenameDialogOpen(false)}
-                  className="border-zinc-700 text-zinc-300"
-                >
-                  Cancel
-                </Button>
-                <Button onClick={handleRename} className="bg-white text-black">
-                  Rename
-                </Button>
+                  return (
+                    <motion.div
+                      key={upload.id}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 20 }}
+                      transition={{ duration: 0.2, delay: index * 0.01 }}
+                      className={`flex items-center gap-4 p-4 hover:bg-zinc-800/20 transition-colors cursor-pointer ${
+                        isSelected ? "bg-zinc-800/30" : ""
+                      }`}
+                      onClick={() => toggleUploadSelection(upload.id)}
+                    >
+                      <div className="w-10 h-10 bg-zinc-800/50 rounded-md flex items-center justify-center">
+                        {isSelected ? (
+                          <CheckCircle className="h-5 w-5 text-white" />
+                        ) : (
+                          <IconComponent className={`h-5 w-5 ${colorClass}`} />
+                        )}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium text-white truncate">{upload.title}</h3>
+                        <div className="flex items-center gap-4 text-xs text-zinc-500 mt-1">
+                          <span className="uppercase tracking-wide">{upload.type}</span>
+                          <span>{formatFileSize(upload.size)}</span>
+                          <span>{formatDistanceToNow(upload.createdAt, { addSuffix: true })}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            window.open(upload.fileUrl, "_blank")
+                          }}
+                          className="text-zinc-400 hover:text-white"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-zinc-400 hover:text-white"
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent className="bg-zinc-900 border-zinc-800">
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setSelectedUpload(upload)
+                                setNewTitle(upload.title)
+                                setIsRenameDialogOpen(true)
+                              }}
+                            >
+                              <Edit2 className="h-4 w-4 mr-2" />
+                              Rename
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                copyToClipboard(upload.fileUrl)
+                              }}
+                            >
+                              <Copy className="h-4 w-4 mr-2" />
+                              Copy URL
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleDelete(upload)
+                              }}
+                              className="text-red-400"
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </motion.div>
+                  )
+                })}
               </div>
             </div>
-          </DialogContent>
-        </Dialog>
+          )}
+        </AnimatePresence>
+      )}
 
-        <Dialog open={showAddToFreeContentDialog} onOpenChange={setShowAddToFreeContentDialog}>
-          <DialogContent className="bg-zinc-900 border-zinc-800">
-            <DialogHeader>
-              <DialogTitle className="text-white">Add to Free Content</DialogTitle>
-              <DialogDescription className="text-zinc-400">
-                Add {selectedUploads.length} selected item(s) to your free content library?
-              </DialogDescription>
-            </DialogHeader>
+      <Dialog open={isRenameDialogOpen} onOpenChange={setIsRenameDialogOpen}>
+        <DialogContent className="bg-zinc-900 border-zinc-800">
+          <DialogHeader>
+            <DialogTitle className="text-white">Rename Upload</DialogTitle>
+            <DialogDescription className="text-zinc-400">Enter a new title for this upload.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Input
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+              placeholder="Enter new title..."
+              className="bg-zinc-800/50 border-zinc-700 text-white"
+            />
             <div className="flex justify-end gap-2">
               <Button
                 variant="outline"
-                onClick={() => setShowAddToFreeContentDialog(false)}
+                onClick={() => setIsRenameDialogOpen(false)}
                 className="border-zinc-700 text-zinc-300"
               >
                 Cancel
               </Button>
-              <Button onClick={addToFreeContent} className="bg-white text-black">
-                Add to Free Content
+              <Button onClick={handleRename} className="bg-white text-black">
+                Rename
               </Button>
             </div>
-          </DialogContent>
-        </Dialog>
+          </div>
+        </DialogContent>
+      </Dialog>
 
-        <CreateFolderDialog
-          isOpen={isCreateFolderDialogOpen}
-          onClose={() => setIsCreateFolderDialogOpen(false)}
-          parentFolderId={selectedFolderId || null}
-          onFolderCreated={() => {
-            console.log("[v0] Folder created, refreshing folder list...")
-            fetchFolders()
-            toast({
-              title: "Success!",
-              description: "Folder created successfully",
-            })
-          }}
-        />
-      </div>
-    </PaywallWrapper>
+      <Dialog open={showAddToFreeContentDialog} onOpenChange={setShowAddToFreeContentDialog}>
+        <DialogContent className="bg-zinc-900 border-zinc-800">
+          <DialogHeader>
+            <DialogTitle className="text-white">Add to Free Content</DialogTitle>
+            <DialogDescription className="text-zinc-400">
+              Add {selectedUploads.length} selected item(s) to your free content library?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowAddToFreeContentDialog(false)}
+              className="border-zinc-700 text-zinc-300"
+            >
+              Cancel
+            </Button>
+            <Button onClick={addToFreeContent} className="bg-white text-black">
+              Add to Free Content
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <CreateFolderDialog
+        isOpen={isCreateFolderDialogOpen}
+        onClose={() => setIsCreateFolderDialogOpen(false)}
+        parentFolderId={selectedFolderId || null}
+        onFolderCreated={() => {
+          console.log("[v0] Folder created, refreshing folder list...")
+          fetchFolders()
+          toast({
+            title: "Success!",
+            description: "Folder created successfully",
+          })
+        }}
+      />
+    </div>
+    // </PaywallWrapper>
   )
 }
