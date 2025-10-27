@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useAuth } from "@/contexts/auth-context"
+import { usePathname } from "next/navigation"
 import {
   getUserObjectives,
   ensureUserObjectives,
@@ -11,8 +12,10 @@ import {
 
 export function useObjectives() {
   const { user } = useAuth()
+  const pathname = usePathname()
   const [objectives, setObjectives] = useState<UserObjectivesDoc | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const navButtonRefs = useRef<Map<string, HTMLElement>>(new Map())
 
   useEffect(() => {
     const loadObjectives = async () => {
@@ -33,6 +36,38 @@ export function useObjectives() {
 
     loadObjectives()
   }, [user])
+
+  useEffect(() => {
+    if (!objectives || objectives.percentageComplete === 100) return
+
+    const currentObjective = objectives.objectives.find((obj) => !obj.completed)
+    if (!currentObjective) return
+
+    const mapping: Record<string, string> = {
+      customize_storefront: "/dashboard/view-storefront",
+      upload_content: "/dashboard/upload",
+      add_free_content: "/dashboard/free-content",
+      connect_stripe: "/dashboard/earnings",
+      create_bundle: "/dashboard/bundles",
+      go_live: "/dashboard/view-storefront",
+    }
+
+    const targetHref = mapping[currentObjective.id]
+    if (!targetHref) return
+
+    // Wait a bit for the DOM to be ready
+    const timer = setTimeout(() => {
+      const navButton = navButtonRefs.current.get(targetHref)
+      if (navButton) {
+        navButton.scrollIntoView({
+          behavior: "smooth",
+          block: "nearest",
+        })
+      }
+    }, 500)
+
+    return () => clearTimeout(timer)
+  }, [objectives, pathname])
 
   const refreshObjectives = async () => {
     if (!user) return
@@ -56,10 +91,19 @@ export function useObjectives() {
     }
   }
 
+  const registerNavButton = (href: string, element: HTMLElement | null) => {
+    if (element) {
+      navButtonRefs.current.set(href, element)
+    } else {
+      navButtonRefs.current.delete(href)
+    }
+  }
+
   return {
     objectives,
     isLoading,
     refreshObjectives,
     reopenPopup,
+    registerNavButton,
   }
 }

@@ -9,7 +9,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import {
-  Loader2,
   Plus,
   Instagram,
   Twitter,
@@ -25,12 +24,14 @@ import {
   UploadIcon,
   Download,
   Pause,
+  Settings,
 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
 import { doc, updateDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import BundleCard from "@/components/bundle-card"
+import { useObjectives } from "@/hooks/use-objectives"
 
 interface ContentItem {
   id: string
@@ -52,6 +53,7 @@ export default function ViewStorefrontPage() {
   const { user, loading: authLoading } = useFirebaseAuth()
   const { toast } = useToast()
   const router = useRouter()
+  const { objectives, isLoading: isLoadingObjectives } = useObjectives()
   const [loading, setLoading] = useState(true)
   const [username, setUsername] = useState<string | null>(null)
   const [displayName, setDisplayName] = useState("")
@@ -209,24 +211,10 @@ export default function ViewStorefrontPage() {
     return "Recently"
   }
 
-  if (authLoading || loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-black">
-        <Loader2 className="h-8 w-8 text-zinc-500 animate-spin" />
-      </div>
-    )
-  }
-
-  if (!user || !username) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-black">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold text-white mb-2">Profile Required</h2>
-          <p className="text-zinc-400">Please complete your profile to view your storefront.</p>
-        </div>
-      </div>
-    )
-  }
+  const needsCustomization =
+    !isLoadingObjectives &&
+    objectives &&
+    !objectives.objectives.find((obj) => obj.id === "customize_storefront")?.completed
 
   const currentContent = activeTab === "free" ? freeContent : premiumContent
 
@@ -236,6 +224,25 @@ export default function ViewStorefrontPage() {
       <div className="fixed inset-0 bg-gradient-to-t from-zinc-900/20 via-transparent to-zinc-800/10 pointer-events-none" />
 
       <div className="relative max-w-6xl mx-auto px-4 sm:px-8 py-8 sm:py-16">
+        {needsCustomization && (
+          <div className="mb-6 p-4 bg-gradient-to-r from-teal-500/10 to-cyan-500/10 border border-teal-500/20 rounded-lg">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-semibold text-white mb-1">Customize Your Storefront</h3>
+                <p className="text-xs text-white/60">Complete your profile to make your storefront stand out</p>
+              </div>
+              <Button
+                onClick={() => router.push("/dashboard/profile")}
+                size="sm"
+                className="bg-gradient-to-r from-teal-400 to-cyan-400 text-black hover:from-teal-500 hover:to-cyan-500 font-medium"
+              >
+                <Settings className="w-4 h-4 mr-2" />
+                Customize
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Header with inline editing */}
         <div className="mb-8 sm:mb-16">
           <div className="flex items-start justify-between gap-8">

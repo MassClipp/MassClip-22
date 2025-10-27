@@ -4,23 +4,41 @@ import { motion } from "framer-motion"
 
 export function ObjectivesIndicator() {
   return (
-    <motion.div
-      className="absolute -right-1 -top-1 h-3 w-3 rounded-full bg-gradient-to-r from-teal-400 to-cyan-400 shadow-lg"
-      animate={{
-        scale: [1, 1.3, 1],
-        opacity: [1, 0.7, 1],
-      }}
-      transition={{
-        duration: 2,
-        repeat: Number.POSITIVE_INFINITY,
-        ease: "easeInOut",
-      }}
-    >
-      {/* Outer pulse ring */}
+    <div className="absolute inset-0 pointer-events-none">
+      {/* Outer glowing ring */}
       <motion.div
-        className="absolute inset-0 rounded-full bg-teal-400/50"
+        className="absolute inset-0 rounded-lg border-2 border-teal-400/60"
         animate={{
-          scale: [1, 2, 2],
+          scale: [1, 1.05, 1],
+          opacity: [0.6, 1, 0.6],
+        }}
+        transition={{
+          duration: 2,
+          repeat: Number.POSITIVE_INFINITY,
+          ease: "easeInOut",
+        }}
+      />
+
+      {/* Middle pulse ring */}
+      <motion.div
+        className="absolute inset-0 rounded-lg border-2 border-cyan-400/40"
+        animate={{
+          scale: [1, 1.1, 1],
+          opacity: [0.4, 0.8, 0.4],
+        }}
+        transition={{
+          duration: 2,
+          repeat: Number.POSITIVE_INFINITY,
+          ease: "easeInOut",
+          delay: 0.3,
+        }}
+      />
+
+      {/* Expanding pulse effect */}
+      <motion.div
+        className="absolute inset-0 rounded-lg border border-teal-400/30"
+        animate={{
+          scale: [1, 1.15, 1.15],
           opacity: [0.5, 0, 0],
         }}
         transition={{
@@ -29,6 +47,19 @@ export function ObjectivesIndicator() {
           ease: "easeOut",
         }}
       />
-    </motion.div>
+
+      {/* Inner glow */}
+      <motion.div
+        className="absolute inset-0 rounded-lg bg-gradient-to-r from-teal-400/10 to-cyan-400/10"
+        animate={{
+          opacity: [0.3, 0.6, 0.3],
+        }}
+        transition={{
+          duration: 2,
+          repeat: Number.POSITIVE_INFINITY,
+          ease: "easeInOut",
+        }}
+      />
+    </div>
   )
 }

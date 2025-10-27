@@ -106,7 +106,7 @@ function VexChat({ children }: VexChatProps) {
   // State for suggestions
   const [currentSuggestions, setCurrentSuggestions] = useState<string[]>([])
 
-  const { objectives, isLoading: isLoadingObjectives, reopenPopup } = useObjectives()
+  const { objectives, isLoading: isLoadingObjectives, reopenPopup, registerNavButton } = useObjectives()
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
@@ -898,19 +898,6 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
         </Button>
       )}
 
-      {!isMobile && isUploadPage && isSidebarCollapsed && (
-        <Button
-          onClick={() => setIsSidebarCollapsed(false)}
-          variant="ghost"
-          size="sm"
-          className="fixed top-1/2 left-0 -translate-y-1/2 z-50 h-12 w-6 p-0 bg-zinc-900/80 backdrop-blur-xl border border-white/10 hover:bg-zinc-800/80 hover:border-white/20 rounded-r-lg rounded-l-none shadow-lg transition-all duration-200"
-          title="Open Vex sidebar"
-        >
-          <ChevronRight className="h-4 w-4 text-zinc-400" />
-        </Button>
-      )}
-
-      {/* Desktop sidebar - Hide completely on upload page when collapsed */}
       {!isMobile && !(isUploadPage && isSidebarCollapsed) && (
         <div
           className={`fixed left-0 top-16 h-[calc(100vh-4rem)] z-40 transition-all duration-300 ${
@@ -1094,6 +1081,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                       {navigationItems.map((item) => (
                         <button
                           key={item.href}
+                          ref={(el) => registerNavButton(item.href, el)}
                           onClick={() => handleNavigation(item.href)}
                           className={`relative w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-all duration-200 group ${
                             item.highlight
@@ -1391,6 +1379,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                     {navigationItems.map((item) => (
                       <button
                         key={item.href}
+                        ref={(el) => registerNavButton(item.href, el)}
                         onClick={() => handleNavigation(item.href)}
                         className={`relative w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-all duration-200 group ${
                           item.highlight
