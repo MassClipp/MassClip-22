@@ -29,9 +29,10 @@ interface BundleCardProps {
   user: any
   creatorId: string
   creatorUsername?: string
+  isPreview?: boolean // Added isPreview prop to control preview mode
 }
 
-export default function BundleCard({ item, user, creatorId, creatorUsername }: BundleCardProps) {
+export default function BundleCard({ item, user, creatorId, creatorUsername, isPreview = false }: BundleCardProps) {
   const router = useRouter()
   const [isThumbnailHovered, setIsThumbnailHovered] = useState(false)
   const [imageError, setImageError] = useState(false)
@@ -47,6 +48,7 @@ export default function BundleCard({ item, user, creatorId, creatorUsername }: B
     creatorId,
     creatorUsername,
     currentUserId: user?.uid,
+    isPreview, // Log preview mode
   })
 
   const handleImageError = () => {
@@ -68,12 +70,13 @@ export default function BundleCard({ item, user, creatorId, creatorUsername }: B
   }
 
   const handleCardClick = (e: React.MouseEvent) => {
-    // Don't navigate if clicking the buy button
     if ((e.target as HTMLElement).closest("button")) {
       return
     }
 
-    if (creatorUsername) {
+    if (isPreview) {
+      router.push(`/dashboard/bundles?edit=${item.id}`)
+    } else if (creatorUsername) {
       router.push(`/creator/${creatorUsername}/bundle/${item.id}`)
     }
   }
@@ -125,30 +128,42 @@ export default function BundleCard({ item, user, creatorId, creatorUsername }: B
             <span className="text-white text-2xl sm:text-3xl font-light tracking-tight">${formattedPrice}</span>
           </div>
 
-          <div className="flex gap-2">
+          {isPreview ? (
             <button
               onClick={(e) => {
                 e.stopPropagation()
-                if (creatorUsername) {
-                  router.push(`/creator/${creatorUsername}/bundle/${item.id}`)
-                }
+                router.push(`/dashboard/bundles?edit=${item.id}`)
               }}
-              className="flex-1 border border-white/20 text-white hover:bg-white/5 rounded-md font-medium text-sm px-4 py-2.5 transition-colors"
+              className="w-full border border-white/20 text-white hover:bg-white/5 rounded-md font-medium text-sm px-4 py-2.5 transition-colors"
             >
-              See Details
+              View Details
             </button>
+          ) : (
+            <div className="flex gap-2">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  if (creatorUsername) {
+                    router.push(`/creator/${creatorUsername}/bundle/${item.id}`)
+                  }
+                }}
+                className="flex-1 border border-white/20 text-white hover:bg-white/5 rounded-md font-medium text-sm px-4 py-2.5 transition-colors"
+              >
+                See Details
+              </button>
 
-            <UnlockButton
-              stripePriceId={item.stripePriceId}
-              bundleId={item.id}
-              user={user}
-              creatorId={creatorId}
-              price={item.price || 0}
-              title={item.title}
-              variant="outline"
-              className="flex-1 border-white/20 text-white hover:bg-white/5 rounded-md font-medium text-sm px-4 py-2.5"
-            />
-          </div>
+              <UnlockButton
+                stripePriceId={item.stripePriceId}
+                bundleId={item.id}
+                user={user}
+                creatorId={creatorId}
+                price={item.price || 0}
+                title={item.title}
+                variant="outline"
+                className="flex-1 border-white/20 text-white hover:bg-white/5 rounded-md font-medium text-sm px-4 py-2.5"
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>

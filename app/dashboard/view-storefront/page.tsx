@@ -1,6 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import type React from "react"
+
+import { useState, useEffect, useRef } from "react"
 import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -21,11 +23,14 @@ import {
   Package,
   Play,
   UploadIcon,
+  Download,
+  Pause,
 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
 import { doc, updateDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
+import BundleCard from "@/components/bundle-card"
 
 interface ContentItem {
   id: string
@@ -38,6 +43,9 @@ interface ContentItem {
   isPremium: boolean
   price?: number
   contentCount?: number
+  description?: string
+  stripePriceId?: string
+  stripeProductId?: string
 }
 
 export default function ViewStorefrontPage() {
@@ -77,7 +85,6 @@ export default function ViewStorefrontPage() {
         setLoading(true)
         const token = await user.getIdToken()
 
-        // Fetch user profile
         const profileResponse = await fetch(`/api/user-profile?uid=${user.uid}`, {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -86,6 +93,7 @@ export default function ViewStorefrontPage() {
 
         if (profileResponse.ok) {
           const profileData = await profileResponse.json()
+          console.log("[v0] Profile data:", profileData)
           setUsername(profileData.username)
           setDisplayName(profileData.displayName || profileData.username)
           setBio(profileData.bio || "")
@@ -94,21 +102,21 @@ export default function ViewStorefrontPage() {
           setCreatedAt(profileData.createdAt || "")
         }
 
-        // Fetch free content
         const freeResponse = await fetch(`/api/creator/${user.uid}/free-content`)
         if (freeResponse.ok) {
           const freeData = await freeResponse.json()
+          console.log("[v0] Free content data:", freeData)
           setFreeContent(freeData.content || [])
         }
 
-        // Fetch premium content
         const premiumResponse = await fetch(`/api/creator/${user.uid}/premium-content`)
         if (premiumResponse.ok) {
           const premiumData = await premiumResponse.json()
+          console.log("[v0] Premium content data:", premiumData)
           setPremiumContent(premiumData.content || [])
         }
       } catch (error) {
-        console.error("Error fetching user data:", error)
+        console.error("[v0] Error fetching user data:", error)
         toast({
           title: "Error",
           description: "Failed to load storefront data",
@@ -140,7 +148,7 @@ export default function ViewStorefrontPage() {
         description: "Your bio has been saved successfully",
       })
     } catch (error) {
-      console.error("Error updating bio:", error)
+      console.error("[v0] Error updating bio:", error)
       toast({
         title: "Error",
         description: "Failed to update bio",
@@ -165,7 +173,7 @@ export default function ViewStorefrontPage() {
         description: "Your social links have been saved successfully",
       })
     } catch (error) {
-      console.error("Error updating social links:", error)
+      console.error("[v0] Error updating social links:", error)
       toast({
         title: "Error",
         description: "Failed to update social links",
@@ -432,9 +440,19 @@ export default function ViewStorefrontPage() {
         {/* Content with action buttons */}
         <div className="pt-8">
           {currentContent.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
+            <div
+              className={
+                activeTab === "premium"
+                  ? "flex flex-col items-center gap-6 sm:grid sm:grid-cols-3 sm:gap-8 sm:justify-items-center"
+                  : "grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 sm:gap-6 justify-items-center"
+              }
+            >
               <div
-                className="aspect-[9/16] rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer flex flex-col items-center justify-center gap-3 group"
+                className={
+                  activeTab === "premium"
+                    ? "w-full max-w-sm aspect-[3/4] rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer flex flex-col items-center justify-center gap-3 group"
+                    : "aspect-[9/16] rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer flex flex-col items-center justify-center gap-3 group"
+                }
                 onClick={() => router.push(activeTab === "free" ? "/dashboard/upload" : "/dashboard/bundles")}
               >
                 <div className="w-12 h-12 rounded-full bg-zinc-800 group-hover:bg-zinc-700 transition-colors flex items-center justify-center">
@@ -449,20 +467,18 @@ export default function ViewStorefrontPage() {
                 </p>
               </div>
 
-              {currentContent.map((item) => (
-                <div key={item.id} className="aspect-[9/16] rounded-lg overflow-hidden bg-zinc-900 relative group">
-                  <img
-                    src={item.thumbnailUrl || "/placeholder.svg"}
-                    alt={item.title}
-                    className="w-full h-full object-cover"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
-                    <div className="absolute bottom-0 left-0 right-0 p-3">
-                      <p className="text-white text-sm font-medium line-clamp-2">{item.title}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
+              {activeTab === "premium"
+                ? premiumContent.map((item) => (
+                    <BundleCard
+                      key={item.id}
+                      item={item}
+                      user={user}
+                      creatorId={user.uid}
+                      creatorUsername={username}
+                      isPreview={true}
+                    />
+                  ))
+                : freeContent.map((item) => <VideoContentCard key={item.id} item={item} />)}
             </div>
           ) : (
             <div className="text-center py-24">
@@ -499,6 +515,142 @@ export default function ViewStorefrontPage() {
             </div>
           )}
         </div>
+      </div>
+    </div>
+  )
+}
+
+function VideoContentCard({ item }: { item: ContentItem }) {
+  const [isHovered, setIsHovered] = useState(false)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const videoRef = useRef<HTMLVideoElement>(null)
+
+  const handlePlayPause = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    if (!videoRef.current || !item.fileUrl) {
+      console.error("[v0] No video element or URL available")
+      return
+    }
+
+    console.log("[v0] Attempting to play video:", item.fileUrl)
+
+    if (isPlaying) {
+      videoRef.current.pause()
+      videoRef.current.currentTime = 0
+      setIsPlaying(false)
+    } else {
+      // Pause all other videos
+      document.querySelectorAll("video").forEach((v) => {
+        if (v !== videoRef.current) {
+          v.pause()
+          v.currentTime = 0
+        }
+      })
+
+      videoRef.current.muted = false
+      videoRef.current
+        .play()
+        .then(() => {
+          console.log("[v0] Video started playing")
+          setIsPlaying(true)
+        })
+        .catch((error) => {
+          console.error("[v0] Error playing video:", error)
+        })
+    }
+  }
+
+  const handleVideoEnd = () => {
+    setIsPlaying(false)
+    if (videoRef.current) {
+      videoRef.current.currentTime = 0
+    }
+  }
+
+  useEffect(() => {
+    const videoElement = videoRef.current
+    if (!videoElement) return
+
+    const handlePlay = () => setIsPlaying(true)
+    const handlePause = () => setIsPlaying(false)
+
+    videoElement.addEventListener("play", handlePlay)
+    videoElement.addEventListener("pause", handlePause)
+    videoElement.addEventListener("ended", handleVideoEnd)
+
+    return () => {
+      videoElement.removeEventListener("play", handlePlay)
+      videoElement.removeEventListener("pause", handlePause)
+      videoElement.removeEventListener("ended", handleVideoEnd)
+    }
+  }, [])
+
+  return (
+    <div
+      className="group cursor-pointer w-full max-w-[180px] sm:max-w-[200px]"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <div
+        className={`relative aspect-[9/16] rounded-lg overflow-hidden mb-2 transition-all duration-300 ${
+          isHovered ? "border border-white/50" : "border border-transparent"
+        }`}
+      >
+        {item.fileUrl && (
+          <video
+            ref={videoRef}
+            className="w-full h-full object-cover bg-black"
+            preload="auto"
+            muted
+            playsInline
+            controls={false}
+          >
+            <source src={item.fileUrl} type="video/mp4" />
+            Your browser does not support the video tag.
+          </video>
+        )}
+
+        <div
+          className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-200 ${
+            isHovered || !isPlaying ? "opacity-100" : "opacity-0"
+          }`}
+        >
+          <button
+            onClick={handlePlayPause}
+            disabled={!item.fileUrl}
+            className="bg-white/20 backdrop-blur-sm rounded-full p-2 transition-transform duration-300 hover:scale-110 disabled:opacity-50"
+            aria-label={isPlaying ? "Pause video" : "Play video"}
+          >
+            {isPlaying ? (
+              <Pause className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+            ) : (
+              <Play className="h-4 w-4 sm:h-5 sm:w-5 text-white ml-0.5" />
+            )}
+          </button>
+        </div>
+
+        {item.fileUrl && (
+          <button
+            className={`absolute bottom-2 right-2 backdrop-blur-sm p-1.5 rounded-full transition-all duration-200 hover:scale-110 bg-black/60 hover:bg-black/80 ${
+              isHovered ? "opacity-100" : "opacity-70"
+            }`}
+            aria-label="Download video"
+            onClick={(e) => {
+              e.stopPropagation()
+              window.open(item.fileUrl, "_blank")
+            }}
+          >
+            <Download className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-white" />
+          </button>
+        )}
+      </div>
+
+      <div className="space-y-1">
+        <h3 className="text-white text-xs sm:text-sm font-medium line-clamp-2 leading-tight" title={item.title}>
+          {item.title}
+        </h3>
       </div>
     </div>
   )
