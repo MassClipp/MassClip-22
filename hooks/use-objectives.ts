@@ -16,6 +16,7 @@ export function useObjectives() {
   const [objectives, setObjectives] = useState<UserObjectivesDoc | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const navButtonRefs = useRef<Map<string, HTMLElement>>(new Map())
+  const [refreshCounter, setRefreshCounter] = useState(0)
 
   useEffect(() => {
     const loadObjectives = async () => {
@@ -35,7 +36,7 @@ export function useObjectives() {
     }
 
     loadObjectives()
-  }, [user])
+  }, [user, refreshCounter])
 
   useEffect(() => {
     if (!objectives || objectives.percentageComplete === 100) return
@@ -67,14 +68,17 @@ export function useObjectives() {
     }, 500)
 
     return () => clearTimeout(timer)
-  }, [objectives, pathname])
+  }, [objectives, pathname, refreshCounter])
 
   const refreshObjectives = async () => {
     if (!user) return
 
     try {
+      console.log("[useObjectives] Refreshing objectives...")
       const data = await getUserObjectives(user.uid)
       setObjectives(data)
+      setRefreshCounter((prev) => prev + 1)
+      console.log("[useObjectives] Objectives refreshed successfully")
     } catch (error) {
       console.error("[useObjectives] Error refreshing objectives:", error)
     }

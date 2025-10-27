@@ -39,35 +39,39 @@ export function ObjectiveCompletionBanner({
     setIsCompleting(true)
 
     try {
+      console.log("[v0] Completing objective:", objectiveId)
       const result = await completeObjective(user.uid, objectiveId)
 
       if (result.success) {
+        console.log("[v0] Objective completed, refreshing objectives...")
         await refreshObjectives()
 
-        if (result.allComplete) {
-          toast({
-            title: "🎉 All Objectives Complete!",
-            description: "You've completed all onboarding objectives. Great job!",
-            duration: 5000,
-          })
-        } else if (result.nextObjective) {
-          const nextObjectiveMapping: Record<string, { title: string; path: string }> = {
-            upload_content: { title: "Upload First Content", path: "/dashboard/upload" },
-            add_free_content: { title: "Add Free Content", path: "/dashboard/free-content" },
-            connect_stripe: { title: "Connect Stripe", path: "/dashboard/earnings" },
-            create_bundle: { title: "Create First Bundle", path: "/dashboard/bundles" },
-            go_live: { title: "Go Live", path: "/dashboard/view-storefront" },
-          }
-
-          const nextInfo = nextObjectiveMapping[result.nextObjective.id]
-          if (nextInfo) {
+        setTimeout(() => {
+          if (result.allComplete) {
             toast({
-              title: `✨ Next: ${nextInfo.title}`,
-              description: result.nextObjective.description,
-              duration: 6000,
+              title: "🎉 All Objectives Complete!",
+              description: "You've completed all onboarding objectives. Great job!",
+              duration: 5000,
             })
+          } else if (result.nextObjective) {
+            const nextObjectiveMapping: Record<string, { title: string; path: string }> = {
+              upload_content: { title: "Upload First Content", path: "/dashboard/upload" },
+              add_free_content: { title: "Add Free Content", path: "/dashboard/free-content" },
+              connect_stripe: { title: "Connect Stripe", path: "/dashboard/earnings" },
+              create_bundle: { title: "Create First Bundle", path: "/dashboard/bundles" },
+              go_live: { title: "Go Live", path: "/dashboard/view-storefront" },
+            }
+
+            const nextInfo = nextObjectiveMapping[result.nextObjective.id]
+            if (nextInfo) {
+              toast({
+                title: `✨ Next: ${nextInfo.title}`,
+                description: result.nextObjective.description,
+                duration: 6000,
+              })
+            }
           }
-        }
+        }, 300)
       }
     } catch (error) {
       console.error("[ObjectiveCompletionBanner] Error completing objective:", error)
@@ -101,7 +105,7 @@ export function ObjectiveCompletionBanner({
                 className="border-teal-400/50 data-[state=checked]:bg-teal-400 data-[state=checked]:border-teal-400"
               />
               <label htmlFor={`objective-${objectiveId}`} className="text-xs text-white/80 cursor-pointer select-none">
-                Mark as complete
+                {isCompleting ? "Completing..." : "Mark as complete"}
               </label>
             </div>
           </div>
