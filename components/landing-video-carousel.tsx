@@ -26,7 +26,7 @@ export function LandingVideoCarousel({ videos }: LandingVideoCarouselProps) {
   ]
 
   const videoList = videos || defaultVideos
-  const duplicatedVideos = [...videoList, ...videoList, ...videoList, ...videoList, ...videoList]
+  const duplicatedVideos = [...videoList, ...videoList]
 
   return (
     <div className="w-full overflow-hidden py-12 relative">
@@ -35,7 +35,7 @@ export function LandingVideoCarousel({ videos }: LandingVideoCarouselProps) {
       <div className="absolute right-0 top-0 bottom-0 w-32 bg-gradient-to-l from-black to-transparent z-10" />
 
       {/* Scrolling container */}
-      <div className="flex gap-4 animate-scroll-right">
+      <div className="flex gap-4 animate-scroll-continuous">
         {duplicatedVideos.map((videoUrl, index) => (
           <div
             key={index}
@@ -47,19 +47,19 @@ export function LandingVideoCarousel({ videos }: LandingVideoCarouselProps) {
       </div>
 
       <style jsx>{`
-        @keyframes scroll-right {
+        @keyframes scroll-continuous {
           0% {
             transform: translateX(0);
           }
           100% {
-            /* Move 60% (3/5th) to show all 17 videos 3 times before seamless loop */
-            transform: translateX(-60%);
+            /* Move exactly 50% (one full set of 17 videos) for seamless loop */
+            transform: translateX(-50%);
           }
         }
 
-        .animate-scroll-right {
-          /* 40s duration for 3 full rotations - smooth but noticeable speed */
-          animation: scroll-right 40s linear infinite;
+        .animate-scroll-continuous {
+          /* 50s for smooth continuous scroll through all 17 videos */
+          animation: scroll-continuous 50s linear infinite;
           will-change: transform;
         }
       `}</style>
