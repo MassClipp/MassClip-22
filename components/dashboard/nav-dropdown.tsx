@@ -70,7 +70,7 @@ const navigationSections: NavSection[] = [
     title: "Business",
     items: [
       { title: "Earnings", href: "/dashboard/earnings", icon: DollarSign },
-      { title: "Storefront Preview", href: "/dashboard/storefront-preview", icon: Store }, // Added Storefront Preview to Business section
+      { title: "View Storefront", href: "/dashboard/view-storefront", icon: Store }, // Added View Storefront to Business section
     ],
   },
   {
