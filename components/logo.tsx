@@ -1,0 +1,55 @@
+"use client"
+
+import Link from "next/link"
+import { cn } from "@/lib/utils"
+
+interface LogoProps {
+  className?: string
+  href?: string
+  linkClassName?: string
+  size?: "sm" | "md" | "lg"
+}
+
+/**
+ * Logo component for Vex
+ * Displays the Vex logo with customizable size and styling
+ * Can be rendered as a link when href is provided
+ *
+ * @param className - Additional classes for the logo container
+ * @param href - Optional URL to make the logo a link
+ * @param linkClassName - Additional classes for the link wrapper (when href is provided)
+ * @param size - Size variant of the logo: "sm", "md", or "lg"
+ */
+function Logo({ className, href, linkClassName, size = "md" }: LogoProps) {
+  const content = (
+    <div className={cn("flex flex-col items-center", className)}>
+      <div className="flex items-center">
+        <span
+          className={cn(
+            "font-league-spartan font-bold tracking-tight text-white",
+            size === "sm" && "text-xl",
+            size === "md" && "text-2xl",
+            size === "lg" && "text-3xl md:text-4xl",
+          )}
+          style={{ fontFamily: "var(--font-league-spartan)" }}
+        >
+          Vex
+        </span>
+      </div>
+    </div>
+  )
+
+  if (href) {
+    return (
+      <Link href={href} className={linkClassName}>
+        {content}
+      </Link>
+    )
+  }
+
+  return content
+}
+
+// Export as both default and named export for compatibility
+export default Logo
+export { Logo }
