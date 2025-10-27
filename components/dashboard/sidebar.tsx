@@ -16,6 +16,7 @@ import {
   FolderOpen,
   Tags,
   Store,
+  Heart,
 } from "lucide-react"
 import { SidebarNavItem } from "./sidebar-nav-item"
 import Logo from "@/components/logo"
@@ -105,6 +106,21 @@ const navItems = [
     ],
   },
   {
+    title: "Favorites",
+    href: "/dashboard/favorites",
+    icon: Heart,
+  },
+  {
+    title: "Upgrade",
+    href: "/dashboard/upgrade",
+    icon: Crown,
+  },
+  {
+    title: "My Purchases",
+    href: "/dashboard/purchases",
+    icon: CreditCard,
+  },
+  {
     title: "Settings",
     icon: Settings,
     children: [
@@ -122,11 +138,6 @@ const navItems = [
         title: "Password",
         href: "/dashboard/password",
         icon: Lock,
-      },
-      {
-        title: "Upgrade",
-        href: "/dashboard/upgrade",
-        icon: Crown,
       },
     ],
   },

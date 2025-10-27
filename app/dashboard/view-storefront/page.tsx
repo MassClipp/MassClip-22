@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-
+import { getDoc } from "firebase/firestore"
 import { useState, useEffect, useRef } from "react"
 import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 import { Button } from "@/components/ui/button"
@@ -83,36 +83,43 @@ export default function ViewStorefrontPage() {
 
       try {
         setLoading(true)
-        const token = await user.getIdToken()
 
-        const profileResponse = await fetch(`/api/user-profile?uid=${user.uid}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
+        const userDocRef = doc(db, "users", user.uid)
+        const userDocSnap = await getDoc(userDocRef)
 
-        if (profileResponse.ok) {
-          const profileData = await profileResponse.json()
-          setUsername(profileData.username)
-          setDisplayName(profileData.displayName || profileData.username)
-          setBio(profileData.bio || "")
-          setTempBio(profileData.bio || "")
-          setSocialLinks(profileData.socialLinks || {})
-          setTempSocials(profileData.socialLinks || {})
-          setProfilePic(profileData.profilePic || profileData.photoURL || "")
-          setCreatedAt(profileData.createdAt || "")
-        }
+        if (userDocSnap.exists()) {
+          const userData = userDocSnap.data()
+          console.log("[v0] Fetched user data:", userData)
 
-        const freeResponse = await fetch(`/api/creator/${user.uid}/free-content`)
-        if (freeResponse.ok) {
-          const freeData = await freeResponse.json()
-          setFreeContent(freeData.content || [])
-        }
+          setUsername(userData.username || null)
+          setDisplayName(userData.displayName || userData.username || "")
+          setBio(userData.bio || "")
+          setTempBio(userData.bio || "")
+          setSocialLinks(userData.socialLinks || {})
+          setTempSocials(userData.socialLinks || {})
+          setProfilePic(userData.profilePic || userData.photoURL || "")
 
-        const premiumResponse = await fetch(`/api/creator/${user.uid}/premium-content`)
-        if (premiumResponse.ok) {
-          const premiumData = await premiumResponse.json()
-          setPremiumContent(premiumData.content || [])
+          // Handle createdAt timestamp
+          if (userData.createdAt) {
+            if (userData.createdAt.toDate) {
+              setCreatedAt(userData.createdAt.toDate().toISOString())
+            } else {
+              setCreatedAt(userData.createdAt)
+            }
+          }
+
+          // Fetch content data
+          const freeResponse = await fetch(`/api/creator/${user.uid}/free-content`)
+          if (freeResponse.ok) {
+            const freeData = await freeResponse.json()
+            setFreeContent(freeData.content || [])
+          }
+
+          const premiumResponse = await fetch(`/api/creator/${user.uid}/premium-content`)
+          if (premiumResponse.ok) {
+            const premiumData = await premiumResponse.json()
+            setPremiumContent(premiumData.content || [])
+          }
         }
       } catch (error) {
         console.error("[v0] Error fetching user data:", error)
@@ -225,9 +232,8 @@ export default function ViewStorefrontPage() {
 
   return (
     <div className="min-h-screen bg-black fixed inset-0 overflow-y-auto">
-      {/* Enhanced subtle gradient background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-black to-zinc-800/20 pointer-events-none" />
-      <div className="absolute inset-0 bg-gradient-to-t from-zinc-900/30 via-transparent to-zinc-800/10 pointer-events-none" />
+      <div className="fixed inset-0 bg-gradient-to-br from-zinc-900/40 via-black to-zinc-800/30 pointer-events-none" />
+      <div className="fixed inset-0 bg-gradient-to-t from-zinc-900/20 via-transparent to-zinc-800/10 pointer-events-none" />
 
       <div className="relative max-w-6xl mx-auto px-4 sm:px-8 py-8 sm:py-16">
         {/* Header with inline editing */}
@@ -522,6 +528,7 @@ export default function ViewStorefrontPage() {
 function VideoContentCard({ item }: { item: ContentItem }) {
   const [isHovered, setIsHovered] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
+  const [isDownloading, setIsDownloading] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
 
   const handlePlayPause = (e: React.MouseEvent) => {
@@ -565,6 +572,37 @@ function VideoContentCard({ item }: { item: ContentItem }) {
     setIsPlaying(false)
     if (videoRef.current) {
       videoRef.current.currentTime = 0
+    }
+  }
+
+  const handleDownload = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+
+    if (!item.fileUrl) {
+      console.error("[v0] No file URL available for download")
+      return
+    }
+
+    try {
+      setIsDownloading(true)
+      console.log("[v0] Starting download:", item.fileUrl)
+
+      const response = await fetch(item.fileUrl)
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = item.title || "video.mp4"
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+
+      console.log("[v0] Download completed")
+    } catch (error) {
+      console.error("[v0] Error downloading file:", error)
+    } finally {
+      setIsDownloading(false)
     }
   }
 
@@ -634,14 +672,12 @@ function VideoContentCard({ item }: { item: ContentItem }) {
           <button
             className={`absolute bottom-2 right-2 backdrop-blur-sm p-1.5 rounded-full transition-all duration-200 hover:scale-110 bg-black/60 hover:bg-black/80 ${
               isHovered ? "opacity-100" : "opacity-70"
-            }`}
+            } ${isDownloading ? "opacity-50 cursor-not-allowed" : ""}`}
             aria-label="Download video"
-            onClick={(e) => {
-              e.stopPropagation()
-              window.open(item.fileUrl, "_blank")
-            }}
+            onClick={handleDownload}
+            disabled={isDownloading}
           >
-            <Download className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-white" />
+            <Download className={`h-3 w-3 sm:h-3.5 sm:w-3.5 text-white ${isDownloading ? "animate-pulse" : ""}`} />
           </button>
         )}
       </div>
