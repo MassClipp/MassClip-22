@@ -3,12 +3,37 @@
 import { useState, useEffect } from "react"
 import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent } from "@/components/ui/card"
-import { Switch } from "@/components/ui/switch"
-import { Loader2, ExternalLink, Settings, User, Lock, Crown } from "lucide-react"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import {
+  Loader2,
+  Plus,
+  Instagram,
+  Twitter,
+  Globe,
+  Edit2,
+  Check,
+  X,
+  Package,
+  Upload,
+  Calendar,
+  Users,
+  Heart,
+} from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
+import { doc, updateDoc } from "firebase/firestore"
+import { db } from "@/lib/firebase"
+
+interface ContentItem {
+  id: string
+  title: string
+  thumbnailUrl: string
+  fileUrl: string
+  type: string
+  isPremium: boolean
+}
 
 export default function ViewStorefrontPage() {
   const { user, loading: authLoading } = useFirebaseAuth()
@@ -16,9 +41,19 @@ export default function ViewStorefrontPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [username, setUsername] = useState<string | null>(null)
-  const [isStorefrontActive, setIsStorefrontActive] = useState(false)
-  const [isPro, setIsPro] = useState(false)
-  const [isOnTrial, setIsOnTrial] = useState(false)
+  const [displayName, setDisplayName] = useState("")
+  const [bio, setBio] = useState("")
+  const [profilePic, setProfilePic] = useState("")
+  const [socialLinks, setSocialLinks] = useState({ instagram: "", twitter: "", website: "" })
+  const [freeContent, setFreeContent] = useState<ContentItem[]>([])
+  const [premiumContent, setPremiumContent] = useState<ContentItem[]>([])
+  const [createdAt, setCreatedAt] = useState<string>("")
+
+  // Editing states
+  const [isEditingBio, setIsEditingBio] = useState(false)
+  const [isEditingSocials, setIsEditingSocials] = useState(false)
+  const [tempBio, setTempBio] = useState("")
+  const [tempSocials, setTempSocials] = useState({ instagram: "", twitter: "", website: "" })
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -38,20 +73,25 @@ export default function ViewStorefrontPage() {
         if (profileResponse.ok) {
           const profileData = await profileResponse.json()
           setUsername(profileData.username)
+          setDisplayName(profileData.displayName || profileData.username)
+          setBio(profileData.bio || "")
+          setProfilePic(profileData.profilePic || profileData.photoURL || "")
+          setSocialLinks(profileData.socialLinks || { instagram: "", twitter: "", website: "" })
+          setCreatedAt(profileData.createdAt || "")
         }
 
-        // Fetch membership status
-        const membershipResponse = await fetch("/api/membership-status", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
+        // Fetch free content
+        const freeResponse = await fetch(`/api/creator/${user.uid}/free-content`)
+        if (freeResponse.ok) {
+          const freeData = await freeResponse.json()
+          setFreeContent(freeData.content || [])
+        }
 
-        if (membershipResponse.ok) {
-          const membershipData = await membershipResponse.json()
-          setIsPro(membershipData.isPro || false)
-          setIsOnTrial(membershipData.isOnTrial || false)
-          setIsStorefrontActive(membershipData.isPro || membershipData.isOnTrial)
+        // Fetch premium content
+        const premiumResponse = await fetch(`/api/creator/${user.uid}/premium-content`)
+        if (premiumResponse.ok) {
+          const premiumData = await premiumResponse.json()
+          setPremiumContent(premiumData.content || [])
         }
       } catch (error) {
         console.error("Error fetching user data:", error)
@@ -70,29 +110,73 @@ export default function ViewStorefrontPage() {
     }
   }, [user, toast])
 
-  const handleToggleStorefront = () => {
-    if (!isPro && !isOnTrial) {
-      // Redirect to upgrade page
-      router.push("/dashboard/upgrade")
+  const handleSaveBio = async () => {
+    if (!user) return
+
+    try {
+      const userDocRef = doc(db, "users", user.uid)
+      await updateDoc(userDocRef, { bio: tempBio })
+      setBio(tempBio)
+      setIsEditingBio(false)
       toast({
-        title: "Upgrade Required",
-        description: "Subscribe to activate your storefront",
+        title: "Bio Updated",
+        description: "Your bio has been saved successfully",
       })
-    } else {
-      // Toggle storefront (this would need an API endpoint to persist the state)
-      setIsStorefrontActive(!isStorefrontActive)
+    } catch (error) {
+      console.error("Error updating bio:", error)
       toast({
-        title: isStorefrontActive ? "Storefront Deactivated" : "Storefront Activated",
-        description: isStorefrontActive
-          ? "Your storefront is now hidden from public view"
-          : "Your storefront is now live and visible to everyone",
+        title: "Error",
+        description: "Failed to update bio",
+        variant: "destructive",
       })
     }
   }
 
+  const handleSaveSocials = async () => {
+    if (!user) return
+
+    try {
+      const userDocRef = doc(db, "users", user.uid)
+      await updateDoc(userDocRef, { socialLinks: tempSocials })
+      setSocialLinks(tempSocials)
+      setIsEditingSocials(false)
+      toast({
+        title: "Social Links Updated",
+        description: "Your social links have been saved successfully",
+      })
+    } catch (error) {
+      console.error("Error updating social links:", error)
+      toast({
+        title: "Error",
+        description: "Failed to update social links",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const getMemberSince = () => {
+    if (createdAt) {
+      let date: Date
+      if (typeof createdAt === "string") {
+        if (createdAt.includes("T") || createdAt.includes("-")) {
+          date = new Date(createdAt)
+        } else {
+          const timestamp = Number.parseInt(createdAt)
+          date = new Date(timestamp)
+        }
+      } else {
+        date = new Date(createdAt)
+      }
+      if (!isNaN(date.getTime())) {
+        return date.toLocaleDateString("en-US", { month: "long", year: "numeric" })
+      }
+    }
+    return "Recently"
+  }
+
   if (authLoading || loading) {
     return (
-      <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
+      <div className="flex items-center justify-center min-h-screen bg-black">
         <Loader2 className="h-8 w-8 text-zinc-500 animate-spin" />
       </div>
     )
@@ -100,7 +184,7 @@ export default function ViewStorefrontPage() {
 
   if (!user || !username) {
     return (
-      <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
+      <div className="flex items-center justify-center min-h-screen bg-black">
         <div className="text-center">
           <h2 className="text-xl font-semibold text-white mb-2">Profile Required</h2>
           <p className="text-zinc-400">Please complete your profile to view your storefront.</p>
@@ -109,165 +193,293 @@ export default function ViewStorefrontPage() {
     )
   }
 
-  const storefrontUrl = `${process.env.NEXT_PUBLIC_SITE_URL || window.location.origin}/creator/${username}`
-
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 pb-6 border-b border-zinc-800/50">
-        <div className="space-y-2">
-          <h1 className="text-2xl font-semibold text-white tracking-tight">Storefront Preview</h1>
-          <p className="text-zinc-400 text-sm">Preview and manage your public creator storefront</p>
-        </div>
+    <div className="min-h-screen bg-black relative -m-6">
+      {/* Background gradients */}
+      <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-black to-zinc-800/20 pointer-events-none" />
+      <div className="absolute inset-0 bg-gradient-to-t from-zinc-900/30 via-transparent to-zinc-800/10 pointer-events-none" />
 
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            onClick={() => window.open(storefrontUrl, "_blank")}
-            className="border-zinc-700/50 bg-zinc-900/50 hover:bg-zinc-800/50 text-zinc-300"
-          >
-            <ExternalLink className="h-4 w-4 mr-2" />
-            Open in New Tab
-          </Button>
-          <Button
-            onClick={() => router.push("/dashboard/storefront")}
-            className="bg-white text-black hover:bg-zinc-100 font-medium px-6"
-          >
-            <Settings className="h-4 w-4 mr-2" />
-            Customize Theme
-          </Button>
-        </div>
-      </div>
-
-      {/* Storefront Status Card */}
-      <Card className="bg-zinc-900/30 border-zinc-800/30">
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <div className="flex items-center gap-3">
-                <h3 className="text-lg font-medium text-white">Storefront Status</h3>
-                <Badge
-                  variant={isStorefrontActive ? "default" : "secondary"}
-                  className={
-                    isStorefrontActive
-                      ? "bg-green-500/20 text-green-400 border-green-500/30"
-                      : "bg-zinc-700/20 text-zinc-400 border-zinc-700/30"
-                  }
+      <div className="relative max-w-6xl mx-auto px-4 sm:px-8 py-8 sm:py-16">
+        {/* Header */}
+        <div className="mb-8 sm:mb-16">
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-8">
+              <div className="relative group">
+                <Avatar
+                  className="w-32 h-32 border-2 border-white/20 cursor-pointer"
+                  onClick={() => router.push("/dashboard/profile")}
                 >
-                  {isStorefrontActive ? "Live" : "Not Live"}
-                </Badge>
-              </div>
-              <p className="text-sm text-zinc-400">
-                {isStorefrontActive
-                  ? "Your storefront is visible to everyone"
-                  : isPro || isOnTrial
-                    ? "Your storefront is currently hidden"
-                    : "Upgrade to activate your storefront"}
-              </p>
-            </div>
-
-            <div className="flex items-center gap-3">
-              {!isPro && !isOnTrial && <Lock className="h-5 w-5 text-zinc-500" />}
-              <Switch
-                checked={isStorefrontActive}
-                onCheckedChange={handleToggleStorefront}
-                disabled={!isPro && !isOnTrial}
-                className="data-[state=checked]:bg-green-500"
-              />
-            </div>
-          </div>
-
-          {!isPro && !isOnTrial && (
-            <div className="mt-4 p-4 bg-zinc-800/30 border border-zinc-700/50 rounded-lg">
-              <div className="flex items-start gap-3">
-                <Crown className="h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <h4 className="font-medium text-white mb-1">Upgrade to Activate Your Storefront</h4>
-                  <p className="text-sm text-zinc-400 mb-3">
-                    Subscribe to a membership or start a free trial to make your storefront live and start selling your
-                    content.
-                  </p>
-                  <Button
-                    onClick={() => router.push("/dashboard/upgrade")}
-                    className="bg-white text-black hover:bg-zinc-100 font-medium"
-                  >
-                    <Crown className="h-4 w-4 mr-2" />
-                    Upgrade Now
-                  </Button>
+                  <AvatarImage src={profilePic || "/placeholder.svg"} alt={displayName} className="object-cover" />
+                  <AvatarFallback className="bg-zinc-900 text-white text-2xl font-medium border-2 border-white/20">
+                    {displayName?.charAt(0)?.toUpperCase() || username?.charAt(0)?.toUpperCase() || "?"}
+                  </AvatarFallback>
+                </Avatar>
+                <div
+                  className="absolute inset-0 bg-black/60 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
+                  onClick={() => router.push("/dashboard/profile")}
+                >
+                  <Edit2 className="w-6 h-6 text-white" />
                 </div>
               </div>
+
+              <div className="space-y-3">
+                <div>
+                  <h1 className="text-3xl font-light text-white tracking-tight">{displayName || username}</h1>
+                  <p className="text-zinc-500 text-sm font-mono">@{username}</p>
+                </div>
+
+                {isEditingBio ? (
+                  <div className="space-y-2">
+                    <Textarea
+                      value={tempBio}
+                      onChange={(e) => setTempBio(e.target.value)}
+                      placeholder="Write your bio..."
+                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-md"
+                      rows={3}
+                    />
+                    <div className="flex gap-2">
+                      <Button size="sm" onClick={handleSaveBio} className="bg-white text-black hover:bg-zinc-100">
+                        <Check className="w-4 h-4 mr-1" />
+                        Save
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setIsEditingBio(false)
+                          setTempBio(bio)
+                        }}
+                        className="text-zinc-400 hover:text-white"
+                      >
+                        <X className="w-4 h-4 mr-1" />
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    className="group cursor-pointer"
+                    onClick={() => {
+                      setTempBio(bio)
+                      setIsEditingBio(true)
+                    }}
+                  >
+                    {bio ? (
+                      <p className="text-zinc-400 text-sm max-w-md leading-relaxed group-hover:text-zinc-300 transition-colors">
+                        {bio}
+                      </p>
+                    ) : (
+                      <p className="text-zinc-600 text-sm max-w-md leading-relaxed group-hover:text-zinc-500 transition-colors italic">
+                        Click to add a bio
+                      </p>
+                    )}
+                    <Edit2 className="w-3 h-3 text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity mt-1" />
+                  </div>
+                )}
+
+                {isEditingSocials ? (
+                  <div className="space-y-2">
+                    <div className="flex gap-2 items-center">
+                      <Instagram className="w-4 h-4 text-zinc-400" />
+                      <Input
+                        value={tempSocials.instagram}
+                        onChange={(e) => setTempSocials({ ...tempSocials, instagram: e.target.value })}
+                        placeholder="Instagram username"
+                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm h-8"
+                      />
+                    </div>
+                    <div className="flex gap-2 items-center">
+                      <Twitter className="w-4 h-4 text-zinc-400" />
+                      <Input
+                        value={tempSocials.twitter}
+                        onChange={(e) => setTempSocials({ ...tempSocials, twitter: e.target.value })}
+                        placeholder="Twitter username"
+                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm h-8"
+                      />
+                    </div>
+                    <div className="flex gap-2 items-center">
+                      <Globe className="w-4 h-4 text-zinc-400" />
+                      <Input
+                        value={tempSocials.website}
+                        onChange={(e) => setTempSocials({ ...tempSocials, website: e.target.value })}
+                        placeholder="Website URL"
+                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm h-8"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" onClick={handleSaveSocials} className="bg-white text-black hover:bg-zinc-100">
+                        <Check className="w-4 h-4 mr-1" />
+                        Save
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setIsEditingSocials(false)
+                          setTempSocials(socialLinks)
+                        }}
+                        className="text-zinc-400 hover:text-white"
+                      >
+                        <X className="w-4 h-4 mr-1" />
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    {socialLinks.instagram && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                        onClick={() => window.open(`https://instagram.com/${socialLinks.instagram}`, "_blank")}
+                      >
+                        <Instagram className="w-4 h-4" />
+                      </Button>
+                    )}
+                    {socialLinks.twitter && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                        onClick={() => window.open(`https://twitter.com/${socialLinks.twitter}`, "_blank")}
+                      >
+                        <Twitter className="w-4 h-4" />
+                      </Button>
+                    )}
+                    {socialLinks.website && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                        onClick={() => window.open(socialLinks.website, "_blank")}
+                      >
+                        <Globe className="w-4 h-4" />
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                      onClick={() => {
+                        setTempSocials(socialLinks)
+                        setIsEditingSocials(true)
+                      }}
+                    >
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Stats */}
+        <div className="flex items-center gap-8 mb-12 text-sm">
+          <div className="flex items-center gap-2 text-zinc-500">
+            <Calendar className="w-4 h-4" />
+            <span>Member since {getMemberSince()}</span>
+          </div>
+          <div className="flex items-center gap-2 text-zinc-500">
+            <Users className="w-4 h-4" />
+            <span>{freeContent.length} free</span>
+          </div>
+          <div className="flex items-center gap-2 text-zinc-500">
+            <Heart className="w-4 h-4" />
+            <span>{premiumContent.length} premium</span>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="mb-8">
+          <div className="flex items-center gap-8 border-b border-zinc-800/50">
+            <div className="pb-4 text-sm font-medium text-white relative">
+              Free Content
+              <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />
+            </div>
+          </div>
+        </div>
+
+        <div className="mb-16">
+          {freeContent.length > 0 ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              {freeContent.map((item) => (
+                <div key={item.id} className="relative aspect-[9/16] rounded-lg overflow-hidden bg-zinc-900">
+                  <img
+                    src={item.thumbnailUrl || "/placeholder.svg"}
+                    alt={item.title}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              ))}
+              <button
+                onClick={() => router.push("/dashboard/upload")}
+                className="aspect-[9/16] rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors flex flex-col items-center justify-center gap-2 group"
+              >
+                <Upload className="w-8 h-8 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
+                <span className="text-sm text-zinc-600 group-hover:text-zinc-400 transition-colors">Add Content</span>
+              </button>
+            </div>
+          ) : (
+            <div className="text-center py-16">
+              <Button
+                onClick={() => router.push("/dashboard/upload")}
+                className="bg-white text-black hover:bg-zinc-100"
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                Upload Your First Content
+              </Button>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
 
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card
-          className="bg-zinc-900/30 border-zinc-800/30 hover:border-zinc-700/50 transition-colors cursor-pointer"
-          onClick={() => router.push("/dashboard/profile")}
-        >
-          <CardContent className="p-6">
-            <User className="h-8 w-8 text-white mb-3" />
-            <h3 className="font-medium text-white mb-1">Edit Profile</h3>
-            <p className="text-sm text-zinc-400">Update your bio, avatar, and social links</p>
-          </CardContent>
-        </Card>
-
-        <Card
-          className="bg-zinc-900/30 border-zinc-800/30 hover:border-zinc-700/50 transition-colors cursor-pointer"
-          onClick={() => router.push("/dashboard/bundles")}
-        >
-          <CardContent className="p-6">
-            <Settings className="h-8 w-8 text-white mb-3" />
-            <h3 className="font-medium text-white mb-1">Manage Bundles</h3>
-            <p className="text-sm text-zinc-400">Create and edit your content bundles</p>
-          </CardContent>
-        </Card>
-
-        <Card
-          className="bg-zinc-900/30 border-zinc-800/30 hover:border-zinc-700/50 transition-colors cursor-pointer"
-          onClick={() => router.push("/dashboard/free-content")}
-        >
-          <CardContent className="p-6">
-            <Settings className="h-8 w-8 text-white mb-3" />
-            <h3 className="font-medium text-white mb-1">Free Content</h3>
-            <p className="text-sm text-zinc-400">Manage your free content library</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Storefront Preview */}
-      <Card className="bg-zinc-900/30 border-zinc-800/30 overflow-hidden">
-        <CardContent className="p-0">
-          <div className="relative w-full" style={{ height: "calc(100vh - 300px)", minHeight: "600px" }}>
-            {!isPro && !isOnTrial && (
-              <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-10 flex items-center justify-center">
-                <div className="text-center space-y-4 p-8">
-                  <Lock className="h-16 w-16 text-zinc-500 mx-auto" />
-                  <h3 className="text-2xl font-semibold text-white">Storefront Locked</h3>
-                  <p className="text-zinc-400 max-w-md">
-                    Subscribe to a membership or start a free trial to unlock your storefront and start selling.
-                  </p>
-                  <Button
-                    onClick={() => router.push("/dashboard/upgrade")}
-                    className="bg-white text-black hover:bg-zinc-100 font-medium px-8"
-                  >
-                    <Crown className="h-4 w-4 mr-2" />
-                    Upgrade to Unlock
-                  </Button>
-                </div>
-              </div>
-            )}
-            <iframe
-              src={storefrontUrl}
-              className="w-full h-full border-0"
-              title="Storefront Preview"
-              sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
-            />
+        {/* Premium Content Section */}
+        <div className="mb-8">
+          <div className="flex items-center gap-8 border-b border-zinc-800/50">
+            <div className="pb-4 text-sm font-medium text-white relative">
+              Premium Content
+              <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />
+            </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+
+        <div>
+          {premiumContent.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+              {premiumContent.map((item) => (
+                <div key={item.id} className="bg-zinc-900/30 border border-zinc-800/30 rounded-lg p-4">
+                  <div className="aspect-video rounded-lg overflow-hidden bg-zinc-800 mb-3">
+                    <img
+                      src={item.thumbnailUrl || "/placeholder.svg"}
+                      alt={item.title}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <h3 className="text-white font-medium mb-1">{item.title}</h3>
+                </div>
+              ))}
+              <button
+                onClick={() => router.push("/dashboard/bundles")}
+                className="bg-zinc-900/30 border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors rounded-lg p-4 flex flex-col items-center justify-center gap-2 group min-h-[200px]"
+              >
+                <Package className="w-8 h-8 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
+                <span className="text-sm text-zinc-600 group-hover:text-zinc-400 transition-colors">Create Bundle</span>
+              </button>
+            </div>
+          ) : (
+            <div className="text-center py-16">
+              <Button
+                onClick={() => router.push("/dashboard/bundles")}
+                className="bg-white text-black hover:bg-zinc-100"
+              >
+                <Package className="w-4 h-4 mr-2" />
+                Create Your First Bundle
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
