@@ -122,3 +122,58 @@ export async function showObjectivesPopup(uid: string): Promise<void> {
     console.error("[Objectives] Error showing popup:", error)
   }
 }
+
+export async function completeObjective(
+  uid: string,
+  objectiveId: string,
+): Promise<{
+  success: boolean
+  nextObjective?: UserObjective
+  allComplete: boolean
+}> {
+  try {
+    const objectivesDoc = await ensureUserObjectives(uid)
+
+    const updatedObjectives = objectivesDoc.objectives.map((obj) => {
+      if (obj.id === objectiveId) {
+        return {
+          ...obj,
+          completed: true,
+          completedAt: new Date(),
+        }
+      }
+      return obj
+    })
+
+    const completedCount = updatedObjectives.filter((obj) => obj.completed).length
+    const percentageComplete = Math.round((completedCount / updatedObjectives.length) * 100)
+    const allComplete = completedCount === updatedObjectives.length
+
+    const updatedDoc: UserObjectivesDoc = {
+      ...objectivesDoc,
+      objectives: updatedObjectives,
+      completedCount,
+      percentageComplete,
+      updatedAt: new Date(),
+    }
+
+    const docRef = doc(db, "users", uid, "onboarding", "objectives")
+    await updateDoc(docRef, updatedDoc as any)
+
+    // Find the next incomplete objective
+    const nextObjective = updatedObjectives.find((obj) => !obj.completed)
+
+    console.log("[Objectives] Completed objective:", objectiveId)
+    return {
+      success: true,
+      nextObjective,
+      allComplete,
+    }
+  } catch (error) {
+    console.error("[Objectives] Error completing objective:", error)
+    return {
+      success: false,
+      allComplete: false,
+    }
+  }
+}

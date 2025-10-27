@@ -24,7 +24,6 @@ import {
   UploadIcon,
   Download,
   Pause,
-  Settings,
 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
@@ -32,6 +31,7 @@ import { doc, updateDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import BundleCard from "@/components/bundle-card"
 import { useObjectives } from "@/hooks/use-objectives"
+import { ObjectiveCompletionBanner } from "@/components/objective-completion-banner"
 
 interface ContentItem {
   id: string
@@ -72,12 +72,14 @@ export default function ViewStorefrontPage() {
   // Editing states
   const [isEditingBio, setIsEditingBio] = useState(false)
   const [isEditingSocials, setIsEditingSocials] = useState(false)
+  const [isEditingUsername, setIsEditingUsername] = useState(false)
   const [tempBio, setTempBio] = useState("")
   const [tempSocials, setTempSocials] = useState<{
     instagram?: string
     twitter?: string
     website?: string
   }>({})
+  const [tempUsername, setTempUsername] = useState("")
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -190,6 +192,31 @@ export default function ViewStorefrontPage() {
     }
   }
 
+  const handleSaveUsername = async () => {
+    if (!user || !tempUsername.trim()) return
+
+    try {
+      const userDocRef = doc(db, "users", user.uid)
+      await updateDoc(userDocRef, {
+        username: tempUsername.trim(),
+      })
+
+      setUsername(tempUsername.trim())
+      setIsEditingUsername(false)
+      toast({
+        title: "Username Updated",
+        description: "Your username has been saved successfully",
+      })
+    } catch (error) {
+      console.error("[v0] Error updating username:", error)
+      toast({
+        title: "Error",
+        description: "Failed to update username",
+        variant: "destructive",
+      })
+    }
+  }
+
   const getMemberSince = () => {
     if (createdAt) {
       let date: Date
@@ -225,22 +252,13 @@ export default function ViewStorefrontPage() {
 
       <div className="relative max-w-6xl mx-auto px-4 sm:px-8 py-8 sm:py-16">
         {needsCustomization && (
-          <div className="mb-6 p-4 bg-gradient-to-r from-teal-500/10 to-cyan-500/10 border border-teal-500/20 rounded-lg">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <h3 className="text-sm font-semibold text-white mb-1">Customize Your Storefront</h3>
-                <p className="text-xs text-white/60">Complete your profile to make your storefront stand out</p>
-              </div>
-              <Button
-                onClick={() => router.push("/dashboard/profile")}
-                size="sm"
-                className="bg-gradient-to-r from-teal-400 to-cyan-400 text-black hover:from-teal-500 hover:to-cyan-500 font-medium"
-              >
-                <Settings className="w-4 h-4 mr-2" />
-                Customize
-              </Button>
-            </div>
-          </div>
+          <ObjectiveCompletionBanner
+            objectiveId="customize_storefront"
+            title="Customize Storefront"
+            instructions="Add profile picture, bio, socials, and check the box when done!"
+            actionLabel="Go to Profile"
+            actionHref="/dashboard/profile"
+          />
         )}
 
         {/* Header with inline editing */}
@@ -268,7 +286,48 @@ export default function ViewStorefrontPage() {
               <div className="space-y-3">
                 <div>
                   <h1 className="text-3xl font-light text-white tracking-tight">{displayName || username}</h1>
-                  <p className="text-zinc-500 text-sm font-mono">@{username}</p>
+                  {isEditingUsername ? (
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-zinc-500 text-sm font-mono">@</span>
+                      <Input
+                        value={tempUsername}
+                        onChange={(e) => setTempUsername(e.target.value)}
+                        placeholder="username"
+                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm h-7 w-40 px-2 font-mono"
+                      />
+                      <Button
+                        size="sm"
+                        onClick={handleSaveUsername}
+                        className="bg-white text-black hover:bg-zinc-100 h-7 px-2"
+                      >
+                        <Check className="w-3 h-3" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setIsEditingUsername(false)
+                          setTempUsername(username || "")
+                        }}
+                        className="text-zinc-400 hover:text-white h-7 px-2"
+                      >
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div
+                      className="flex items-center gap-1 group cursor-pointer mt-1"
+                      onClick={() => {
+                        setTempUsername(username || "")
+                        setIsEditingUsername(true)
+                      }}
+                    >
+                      <p className="text-zinc-500 text-sm font-mono group-hover:text-zinc-400 transition-colors">
+                        @{username}
+                      </p>
+                      <Edit2 className="w-3 h-3 text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                  )}
                 </div>
 
                 {isEditingBio ? (
