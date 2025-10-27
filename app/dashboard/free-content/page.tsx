@@ -26,6 +26,8 @@ import { VideoPreviewPlayer } from "@/components/video-preview-player"
 import { motion, AnimatePresence } from "framer-motion"
 import { safelyConvertToDate, safelyFormatRelativeTime } from "@/lib/date-utils"
 import NewFolderSelector from "@/components/new-folder-selector"
+import { ObjectiveCompletionBanner } from "@/components/objective-completion-banner"
+import { useObjectives } from "@/hooks/use-objectives"
 
 interface FreeContentItem {
   id: string
@@ -66,6 +68,7 @@ const FILE_TYPE_COLORS = {
 export default function FreeContentPage() {
   const { user, loading: authLoading } = useFirebaseAuth()
   const { toast } = useToast()
+  const { objectives } = useObjectives()
   const [freeContent, setFreeContent] = useState<FreeContentItem[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
@@ -300,8 +303,20 @@ export default function FreeContentPage() {
     return upload.folderId === selectedFolderId || upload.folder === selectedFolderId
   })
 
+  const addFreeContentObjective = objectives.find(
+    (obj) => obj.id === "add_free_content" && obj.status === "in_progress",
+  )
+
   return (
     <div className="space-y-6">
+      {addFreeContentObjective && freeContent.length > 0 && (
+        <ObjectiveCompletionBanner
+          objectiveId="add_free_content"
+          title="Add Free Content"
+          instructions="You've added content to your library! Mark this objective as complete to continue."
+        />
+      )}
+
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 pb-6 border-b border-zinc-800/50">
         <div className="space-y-2">
           <h1 className="text-2xl font-semibold text-white tracking-tight">Content Library</h1>

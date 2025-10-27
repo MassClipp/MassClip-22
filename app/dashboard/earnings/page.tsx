@@ -17,15 +17,8 @@ import {
 import { useAuthState } from "react-firebase-hooks/auth"
 import { auth } from "@/lib/firebase"
 import EarningsContent from "./earnings-content"
-
-// Safe formatting functions
-function formatCurrency(amount: number): string {
-  if (typeof amount !== "number" || isNaN(amount)) return "$0.00"
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(amount)
-}
+import { ObjectiveCompletionBanner } from "@/components/objective-completion-banner"
+import { useObjectives } from "@/hooks/use-objectives"
 
 interface StripeConnectionStatus {
   connected: boolean
@@ -38,11 +31,11 @@ interface StripeConnectionStatus {
 
 function EarningsPage() {
   const [user, loading, error] = useAuthState(auth)
+  const { objectives } = useObjectives()
   const [stripeStatus, setStripeStatus] = useState<StripeConnectionStatus | null>(null)
   const [checkingStripe, setCheckingStripe] = useState(true)
   const [connectionError, setConnectionError] = useState<string | null>(null)
 
-  // Check Stripe connection status
   const checkStripeStatus = async () => {
     if (!user?.uid) return
 
@@ -96,7 +89,6 @@ function EarningsPage() {
     }
   }, [user])
 
-  // Show loading while checking auth or Stripe status
   if (loading || checkingStripe) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -108,7 +100,6 @@ function EarningsPage() {
     )
   }
 
-  // Show login prompt if not authenticated
   if (!user) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -121,11 +112,11 @@ function EarningsPage() {
     )
   }
 
-  // Show Stripe connection setup if not connected or not fully set up
+  const connectStripeObjective = objectives.find((obj) => obj.id === "connect_stripe" && obj.status === "in_progress")
+
   if (!stripeStatus?.connected || !stripeStatus?.chargesEnabled || !stripeStatus?.detailsSubmitted) {
     return (
       <div className="space-y-8">
-        {/* Header */}
         <div className="text-center space-y-3">
           <div className="inline-flex items-center justify-center w-12 h-12 bg-gradient-to-br from-blue-500 via-purple-600 to-purple-700 rounded-full shadow-lg">
             <CreditCard className="w-6 h-6 text-white" />
@@ -134,7 +125,6 @@ function EarningsPage() {
           <p className="text-white/70">Start accepting payments and track your earnings</p>
         </div>
 
-        {/* Benefits */}
         <div className="space-y-4">
           <h2 className="text-lg font-light text-white text-center">Why Connect Stripe?</h2>
           <div className="space-y-3">
@@ -164,7 +154,6 @@ function EarningsPage() {
           </div>
         </div>
 
-        {/* Connection Card */}
         <Card className="bg-gray-800/30 border-purple-500/30">
           <CardContent className="p-6 space-y-4">
             <div className="flex items-center gap-3">
@@ -238,7 +227,6 @@ function EarningsPage() {
           </CardContent>
         </Card>
 
-        {/* How It Works */}
         <div className="space-y-4">
           <div className="flex items-center justify-center gap-2">
             <Info className="w-5 h-5 text-purple-400" />
@@ -278,7 +266,6 @@ function EarningsPage() {
           </div>
         </div>
 
-        {/* Error Display */}
         {connectionError && (
           <Card className="border-red-600/50 bg-red-900/20">
             <CardContent className="p-4">
@@ -301,8 +288,20 @@ function EarningsPage() {
     )
   }
 
-  // Show the earnings dashboard if connected and set up
-  return <EarningsContent />
+  return (
+    <>
+      {connectStripeObjective && stripeStatus?.connected && stripeStatus?.chargesEnabled && (
+        <div className="mb-6">
+          <ObjectiveCompletionBanner
+            objectiveId="connect_stripe"
+            title="Connect Stripe"
+            instructions="Your Stripe account is connected! Mark this objective as complete to continue."
+          />
+        </div>
+      )}
+      <EarningsContent />
+    </>
+  )
 }
 
 function EarningsPageWithHeader() {

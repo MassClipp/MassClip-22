@@ -898,6 +898,18 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
         </Button>
       )}
 
+      {/* Desktop sidebar toggle button - Show when collapsed */}
+      {!isMobile && isSidebarCollapsed && (
+        <Button
+          onClick={() => setIsSidebarCollapsed(false)}
+          variant="ghost"
+          size="sm"
+          className="fixed top-20 left-2 z-50 h-9 w-9 p-0 bg-zinc-900/80 backdrop-blur-xl border border-white/10 hover:bg-zinc-800/80 hover:border-white/20 rounded-lg shadow-lg transition-all duration-200"
+        >
+          <ChevronRight className="h-4 w-4 text-zinc-400" />
+        </Button>
+      )}
+
       {!isMobile && !(isUploadPage && isSidebarCollapsed) && (
         <div
           className={`fixed left-0 top-16 h-[calc(100vh-4rem)] z-40 transition-all duration-300 ${
