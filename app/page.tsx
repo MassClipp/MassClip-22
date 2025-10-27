@@ -79,6 +79,15 @@ const LandingPage = () => {
           {/* VEX Interface Hero Section */}
           <LandingVexInterface />
 
+          <section className="py-12 px-6">
+            <div className="max-w-7xl mx-auto text-center">
+              <h2 className="text-3xl md:text-4xl font-bold text-white mb-3">
+                Creators sell billions in content every year.
+              </h2>
+              <p className="text-white/60 text-lg">Get your storefront live and start earning today.</p>
+            </div>
+          </section>
+
           <LandingVideoCarousel />
 
           {/* Review Section */}
