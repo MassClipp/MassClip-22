@@ -109,3 +109,16 @@ export async function dismissObjectivesPopup(uid: string): Promise<void> {
     console.error("[Objectives] Error dismissing popup:", error)
   }
 }
+
+export async function showObjectivesPopup(uid: string): Promise<void> {
+  try {
+    const docRef = doc(db, "users", uid, "onboarding", "objectives")
+    await updateDoc(docRef, {
+      dismissed: false,
+      updatedAt: new Date(),
+    })
+    console.log("[Objectives] Showing objectives popup for user:", uid)
+  } catch (error) {
+    console.error("[Objectives] Error showing popup:", error)
+  }
+}

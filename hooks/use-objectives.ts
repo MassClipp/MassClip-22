@@ -2,7 +2,12 @@
 
 import { useState, useEffect } from "react"
 import { useAuth } from "@/contexts/auth-context"
-import { getUserObjectives, ensureUserObjectives, type UserObjectivesDoc } from "@/lib/objectives-service"
+import {
+  getUserObjectives,
+  ensureUserObjectives,
+  showObjectivesPopup,
+  type UserObjectivesDoc,
+} from "@/lib/objectives-service"
 
 export function useObjectives() {
   const { user } = useAuth()
@@ -40,9 +45,21 @@ export function useObjectives() {
     }
   }
 
+  const reopenPopup = async () => {
+    if (!user) return
+
+    try {
+      await showObjectivesPopup(user.uid)
+      await refreshObjectives()
+    } catch (error) {
+      console.error("[useObjectives] Error reopening popup:", error)
+    }
+  }
+
   return {
     objectives,
     isLoading,
     refreshObjectives,
+    reopenPopup,
   }
 }
