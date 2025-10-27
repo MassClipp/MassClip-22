@@ -22,6 +22,7 @@ import {
   Shield,
   ChevronDown,
   Bot,
+  Store,
 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { useUserPlan } from "@/hooks/use-user-plan"
@@ -67,7 +68,10 @@ const navigationSections: NavSection[] = [
   },
   {
     title: "Business",
-    items: [{ title: "Earnings", href: "/dashboard/earnings", icon: DollarSign }],
+    items: [
+      { title: "Earnings", href: "/dashboard/earnings", icon: DollarSign },
+      { title: "Storefront Preview", href: "/dashboard/storefront-preview", icon: Store }, // Added Storefront Preview to Business section
+    ],
   },
   {
     title: "Settings",

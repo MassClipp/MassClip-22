@@ -15,6 +15,7 @@ import {
   Grid3X3,
   FolderOpen,
   Tags,
+  Store,
 } from "lucide-react"
 import { NavDropdown } from "./nav-dropdown"
 import Logo from "@/components/logo"
@@ -95,6 +96,11 @@ const navItems = [
         title: "Bundles",
         href: "/dashboard/bundles",
         icon: Package,
+      },
+      {
+        title: "Storefront Preview",
+        href: "/dashboard/storefront-preview",
+        icon: Store,
       },
     ],
   },
