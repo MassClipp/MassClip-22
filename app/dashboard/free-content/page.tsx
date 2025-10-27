@@ -303,13 +303,12 @@ export default function FreeContentPage() {
     return upload.folderId === selectedFolderId || upload.folder === selectedFolderId
   })
 
-  const addFreeContentObjective = objectives
-    ? objectives.find((obj) => obj.id === "add_free_content" && obj.status === "in_progress")
-    : null
+  const currentObjective = objectives?.objectives?.find((obj) => !obj.completed)
+  const isCurrentObjective = currentObjective?.id === "add_free_content"
 
   return (
     <div className="space-y-6">
-      {addFreeContentObjective && freeContent.length > 0 && (
+      {isCurrentObjective && freeContent.length > 0 && (
         <ObjectiveCompletionBanner
           objectiveId="add_free_content"
           title="Add Free Content"

@@ -112,7 +112,8 @@ function EarningsPage() {
     )
   }
 
-  const connectStripeObjective = objectives.find((obj) => obj.id === "connect_stripe" && obj.status === "in_progress")
+  const currentObjective = objectives?.objectives?.find((obj) => !obj.completed)
+  const isCurrentObjective = currentObjective?.id === "connect_stripe"
 
   if (!stripeStatus?.connected || !stripeStatus?.chargesEnabled || !stripeStatus?.detailsSubmitted) {
     return (
@@ -290,7 +291,7 @@ function EarningsPage() {
 
   return (
     <>
-      {connectStripeObjective && stripeStatus?.connected && stripeStatus?.chargesEnabled && (
+      {isCurrentObjective && stripeStatus?.connected && stripeStatus?.chargesEnabled && (
         <div className="mb-6">
           <ObjectiveCompletionBanner
             objectiveId="connect_stripe"
