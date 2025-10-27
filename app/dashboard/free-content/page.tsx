@@ -68,7 +68,7 @@ const FILE_TYPE_COLORS = {
 export default function FreeContentPage() {
   const { user, loading: authLoading } = useFirebaseAuth()
   const { toast } = useToast()
-  const { objectives } = useObjectives()
+  const { currentObjective } = useObjectives()
   const [freeContent, setFreeContent] = useState<FreeContentItem[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
@@ -77,6 +77,7 @@ export default function FreeContentPage() {
   const [selectedUploadIds, setSelectedUploadIds] = useState<string[]>([])
   const [uploadsLoading, setUploadsLoading] = useState(false)
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
+  const showBanner = currentObjective?.id === "add_free_content"
 
   const fetchFreeContent = async () => {
     if (!user) return
@@ -303,16 +304,13 @@ export default function FreeContentPage() {
     return upload.folderId === selectedFolderId || upload.folder === selectedFolderId
   })
 
-  const currentObjective = objectives?.objectives?.find((obj) => !obj.completed)
-  const isCurrentObjective = currentObjective?.id === "add_free_content"
-
   return (
     <div className="space-y-6">
-      {isCurrentObjective && freeContent.length > 0 && (
+      {showBanner && (
         <ObjectiveCompletionBanner
           objectiveId="add_free_content"
           title="Add Free Content"
-          instructions="You've added content to your library! Mark this objective as complete to continue."
+          instructions="Add content to your free library to showcase on your public profile. Once you've added at least one item, mark this objective as complete!"
         />
       )}
 

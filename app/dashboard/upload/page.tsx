@@ -46,7 +46,6 @@ import { uploadQueueManager, type QueuedUpload } from "@/lib/upload-queue-manage
 import { CreateFolderDialog } from "@/components/create-folder-dialog"
 import FolderSidebar from "@/components/folder-sidebar"
 import { VexFolderOrganizer } from "@/components/vex-folder-organizer"
-import { ObjectiveCompletionBanner } from "@/components/objective-completion-banner"
 // import { PaywallWrapper } from "@/components/paywall-wrapper"
 
 interface UploadType {
@@ -878,12 +877,6 @@ export default function UploadPage() {
   return (
     // <PaywallWrapper>
     <div className="space-y-6">
-      <ObjectiveCompletionBanner
-        objectiveId="upload_content"
-        title="Upload First Content"
-        description="Upload your first video, audio, or image file to get started!"
-      />
-
       {/* Folder Sidebar */}
       <FolderSidebar
         isOpen={isSidebarOpen}

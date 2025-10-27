@@ -31,7 +31,7 @@ interface StripeConnectionStatus {
 
 function EarningsPage() {
   const [user, loading, error] = useAuthState(auth)
-  const { objectives } = useObjectives()
+  const { currentObjective } = useObjectives()
   const [stripeStatus, setStripeStatus] = useState<StripeConnectionStatus | null>(null)
   const [checkingStripe, setCheckingStripe] = useState(true)
   const [connectionError, setConnectionError] = useState<string | null>(null)
@@ -112,8 +112,7 @@ function EarningsPage() {
     )
   }
 
-  const currentObjective = objectives?.objectives?.find((obj) => !obj.completed)
-  const isCurrentObjective = currentObjective?.id === "connect_stripe"
+  const showBanner = currentObjective?.id === "connect_stripe"
 
   if (!stripeStatus?.connected || !stripeStatus?.chargesEnabled || !stripeStatus?.detailsSubmitted) {
     return (
@@ -291,7 +290,7 @@ function EarningsPage() {
 
   return (
     <>
-      {isCurrentObjective && stripeStatus?.connected && stripeStatus?.chargesEnabled && (
+      {showBanner && stripeStatus?.connected && stripeStatus?.chargesEnabled && (
         <div className="mb-6">
           <ObjectiveCompletionBanner
             objectiveId="connect_stripe"
