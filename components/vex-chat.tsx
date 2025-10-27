@@ -118,6 +118,7 @@ function VexChat({ children }: VexChatProps) {
     { icon: CreditCard, label: "Upgrade", href: "/dashboard/upgrade", highlight: true },
     { icon: Package, label: "My Purchases", href: "/dashboard/purchases" },
     { icon: Gift, label: "Free Content", href: "/dashboard/free-content" },
+    { icon: User, label: "View Storefront", href: "/dashboard/view-storefront" },
   ]
 
   // Suggestions list (moved here to fix undeclared variable error)
