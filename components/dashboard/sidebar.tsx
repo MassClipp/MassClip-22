@@ -17,7 +17,7 @@ import {
   Tags,
   Store,
 } from "lucide-react"
-import { NavDropdown } from "./nav-dropdown"
+import { SidebarNavItem } from "./sidebar-nav-item"
 import Logo from "@/components/logo"
 
 const navItems = [
@@ -144,7 +144,7 @@ export function DashboardSidebar() {
         <nav className="grid items-start px-2 text-sm font-medium">
           <div className="space-y-1">
             {navItems.map((item, index) => (
-              <NavDropdown key={index} item={item} />
+              <SidebarNavItem key={index} item={item} />
             ))}
           </div>
         </nav>
