@@ -76,7 +76,15 @@ export function LandingVideoCarousel({ videos }: LandingVideoCarouselProps) {
             key={index}
             className="flex-shrink-0 w-[200px] h-[355px] rounded-xl overflow-hidden bg-white/5 backdrop-blur-sm border border-white/10"
           >
-            <video src={videoUrl} autoPlay loop muted playsInline className="w-full h-full object-cover" />
+            <video
+              src={videoUrl}
+              autoPlay
+              loop
+              muted
+              playsInline
+              preload="auto"
+              className="w-full h-full object-cover"
+            />
           </div>
         ))}
       </div>
