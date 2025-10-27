@@ -1,29 +1,25 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { getAuth } from "firebase-admin/auth"
-import { completeOnboardingTask } from "@/lib/onboarding-service"
+import { NextResponse } from "next/server"
+import { auth } from "@/lib/firebase-admin"
+import { completeTask } from "@/lib/onboarding-service"
 
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
     const authHeader = request.headers.get("authorization")
-    if (!authHeader?.startsWith("Bearer ")) {
+    if (!authHeader) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const token = authHeader.split("Bearer ")[1]
-    const decodedToken = await getAuth().verifyIdToken(token)
+    const decodedToken = await auth.verifyIdToken(token)
     const userId = decodedToken.uid
 
     const { taskId } = await request.json()
 
-    if (!taskId) {
-      return NextResponse.json({ error: "Task ID is required" }, { status: 400 })
-    }
+    await completeTask(userId, taskId)
 
-    const progress = await completeOnboardingTask(userId, taskId)
-
-    return NextResponse.json(progress)
+    return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("Error completing onboarding task:", error)
+    console.error("[v0] Error completing task:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

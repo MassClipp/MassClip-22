@@ -1,117 +1,106 @@
 "use client"
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
-import { useAuth } from "@/contexts/auth-context"
+import type React from "react"
 
-interface OnboardingTask {
-  id: string
-  title: string
-  description: string
-  completed: boolean
-  route: string
-  targetElement?: string
-}
+import { createContext, useContext, useEffect, useState } from "react"
+import { useAuth } from "./auth-context"
+import {
+  type OnboardingProgress,
+  getOnboardingProgress,
+  initializeOnboarding,
+  completeTask as completeTaskService,
+  dismissOnboarding as dismissOnboardingService,
+} from "@/lib/onboarding-service"
 
 interface OnboardingContextType {
-  tasks: OnboardingTask[]
-  currentTaskIndex: number
-  allTasksCompleted: boolean
-  dismissed: boolean
-  isLoading: boolean
+  progress: OnboardingProgress | null
+  loading: boolean
   completeTask: (taskId: string) => Promise<void>
   dismissOnboarding: () => Promise<void>
-  refreshOnboarding: () => Promise<void>
-  shouldShowIndicator: (route: string) => boolean
+  getCurrentTask: () => { id: string; route?: string; targetElement?: string } | null
 }
 
 const OnboardingContext = createContext<OnboardingContextType | undefined>(undefined)
 
-export function OnboardingProvider({ children }: { children: ReactNode }) {
+export function OnboardingProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
-  const [tasks, setTasks] = useState<OnboardingTask[]>([])
-  const [currentTaskIndex, setCurrentTaskIndex] = useState(0)
-  const [allTasksCompleted, setAllTasksCompleted] = useState(false)
-  const [dismissed, setDismissed] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
-
-  const fetchOnboarding = async () => {
-    if (!user) {
-      setIsLoading(false)
-      return
-    }
-
-    try {
-      const response = await fetch("/api/onboarding")
-      if (response.ok) {
-        const data = await response.json()
-        setTasks(data.tasks || [])
-        setCurrentTaskIndex(data.currentTaskIndex || 0)
-        setAllTasksCompleted(data.allTasksCompleted || false)
-        setDismissed(data.dismissed || false)
-      }
-    } catch (error) {
-      console.error("Error fetching onboarding:", error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  const [progress, setProgress] = useState<OnboardingProgress | null>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetchOnboarding()
+    async function loadOnboarding() {
+      if (!user) {
+        setProgress(null)
+        setLoading(false)
+        return
+      }
+
+      try {
+        let onboardingProgress = await getOnboardingProgress(user.uid)
+
+        // Initialize onboarding for new users
+        if (!onboardingProgress) {
+          onboardingProgress = await initializeOnboarding(user.uid)
+        }
+
+        setProgress(onboardingProgress)
+      } catch (error) {
+        console.error("[v0] Error loading onboarding:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadOnboarding()
   }, [user])
 
   const completeTask = async (taskId: string) => {
-    try {
-      const response = await fetch("/api/onboarding/complete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ taskId }),
-      })
+    if (!user) return
 
-      if (response.ok) {
-        await fetchOnboarding()
-      }
+    try {
+      await completeTaskService(user.uid, taskId)
+      const updatedProgress = await getOnboardingProgress(user.uid)
+      setProgress(updatedProgress)
     } catch (error) {
-      console.error("Error completing task:", error)
+      console.error("[v0] Error completing task:", error)
     }
   }
 
   const dismissOnboarding = async () => {
-    try {
-      const response = await fetch("/api/onboarding/dismiss", {
-        method: "POST",
-      })
+    if (!user) return
 
-      if (response.ok) {
-        setDismissed(true)
-      }
+    try {
+      await dismissOnboardingService(user.uid)
+      const updatedProgress = await getOnboardingProgress(user.uid)
+      setProgress(updatedProgress)
     } catch (error) {
-      console.error("Error dismissing onboarding:", error)
+      console.error("[v0] Error dismissing onboarding:", error)
     }
   }
 
-  const refreshOnboarding = async () => {
-    await fetchOnboarding()
-  }
+  const getCurrentTask = () => {
+    if (!progress || progress.isDismissed || progress.isComplete) {
+      return null
+    }
 
-  const shouldShowIndicator = (route: string) => {
-    if (dismissed || allTasksCompleted || isLoading) return false
-    const currentTask = tasks[currentTaskIndex]
-    return currentTask?.route === route && !currentTask?.completed
+    const currentTask = progress.tasks[progress.currentTaskIndex]
+    if (!currentTask) return null
+
+    return {
+      id: currentTask.id,
+      route: currentTask.route,
+      targetElement: currentTask.targetElement,
+    }
   }
 
   return (
     <OnboardingContext.Provider
       value={{
-        tasks,
-        currentTaskIndex,
-        allTasksCompleted,
-        dismissed,
-        isLoading,
+        progress,
+        loading,
         completeTask,
         dismissOnboarding,
-        refreshOnboarding,
-        shouldShowIndicator,
+        getCurrentTask,
       }}
     >
       {children}

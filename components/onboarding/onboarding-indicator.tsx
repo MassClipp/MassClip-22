@@ -1,29 +1,28 @@
 "use client"
 
+import type React from "react"
+
 import { motion } from "framer-motion"
-import { cn } from "@/lib/utils"
 
 interface OnboardingIndicatorProps {
-  active: boolean
-  className?: string
+  children: React.ReactNode
+  isActive: boolean
 }
 
-export function OnboardingIndicator({ active, className }: OnboardingIndicatorProps) {
-  if (!active) return null
+export function OnboardingIndicator({ children, isActive }: OnboardingIndicatorProps) {
+  if (!isActive) {
+    return <>{children}</>
+  }
 
   return (
-    <motion.div
-      className={cn("absolute inset-0 pointer-events-none rounded-lg", className)}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-    >
+    <div className="relative">
       {/* Animated multi-color ring */}
       <motion.div
         className="absolute inset-0 rounded-lg"
         style={{
-          background: "conic-gradient(from 0deg, #ff0080, #7928ca, #0070f3, #00dfd8, #ff0080)",
-          padding: "3px",
+          background: "conic-gradient(from 0deg, #ff0080, #7928ca, #ff0080)",
+          padding: "2px",
+          zIndex: -1,
         }}
         animate={{
           rotate: 360,
@@ -41,11 +40,12 @@ export function OnboardingIndicator({ active, className }: OnboardingIndicatorPr
       <motion.div
         className="absolute inset-0 rounded-lg blur-md"
         style={{
-          background: "conic-gradient(from 0deg, #ff0080, #7928ca, #0070f3, #00dfd8, #ff0080)",
+          background: "radial-gradient(circle, rgba(255,0,128,0.4), rgba(121,40,202,0.4))",
+          zIndex: -2,
         }}
         animate={{
-          opacity: [0.3, 0.6, 0.3],
-          scale: [1, 1.05, 1],
+          scale: [1, 1.1, 1],
+          opacity: [0.5, 0.8, 0.5],
         }}
         transition={{
           duration: 2,
@@ -53,6 +53,8 @@ export function OnboardingIndicator({ active, className }: OnboardingIndicatorPr
           ease: "easeInOut",
         }}
       />
-    </motion.div>
+
+      {children}
+    </div>
   )
 }

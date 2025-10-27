@@ -1,28 +1,23 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { getAuth } from "firebase-admin/auth"
-import { getOnboardingProgress, initializeOnboarding } from "@/lib/onboarding-service"
+import { NextResponse } from "next/server"
+import { auth } from "@/lib/firebase-admin"
+import { getOnboardingProgress } from "@/lib/onboarding-service"
 
-export async function GET(request: NextRequest) {
+export async function GET(request: Request) {
   try {
     const authHeader = request.headers.get("authorization")
-    if (!authHeader?.startsWith("Bearer ")) {
+    if (!authHeader) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const token = authHeader.split("Bearer ")[1]
-    const decodedToken = await getAuth().verifyIdToken(token)
+    const decodedToken = await auth.verifyIdToken(token)
     const userId = decodedToken.uid
 
-    let progress = await getOnboardingProgress(userId)
+    const progress = await getOnboardingProgress(userId)
 
-    // Initialize onboarding if it doesn't exist
-    if (!progress) {
-      progress = await initializeOnboarding(userId)
-    }
-
-    return NextResponse.json(progress)
+    return NextResponse.json({ progress })
   } catch (error) {
-    console.error("Error fetching onboarding:", error)
+    console.error("[v0] Error getting onboarding progress:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

@@ -1,163 +1,124 @@
-import { adminDb } from "@/lib/firebase-admin"
-import { FieldValue } from "firebase-admin/firestore"
+import { db } from "./firebase"
+import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore"
 
 export interface OnboardingTask {
   id: string
   title: string
   description: string
   completed: boolean
-  route: string // Where to navigate when clicked
-  targetElement?: string // CSS selector or ID of element to highlight
+  route?: string
+  targetElement?: string
 }
 
 export interface OnboardingProgress {
-  uid: string
+  userId: string
   tasks: OnboardingTask[]
   currentTaskIndex: number
-  allTasksCompleted: boolean
-  dismissed: boolean
-  createdAt: any
-  updatedAt: any
-  completedAt?: any
+  isComplete: boolean
+  isDismissed: boolean
+  createdAt: Date
+  updatedAt: Date
 }
 
-const DEFAULT_ONBOARDING_TASKS: Omit<OnboardingTask, "completed">[] = [
+export const ONBOARDING_TASKS: Omit<OnboardingTask, "completed">[] = [
   {
-    id: "customize_storefront",
+    id: "customize-storefront",
     title: "Customize your storefront",
-    description: "Add your profile picture, bio, and social links",
-    route: "/dashboard/view-storefront",
-    targetElement: "#profile-section",
+    description: "Add your bio, profile picture, and social links",
+    route: "/dashboard/settings",
+    targetElement: "profile-settings",
   },
   {
-    id: "upload_content",
+    id: "upload-content",
     title: "Upload your first content",
-    description: "Upload videos to your content library",
+    description: "Upload videos, images, or audio files",
     route: "/dashboard/upload",
-    targetElement: "#upload-files-button",
+    targetElement: "upload-button",
   },
   {
-    id: "add_free_content",
+    id: "add-free-content",
     title: "Add free content",
-    description: "Make some content available for free to attract fans",
+    description: "Give your audience a taste of what you offer",
     route: "/dashboard/free-content",
-    targetElement: "#add-free-content-button",
+    targetElement: "add-free-content",
   },
   {
-    id: "connect_stripe",
-    title: "Connect Stripe for payouts",
-    description: "Set up your payment account to receive earnings",
+    id: "connect-stripe",
+    title: "Connect Stripe",
+    description: "Set up payments to receive earnings",
     route: "/dashboard/earnings",
-    targetElement: "#connect-stripe-button",
+    targetElement: "connect-stripe",
   },
   {
-    id: "create_bundle",
+    id: "create-bundle",
     title: "Create your first bundle",
-    description: "Package your content into a premium bundle",
+    description: "Package content together for your fans",
     route: "/dashboard/bundles",
-    targetElement: "#create-bundle-button",
+    targetElement: "create-bundle",
   },
   {
-    id: "go_live",
+    id: "go-live",
     title: "Go live on your storefront",
-    description: "Enable your storefront and start selling",
+    description: "Enable your store and start selling",
     route: "/dashboard/view-storefront",
-    targetElement: "#storefront-toggle",
+    targetElement: "storefront-toggle",
   },
 ]
 
-export async function getOnboardingProgress(uid: string): Promise<OnboardingProgress | null> {
-  try {
-    const docRef = adminDb.collection("onboarding").doc(uid)
-    const docSnap = await docRef.get()
+export async function initializeOnboarding(userId: string): Promise<OnboardingProgress> {
+  const onboardingRef = doc(db, "onboarding", userId)
 
-    if (docSnap.exists) {
-      return docSnap.data() as OnboardingProgress
-    }
+  const progress: OnboardingProgress = {
+    userId,
+    tasks: ONBOARDING_TASKS.map((task) => ({ ...task, completed: false })),
+    currentTaskIndex: 0,
+    isComplete: false,
+    isDismissed: false,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  }
 
+  await setDoc(onboardingRef, progress)
+  return progress
+}
+
+export async function getOnboardingProgress(userId: string): Promise<OnboardingProgress | null> {
+  const onboardingRef = doc(db, "onboarding", userId)
+  const snapshot = await getDoc(onboardingRef)
+
+  if (!snapshot.exists()) {
     return null
-  } catch (error) {
-    console.error("Error getting onboarding progress:", error)
-    return null
   }
+
+  return snapshot.data() as OnboardingProgress
 }
 
-export async function initializeOnboarding(uid: string): Promise<OnboardingProgress> {
-  try {
-    const existing = await getOnboardingProgress(uid)
-    if (existing) {
-      return existing
-    }
+export async function completeTask(userId: string, taskId: string): Promise<void> {
+  const onboardingRef = doc(db, "onboarding", userId)
+  const progress = await getOnboardingProgress(userId)
 
-    const onboardingData: OnboardingProgress = {
-      uid,
-      tasks: DEFAULT_ONBOARDING_TASKS.map((task) => ({ ...task, completed: false })),
-      currentTaskIndex: 0,
-      allTasksCompleted: false,
-      dismissed: false,
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    }
+  if (!progress) return
 
-    const docRef = adminDb.collection("onboarding").doc(uid)
-    await docRef.set(onboardingData)
+  const taskIndex = progress.tasks.findIndex((t) => t.id === taskId)
+  if (taskIndex === -1) return
 
-    console.log("✅ Initialized onboarding for user:", uid.substring(0, 8))
-    return onboardingData
-  } catch (error) {
-    console.error("Error initializing onboarding:", error)
-    throw error
-  }
+  progress.tasks[taskIndex].completed = true
+
+  // Move to next incomplete task
+  const nextIncompleteIndex = progress.tasks.findIndex((t) => !t.completed)
+  progress.currentTaskIndex = nextIncompleteIndex !== -1 ? nextIncompleteIndex : progress.tasks.length
+
+  // Check if all tasks are complete
+  progress.isComplete = progress.tasks.every((t) => t.completed)
+  progress.updatedAt = new Date()
+
+  await updateDoc(onboardingRef, progress as any)
 }
 
-export async function completeOnboardingTask(uid: string, taskId: string): Promise<OnboardingProgress> {
-  try {
-    const progress = await getOnboardingProgress(uid)
-    if (!progress) {
-      throw new Error("Onboarding progress not found")
-    }
-
-    const taskIndex = progress.tasks.findIndex((t) => t.id === taskId)
-    if (taskIndex === -1) {
-      throw new Error("Task not found")
-    }
-
-    // Mark task as completed
-    progress.tasks[taskIndex].completed = true
-
-    // Find next incomplete task
-    const nextIncompleteIndex = progress.tasks.findIndex((t) => !t.completed)
-    const allCompleted = nextIncompleteIndex === -1
-
-    const docRef = adminDb.collection("onboarding").doc(uid)
-    await docRef.update({
-      tasks: progress.tasks,
-      currentTaskIndex: allCompleted ? progress.tasks.length : nextIncompleteIndex,
-      allTasksCompleted: allCompleted,
-      updatedAt: FieldValue.serverTimestamp(),
-      ...(allCompleted && { completedAt: FieldValue.serverTimestamp() }),
-    })
-
-    console.log(`✅ Completed task ${taskId} for user:`, uid.substring(0, 8))
-
-    return (await getOnboardingProgress(uid))!
-  } catch (error) {
-    console.error("Error completing onboarding task:", error)
-    throw error
-  }
-}
-
-export async function dismissOnboarding(uid: string): Promise<void> {
-  try {
-    const docRef = adminDb.collection("onboarding").doc(uid)
-    await docRef.update({
-      dismissed: true,
-      updatedAt: FieldValue.serverTimestamp(),
-    })
-
-    console.log("✅ Dismissed onboarding for user:", uid.substring(0, 8))
-  } catch (error) {
-    console.error("Error dismissing onboarding:", error)
-    throw error
-  }
+export async function dismissOnboarding(userId: string): Promise<void> {
+  const onboardingRef = doc(db, "onboarding", userId)
+  await updateDoc(onboardingRef, {
+    isDismissed: true,
+    updatedAt: new Date(),
+  })
 }

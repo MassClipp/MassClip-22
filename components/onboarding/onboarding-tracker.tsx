@@ -1,78 +1,61 @@
 "use client"
 
 import { useState } from "react"
-import { X, Check, ChevronDown, ChevronUp } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
-import { cn } from "@/lib/utils"
+import { X, ChevronDown, ChevronUp, Check } from "lucide-react"
+import { useOnboarding } from "@/contexts/onboarding-context"
+import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
 
-interface OnboardingTask {
-  id: string
-  title: string
-  description: string
-  completed: boolean
-  route: string
-}
-
-interface OnboardingTrackerProps {
-  tasks: OnboardingTask[]
-  currentTaskIndex: number
-  allTasksCompleted: boolean
-  onDismiss: () => void
-}
-
-export function OnboardingTracker({ tasks, currentTaskIndex, allTasksCompleted, onDismiss }: OnboardingTrackerProps) {
+export function OnboardingTracker() {
+  const { progress, dismissOnboarding } = useOnboarding()
   const [isExpanded, setIsExpanded] = useState(true)
   const router = useRouter()
 
-  const completedCount = tasks.filter((t) => t.completed).length
+  if (!progress || progress.isDismissed) {
+    return null
+  }
+
+  const completedCount = progress.tasks.filter((t) => t.completed).length
+  const totalCount = progress.tasks.length
+  const progressPercentage = (completedCount / totalCount) * 100
+
+  const canDismiss = progress.isComplete
 
   return (
     <motion.div
       initial={{ opacity: 0, y: -20 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      className="fixed top-4 right-4 z-50 w-80 bg-background/95 backdrop-blur-lg border border-border rounded-lg shadow-2xl"
+      className="fixed top-4 right-4 w-80 bg-background/95 backdrop-blur-sm border border-border rounded-lg shadow-lg z-50"
     >
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-border">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center text-white text-sm font-bold">
-              {completedCount}
-            </div>
-            <div>
-              <h3 className="font-semibold text-sm">Getting Started</h3>
-              <p className="text-xs text-muted-foreground">
-                {completedCount} of {tasks.length} completed
-              </p>
-            </div>
-          </div>
+        <div className="flex items-center gap-2">
+          <h3 className="font-semibold text-sm">Getting Started</h3>
+          <span className="text-xs text-muted-foreground">
+            {completedCount}/{totalCount}
+          </span>
         </div>
         <div className="flex items-center gap-1">
-          <button
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="p-1 hover:bg-accent rounded transition-colors"
-            aria-label={isExpanded ? "Collapse" : "Expand"}
-          >
-            {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-          </button>
-          {allTasksCompleted && (
-            <button onClick={onDismiss} className="p-1 hover:bg-accent rounded transition-colors" aria-label="Dismiss">
-              <X className="w-4 h-4" />
-            </button>
+          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setIsExpanded(!isExpanded)}>
+            {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </Button>
+          {canDismiss && (
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={dismissOnboarding}>
+              <X className="h-4 w-4" />
+            </Button>
           )}
         </div>
       </div>
 
       {/* Progress bar */}
       <div className="px-4 pt-3 pb-2">
-        <div className="w-full h-2 bg-accent rounded-full overflow-hidden">
+        <div className="h-2 bg-muted rounded-full overflow-hidden">
           <motion.div
-            className="h-full bg-gradient-to-r from-purple-500 to-pink-500"
+            className="h-full bg-gradient-to-r from-pink-500 to-purple-600"
             initial={{ width: 0 }}
-            animate={{ width: `${(completedCount / tasks.length) * 100}%` }}
-            transition={{ duration: 0.5, ease: "easeOut" }}
+            animate={{ width: `${progressPercentage}%` }}
+            transition={{ duration: 0.5 }}
           />
         </div>
       </div>
@@ -81,65 +64,50 @@ export function OnboardingTracker({ tasks, currentTaskIndex, allTasksCompleted, 
       <AnimatePresence>
         {isExpanded && (
           <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            initial={{ height: 0 }}
+            animate={{ height: "auto" }}
+            exit={{ height: 0 }}
             className="overflow-hidden"
           >
             <div className="p-4 space-y-2 max-h-96 overflow-y-auto">
-              {tasks.map((task, index) => (
-                <button
+              {progress.tasks.map((task, index) => (
+                <motion.div
                   key={task.id}
-                  onClick={() => !task.completed && router.push(task.route)}
-                  disabled={task.completed}
-                  className={cn(
-                    "w-full text-left p-3 rounded-lg border transition-all",
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                  className={`flex items-start gap-3 p-3 rounded-lg border transition-colors cursor-pointer ${
                     task.completed
-                      ? "bg-accent/50 border-border cursor-default"
-                      : index === currentTaskIndex
-                        ? "bg-gradient-to-r from-purple-500/10 to-pink-500/10 border-purple-500/50 hover:border-purple-500 cursor-pointer"
-                        : "bg-background border-border hover:bg-accent cursor-pointer",
-                  )}
+                      ? "bg-muted/50 border-muted"
+                      : index === progress.currentTaskIndex
+                        ? "bg-gradient-to-r from-pink-500/10 to-purple-600/10 border-pink-500/50"
+                        : "bg-background border-border hover:bg-muted/30"
+                  }`}
+                  onClick={() => task.route && router.push(task.route)}
                 >
-                  <div className="flex items-start gap-3">
-                    <div
-                      className={cn(
-                        "w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5",
-                        task.completed
-                          ? "bg-green-500 border-green-500"
-                          : index === currentTaskIndex
-                            ? "border-purple-500"
-                            : "border-muted-foreground/30",
-                      )}
-                    >
-                      {task.completed && <Check className="w-3 h-3 text-white" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p
-                        className={cn(
-                          "text-sm font-medium",
-                          task.completed ? "text-muted-foreground line-through" : "text-foreground",
-                        )}
-                      >
-                        {task.title}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{task.description}</p>
-                    </div>
+                  <div
+                    className={`flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                      task.completed
+                        ? "bg-green-500 border-green-500"
+                        : index === progress.currentTaskIndex
+                          ? "border-pink-500"
+                          : "border-muted-foreground/30"
+                    }`}
+                  >
+                    {task.completed && <Check className="h-3 w-3 text-white" />}
                   </div>
-                </button>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-medium ${task.completed ? "line-through text-muted-foreground" : ""}`}>
+                      {task.title}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{task.description}</p>
+                  </div>
+                </motion.div>
               ))}
             </div>
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* Completion message */}
-      {allTasksCompleted && (
-        <div className="p-4 border-t border-border bg-gradient-to-r from-purple-500/10 to-pink-500/10">
-          <p className="text-sm font-medium text-center">🎉 All set! You're ready to start selling.</p>
-        </div>
-      )}
     </motion.div>
   )
 }
