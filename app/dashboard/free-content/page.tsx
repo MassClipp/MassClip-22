@@ -303,9 +303,9 @@ export default function FreeContentPage() {
     return upload.folderId === selectedFolderId || upload.folder === selectedFolderId
   })
 
-  const addFreeContentObjective = objectives.find(
-    (obj) => obj.id === "add_free_content" && obj.status === "in_progress",
-  )
+  const addFreeContentObjective = objectives
+    ? objectives.find((obj) => obj.id === "add_free_content" && obj.status === "in_progress")
+    : null
 
   return (
     <div className="space-y-6">
