@@ -1,10 +1,16 @@
 "use client"
 
+import { useEffect, useRef } from "react"
+
 interface LandingVideoCarouselProps {
   videos?: string[]
 }
 
 export function LandingVideoCarousel({ videos }: LandingVideoCarouselProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const scrollPositionRef = useRef(0)
+  const animationFrameRef = useRef<number>()
+
   const defaultVideos = [
     "https://pub-93cabcf58da344dea3d33ba1e4be2ef2.r2.dev/creators/stack/1761523559750-David_Goggins-3.mov",
     "https://pub-93cabcf58da344dea3d33ba1e4be2ef2.r2.dev/creators/stack/1761516695694-meme_template_.mp4",
@@ -28,14 +34,43 @@ export function LandingVideoCarousel({ videos }: LandingVideoCarouselProps) {
   const videoList = videos || defaultVideos
   const duplicatedVideos = [...videoList, ...videoList]
 
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    const videoCardWidth = 216
+    const totalVideos = videoList.length
+    const oneSetWidth = videoCardWidth * totalVideos
+
+    const scrollSpeed = 1.5
+
+    const animate = () => {
+      scrollPositionRef.current += scrollSpeed
+
+      if (scrollPositionRef.current >= oneSetWidth) {
+        scrollPositionRef.current = 0
+      }
+
+      container.style.transform = `translateX(-${scrollPositionRef.current}px)`
+      animationFrameRef.current = requestAnimationFrame(animate)
+    }
+
+    animationFrameRef.current = requestAnimationFrame(animate)
+
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current)
+      }
+    }
+  }, [videoList.length])
+
   return (
     <div className="w-full overflow-hidden py-12 relative">
       {/* Gradient overlays for fade effect */}
       <div className="absolute left-0 top-0 bottom-0 w-32 bg-gradient-to-r from-black to-transparent z-10" />
       <div className="absolute right-0 top-0 bottom-0 w-32 bg-gradient-to-l from-black to-transparent z-10" />
 
-      {/* Scrolling container */}
-      <div className="flex gap-4 animate-scroll-continuous">
+      <div ref={containerRef} className="flex gap-4 will-change-transform">
         {duplicatedVideos.map((videoUrl, index) => (
           <div
             key={index}
@@ -45,24 +80,6 @@ export function LandingVideoCarousel({ videos }: LandingVideoCarouselProps) {
           </div>
         ))}
       </div>
-
-      <style jsx>{`
-        @keyframes scroll-continuous {
-          0% {
-            transform: translateX(0);
-          }
-          100% {
-            /* Move exactly 50% (one full set of 17 videos) for seamless loop */
-            transform: translateX(-50%);
-          }
-        }
-
-        .animate-scroll-continuous {
-          /* 50s for smooth continuous scroll through all 17 videos */
-          animation: scroll-continuous 50s linear infinite;
-          will-change: transform;
-        }
-      `}</style>
     </div>
   )
 }
