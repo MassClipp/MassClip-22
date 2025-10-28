@@ -334,8 +334,8 @@ export default function ViewStorefrontPage() {
       <div className="fixed inset-0 bg-gradient-to-t from-zinc-900/20 via-transparent to-zinc-800/10 pointer-events-none" />
 
       <div className="relative max-w-6xl mx-auto px-4 sm:px-8 py-8 sm:py-16">
-        <div className="absolute top-4 right-4 sm:top-8 sm:right-8 z-10">
-          <div className="flex items-center gap-3 bg-zinc-900/80 backdrop-blur-sm border border-zinc-800 rounded-lg px-4 py-2">
+        <div className="absolute top-8 right-4 sm:top-12 sm:right-8 z-10">
+          <div className="flex items-center gap-3 bg-zinc-900/80 backdrop-blur-sm border border-zinc-800 rounded-lg px-4 py-2 mb-8">
             <div className="flex flex-col items-end">
               <span className="text-xs font-medium text-white">Go Live</span>
               {!isProUser && <span className="text-[10px] text-zinc-500">Pro required</span>}
@@ -617,7 +617,7 @@ export default function ViewStorefrontPage() {
                 className={
                   activeTab === "premium"
                     ? "w-full max-w-sm aspect-[3/4] rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer flex flex-col items-center justify-center gap-3 group"
-                    : "aspect-[9/16] rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer flex flex-col items-center justify-center gap-3 group"
+                    : "w-full aspect-[9/16] rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer flex flex-col items-center justify-center gap-3 group"
                 }
                 onClick={() => router.push(activeTab === "free" ? "/dashboard/free-content" : "/dashboard/bundles")}
               >

@@ -164,6 +164,40 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
       notFound()
     }
 
+    const storefrontActive = userData.storefrontActive ?? true // Default to true for backwards compatibility
+
+    if (!storefrontActive) {
+      console.log(`[Page] Storefront is offline for username: ${username}`)
+      return (
+        <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
+          <div className="text-center max-w-md">
+            <div className="mb-6">
+              <div className="w-24 h-24 mx-auto bg-gray-800 rounded-full flex items-center justify-center">
+                <svg className="w-12 h-12 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
+                  />
+                </svg>
+              </div>
+            </div>
+            <h1 className="text-2xl font-bold mb-2">Storefront Offline</h1>
+            <p className="text-gray-400 mb-6">
+              This creator's storefront is currently not available. Please check back later.
+            </p>
+            <a
+              href="/"
+              className="inline-block px-6 py-3 bg-white text-black rounded-lg font-medium hover:bg-gray-200 transition-colors"
+            >
+              Back to Home
+            </a>
+          </div>
+        </div>
+      )
+    }
+
     // If we found the user in creators collection but not users, try to get fresh data from users
     if (uid && !userData.email) {
       console.log(`[Page] Attempting to get fresh user data from users collection for UID: ${uid}`)
