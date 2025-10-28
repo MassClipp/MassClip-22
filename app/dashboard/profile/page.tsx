@@ -361,67 +361,15 @@ export default function ProfilePage() {
     }
 
     const croppedImageBlob = await new Promise<Blob | null>((resolve) => {
-      canvas.toBlob(resolve, "image/jpeg", 0.95)
+      canvas.toBlob(resolve)
     })
 
     if (croppedImageBlob) {
-      await uploadProfilePicture(croppedImageBlob)
+      setProfilePicPreview(URL.createObjectURL(croppedImageBlob))
+      setNewProfilePic(croppedImageBlob)
     }
 
     setShowCropModal(false)
-    setImageToCrop(null)
-  }
-
-  const uploadProfilePicture = async (blob: Blob) => {
-    if (!user) return
-
-    try {
-      setSaving(true)
-      console.log("[v0] Uploading profile picture...")
-
-      const formData = new FormData()
-      formData.append("file", blob, "profile-pic.jpg")
-
-      const token = await user.getIdToken()
-      const response = await fetch("/api/upload-profile-pic", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: formData,
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to upload profile picture")
-      }
-
-      const data = await response.json()
-      console.log("[v0] Profile picture uploaded successfully:", data.profilePicUrl)
-
-      // Update local state with the new profile picture URL
-      setProfileData((prev) => ({
-        ...prev,
-        profilePic: data.profilePicUrl,
-      }))
-      setProfilePicPreview(data.profilePicUrl)
-
-      toast({
-        title: "Success",
-        description: "Profile picture updated successfully!",
-      })
-
-      // Refresh profile data from database
-      await fetchProfile()
-    } catch (error) {
-      console.error("[v0] Error uploading profile picture:", error)
-      toast({
-        title: "Error",
-        description: "Failed to upload profile picture. Please try again.",
-        variant: "destructive",
-      })
-    } finally {
-      setSaving(false)
-    }
   }
 
   if (loading) {
