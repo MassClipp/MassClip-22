@@ -266,7 +266,7 @@ export default function ViewStorefrontPage() {
         )}
 
         {user && (
-          <div className="absolute top-8 right-8">
+          <div className="absolute top-4 right-4 z-50">
             <StorefrontLiveToggle
               userId={user.uid}
               isLive={isStorefrontLive}

@@ -119,6 +119,9 @@ export default function BundlesPage() {
   const tierName = freeTierLimits?.tier || "starter"
 
   useEffect(() => {
+    console.log("[v0] ===== BUNDLES PAGE DEBUG =====")
+    console.log("[v0] Current objective:", currentObjective)
+    console.log("[v0] Should show banner:", currentObjective?.id === "create_bundle" && !currentObjective?.completed)
     console.log("[v0] ===== BUNDLE LIMITS DEBUG =====")
     console.log("[v0] User plan data:", {
       planData,
@@ -144,6 +147,7 @@ export default function BundlesPage() {
     videosPerBundleLimit,
     tierName,
     productBoxes.length,
+    currentObjective,
   ])
 
   const isAtBundleLimit = !isProUser && productBoxes.length >= bundleLimit

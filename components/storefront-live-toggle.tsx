@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Switch } from "@/components/ui/switch"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
@@ -21,8 +21,11 @@ export function StorefrontLiveToggle({ userId, isLive, isProUser, onTrialOrSubsc
   const router = useRouter()
   const { toast } = useToast()
 
+  useEffect(() => {
+    setLiveStatus(isLive)
+  }, [isLive])
+
   const handleToggle = async (checked: boolean) => {
-    // Check if user has access
     if (!isProUser && !onTrialOrSubscription) {
       toast({
         title: "Upgrade Required",
@@ -35,6 +38,8 @@ export function StorefrontLiveToggle({ userId, isLive, isProUser, onTrialOrSubsc
 
     try {
       setIsToggling(true)
+
+      console.log("[v0] Toggling storefront status to:", checked)
 
       // Update Firestore
       const userDocRef = doc(db, "users", userId)
@@ -51,6 +56,8 @@ export function StorefrontLiveToggle({ userId, isLive, isProUser, onTrialOrSubsc
           ? "Your storefront is now visible to the public"
           : "Your storefront is now hidden from the public",
       })
+
+      console.log("[v0] Storefront status updated successfully")
     } catch (error) {
       console.error("[v0] Error toggling storefront status:", error)
       toast({
@@ -58,16 +65,17 @@ export function StorefrontLiveToggle({ userId, isLive, isProUser, onTrialOrSubsc
         description: "Failed to update storefront status",
         variant: "destructive",
       })
+      setLiveStatus(!checked)
     } finally {
       setIsToggling(false)
     }
   }
 
   return (
-    <div className="flex items-center gap-3 bg-zinc-900/50 border border-zinc-800 rounded-lg px-4 py-2">
+    <div className="flex items-center gap-3 bg-zinc-900/90 backdrop-blur-sm border border-zinc-700 rounded-lg px-4 py-2.5 shadow-lg">
       <div className="flex flex-col">
-        <span className="text-sm font-medium text-white">Storefront Status</span>
-        <span className="text-xs text-zinc-400">{liveStatus ? "Live" : "Offline"}</span>
+        <span className="text-sm font-medium text-white">Go Live</span>
+        <span className="text-xs text-zinc-400">{liveStatus ? "Storefront is live" : "Storefront offline"}</span>
       </div>
       <div className="flex items-center gap-2">
         {isToggling && <Loader2 className="w-4 h-4 text-zinc-400 animate-spin" />}
