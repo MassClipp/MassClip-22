@@ -34,6 +34,8 @@ import { useRouter } from "next/navigation"
 import { doc, updateDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import BundleCard from "@/components/bundle-card"
+import { useOnboarding } from "@/hooks/use-onboarding"
+import { OnboardingIndicator } from "@/components/onboarding-indicator"
 
 interface ContentItem {
   id: string
@@ -56,6 +58,7 @@ export default function ViewStorefrontPage() {
   const { isProUser, planData, loading: planLoading } = useUserPlan()
   const { toast } = useToast()
   const router = useRouter()
+  const { completeStep } = useOnboarding()
   const [loading, setLoading] = useState(true)
   const [username, setUsername] = useState<string | null>(null)
   const [displayName, setDisplayName] = useState("")
@@ -298,11 +301,37 @@ export default function ViewStorefrontPage() {
     }
   }
 
-  const handleGoLiveClick = () => {
-    if (trialEligible) {
-      router.push("/welcome/free-trial")
-    } else {
-      router.push("/dashboard/upgrade")
+  const handleGoLiveClick = async () => {
+    try {
+      if (!user) return
+
+      const idToken = await user.getIdToken()
+      const response = await fetch("/api/stripe/checkout/pricing", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          idToken,
+          plan: "creator_vip",
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to create checkout session")
+      }
+
+      const data = await response.json()
+      if (data.url) {
+        window.location.href = data.url
+      }
+    } catch (error) {
+      console.error("[v0] Error creating checkout session:", error)
+      toast({
+        title: "Error",
+        description: "Failed to start checkout. Please try again.",
+        variant: "destructive",
+      })
     }
   }
 
@@ -350,6 +379,7 @@ export default function ViewStorefrontPage() {
 
   return (
     <div className="min-h-screen bg-black fixed inset-0 overflow-y-auto">
+      <OnboardingIndicator />
       <div className="fixed inset-0 bg-gradient-to-br from-zinc-900/40 via-black to-zinc-800/30 pointer-events-none" />
       <div className="fixed inset-0 bg-gradient-to-t from-zinc-900/20 via-transparent to-zinc-800/10 pointer-events-none" />
 

@@ -1,0 +1,147 @@
+import { type NextRequest, NextResponse } from "next/server"
+import { verifyIdToken, adminDb } from "@/lib/firebase-admin"
+
+export interface OnboardingStep {
+  id: string
+  title: string
+  description: string
+  completed: boolean
+  completedAt?: Date
+}
+
+export interface OnboardingProgress {
+  steps: OnboardingStep[]
+  currentStep: string
+  completedSteps: string[]
+  isComplete: boolean
+}
+
+const DEFAULT_STEPS: Omit<OnboardingStep, "completed" | "completedAt">[] = [
+  {
+    id: "setup_storefront",
+    title: "Set up Storefront",
+    description: "Customize your profile with a username and bio",
+  },
+  {
+    id: "upload_content",
+    title: "Upload First Content",
+    description: "Upload your first video or content piece",
+  },
+  {
+    id: "add_free_content",
+    title: "Add Free Content",
+    description: "Make at least one piece of content free for your audience",
+  },
+  {
+    id: "setup_stripe",
+    title: "Set up Stripe Payments",
+    description: "Connect your Stripe account to receive payments",
+  },
+  {
+    id: "create_bundle",
+    title: "Make a Bundle",
+    description: "Create your first premium content bundle",
+  },
+  {
+    id: "go_live",
+    title: "Go Live",
+    description: "Activate your storefront and start earning",
+  },
+]
+
+export async function GET(req: NextRequest) {
+  try {
+    const authHeader = req.headers.get("Authorization")
+    if (!authHeader?.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const idToken = authHeader.split("Bearer ")[1]
+    const decodedToken = await verifyIdToken(idToken)
+    const userId = decodedToken.uid
+
+    const onboardingDoc = await adminDb.collection("onboarding").doc(userId).get()
+
+    if (!onboardingDoc.exists) {
+      // Initialize onboarding for new user
+      const initialProgress: OnboardingProgress = {
+        steps: DEFAULT_STEPS.map((step) => ({ ...step, completed: false })),
+        currentStep: DEFAULT_STEPS[0].id,
+        completedSteps: [],
+        isComplete: false,
+      }
+
+      await adminDb
+        .collection("onboarding")
+        .doc(userId)
+        .set({
+          ...initialProgress,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+
+      return NextResponse.json(initialProgress)
+    }
+
+    const data = onboardingDoc.data() as OnboardingProgress
+    return NextResponse.json(data)
+  } catch (error) {
+    console.error("[Onboarding Progress] Error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const authHeader = req.headers.get("Authorization")
+    if (!authHeader?.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const idToken = authHeader.split("Bearer ")[1]
+    const decodedToken = await verifyIdToken(idToken)
+    const userId = decodedToken.uid
+
+    const { stepId } = await req.json()
+
+    if (!stepId) {
+      return NextResponse.json({ error: "Step ID required" }, { status: 400 })
+    }
+
+    const onboardingRef = adminDb.collection("onboarding").doc(userId)
+    const onboardingDoc = await onboardingRef.get()
+
+    if (!onboardingDoc.exists) {
+      return NextResponse.json({ error: "Onboarding not initialized" }, { status: 404 })
+    }
+
+    const data = onboardingDoc.data() as OnboardingProgress
+
+    // Update the step as completed
+    const updatedSteps = data.steps.map((step) =>
+      step.id === stepId ? { ...step, completed: true, completedAt: new Date() } : step,
+    )
+
+    const completedSteps = [...new Set([...data.completedSteps, stepId])]
+    const currentStepIndex = DEFAULT_STEPS.findIndex((s) => s.id === stepId)
+    const nextStep = DEFAULT_STEPS[currentStepIndex + 1]
+    const isComplete = completedSteps.length === DEFAULT_STEPS.length
+
+    const updatedProgress: OnboardingProgress = {
+      steps: updatedSteps,
+      currentStep: nextStep ? nextStep.id : data.currentStep,
+      completedSteps,
+      isComplete,
+    }
+
+    await onboardingRef.update({
+      ...updatedProgress,
+      updatedAt: new Date(),
+    })
+
+    return NextResponse.json(updatedProgress)
+  } catch (error) {
+    console.error("[Onboarding Progress] Error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  }
+}
