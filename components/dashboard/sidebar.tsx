@@ -1,5 +1,4 @@
 "use client"
-import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
   LayoutDashboard,
@@ -16,8 +15,11 @@ import {
   Grid3X3,
   FolderOpen,
   Tags,
+  Store,
+  Heart,
 } from "lucide-react"
-import { NavDropdown } from "./nav-dropdown"
+import { SidebarNavItem } from "./sidebar-nav-item"
+import Logo from "@/components/logo"
 
 const navItems = [
   {
@@ -96,7 +98,27 @@ const navItems = [
         href: "/dashboard/bundles",
         icon: Package,
       },
+      {
+        title: "View Storefront",
+        href: "/dashboard/view-storefront",
+        icon: Store,
+      },
     ],
+  },
+  {
+    title: "Favorites",
+    href: "/dashboard/favorites",
+    icon: Heart,
+  },
+  {
+    title: "Upgrade",
+    href: "/dashboard/upgrade",
+    icon: Crown,
+  },
+  {
+    title: "My Purchases",
+    href: "/dashboard/purchases",
+    icon: CreditCard,
   },
   {
     title: "Settings",
@@ -117,11 +139,6 @@ const navItems = [
         href: "/dashboard/password",
         icon: Lock,
       },
-      {
-        title: "Upgrade",
-        href: "/dashboard/upgrade",
-        icon: Crown,
-      },
     ],
   },
 ]
@@ -132,15 +149,13 @@ export function DashboardSidebar() {
   return (
     <div className="flex h-full w-64 flex-col bg-zinc-900 border-r border-zinc-800">
       <div className="flex h-14 items-center border-b border-zinc-800 px-4">
-        <Link className="flex items-center gap-2 font-semibold" href="/dashboard">
-          <span className="text-xl">MassClip</span>
-        </Link>
+        <Logo href="/dashboard" size="sm" />
       </div>
       <div className="flex-1 overflow-auto py-2">
         <nav className="grid items-start px-2 text-sm font-medium">
           <div className="space-y-1">
             {navItems.map((item, index) => (
-              <NavDropdown key={index} item={item} />
+              <SidebarNavItem key={index} item={item} />
             ))}
           </div>
         </nav>

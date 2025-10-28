@@ -31,10 +31,23 @@ export default function LoginPage() {
 
   if (user) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <Loader2 className="h-12 w-12 animate-spin mx-auto text-red-600" />
-          <p className="text-gray-600 text-lg">Redirecting to your dashboard...</p>
+      <div className="min-h-screen bg-black flex items-center justify-center relative overflow-hidden">
+        {/* Background gradients matching platform theme */}
+        <div className="absolute inset-0 bg-gradient-to-tl from-white/3 via-white/1 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-br from-transparent via-white/1 to-white/2" />
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl" />
+        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-teal-500/5 rounded-full blur-3xl" />
+
+        <div className="text-center space-y-6 relative z-10">
+          {/* Animated spinner with teal gradient */}
+          <div className="relative">
+            <div className="absolute inset-0 bg-gradient-to-r from-cyan-400 to-teal-400 rounded-full blur-xl opacity-20 animate-pulse" />
+            <Loader2 className="h-12 w-12 animate-spin text-cyan-400 mx-auto relative z-10" />
+          </div>
+
+          <p className="text-lg bg-gradient-to-br from-slate-300 via-cyan-200 to-white bg-clip-text text-transparent font-medium">
+            Redirecting to your dashboard...
+          </p>
         </div>
       </div>
     )

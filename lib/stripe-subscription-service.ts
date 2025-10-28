@@ -11,7 +11,7 @@ export interface StripeSubscriptionStatus {
   status: string
   currentPeriodEnd: Date | null
   cancelAtPeriodEnd: boolean
-  plan: "free" | "creator_pro"
+  plan: "free" | "creator_pro" | "starter"
 }
 
 export async function getStripeSubscriptionStatus(userId: string): Promise<StripeSubscriptionStatus> {
@@ -70,17 +70,20 @@ export async function getStripeSubscriptionStatus(userId: string): Promise<Strip
     const isCanceled =
       subscription.cancel_at_period_end || ["canceled", "incomplete_expired"].includes(subscription.status)
 
-    await adminDb
-      .collection("memberships")
-      .doc(userId)
-      .update({
-        isActive: isActive,
-        status: subscription.status,
-        plan: isActive ? "creator_pro" : "free",
-        cancelAtPeriodEnd: subscription.cancel_at_period_end,
-        currentPeriodEnd: currentPeriodEnd.toISOString(),
-        updatedAt: new Date().toISOString(),
-      })
+    const priceId = subscription.items.data[0]?.price.id
+    const starterPriceIds = [process.env.STARTER_PLAN_FIRST, process.env.STARTER_PLAN_REGULAR].filter(Boolean)
+
+    const isStarterPlan = priceId && starterPriceIds.includes(priceId)
+    const determinedPlan = isActive ? (isStarterPlan ? "starter" : "creator_pro") : "free"
+
+    await adminDb.collection("memberships").doc(userId).update({
+      isActive: isActive,
+      status: subscription.status,
+      plan: determinedPlan,
+      cancelAtPeriodEnd: subscription.cancel_at_period_end,
+      currentPeriodEnd: currentPeriodEnd.toISOString(),
+      updatedAt: new Date().toISOString(),
+    })
 
     if (!isActive) {
       await adminDb.collection("freeUsers").doc(userId).set({
@@ -99,7 +102,7 @@ export async function getStripeSubscriptionStatus(userId: string): Promise<Strip
       status: subscription.status,
       currentPeriodEnd,
       cancelAtPeriodEnd: subscription.cancel_at_period_end,
-      plan: isActive ? "creator_pro" : "free",
+      plan: determinedPlan,
     }
   } catch (error) {
     console.error("Error checking Stripe subscription status:", error)

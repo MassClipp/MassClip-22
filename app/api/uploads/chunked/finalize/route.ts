@@ -39,7 +39,7 @@ async function verifyAuthToken(request: NextRequest) {
   }
 }
 
-async function combineChunksInR2(bucketName: string, r2Key: string, totalChunks: number) {
+async function combineChunksInR2(bucketName: string, r2Key: string, totalChunks: number, mimeType: string) {
   console.log(`🔄 [Combine Chunks] Starting combination for ${totalChunks} chunks`)
 
   try {
@@ -79,16 +79,24 @@ async function combineChunksInR2(bucketName: string, r2Key: string, totalChunks:
     const combinedBuffer = Buffer.concat(chunkBuffers)
     console.log(`🔗 [Combine Chunks] Combined ${chunkBuffers.length} chunks into ${combinedBuffer.length} bytes`)
 
-    // Upload combined file
+    // Upload combined file with proper headers
     const putCommand = new PutObjectCommand({
       Bucket: bucketName,
       Key: r2Key,
       Body: combinedBuffer,
-      ContentType: "video/mp4", // Default to mp4, should be determined from original file type
+      ContentType: mimeType,
+      CacheControl: "public, max-age=31536000, immutable",
+      Metadata: {
+        "uploaded-via": "chunked-upload",
+        "original-mime-type": mimeType,
+      },
     })
 
     await s3Client.send(putCommand)
     console.log(`✅ [Combine Chunks] Uploaded combined file: ${r2Key}`)
+    console.log(`   Content-Type: ${mimeType}`)
+    console.log(`   Size: ${combinedBuffer.length} bytes`)
+    console.log(`   Cache-Control: public, max-age=31536000, immutable`)
 
     // Clean up chunk files
     for (let i = 0; i < totalChunks; i++) {
@@ -159,24 +167,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "R2 bucket not configured" }, { status: 500 })
     }
 
-    console.log(`🏁 [Finalize Upload] Starting finalization for ${uploadId}`)
-    console.log(`📦 [Finalize Upload] Combining ${completedChunks.length} chunks`)
+    console.log(`🏁 [Finalize] Starting finalization for ${uploadId}`)
 
     try {
       // Combine chunks into final file
-      await combineChunksInR2(bucketName, sessionData.r2Key, sessionData.totalChunks)
+      await combineChunksInR2(bucketName, sessionData.r2Key, sessionData.totalChunks, sessionData.fileType)
 
       // Create upload record in database
       const uploadData = {
         uid: user.uid,
         fileUrl: sessionData.publicUrl,
         filename: sessionData.originalFileName,
-        title: sessionData.originalFileName.split(".")[0], // Remove extension for title
+        title: sessionData.originalFileName.split(".")[0],
         type: getFileType(sessionData.fileType),
         size: sessionData.fileSize,
         mimeType: sessionData.fileType,
-        folderId: sessionData.folderId || null, // Include folder ID from session
-        folderPath: sessionData.folderPath || null, // Include folder path from session
+        folderId: sessionData.folderId || null,
+        folderPath: sessionData.folderPath || null,
         createdAt: new Date(),
         updatedAt: new Date(),
         uploadMethod: "chunked",
@@ -186,6 +193,7 @@ export async function POST(request: NextRequest) {
       }
 
       const uploadRef = await db.collection("uploads").add(uploadData)
+      console.log(`✅ [Finalize] Created upload record: ${uploadRef.id}`)
 
       // Update session status
       await db.collection("uploadSessions").doc(uploadId).update({
@@ -195,24 +203,18 @@ export async function POST(request: NextRequest) {
         updatedAt: new Date(),
       })
 
-      console.log(`✅ [Finalize Upload] Upload completed: ${uploadId}`)
-      console.log(`📄 [Finalize Upload] Created upload record: ${uploadRef.id}`)
-      if (sessionData.folderId && sessionData.folderId !== "main") {
-        console.log(`📂 [Finalize Upload] Assigned to folder: ${sessionData.folderId} (${sessionData.folderPath})`)
-      } else {
-        console.log(`📁 [Finalize Upload] Assigned to Main folder`)
-      }
+      console.log(`✅ [Finalize] Upload completed: ${uploadRef.id}`)
 
       return NextResponse.json({
         success: true,
         uploadId: uploadRef.id,
         fileUrl: sessionData.publicUrl,
+        fileType: uploadData.type,
         message: "Upload completed successfully",
       })
     } catch (combineError) {
-      console.error("❌ [Finalize Upload] Failed to combine chunks:", combineError)
+      console.error("❌ [Finalize] Failed to combine chunks:", combineError)
 
-      // Update session with error status
       await db
         .collection("uploadSessions")
         .doc(uploadId)
@@ -225,8 +227,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to combine uploaded chunks into final file" }, { status: 500 })
     }
   } catch (error) {
-    console.error("Error finalizing chunked upload:", error)
-
+    console.error("❌ [Finalize] Error:", error)
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unknown error occurred" },
       { status: 500 },

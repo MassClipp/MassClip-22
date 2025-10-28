@@ -21,6 +21,8 @@ import {
   User,
   Shield,
   ChevronDown,
+  Bot,
+  Store,
 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { useUserPlan } from "@/hooks/use-user-plan"
@@ -44,7 +46,8 @@ const navigationSections: NavSection[] = [
     title: "Main",
     items: [
       { title: "Dashboard", href: "/dashboard", icon: Home },
-      { title: "Explore", href: "/dashboard/explore", icon: Search },
+      { title: "Upload", href: "/dashboard/uploads", icon: Upload },
+      { title: "Vex AI Assistant", href: "/dashboard/vex", icon: Bot }, // Added Vex AI Assistant to main navigation
       { title: "Upgrade", href: "/dashboard/upgrade", icon: Crown },
     ],
   },
@@ -52,7 +55,7 @@ const navigationSections: NavSection[] = [
     title: "Content",
     items: [
       { title: "Free Content", href: "/dashboard/free-content", icon: Video },
-      { title: "Upload", href: "/dashboard/upload", icon: Upload },
+      { title: "Explore", href: "/dashboard/explore", icon: Search },
       { title: "Bundles", href: "/dashboard/bundles", icon: Package },
     ],
   },
@@ -65,7 +68,10 @@ const navigationSections: NavSection[] = [
   },
   {
     title: "Business",
-    items: [{ title: "Earnings", href: "/dashboard/earnings", icon: DollarSign }],
+    items: [
+      { title: "Earnings", href: "/dashboard/earnings", icon: DollarSign },
+      { title: "View Storefront", href: "/dashboard/view-storefront", icon: Store }, // Added View Storefront to Business section
+    ],
   },
   {
     title: "Settings",

@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { cert, getApps, initializeApp } from "firebase-admin/app"
 import { getAuth } from "firebase-admin/auth"
 import { getFirestore, Timestamp } from "firebase-admin/firestore"
-import { getMembership } from "@/lib/memberships-service"
+import { getUserTierInfo } from "@/lib/user-tier-service"
 
 // Initialize Firebase Admin with only the required fields to avoid missing env crashes
 if (!getApps().length) {
@@ -60,23 +60,31 @@ function getContentType(mimeType: string): ContentType {
 
 async function getTierInfoSafe(uid: string): Promise<{ maxVideosPerBundle: number | null; maxBundles: number | null }> {
   try {
-    const membership = await getMembership(uid)
+    console.log("[v0] ===== TIER INFO DEBUG =====")
+    console.log("[v0] Getting tier info for uid:", uid)
 
-    // Dead simple logic: If they have an active Creator Pro membership, unlimited everything
-    if (membership && membership.isActive && membership.plan === "creator_pro") {
-      console.log("🚀 [Bundle Limit] Creator Pro user - UNLIMITED EVERYTHING")
-      return {
-        maxVideosPerBundle: null, // Unlimited videos per bundle
-        maxBundles: null, // Unlimited bundles
-      }
+    // Use the proper tier service that handles free, starter, and creator_pro
+    const tierInfo = await getUserTierInfo(uid)
+
+    console.log("[v0] Tier info from service:", {
+      tier: tierInfo.tier,
+      maxVideosPerBundle: tierInfo.maxVideosPerBundle,
+      bundlesLimit: tierInfo.bundlesLimit,
+      isUnlimited: tierInfo.maxVideosPerBundle === null,
+    })
+    console.log("[v0] Full tierInfo object:", JSON.stringify(tierInfo, null, 2))
+    console.log("[v0] ==============================")
+
+    return {
+      maxVideosPerBundle: tierInfo.maxVideosPerBundle,
+      maxBundles: tierInfo.bundlesLimit,
     }
   } catch (e) {
-    console.error("❌ [Bundle Limit] Error checking membership:", e)
+    console.error("[v0] ❌ Error getting tier info:", e)
+    // Fallback to starter limits (not free limits)
+    console.log("[v0] 📝 Fallback to Starter tier limits - 15 videos per bundle, 5 bundles max")
+    return { maxVideosPerBundle: 15, maxBundles: 5 }
   }
-
-  // Everyone else gets free tier limits
-  console.log("📝 [Bundle Limit] Free user - 10 videos per bundle, 2 bundles max")
-  return { maxVideosPerBundle: 10, maxBundles: 2 }
 }
 
 async function buildDetailedItemsForIds(idsToAdd: string[]) {
@@ -286,22 +294,34 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     // Enforce tier limits
     const tier = await getTierInfoSafe(uid)
 
+    console.log("[v0] ===== BUNDLE CONTENT LIMIT DEBUG =====")
+    console.log("[v0] Bundle ID:", bundleId)
+    console.log("[v0] User ID:", uid)
+    console.log("[v0] Tier limits:", tier)
+
     const existingDetailed = Array.isArray(bundleData.detailedContentItems) ? bundleData.detailedContentItems : []
     const currentCount = existingDetailed.length
+
+    console.log("[v0] Current bundle content:", {
+      currentCount,
+      maxAllowed: tier.maxVideosPerBundle,
+      isUnlimited: tier.maxVideosPerBundle === null,
+    })
 
     // Simplified logic: null means unlimited, period
     let remaining: number
     if (tier.maxVideosPerBundle === null) {
       remaining = Number.POSITIVE_INFINITY // Creator Pro = unlimited
-      console.log("🚀 [Bundle Limit] Creator Pro user - NO LIMITS APPLIED")
+      console.log("[v0] 🚀 Creator Pro user - NO LIMITS APPLIED")
     } else {
       remaining = Math.max(0, tier.maxVideosPerBundle - currentCount)
-      console.log("📊 [Bundle Limit] Free user limits applied:", {
+      console.log("[v0] 📊 Tier limits applied:", {
         limit: tier.maxVideosPerBundle,
         current: currentCount,
         remaining: remaining,
       })
     }
+    console.log("[v0] ========================================")
 
     const existingIds = new Set(
       existingDetailed
@@ -463,15 +483,177 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       durationMs: Date.now() - startedAt,
       debug: {
         uid,
-        membershipFound: tier.maxVideosPerBundle !== 10, // If not 10, membership was found
+        membershipFound: tier.maxVideosPerBundle !== 15, // If not 15, membership was found
         isUnlimited: tier.maxVideosPerBundle === null,
         tierInfo: tier,
         validationErrors: validationErrors.length > 0 ? validationErrors : undefined, // Include validation errors in debug
       },
     })
   } catch (error: any) {
-    console.error("❌ [Add Content] Unhandled error:", error)
+    console.error("[v0] ❌ Unhandled error:", error)
     const message = typeof error?.message === "string" ? error.message : "Failed to add content to bundle"
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
+}
+
+export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+  const startedAt = Date.now()
+  try {
+    // Auth
+    const authHeader = request.headers.get("authorization") || ""
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null
+    if (!token) {
+      return NextResponse.json({ error: "Missing Authorization Bearer token" }, { status: 401 })
+    }
+
+    let decoded
+    try {
+      decoded = await getAuth().verifyIdToken(token)
+    } catch (e) {
+      console.error("❌ [Remove Content] verifyIdToken failed:", e)
+      return NextResponse.json({ error: "Invalid or expired auth token" }, { status: 401 })
+    }
+    const uid = decoded.uid
+
+    const bundleId = params.id
+    if (!bundleId) {
+      return NextResponse.json({ error: "Missing bundle id" }, { status: 400 })
+    }
+
+    let body: any
+    try {
+      body = await request.json()
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
+    }
+
+    const { contentIds } = body || {}
+    if (!Array.isArray(contentIds) || contentIds.length === 0) {
+      return NextResponse.json({ error: "contentIds must be a non-empty array" }, { status: 400 })
+    }
+
+    // Get bundle doc
+    const bundleRef = db.collection("bundles").doc(bundleId)
+    const bundleSnap = await bundleRef.get()
+    if (!bundleSnap.exists) {
+      return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
+    }
+    const bundleData = bundleSnap.data() || {}
+
+    // Verify ownership
+    if (bundleData.creatorId !== uid) {
+      return NextResponse.json({ error: "Unauthorized: You don't own this bundle" }, { status: 403 })
+    }
+
+    const existingDetailed = Array.isArray(bundleData.detailedContentItems) ? bundleData.detailedContentItems : []
+    const idsToRemove = new Set(contentIds.filter((id: any) => typeof id === "string" && id.length > 0))
+
+    console.log("🗑️ [Remove Content] Removing content:", {
+      bundleId,
+      idsToRemove: Array.from(idsToRemove),
+      existingCount: existingDetailed.length,
+    })
+
+    // Filter out the content to remove
+    const filteredDetailed = existingDetailed.filter((item: any) => {
+      const itemId = item.uploadId || item.id
+      return !idsToRemove.has(itemId)
+    })
+
+    const removedCount = existingDetailed.length - filteredDetailed.length
+
+    if (removedCount === 0) {
+      return NextResponse.json({
+        success: true,
+        removed: 0,
+        message: "No matching content found to remove",
+        finalCount: filteredDetailed.length,
+      })
+    }
+
+    // Recalculate metadata
+    const totalSize = filteredDetailed.reduce((s: number, it: any) => s + (Number(it.fileSize) || 0), 0)
+    const totalDuration = filteredDetailed.reduce((s: number, it: any) => s + (Number(it.duration) || 0), 0)
+    const totalItems = filteredDetailed.length
+
+    const finalContentMetadata = {
+      totalItems: totalItems || 0,
+      totalSize: totalSize || 0,
+      totalSizeFormatted: formatFileSize(totalSize || 0),
+      totalDuration: totalDuration || 0,
+      totalDurationFormatted: formatDuration(totalDuration || 0),
+      contentBreakdown: {
+        videos: filteredDetailed.filter((i: any) => i.contentType === "video").length || 0,
+        audio: filteredDetailed.filter((i: any) => i.contentType === "audio").length || 0,
+        images: filteredDetailed.filter((i: any) => i.contentType === "image").length || 0,
+        documents: filteredDetailed.filter((i: any) => i.contentType === "document").length || 0,
+      },
+      formats: Array.from(new Set(filteredDetailed.map((i: any) => i.format).filter(Boolean))),
+      qualities: Array.from(new Set(filteredDetailed.map((i: any) => i.quality).filter(Boolean))),
+      lastUpdated: new Date(),
+    }
+
+    const mergedIds = filteredDetailed.map((item: any) => item.uploadId || item.id).filter(Boolean)
+
+    const serializedDetailed = convertDatesToTimestamps(filteredDetailed)
+    const serializedMetadata = convertDatesToTimestamps(finalContentMetadata)
+
+    const updateData = {
+      contentItems: mergedIds,
+      detailedContentItems: serializedDetailed,
+      contentMetadata: serializedMetadata,
+      contentTitles: ensureStringArray(filteredDetailed, (i: any) => i.title, "Untitled"),
+      contentDescriptions: ensureStringArray(filteredDetailed, (i: any) => i.description, ""),
+      contentTags: Array.from(
+        new Set(
+          filteredDetailed
+            .flatMap((i: any) => (Array.isArray(i.tags) ? i.tags : []))
+            .filter((tag: any) => typeof tag === "string" && tag.length > 0),
+        ),
+      ),
+      contentUrls: ensureStringArray(filteredDetailed, (i: any) => i.fileUrl, ""),
+      contentThumbnails: ensureStringArray(filteredDetailed, (i: any) => i.thumbnailUrl, ""),
+      updatedAt: Timestamp.now(),
+      contentLastUpdated: Timestamp.now(),
+    }
+
+    const cleanedUpdateData = removeUndefinedValues(updateData)
+
+    console.log("📝 [Remove Content] Updating bundle:", {
+      removedCount,
+      finalCount: filteredDetailed.length,
+      totalItems: cleanedUpdateData.contentMetadata?.totalItems,
+    })
+
+    await bundleRef.update(cleanedUpdateData)
+
+    // Clean up productBoxContent entries
+    try {
+      const contentQuery = await db
+        .collection("productBoxContent")
+        .where("productBoxId", "==", bundleId)
+        .where("uploadId", "in", Array.from(idsToRemove).slice(0, 10)) // Firestore 'in' limit is 10
+        .get()
+
+      const batch = db.batch()
+      contentQuery.docs.forEach((doc) => batch.delete(doc.ref))
+      await batch.commit()
+
+      console.log("🗑️ [Remove Content] Cleaned up productBoxContent entries:", contentQuery.size)
+    } catch (e) {
+      console.warn("⚠️ [Remove Content] Failed to clean up productBoxContent:", e)
+      // Non-critical, continue
+    }
+
+    return NextResponse.json({
+      success: true,
+      removed: removedCount,
+      finalCount: filteredDetailed.length,
+      durationMs: Date.now() - startedAt,
+    })
+  } catch (error: any) {
+    console.error("❌ [Remove Content] Unhandled error:", error)
+    const message = typeof error?.message === "string" ? error.message : "Failed to remove content from bundle"
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

@@ -1,6 +1,6 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { Inter } from "next/font/google"
+import { Inter, League_Spartan } from "next/font/google"
 import { AuthProvider } from "@/contexts/auth-context"
 import { Toaster } from "@/components/ui/toaster"
 import Script from "next/script"
@@ -19,31 +19,39 @@ const inter = Inter({
   preload: true,
 })
 
+const leagueSpartan = League_Spartan({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-league-spartan",
+})
+
 export const metadata: Metadata = {
   title: {
-    default: "MassClip: Monetize Your Faceless Content",
-    template: "%s | MassClip - Faceless Creator Platform",
+    default: "MassClip - Passive Income From Your Faceless Content",
+    template: "%s | MassClip",
   },
   description:
-    "Monetize your faceless content effortlessly. Sell b-rolls, background videos, clips, images, and audio through a clean, minimal storefront profile. MassClip handles all file hosting so you can focus on creating. Just upload your content, publish it in full HD, and start earning — no file management required.",
+    "MassClip's Vex AI analyzes your content, organizes it intelligently, and helps you create sellable bundles in seconds. Upload videos, clips, templates, and resources—let Vex handle the organization, pricing, and packaging. The smartest way for creators to sell content tools and resources.",
   keywords: [
-    "faceless creators",
-    "anonymous content",
-    "digital products",
+    "AI content organization",
+    "MassClip",
+    "Vex AI",
+    "content creator tools",
+    "sell video clips",
+    "sell templates",
+    "AI-powered bundling",
     "content monetization",
-    "clip vault",
-    "faceless YouTube",
-    "anonymous creator platform",
-    "sell your faceless content",
-    "monetize faceless content",
-    "sell video content online",
-    "b-roll marketplace",
-    "digital product storefront",
-    "sell anonymous content",
-    "sell stock footage platform",
-    "faceless content selling platform",
-    "passive income for faceless creators",
-    "digital monetization platform",
+    "creator marketplace",
+    "viral clips",
+    "b-roll footage",
+    "clip templates",
+    "carousel templates",
+    "SFX marketplace",
+    "audio resources",
+    "short-form content tools",
+    "AI content assistant",
+    "smart content packaging",
+    "creator resources",
   ],
   authors: [{ name: "MassClip" }],
   creator: "MassClip",
@@ -64,23 +72,23 @@ export const metadata: Metadata = {
     locale: "en_US",
     url: "https://massclip.pro",
     siteName: "MassClip",
-    title: "MassClip: Monetize Your Faceless Content",
+    title: "MassClip - AI-Powered Content Organization & Sales Platform",
     description:
-      "Monetize your faceless content effortlessly. Sell b-rolls, background videos, clips, images, and audio through a clean, minimal storefront profile. MassClip handles all file hosting so you can focus on creating. Just upload your content, publish it in full HD, and start earning — no file management required.",
+      "MassClip's Vex AI analyzes your content, organizes it intelligently, and helps you create sellable bundles in seconds. Upload clips, templates, and resources—let Vex handle everything. The smartest way to sell content tools.",
     images: [
       {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "MassClip - Faceless Creator Platform",
+        alt: "MassClip - AI Content Organization Platform",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "MassClip: Monetize Your Faceless Content",
+    title: "MassClip - AI-Powered Content Organization & Sales Platform",
     description:
-      "Monetize your faceless content effortlessly. Sell b-rolls, background videos, clips, images, and audio through a clean, minimal storefront profile. MassClip handles all file hosting so you can focus on creating. Just upload your content, publish it in full HD, and start earning — no file management required.",
+      "MassClip's Vex AI analyzes your content, organizes it intelligently, and helps you create sellable bundles in seconds. The smartest way for creators to sell content tools and resources.",
     images: ["/og-image.png"],
     creator: "@massclip",
     site: "@massclip",
@@ -103,7 +111,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className="prevent-zoom">
+    <html lang="en" className={`prevent-zoom ${leagueSpartan.variable}`}>
       <head>
         <script
           type="application/ld+json"
@@ -112,7 +120,8 @@ export default function RootLayout({
               "@context": "https://schema.org",
               "@type": "Organization",
               name: "MassClip",
-              description: "The #1 platform for faceless creators to monetize anonymous content",
+              description:
+                "AI-powered content platform that helps creators organize, package, and sell content tools and resources with Vex AI assistant",
               url: "https://massclip.pro",
               logo: "https://massclip.pro/favicon.png",
               sameAs: ["https://twitter.com/massclip"],
@@ -123,14 +132,16 @@ export default function RootLayout({
               },
               foundingDate: "2024",
               knowsAbout: [
-                "Content Creation",
-                "Digital Marketing",
-                "Faceless Content",
-                "Video Production",
+                "AI Content Organization",
+                "Content Bundling",
+                "Creator Tools",
+                "Video Clips",
+                "Templates",
                 "Content Monetization",
+                "Short-form Content",
               ],
               areaServed: "Worldwide",
-              serviceType: "Digital Content Platform",
+              serviceType: "AI Content Organization Platform",
             }),
           }}
         />
@@ -143,7 +154,8 @@ export default function RootLayout({
               "@type": "WebSite",
               name: "MassClip",
               url: "https://massclip.pro",
-              description: "The #1 platform for faceless creators to monetize anonymous content",
+              description:
+                "AI-powered content platform that helps creators organize, package, and sell content tools and resources",
               potentialAction: {
                 "@type": "SearchAction",
                 target: "https://massclip.pro/search?q={search_term_string}",
@@ -162,6 +174,8 @@ export default function RootLayout({
               name: "MassClip",
               applicationCategory: "BusinessApplication",
               operatingSystem: "Web Browser",
+              description:
+                "AI content platform with Vex AI assistant for creators to organize and sell content tools and resources",
               offers: {
                 "@type": "Offer",
                 price: "0",
@@ -188,8 +202,8 @@ export default function RootLayout({
         {/* Load zoom prevention script before anything else */}
         <Script src="/zoom-prevention.js" strategy="beforeInteractive" id="zoom-prevention-script" />
 
-        {/* Simple TikTok detection script */}
         <script
+          type="text/javascript"
           dangerouslySetInnerHTML={{
             __html: `
             // Detect TikTok browser and add class to html element
@@ -203,6 +217,46 @@ export default function RootLayout({
                 console.error('Error in TikTok detection:', e);
               }
             })();
+            `,
+          }}
+        />
+
+        <script
+          type="text/javascript"
+          dangerouslySetInnerHTML={{
+            __html: `
+            !function(f,b,e,v,n,t,s)
+            {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+            n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+            if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+            n.queue=[];t=b.createElement(e);t.async=!0;
+            t.src=v;s=b.getElementsByTagName(e)[0];
+            s.parentNode.insertBefore(t,s)}(window, document,'script',
+            'https://connect.facebook.net/en_US/fbevents.js');
+            fbq('init', '1136266684699128');
+            fbq('track', 'PageView');
+            `,
+          }}
+        />
+        <noscript>
+          <img
+            height="1"
+            width="1"
+            style={{ display: "none" }}
+            src="https://www.facebook.com/tr?id=1136266684699128&ev=PageView&noscript=1"
+            alt=""
+          />
+        </noscript>
+
+        <script
+          type="text/javascript"
+          dangerouslySetInnerHTML={{
+            __html: `
+            (function(c,l,a,r,i,t,y){
+                c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+                t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+                y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+            })(window, document, "clarity", "script", "tr9t8yy9cv");
             `,
           }}
         />

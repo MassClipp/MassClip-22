@@ -35,10 +35,13 @@ export function CancelSubscriptionButton() {
 
     setIsLoading(true)
     try {
+      const token = await user.getIdToken()
+
       const response = await fetch("/api/cancel-subscription", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           userId: user.uid,
@@ -86,10 +89,10 @@ export function CancelSubscriptionButton() {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-red-500" />
-            Cancel Your Creator Pro Subscription
+            Cancel Your Creator VIP Subscription
           </DialogTitle>
           <DialogDescription className="text-zinc-400">
-            Are you sure you want to cancel your Creator Pro subscription?
+            Are you sure you want to cancel your Creator VIP subscription?
           </DialogDescription>
         </DialogHeader>
 
@@ -99,7 +102,7 @@ export function CancelSubscriptionButton() {
             <ul className="list-disc pl-5 space-y-1 text-sm text-zinc-300">
               <li>Your subscription will remain active until the end of your current billing period</li>
               <li>You'll automatically return to the Free plan after that date</li>
-              <li>You can resubscribe at any time to regain Creator Pro features</li>
+              <li>You can resubscribe at any time to regain Creator VIP features</li>
               <li>No refunds are provided for partial billing periods</li>
             </ul>
           </div>

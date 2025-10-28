@@ -18,6 +18,8 @@ export interface UploadProgress {
   percentage: number // percentage completed (0-100)
   status: "queued" | "uploading" | "completed" | "error" | "paused"
   error?: string
+  fileUrl?: string
+  firestoreDocId?: string // Add firestoreDocId to the UploadProgress interface
 }
 
 export interface ChunkedUploadSession {
@@ -33,6 +35,7 @@ export interface ChunkedUploadSession {
   startTime: number
   lastProgressTime: number
   uploadedBytes: number
+  firestoreDocId?: string // Add firestoreDocId to track the actual Firestore document ID
 }
 
 export class ChunkedUploadService {
@@ -101,11 +104,14 @@ export class ChunkedUploadService {
     console.log(`   Folder Path: ${folderPath}`)
     console.log(`   Has folder info: ${folderId ? "YES" : "NO"}`)
 
+    const fileType = file.type || "application/octet-stream"
+    console.log(`   File Type: ${fileType} (original: ${file.type || "empty"})`)
+
     const requestBody = {
       uploadId,
       fileName: file.name,
       fileSize: file.size,
-      fileType: file.type,
+      fileType: fileType,
       totalChunks: chunks.length,
       chunkSize: ChunkedUploadService.CHUNK_SIZE,
       folderId,
@@ -130,16 +136,17 @@ export class ChunkedUploadService {
         throw new Error(error.error || "Failed to initialize upload")
       }
 
-      const { publicUrl, r2Key } = await response.json()
+      const { publicUrl, r2Key, firestoreDocId } = await response.json()
       console.log(`✅ [v0] Chunked Upload Service - Initialized: ${uploadId}`)
       console.log(`   Public URL: ${publicUrl}`)
       console.log(`   R2 Key: ${r2Key}`)
+      console.log(`   Firestore Doc ID: ${firestoreDocId}`)
 
       const session: ChunkedUploadSession = {
         uploadId,
         fileName: file.name,
         fileSize: file.size,
-        fileType: file.type,
+        fileType: fileType, // Use the validated fileType
         totalChunks: chunks.length,
         chunkSize: ChunkedUploadService.CHUNK_SIZE,
         uploadedChunks: new Set(),
@@ -148,6 +155,7 @@ export class ChunkedUploadService {
         startTime: Date.now(),
         lastProgressTime: Date.now(),
         uploadedBytes: 0,
+        firestoreDocId,
       }
 
       this.sessions.set(uploadId, session)
@@ -285,6 +293,16 @@ export class ChunkedUploadService {
     try {
       const token = await this.getValidAuthToken()
 
+      console.log(`[v0] About to call finalize endpoint for ${uploadId}`)
+      console.log(`[v0] Has auth token: ${!!token}`)
+      console.log(`[v0] Session data:`, {
+        uploadId: session.uploadId,
+        fileName: session.fileName,
+        fileType: session.fileType,
+        completedChunks: session.uploadedChunks.size,
+        totalChunks: session.totalChunks,
+      })
+
       const response = await fetch("/api/uploads/chunked/finalize", {
         method: "POST",
         headers: {
@@ -297,21 +315,41 @@ export class ChunkedUploadService {
         }),
       })
 
+      console.log(`[v0] Finalize response status: ${response.status}`)
+      console.log(`[v0] Finalize response ok: ${response.ok}`)
+
       if (!response.ok) {
-        const error = await response.json()
+        const errorText = await response.text()
+        console.error("[v0] Finalize error response:", errorText)
+        let error
+        try {
+          error = JSON.parse(errorText)
+        } catch {
+          error = { error: errorText }
+        }
         console.error("❌ [Chunked Upload] Finalization failed:", error)
         throw new Error(error.error || "Failed to finalize upload")
       }
 
+      const result = await response.json()
+      console.log(`[v0] Finalize success result:`, result)
+      session.firestoreDocId = result.uploadId
       console.log(`✅ [Chunked Upload] Upload completed: ${uploadId}`)
-      this.updateProgress(uploadId, "completed")
+      this.updateProgress(uploadId, "completed", undefined, result.fileUrl, result.uploadId)
     } catch (error) {
       console.error("❌ [Chunked Upload] Upload finalization failed:", error)
+      console.error("[v0] Full error details:", error)
       this.updateProgress(uploadId, "error", error instanceof Error ? error.message : "Finalization failed")
     }
   }
 
-  private updateProgress(uploadId: string, status: UploadProgress["status"], error?: string) {
+  private updateProgress(
+    uploadId: string,
+    status: UploadProgress["status"],
+    error?: string,
+    fileUrl?: string,
+    firestoreDocId?: string,
+  ) {
     const session = this.sessions.get(uploadId)
     const callback = this.progressCallbacks.get(uploadId)
 
@@ -341,6 +379,8 @@ export class ChunkedUploadService {
       percentage,
       status,
       error,
+      fileUrl,
+      firestoreDocId: session.firestoreDocId,
     }
 
     session.lastProgressTime = now
@@ -384,6 +424,7 @@ export class ChunkedUploadService {
       eta: 0,
       percentage,
       status: "uploading",
+      firestoreDocId: session.firestoreDocId,
     }
   }
 }

@@ -475,7 +475,13 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
             >
               {filteredContent.map((item) =>
                 activeTab === "premium" ? (
-                  <BundleCard key={item.id} item={item} user={user} creatorId={creator.uid} />
+                  <BundleCard
+                    key={item.id}
+                    item={item}
+                    user={user}
+                    creatorId={creator.uid}
+                    creatorUsername={creator.username}
+                  />
                 ) : (
                   <ContentCard key={item.id} item={item} />
                 ),

@@ -41,6 +41,10 @@ export default function FolderSidebar({
   const [newFolderName, setNewFolderName] = useState("")
   const [renamingFolder, setRenamingFolder] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState("")
+  const [subscription, setSubscription] = useState<{
+    maxFolders: number | null
+    plan: string
+  } | null>(null)
 
   const fetchFolders = async () => {
     if (!user) {
@@ -154,12 +158,29 @@ export default function FolderSidebar({
         setCreatingFolder(null)
         await fetchFolders()
         onFolderCreated()
+        const rootFolderCount = folders.filter((f) => !f.parentId).length + 1
+        if (subscription?.maxFolders !== null && subscription?.maxFolders !== undefined) {
+          toast({
+            title: "Folder Created",
+            description: `${rootFolderCount}/${subscription.maxFolders} folders used`,
+          })
+        }
       } else {
-        const errorData = await response.text()
+        const errorData = await response.json()
         console.error("[v0] Create folder error:", response.status, errorData)
+        toast({
+          title: "Error",
+          description: errorData.error || "Failed to create folder",
+          variant: "destructive",
+        })
       }
     } catch (error) {
       console.error("[v0] Failed to create folder:", error)
+      toast({
+        title: "Error",
+        description: "Failed to create folder",
+        variant: "destructive",
+      })
     }
   }
 
@@ -381,16 +402,42 @@ export default function FolderSidebar({
     )
   }
 
+  const fetchSubscription = async () => {
+    if (!user) return
+
+    try {
+      const token = await user.getIdToken()
+      const response = await fetch("/api/user/membership", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setSubscription({
+          maxFolders: data.features?.maxFolders ?? null,
+          plan: data.plan || "starter",
+        })
+      }
+    } catch (error) {
+      console.error("[v0] Failed to fetch subscription:", error)
+    }
+  }
+
   useEffect(() => {
     if (isOpen && user) {
       fetchFolders()
+      fetchSubscription()
     }
   }, [isOpen, user])
+
+  const rootFolderCount = folders.filter((f) => !f.parentId).length
 
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-y-0 left-0 z-50 w-80 bg-zinc-950 border-r border-zinc-800 flex flex-col">
+    <div className="fixed inset-y-0 left-0 z-[80] w-80 bg-zinc-950 border-r border-zinc-800 flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-zinc-800">
         <div className="flex items-center gap-2">
@@ -406,6 +453,24 @@ export default function FolderSidebar({
           <X className="h-4 w-4" />
         </Button>
       </div>
+
+      {subscription?.maxFolders !== null && subscription?.maxFolders !== undefined && (
+        <div className="px-4 py-3 border-b border-zinc-800/50 bg-zinc-900/30">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-zinc-400">Folders</span>
+            <span
+              className={`font-medium ${rootFolderCount >= subscription.maxFolders ? "text-red-400" : "text-white"}`}
+            >
+              {rootFolderCount}/{subscription.maxFolders}
+            </span>
+          </div>
+          {rootFolderCount >= subscription.maxFolders && (
+            <p className="text-xs text-red-400 mt-1">
+              Folder limit reached. Upgrade to Creator VIP for unlimited folders.
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="p-3 border-b border-zinc-800/50">
         <button
@@ -461,7 +526,12 @@ export default function FolderSidebar({
             variant="outline"
             size="sm"
             onClick={() => setCreatingFolder("root")}
-            className="w-full h-8 border-zinc-700 bg-zinc-900/50 hover:bg-zinc-800/50 text-zinc-300"
+            disabled={
+              subscription?.maxFolders !== null &&
+              subscription?.maxFolders !== undefined &&
+              rootFolderCount >= subscription.maxFolders
+            }
+            className="w-full h-8 border-zinc-700 bg-zinc-900/50 hover:bg-zinc-800/50 text-zinc-300 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Plus className="h-3 w-3 mr-2" />
             New Folder

@@ -1,5 +1,6 @@
 import { initializeApp, getApps } from "firebase/app"
 import { getFirestore } from "firebase/firestore"
+import { getAuth } from "firebase/auth"
 import { getFirebaseConfig } from "../firebase-config"
 
 // Initialize Firebase app if it hasn't been initialized yet
@@ -14,5 +15,7 @@ if (!getApps().length) {
 // Initialize Firestore
 const db = getFirestore(app)
 
-// Export both app and db
-export { app, db }
+const auth = getAuth(app)
+
+// Export app, db, and auth
+export { app, db, auth }

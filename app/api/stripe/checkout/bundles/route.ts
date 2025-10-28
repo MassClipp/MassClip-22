@@ -90,8 +90,8 @@ export async function POST(request: NextRequest) {
         },
       ],
       customer_email: email,
-      success_url: `${siteUrl}/purchase/success?session_id={CHECKOUT_SESSION_ID}&type=bundle_slots`,
-      cancel_url: `${siteUrl}/dashboard/pricing`,
+      success_url: `${siteUrl}/dashboard/upgrade?session_id={CHECKOUT_SESSION_ID}&type=bundle_slots&success=true`,
+      cancel_url: `${siteUrl}/dashboard/upgrade`,
       metadata: metadata,
     })
 

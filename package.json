@@ -9,6 +9,8 @@
     "start": "next start"
   },
   "dependencies": {
+    "@ai-sdk/groq": "latest",
+    "@ai-sdk/react": "2.0.51",
     "@auth/core": "latest",
     "@auth/firebase-adapter": "latest",
     "@aws-sdk/client-s3": "latest",
@@ -48,7 +50,10 @@
     "@radix-ui/react-tooltip": "latest",
     "@react-email/render": "latest",
     "@tanstack/react-query": "latest",
+    "@vercel/blob": "2.0.0",
+    "ai": "latest",
     "autoprefixer": "^10.4.20",
+    "buffer": "latest",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "latest",
@@ -57,9 +62,13 @@
     "embla-carousel-react": "latest",
     "firebase": "latest",
     "firebase-admin": "latest",
+    "form-data": "4.0.4",
+    "formdata-node": "latest",
     "framer-motion": "latest",
     "fs": "latest",
+    "groq-sdk": "latest",
     "input-otp": "latest",
+    "jszip": "latest",
     "lucide-react": "^0.454.0",
     "next": "15.2.4",
     "next-auth": "latest",
@@ -85,7 +94,7 @@
     "uuid": "latest",
     "vaul": "latest",
     "ws": "latest",
-    "zod": "^3.24.1"
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/node": "^22",

@@ -133,11 +133,10 @@ export async function applyBundleSlotsToUser(uid: string, slots: number, purchas
     })
     console.log(`✅ Updated existing freeUsers bundlesLimit by ${slots} slots`)
   } else {
-    // Create freeUsers document with default values + purchased slots
     console.log("ℹ️ Creating new freeUsers document with purchased bundle slots")
     await freeUserRef.set({
       bundlesCreated: 0,
-      bundlesLimit: 2 + slots, // Default 2 + purchased slots
+      bundlesLimit: 5 + slots, // Changed from 2 + slots to 5 + slots
       downloadsLimit: 15,
       downloadsUsed: 0,
       currentPeriodStart: FieldValue.serverTimestamp(),
@@ -149,7 +148,7 @@ export async function applyBundleSlotsToUser(uid: string, slots: number, purchas
       hasUnlimitedDownloads: false,
       createdAt: FieldValue.serverTimestamp(),
     })
-    console.log(`✅ Created new freeUsers document with bundlesLimit: ${2 + slots}`)
+    console.log(`✅ Created new freeUsers document with bundlesLimit: ${5 + slots}`)
   }
 
   const userSlotsRef = adminDb.collection("userBundleSlots").doc(uid)

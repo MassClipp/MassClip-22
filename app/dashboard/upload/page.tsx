@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/components/ui/use-toast"
+import { Clock } from "lucide-react"
 import {
   Upload,
   Search,
@@ -29,7 +30,8 @@ import {
   X,
   CheckCircle,
   AlertCircle,
-  Clock,
+  Download,
+  Menu,
 } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -43,7 +45,8 @@ import { chunkedUploadService } from "@/lib/chunked-upload-service"
 import { uploadQueueManager, type QueuedUpload } from "@/lib/upload-queue-manager"
 import { CreateFolderDialog } from "@/components/create-folder-dialog"
 import FolderSidebar from "@/components/folder-sidebar"
-import { Menu } from "lucide-react"
+import { VexFolderOrganizer } from "@/components/vex-folder-organizer"
+// import { PaywallWrapper } from "@/components/paywall-wrapper"
 
 interface UploadType {
   id: string
@@ -133,12 +136,16 @@ export default function UploadPage() {
   const [selectedFolderId, setSelectedFolderId] = useState<string>("main") // Default to main instead of root
   const [isCreateFolderDialogOpen, setIsCreateFolderDialogOpen] = useState(false)
   const [loadingFolders, setLoadingFolders] = useState(false)
+  const userToken = useState<string>("")[0] // Access token from state
+
+  const [isDownloadingZip, setIsDownloadingZip] = useState(false)
 
   // Initialize upload services
   useEffect(() => {
     if (user) {
       // Set auth token for chunked upload service
       user.getIdToken().then((token) => {
+        // setUserToken(token) // This line was commented out in the original, assuming it's not needed here directly
         chunkedUploadService.setAuthToken(token)
       })
 
@@ -342,39 +349,207 @@ export default function UploadPage() {
     const finalFolderId = selectedFolderId === "main" ? undefined : selectedFolderId
     console.log(`✅ [v0] Final folder ID to pass to queue:`, finalFolderId)
 
-    // Add files to upload queue with folder information
-    Array.from(files).forEach((file, index) => {
-      const priority = file.size < 50 * 1024 * 1024 ? 1 : 0 // Prioritize smaller files
+    for (const file of Array.from(files)) {
+      const fileName = file.name.toLowerCase()
+      const fileType = file.type.toLowerCase()
 
-      console.log(
-        `📤 [v0] Adding file ${file.name} to queue with folderId: ${finalFolderId}, folderPath: ${folderPath}`,
-      )
+      // Check multiple conditions for ZIP files
+      const isZipByExtension = fileName.endsWith(".zip")
+      const isZipByMimeType =
+        fileType === "application/zip" ||
+        fileType === "application/x-zip-compressed" ||
+        fileType === "application/x-zip" ||
+        (fileType === "application/octet-stream" && fileName.endsWith(".zip"))
 
-      const queueId = uploadQueueManager.addToQueue(file, priority, finalFolderId, folderPath)
+      const isZip = isZipByExtension || isZipByMimeType
 
-      // Set up individual progress callback
-      uploadQueueManager.setProgressCallback(queueId, (queuedUpload) => {
-        if (queuedUpload.status === "completed") {
-          toast({
-            title: "Upload Complete!",
-            description: `${queuedUpload.file.name} has been uploaded successfully.`,
+      console.log(`🔍 [v0] File detection for: ${file.name}`)
+      console.log(`   - File type: "${file.type}" (empty: ${file.type === ""})`)
+      console.log(`   - File extension: ${fileName.split(".").pop()}`)
+      console.log(`   - Is ZIP by extension: ${isZipByExtension}`)
+      console.log(`   - Is ZIP by MIME type: ${isZipByMimeType}`)
+      console.log(`   - Final decision: ${isZip ? "ZIP FILE" : "REGULAR FILE"}`)
+
+      if (isZip) {
+        console.log(`🗜️ [v0] Processing ZIP file: ${file.name}`)
+
+        try {
+          const token = await user.getIdToken()
+          const formData = new FormData()
+          formData.append("zipFile", file)
+          if (finalFolderId) {
+            formData.append("folderId", finalFolderId)
+          }
+          if (folderPath) {
+            formData.append("folderPath", folderPath)
+          }
+
+          console.log(`📤 [v0] Sending ZIP to /api/uploads/zip`)
+
+          const response = await fetch("/api/uploads/zip", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            body: formData,
           })
-          // Refresh uploads list
-          setTimeout(() => fetchUploads(), 1000)
-        } else if (queuedUpload.status === "error") {
+
+          if (!response.ok) {
+            const errorData = await response.json()
+            console.error("❌ [v0] Failed to upload ZIP:", errorData)
+            throw new Error(errorData.error || "Failed to upload ZIP file")
+          }
+
+          const result = await response.json()
+          console.log(`✅ [v0] ZIP processed: ${result.totalFiles} files extracted`)
+
           toast({
-            title: "Upload Failed",
-            description: queuedUpload.error || `Failed to upload ${queuedUpload.file.name}`,
+            title: "ZIP Upload Complete",
+            description: `${file.name} processed successfully. ${result.totalFiles} files extracted.`,
+          })
+
+          // Refresh uploads list after ZIP processing
+          setTimeout(() => fetchUploads(), 1000)
+        } catch (error) {
+          console.error(`❌ [v0] ZIP upload failed:`, error)
+          toast({
+            title: "ZIP Upload Failed",
+            description: error instanceof Error ? error.message : "Failed to upload ZIP file",
             variant: "destructive",
           })
         }
-      })
+      } else {
+        // Handle regular files with chunked upload
+        const priority = file.size < 50 * 1024 * 1024 ? 1 : 0 // Prioritize smaller files
+
+        console.log(
+          ` saddas [v0] Adding file ${file.name} to queue with folderId: ${finalFolderId}, folderPath: ${folderPath}`,
+        )
+        console.log(`   File type: ${file.type || "empty/unknown"}`)
+        console.log(`   File size: ${file.size} bytes`)
+
+        const queueId = uploadQueueManager.addToQueue(file, priority, finalFolderId, folderPath)
+
+        // Set up individual progress callback
+        uploadQueueManager.setProgressCallback(queueId, async (queuedUpload) => {
+          console.log(`[v0] Upload progress callback triggered for: ${queuedUpload.file.name}`)
+          console.log(`[v0] Status: ${queuedUpload.status}`)
+          console.log(`[v0] Upload ID: ${queuedUpload.uploadId}`)
+          console.log(`[v0] Firestore Doc ID: ${queuedUpload.firestoreDocId}`)
+          console.log(`[v0] File URL: ${queuedUpload.fileUrl}`)
+
+          if (queuedUpload.status === "completed") {
+            toast({
+              title: "Upload Complete!",
+              description: `${queuedUpload.file.name} has been uploaded successfully.`,
+            })
+
+            const isVideo = queuedUpload.file.type.startsWith("video/")
+            const isImage = queuedUpload.file.type.startsWith("image/")
+
+            if (isVideo && queuedUpload.firestoreDocId && queuedUpload.fileUrl) {
+              console.log(
+                `[v0] Video upload completed, triggering transcription for Firestore doc: ${queuedUpload.firestoreDocId}`,
+              )
+
+              try {
+                const token = await user.getIdToken()
+                const transcribeResponse = await fetch("/api/uploads/auto-transcribe", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                  },
+                  body: JSON.stringify({
+                    uploadId: queuedUpload.firestoreDocId,
+                    videoUrl: queuedUpload.fileUrl,
+                    mimeType: queuedUpload.file.type,
+                  }),
+                })
+
+                if (transcribeResponse.ok) {
+                  console.log(
+                    `[v0] Transcription started successfully for Firestore doc: ${queuedUpload.firestoreDocId}`,
+                  )
+                  toast({
+                    title: "Transcription Started",
+                    description: "Your video is being transcribed in the background.",
+                  })
+                } else {
+                  const error = await transcribeResponse.json()
+                  console.error(`[v0] Transcription failed:`, error)
+                }
+              } catch (error) {
+                console.error(`[v0] Failed to trigger transcription:`, error)
+              }
+            }
+
+            if (isImage && queuedUpload.firestoreDocId && queuedUpload.fileUrl) {
+              console.log(
+                `[v0] Image upload completed, triggering vision analysis for Firestore doc: ${queuedUpload.firestoreDocId}`,
+              )
+
+              try {
+                const token = await user.getIdToken()
+                const analyzeResponse = await fetch("/api/uploads/analyze-image", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                  },
+                  body: JSON.stringify({
+                    uploadId: queuedUpload.firestoreDocId,
+                    imageUrl: queuedUpload.fileUrl,
+                  }),
+                })
+
+                if (analyzeResponse.ok) {
+                  const result = await analyzeResponse.json()
+                  console.log(`[v0] Image analysis completed: ${result.description.substring(0, 100)}...`)
+                  toast({
+                    title: "Image Analyzed",
+                    description: "Vex has analyzed your image content.",
+                  })
+                } else {
+                  const error = await analyzeResponse.json()
+                  console.error(`[v0] Image analysis failed:`, error)
+                }
+              } catch (error) {
+                console.error(`[v0] Failed to trigger image analysis:`, error)
+              }
+            }
+
+            // Refresh uploads list
+            setTimeout(() => fetchUploads(), 1000)
+          } else if (queuedUpload.status === "error") {
+            toast({
+              title: "Upload Failed",
+              description: queuedUpload.error || `Failed to upload ${queuedUpload.file.name}`,
+              variant: "destructive",
+            })
+          }
+        })
+      }
+    }
+
+    const regularFiles = Array.from(files).filter((file) => {
+      const fileName = file.name.toLowerCase()
+      const fileType = file.type.toLowerCase()
+      const isZipByExtension = fileName.endsWith(".zip")
+      const isZipByMimeType =
+        fileType === "application/zip" ||
+        fileType === "application/x-zip-compressed" ||
+        fileType === "application/x-zip" ||
+        (fileType === "application/octet-stream" && fileName.endsWith(".zip"))
+      return !(isZipByExtension || isZipByMimeType)
     })
 
-    toast({
-      title: "Files Added to Queue",
-      description: `${files.length} file(s) added to upload queue${selectedFolder ? ` in "${selectedFolder.name}"` : ""}`,
-    })
+    if (regularFiles.length > 0) {
+      toast({
+        title: "Files Added to Queue",
+        description: `${regularFiles.length} file(s) added to upload queue${selectedFolder ? ` in "${selectedFolder.name}"` : ""}`,
+      })
+    }
   }
 
   // Handle drag and drop
@@ -603,6 +778,73 @@ export default function UploadPage() {
     setSelectedFolderId(folderId)
   }
 
+  const handleVexOrganizeComplete = () => {
+    fetchUploads()
+    setSelectedUploads([])
+    toast({
+      title: "Organization Complete",
+      description: "Vex has successfully organized your files",
+    })
+  }
+
+  const handleDownloadAllAsZip = async () => {
+    if (!user || uploads.length === 0) {
+      toast({
+        title: "No Files to Download",
+        description: "There are no files in the current view to download.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      setIsDownloadingZip(true)
+      const token = await user.getIdToken()
+
+      // Build query params based on current filters
+      const params = new URLSearchParams()
+      if (filterType !== "all") params.append("type", filterType)
+      if (searchTerm) params.append("search", searchTerm)
+      if (selectedFolderId && selectedFolderId !== "main") params.append("folder", selectedFolderId)
+
+      const response = await fetch(`/api/uploads/download-all-zip?${params}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to download files")
+      }
+
+      // Get the blob and create download link
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `uploads-${Date.now()}.zip`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+
+      toast({
+        title: "Download Complete",
+        description: `Downloaded ${uploads.length} files as ZIP`,
+      })
+    } catch (error: any) {
+      console.error("Error downloading files:", error)
+      toast({
+        title: "Download Failed",
+        description: error.message || "Failed to download files",
+        variant: "destructive",
+      })
+    } finally {
+      setIsDownloadingZip(false)
+    }
+  }
+
   if (loading || authLoading) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
@@ -633,6 +875,7 @@ export default function UploadPage() {
   }
 
   return (
+    // <PaywallWrapper>
     <div className="space-y-6">
       {/* Folder Sidebar */}
       <FolderSidebar
@@ -649,42 +892,61 @@ export default function UploadPage() {
       {/* Index Setup Helper */}
       {hasIndexError && <FirestoreIndexHelper />}
 
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 pb-6 border-b border-zinc-800/50">
+      <div className="flex flex-col gap-4 pb-6 border-b border-zinc-800/50">
+        {/* Header section */}
         <div className="space-y-2">
-          <h1 className="text-2xl font-semibold text-white tracking-tight">Content Library</h1>
-          {username && (
-            <div className="flex items-center gap-2 text-xs text-zinc-500">
-              <div className="w-1.5 h-1.5 bg-zinc-500 rounded-full"></div>
-              <span>Storage path: creators/{username}/</span>
-            </div>
-          )}
+          <h1 className="text-2xl font-semibold text-white tracking-tight">Upload</h1>
+          <div className="space-y-1">
+            <h2 className="text-lg font-medium text-white">Content Library</h2>
+            {username && (
+              <div className="flex items-center gap-2 text-xs text-zinc-500 flex-wrap">
+                <div className="w-1.5 h-1.5 bg-zinc-500 rounded-full"></div>
+                <span className="break-all">Storage path: creators/{username}/</span>
+              </div>
+            )}
+          </div>
+          <p className="text-zinc-400 text-sm">Upload and manage your content files</p>
         </div>
 
-        <div className="flex items-center gap-3">
-          {/* Sidebar toggle button */}
+        {/* Button row - wraps on mobile */}
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="outline"
             onClick={() => setIsSidebarOpen(true)}
-            className="border-zinc-700/50 bg-zinc-900/50 hover:bg-zinc-800/50 text-zinc-300"
+            className="border-zinc-700/50 bg-zinc-900/50 hover:bg-zinc-800/50 text-zinc-300 flex-shrink-0"
           >
-            <Menu className="h-4 w-4 mr-2" />
-            Folders
+            <Menu className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Folders</span>
+          </Button>
+
+          <Button
+            variant="outline"
+            onClick={handleDownloadAllAsZip}
+            disabled={isDownloadingZip || uploads.length === 0}
+            className="border-zinc-700/50 bg-zinc-900/50 hover:bg-zinc-800/50 text-zinc-300 flex-shrink-0"
+          >
+            {isDownloadingZip ? (
+              <Loader2 className="h-4 w-4 sm:mr-2 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4 sm:mr-2" />
+            )}
+            <span className="hidden sm:inline">Download ZIP</span>
           </Button>
 
           <Button
             variant="outline"
             onClick={() => fetchUploads()}
-            className="border-zinc-700/50 bg-zinc-900/50 hover:bg-zinc-800/50 text-zinc-300"
+            className="border-zinc-700/50 bg-zinc-900/50 hover:bg-zinc-800/50 text-zinc-300 flex-shrink-0"
           >
             <RefreshCw className="h-4 w-4" />
           </Button>
 
           <Button
             onClick={() => fileInputRef.current?.click()}
-            className="bg-white text-black hover:bg-zinc-100 font-medium px-6"
+            className="bg-white text-black hover:bg-zinc-100 font-medium px-4 sm:px-6 flex-shrink-0"
           >
-            <Upload className="h-4 w-4 mr-2" />
-            Upload Files
+            <Upload className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Upload Files</span>
           </Button>
           <input
             ref={fileInputRef}
@@ -692,7 +954,7 @@ export default function UploadPage() {
             multiple
             onChange={(e) => e.target.files && handleFileUpload(e.target.files)}
             className="hidden"
-            accept="video/*,audio/*,image/*,.pdf,.doc,.docx,.txt"
+            accept="video/*,audio/*,image/*,.pdf,.doc,.docx,.txt,.zip,application/zip,application/x-zip-compressed"
           />
         </div>
       </div>
@@ -789,42 +1051,53 @@ export default function UploadPage() {
         onDrop={handleDrop}
         onClick={() => fileInputRef.current?.click()}
       >
-        <div className="flex flex-col items-center justify-center py-12 px-6">
+        <div className="flex flex-col items-center justify-center py-12 px-4 sm:px-6">
           <div className="w-12 h-12 bg-zinc-800/50 rounded-lg flex items-center justify-center mb-4">
             <Upload className="h-6 w-6 text-zinc-400" />
           </div>
-          <h3 className="text-lg font-medium text-white mb-2">Upload your files</h3>
-          <p className="text-zinc-400 text-center text-sm max-w-md">
-            Drag and drop files here, or click to browse. Advanced chunked upload technology ensures reliable transfers
-            for large files.
+          <h3 className="text-lg font-medium text-white mb-2 text-center">Upload your files</h3>
+          <p className="text-zinc-400 text-center text-sm max-w-md">Drag and drop files here, or click to browse.</p>
+          <p className="text-zinc-500 text-center text-xs mt-3 max-w-md leading-relaxed">
+            Tip: Use descriptive titles with keywords so Vex can organize your content accurately
           </p>
         </div>
       </div>
 
       {/* Selected Items Actions */}
       {selectedUploads.length > 0 && (
-        <div className="flex items-center justify-between bg-zinc-900/80 border border-zinc-800 rounded-lg p-4">
-          <div className="text-sm text-zinc-300">
-            <span className="font-medium">{selectedUploads.length}</span> item(s) selected
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-zinc-700 bg-transparent"
-              onClick={() => setSelectedUploads([])}
-            >
-              Clear Selection
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-zinc-700 bg-transparent"
-              onClick={() => setShowAddToFreeContentDialog(true)}
-            >
-              <PlusCircle className="h-4 w-4 mr-2" />
-              Add to Free Content
-            </Button>
+        <div className="space-y-4">
+          {/* Vex Folder Organizer */}
+          {userToken && (
+            <VexFolderOrganizer
+              selectedFiles={selectedUploads}
+              onOrganizeComplete={handleVexOrganizeComplete}
+              userToken={userToken}
+            />
+          )}
+
+          <div className="flex items-center justify-between bg-zinc-900/80 border border-zinc-800 rounded-lg p-4">
+            <div className="text-sm text-zinc-300">
+              <span className="font-medium">{selectedUploads.length}</span> item(s) selected
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-zinc-700 bg-transparent"
+                onClick={() => setSelectedUploads([])}
+              >
+                Clear Selection
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-zinc-700 bg-transparent"
+                onClick={() => setShowAddToFreeContentDialog(true)}
+              >
+                <PlusCircle className="h-4 w-4 mr-2" />
+                Add to Free Content
+              </Button>
+            </div>
           </div>
         </div>
       )}
@@ -940,13 +1213,23 @@ export default function UploadPage() {
                                 src={upload.fileUrl || "/placeholder.svg"}
                                 alt={upload.title}
                                 className="w-full h-full object-cover"
+                                loading="lazy"
+                                crossOrigin="anonymous"
+                                onLoad={(e) => {
+                                  console.log("[v0] Image loaded successfully:", upload.fileUrl)
+                                  const target = e.target as HTMLImageElement
+                                  target.style.display = "block"
+                                }}
                                 onError={(e) => {
+                                  console.error("[v0] Image failed to load:", upload.fileUrl)
+                                  console.error("[v0] Image error event:", e)
                                   const target = e.target as HTMLImageElement
                                   target.style.display = "none"
-                                  target.nextElementSibling?.classList.remove("hidden")
+                                  const fallback = target.nextElementSibling as HTMLElement
+                                  if (fallback) fallback.classList.remove("hidden")
                                 }}
                               />
-                              <div className="hidden absolute inset-0 flex items-center justify-center">
+                              <div className="hidden absolute inset-0 flex items-center justify-center bg-zinc-800/50">
                                 <IconComponent className={`h-8 w-8 ${colorClass}`} />
                               </div>
                             </div>
@@ -1198,5 +1481,6 @@ export default function UploadPage() {
         }}
       />
     </div>
+    // </PaywallWrapper>
   )
 }

@@ -1,6 +1,9 @@
 "use client"
 
+import type React from "react"
+
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Package } from "lucide-react"
 import { UnlockButton } from "@/components/unlock-button"
 
@@ -25,9 +28,12 @@ interface BundleCardProps {
   item: ContentItem
   user: any
   creatorId: string
+  creatorUsername?: string
+  isPreview?: boolean // Added isPreview prop to control preview mode
 }
 
-export default function BundleCard({ item, user, creatorId }: BundleCardProps) {
+export default function BundleCard({ item, user, creatorId, creatorUsername, isPreview = false }: BundleCardProps) {
+  const router = useRouter()
   const [isThumbnailHovered, setIsThumbnailHovered] = useState(false)
   const [imageError, setImageError] = useState(false)
 
@@ -40,7 +46,9 @@ export default function BundleCard({ item, user, creatorId }: BundleCardProps) {
     price: item.price,
     contentCount: item.contentCount,
     creatorId,
+    creatorUsername,
     currentUserId: user?.uid,
+    isPreview, // Log preview mode
   })
 
   const handleImageError = () => {
@@ -61,11 +69,26 @@ export default function BundleCard({ item, user, creatorId }: BundleCardProps) {
     return "0.00"
   }
 
+  const handleCardClick = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest("button")) {
+      return
+    }
+
+    if (isPreview && creatorUsername) {
+      router.push(`/creator/${creatorUsername}/bundle/${item.id}`)
+    } else if (creatorUsername) {
+      router.push(`/creator/${creatorUsername}/bundle/${item.id}`)
+    }
+  }
+
   const formattedPrice = formatPrice(item.price)
   console.log("💰 Final formatted price:", formattedPrice)
 
   return (
-    <div className="bg-zinc-900 rounded-lg overflow-hidden border border-zinc-700/30 hover:border-zinc-600/40 transition-all duration-300 w-full max-w-[340px] sm:max-w-[320px] relative">
+    <div
+      onClick={handleCardClick}
+      className="bg-zinc-900 rounded-lg overflow-hidden border border-zinc-700/30 hover:border-zinc-600/40 transition-all duration-300 w-full max-w-[340px] sm:max-w-[320px] relative cursor-pointer group"
+    >
       <div
         className="relative aspect-square bg-zinc-800 overflow-hidden"
         onMouseEnter={() => setIsThumbnailHovered(true)}
@@ -85,32 +108,64 @@ export default function BundleCard({ item, user, creatorId }: BundleCardProps) {
           </div>
         )}
 
-        <div className="absolute top-2 right-2 sm:top-4 sm:right-4 bg-black/80 backdrop-blur-sm px-2 py-1 sm:px-3 sm:py-1.5 rounded-full text-xs text-white font-semibold">
-          {item.contentCount || 0} items
+        <div className="absolute top-2 right-2 sm:top-4 sm:right-4 bg-black/90 backdrop-blur-sm px-3 py-1.5 sm:px-4 sm:py-2 rounded-full">
+          <span className="text-xs sm:text-sm text-white font-medium">{item.contentCount || 0} items</span>
         </div>
       </div>
 
-      <div className="p-3 sm:p-4 space-y-2 bg-gradient-to-br from-black via-black to-zinc-800/30 relative">
-        <div className="space-y-1">
-          <h3 className="text-white text-base sm:text-lg font-bold line-clamp-1" title={item.title}>
+      <div className="p-4 sm:p-5 space-y-3 bg-gradient-to-br from-black via-black to-zinc-800/30 relative">
+        <div className="space-y-2">
+          <h3 className="text-white text-lg sm:text-xl font-semibold line-clamp-2 leading-tight" title={item.title}>
             {item.title}
           </h3>
-          <p className="text-zinc-400 text-sm line-clamp-1">{item.description || "Premium content bundle"}</p>
+          <p className="text-zinc-400 text-sm sm:text-base line-clamp-2 leading-relaxed">
+            {item.description || "Premium content bundle"}
+          </p>
         </div>
 
-        <div className="flex items-center justify-between pt-1">
-          <span className="text-white text-xl sm:text-2xl font-light">${formattedPrice}</span>
+        <div className="space-y-3 pt-2">
+          <div className="flex items-center justify-between">
+            <span className="text-white text-2xl sm:text-3xl font-light tracking-tight">${formattedPrice}</span>
+          </div>
 
-          <UnlockButton
-            stripePriceId={item.stripePriceId}
-            bundleId={item.id}
-            user={user}
-            creatorId={creatorId}
-            price={item.price || 0}
-            title={item.title}
-            variant="outline"
-            className="border-white/20 text-white hover:bg-white/5 rounded-md font-light text-sm px-4 py-2"
-          />
+          {isPreview ? (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                if (creatorUsername) {
+                  router.push(`/creator/${creatorUsername}/bundle/${item.id}`)
+                }
+              }}
+              className="w-full border border-white/20 text-white hover:bg-white/5 rounded-md font-medium text-sm px-4 py-2.5 transition-colors"
+            >
+              View Details
+            </button>
+          ) : (
+            <div className="flex gap-2">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  if (creatorUsername) {
+                    router.push(`/creator/${creatorUsername}/bundle/${item.id}`)
+                  }
+                }}
+                className="flex-1 border border-white/20 text-white hover:bg-white/5 rounded-md font-medium text-sm px-4 py-2.5 transition-colors"
+              >
+                See Details
+              </button>
+
+              <UnlockButton
+                stripePriceId={item.stripePriceId}
+                bundleId={item.id}
+                user={user}
+                creatorId={creatorId}
+                price={item.price || 0}
+                title={item.title}
+                variant="outline"
+                className="flex-1 border-white/20 text-white hover:bg-white/5 rounded-md font-medium text-sm px-4 py-2.5"
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -31,7 +31,7 @@ export async function fetchSubscriptionData(
 
       if (membershipData.isActive) {
         subscriptionData = {
-          plan: "creator_pro",
+          plan: membershipData.plan || "creator_pro", // Use actual plan from API
           isActive: true,
           status: membershipData.status || "active",
           currentPeriodEnd: membershipData.currentPeriodEnd || null,
@@ -40,7 +40,7 @@ export async function fetchSubscriptionData(
       } else {
         // Even if not active, preserve cancellation data for display
         subscriptionData = {
-          plan: "free",
+          plan: membershipData.plan || "free", // Use actual plan even when inactive
           isActive: false,
           status: membershipData.status || "inactive",
           currentPeriodEnd: membershipData.currentPeriodEnd || null,

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Folder, FolderPlus, ChevronRight, Home, MoreVertical, Edit, Trash2, ArrowLeft } from "lucide-react"
+import { Folder, FolderPlus, ChevronRight, Home, MoreVertical, Edit, Trash2, ArrowLeft, Download } from "lucide-react"
 import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -43,6 +43,7 @@ export default function FolderNavigation({
   const [currentFolder, setCurrentFolder] = useState<FolderItem | null>(null)
   const [breadcrumbs, setBreadcrumbs] = useState<FolderItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [downloadingFolder, setDownloadingFolder] = useState<string | null>(null)
 
   const fetchFolders = async () => {
     if (!user) return
@@ -80,13 +81,11 @@ export default function FolderNavigation({
     }
   }, [user])
 
-  // Update current folder and breadcrumbs when currentFolderId changes
   useEffect(() => {
     if (currentFolderId) {
       const folder = folders.find((f) => f.id === currentFolderId)
       setCurrentFolder(folder || null)
 
-      // Build breadcrumbs
       if (folder) {
         const crumbs: FolderItem[] = []
         let current = folder
@@ -104,7 +103,6 @@ export default function FolderNavigation({
     }
   }, [currentFolderId, folders])
 
-  // Get child folders of current folder
   const getChildFolders = (parentId: string | null) => {
     return folders.filter((f) => f.parentId === parentId)
   }
@@ -112,7 +110,6 @@ export default function FolderNavigation({
   const handleFolderClick = (folderId: string | null) => {
     onFolderChange?.(folderId)
 
-    // Update URL if we're in a route that supports folder navigation
     const currentPath = window.location.pathname
     if (currentPath.includes("/dashboard/uploads") || currentPath.includes("/dashboard/free-content")) {
       const params = new URLSearchParams(searchParams.toString())
@@ -148,7 +145,6 @@ export default function FolderNavigation({
           description: "Folder deleted successfully",
         })
 
-        // Refresh folders
         fetchFolders()
       }
     } catch (error) {
@@ -158,6 +154,54 @@ export default function FolderNavigation({
         description: `Failed to ${action} folder`,
         variant: "destructive",
       })
+    }
+  }
+
+  const handleDownloadFolder = async (folderId: string, folderName: string) => {
+    if (!user) return
+
+    try {
+      setDownloadingFolder(folderId)
+      toast({
+        title: "Preparing Download",
+        description: "Creating ZIP file for your folder...",
+      })
+
+      const token = await user.getIdToken()
+      const response = await fetch(`/api/folders/${folderId}/download-zip`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to download folder")
+      }
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `${folderName}.zip`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+
+      toast({
+        title: "Download Complete",
+        description: `${folderName}.zip has been downloaded`,
+      })
+    } catch (error) {
+      console.error("Error downloading folder:", error)
+      toast({
+        title: "Download Failed",
+        description: error instanceof Error ? error.message : "Failed to download folder",
+        variant: "destructive",
+      })
+    } finally {
+      setDownloadingFolder(null)
     }
   }
 
@@ -177,7 +221,6 @@ export default function FolderNavigation({
 
   return (
     <div className={cn("space-y-4", className)}>
-      {/* Breadcrumbs */}
       {breadcrumbs.length > 0 && (
         <div className="flex items-center space-x-2 text-sm text-zinc-400">
           <Button
@@ -205,7 +248,6 @@ export default function FolderNavigation({
         </div>
       )}
 
-      {/* Current folder header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
           {currentFolder && (
@@ -246,7 +288,6 @@ export default function FolderNavigation({
         )}
       </div>
 
-      {/* Child folders grid */}
       {getChildFolders(currentFolderId || null).length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
           {getChildFolders(currentFolderId || null).map((folder) => (
@@ -263,7 +304,6 @@ export default function FolderNavigation({
                 </div>
               </div>
 
-              {/* Folder actions */}
               <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -277,6 +317,16 @@ export default function FolderNavigation({
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent className="bg-zinc-900 border-zinc-800">
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleDownloadFolder(folder.id, folder.name)
+                      }}
+                      disabled={downloadingFolder === folder.id}
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      {downloadingFolder === folder.id ? "Downloading..." : "Download as ZIP"}
+                    </DropdownMenuItem>
                     <DropdownMenuItem
                       onClick={(e) => {
                         e.stopPropagation()

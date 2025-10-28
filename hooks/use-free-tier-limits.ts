@@ -35,8 +35,19 @@ export function useFreeTierLimits() {
 
     try {
       setLoading(true)
+      console.log("[v0] ===== FETCHING FREE TIER LIMITS =====")
+      console.log("[v0] User UID:", user.uid)
+
       const response = await fetch(`/api/user/free-limits?uid=${user.uid}`)
       const result = await response.json()
+
+      console.log("[v0] API Response:", {
+        success: result.success,
+        limits: result.limits,
+        error: result.error,
+      })
+      console.log("[v0] Full response object:", JSON.stringify(result, null, 2))
+      console.log("[v0] ========================================")
 
       if (result.success) {
         setLimits(result.limits)
@@ -45,8 +56,8 @@ export function useFreeTierLimits() {
         setError(result.error || "Failed to fetch limits")
       }
     } catch (err) {
+      console.error("[v0] ❌ Error fetching free tier limits:", err)
       setError("Failed to fetch limits")
-      console.error("Error fetching free tier limits:", err)
     } finally {
       setLoading(false)
     }

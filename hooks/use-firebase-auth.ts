@@ -7,9 +7,9 @@ import {
   createUserWithEmailAndPassword,
   signInWithPopup,
   GoogleAuthProvider,
-  signOut as firebaseSignOut,
   onAuthStateChanged,
   sendPasswordResetEmail,
+  signOut as firebaseSignOut,
 } from "firebase/auth"
 import { doc, setDoc, getDoc } from "firebase/firestore"
 import { auth, db, isFirebaseConfigured } from "@/lib/firebase"
@@ -186,26 +186,33 @@ export function useFirebaseAuth() {
   }, [])
 
   const signOut = useCallback(async (): Promise<AuthResult> => {
-    if (!auth) {
-      return { success: false, error: "Firebase auth not initialized" }
-    }
-
     try {
+      if (!auth) {
+        console.error("Firebase auth not initialized")
+        return { success: false, error: "Firebase auth not initialized" }
+      }
+
+      // Sign out from Firebase
       await firebaseSignOut(auth)
 
-      // Clear session cookie
-      try {
-        await fetch("/api/auth/logout", {
-          method: "POST",
-          credentials: "include",
-        })
-      } catch (error) {
-        console.error("Error clearing session:", error)
-      }
+      // Clear basic storage
+      localStorage.clear()
+      sessionStorage.clear()
+
+      // Call logout API to clear cookies
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      })
+
+      // Redirect to login
+      window.location.href = "/login"
 
       return { success: true }
     } catch (error: any) {
       console.error("Sign out error:", error)
+      // Force redirect even on error
+      window.location.href = "/login"
       return {
         success: false,
         error: error.message || "Failed to sign out",

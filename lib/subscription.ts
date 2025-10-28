@@ -6,7 +6,7 @@ export type SubscriptionStatus = "active" | "inactive" | "canceled" | "past_due"
 
 export interface SubscriptionData {
   isActive: boolean
-  plan: "free" | "pro" | "creator_pro"
+  plan: "starter" | "pro" | "creator_pro" // Changed "free" to "starter"
   stripeCustomerId?: string
   stripeSubscriptionId?: string
   currentPeriodEnd?: Date
@@ -16,50 +16,78 @@ export interface SubscriptionData {
     noWatermark: boolean
     prioritySupport: boolean
     platformFeePercentage: number
-    maxVideosPerBundle: number | null // null means unlimited
-    maxBundles: number | null // null means unlimited
+    maxVideosPerBundle: number | null
+    maxBundles: number | null
+    maxFolders: number | null
+    canCreateSubfolders: boolean
+    canAnalyzeTranscripts: boolean
+    canCreateBundles: boolean
   }
 }
 
-// Defaults for free tier
-const FREE_DEFAULTS = {
+const STARTER_DEFAULTS = {
   unlimitedDownloads: false,
   premiumContent: false,
   noWatermark: false,
   prioritySupport: false,
-  platformFeePercentage: 20,
-  maxVideosPerBundle: 10,
-  maxBundles: 2,
+  platformFeePercentage: 20, // 20% for Starter
+  maxVideosPerBundle: 15, // 15 videos per bundle for Starter
+  maxBundles: 5, // 5 bundles for Starter
+  maxFolders: 3, // 3 folders for Starter
+  canCreateSubfolders: true, // Starter can create subfolders
+  canAnalyzeTranscripts: false, // Basic Vex AI only - no transcript analysis
+  canCreateBundles: false,
 }
 
 export async function checkSubscription(userId?: string): Promise<SubscriptionData> {
   try {
     if (!userId) {
-      // Anonymous/unauthenticated -> treat as free
       return {
         isActive: false,
-        plan: "free",
-        features: { ...FREE_DEFAULTS },
+        plan: "starter", // Changed from "free" to "starter"
+        features: { ...STARTER_DEFAULTS },
       }
     }
 
     const membership = await getMembership(userId)
     if (membership && membership.isActive) {
+      const isStarterPlan = membership.plan === "starter"
+
       return {
         isActive: true,
-        plan: "creator_pro",
+        plan: membership.plan as "starter" | "pro" | "creator_pro",
         stripeCustomerId: membership.stripeCustomerId,
         stripeSubscriptionId: membership.stripeSubscriptionId,
         currentPeriodEnd: membership.currentPeriodEnd,
-        features: {
-          unlimitedDownloads: true,
-          premiumContent: true,
-          noWatermark: true,
-          prioritySupport: true,
-          platformFeePercentage: 10,
-          maxVideosPerBundle: null, // unlimited
-          maxBundles: null, // unlimited
-        },
+        features: isStarterPlan
+          ? {
+              // Starter plan features
+              unlimitedDownloads: false,
+              premiumContent: false,
+              noWatermark: false,
+              prioritySupport: false,
+              platformFeePercentage: 20,
+              maxVideosPerBundle: 15,
+              maxBundles: 5,
+              maxFolders: 3,
+              canCreateSubfolders: true,
+              canAnalyzeTranscripts: false,
+              canCreateBundles: false,
+            }
+          : {
+              // Creator Pro features
+              unlimitedDownloads: true,
+              premiumContent: true,
+              noWatermark: true,
+              prioritySupport: true,
+              platformFeePercentage: 10,
+              maxVideosPerBundle: null,
+              maxBundles: null,
+              maxFolders: null,
+              canCreateSubfolders: true,
+              canAnalyzeTranscripts: true,
+              canCreateBundles: true,
+            },
       }
     }
 
@@ -67,20 +95,32 @@ export async function checkSubscription(userId?: string): Promise<SubscriptionDa
     if (freeSnap.exists()) {
       const data = freeSnap.data() as any
 
-      // Prefer stored limits if present, fallback to defaults
       const platformFeePercentage =
         typeof data.platformFeePercentage === "number"
           ? data.platformFeePercentage
-          : FREE_DEFAULTS.platformFeePercentage
+          : STARTER_DEFAULTS.platformFeePercentage
 
       const maxVideosPerBundle =
-        typeof data.maxVideosPerBundle === "number" ? data.maxVideosPerBundle : FREE_DEFAULTS.maxVideosPerBundle
+        typeof data.maxVideosPerBundle === "number" ? data.maxVideosPerBundle : STARTER_DEFAULTS.maxVideosPerBundle
 
-      const maxBundles = typeof data.bundlesLimit === "number" ? data.bundlesLimit : FREE_DEFAULTS.maxBundles
+      const maxBundles = typeof data.bundlesLimit === "number" ? data.bundlesLimit : STARTER_DEFAULTS.maxBundles
+
+      const maxFolders = typeof data.maxFolders === "number" ? data.maxFolders : STARTER_DEFAULTS.maxFolders
+
+      const canCreateSubfolders =
+        typeof data.canCreateSubfolders === "boolean" ? data.canCreateSubfolders : STARTER_DEFAULTS.canCreateSubfolders
+
+      const canAnalyzeTranscripts =
+        typeof data.canAnalyzeTranscripts === "boolean"
+          ? data.canAnalyzeTranscripts
+          : STARTER_DEFAULTS.canAnalyzeTranscripts
+
+      const canCreateBundles =
+        typeof data.canCreateBundles === "boolean" ? data.canCreateBundles : STARTER_DEFAULTS.canCreateBundles
 
       return {
         isActive: false,
-        plan: "free",
+        plan: "starter", // Changed from "free" to "starter"
         features: {
           unlimitedDownloads: false,
           premiumContent: false,
@@ -89,26 +129,29 @@ export async function checkSubscription(userId?: string): Promise<SubscriptionDa
           platformFeePercentage,
           maxVideosPerBundle,
           maxBundles,
+          maxFolders,
+          canCreateSubfolders,
+          canAnalyzeTranscripts,
+          canCreateBundles,
         },
       }
     }
 
     return {
       isActive: false,
-      plan: "free",
-      features: { ...FREE_DEFAULTS },
+      plan: "starter", // Changed from "free" to "starter"
+      features: { ...STARTER_DEFAULTS },
     }
   } catch (error) {
     console.error("Error checking subscription (tier lookup):", error)
     return {
       isActive: false,
-      plan: "free",
-      features: { ...FREE_DEFAULTS },
+      plan: "starter", // Changed from "free" to "starter"
+      features: { ...STARTER_DEFAULTS },
     }
   }
 }
 
-// Kept for compatibility with any existing callers that check "pro" too.
 export function getSubscriptionFeatures(plan: string) {
   switch (plan) {
     case "pro":
@@ -118,12 +161,16 @@ export function getSubscriptionFeatures(plan: string) {
         premiumContent: true,
         noWatermark: true,
         prioritySupport: true,
-        platformFeePercentage: 10,
-        maxVideosPerBundle: null, // unlimited
-        maxBundles: null, // unlimited
+        platformFeePercentage: 10, // 10% for Creator Pro
+        maxVideosPerBundle: null, // Unlimited for Creator Pro
+        maxBundles: null, // Unlimited for Creator Pro
+        maxFolders: null, // Unlimited for Creator Pro
+        canCreateSubfolders: true,
+        canAnalyzeTranscripts: true, // Full Vex AI with transcript analysis
+        canCreateBundles: true,
       }
     default:
-      return { ...FREE_DEFAULTS }
+      return { ...STARTER_DEFAULTS }
   }
 }
 
@@ -142,11 +189,15 @@ export function calculateCreatorEarnings(amount: number, plan: string): number {
 }
 
 export function getMaxVideosPerBundle(plan: string): number | null {
-  return plan === "pro" || plan === "creator_pro" ? null : FREE_DEFAULTS.maxVideosPerBundle
+  return plan === "pro" || plan === "creator_pro" ? null : STARTER_DEFAULTS.maxVideosPerBundle
 }
 
 export function getMaxBundles(plan: string): number | null {
-  return plan === "pro" || plan === "creator_pro" ? null : FREE_DEFAULTS.maxBundles
+  return plan === "pro" || plan === "creator_pro" ? null : STARTER_DEFAULTS.maxBundles
+}
+
+export function getMaxFolders(plan: string): number | null {
+  return plan === "pro" || plan === "creator_pro" ? null : STARTER_DEFAULTS.maxFolders
 }
 
 export function canAddVideoToBundle(currentVideoCount: number, plan: string): boolean {
@@ -159,4 +210,16 @@ export function canCreateBundle(currentBundleCount: number, plan: string): boole
   const maxBundles = getMaxBundles(plan)
   if (maxBundles === null) return true // unlimited
   return currentBundleCount < maxBundles
+}
+
+export function canCreateSubfolders(plan: string): boolean {
+  return plan === "pro" || plan === "creator_pro"
+}
+
+export function canAnalyzeTranscripts(plan: string): boolean {
+  return plan === "pro" || plan === "creator_pro"
+}
+
+export function canUserCreateBundles(plan: string): boolean {
+  return plan === "pro" || plan === "creator_pro"
 }

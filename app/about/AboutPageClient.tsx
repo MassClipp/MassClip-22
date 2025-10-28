@@ -14,20 +14,19 @@ export default function AboutPageClient() {
       {/* Header */}
       <header className="relative z-10 px-6 py-6">
         <nav className="flex items-center justify-between max-w-7xl mx-auto">
-          <Link href="/" className="text-white font-light text-2xl">
-            Mass
-            <span className="bg-gradient-to-br from-slate-300 via-cyan-200 via-blue-100 to-white bg-clip-text text-transparent">
-              Clip
+          <div className="text-white font-light text-2xl">
+            <span className="font-league-spartan font-bold" style={{ fontFamily: "var(--font-league-spartan)" }}>
+              Vex
             </span>
-          </Link>
+          </div>
 
           {/* Center Navigation */}
           <div className="hidden md:flex items-center space-x-8">
             <Link href="/dashboard/upgrade" className="text-white/80 hover:text-white transition-colors font-light">
               Upgrade
             </Link>
-            <Link href="/explore" className="text-white/80 hover:text-white transition-colors font-light">
-              Explore
+            <Link href="/dashboard/upload" className="text-white/80 hover:text-white transition-colors font-light">
+              Upload
             </Link>
           </div>
 
@@ -62,7 +61,15 @@ export default function AboutPageClient() {
 
                 <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
                   Instead of selling files through messy downloads or complicated exchanges, MassClip gives you a simple
-                  storefront where others can browse, preview, and buy your content with ease.
+                  storefront where others can browse, preview, and buy your content with ease. But we know the real pain
+                  point: organizing your content for sale is tedious and time-consuming.
+                </p>
+
+                <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
+                  That's where Vex comes in. Too many creators get lazy with organizing folders or content bundles they
+                  put up for sale— they either don't organize it at all or spend hours doing manual sorting work. With
+                  Vex's AI-powered organization, you can simply tell it what content you want in which folder, what
+                  content you want in which bundle, and it does it for you in seconds.
                 </p>
               </div>
             </div>
@@ -76,13 +83,21 @@ export default function AboutPageClient() {
               <div className="space-y-6">
                 <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
                   Our mission is to put a store link in the bio of every faceless creator who wants to turn their
-                  content into income. Too many creators put in serious work but never see the financial return.
+                  content into income—without the headache of manual organization. Too many creators put in serious work
+                  but never see the financial return, often because organizing content for sale feels overwhelming.
                 </p>
 
                 <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
-                  MassClip changes that by giving you the tools to set up your own digital store and start selling your
-                  content directly to other creators who need it. You should not have to chase payments or waste time.
-                  You should be building your brand and getting paid for the content you already know how to create.
+                  MassClip changes that by giving you the tools to set up your own digital store, and Vex makes it
+                  effortless to organize everything. No more spending hours sorting files or creating bundle packs
+                  manually. Just tell Vex what you want sorted, describe the bundle packs you want to sell, and it makes
+                  it happen in a short amount of time.
+                </p>
+
+                <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
+                  You should not have to chase payments, waste time on tedious organization, or let great content sit
+                  unorganized. You should be building your brand and getting paid for the content you already know how
+                  to create—while Vex handles the busy work of keeping everything perfectly organized.
                 </p>
               </div>
             </div>
@@ -179,9 +194,11 @@ export default function AboutPageClient() {
 
           <div className="border-t border-gray-200 mt-6 pt-4">
             <div className="flex flex-col md:flex-row justify-between items-center">
-              <div className="text-gray-600 font-light">© 2025 MassClip. All rights reserved.</div>
+              <div className="text-gray-600 font-light">© 2025 Vex. All rights reserved.</div>
               <div className="text-black font-light text-xl mt-4 md:mt-0">
-                Mass<span className="bg-gradient-to-r from-black to-black/60 bg-clip-text text-transparent">Clip</span>
+                <span className="font-league-spartan font-bold" style={{ fontFamily: "var(--font-league-spartan)" }}>
+                  Vex
+                </span>
               </div>
             </div>
           </div>

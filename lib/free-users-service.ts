@@ -7,17 +7,26 @@ export interface FreeUserDoc {
   // Usage tracking
   downloadsUsed: number
   bundlesCreated: number
-  // Free tier limits
   downloadsLimit: number
-  bundlesLimit: number
-  maxVideosPerBundle: number
-  platformFeePercentage: number
+  bundlesLimit: number // 5 bundles for Starter
+  maxVideosPerBundle: number // 15 videos per bundle for Starter
+  platformFeePercentage: number // 20% for Starter
+  maxFolders: number // 3 folders for Starter
+  canCreateSubfolders: boolean // true for Starter
+  canAnalyzeTranscripts: boolean // false for Starter (Basic Vex AI only)
+  canCreateBundles: boolean
   // Features
   hasUnlimitedDownloads: boolean
   hasPremiumContent: boolean
   hasNoWatermark: boolean
   hasPrioritySupport: boolean
   hasLimitedOrganization: boolean
+  // Permanent trial tracking field
+  hasUsedFreeTrial?: boolean // Permanent flag - once true, never resets
+  trialActive?: boolean // Indicates if the user is currently in a trial period
+  hasUsedFirstWeekDiscount?: boolean // Track if user has used $3 first week promo on ANY plan
+  firstWeekDiscountUsedDate?: any // When they used the discount
+  firstWeekDiscountPlan?: "starter" | "creator_pro" // Which plan they used it on
   // Timestamps
   createdAt: any
   updatedAt: any
@@ -29,16 +38,21 @@ export interface FreeUserDoc {
   upgradeDate?: any
 }
 
-const FREE_TIER_DEFAULTS = {
+const STARTER_TIER_DEFAULTS = {
   downloadsLimit: 15,
-  bundlesLimit: 2,
-  maxVideosPerBundle: 10,
+  bundlesLimit: 5, // Changed from 2 to 5
+  maxVideosPerBundle: 15, // Changed from 10 to 15
   platformFeePercentage: 20,
+  maxFolders: 3, // Changed from 2 to 3
+  canCreateSubfolders: true, // Changed from false to true
+  canAnalyzeTranscripts: false, // Basic Vex AI only
+  canCreateBundles: false,
   hasUnlimitedDownloads: false,
   hasPremiumContent: false,
   hasNoWatermark: false,
   hasPrioritySupport: false,
   hasLimitedOrganization: true,
+  trialActive: false,
 }
 
 export async function getFreeUser(uid: string): Promise<FreeUserDoc | null> {
@@ -85,8 +99,7 @@ export async function createFreeUser(uid: string, email: string): Promise<FreeUs
     // Usage tracking (starts at 0)
     downloadsUsed: 0,
     bundlesCreated: 0,
-    // Free tier limits
-    ...FREE_TIER_DEFAULTS,
+    ...STARTER_TIER_DEFAULTS,
     // Timestamps
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
@@ -97,7 +110,7 @@ export async function createFreeUser(uid: string, email: string): Promise<FreeUs
   try {
     const docRef = adminDb.collection("freeUsers").doc(uid)
     await docRef.set(freeUserDoc)
-    console.log("✅ Created new freeUser successfully with all tier attributes")
+    console.log("✅ Created new freeUser successfully with Starter tier attributes")
     return freeUserDoc
   } catch (error) {
     console.error("❌ Error creating freeUser:", error)
@@ -220,13 +233,17 @@ export async function canUserAddVideoToBundle(
 }
 
 export async function getFreeUserLimits(uid: string): Promise<{
-  tier: "free"
+  tier: "starter"
   downloadsUsed: number
   downloadsLimit: number
   bundlesCreated: number
   bundlesLimit: number
   maxVideosPerBundle: number
   platformFeePercentage: number
+  maxFolders: number
+  canCreateSubfolders: boolean
+  canAnalyzeTranscripts: boolean
+  canCreateBundles: boolean
   reachedDownloadLimit: boolean
   reachedBundleLimit: boolean
   hasUnlimitedDownloads: boolean
@@ -235,6 +252,9 @@ export async function getFreeUserLimits(uid: string): Promise<{
   hasPrioritySupport: boolean
   hasLimitedOrganization: boolean
   daysUntilReset: number
+  hasUsedFreeTrial?: boolean
+  trialActive?: boolean
+  hasUsedFirstWeekDiscount?: boolean
 }> {
   // Check and reset monthly limits if needed
   const freeUser = await checkAndResetMonthlyLimits(uid)
@@ -242,17 +262,81 @@ export async function getFreeUserLimits(uid: string): Promise<{
   if (!freeUser) {
     // Return default limits if no record exists
     return {
-      tier: "free",
+      tier: "starter",
       downloadsUsed: 0,
-      downloadsLimit: FREE_TIER_DEFAULTS.downloadsLimit,
+      downloadsLimit: STARTER_TIER_DEFAULTS.downloadsLimit,
       bundlesCreated: 0,
-      bundlesLimit: FREE_TIER_DEFAULTS.bundlesLimit,
-      maxVideosPerBundle: FREE_TIER_DEFAULTS.maxVideosPerBundle,
-      platformFeePercentage: FREE_TIER_DEFAULTS.platformFeePercentage,
+      bundlesLimit: STARTER_TIER_DEFAULTS.bundlesLimit,
+      maxVideosPerBundle: STARTER_TIER_DEFAULTS.maxVideosPerBundle,
+      platformFeePercentage: STARTER_TIER_DEFAULTS.platformFeePercentage,
+      maxFolders: STARTER_TIER_DEFAULTS.maxFolders,
+      canCreateSubfolders: STARTER_TIER_DEFAULTS.canCreateSubfolders,
+      canAnalyzeTranscripts: STARTER_TIER_DEFAULTS.canAnalyzeTranscripts,
+      canCreateBundles: STARTER_TIER_DEFAULTS.canCreateBundles,
       reachedDownloadLimit: false,
       reachedBundleLimit: false,
-      ...FREE_TIER_DEFAULTS,
+      ...STARTER_TIER_DEFAULTS,
       daysUntilReset: 0,
+      hasUsedFreeTrial: false,
+      trialActive: false,
+      hasUsedFirstWeekDiscount: false,
+    }
+  }
+
+  // Check if user has old FREE tier limits (2 bundles, 10 videos) and update to STARTER limits (5 bundles, 15 videos)
+  const needsUpdate =
+    freeUser.bundlesLimit === 2 ||
+    freeUser.maxVideosPerBundle === 10 ||
+    freeUser.maxFolders === 2 ||
+    freeUser.canCreateSubfolders === false
+
+  if (needsUpdate) {
+    console.log("🔄 Auto-updating outdated limits to Starter plan defaults for user:", uid.substring(0, 8) + "...")
+
+    const docRef = adminDb.collection("freeUsers").doc(uid)
+    await docRef.update({
+      bundlesLimit: STARTER_TIER_DEFAULTS.bundlesLimit, // 5
+      maxVideosPerBundle: STARTER_TIER_DEFAULTS.maxVideosPerBundle, // 15
+      maxFolders: STARTER_TIER_DEFAULTS.maxFolders, // 3
+      canCreateSubfolders: STARTER_TIER_DEFAULTS.canCreateSubfolders, // true
+      platformFeePercentage: STARTER_TIER_DEFAULTS.platformFeePercentage, // 20
+      updatedAt: FieldValue.serverTimestamp(),
+    })
+
+    console.log("✅ Updated user limits to Starter plan defaults")
+
+    // Fetch the updated document
+    const updatedDoc = await docRef.get()
+    const updatedFreeUser = updatedDoc.data() as FreeUserDoc
+
+    // Calculate days until next reset
+    const now = new Date()
+    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+    const daysUntilReset = Math.ceil((nextMonth.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+
+    return {
+      tier: "starter",
+      downloadsUsed: updatedFreeUser.downloadsUsed,
+      downloadsLimit: updatedFreeUser.downloadsLimit,
+      bundlesCreated: updatedFreeUser.bundlesCreated,
+      bundlesLimit: updatedFreeUser.bundlesLimit,
+      maxVideosPerBundle: updatedFreeUser.maxVideosPerBundle,
+      platformFeePercentage: updatedFreeUser.platformFeePercentage,
+      maxFolders: updatedFreeUser.maxFolders,
+      canCreateSubfolders: updatedFreeUser.canCreateSubfolders,
+      canAnalyzeTranscripts: updatedFreeUser.canAnalyzeTranscripts,
+      canCreateBundles: updatedFreeUser.canCreateBundles,
+      reachedDownloadLimit: updatedFreeUser.downloadsUsed >= updatedFreeUser.downloadsLimit,
+      reachedBundleLimit: updatedFreeUser.bundlesCreated >= updatedFreeUser.bundlesLimit,
+      hasUnlimitedDownloads: updatedFreeUser.hasUnlimitedDownloads,
+      hasPremiumContent: updatedFreeUser.hasPremiumContent,
+      hasNoWatermark: updatedFreeUser.hasNoWatermark,
+      hasPrioritySupport: updatedFreeUser.hasPrioritySupport,
+      hasLimitedOrganization: updatedFreeUser.hasLimitedOrganization,
+      daysUntilReset,
+      hasUsedFreeTrial: updatedFreeUser.hasUsedFreeTrial ?? false,
+      trialActive: updatedFreeUser.trialActive ?? false,
+      hasUsedFirstWeekDiscount: updatedFreeUser.hasUsedFirstWeekDiscount ?? false,
     }
   }
 
@@ -262,13 +346,17 @@ export async function getFreeUserLimits(uid: string): Promise<{
   const daysUntilReset = Math.ceil((nextMonth.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
 
   return {
-    tier: "free",
+    tier: "starter",
     downloadsUsed: freeUser.downloadsUsed,
     downloadsLimit: freeUser.downloadsLimit,
     bundlesCreated: freeUser.bundlesCreated,
     bundlesLimit: freeUser.bundlesLimit,
     maxVideosPerBundle: freeUser.maxVideosPerBundle,
     platformFeePercentage: freeUser.platformFeePercentage,
+    maxFolders: freeUser.maxFolders ?? STARTER_TIER_DEFAULTS.maxFolders,
+    canCreateSubfolders: freeUser.canCreateSubfolders ?? STARTER_TIER_DEFAULTS.canCreateSubfolders,
+    canAnalyzeTranscripts: freeUser.canAnalyzeTranscripts ?? STARTER_TIER_DEFAULTS.canAnalyzeTranscripts,
+    canCreateBundles: freeUser.canCreateBundles ?? STARTER_TIER_DEFAULTS.canCreateBundles,
     reachedDownloadLimit: freeUser.downloadsUsed >= freeUser.downloadsLimit,
     reachedBundleLimit: freeUser.bundlesCreated >= freeUser.bundlesLimit,
     hasUnlimitedDownloads: freeUser.hasUnlimitedDownloads,
@@ -277,6 +365,9 @@ export async function getFreeUserLimits(uid: string): Promise<{
     hasPrioritySupport: freeUser.hasPrioritySupport,
     hasLimitedOrganization: freeUser.hasLimitedOrganization,
     daysUntilReset,
+    hasUsedFreeTrial: freeUser.hasUsedFreeTrial ?? false,
+    trialActive: freeUser.trialActive ?? false,
+    hasUsedFirstWeekDiscount: freeUser.hasUsedFirstWeekDiscount ?? false,
   }
 }
 
@@ -298,6 +389,58 @@ export async function upgradeFreeUserToPro(uid: string): Promise<void> {
     console.log("✅ Free user marked as upgraded to pro")
   } catch (error) {
     console.error("❌ Error upgrading free user:", error)
+    throw error
+  }
+}
+
+export async function downgradeFreeUserFromTrial(uid: string): Promise<void> {
+  console.log("🔄 Downgrading user from trial to starter plan:", uid.substring(0, 8) + "...")
+
+  try {
+    const docRef = adminDb.collection("freeUsers").doc(uid)
+    const docSnap = await docRef.get()
+
+    if (docSnap.exists) {
+      await docRef.update({
+        trialActive: false,
+        canCreateBundles: false,
+        canAnalyzeTranscripts: false,
+        maxFolders: 3, // Starter tier
+        canCreateSubfolders: true, // Starter tier
+        bundlesLimit: 5, // Starter tier
+        maxVideosPerBundle: 15, // Starter tier
+        platformFeePercentage: 20,
+        updatedAt: FieldValue.serverTimestamp(),
+      })
+      console.log("✅ Updated existing freeUser record to Starter plan limits")
+    } else {
+      const freeUserDoc: Partial<FreeUserDoc> = {
+        uid,
+        email: "", // Will be updated when we have the email
+        downloadsUsed: 0,
+        bundlesCreated: 0,
+        ...STARTER_TIER_DEFAULTS,
+        hasUsedFreeTrial: true, // Mark that they've used their trial
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        lastResetDate: FieldValue.serverTimestamp(),
+        currentPeriodStart: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+      }
+      await docRef.set(freeUserDoc)
+      console.log("✅ Created new freeUser record with Starter plan limits")
+    }
+
+    // Also update the users collection
+    const userRef = adminDb.collection("users").doc(uid)
+    await userRef.update({
+      trialActive: false,
+      plan: "starter", // Changed from "free" to "starter"
+      updatedAt: FieldValue.serverTimestamp(),
+    })
+
+    console.log("✅ User downgraded from trial to Starter plan successfully")
+  } catch (error) {
+    console.error("❌ Error downgrading user from trial:", error)
     throw error
   }
 }

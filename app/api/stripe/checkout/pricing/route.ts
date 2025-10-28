@@ -1,14 +1,15 @@
 import { type NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
-import { auth, isFirebaseAdminInitialized } from "@/lib/firebase-admin"
+import { auth, isFirebaseAdminInitialized, adminDb } from "@/lib/firebase-admin"
 
 // Initialize Stripe with the secret key from environment variables
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
 })
 
-// Fallback Price ID for testing if the environment variable is not set
-const FALLBACK_TEST_PRICE_ID = "price_1P0jL4H6aJg9jZ4Y6yZ4jZ4Y" // Replace with a valid test price ID if needed
+const STARTER_PRICE_ID = "price_1SKKFPDheyb0pkWFBT6lf7V7" // $3/month flat (no trial)
+const CREATOR_VIP_FIRST_TIME_PRICE_ID = "price_1SK7SzDheyb0pkWFaKOzIOzf" // $15/month with 3-day trial
+const CREATOR_VIP_REGULAR_PRICE_ID = "price_1SK7SzDheyb0pkWFaKOzIOzf" // $15/month no trial
 
 export async function POST(request: NextRequest) {
   console.log("🚀 [Membership Checkout] Starting session creation...")
@@ -20,8 +21,8 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { idToken, overridePriceId } = body
-    console.log("📝 [Membership Checkout] Request body received:", { hasIdToken: !!idToken, overridePriceId })
+    const { idToken, plan } = body
+    console.log("📝 [Membership Checkout] Request body received:", { hasIdToken: !!idToken, plan })
 
     if (!idToken) {
       console.error("❌ [Membership Checkout] Authentication error: Missing idToken.")
@@ -38,25 +39,52 @@ export async function POST(request: NextRequest) {
     }
 
     const { uid, email, name } = decodedToken
-    console.log("✅ [Membership Checkout] User authenticated:", { uid, email })
+    console.log("✅ [Membership Checkout] User authenticated:", { uid, email, plan })
 
-    // --- Determine Stripe Price ID ---
-    const priceId = overridePriceId || process.env.STRIPE_PRICE_ID || FALLBACK_TEST_PRICE_ID
-    if (!priceId) {
-      console.error("❌ [Membership Checkout] Configuration error: Missing Stripe Price ID.")
-      return NextResponse.json({ error: "Stripe Price ID is not configured." }, { status: 500 })
+    let hasUsedTrial = false
+    try {
+      const freeUserDoc = await adminDb.collection("freeUsers").doc(uid).get()
+      if (freeUserDoc.exists) {
+        const freeUserData = freeUserDoc.data()
+        hasUsedTrial = freeUserData?.hasUsedFreeTrial || false // Changed from hasUsedFirstWeekDiscount
+        console.log(`📊 [Membership Checkout] User trial status: ${hasUsedTrial}`)
+      }
+    } catch (error) {
+      console.error("⚠️ [Membership Checkout] Error checking trial status:", error)
     }
+
+    let priceId: string
+    let trialPeriodDays: number | undefined = undefined
+
+    if (plan === "starter") {
+      priceId = STARTER_PRICE_ID
+      console.log(`💲 [Membership Checkout] Starter Plan - $3/month (no trial)`)
+    } else if (plan === "creator_vip" || plan === "creator_pro") {
+      priceId = hasUsedTrial ? CREATOR_VIP_REGULAR_PRICE_ID : CREATOR_VIP_FIRST_TIME_PRICE_ID
+      trialPeriodDays = hasUsedTrial ? undefined : 3
+      console.log(
+        `💲 [Membership Checkout] Creator VIP - ${hasUsedTrial ? "$15/month (no trial)" : "3-day free trial then $15/month"}`,
+      )
+    }
+    // Default to Creator VIP
+    else {
+      priceId = hasUsedTrial ? CREATOR_VIP_REGULAR_PRICE_ID : CREATOR_VIP_FIRST_TIME_PRICE_ID
+      trialPeriodDays = hasUsedTrial ? undefined : 3
+      console.log(`💲 [Membership Checkout] No plan specified, defaulting to Creator VIP`)
+    }
+
     console.log(`💲 [Membership Checkout] Using Stripe Price ID: ${priceId}`)
+    console.log(`💲 [Membership Checkout] Trial period days: ${trialPeriodDays || "none"}`)
 
     // --- Construct Metadata ---
-    // This metadata is CRITICAL for the webhook to identify the user
     const metadata = {
-      buyerUid: uid, // The most important piece of data
+      buyerUid: uid,
       buyerEmail: email || "",
       buyerName: name || email?.split("@")[0] || "",
-      plan: "creator_pro",
-      contentType: "membership", // Differentiates from bundle purchases
+      plan: plan === "starter" ? "starter" : "creator_pro",
+      contentType: "membership",
       source: "dashboard_membership_upgrade",
+      isFirstTimeDiscount: (trialPeriodDays !== undefined && !hasUsedTrial).toString(),
     }
     console.log("📋 [Membership Checkout] Constructed metadata for Stripe:", metadata)
 
@@ -65,9 +93,9 @@ export async function POST(request: NextRequest) {
     const protocol = process.env.NODE_ENV === "development" ? "http" : "https"
     const siteUrl = `${protocol}://${host}`
 
-    // --- Create Stripe Checkout Session ---
     console.log("🔄 [Membership Checkout] Creating Stripe session on PLATFORM account...")
-    const session = await stripe.checkout.sessions.create({
+
+    const sessionParams: Stripe.Checkout.SessionCreateParams = {
       payment_method_types: ["card"],
       mode: "subscription",
       line_items: [
@@ -76,18 +104,17 @@ export async function POST(request: NextRequest) {
           quantity: 1,
         },
       ],
-      // Use the authenticated user's email
       customer_email: email,
-      // Set success and cancel URLs
       success_url: `${siteUrl}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${siteUrl}/dashboard`,
-      // Attach the critical metadata
+      cancel_url: `${siteUrl}/dashboard/upgrade`,
       metadata: metadata,
-      // Also attach metadata to the subscription for easier debugging
       subscription_data: {
         metadata: metadata,
+        ...(trialPeriodDays && { trial_period_days: trialPeriodDays }), // Add trial period if applicable
       },
-    })
+    }
+
+    const session = await stripe.checkout.sessions.create(sessionParams)
 
     console.log("✅ [Membership Checkout] Stripe session created successfully!")
     console.log(`   - Session ID: ${session.id}`)

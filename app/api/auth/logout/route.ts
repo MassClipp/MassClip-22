@@ -8,24 +8,20 @@ export async function POST() {
   try {
     const cookieStore = cookies()
 
-    // Clear all auth-related cookies
-    const authCookies = [
-      "session",
-      "firebase-auth-token",
-      "__session",
-      "next-auth.session-token",
-      "next-auth.csrf-token",
-      "next-auth.callback-url",
-    ]
-
-    authCookies.forEach((cookieName) => {
-      cookieStore.delete(cookieName)
+    const allCookies = cookieStore.getAll()
+    allCookies.forEach((cookie) => {
+      cookieStore.delete(cookie.name)
     })
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       message: "Successfully logged out",
     })
+
+    response.headers.set("Cache-Control", "no-store, must-revalidate")
+    response.headers.set("Clear-Site-Data", '"cache", "cookies", "storage"')
+
+    return response
   } catch (error) {
     console.error("Error clearing session:", error)
     return NextResponse.json(

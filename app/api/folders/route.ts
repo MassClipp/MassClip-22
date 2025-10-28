@@ -134,6 +134,54 @@ export async function POST(request: NextRequest) {
         )
       }
 
+      const { checkSubscription } = await import("@/lib/subscription")
+      const subscription = await checkSubscription(userId)
+
+      // If creating a subfolder, check if user has permission
+      if (parentId && parentId !== "root") {
+        if (!subscription.features.canCreateSubfolders) {
+          return NextResponse.json(
+            {
+              error: "Subfolder creation is not available on the Free plan",
+              details: "Upgrade to Creator Pro to create subfolders and organize your content better",
+              code: "SUBFOLDER_NOT_ALLOWED",
+            },
+            { status: 403 },
+          )
+        }
+      }
+
+      // If creating a root folder, check folder count limit
+      if (!parentId || parentId === "root") {
+        const maxFolders = subscription.features.maxFolders
+
+        if (maxFolders !== null) {
+          // Count existing root folders
+          const rootFoldersSnapshot = await db
+            .collection("folders")
+            .where("userId", "==", userId)
+            .where("parentId", "==", null)
+            .where("isDeleted", "==", false)
+            .get()
+
+          console.log(
+            `[v0] Folder limit check: ${rootFoldersSnapshot.size}/${maxFolders} folders (plan: ${subscription.plan})`,
+          )
+
+          if (rootFoldersSnapshot.size >= maxFolders) {
+            const planName = subscription.plan === "starter" ? "Starter" : "Free"
+            return NextResponse.json(
+              {
+                error: `Folder limit reached (${maxFolders} folders max on ${planName} plan)`,
+                details: "Upgrade to Creator Pro for unlimited folders",
+                code: "FOLDER_LIMIT_REACHED",
+              },
+              { status: 403 },
+            )
+          }
+        }
+      }
+
       // Validate parent folder exists if specified
       let parentPath = ""
       if (parentId && parentId !== "root") {

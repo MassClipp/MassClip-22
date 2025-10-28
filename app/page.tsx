@@ -2,300 +2,259 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { useEffect, useRef } from "react"
+import { useEffect, useState } from "react"
+import { LandingVexInterface } from "@/components/landing-vex-interface"
+import { LandingReview } from "@/components/landing-review"
+import { LandingVideoCarousel } from "@/components/landing-video-carousel"
+import { Sparkles, Package, TrendingUp } from "lucide-react"
 
 const LandingPage = () => {
   const router = useRouter()
-  const observerRef = useRef<IntersectionObserver | null>(null)
+  const [scrolled, setScrolled] = useState(false)
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      // Pre-warm router for better UX
       router.prefetch("/signup")
-      router.prefetch("/dashboard/explore")
-      router.prefetch("/dashboard/upgrade")
+      router.prefetch("/login")
     }, 100)
 
     return () => clearTimeout(timer)
   }, [router])
 
   useEffect(() => {
-    observerRef.current = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add("animate-in")
-          }
-        })
-      },
-      { threshold: 0.1, rootMargin: "50px" },
-    )
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 100)
+    }
 
-    const elements = document.querySelectorAll(".scroll-animate")
-    elements.forEach((el) => observerRef.current?.observe(el))
-
-    return () => observerRef.current?.disconnect()
+    window.addEventListener("scroll", handleScroll)
+    return () => window.removeEventListener("scroll", handleScroll)
   }, [])
 
-  const handleGetStarted = () => {
-    router.push("/signup")
-  }
-
-  const handleExplore = () => {
-    router.push("/dashboard/explore")
-  }
-
   return (
-    <div className="min-h-screen bg-black relative overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-tl from-cyan-200/20 via-white/10 to-transparent opacity-70" />
-      <div className="absolute bottom-0 right-0 w-1/2 h-1/2 bg-gradient-radial from-cyan-100/15 to-transparent opacity-90" />
-      <div className="absolute top-0 left-0 w-1/3 h-1/3 bg-gradient-radial from-slate-300/10 to-transparent opacity-60" />
+    <div className="min-h-screen flex flex-col relative overflow-hidden bg-black">
+      <div className="fixed inset-0 z-0">
+        <div className="absolute inset-0 bg-black" />
 
-      <header className="relative z-10 px-6 py-6">
-        <nav className="flex items-center justify-between max-w-7xl mx-auto">
-          <div className="text-white font-light text-2xl">
-            Mass
-            <span className="gradient-text">Clip</span>
-          </div>
+        <div className="absolute top-1/4 right-1/4 w-[600px] h-[600px] bg-teal-500/10 rounded-full blur-[120px]" />
+        <div className="absolute bottom-1/3 left-1/4 w-[500px] h-[500px] bg-cyan-500/8 rounded-full blur-[100px]" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] bg-teal-400/6 rounded-full blur-[80px]" />
+      </div>
 
-          <div className="hidden md:flex items-center space-x-8">
-            <Link href="/dashboard/upgrade" className="text-white/80 hover:text-white transition-colors font-light">
-              Upgrade
-            </Link>
-            <Link href="/dashboard/explore" className="text-white/80 hover:text-white transition-colors font-light">
-              Explore
-            </Link>
-            <Link href="/about" className="text-white/80 hover:text-white transition-colors font-light">
-              About Us
-            </Link>
-          </div>
-
-          <Link href="/login" className="text-white/80 hover:text-white transition-colors font-light">
-            Login
-          </Link>
-        </nav>
-      </header>
-
-      <main className="relative z-10 flex items-center justify-start min-h-[calc(100vh-120px)] px-6">
-        <div className="max-w-7xl mx-auto w-full">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
-            <div className="max-w-3xl">
-              <div className="space-y-6">
-                <h1 className="hero-text text-5xl lg:text-7xl font-thin text-white/80 leading-tight">
-                  Monetize Your <span className="gradient-text">Faceless</span> Content
-                </h1>
-
-                <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
-                  Welcome to a smarter way to monetize, sell, and get paid for your faceless content.
-                </p>
-
-                <div className="flex flex-col sm:flex-row gap-4 pt-4">
-                  <Button
-                    onClick={handleGetStarted}
-                    className="px-8 py-4 bg-white text-black hover:bg-white/90 font-light rounded-full text-lg transition-all duration-200"
-                  >
-                    Get Started
-                  </Button>
-
-                  <Button
-                    onClick={handleExplore}
-                    variant="outline"
-                    className="px-8 py-4 border-2 border-white/30 text-white hover:bg-white/10 font-light rounded-full text-lg transition-all duration-200 bg-transparent"
-                  >
-                    Explore
-                  </Button>
-                </div>
-              </div>
+      <div className="relative z-10 flex flex-col min-h-screen">
+        <header className="sticky top-0 z-50 backdrop-blur-xl">
+          <nav className="flex items-center justify-between max-w-7xl mx-auto px-6 py-4 relative">
+            <div className="text-white font-light text-2xl">
+              <span className="font-league-spartan font-bold" style={{ fontFamily: "var(--font-league-spartan)" }}>
+                Vex
+              </span>
             </div>
 
-            <div className="hidden lg:flex flex-col items-center justify-center space-y-6 h-full">
-              <div className="text-center slide-in-right">
-                <div className="text-8xl xl:text-9xl font-extralight leading-none tracking-tight">
-                  <div className="gradient-text drop-shadow-[0_8px_16px_rgba(255,255,255,0.3)]">
-                    <div className="mb-2">Capitalize</div>
-                    <div className="mb-2">Sell</div>
-                    <div>Monetize</div>
+            <div className="absolute left-1/2 transform -translate-x-1/2 hidden md:flex items-center gap-6">
+              <a href="#features" className="text-white/80 hover:text-white transition-colors font-light text-sm">
+                Features
+              </a>
+              <a href="#how-it-works" className="text-white/80 hover:text-white transition-colors font-light text-sm">
+                How It Works
+              </a>
+              <Link href="/about" className="text-white/80 hover:text-white transition-colors font-light text-sm">
+                About Us
+              </Link>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <Link href="/login" className="text-white/80 hover:text-white transition-colors font-light text-sm">
+                Login
+              </Link>
+              <Button
+                onClick={() => router.push("/signup")}
+                className="bg-gradient-to-r from-teal-500 to-cyan-400 text-white hover:from-teal-600 hover:to-cyan-500 font-light rounded-full px-6 py-2 text-sm shadow-lg shadow-teal-500/20"
+              >
+                Sign Up Free
+              </Button>
+            </div>
+          </nav>
+        </header>
+
+        <main className="flex-1 flex flex-col">
+          {/* VEX Interface Hero Section */}
+          <LandingVexInterface />
+
+          <section className="py-12 px-6">
+            <div className="max-w-7xl mx-auto text-center">
+              <h2 className="text-3xl md:text-4xl font-bold text-white mb-3">
+                Creators sell billions in content every year.
+              </h2>
+              <p className="text-white/60 text-lg">Get your storefront live and start earning today.</p>
+            </div>
+          </section>
+
+          <LandingVideoCarousel />
+
+          {/* Review Section */}
+          <LandingReview />
+
+          <section className="py-24 px-6 border-t border-white/10">
+            <div className="max-w-7xl mx-auto">
+              <div className="grid md:grid-cols-2 gap-12 items-center">
+                <div>
+                  <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
+                    Vex Organizes Your Content In Seconds
+                  </h2>
+                  <p className="text-white/60 text-lg leading-relaxed mb-6">
+                    No more selling messy zip files. Every piece of content is delivered through a beautiful, HD
+                    interface that your customers will love. Professional folder organization that makes browsing and
+                    downloading seamless.
+                  </p>
+                  <p className="text-white/60 text-lg leading-relaxed">
+                    VEX automatically structures your content with smart naming conventions and logical groupings. Your
+                    customers get a premium experience, not a confusing file dump.
+                  </p>
+                </div>
+                <div className="relative">
+                  <div className="bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 shadow-2xl hover:shadow-teal-500/10 transition-all">
+                    <img
+                      src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/7D123C64-C36B-4ACB-83ED-085BB60E2747.PNG-V4RkOLOzcrUKvamM8cZGlw9BRS9b5W.png"
+                      alt="HD Organized Folders Interface"
+                      className="w-full rounded-lg shadow-lg"
+                    />
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      </main>
+          </section>
 
-      <section className="relative z-10 py-20 px-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="scroll-animate space-y-8">
-            <h2 className="text-4xl lg:text-5xl font-thin text-white">Earning Money As A Faceless Creator</h2>
+          <section id="features" className="py-24 px-6 border-t border-white/10">
+            <div className="max-w-7xl mx-auto">
+              <div className="text-center mb-16">
+                <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">Everything you need to sell content</h2>
+                <p className="text-white/60 text-lg max-w-2xl mx-auto">
+                  VEX AI handles the heavy lifting so you can focus on creating
+                </p>
+              </div>
 
-            <div className="max-w-4xl">
-              <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
-                If you run a faceless page, you already create content that other creators need. Whether it is
-                motivation, memes, sports, trending topics, or cinema, your posts can be packaged and sold. Creators are
-                constantly looking for ready-to-use content that saves them time and effort, and you can turn what you
-                are already making into a new source of income.
+              <div className="grid md:grid-cols-3 gap-8">
+                <div className="bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 hover:bg-white/10 hover:border-white/30 transition-all shadow-xl hover:shadow-2xl hover:shadow-teal-500/10">
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-r from-teal-500 to-cyan-400 flex items-center justify-center mb-6 shadow-lg shadow-teal-500/30">
+                    <Sparkles className="w-6 h-6 text-white" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-white mb-3">AI-Powered Organization</h3>
+                  <p className="text-white/60">
+                    VEX analyzes your content and automatically suggests the best way to organize and bundle your files
+                  </p>
+                </div>
+
+                <div className="bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 hover:bg-white/10 hover:border-white/30 transition-all shadow-xl hover:shadow-2xl hover:shadow-cyan-500/10">
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-r from-teal-500 to-cyan-400 flex items-center justify-center mb-6 shadow-lg shadow-cyan-500/30">
+                    <Package className="w-6 h-6 text-white" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-white mb-3">Smart Bundling</h3>
+                  <p className="text-white/60">
+                    Create sellable bundles in seconds with AI recommendations for pricing and packaging
+                  </p>
+                </div>
+
+                <div className="bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 hover:bg-white/10 hover:border-white/30 transition-all shadow-xl hover:shadow-2xl hover:shadow-teal-500/10">
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-r from-teal-500 to-cyan-400 flex items-center justify-center mb-6 shadow-lg shadow-teal-500/30">
+                    <TrendingUp className="w-6 h-6 text-white" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-white mb-3">Instant Storefront</h3>
+                  <p className="text-white/60">
+                    Get a professional storefront automatically generated for your content with zero setup
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section id="how-it-works" className="py-24 px-6 border-t border-white/10">
+            <div className="max-w-7xl mx-auto">
+              <div className="text-center mb-16">
+                <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">How VEX Works</h2>
+                <p className="text-white/60 text-lg max-w-2xl mx-auto">Organization and sellable bundles in seconds</p>
+              </div>
+
+              <div className="mb-16 max-w-4xl mx-auto">
+                <div className="bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 shadow-2xl">
+                  <img
+                    src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/copy_ACAD5C9D-0800-434F-BC27-E3DE625779B1.JPEG-6TlHbPShOaerHSsdCOqseRiuPKglfX.jpeg"
+                    alt="VEX Chat Interface Example"
+                    className="w-full rounded-lg shadow-lg"
+                  />
+                </div>
+              </div>
+
+              <div className="grid md:grid-cols-3 gap-12">
+                <div className="text-center bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 hover:bg-white/10 hover:border-white/30 transition-all shadow-xl">
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-r from-teal-500 to-cyan-400 flex items-center justify-center mx-auto mb-6 text-2xl font-bold text-white shadow-lg shadow-teal-500/30">
+                    1
+                  </div>
+                  <h3 className="text-xl font-semibold text-white mb-3">Upload Your Content</h3>
+                  <p className="text-white/60">
+                    Drop your videos, audio, or files into VEX. No limits on what you can upload.
+                  </p>
+                </div>
+
+                <div className="text-center bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 hover:bg-white/10 hover:border-white/30 transition-all shadow-xl">
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-r from-teal-500 to-cyan-400 flex items-center justify-center mx-auto mb-6 text-2xl font-bold text-white shadow-lg shadow-cyan-500/30">
+                    2
+                  </div>
+                  <h3 className="text-xl font-semibold text-white mb-3">Let VEX Analyze</h3>
+                  <p className="text-white/60">
+                    VEX AI analyzes your content and suggests the best organization and bundle strategies.
+                  </p>
+                </div>
+
+                <div className="text-center bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 hover:bg-white/10 hover:border-white/30 transition-all shadow-xl">
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-r from-teal-500 to-cyan-400 flex items-center justify-center mx-auto mb-6 text-2xl font-bold text-white shadow-lg shadow-teal-500/30">
+                    3
+                  </div>
+                  <h3 className="text-xl font-semibold text-white mb-3">Start Selling</h3>
+                  <p className="text-white/60">
+                    Vex does everything for you. Create bundles, set prices, and share your storefront. Get paid
+                    instantly via Stripe.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section className="py-24 px-6 border-t border-white/10">
+            <div className="max-w-4xl mx-auto text-center bg-gradient-to-r from-teal-500/10 to-cyan-400/10 backdrop-blur-xl border border-white/20 rounded-3xl p-12 shadow-2xl">
+              <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">Ready to start selling?</h2>
+              <p className="text-white/60 text-lg mb-8">
+                Try VEX for free. Upload your content and see what VEX can do for you.
               </p>
-
-              <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light mt-6">
-                We provide you with a profile style storefront where you can showcase your work. Share free downloads to
-                grow your audience and offer premium content for purchase, giving creators exactly what they want while
-                you build a steady stream of revenue.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="relative z-10 py-20 px-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="scroll-animate grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-            <div className="order-2 lg:order-1">
-              <img
-                src="/images/folder-structure-interface.png"
-                alt="HD Folder Structure Interface"
-                className="w-full max-w-md mx-auto rounded-lg shadow-2xl"
-              />
-            </div>
-
-            <div className="order-1 lg:order-2 space-y-6">
-              <h2 className="text-4xl lg:text-5xl font-thin text-white">HD Folders</h2>
-
-              <div className="space-y-4">
-                <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
-                  Create organized, specific folders for all your content uploads in crystal-clear HD quality. No more
-                  dealing with messy raw files or complicated file management.
-                </p>
-
-                <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
-                  Say goodbye to selling chaotic zip folders to your audience. MassClip handles all file storage and
-                  organization automatically, ensuring everything stays in HD and perfectly organized.
-                </p>
-
-                <p className="text-lg lg:text-xl text-white/70 leading-relaxed font-light">
-                  Your customers get clean, professional access to high-quality content without the frustration of
-                  downloading and extracting messy zip files. Everything is streamlined, organized, and ready to use.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="relative z-10 py-20 px-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="scroll-animate space-y-12">
-            <h2 className="text-4xl lg:text-5xl font-thin text-white">What You Can Sell</h2>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-              <div
-                className="scroll-animate bg-white p-8 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
-                style={{ animationDelay: "0.1s" }}
+              <Button
+                onClick={() => router.push("/signup")}
+                size="lg"
+                className="bg-gradient-to-r from-teal-500 to-cyan-400 text-white hover:from-teal-600 hover:to-cyan-500 font-light rounded-full px-8 py-6 text-lg shadow-xl shadow-teal-500/30 hover:shadow-2xl hover:shadow-teal-500/40 transition-all"
               >
-                <h3 className="text-xl font-light text-black mb-4">B-Roll Content</h3>
-                <p className="text-gray-600 font-light leading-relaxed">
-                  High-quality background footage that creators can use to enhance their videos and storytelling.
-                </p>
-              </div>
+                Get Started For Free
+              </Button>
+            </div>
+          </section>
+        </main>
 
-              <div
-                className="scroll-animate bg-white p-8 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
-                style={{ animationDelay: "0.2s" }}
+        <footer className="border-t border-white/20 bg-white/5 backdrop-blur-xl py-6">
+          <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div className="text-white/60 font-light text-sm">© 2025 Vex. All rights reserved.</div>
+            <div className="flex items-center gap-6 text-sm">
+              <Link href="/terms" className="text-white/60 hover:text-white transition-colors font-light">
+                Terms
+              </Link>
+              <Link href="/privacy" className="text-white/60 hover:text-white transition-colors font-light">
+                Privacy
+              </Link>
+              <a
+                href="mailto:contact@massclip.pro"
+                className="text-white/60 hover:text-white transition-colors font-light"
               >
-                <h3 className="text-xl font-light text-black mb-4">Background Videos</h3>
-                <p className="text-gray-600 font-light leading-relaxed">
-                  Looping video backgrounds perfect for social media posts, presentations, and content creation.
-                </p>
-              </div>
-
-              <div
-                className="scroll-animate bg-white p-8 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
-                style={{ animationDelay: "0.3s" }}
-              >
-                <h3 className="text-xl font-light text-black mb-4">Audio Tracks</h3>
-                <p className="text-gray-600 font-light leading-relaxed">
-                  Music, sound effects, and audio clips that creators can use to enhance their content.
-                </p>
-              </div>
-
-              <div
-                className="scroll-animate bg-white p-8 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
-                style={{ animationDelay: "0.4s" }}
-              >
-                <h3 className="text-xl font-light text-black mb-4">Carousels</h3>
-                <p className="text-gray-600 font-light leading-relaxed">
-                  Ready-made carousel posts and slide templates for Instagram, LinkedIn, and other platforms.
-                </p>
-              </div>
+                Contact
+              </a>
             </div>
           </div>
-        </div>
-      </section>
-
-      <footer className="relative z-10 bg-white py-4 px-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div>
-              <h3 className="text-black font-light text-lg mb-4">Resources</h3>
-              <div className="space-y-3">
-                <Link
-                  href="/resources/free-content"
-                  className="block text-gray-600 hover:text-black transition-colors font-light"
-                >
-                  How to use free content
-                </Link>
-                <Link
-                  href="/resources/optimize-storefront"
-                  className="block text-gray-600 hover:text-black transition-colors font-light"
-                >
-                  How to optimize your storefront
-                </Link>
-                <Link
-                  href="/resources/organize-bundles"
-                  className="block text-gray-600 hover:text-black transition-colors font-light"
-                >
-                  How to organize your bundles
-                </Link>
-              </div>
-            </div>
-
-            <div>
-              <h3 className="text-black font-light text-lg mb-4">Company</h3>
-              <div className="space-y-3">
-                <Link href="/about" className="block text-gray-600 hover:text-black transition-colors font-light">
-                  About Us
-                </Link>
-                <a
-                  href="mailto:contact@massclip.pro"
-                  className="block text-gray-600 hover:text-black transition-colors font-light"
-                >
-                  contact@massclip.pro
-                </a>
-              </div>
-            </div>
-
-            <div>
-              <h3 className="text-black font-light text-lg mb-4">Legal</h3>
-              <div className="space-y-3">
-                <Link href="/terms" className="block text-gray-600 hover:text-black transition-colors font-light">
-                  Terms of Service
-                </Link>
-                <Link href="/privacy" className="block text-gray-600 hover:text-black transition-colors font-light">
-                  Privacy Policy
-                </Link>
-              </div>
-            </div>
-          </div>
-
-          <div className="border-t border-gray-200 mt-6 pt-4">
-            <div className="flex flex-col md:flex-row justify-between items-center">
-              <div className="text-gray-600 font-light">© 2025 MassClip. All rights reserved.</div>
-              <div className="text-black font-light text-xl mt-4 md:mt-0">
-                Mass<span className="bg-gradient-to-br from-black to-black/60 bg-clip-text text-transparent">Clip</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </footer>
+        </footer>
+      </div>
     </div>
   )
 }
