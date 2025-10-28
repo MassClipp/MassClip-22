@@ -84,6 +84,7 @@ export default function ViewStorefrontPage() {
   }>({})
   const [storefrontActive, setStorefrontActive] = useState(false)
   const [updating, setUpdating] = useState(false)
+  const [trialEligible, setTrialEligible] = useState(false)
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -129,6 +130,17 @@ export default function ViewStorefrontPage() {
           if (premiumResponse.ok) {
             const premiumData = await premiumResponse.json()
             setPremiumContent(premiumData.content || [])
+          }
+
+          const token = await user.getIdToken()
+          const trialResponse = await fetch("/api/user/trial-status", {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          })
+          if (trialResponse.ok) {
+            const trialData = await trialResponse.json()
+            setTrialEligible(!trialData.hasUsedFreeTrial && !trialData.hasActiveCreatorVIP)
           }
         }
       } catch (error) {
@@ -286,6 +298,14 @@ export default function ViewStorefrontPage() {
     }
   }
 
+  const handleGoLiveClick = () => {
+    if (trialEligible) {
+      router.push("/welcome/free-trial")
+    } else {
+      router.push("/dashboard/upgrade")
+    }
+  }
+
   const getMemberSince = () => {
     if (createdAt) {
       let date: Date
@@ -334,28 +354,6 @@ export default function ViewStorefrontPage() {
       <div className="fixed inset-0 bg-gradient-to-t from-zinc-900/20 via-transparent to-zinc-800/10 pointer-events-none" />
 
       <div className="relative max-w-6xl mx-auto px-4 sm:px-8 py-8 sm:py-16">
-        <div className="absolute top-8 right-4 sm:top-12 sm:right-8 z-10">
-          <div className="flex items-center gap-3 bg-zinc-900/80 backdrop-blur-sm border border-zinc-800 rounded-lg px-4 py-2 mb-8">
-            <div className="flex flex-col items-end">
-              <span className="text-xs font-medium text-white">Go Live</span>
-              {!isProUser && <span className="text-[10px] text-zinc-500">Pro required</span>}
-            </div>
-            <Switch
-              checked={storefrontActive}
-              onCheckedChange={handleToggleStorefront}
-              disabled={updating || (!isProUser && !storefrontActive)}
-              className="data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-zinc-700"
-            />
-            {storefrontActive ? (
-              <Badge className="bg-green-500/10 text-green-400 border-green-500/20">Live</Badge>
-            ) : (
-              <Badge variant="secondary" className="bg-zinc-700 text-zinc-300">
-                Offline
-              </Badge>
-            )}
-          </div>
-        </div>
-
         {/* Header with inline editing */}
         <div className="mb-8 sm:mb-16">
           <div className="flex items-start justify-between gap-8">
@@ -563,19 +561,51 @@ export default function ViewStorefrontPage() {
           </div>
         </div>
 
-        {/* Stats */}
-        <div className="flex items-center gap-8 mb-12 text-sm">
-          <div className="flex items-center gap-2 text-zinc-500">
-            <Calendar className="w-4 h-4" />
-            <span>Member since {getMemberSince()}</span>
+        <div className="flex items-center justify-between mb-12">
+          <div className="flex items-center gap-8 text-sm">
+            <div className="flex items-center gap-2 text-zinc-500">
+              <Calendar className="w-4 h-4" />
+              <span>Member since {getMemberSince()}</span>
+            </div>
+            <div className="flex items-center gap-2 text-zinc-500">
+              <Users className="w-4 h-4" />
+              <span>{freeContent.length} free</span>
+            </div>
+            <div className="flex items-center gap-2 text-zinc-500">
+              <Heart className="w-4 h-4" />
+              <span>{premiumContent.length} premium</span>
+            </div>
           </div>
-          <div className="flex items-center gap-2 text-zinc-500">
-            <Users className="w-4 h-4" />
-            <span>{freeContent.length} free</span>
-          </div>
-          <div className="flex items-center gap-2 text-zinc-500">
-            <Heart className="w-4 h-4" />
-            <span>{premiumContent.length} premium</span>
+
+          <div className="flex flex-col items-end gap-3">
+            <div className="flex items-center gap-3 bg-zinc-900/80 backdrop-blur-sm border border-zinc-800 rounded-lg px-4 py-2">
+              <div className="flex flex-col items-end">
+                <span className="text-xs font-medium text-white">Go Live</span>
+                {!isProUser && trialEligible && <span className="text-[10px] text-zinc-500">Free trial</span>}
+                {!isProUser && !trialEligible && <span className="text-[10px] text-zinc-500">Go Live</span>}
+              </div>
+              <Switch
+                checked={storefrontActive}
+                onCheckedChange={handleToggleStorefront}
+                disabled={updating || (!isProUser && !storefrontActive)}
+                className="data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-zinc-700"
+              />
+              {storefrontActive ? (
+                <Badge className="bg-green-500/10 text-green-400 border-green-500/20">Live</Badge>
+              ) : (
+                <Badge variant="secondary" className="bg-zinc-700 text-zinc-300">
+                  Offline
+                </Badge>
+              )}
+            </div>
+            {!isProUser && (
+              <Button
+                onClick={handleGoLiveClick}
+                className="bg-white text-black hover:bg-zinc-100 font-medium text-sm px-6"
+              >
+                Go Live
+              </Button>
+            )}
           </div>
         </div>
 
