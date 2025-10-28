@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import {
+  Loader2,
   Plus,
   Instagram,
   Twitter,
@@ -30,10 +31,6 @@ import { useRouter } from "next/navigation"
 import { doc, updateDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import BundleCard from "@/components/bundle-card"
-import { useObjectives } from "@/hooks/use-objectives"
-import { ObjectiveCompletionBanner } from "@/components/objective-completion-banner"
-import { StorefrontLiveToggle } from "@/components/storefront-live-toggle"
-import { useUserPlan } from "@/hooks/use-user-plan"
 
 interface ContentItem {
   id: string
@@ -55,8 +52,6 @@ export default function ViewStorefrontPage() {
   const { user, loading: authLoading } = useFirebaseAuth()
   const { toast } = useToast()
   const router = useRouter()
-  const { objectives, isLoading: isLoadingObjectives, currentObjective } = useObjectives()
-  const { isProUser, planData } = useUserPlan()
   const [loading, setLoading] = useState(true)
   const [username, setUsername] = useState<string | null>(null)
   const [displayName, setDisplayName] = useState("")
@@ -71,18 +66,16 @@ export default function ViewStorefrontPage() {
   const [premiumContent, setPremiumContent] = useState<ContentItem[]>([])
   const [activeTab, setActiveTab] = useState<"free" | "premium">("free")
   const [createdAt, setCreatedAt] = useState<string>("")
-  const [isStorefrontLive, setIsStorefrontLive] = useState(false)
 
+  // Editing states
   const [isEditingBio, setIsEditingBio] = useState(false)
   const [isEditingSocials, setIsEditingSocials] = useState(false)
-  const [isEditingUsername, setIsEditingUsername] = useState(false)
   const [tempBio, setTempBio] = useState("")
   const [tempSocials, setTempSocials] = useState<{
     instagram?: string
     twitter?: string
     website?: string
   }>({})
-  const [tempUsername, setTempUsername] = useState("")
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -105,8 +98,8 @@ export default function ViewStorefrontPage() {
           setSocialLinks(userData.socialLinks || {})
           setTempSocials(userData.socialLinks || {})
           setProfilePic(userData.profilePic || userData.photoURL || "")
-          setIsStorefrontLive(userData.isStorefrontLive || false)
 
+          // Handle createdAt timestamp
           if (userData.createdAt) {
             if (userData.createdAt.toDate) {
               setCreatedAt(userData.createdAt.toDate().toISOString())
@@ -115,6 +108,7 @@ export default function ViewStorefrontPage() {
             }
           }
 
+          // Fetch content data
           const freeResponse = await fetch(`/api/creator/${user.uid}/free-content`)
           if (freeResponse.ok) {
             const freeData = await freeResponse.json()
@@ -194,31 +188,6 @@ export default function ViewStorefrontPage() {
     }
   }
 
-  const handleSaveUsername = async () => {
-    if (!user || !tempUsername.trim()) return
-
-    try {
-      const userDocRef = doc(db, "users", user.uid)
-      await updateDoc(userDocRef, {
-        username: tempUsername.trim(),
-      })
-
-      setUsername(tempUsername.trim())
-      setIsEditingUsername(false)
-      toast({
-        title: "Username Updated",
-        description: "Your username has been saved successfully",
-      })
-    } catch (error) {
-      console.error("[v0] Error updating username:", error)
-      toast({
-        title: "Error",
-        description: "Failed to update username",
-        variant: "destructive",
-      })
-    }
-  }
-
   const getMemberSince = () => {
     if (createdAt) {
       let date: Date
@@ -240,14 +209,26 @@ export default function ViewStorefrontPage() {
     return "Recently"
   }
 
-  const needsCustomization =
-    !isLoadingObjectives &&
-    objectives &&
-    !objectives.objectives.find((obj) => obj.id === "customize_storefront")?.completed
+  if (authLoading || loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-black">
+        <Loader2 className="h-8 w-8 text-zinc-500 animate-spin" />
+      </div>
+    )
+  }
+
+  if (!user || !username) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-black">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold text-white mb-2">Profile Required</h2>
+          <p className="text-zinc-400">Please complete your profile to view your storefront.</p>
+        </div>
+      </div>
+    )
+  }
 
   const currentContent = activeTab === "free" ? freeContent : premiumContent
-
-  const onTrialOrSubscription = planData?.isActive || false
 
   return (
     <div className="min-h-screen bg-black fixed inset-0 overflow-y-auto">
@@ -255,27 +236,7 @@ export default function ViewStorefrontPage() {
       <div className="fixed inset-0 bg-gradient-to-t from-zinc-900/20 via-transparent to-zinc-800/10 pointer-events-none" />
 
       <div className="relative max-w-6xl mx-auto px-4 sm:px-8 py-8 sm:py-16">
-        {currentObjective?.id === "customize_storefront" && !currentObjective?.completed && (
-          <ObjectiveCompletionBanner
-            objectiveId="customize_storefront"
-            title="Customize Storefront"
-            instructions="Add profile picture, bio, socials, and check the box when done!"
-            actionLabel="Go to Profile"
-            actionHref="/dashboard/profile"
-          />
-        )}
-
-        {user && (
-          <div className="absolute top-4 right-4 z-50">
-            <StorefrontLiveToggle
-              userId={user.uid}
-              isLive={isStorefrontLive}
-              isProUser={isProUser}
-              onTrialOrSubscription={onTrialOrSubscription}
-            />
-          </div>
-        )}
-
+        {/* Header with inline editing */}
         <div className="mb-8 sm:mb-16">
           <div className="flex items-start justify-between gap-8">
             <div className="flex items-center gap-8">
@@ -300,48 +261,7 @@ export default function ViewStorefrontPage() {
               <div className="space-y-3">
                 <div>
                   <h1 className="text-3xl font-light text-white tracking-tight">{displayName || username}</h1>
-                  {isEditingUsername ? (
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-zinc-500 text-sm font-mono">@</span>
-                      <Input
-                        value={tempUsername}
-                        onChange={(e) => setTempUsername(e.target.value)}
-                        placeholder="username"
-                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm h-7 w-40 px-2 font-mono"
-                      />
-                      <Button
-                        size="sm"
-                        onClick={handleSaveUsername}
-                        className="bg-white text-black hover:bg-zinc-100 h-7 px-2"
-                      >
-                        <Check className="w-3 h-3" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          setIsEditingUsername(false)
-                          setTempUsername(username || "")
-                        }}
-                        className="text-zinc-400 hover:text-white h-7 px-2"
-                      >
-                        <X className="w-3 h-3" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <div
-                      className="flex items-center gap-1 group cursor-pointer mt-1"
-                      onClick={() => {
-                        setTempUsername(username || "")
-                        setIsEditingUsername(true)
-                      }}
-                    >
-                      <p className="text-zinc-500 text-sm font-mono group-hover:text-zinc-400 transition-colors">
-                        @{username}
-                      </p>
-                      <Edit2 className="w-3 h-3 text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </div>
-                  )}
+                  <p className="text-zinc-500 text-sm font-mono">@{username}</p>
                 </div>
 
                 {isEditingBio ? (
@@ -354,11 +274,7 @@ export default function ViewStorefrontPage() {
                       rows={3}
                     />
                     <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        onClick={handleSaveBio}
-                        className="bg-white text-black hover:bg-zinc-100 h-7 px-2"
-                      >
+                      <Button size="sm" onClick={handleSaveBio} className="bg-white text-black hover:bg-zinc-100">
                         <Check className="w-4 h-4 mr-1" />
                         Save
                       </Button>
@@ -369,7 +285,7 @@ export default function ViewStorefrontPage() {
                           setIsEditingBio(false)
                           setTempBio(bio)
                         }}
-                        className="text-zinc-400 hover:text-white h-7 px-2"
+                        className="text-zinc-400 hover:text-white"
                       >
                         <X className="w-4 h-4 mr-1" />
                         Cancel
@@ -418,11 +334,7 @@ export default function ViewStorefrontPage() {
                       className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
                     />
                     <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        onClick={handleSaveSocials}
-                        className="bg-white text-black hover:bg-zinc-100 h-7 px-2"
-                      >
+                      <Button size="sm" onClick={handleSaveSocials} className="bg-white text-black hover:bg-zinc-100">
                         <Check className="w-4 h-4 mr-1" />
                         Save
                       </Button>
@@ -433,7 +345,7 @@ export default function ViewStorefrontPage() {
                           setIsEditingSocials(false)
                           setTempSocials(socialLinks)
                         }}
-                        className="text-zinc-400 hover:text-white h-7 px-2"
+                        className="text-zinc-400 hover:text-white"
                       >
                         <X className="w-4 h-4 mr-1" />
                         Cancel
@@ -490,6 +402,7 @@ export default function ViewStorefrontPage() {
           </div>
         </div>
 
+        {/* Stats */}
         <div className="flex items-center gap-8 mb-12 text-sm">
           <div className="flex items-center gap-2 text-zinc-500">
             <Calendar className="w-4 h-4" />
@@ -505,6 +418,7 @@ export default function ViewStorefrontPage() {
           </div>
         </div>
 
+        {/* Tabs */}
         <div className="mb-8">
           <div className="flex items-center gap-8 border-b border-zinc-800/50">
             <button
@@ -528,6 +442,7 @@ export default function ViewStorefrontPage() {
           </div>
         </div>
 
+        {/* Content with action buttons */}
         <div className="pt-8">
           {currentContent.length > 0 ? (
             <div
@@ -632,6 +547,7 @@ function VideoContentCard({ item }: { item: ContentItem }) {
       videoRef.current.currentTime = 0
       setIsPlaying(false)
     } else {
+      // Pause all other videos
       document.querySelectorAll("video").forEach((v) => {
         if (v !== videoRef.current) {
           v.pause()

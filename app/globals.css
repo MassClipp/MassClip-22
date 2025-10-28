@@ -989,7 +989,6 @@
   }
 }
 
-/* Chat animations */
 .chat-slide-up {
   animation: chatSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -1003,21 +1002,4 @@
     opacity: 1;
     transform: translateY(0);
   }
-}
-
-/* Add glowing ring animation for objectives indicator */
-@keyframes glowPulse {
-  0%,
-  100% {
-    box-shadow: 0 0 5px rgba(45, 212, 191, 0.4), 0 0 10px rgba(45, 212, 191, 0.3), 0 0 15px rgba(45, 212, 191, 0.2), 0 0
-      20px rgba(45, 212, 191, 0.1);
-  }
-  50% {
-    box-shadow: 0 0 10px rgba(45, 212, 191, 0.6), 0 0 20px rgba(45, 212, 191, 0.5), 0 0 30px rgba(45, 212, 191, 0.4), 0
-      0 40px rgba(45, 212, 191, 0.3);
-  }
-}
-
-.objectives-glow {
-  animation: glowPulse 2s ease-in-out infinite;
 }
