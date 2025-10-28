@@ -2,6 +2,7 @@
 
 // import { PaywallWrapper } from "@/components/paywall-wrapper"
 
+import { ObjectiveCompletionBanner } from "@/components/objective-completion-banner"
 import { useRef } from "react"
 
 import { useState, useEffect } from "react"
@@ -36,6 +37,7 @@ import { useUserPlan } from "@/hooks/use-user-plan"
 import { useRouter } from "next/navigation"
 import { useFreeTierLimits } from "@/hooks/use-free-tier-limits"
 import NewFolderSelector from "@/components/new-folder-selector"
+import { useObjectives } from "@/hooks/use-objectives"
 
 interface ContentItem {
   id: string
@@ -89,6 +91,8 @@ const BUNDLE_DISPLAY_LIMIT = 6
 
 export default function BundlesPage() {
   const { user } = useAuth()
+  const { currentObjective } = useObjectives()
+
   const [productBoxes, setProductBoxes] = useState<ProductBox[]>([])
   const [contentItems, setContentItems] = useState<{ [key: string]: ContentItem[] }>({})
   const [loading, setLoading] = useState(true)
@@ -1122,6 +1126,14 @@ export default function BundlesPage() {
     <div className="p-6">
       <div className="max-w-7xl mx-auto">
         <div className="space-y-6">
+          {currentObjective?.id === "create_bundle" && !currentObjective?.completed && (
+            <ObjectiveCompletionBanner
+              objectiveId="create_bundle"
+              title="Create First Bundle"
+              description="Create your first content bundle to start selling!"
+            />
+          )}
+
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
             <div>

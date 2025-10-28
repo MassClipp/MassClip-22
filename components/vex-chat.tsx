@@ -22,6 +22,7 @@ import {
   ChevronRight,
   ChevronLeft,
   ArrowDown,
+  Target,
 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -39,6 +40,9 @@ import { db } from "@/lib/firebase"
 import { TopHeader } from "@/components/top-header"
 import { Badge } from "@/components/ui/badge"
 import { Clock } from "lucide-react"
+import { useObjectives } from "@/hooks/use-objectives"
+import { ObjectivesPopup } from "@/components/objectives-popup"
+import { ObjectivesIndicator } from "@/components/objectives-indicator"
 
 interface Message {
   id: string
@@ -101,6 +105,8 @@ function VexChat({ children }: VexChatProps) {
 
   // State for suggestions
   const [currentSuggestions, setCurrentSuggestions] = useState<string[]>([])
+
+  const { objectives, isLoading: isLoadingObjectives, reopenPopup, registerNavButton } = useObjectives() // Removed undeclared currentObjective here
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
@@ -852,10 +858,27 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
     }
   }, [shouldShowTrialButton, trialStatus, membershipStatus, isLoadingTrialStatus, isLoadingMembershipStatus])
 
+  const getObjectiveNavigationHref = (objectiveId: string): string | null => {
+    const mapping: Record<string, string> = {
+      customize_storefront: "/dashboard/view-storefront",
+      upload_content: "/dashboard/upload",
+      add_free_content: "/dashboard/free-content",
+      connect_stripe: "/dashboard/earnings",
+      create_bundle: "/dashboard/bundles",
+      go_live: "/dashboard/view-storefront",
+    }
+    return mapping[objectiveId] || null
+  }
+
+  const currentObjective = objectives?.objectives.find((obj) => !obj.completed)
+  const currentObjectiveHref = currentObjective ? getObjectiveNavigationHref(currentObjective.id) : null
+
   return (
     <div className="flex min-h-screen relative bg-gradient-to-br from-black via-zinc-900 to-black">
       {/* Fixed noise overlay */}
       <div className="fixed inset-0 bg-[url('/noise.png')] opacity-[0.03] mix-blend-soft-light pointer-events-none z-0"></div>
+
+      <ObjectivesPopup />
 
       {/* Top Header */}
       <div className="fixed top-0 left-0 right-0 z-50">
@@ -875,19 +898,18 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
         </Button>
       )}
 
-      {!isMobile && isUploadPage && isSidebarCollapsed && (
+      {/* Desktop sidebar toggle button - Show when collapsed */}
+      {!isMobile && isSidebarCollapsed && (
         <Button
           onClick={() => setIsSidebarCollapsed(false)}
           variant="ghost"
           size="sm"
-          className="fixed top-1/2 left-0 -translate-y-1/2 z-50 h-12 w-6 p-0 bg-zinc-900/80 backdrop-blur-xl border border-white/10 hover:bg-zinc-800/80 hover:border-white/20 rounded-r-lg rounded-l-none shadow-lg transition-all duration-200"
-          title="Open Vex sidebar"
+          className="fixed top-20 left-2 z-50 h-9 w-9 p-0 bg-zinc-900/80 backdrop-blur-xl border border-white/10 hover:bg-zinc-800/80 hover:border-white/20 rounded-lg shadow-lg transition-all duration-200"
         >
           <ChevronRight className="h-4 w-4 text-zinc-400" />
         </Button>
       )}
 
-      {/* Desktop sidebar - Hide completely on upload page when collapsed */}
       {!isMobile && !(isUploadPage && isSidebarCollapsed) && (
         <div
           className={`fixed left-0 top-16 h-[calc(100vh-4rem)] z-40 transition-all duration-300 ${
@@ -949,6 +971,51 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
 
               <ScrollArea className="flex-1">
                 <div className="flex flex-col h-full">
+                  {!isLoadingObjectives && objectives && objectives.percentageComplete < 100 && (
+                    <div className="px-3 py-4 border-b border-white/5">
+                      <div className="mb-3 px-3">
+                        <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">
+                          Objectives
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => {
+                          reopenPopup()
+                        }}
+                        className="w-full bg-white/[0.02] backdrop-blur-md border border-white/10 rounded-lg p-3 space-y-3 hover:border-white/20 hover:bg-white/[0.04] transition-all duration-200"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Target className="h-4 w-4 text-teal-400" />
+                          <span className="text-sm font-medium text-white">Get Started</span>
+                        </div>
+
+                        {/* Progress bar */}
+                        <div>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="text-xs text-white/60">
+                              {objectives.completedCount} of {objectives.totalCount}
+                            </span>
+                            <span className="text-xs font-medium text-white">{objectives.percentageComplete}%</span>
+                          </div>
+                          <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-teal-400 to-cyan-400 transition-all duration-500"
+                              style={{ width: `${objectives.percentageComplete}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Next objective */}
+                        {currentObjective && (
+                          <div className="pt-2 border-t border-white/5 text-left">
+                            <p className="text-xs text-white/40 mb-1">Next:</p>
+                            <p className="text-xs font-medium text-white">{currentObjective.title}</p>
+                          </div>
+                        )}
+                      </button>
+                    </div>
+                  )}
+
                   <div className="px-3 py-4 border-b border-white/5">
                     <button
                       onClick={() => {
@@ -1028,8 +1095,9 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                       {navigationItems.map((item) => (
                         <button
                           key={item.href}
+                          ref={(el) => registerNavButton(item.href, el)}
                           onClick={() => handleNavigation(item.href)}
-                          className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-all duration-200 group ${
+                          className={`relative w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-all duration-200 group ${
                             item.highlight
                               ? "bg-gradient-to-br from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 font-medium"
                               : "text-zinc-400 hover:text-white hover:bg-white/5"
@@ -1039,6 +1107,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                             className={`h-4 w-4 ${item.highlight ? "" : "group-hover:scale-110 transition-transform duration-200"}`}
                           />
                           <span className="font-medium">{item.label}</span>
+                          {currentObjectiveHref === item.href && <ObjectivesIndicator />}
                         </button>
                       ))}
                     </nav>
@@ -1203,6 +1272,51 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
 
             <ScrollArea className="flex-1">
               <div className="flex flex-col h-full">
+                {!isLoadingObjectives && objectives && objectives.percentageComplete < 100 && (
+                  <div className="px-3 py-4 border-b border-white/5">
+                    <div className="mb-3 px-3">
+                      <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">
+                        Objectives
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        reopenPopup()
+                      }}
+                      className="w-full bg-white/[0.02] backdrop-blur-md border border-white/10 rounded-lg p-3 space-y-3 hover:border-white/20 hover:bg-white/[0.04] transition-all duration-200"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Target className="h-4 w-4 text-teal-400" />
+                        <span className="text-sm font-medium text-white">Get Started</span>
+                      </div>
+
+                      {/* Progress bar */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-xs text-white/60">
+                            {objectives.completedCount} of {objectives.totalCount}
+                          </span>
+                          <span className="text-xs font-medium text-white">{objectives.percentageComplete}%</span>
+                        </div>
+                        <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-teal-400 to-cyan-400 transition-all duration-500"
+                            style={{ width: `${objectives.percentageComplete}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Next objective */}
+                      {currentObjective && (
+                        <div className="pt-2 border-t border-white/5 text-left">
+                          <p className="text-xs text-white/40 mb-1">Next:</p>
+                          <p className="text-xs font-medium text-white">{currentObjective.title}</p>
+                        </div>
+                      )}
+                    </button>
+                  </div>
+                )}
+
                 <div className="px-3 py-4 border-b border-white/5">
                   <button
                     onClick={() => {
@@ -1281,8 +1395,9 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                     {navigationItems.map((item) => (
                       <button
                         key={item.href}
+                        ref={(el) => registerNavButton(item.href, el)}
                         onClick={() => handleNavigation(item.href)}
-                        className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-all duration-200 group ${
+                        className={`relative w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-all duration-200 group ${
                           item.highlight
                             ? "bg-gradient-to-br from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 font-medium"
                             : "text-zinc-400 hover:text-white hover:bg-white/5"
@@ -1292,6 +1407,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                           className={`h-4 w-4 ${item.highlight ? "" : "group-hover:scale-110 transition-transform duration-200"}`}
                         />
                         <span className="font-medium">{item.label}</span>
+                        {currentObjectiveHref === item.href && <ObjectivesIndicator />}
                       </button>
                     ))}
                   </nav>
@@ -1311,6 +1427,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                           >
                             <Clock className="h-3 w-3 mr-1.5" />
                             Free Trial: {trialStatus.daysRemaining} {trialStatus.daysRemaining === 1 ? "day" : "days"}{" "}
+                            {/* Corrected 'left' to be on same line */}
                             left
                           </Badge>
                         </div>
