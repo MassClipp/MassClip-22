@@ -164,6 +164,19 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
       notFound()
     }
 
+    console.log(`[Page] Checking subscription status for UID: ${uid}`)
+    const subscriptionDoc = await db.collection("subscriptions").doc(uid).get()
+    const subscriptionData = subscriptionDoc.exists ? subscriptionDoc.data() : null
+
+    const hasActiveSubscription = subscriptionData?.status === "active" || subscriptionData?.status === "trialing"
+
+    if (!hasActiveSubscription) {
+      console.log(`[Page] User ${uid} does not have an active subscription`)
+      notFound()
+    }
+
+    console.log(`[Page] User ${uid} has active subscription with status: ${subscriptionData?.status}`)
+
     // If we found the user in creators collection but not users, try to get fresh data from users
     if (uid && !userData.email) {
       console.log(`[Page] Attempting to get fresh user data from users collection for UID: ${uid}`)

@@ -17,8 +17,7 @@ import {
 import { useAuthState } from "react-firebase-hooks/auth"
 import { auth } from "@/lib/firebase"
 import EarningsContent from "./earnings-content"
-import { ObjectiveCompletionBanner } from "@/components/objective-completion-banner"
-import { useObjectives } from "@/hooks/use-objectives"
+import { OnboardingStepBanner } from "@/components/onboarding-step-banner"
 
 interface StripeConnectionStatus {
   connected: boolean
@@ -31,7 +30,6 @@ interface StripeConnectionStatus {
 
 function EarningsPage() {
   const [user, loading, error] = useAuthState(auth)
-  const { currentObjective } = useObjectives()
   const [stripeStatus, setStripeStatus] = useState<StripeConnectionStatus | null>(null)
   const [checkingStripe, setCheckingStripe] = useState(true)
   const [connectionError, setConnectionError] = useState<string | null>(null)
@@ -112,11 +110,11 @@ function EarningsPage() {
     )
   }
 
-  const showBanner = currentObjective?.id === "connect_stripe"
-
   if (!stripeStatus?.connected || !stripeStatus?.chargesEnabled || !stripeStatus?.detailsSubmitted) {
     return (
       <div className="space-y-8">
+        <OnboardingStepBanner stepId="connect_stripe" />
+
         <div className="text-center space-y-3">
           <div className="inline-flex items-center justify-center w-12 h-12 bg-gradient-to-br from-blue-500 via-purple-600 to-purple-700 rounded-full shadow-lg">
             <CreditCard className="w-6 h-6 text-white" />
@@ -290,15 +288,7 @@ function EarningsPage() {
 
   return (
     <>
-      {showBanner && stripeStatus?.connected && stripeStatus?.chargesEnabled && (
-        <div className="mb-6">
-          <ObjectiveCompletionBanner
-            objectiveId="connect_stripe"
-            title="Connect Stripe"
-            instructions="Your Stripe account is connected! Mark this objective as complete to continue."
-          />
-        </div>
-      )}
+      <OnboardingStepBanner stepId="connect_stripe" />
       <EarningsContent />
     </>
   )

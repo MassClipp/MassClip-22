@@ -979,7 +979,9 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                         </span>
                       </div>
                       <button
-                        onClick={reopenPopup}
+                        onClick={() => {
+                          reopenPopup()
+                        }}
                         className="w-full bg-white/[0.02] backdrop-blur-md border border-white/10 rounded-lg p-3 space-y-3 hover:border-white/20 hover:bg-white/[0.04] transition-all duration-200"
                       >
                         <div className="flex items-center gap-2">
@@ -1278,7 +1280,9 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                       </span>
                     </div>
                     <button
-                      onClick={reopenPopup}
+                      onClick={() => {
+                        reopenPopup()
+                      }}
                       className="w-full bg-white/[0.02] backdrop-blur-md border border-white/10 rounded-lg p-3 space-y-3 hover:border-white/20 hover:bg-white/[0.04] transition-all duration-200"
                     >
                       <div className="flex items-center gap-2">
