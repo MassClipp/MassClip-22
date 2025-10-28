@@ -354,9 +354,216 @@ export default function ViewStorefrontPage() {
       <div className="fixed inset-0 bg-gradient-to-t from-zinc-900/20 via-transparent to-zinc-800/10 pointer-events-none" />
 
       <div className="relative max-w-6xl mx-auto px-4 sm:px-8 py-8 sm:py-16">
-        {/* Header with inline editing */}
         <div className="mb-8 sm:mb-16">
-          <div className="flex items-start justify-between gap-8">
+          {/* Mobile Layout - Centered Tree */}
+          <div className="block sm:hidden">
+            <div className="flex flex-col items-center text-center space-y-4 mb-6">
+              {/* Profile Picture */}
+              <div className="relative group">
+                <Avatar
+                  className="w-24 h-24 border-2 border-white/20 cursor-pointer"
+                  onClick={() => router.push("/dashboard/profile")}
+                >
+                  <AvatarImage src={profilePic || "/placeholder.svg"} alt={displayName} className="object-cover" />
+                  <AvatarFallback className="bg-zinc-900 text-white text-2xl font-medium border-2 border-white/20">
+                    {displayName?.charAt(0)?.toUpperCase() || username?.charAt(0)?.toUpperCase() || "?"}
+                  </AvatarFallback>
+                </Avatar>
+                <div
+                  className="absolute inset-0 bg-black/60 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
+                  onClick={() => router.push("/dashboard/profile")}
+                >
+                  <Edit2 className="w-5 h-5 text-white" />
+                </div>
+              </div>
+
+              {/* Name and Username */}
+              <div className="space-y-1">
+                <h1 className="text-2xl font-light text-white tracking-tight">{displayName || username}</h1>
+                {isEditingUsername ? (
+                  <div className="flex items-center gap-2 justify-center">
+                    <span className="text-zinc-500 text-sm">@</span>
+                    <Input
+                      value={tempUsername}
+                      onChange={(e) => setTempUsername(e.target.value)}
+                      placeholder="username"
+                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm h-7 w-32"
+                    />
+                    <Button
+                      size="sm"
+                      onClick={handleSaveUsername}
+                      className="bg-white text-black hover:bg-zinc-100 h-7 px-2"
+                    >
+                      <Check className="w-3 h-3" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setIsEditingUsername(false)
+                        setTempUsername(username || "")
+                      }}
+                      className="text-zinc-400 hover:text-white h-7 px-2"
+                    >
+                      <X className="w-3 h-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div
+                    className="group/username cursor-pointer flex items-center gap-1 justify-center"
+                    onClick={() => {
+                      setTempUsername(username || "")
+                      setIsEditingUsername(true)
+                    }}
+                  >
+                    <p className="text-zinc-500 text-sm font-mono group-hover/username:text-zinc-400 transition-colors">
+                      @{username}
+                    </p>
+                    <Edit2 className="w-3 h-3 text-zinc-600 opacity-0 group-hover/username:opacity-100 transition-opacity" />
+                  </div>
+                )}
+              </div>
+
+              {/* Bio */}
+              {isEditingBio ? (
+                <div className="space-y-2 w-full max-w-sm">
+                  <Textarea
+                    value={tempBio}
+                    onChange={(e) => setTempBio(e.target.value)}
+                    placeholder="Write your bio..."
+                    className="bg-zinc-900/50 border-zinc-700 text-white text-sm resize-none"
+                    rows={3}
+                  />
+                  <div className="flex gap-2 justify-center">
+                    <Button size="sm" onClick={handleSaveBio} className="bg-white text-black hover:bg-zinc-100">
+                      <Check className="w-4 h-4 mr-1" />
+                      Save
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setIsEditingBio(false)
+                        setTempBio(bio)
+                      }}
+                      className="text-zinc-400 hover:text-white"
+                    >
+                      <X className="w-4 h-4 mr-1" />
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  className="group cursor-pointer w-full max-w-sm"
+                  onClick={() => {
+                    setTempBio(bio)
+                    setIsEditingBio(true)
+                  }}
+                >
+                  {bio ? (
+                    <p className="text-zinc-400 text-sm leading-relaxed group-hover:text-zinc-300 transition-colors">
+                      {bio}
+                    </p>
+                  ) : (
+                    <p className="text-zinc-600 text-sm leading-relaxed group-hover:text-zinc-500 transition-colors italic">
+                      Click to add a bio
+                    </p>
+                  )}
+                  <Edit2 className="w-3 h-3 text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity mt-1 mx-auto" />
+                </div>
+              )}
+
+              {/* Social Links */}
+              {isEditingSocials ? (
+                <div className="space-y-2 w-full max-w-xs">
+                  <Input
+                    value={tempSocials.instagram || ""}
+                    onChange={(e) => setTempSocials({ ...tempSocials, instagram: e.target.value })}
+                    placeholder="Instagram username"
+                    className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
+                  />
+                  <Input
+                    value={tempSocials.twitter || ""}
+                    onChange={(e) => setTempSocials({ ...tempSocials, twitter: e.target.value })}
+                    placeholder="Twitter username"
+                    className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
+                  />
+                  <Input
+                    value={tempSocials.website || ""}
+                    onChange={(e) => setTempSocials({ ...tempSocials, website: e.target.value })}
+                    placeholder="Website URL"
+                    className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
+                  />
+                  <div className="flex gap-2 justify-center">
+                    <Button size="sm" onClick={handleSaveSocials} className="bg-white text-black hover:bg-zinc-100">
+                      <Check className="w-4 h-4 mr-1" />
+                      Save
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setIsEditingSocials(false)
+                        setTempSocials(socialLinks)
+                      }}
+                      className="text-zinc-400 hover:text-white"
+                    >
+                      <X className="w-4 h-4 mr-1" />
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex gap-2 justify-center">
+                  {socialLinks.instagram && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                      onClick={() => window.open(`https://instagram.com/${socialLinks.instagram}`, "_blank")}
+                    >
+                      <Instagram className="w-4 h-4" />
+                    </Button>
+                  )}
+                  {socialLinks.twitter && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                      onClick={() => window.open(`https://twitter.com/${socialLinks.twitter}`, "_blank")}
+                    >
+                      <Twitter className="w-4 h-4" />
+                    </Button>
+                  )}
+                  {socialLinks.website && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                      onClick={() => window.open(socialLinks.website, "_blank")}
+                    >
+                      <Globe className="w-4 h-4" />
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                    onClick={() => {
+                      setTempSocials(socialLinks)
+                      setIsEditingSocials(true)
+                    }}
+                  >
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Desktop Layout - Horizontal */}
+          <div className="hidden sm:flex items-start justify-between">
             <div className="flex items-center gap-8">
               <div className="relative group">
                 <Avatar
@@ -561,28 +768,29 @@ export default function ViewStorefrontPage() {
           </div>
         </div>
 
-        <div className="flex items-center justify-between mb-12">
-          <div className="flex items-center gap-8 text-sm">
+        <div className="mb-8 sm:mb-12">
+          {/* Stats Row */}
+          <div className="flex items-center justify-center sm:justify-start gap-4 sm:gap-8 mb-6 text-xs sm:text-sm">
             <div className="flex items-center gap-2 text-zinc-500">
-              <Calendar className="w-4 h-4" />
+              <Calendar className="w-3 h-3 sm:w-4 sm:h-4" />
               <span>Member since {getMemberSince()}</span>
             </div>
             <div className="flex items-center gap-2 text-zinc-500">
-              <Users className="w-4 h-4" />
+              <Users className="w-3 h-3 sm:w-4 sm:h-4" />
               <span>{freeContent.length} free</span>
             </div>
             <div className="flex items-center gap-2 text-zinc-500">
-              <Heart className="w-4 h-4" />
+              <Heart className="w-3 h-3 sm:w-4 sm:h-4" />
               <span>{premiumContent.length} premium</span>
             </div>
           </div>
 
-          <div className="flex flex-col items-end gap-3">
-            <div className="flex items-center gap-3 bg-zinc-900/80 backdrop-blur-sm border border-zinc-800 rounded-lg px-4 py-2">
+          {/* Go Live Controls - Centered on mobile, right-aligned on desktop */}
+          <div className="flex flex-col items-center sm:items-end gap-3">
+            <div className="flex items-center gap-3 bg-zinc-900/80 backdrop-blur-sm border border-zinc-800 rounded-lg px-4 py-2.5">
               <div className="flex flex-col items-end">
                 <span className="text-xs font-medium text-white">Go Live</span>
-                {!isProUser && trialEligible && <span className="text-[10px] text-zinc-500">Free trial</span>}
-                {!isProUser && !trialEligible && <span className="text-[10px] text-zinc-500">Go Live</span>}
+                {!isProUser && trialEligible && <span className="text-[10px] text-zinc-500 mt-0.5">Free trial</span>}
               </div>
               <Switch
                 checked={storefrontActive}
@@ -610,11 +818,11 @@ export default function ViewStorefrontPage() {
         </div>
 
         {/* Tabs */}
-        <div className="mb-8">
-          <div className="flex items-center gap-8 border-b border-zinc-800/50">
+        <div className="mb-6 sm:mb-8">
+          <div className="flex items-center justify-center sm:justify-start gap-6 sm:gap-8 border-b border-zinc-800/50">
             <button
               onClick={() => setActiveTab("free")}
-              className={`pb-4 text-sm font-medium transition-all duration-200 relative ${
+              className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
                 activeTab === "free" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
               }`}
             >
@@ -623,7 +831,7 @@ export default function ViewStorefrontPage() {
             </button>
             <button
               onClick={() => setActiveTab("premium")}
-              className={`pb-4 text-sm font-medium transition-all duration-200 relative ${
+              className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
                 activeTab === "premium" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
               }`}
             >
@@ -634,7 +842,7 @@ export default function ViewStorefrontPage() {
         </div>
 
         {/* Content with action buttons */}
-        <div className="pt-8">
+        <div className="pt-4 sm:pt-8">
           {currentContent.length > 0 ? (
             <div
               className={
@@ -677,9 +885,9 @@ export default function ViewStorefrontPage() {
                 : freeContent.map((item) => <VideoContentCard key={item.id} item={item} />)}
             </div>
           ) : (
-            <div className="text-center py-24">
+            <div className="text-center py-16 sm:py-24">
               <div
-                className="w-24 h-24 mx-auto mb-6 bg-zinc-900 rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer flex items-center justify-center group"
+                className="w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-6 bg-zinc-900 rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer flex items-center justify-center group"
                 onClick={() => router.push(activeTab === "free" ? "/dashboard/free-content" : "/dashboard/bundles")}
               >
                 {activeTab === "premium" ? (
@@ -688,8 +896,8 @@ export default function ViewStorefrontPage() {
                   <Play className="w-8 h-8 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
                 )}
               </div>
-              <h3 className="text-lg font-medium text-white mb-2">No {activeTab} content yet</h3>
-              <p className="text-zinc-500 text-sm mb-6">
+              <h3 className="text-base sm:text-lg font-medium text-white mb-2">No {activeTab} content yet</h3>
+              <p className="text-zinc-500 text-xs sm:text-sm mb-6">
                 {activeTab === "free" ? "Upload your first piece of content" : "Create your first bundle"}
               </p>
               <Button
