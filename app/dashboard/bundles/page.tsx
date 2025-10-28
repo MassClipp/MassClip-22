@@ -1126,7 +1126,7 @@ export default function BundlesPage() {
     <div className="p-6">
       <div className="max-w-7xl mx-auto">
         <div className="space-y-6">
-          {currentObjective?.id === "create_bundle" && (
+          {currentObjective?.id === "create_bundle" && !currentObjective?.completed && (
             <ObjectiveCompletionBanner
               objectiveId="create_bundle"
               title="Create First Bundle"

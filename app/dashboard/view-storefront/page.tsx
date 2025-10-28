@@ -32,6 +32,8 @@ import { db } from "@/lib/firebase"
 import BundleCard from "@/components/bundle-card"
 import { useObjectives } from "@/hooks/use-objectives"
 import { ObjectiveCompletionBanner } from "@/components/objective-completion-banner"
+import { StorefrontLiveToggle } from "@/components/storefront-live-toggle"
+import { useUserPlan } from "@/hooks/use-user-plan"
 
 interface ContentItem {
   id: string
@@ -53,7 +55,8 @@ export default function ViewStorefrontPage() {
   const { user, loading: authLoading } = useFirebaseAuth()
   const { toast } = useToast()
   const router = useRouter()
-  const { objectives, isLoading: isLoadingObjectives } = useObjectives()
+  const { objectives, isLoading: isLoadingObjectives, currentObjective } = useObjectives()
+  const { isProUser, planData } = useUserPlan()
   const [loading, setLoading] = useState(true)
   const [username, setUsername] = useState<string | null>(null)
   const [displayName, setDisplayName] = useState("")
@@ -68,8 +71,8 @@ export default function ViewStorefrontPage() {
   const [premiumContent, setPremiumContent] = useState<ContentItem[]>([])
   const [activeTab, setActiveTab] = useState<"free" | "premium">("free")
   const [createdAt, setCreatedAt] = useState<string>("")
+  const [isStorefrontLive, setIsStorefrontLive] = useState(false)
 
-  // Editing states
   const [isEditingBio, setIsEditingBio] = useState(false)
   const [isEditingSocials, setIsEditingSocials] = useState(false)
   const [isEditingUsername, setIsEditingUsername] = useState(false)
@@ -102,8 +105,8 @@ export default function ViewStorefrontPage() {
           setSocialLinks(userData.socialLinks || {})
           setTempSocials(userData.socialLinks || {})
           setProfilePic(userData.profilePic || userData.photoURL || "")
+          setIsStorefrontLive(userData.isStorefrontLive || false)
 
-          // Handle createdAt timestamp
           if (userData.createdAt) {
             if (userData.createdAt.toDate) {
               setCreatedAt(userData.createdAt.toDate().toISOString())
@@ -112,7 +115,6 @@ export default function ViewStorefrontPage() {
             }
           }
 
-          // Fetch content data
           const freeResponse = await fetch(`/api/creator/${user.uid}/free-content`)
           if (freeResponse.ok) {
             const freeData = await freeResponse.json()
@@ -245,13 +247,15 @@ export default function ViewStorefrontPage() {
 
   const currentContent = activeTab === "free" ? freeContent : premiumContent
 
+  const onTrialOrSubscription = planData?.isActive || false
+
   return (
     <div className="min-h-screen bg-black fixed inset-0 overflow-y-auto">
       <div className="fixed inset-0 bg-gradient-to-br from-zinc-900/40 via-black to-zinc-800/30 pointer-events-none" />
       <div className="fixed inset-0 bg-gradient-to-t from-zinc-900/20 via-transparent to-zinc-800/10 pointer-events-none" />
 
       <div className="relative max-w-6xl mx-auto px-4 sm:px-8 py-8 sm:py-16">
-        {needsCustomization && (
+        {currentObjective?.id === "customize_storefront" && !currentObjective?.completed && (
           <ObjectiveCompletionBanner
             objectiveId="customize_storefront"
             title="Customize Storefront"
@@ -261,7 +265,17 @@ export default function ViewStorefrontPage() {
           />
         )}
 
-        {/* Header with inline editing */}
+        {user && (
+          <div className="absolute top-8 right-8">
+            <StorefrontLiveToggle
+              userId={user.uid}
+              isLive={isStorefrontLive}
+              isProUser={isProUser}
+              onTrialOrSubscription={onTrialOrSubscription}
+            />
+          </div>
+        )}
+
         <div className="mb-8 sm:mb-16">
           <div className="flex items-start justify-between gap-8">
             <div className="flex items-center gap-8">
@@ -340,7 +354,11 @@ export default function ViewStorefrontPage() {
                       rows={3}
                     />
                     <div className="flex gap-2">
-                      <Button size="sm" onClick={handleSaveBio} className="bg-white text-black hover:bg-zinc-100">
+                      <Button
+                        size="sm"
+                        onClick={handleSaveBio}
+                        className="bg-white text-black hover:bg-zinc-100 h-7 px-2"
+                      >
                         <Check className="w-4 h-4 mr-1" />
                         Save
                       </Button>
@@ -351,7 +369,7 @@ export default function ViewStorefrontPage() {
                           setIsEditingBio(false)
                           setTempBio(bio)
                         }}
-                        className="text-zinc-400 hover:text-white"
+                        className="text-zinc-400 hover:text-white h-7 px-2"
                       >
                         <X className="w-4 h-4 mr-1" />
                         Cancel
@@ -400,7 +418,11 @@ export default function ViewStorefrontPage() {
                       className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
                     />
                     <div className="flex gap-2">
-                      <Button size="sm" onClick={handleSaveSocials} className="bg-white text-black hover:bg-zinc-100">
+                      <Button
+                        size="sm"
+                        onClick={handleSaveSocials}
+                        className="bg-white text-black hover:bg-zinc-100 h-7 px-2"
+                      >
                         <Check className="w-4 h-4 mr-1" />
                         Save
                       </Button>
@@ -411,7 +433,7 @@ export default function ViewStorefrontPage() {
                           setIsEditingSocials(false)
                           setTempSocials(socialLinks)
                         }}
-                        className="text-zinc-400 hover:text-white"
+                        className="text-zinc-400 hover:text-white h-7 px-2"
                       >
                         <X className="w-4 h-4 mr-1" />
                         Cancel
@@ -468,7 +490,6 @@ export default function ViewStorefrontPage() {
           </div>
         </div>
 
-        {/* Stats */}
         <div className="flex items-center gap-8 mb-12 text-sm">
           <div className="flex items-center gap-2 text-zinc-500">
             <Calendar className="w-4 h-4" />
@@ -484,7 +505,6 @@ export default function ViewStorefrontPage() {
           </div>
         </div>
 
-        {/* Tabs */}
         <div className="mb-8">
           <div className="flex items-center gap-8 border-b border-zinc-800/50">
             <button
@@ -508,7 +528,6 @@ export default function ViewStorefrontPage() {
           </div>
         </div>
 
-        {/* Content with action buttons */}
         <div className="pt-8">
           {currentContent.length > 0 ? (
             <div
@@ -613,7 +632,6 @@ function VideoContentCard({ item }: { item: ContentItem }) {
       videoRef.current.currentTime = 0
       setIsPlaying(false)
     } else {
-      // Pause all other videos
       document.querySelectorAll("video").forEach((v) => {
         if (v !== videoRef.current) {
           v.pause()
