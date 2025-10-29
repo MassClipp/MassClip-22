@@ -29,6 +29,7 @@ export function useOnboarding() {
 
   const fetchProgress = useCallback(async () => {
     if (!user) {
+      console.log("[v0] useOnboarding - No user, skipping fetch")
       setLoading(false)
       return
     }
@@ -47,7 +48,12 @@ export function useOnboarding() {
       }
 
       const data = await response.json()
-      console.log("[v0] useOnboarding - Progress data:", data)
+      console.log("[v0] useOnboarding - Progress data received:", {
+        isComplete: data.isComplete,
+        completedSteps: data.completedSteps,
+        currentStep: data.currentStep,
+        totalSteps: data.steps?.length,
+      })
       setProgress(data)
     } catch (err) {
       console.error("[v0] useOnboarding - Error:", err)

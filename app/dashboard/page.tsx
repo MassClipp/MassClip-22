@@ -10,7 +10,15 @@ export default function DashboardPage() {
   const { progress, loading } = useOnboarding()
 
   useEffect(() => {
+    console.log("[v0] Dashboard - Progress state:", {
+      loading,
+      isComplete: progress?.isComplete,
+      completedSteps: progress?.completedSteps?.length,
+      totalSteps: progress?.steps?.length,
+    })
+
     if (!loading && progress?.isComplete) {
+      console.log("[v0] Dashboard - Onboarding complete, redirecting to upload")
       router.replace("/dashboard/upload")
     }
   }, [router, loading, progress])
@@ -27,6 +35,7 @@ export default function DashboardPage() {
   }
 
   if (!progress?.isComplete) {
+    console.log("[v0] Dashboard - Showing onboarding checklist")
     return (
       <div className="min-h-screen bg-black p-4 sm:p-8">
         <div className="max-w-2xl mx-auto pt-8">

@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { CheckCircle2, Circle, ChevronRight, Sparkles } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
+import { useEffect } from "react"
 
 const STEP_ROUTES: Record<string, string> = {
   setup_storefront: "/dashboard/view-storefront",
@@ -20,7 +21,18 @@ export function OnboardingChecklist() {
   const { progress, loading } = useOnboarding()
   const router = useRouter()
 
+  useEffect(() => {
+    console.log("[v0] OnboardingChecklist - Render state:", {
+      loading,
+      hasProgress: !!progress,
+      isComplete: progress?.isComplete,
+      completedCount: progress?.completedSteps?.length,
+      totalCount: progress?.steps?.length,
+    })
+  }, [loading, progress])
+
   if (loading || !progress) {
+    console.log("[v0] OnboardingChecklist - Showing loading state")
     return (
       <Card className="border-zinc-800 bg-zinc-900/50">
         <CardHeader>
@@ -32,6 +44,7 @@ export function OnboardingChecklist() {
   }
 
   if (progress.isComplete) {
+    console.log("[v0] OnboardingChecklist - Showing completion state")
     return (
       <Card className="border-green-800 bg-gradient-to-br from-green-900/20 to-zinc-900/50">
         <CardHeader>
@@ -48,6 +61,13 @@ export function OnboardingChecklist() {
   const completedCount = progress.completedSteps.length
   const totalCount = progress.steps.length
   const progressPercent = (completedCount / totalCount) * 100
+
+  console.log("[v0] OnboardingChecklist - Showing active checklist:", {
+    completedCount,
+    totalCount,
+    progressPercent,
+    currentStep: progress.currentStep,
+  })
 
   return (
     <Card className="border-zinc-800 bg-zinc-900/50">
