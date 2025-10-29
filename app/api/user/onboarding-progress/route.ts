@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { verifyIdToken, adminDb } from "@/lib/firebase-admin"
+import { ConnectedStripeAccountsService } from "@/lib/connected-stripe-accounts-service"
 
 export interface OnboardingStep {
   id: string
@@ -64,11 +65,55 @@ export async function GET(req: NextRequest) {
 
     if (!onboardingDoc.exists) {
       // Initialize onboarding for new user
+      const userDoc = await adminDb.collection("users").doc(userId).get()
+      const userData = userDoc.data()
+
+      const stripeAccount = await ConnectedStripeAccountsService.getAccount(userId)
+      const hasStripeSetup = stripeAccount ? ConnectedStripeAccountsService.isAccountFullySetup(stripeAccount) : false
+
+      // Check content uploads
+      const contentSnapshot = await adminDb.collection("content").where("creatorId", "==", userId).limit(1).get()
+      const hasContent = !contentSnapshot.empty
+
+      // Check free content
+      const freeContentSnapshot = await adminDb
+        .collection("content")
+        .where("creatorId", "==", userId)
+        .where("isPremium", "==", false)
+        .limit(1)
+        .get()
+      const hasFreeContent = !freeContentSnapshot.empty
+
+      // Check bundles
+      const bundlesSnapshot = await adminDb.collection("bundles").where("creatorId", "==", userId).limit(1).get()
+      const hasBundle = !bundlesSnapshot.empty
+
+      // Check if storefront is active
+      const isLive = userData?.storefrontActive === true
+
+      // Auto-complete steps
+      const completedSteps: string[] = []
+      if (userData?.username && userData?.bio) completedSteps.push("setup_storefront")
+      if (hasContent) completedSteps.push("upload_content")
+      if (hasFreeContent) completedSteps.push("add_free_content")
+      if (hasStripeSetup) completedSteps.push("setup_stripe")
+      if (hasBundle) completedSteps.push("create_bundle")
+      if (isLive) completedSteps.push("go_live")
+
+      const steps = DEFAULT_STEPS.map((step) => ({
+        ...step,
+        completed: completedSteps.includes(step.id),
+      }))
+
+      const currentStepIndex = steps.findIndex((s) => !s.completed)
+      const currentStep =
+        currentStepIndex >= 0 ? steps[currentStepIndex].id : DEFAULT_STEPS[DEFAULT_STEPS.length - 1].id
+
       const initialProgress: OnboardingProgress = {
-        steps: DEFAULT_STEPS.map((step) => ({ ...step, completed: false })),
-        currentStep: DEFAULT_STEPS[0].id,
-        completedSteps: [],
-        isComplete: false,
+        steps,
+        currentStep,
+        completedSteps,
+        isComplete: completedSteps.length === DEFAULT_STEPS.length,
       }
 
       await adminDb

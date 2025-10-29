@@ -262,11 +262,10 @@ export default function ViewStorefrontPage() {
   const handleToggleStorefront = async () => {
     if (!user) return
 
-    // If user is not pro and trying to activate, show error
-    if (!isProUser && !storefrontActive) {
+    if (!isProUser && !storefrontActive && !planData?.plan?.includes("starter")) {
       toast({
         title: "Upgrade Required",
-        description: "You need Creator Pro to activate your storefront",
+        description: "You need a subscription to activate your storefront",
         variant: "destructive",
       })
       return
@@ -825,7 +824,7 @@ export default function ViewStorefrontPage() {
               <Switch
                 checked={storefrontActive}
                 onCheckedChange={handleToggleStorefront}
-                disabled={updating || (!isProUser && !storefrontActive)}
+                disabled={updating || (!isProUser && !storefrontActive && !planData?.plan?.includes("starter"))}
                 className="data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-zinc-700"
               />
               {storefrontActive ? (
@@ -836,7 +835,7 @@ export default function ViewStorefrontPage() {
                 </Badge>
               )}
             </div>
-            {!isProUser && (
+            {!isProUser && !planData?.plan?.includes("starter") && (
               <Button
                 onClick={handleGoLiveClick}
                 className="bg-white text-black hover:bg-zinc-100 font-medium text-sm px-6"
