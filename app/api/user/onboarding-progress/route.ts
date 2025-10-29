@@ -128,8 +128,75 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(initialProgress)
     }
 
-    const data = onboardingDoc.data() as OnboardingProgress
-    return NextResponse.json(data)
+    const userDoc = await adminDb.collection("users").doc(userId).get()
+    const userData = userDoc.data()
+
+    const stripeAccount = await ConnectedStripeAccountsService.getAccount(userId)
+    const hasStripeSetup = stripeAccount ? ConnectedStripeAccountsService.isAccountFullySetup(stripeAccount) : false
+
+    console.log("[v0] Stripe detection:", {
+      userId,
+      hasAccount: !!stripeAccount,
+      hasStripeSetup,
+      charges_enabled: stripeAccount?.charges_enabled,
+      details_submitted: stripeAccount?.details_submitted,
+    })
+
+    // Check content uploads
+    const contentSnapshot = await adminDb.collection("content").where("creatorId", "==", userId).limit(1).get()
+    const hasContent = !contentSnapshot.empty
+
+    // Check free content
+    const freeContentSnapshot = await adminDb
+      .collection("content")
+      .where("creatorId", "==", userId)
+      .where("isPremium", "==", false)
+      .limit(1)
+      .get()
+    const hasFreeContent = !freeContentSnapshot.empty
+
+    // Check bundles
+    const bundlesSnapshot = await adminDb.collection("bundles").where("creatorId", "==", userId).limit(1).get()
+    const hasBundle = !bundlesSnapshot.empty
+
+    // Check if storefront is active
+    const isLive = userData?.storefrontActive === true
+
+    // Auto-complete steps based on actual data
+    const completedSteps: string[] = []
+    if (userData?.username && userData?.bio) completedSteps.push("setup_storefront")
+    if (hasContent) completedSteps.push("upload_content")
+    if (hasFreeContent) completedSteps.push("add_free_content")
+    if (hasStripeSetup) completedSteps.push("setup_stripe")
+    if (hasBundle) completedSteps.push("create_bundle")
+    if (isLive) completedSteps.push("go_live")
+
+    const steps = DEFAULT_STEPS.map((step) => ({
+      ...step,
+      completed: completedSteps.includes(step.id),
+    }))
+
+    const currentStepIndex = steps.findIndex((s) => !s.completed)
+    const currentStep = currentStepIndex >= 0 ? steps[currentStepIndex].id : DEFAULT_STEPS[DEFAULT_STEPS.length - 1].id
+
+    const progress: OnboardingProgress = {
+      steps,
+      currentStep,
+      completedSteps,
+      isComplete: completedSteps.length === DEFAULT_STEPS.length,
+    }
+
+    // Update the onboarding document with fresh data
+    const onboardingRef = adminDb.collection("onboarding").doc(userId)
+    await onboardingRef.set(
+      {
+        ...progress,
+        updatedAt: new Date(),
+      },
+      { merge: true },
+    )
+
+    return NextResponse.json(progress)
   } catch (error) {
     console.error("[Onboarding Progress] Error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
