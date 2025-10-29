@@ -177,7 +177,7 @@ export function useOnboarding() {
 
       const setupStripeStep = progress.steps.find((s) => s.id === "setup_stripe")
       if (setupStripeStep && !setupStripeStep.completed && !attemptedSteps.current.has("setup_stripe")) {
-        if (userData.stripeAccountId && userData.stripeOnboardingComplete) {
+        if (userData.stripeConnected === true || userData.stripeAccountId) {
           console.log("[v0] useOnboarding - setup_stripe conditions met")
           stepsToComplete.push("setup_stripe")
         }

@@ -77,14 +77,16 @@ export function OnboardingChecklist() {
     const target = e.target as HTMLElement
     const isCircleClick = target.closest(".step-circle")
 
-    if (isCircleClick && !completed) {
+    if (isCircleClick) {
       e.stopPropagation()
       try {
-        await completeStep(stepId)
+        if (!completed) {
+          await completeStep(stepId)
+        }
       } catch (err) {
         console.error("[v0] OnboardingChecklist - Error completing step:", err)
       }
-    } else if (!isCircleClick) {
+    } else {
       // Navigate to the route if clicking elsewhere
       const route = STEP_ROUTES[stepId]
       if (route) {
