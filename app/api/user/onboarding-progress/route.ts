@@ -70,16 +70,16 @@ export async function GET(req: NextRequest) {
       username: userData?.username,
       bio: userData?.bio,
       stripeAccountId: userData?.stripeAccountId,
-      stripeOnboarded: userData?.stripeOnboarded,
+      stripeConnected: userData?.stripeConnected,
       storefrontActive: userData?.storefrontActive,
     })
 
-    // Check Stripe setup - using stripeOnboarded field
-    const hasStripeSetup = !!(userData?.stripeAccountId && userData?.stripeOnboarded)
+    // Check Stripe setup - using stripeConnected field
+    const hasStripeSetup = !!(userData?.stripeAccountId && userData?.stripeConnected)
     console.log("[v0] Stripe detection:", {
       hasStripeSetup,
       stripeAccountId: userData?.stripeAccountId,
-      stripeOnboarded: userData?.stripeOnboarded,
+      stripeConnected: userData?.stripeConnected,
     })
 
     // Check content in uploads collection
