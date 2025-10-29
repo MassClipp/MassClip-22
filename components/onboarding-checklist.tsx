@@ -1,5 +1,7 @@
 "use client"
 
+import type React from "react"
+
 import { useOnboarding } from "@/hooks/use-onboarding"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -18,7 +20,7 @@ const STEP_ROUTES: Record<string, string> = {
 }
 
 export function OnboardingChecklist() {
-  const { progress, loading, dismiss } = useOnboarding()
+  const { progress, loading, dismiss, completeStep } = useOnboarding()
   const router = useRouter()
 
   useEffect(() => {
@@ -70,6 +72,27 @@ export function OnboardingChecklist() {
     currentStep: progress.currentStep,
   })
 
+  const handleStepClick = async (stepId: string, completed: boolean, e: React.MouseEvent) => {
+    // Check if the click was on the circle icon area (left side)
+    const target = e.target as HTMLElement
+    const isCircleClick = target.closest(".step-circle")
+
+    if (isCircleClick && !completed) {
+      e.stopPropagation()
+      try {
+        await completeStep(stepId)
+      } catch (err) {
+        console.error("[v0] OnboardingChecklist - Error completing step:", err)
+      }
+    } else if (!isCircleClick) {
+      // Navigate to the route if clicking elsewhere
+      const route = STEP_ROUTES[stepId]
+      if (route) {
+        router.push(route)
+      }
+    }
+  }
+
   return (
     <Card className="border-zinc-800 bg-zinc-900/50">
       <CardHeader>
@@ -94,12 +117,11 @@ export function OnboardingChecklist() {
       <CardContent className="space-y-2">
         {progress.steps.map((step, index) => {
           const isActive = step.id === progress.currentStep
-          const route = STEP_ROUTES[step.id]
 
           return (
             <button
               key={step.id}
-              onClick={() => route && router.push(route)}
+              onClick={(e) => handleStepClick(step.id, step.completed, e)}
               className={cn(
                 "w-full flex items-center gap-3 p-3 rounded-lg transition-all",
                 "hover:bg-zinc-800/50",
@@ -107,7 +129,10 @@ export function OnboardingChecklist() {
                 step.completed && "opacity-60",
               )}
             >
-              <div className="flex-shrink-0">
+              <div
+                className="flex-shrink-0 step-circle cursor-pointer"
+                title={step.completed ? "Completed" : "Click to mark complete"}
+              >
                 {step.completed ? (
                   <CheckCircle2 className="h-5 w-5 text-green-400" />
                 ) : (
