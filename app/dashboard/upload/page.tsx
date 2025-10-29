@@ -3,6 +3,7 @@
 import type React from "react"
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
+import { useOnboarding } from "@/hooks/use-onboarding"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -108,6 +109,8 @@ export default function UploadPage() {
   const { toast } = useToast()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false) // Declare isSidebarOpen
+
+  const { refetch: refetchOnboarding } = useOnboarding()
 
   // State
   const [uploads, setUploads] = useState<UploadType[]>([])
@@ -443,6 +446,9 @@ export default function UploadPage() {
               title: "Upload Complete!",
               description: `${queuedUpload.file.name} has been uploaded successfully.`,
             })
+
+            console.log("[v0] Triggering onboarding refetch after upload completion")
+            refetchOnboarding?.()
 
             const isVideo = queuedUpload.file.type.startsWith("video/")
             const isImage = queuedUpload.file.type.startsWith("image/")

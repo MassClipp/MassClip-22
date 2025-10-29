@@ -29,6 +29,28 @@ export function useOnboarding() {
   const attemptedSteps = useRef<Set<string>>(new Set())
   const hasRunAutoDetection = useRef(false)
 
+  const refetch = useCallback(async () => {
+    if (!user) return
+
+    try {
+      console.log("[v0] useOnboarding - Manual refetch triggered")
+      const idToken = await user.getIdToken()
+      const response = await fetch("/api/user/onboarding-progress", {
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+        },
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log("[v0] useOnboarding - Refetch completed:", data)
+        // The real-time listener will pick up the changes automatically
+      }
+    } catch (err) {
+      console.error("[v0] useOnboarding - Error refetching:", err)
+    }
+  }, [user])
+
   const completeStep = useCallback(
     async (stepId: string) => {
       if (!user) return
@@ -270,5 +292,6 @@ export function useOnboarding() {
     error,
     completeStep,
     dismiss,
+    refetch, // Expose refetch function
   }
 }
