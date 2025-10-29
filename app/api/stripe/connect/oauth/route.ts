@@ -14,15 +14,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Stripe client ID not configured" }, { status: 500 })
     }
 
-    let baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || "https://massclip.pro"
-
-    // Remove www. if present to match Stripe redirect URI configuration
-    baseUrl = baseUrl.replace("://www.", "://")
-
-    const redirectUri = `${baseUrl}/api/stripe/connect/oauth-callback`
-
-    console.log("[v0] Stripe OAuth - Base URL:", baseUrl)
-    console.log("[v0] Stripe OAuth - Redirect URI:", redirectUri)
+    const redirectUri = "https://massclip.pro/api/stripe/connect/oauth-callback"
 
     const params = new URLSearchParams({
       response_type: "code",
