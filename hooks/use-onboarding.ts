@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useAuth } from "@/contexts/auth-context"
-import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore"
+import { doc, getDoc, collection, query, where, getDocs, onSnapshot } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 
 export interface OnboardingStep {
@@ -29,44 +29,6 @@ export function useOnboarding() {
   const attemptedSteps = useRef<Set<string>>(new Set())
   const hasRunAutoDetection = useRef(false)
 
-  const fetchProgress = useCallback(async () => {
-    if (!user) {
-      console.log("[v0] useOnboarding - No user, skipping fetch")
-      setLoading(false)
-      return
-    }
-
-    try {
-      console.log("[v0] useOnboarding - Fetching progress for user:", user.uid)
-      const idToken = await user.getIdToken()
-      const response = await fetch("/api/user/onboarding-progress", {
-        headers: {
-          Authorization: `Bearer ${idToken}`,
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch onboarding progress")
-      }
-
-      const data = await response.json()
-      console.log("[v0] useOnboarding - Progress data received:", {
-        isComplete: data.isComplete,
-        completedSteps: data.completedSteps,
-        currentStep: data.currentStep,
-        totalSteps: data.steps?.length,
-        steps: data.steps,
-      })
-      setProgress(data)
-      hasRunAutoDetection.current = false
-    } catch (err) {
-      console.error("[v0] useOnboarding - Error:", err)
-      setError(err instanceof Error ? err.message : "Failed to load onboarding")
-    } finally {
-      setLoading(false)
-    }
-  }, [user])
-
   const completeStep = useCallback(
     async (stepId: string) => {
       if (!user) return
@@ -89,7 +51,6 @@ export function useOnboarding() {
 
         const data = await response.json()
         console.log("[v0] useOnboarding - Step completed, new progress:", data)
-        setProgress(data)
         attemptedSteps.current.add(stepId)
         return data
       } catch (err) {
@@ -121,7 +82,6 @@ export function useOnboarding() {
 
       const data = await response.json()
       console.log("[v0] useOnboarding - Dismissed, new state:", data)
-      setProgress(data)
     } catch (err) {
       console.error("[v0] useOnboarding - Error dismissing:", err)
       throw err
@@ -232,8 +192,70 @@ export function useOnboarding() {
   }, [user, progress, completeStep])
 
   useEffect(() => {
-    fetchProgress()
-  }, [fetchProgress])
+    if (!user) {
+      console.log("[v0] useOnboarding - No user, skipping listener setup")
+      setLoading(false)
+      return
+    }
+
+    console.log("[v0] useOnboarding - Setting up real-time listener for user:", user.uid)
+
+    // Set up real-time listener on the onboarding document
+    const onboardingDocRef = doc(db, "onboarding", user.uid)
+
+    const unsubscribe = onSnapshot(
+      onboardingDocRef,
+      async (docSnapshot) => {
+        if (docSnapshot.exists()) {
+          // Document exists, use the data directly
+          const data = docSnapshot.data() as OnboardingProgress
+          console.log("[v0] useOnboarding - Real-time update received:", {
+            isComplete: data.isComplete,
+            completedSteps: data.completedSteps,
+            currentStep: data.currentStep,
+            totalSteps: data.steps?.length,
+            dismissed: data.dismissed,
+          })
+          setProgress(data)
+          hasRunAutoDetection.current = false
+          setLoading(false)
+        } else {
+          // Document doesn't exist yet, trigger API to create it
+          console.log("[v0] useOnboarding - Document doesn't exist, initializing via API")
+          try {
+            const idToken = await user.getIdToken()
+            const response = await fetch("/api/user/onboarding-progress", {
+              headers: {
+                Authorization: `Bearer ${idToken}`,
+              },
+            })
+
+            if (response.ok) {
+              const data = await response.json()
+              console.log("[v0] useOnboarding - Initialized progress:", data)
+              // Don't set progress here - the listener will pick up the new document
+            }
+          } catch (err) {
+            console.error("[v0] useOnboarding - Error initializing:", err)
+            setError(err instanceof Error ? err.message : "Failed to initialize onboarding")
+          } finally {
+            setLoading(false)
+          }
+        }
+      },
+      (err) => {
+        console.error("[v0] useOnboarding - Listener error:", err)
+        setError(err.message)
+        setLoading(false)
+      },
+    )
+
+    // Cleanup listener on unmount
+    return () => {
+      console.log("[v0] useOnboarding - Cleaning up listener")
+      unsubscribe()
+    }
+  }, [user])
 
   useEffect(() => {
     if (progress && !loading && !hasRunAutoDetection.current) {
@@ -248,6 +270,5 @@ export function useOnboarding() {
     error,
     completeStep,
     dismiss,
-    refetch: fetchProgress,
   }
 }
