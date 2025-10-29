@@ -15,8 +15,8 @@ export async function POST(request: NextRequest) {
     }
 
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL_2 || process.env.NEXT_PUBLIC_SITE_URL || "https://massclip.pro"
-    // Remove www. if present to match Stripe settings
-    const cleanBaseUrl = baseUrl.replace(/^https?:\/\/www\./, "https://")
+    // Remove www. from the domain while preserving the protocol
+    const cleanBaseUrl = baseUrl.replace("://www.", "://")
     const redirectUri = `${cleanBaseUrl}/api/stripe/connect/oauth-callback`
 
     console.log("[v0] Stripe OAuth - Base URL:", baseUrl)
