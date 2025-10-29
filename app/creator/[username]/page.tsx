@@ -192,7 +192,7 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
                 </svg>
               </div>
             </div>
-            <h1 className="text-2xl font-bold mb-2">Storefront Unavailable</h1>
+            <h1 className="text-2xl font-bold mb-2">Storefront Offline</h1>
             <p className="text-gray-400 mb-6">
               {!hasActiveMembership
                 ? "This creator needs an active membership to make their storefront available."
