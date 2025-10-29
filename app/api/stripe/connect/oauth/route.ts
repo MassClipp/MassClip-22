@@ -14,13 +14,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Stripe client ID not configured" }, { status: 500 })
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL_2 || process.env.NEXT_PUBLIC_SITE_URL || "https://massclip.pro"
-    // Remove www. from the domain while preserving the protocol
-    const cleanBaseUrl = baseUrl.replace("://www.", "://")
-    const redirectUri = `${cleanBaseUrl}/api/stripe/connect/oauth-callback`
+    let baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || "https://massclip.pro"
+
+    // Remove www. if present to match Stripe redirect URI configuration
+    baseUrl = baseUrl.replace("://www.", "://")
+
+    const redirectUri = `${baseUrl}/api/stripe/connect/oauth-callback`
 
     console.log("[v0] Stripe OAuth - Base URL:", baseUrl)
-    console.log("[v0] Stripe OAuth - Clean Base URL:", cleanBaseUrl)
     console.log("[v0] Stripe OAuth - Redirect URI:", redirectUri)
 
     const params = new URLSearchParams({
@@ -33,7 +34,7 @@ export async function POST(request: NextRequest) {
 
     const authUrl = `https://connect.stripe.com/oauth/authorize?${params.toString()}`
 
-    return NextResponse.json({ url: authUrl, authUrl })
+    return NextResponse.json({ authUrl, url: authUrl })
   } catch (error) {
     console.error("Error generating OAuth URL:", error)
     return NextResponse.json({ error: "Failed to generate OAuth URL" }, { status: 500 })
