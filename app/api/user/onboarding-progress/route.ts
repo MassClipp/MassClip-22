@@ -62,123 +62,53 @@ export async function GET(req: NextRequest) {
     const userId = decodedToken.uid
 
     const onboardingDoc = await adminDb.collection("onboarding").doc(userId).get()
-
-    if (!onboardingDoc.exists) {
-      // Initialize onboarding for new user
-      const userDoc = await adminDb.collection("users").doc(userId).get()
-      const userData = userDoc.data()
-
-      const hasStripeSetup = !!(userData?.stripeAccountId && userData?.stripeOnboardingComplete)
-
-      const freeContentSnapshot = await adminDb.collection("free_content").where("uid", "==", userId).limit(1).get()
-      const productBoxContentSnapshot = await adminDb
-        .collection("productBoxContent")
-        .where("creatorId", "==", userId)
-        .limit(1)
-        .get()
-      const hasContent = !freeContentSnapshot.empty || !productBoxContentSnapshot.empty
-
-      // Check free content
-      const hasFreeContent = !freeContentSnapshot.empty
-
-      const bundlesSnapshot = await adminDb.collection("bundles").where("creatorId", "==", userId).limit(1).get()
-      const productBoxesSnapshot = await adminDb
-        .collection("productBoxes")
-        .where("creatorId", "==", userId)
-        .limit(1)
-        .get()
-      const hasBundle = !bundlesSnapshot.empty || !productBoxesSnapshot.empty
-
-      // Check if storefront is active
-      const isLive = userData?.storefrontActive === true
-
-      // Auto-complete steps
-      const completedSteps: string[] = []
-      if (userData?.username && userData?.bio) completedSteps.push("setup_storefront")
-      if (hasContent) completedSteps.push("upload_content")
-      if (hasFreeContent) completedSteps.push("add_free_content")
-      if (hasStripeSetup) completedSteps.push("setup_stripe")
-      if (hasBundle) completedSteps.push("create_bundle")
-      if (isLive) completedSteps.push("go_live")
-
-      const steps = DEFAULT_STEPS.map((step) => ({
-        ...step,
-        completed: completedSteps.includes(step.id),
-      }))
-
-      const currentStepIndex = steps.findIndex((s) => !s.completed)
-      const currentStep =
-        currentStepIndex >= 0 ? steps[currentStepIndex].id : DEFAULT_STEPS[DEFAULT_STEPS.length - 1].id
-
-      const initialProgress: OnboardingProgress = {
-        steps,
-        currentStep,
-        completedSteps,
-        isComplete: completedSteps.length === DEFAULT_STEPS.length,
-        dismissed: false,
-      }
-
-      await adminDb
-        .collection("onboarding")
-        .doc(userId)
-        .set({
-          ...initialProgress,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })
-
-      return NextResponse.json(initialProgress)
-    }
-
-    const existingData = onboardingDoc.data()
-    const dismissed = existingData?.dismissed || false
-
     const userDoc = await adminDb.collection("users").doc(userId).get()
     const userData = userDoc.data()
 
-    const hasStripeSetup = !!(userData?.stripeAccountId && userData?.stripeOnboardingComplete)
-
-    console.log("[v0] Stripe detection:", {
+    console.log("[v0] User data:", {
       userId,
+      username: userData?.username,
+      bio: userData?.bio,
       stripeAccountId: userData?.stripeAccountId,
-      stripeOnboardingComplete: userData?.stripeOnboardingComplete,
-      hasStripeSetup,
+      stripeOnboarded: userData?.stripeOnboarded,
+      storefrontActive: userData?.storefrontActive,
     })
 
-    const freeContentSnapshot = await adminDb.collection("free_content").where("uid", "==", userId).limit(1).get()
-    const productBoxContentSnapshot = await adminDb
-      .collection("productBoxContent")
-      .where("creatorId", "==", userId)
+    // Check Stripe setup - using stripeOnboarded field
+    const hasStripeSetup = !!(userData?.stripeAccountId && userData?.stripeOnboarded)
+    console.log("[v0] Stripe detection:", {
+      hasStripeSetup,
+      stripeAccountId: userData?.stripeAccountId,
+      stripeOnboarded: userData?.stripeOnboarded,
+    })
+
+    // Check content in uploads collection
+    const uploadsSnapshot = await adminDb.collection("uploads").where("uid", "==", userId).limit(1).get()
+    const hasContent = !uploadsSnapshot.empty
+    console.log("[v0] Content detection:", { hasContent, uploadsCount: uploadsSnapshot.size })
+
+    // Check free content in uploads collection
+    const freeUploadsSnapshot = await adminDb
+      .collection("uploads")
+      .where("uid", "==", userId)
+      .where("isFreeContent", "==", true)
       .limit(1)
       .get()
-    const hasContent = !freeContentSnapshot.empty || !productBoxContentSnapshot.empty
+    const hasFreeContent = !freeUploadsSnapshot.empty
+    console.log("[v0] Free content detection:", { hasFreeContent, freeUploadsCount: freeUploadsSnapshot.size })
 
-    // Check free content
-    const hasFreeContent = !freeContentSnapshot.empty
-
-    const bundlesSnapshot = await adminDb.collection("bundles").where("creatorId", "==", userId).limit(1).get()
+    // Check bundles in productBoxes collection (primary collection for bundles)
     const productBoxesSnapshot = await adminDb
       .collection("productBoxes")
       .where("creatorId", "==", userId)
       .limit(1)
       .get()
-    const hasBundle = !bundlesSnapshot.empty || !productBoxesSnapshot.empty
-
-    console.log("[v0] Bundle detection:", {
-      userId,
-      bundlesCount: bundlesSnapshot.size,
-      productBoxesCount: productBoxesSnapshot.size,
-      hasBundle,
-    })
+    const hasBundle = !productBoxesSnapshot.empty
+    console.log("[v0] Bundle detection:", { hasBundle, productBoxesCount: productBoxesSnapshot.size })
 
     // Check if storefront is active
     const isLive = userData?.storefrontActive === true
-
-    console.log("[v0] Go Live detection:", {
-      userId,
-      storefrontActive: userData?.storefrontActive,
-      isLive,
-    })
+    console.log("[v0] Go Live detection:", { isLive, storefrontActive: userData?.storefrontActive })
 
     // Auto-complete steps based on actual data
     const completedSteps: string[] = []
@@ -199,6 +129,8 @@ export async function GET(req: NextRequest) {
     const currentStepIndex = steps.findIndex((s) => !s.completed)
     const currentStep = currentStepIndex >= 0 ? steps[currentStepIndex].id : DEFAULT_STEPS[DEFAULT_STEPS.length - 1].id
 
+    const dismissed = onboardingDoc.exists ? onboardingDoc.data()?.dismissed || false : false
+
     const progress: OnboardingProgress = {
       steps,
       currentStep,
@@ -208,14 +140,17 @@ export async function GET(req: NextRequest) {
     }
 
     // Update the onboarding document with fresh data
-    const onboardingRef = adminDb.collection("onboarding").doc(userId)
-    await onboardingRef.set(
-      {
-        ...progress,
-        updatedAt: new Date(),
-      },
-      { merge: true },
-    )
+    await adminDb
+      .collection("onboarding")
+      .doc(userId)
+      .set(
+        {
+          ...progress,
+          updatedAt: new Date(),
+          ...(onboardingDoc.exists ? {} : { createdAt: new Date() }),
+        },
+        { merge: true },
+      )
 
     return NextResponse.json(progress)
   } catch (error) {
