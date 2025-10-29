@@ -50,9 +50,9 @@ export function OnboardingChecklist() {
         <CardHeader>
           <div className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-green-400" />
-            <CardTitle className="text-white">All Set!</CardTitle>
+            <CardTitle className="text-white">Objectives Complete!</CardTitle>
           </div>
-          <CardDescription>You've completed all onboarding steps. Your storefront is ready!</CardDescription>
+          <CardDescription>Let's earn your first $50</CardDescription>
         </CardHeader>
       </Card>
     )

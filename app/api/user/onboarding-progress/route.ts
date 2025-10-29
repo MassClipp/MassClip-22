@@ -162,6 +162,13 @@ export async function GET(req: NextRequest) {
     // Check if storefront is active
     const isLive = userData?.storefrontActive === true
 
+    console.log("[v0] Go Live detection:", {
+      userId,
+      storefrontActive: userData?.storefrontActive,
+      isLive,
+      userDataKeys: userData ? Object.keys(userData) : [],
+    })
+
     // Auto-complete steps based on actual data
     const completedSteps: string[] = []
     if (userData?.username && userData?.bio) completedSteps.push("setup_storefront")
