@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { verifyIdToken, adminDb } from "@/lib/firebase-admin"
-import { ConnectedStripeAccountsService } from "@/lib/connected-stripe-accounts-service"
 
 export interface OnboardingStep {
   id: string
@@ -69,25 +68,26 @@ export async function GET(req: NextRequest) {
       const userDoc = await adminDb.collection("users").doc(userId).get()
       const userData = userDoc.data()
 
-      const stripeAccount = await ConnectedStripeAccountsService.getAccount(userId)
-      const hasStripeSetup = stripeAccount ? ConnectedStripeAccountsService.isAccountFullySetup(stripeAccount) : false
+      const hasStripeSetup = !!(userData?.stripeAccountId && userData?.stripeOnboardingComplete)
 
-      // Check content uploads
-      const contentSnapshot = await adminDb.collection("content").where("creatorId", "==", userId).limit(1).get()
-      const hasContent = !contentSnapshot.empty
-
-      // Check free content
-      const freeContentSnapshot = await adminDb
-        .collection("content")
+      const freeContentSnapshot = await adminDb.collection("free_content").where("uid", "==", userId).limit(1).get()
+      const productBoxContentSnapshot = await adminDb
+        .collection("productBoxContent")
         .where("creatorId", "==", userId)
-        .where("isPremium", "==", false)
         .limit(1)
         .get()
+      const hasContent = !freeContentSnapshot.empty || !productBoxContentSnapshot.empty
+
+      // Check free content
       const hasFreeContent = !freeContentSnapshot.empty
 
-      // Check bundles
       const bundlesSnapshot = await adminDb.collection("bundles").where("creatorId", "==", userId).limit(1).get()
-      const hasBundle = !bundlesSnapshot.empty
+      const productBoxesSnapshot = await adminDb
+        .collection("productBoxes")
+        .where("creatorId", "==", userId)
+        .limit(1)
+        .get()
+      const hasBundle = !bundlesSnapshot.empty || !productBoxesSnapshot.empty
 
       // Check if storefront is active
       const isLive = userData?.storefrontActive === true
@@ -115,7 +115,7 @@ export async function GET(req: NextRequest) {
         currentStep,
         completedSteps,
         isComplete: completedSteps.length === DEFAULT_STEPS.length,
-        dismissed: false, // Initialize dismissed as false for new users
+        dismissed: false,
       }
 
       await adminDb
@@ -136,44 +136,39 @@ export async function GET(req: NextRequest) {
     const userDoc = await adminDb.collection("users").doc(userId).get()
     const userData = userDoc.data()
 
-    const stripeAccount = await ConnectedStripeAccountsService.getAccount(userId)
-    const hasStripeSetup = stripeAccount ? ConnectedStripeAccountsService.isAccountFullySetup(stripeAccount) : false
+    const hasStripeSetup = !!(userData?.stripeAccountId && userData?.stripeOnboardingComplete)
 
     console.log("[v0] Stripe detection:", {
       userId,
-      hasAccount: !!stripeAccount,
+      stripeAccountId: userData?.stripeAccountId,
+      stripeOnboardingComplete: userData?.stripeOnboardingComplete,
       hasStripeSetup,
-      charges_enabled: stripeAccount?.charges_enabled,
-      details_submitted: stripeAccount?.details_submitted,
-      payouts_enabled: stripeAccount?.payouts_enabled,
     })
 
-    // Check content uploads
-    const contentSnapshot = await adminDb.collection("content").where("creatorId", "==", userId).limit(1).get()
-    const hasContent = !contentSnapshot.empty
+    const freeContentSnapshot = await adminDb.collection("free_content").where("uid", "==", userId).limit(1).get()
+    const productBoxContentSnapshot = await adminDb
+      .collection("productBoxContent")
+      .where("creatorId", "==", userId)
+      .limit(1)
+      .get()
+    const hasContent = !freeContentSnapshot.empty || !productBoxContentSnapshot.empty
 
     // Check free content
-    const freeContentSnapshot = await adminDb
-      .collection("content")
-      .where("creatorId", "==", userId)
-      .where("isPremium", "==", false)
-      .limit(1)
-      .get()
     const hasFreeContent = !freeContentSnapshot.empty
 
-    // Check bundles
-    const bundlesSnapshot = await adminDb
-      .collection("bundles")
+    const bundlesSnapshot = await adminDb.collection("bundles").where("creatorId", "==", userId).limit(1).get()
+    const productBoxesSnapshot = await adminDb
+      .collection("productBoxes")
       .where("creatorId", "==", userId)
-      .where("isActive", "==", true)
       .limit(1)
       .get()
-    const hasBundle = !bundlesSnapshot.empty
+    const hasBundle = !bundlesSnapshot.empty || !productBoxesSnapshot.empty
 
     console.log("[v0] Bundle detection:", {
       userId,
+      bundlesCount: bundlesSnapshot.size,
+      productBoxesCount: productBoxesSnapshot.size,
       hasBundle,
-      bundleCount: bundlesSnapshot.size,
     })
 
     // Check if storefront is active
@@ -209,7 +204,7 @@ export async function GET(req: NextRequest) {
       currentStep,
       completedSteps,
       isComplete: completedSteps.length === DEFAULT_STEPS.length,
-      dismissed, // Preserve dismissed state
+      dismissed,
     }
 
     // Update the onboarding document with fresh data
