@@ -26,6 +26,7 @@ export function useOnboarding() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const attemptedSteps = useRef<Set<string>>(new Set())
+  const hasRunAutoDetection = useRef(false)
 
   const fetchProgress = useCallback(async () => {
     if (!user) {
@@ -53,8 +54,10 @@ export function useOnboarding() {
         completedSteps: data.completedSteps,
         currentStep: data.currentStep,
         totalSteps: data.steps?.length,
+        steps: data.steps,
       })
       setProgress(data)
+      hasRunAutoDetection.current = false
     } catch (err) {
       console.error("[v0] useOnboarding - Error:", err)
       setError(err instanceof Error ? err.message : "Failed to load onboarding")
@@ -97,11 +100,16 @@ export function useOnboarding() {
   )
 
   const autoDetectCompletedSteps = useCallback(async () => {
-    if (!user || !progress) {
-      console.log("[v0] useOnboarding - Skipping auto-detect: no user or progress")
+    if (!user || !progress || hasRunAutoDetection.current) {
+      console.log("[v0] useOnboarding - Skipping auto-detect:", {
+        hasUser: !!user,
+        hasProgress: !!progress,
+        alreadyRan: hasRunAutoDetection.current,
+      })
       return
     }
 
+    hasRunAutoDetection.current = true
     console.log("[v0] useOnboarding - Running auto-detection")
 
     try {
@@ -184,8 +192,10 @@ export function useOnboarding() {
       }
 
       console.log("[v0] useOnboarding - Steps to complete:", stepsToComplete)
-      for (const stepId of stepsToComplete) {
-        await completeStep(stepId)
+      if (stepsToComplete.length > 0) {
+        for (const stepId of stepsToComplete) {
+          await completeStep(stepId)
+        }
       }
     } catch (err) {
       console.error("[v0] useOnboarding - Error auto-detecting steps:", err)
@@ -197,11 +207,11 @@ export function useOnboarding() {
   }, [fetchProgress])
 
   useEffect(() => {
-    if (progress && !loading) {
+    if (progress && !loading && !hasRunAutoDetection.current) {
       console.log("[v0] useOnboarding - Progress loaded, running auto-detection")
       autoDetectCompletedSteps()
     }
-  }, [progress, loading]) // Only re-run when progress or loading changes
+  }, [progress, loading, autoDetectCompletedSteps])
 
   return {
     progress,
