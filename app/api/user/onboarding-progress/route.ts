@@ -15,6 +15,7 @@ export interface OnboardingProgress {
   currentStep: string
   completedSteps: string[]
   isComplete: boolean
+  dismissed?: boolean // Added dismissed flag to track if user dismissed the completion card
 }
 
 const DEFAULT_STEPS: Omit<OnboardingStep, "completed" | "completedAt">[] = [
@@ -114,6 +115,7 @@ export async function GET(req: NextRequest) {
         currentStep,
         completedSteps,
         isComplete: completedSteps.length === DEFAULT_STEPS.length,
+        dismissed: false, // Initialize dismissed as false for new users
       }
 
       await adminDb
@@ -127,6 +129,9 @@ export async function GET(req: NextRequest) {
 
       return NextResponse.json(initialProgress)
     }
+
+    const existingData = onboardingDoc.data()
+    const dismissed = existingData?.dismissed || false
 
     const userDoc = await adminDb.collection("users").doc(userId).get()
     const userData = userDoc.data()
@@ -191,6 +196,7 @@ export async function GET(req: NextRequest) {
       currentStep,
       completedSteps,
       isComplete: completedSteps.length === DEFAULT_STEPS.length,
+      dismissed, // Preserve dismissed state
     }
 
     // Update the onboarding document with fresh data
@@ -221,7 +227,18 @@ export async function POST(req: NextRequest) {
     const decodedToken = await verifyIdToken(idToken)
     const userId = decodedToken.uid
 
-    const { stepId } = await req.json()
+    const { stepId, action } = await req.json()
+
+    if (action === "dismiss") {
+      const onboardingRef = adminDb.collection("onboarding").doc(userId)
+      await onboardingRef.update({
+        dismissed: true,
+        updatedAt: new Date(),
+      })
+
+      const updatedDoc = await onboardingRef.get()
+      return NextResponse.json(updatedDoc.data())
+    }
 
     if (!stepId) {
       return NextResponse.json({ error: "Step ID required" }, { status: 400 })

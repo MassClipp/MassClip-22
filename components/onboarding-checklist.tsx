@@ -3,7 +3,7 @@
 import { useOnboarding } from "@/hooks/use-onboarding"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { CheckCircle2, Circle, ChevronRight, Sparkles } from "lucide-react"
+import { CheckCircle2, Circle, ChevronRight, Sparkles, X } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { useEffect } from "react"
@@ -18,7 +18,7 @@ const STEP_ROUTES: Record<string, string> = {
 }
 
 export function OnboardingChecklist() {
-  const { progress, loading } = useOnboarding()
+  const { progress, loading, dismiss } = useOnboarding()
   const router = useRouter()
 
   useEffect(() => {
@@ -31,16 +31,12 @@ export function OnboardingChecklist() {
     })
   }, [loading, progress])
 
-  if (loading || !progress) {
-    console.log("[v0] OnboardingChecklist - Showing loading state")
-    return (
-      <Card className="border-zinc-800 bg-zinc-900/50">
-        <CardHeader>
-          <CardTitle className="text-white">Getting Started</CardTitle>
-          <CardDescription>Loading your progress...</CardDescription>
-        </CardHeader>
-      </Card>
-    )
+  if (loading) {
+    return null
+  }
+
+  if (!progress || progress.dismissed) {
+    return null
   }
 
   if (progress.isComplete) {
@@ -48,11 +44,16 @@ export function OnboardingChecklist() {
     return (
       <Card className="border-green-800 bg-gradient-to-br from-green-900/20 to-zinc-900/50">
         <CardHeader>
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-green-400" />
-            <CardTitle className="text-white">Objectives Complete!</CardTitle>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-green-400" />
+              <CardTitle className="text-white">Objectives Complete!</CardTitle>
+            </div>
+            <button onClick={dismiss} className="p-1 hover:bg-zinc-800 rounded transition-colors" title="Dismiss">
+              <X className="h-4 w-4 text-zinc-400" />
+            </button>
           </div>
-          <CardDescription>Let's earn your first $50</CardDescription>
+          <CardDescription>Let's make your first $50</CardDescription>
         </CardHeader>
       </Card>
     )

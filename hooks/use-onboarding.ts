@@ -18,6 +18,7 @@ export interface OnboardingProgress {
   currentStep: string
   completedSteps: string[]
   isComplete: boolean
+  dismissed?: boolean
 }
 
 export function useOnboarding() {
@@ -98,6 +99,34 @@ export function useOnboarding() {
     },
     [user],
   )
+
+  const dismiss = useCallback(async () => {
+    if (!user) return
+
+    try {
+      console.log("[v0] useOnboarding - Dismissing onboarding")
+      const idToken = await user.getIdToken()
+      const response = await fetch("/api/user/onboarding-progress", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ action: "dismiss" }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to dismiss onboarding")
+      }
+
+      const data = await response.json()
+      console.log("[v0] useOnboarding - Dismissed, new state:", data)
+      setProgress(data)
+    } catch (err) {
+      console.error("[v0] useOnboarding - Error dismissing:", err)
+      throw err
+    }
+  }, [user])
 
   const autoDetectCompletedSteps = useCallback(async () => {
     if (!user || !progress || hasRunAutoDetection.current) {
@@ -218,6 +247,7 @@ export function useOnboarding() {
     loading,
     error,
     completeStep,
+    dismiss,
     refetch: fetchProgress,
   }
 }

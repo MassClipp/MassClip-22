@@ -2,7 +2,7 @@
 
 import { useOnboarding } from "@/hooks/use-onboarding"
 import { usePathname } from "next/navigation"
-import { CheckCircle2, Circle, ChevronRight, X, ChevronDown } from "lucide-react"
+import { CheckCircle2, Circle, ChevronRight, X, ChevronDown, Sparkles } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { cn } from "@/lib/utils"
@@ -18,18 +18,63 @@ const STEP_ROUTES: Record<string, string> = {
 }
 
 export function OnboardingIndicator() {
-  const { progress, loading } = useOnboarding()
+  const { progress, loading, dismiss } = useOnboarding()
   const pathname = usePathname()
   const router = useRouter()
   const [isMinimized, setIsMinimized] = useState(false)
-  const [isDismissed, setIsDismissed] = useState(false)
+  const [isDismissed, setIsDismissed] = useState(false) // Declare setIsDismissed
 
   if (pathname === "/dashboard") {
     return null
   }
 
-  if (loading || !progress || progress.isComplete || isDismissed) {
+  if (loading || !progress || progress.dismissed) {
     return null
+  }
+
+  if (progress.isComplete) {
+    if (isMinimized) {
+      return (
+        <button
+          onClick={() => setIsMinimized(false)}
+          className="fixed bottom-6 right-6 z-50 bg-gradient-to-r from-green-600 to-emerald-600 p-[1px] rounded-full shadow-2xl hover:scale-105 transition-transform"
+        >
+          <div className="bg-zinc-900 rounded-full px-4 py-3 flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-green-400" />
+            <span className="text-white font-medium text-sm">Complete!</span>
+            <ChevronDown className="h-4 w-4 text-zinc-400" />
+          </div>
+        </button>
+      )
+    }
+
+    return (
+      <div className="fixed bottom-6 right-6 z-50 w-96 max-w-[calc(100vw-3rem)]">
+        <div className="bg-gradient-to-r from-green-600 to-emerald-600 p-[1px] rounded-lg shadow-2xl">
+          <div className="bg-zinc-900 rounded-lg p-6">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-green-400" />
+                <h3 className="font-semibold text-white">Objectives Complete!</h3>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setIsMinimized(true)}
+                  className="p-1 hover:bg-zinc-800 rounded transition-colors"
+                  title="Minimize"
+                >
+                  <ChevronDown className="h-4 w-4 text-zinc-400" />
+                </button>
+                <button onClick={dismiss} className="p-1 hover:bg-zinc-800 rounded transition-colors" title="Dismiss">
+                  <X className="h-4 w-4 text-zinc-400" />
+                </button>
+              </div>
+            </div>
+            <p className="text-zinc-400 text-sm">Let's make your first $50</p>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   const completedCount = progress.completedSteps.length
