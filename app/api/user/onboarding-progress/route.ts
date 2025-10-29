@@ -145,6 +145,7 @@ export async function GET(req: NextRequest) {
       hasStripeSetup,
       charges_enabled: stripeAccount?.charges_enabled,
       details_submitted: stripeAccount?.details_submitted,
+      payouts_enabled: stripeAccount?.payouts_enabled,
     })
 
     // Check content uploads
@@ -161,8 +162,19 @@ export async function GET(req: NextRequest) {
     const hasFreeContent = !freeContentSnapshot.empty
 
     // Check bundles
-    const bundlesSnapshot = await adminDb.collection("bundles").where("creatorId", "==", userId).limit(1).get()
+    const bundlesSnapshot = await adminDb
+      .collection("bundles")
+      .where("creatorId", "==", userId)
+      .where("isActive", "==", true)
+      .limit(1)
+      .get()
     const hasBundle = !bundlesSnapshot.empty
+
+    console.log("[v0] Bundle detection:", {
+      userId,
+      hasBundle,
+      bundleCount: bundlesSnapshot.size,
+    })
 
     // Check if storefront is active
     const isLive = userData?.storefrontActive === true
@@ -171,7 +183,6 @@ export async function GET(req: NextRequest) {
       userId,
       storefrontActive: userData?.storefrontActive,
       isLive,
-      userDataKeys: userData ? Object.keys(userData) : [],
     })
 
     // Auto-complete steps based on actual data
@@ -182,6 +193,8 @@ export async function GET(req: NextRequest) {
     if (hasStripeSetup) completedSteps.push("setup_stripe")
     if (hasBundle) completedSteps.push("create_bundle")
     if (isLive) completedSteps.push("go_live")
+
+    console.log("[v0] Completed steps:", completedSteps)
 
     const steps = DEFAULT_STEPS.map((step) => ({
       ...step,
