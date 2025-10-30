@@ -166,11 +166,16 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
 
     const storefrontActive = userData.storefrontActive ?? true
     const membershipStatus = userData.membershipStatus || "free"
-    const hasActiveMembership = membershipStatus === "trial" || membershipStatus === "active"
+    const hasActiveMembership =
+      membershipStatus === "trialing" ||
+      membershipStatus === "active" ||
+      userData.plan === "vip" ||
+      userData.plan === "creator_pro"
 
     console.log(`[Page] Access check for ${username}:`, {
       storefrontActive,
       membershipStatus,
+      plan: userData.plan,
       hasActiveMembership,
     })
 

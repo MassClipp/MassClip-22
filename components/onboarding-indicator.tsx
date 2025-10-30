@@ -57,7 +57,7 @@ export function OnboardingIndicator() {
               <div className="flex items-center justify-between mb-2">
                 <div className="space-y-1">
                   <h3 className="font-semibold text-white text-lg tracking-tight">Setup Complete</h3>
-                  <p className="text-zinc-400 text-sm">Ready to earn your first $50</p>
+                  <p className="text-zinc-400 text-sm">Ready to earn your first $50?</p>
                 </div>
                 <div className="flex items-center gap-1">
                   <button

@@ -51,7 +51,7 @@ export function OnboardingChecklist() {
             <div className="flex items-center justify-between">
               <div className="space-y-1">
                 <CardTitle className="text-white text-lg font-semibold tracking-tight">Setup Complete</CardTitle>
-                <CardDescription className="text-zinc-400 text-sm">Ready to earn your first $50</CardDescription>
+                <CardDescription className="text-zinc-400 text-sm">Ready to earn your first $50?</CardDescription>
               </div>
               <button
                 onClick={dismiss}
