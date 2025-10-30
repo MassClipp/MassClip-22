@@ -113,14 +113,17 @@ function VexChat({ children }: VexChatProps) {
 
   const navigationItems = [
     { icon: Upload, label: "Upload", href: "/dashboard/upload" },
-    { icon: Package, label: "Bundles", href: "/dashboard/bundles" },
-    { icon: DollarSign, label: "Earnings", href: "/dashboard/earnings" },
     { icon: Heart, label: "Favorites", href: "/dashboard/favorites" },
     { icon: CreditCard, label: "Upgrade", href: "/dashboard/upgrade", highlight: true },
     { icon: Package, label: "My Purchases", href: "/dashboard/purchases" },
     { icon: Gift, label: "Free Content", href: "/dashboard/free-content" },
+  ]
+
+  const businessManagementItems = [
+    { icon: Target, label: "Sales Objectives", href: "/dashboard", gradient: true },
+    { icon: Package, label: "Bundles", href: "/dashboard/bundles" },
+    { icon: DollarSign, label: "Earnings", href: "/dashboard/earnings" },
     { icon: User, label: "View Storefront", href: "/dashboard/view-storefront" },
-    { icon: Target, label: "Sales Objectives", href: "/dashboard" },
   ]
 
   // Suggestions list (moved here to fix undeclared variable error)
@@ -1021,6 +1024,32 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                   </div>
 
                   <div className="flex-1 px-3 py-4">
+                    <div className="mb-6">
+                      <div className="mb-3 px-3">
+                        <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">
+                          Business Management
+                        </span>
+                      </div>
+                      <nav className="space-y-1">
+                        {businessManagementItems.map((item) => (
+                          <button
+                            key={item.href}
+                            onClick={() => handleNavigation(item.href)}
+                            className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-all duration-200 group ${
+                              item.gradient
+                                ? "bg-gradient-to-r from-purple-500 via-blue-500 to-pink-500 text-white hover:from-purple-600 hover:via-blue-600 hover:to-pink-600 shadow-lg shadow-purple-500/20 hover:shadow-purple-500/30 font-medium"
+                                : "text-zinc-400 hover:text-white hover:bg-white/5"
+                            }`}
+                          >
+                            <item.icon
+                              className={`h-4 w-4 ${item.gradient ? "" : "group-hover:scale-110 transition-transform duration-200"}`}
+                            />
+                            <span className="font-medium">{item.label}</span>
+                          </button>
+                        ))}
+                      </nav>
+                    </div>
+
                     <div className="mb-3 px-3">
                       <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">
                         Navigation
@@ -1276,6 +1305,32 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                 </div>
 
                 <div className="flex-1 px-3 py-4">
+                  <div className="mb-6">
+                    <div className="mb-3 px-3">
+                      <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">
+                        Business Management
+                      </span>
+                    </div>
+                    <nav className="space-y-1">
+                      {businessManagementItems.map((item) => (
+                        <button
+                          key={item.href}
+                          onClick={() => handleNavigation(item.href)}
+                          className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-all duration-200 group ${
+                            item.gradient
+                              ? "bg-gradient-to-r from-purple-500 via-blue-500 to-pink-500 text-white hover:from-purple-600 hover:via-blue-600 hover:to-pink-600 shadow-lg shadow-purple-500/20 hover:shadow-purple-500/30 font-medium"
+                              : "text-zinc-400 hover:text-white hover:bg-white/5"
+                          }`}
+                        >
+                          <item.icon
+                            className={`h-4 w-4 ${item.gradient ? "" : "group-hover:scale-110 transition-transform duration-200"}`}
+                          />
+                          <span className="font-medium">{item.label}</span>
+                        </button>
+                      ))}
+                    </nav>
+                  </div>
+
                   <div className="mb-3 px-3">
                     <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Navigation</span>
                   </div>
