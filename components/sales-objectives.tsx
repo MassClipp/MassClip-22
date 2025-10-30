@@ -203,79 +203,64 @@ export function SalesObjectives() {
 
   return (
     <div className="min-h-screen bg-black px-4 py-8 sm:px-6 lg:px-8">
-      <div className="max-w-5xl mx-auto">
-        {/* Header */}
-        <div className="mb-12">
-          <h1 className="text-4xl font-bold text-white mb-3 tracking-tight">Sales Objectives</h1>
-          <p className="text-zinc-400 text-lg">Track your progress and unlock new tiers</p>
-        </div>
+      {/* Header */}
+      <div className="mb-12">
+        <h1 className="text-4xl font-bold text-white mb-3 tracking-tight">Sales Objectives</h1>
+        <p className="text-zinc-400 text-lg">Track your progress and unlock new tiers</p>
+      </div>
 
-        {/* Tiers */}
-        <div className="space-y-6">
-          {tiers.map((tier, tierIndex) => {
-            const completedObjectives = tier.objectives.filter((obj) => obj.completed).length
-            const totalObjectives = tier.objectives.length
-            const tierProgress = (completedObjectives / totalObjectives) * 100
+      {/* Tiers */}
+      <div className="space-y-6">
+        {tiers.map((tier, tierIndex) => {
+          const completedObjectives = tier.objectives.filter((obj) => obj.completed).length
+          const totalObjectives = tier.objectives.length
+          const tierProgress = (completedObjectives / totalObjectives) * 100
 
-            return (
-              <div
-                key={tier.id}
-                className={cn(
-                  "relative overflow-hidden rounded-lg border transition-all duration-300",
-                  tier.unlocked
-                    ? "border-zinc-800 bg-zinc-950/50 hover:border-zinc-700"
-                    : "border-zinc-900 bg-zinc-950/30 opacity-60",
-                  tier.completed && "border-emerald-900/50 bg-emerald-950/10",
-                )}
-              >
-                {/* Tier Header */}
-                <div className="p-6 border-b border-zinc-900">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-4">
-                      {/* Tier Number Badge */}
-                      <div
-                        className={cn(
-                          "flex h-12 w-12 items-center justify-center rounded-lg text-lg font-bold",
-                          tier.completed
-                            ? "bg-emerald-500/10 text-emerald-400"
-                            : tier.unlocked
-                              ? "bg-zinc-800 text-white"
-                              : "bg-zinc-900 text-zinc-600",
-                        )}
-                      >
-                        {tier.completed ? <Check className="h-6 w-6" /> : tierIndex + 1}
-                      </div>
-
-                      {/* Tier Info */}
-                      <div>
-                        <div className="flex items-center gap-3 mb-1">
-                          <h2 className="text-2xl font-bold text-white tracking-tight">{tier.name}</h2>
-                          {!tier.unlocked && <Lock className="h-4 w-4 text-zinc-600" />}
-                        </div>
-                        <p className="text-zinc-500 text-sm">{tier.description}</p>
-                      </div>
+          return (
+            <div
+              key={tier.id}
+              className={cn(
+                "relative overflow-hidden rounded-lg border transition-all duration-300",
+                tier.unlocked
+                  ? "border-zinc-800 bg-zinc-950/50 hover:border-zinc-700"
+                  : "border-zinc-900 bg-zinc-950/30 opacity-60",
+                tier.completed && "border-emerald-900/50 bg-emerald-950/10",
+              )}
+            >
+              {/* Tier Header */}
+              <div className="p-6 border-b border-zinc-900">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-4">
+                    {/* Tier Number Badge */}
+                    <div
+                      className={cn(
+                        "flex h-12 w-12 items-center justify-center rounded-lg text-lg font-bold",
+                        tier.completed
+                          ? "bg-emerald-500/10 text-emerald-400"
+                          : tier.unlocked
+                            ? "bg-zinc-800 text-white"
+                            : "bg-zinc-900 text-zinc-600",
+                      )}
+                    >
+                      {tier.completed ? <Check className="h-6 w-6" /> : tierIndex + 1}
                     </div>
 
-                    {/* Progress Badge */}
-                    <div className="text-right">
-                      <div className="text-2xl font-bold text-white">
-                        {completedObjectives}/{totalObjectives}
+                    {/* Tier Info */}
+                    <div>
+                      <div className="flex items-center gap-3 mb-1">
+                        <h2 className="text-2xl font-bold text-white tracking-tight">{tier.name}</h2>
+                        {!tier.unlocked && <Lock className="h-4 w-4 text-zinc-600" />}
                       </div>
-                      <div className="text-xs text-zinc-500 uppercase tracking-wider">Completed</div>
+                      <p className="text-zinc-500 text-sm">{tier.description}</p>
                     </div>
                   </div>
 
-                  {/* Progress Bar */}
-                  <div className="mt-4">
-                    <div className="h-1.5 bg-zinc-900 rounded-full overflow-hidden">
-                      <div
-                        className={cn(
-                          "h-full transition-all duration-500 rounded-full",
-                          tier.completed ? "bg-emerald-500" : "bg-zinc-700",
-                        )}
-                        style={{ width: `${tierProgress}%` }}
-                      />
+                  {/* Progress Badge */}
+                  <div className="text-right">
+                    <div className="text-2xl font-bold text-white">
+                      {completedObjectives}/{totalObjectives}
                     </div>
+                    <div className="text-xs text-zinc-500 uppercase tracking-wider">Completed</div>
                   </div>
                 </div>
 
@@ -330,9 +315,9 @@ export function SalesObjectives() {
                   </div>
                 </div>
               </div>
-            )
-          })}
-        </div>
+            </div>
+          )
+        })}
       </div>
     </div>
   )
