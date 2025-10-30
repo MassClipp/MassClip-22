@@ -97,14 +97,18 @@ export async function GET(req: NextRequest) {
     const hasFreeContent = !freeUploadsSnapshot.empty
     console.log("[v0] Free content detection:", { hasFreeContent, freeUploadsCount: freeUploadsSnapshot.size })
 
-    // Check bundles in productBoxes collection (primary collection for bundles)
+    const bundlesSnapshot = await adminDb.collection("bundles").where("creatorId", "==", userId).limit(1).get()
     const productBoxesSnapshot = await adminDb
       .collection("productBoxes")
       .where("creatorId", "==", userId)
       .limit(1)
       .get()
-    const hasBundle = !productBoxesSnapshot.empty
-    console.log("[v0] Bundle detection:", { hasBundle, productBoxesCount: productBoxesSnapshot.size })
+    const hasBundle = !bundlesSnapshot.empty || !productBoxesSnapshot.empty
+    console.log("[v0] Bundle detection:", {
+      hasBundle,
+      bundlesCount: bundlesSnapshot.size,
+      productBoxesCount: productBoxesSnapshot.size,
+    })
 
     // Check if storefront is active
     const isLive = userData?.storefrontActive === true
@@ -181,6 +185,52 @@ export async function POST(req: NextRequest) {
 
       const updatedDoc = await onboardingRef.get()
       return NextResponse.json(updatedDoc.data())
+    }
+
+    if (action === "toggle") {
+      const onboardingRef = adminDb.collection("onboarding").doc(userId)
+      const onboardingDoc = await onboardingRef.get()
+
+      if (!onboardingDoc.exists) {
+        return NextResponse.json({ error: "Onboarding not initialized" }, { status: 404 })
+      }
+
+      const data = onboardingDoc.data() as OnboardingProgress
+      const isCurrentlyCompleted = data.completedSteps.includes(stepId)
+
+      // Toggle the step
+      const updatedSteps = data.steps.map((step) =>
+        step.id === stepId
+          ? {
+              ...step,
+              completed: !isCurrentlyCompleted,
+              completedAt: !isCurrentlyCompleted ? new Date() : undefined,
+            }
+          : step,
+      )
+
+      const completedSteps = isCurrentlyCompleted
+        ? data.completedSteps.filter((id) => id !== stepId)
+        : [...new Set([...data.completedSteps, stepId])]
+
+      const currentStepIndex = updatedSteps.findIndex((s) => !s.completed)
+      const currentStep =
+        currentStepIndex >= 0 ? updatedSteps[currentStepIndex].id : DEFAULT_STEPS[DEFAULT_STEPS.length - 1].id
+      const isComplete = completedSteps.length === DEFAULT_STEPS.length
+
+      const updatedProgress: OnboardingProgress = {
+        steps: updatedSteps,
+        currentStep,
+        completedSteps,
+        isComplete,
+      }
+
+      await onboardingRef.update({
+        ...updatedProgress,
+        updatedAt: new Date(),
+      })
+
+      return NextResponse.json(updatedProgress)
     }
 
     if (!stepId) {

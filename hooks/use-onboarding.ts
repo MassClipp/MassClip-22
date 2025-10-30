@@ -110,6 +110,37 @@ export function useOnboarding() {
     }
   }, [user])
 
+  const toggleStep = useCallback(
+    async (stepId: string) => {
+      if (!user) return
+
+      try {
+        console.log("[v0] useOnboarding - Toggling step:", stepId)
+        const idToken = await user.getIdToken()
+        const response = await fetch("/api/user/onboarding-progress", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({ stepId, action: "toggle" }),
+        })
+
+        if (!response.ok) {
+          throw new Error("Failed to toggle step")
+        }
+
+        const data = await response.json()
+        console.log("[v0] useOnboarding - Step toggled, new progress:", data)
+        return data
+      } catch (err) {
+        console.error("[v0] useOnboarding - Error toggling step:", err)
+        throw err
+      }
+    },
+    [user],
+  )
+
   const autoDetectCompletedSteps = useCallback(async () => {
     if (!user || !progress || hasRunAutoDetection.current) {
       console.log("[v0] useOnboarding - Skipping auto-detect:", {
@@ -152,13 +183,10 @@ export function useOnboarding() {
 
       const uploadContentStep = progress.steps.find((s) => s.id === "upload_content")
       if (uploadContentStep && !uploadContentStep.completed && !attemptedSteps.current.has("upload_content")) {
-        const freeContentQuery = query(collection(db, "free_content"), where("uid", "==", user.uid))
-        const freeContentSnapshot = await getDocs(freeContentQuery)
+        const uploadsQuery = query(collection(db, "uploads"), where("uid", "==", user.uid))
+        const uploadsSnapshot = await getDocs(uploadsQuery)
 
-        const productBoxesQuery = query(collection(db, "productBoxes"), where("creatorId", "==", user.uid))
-        const productBoxesSnapshot = await getDocs(productBoxesQuery)
-
-        if (!freeContentSnapshot.empty || !productBoxesSnapshot.empty) {
+        if (!uploadsSnapshot.empty) {
           console.log("[v0] useOnboarding - upload_content conditions met")
           stepsToComplete.push("upload_content")
         }
@@ -166,10 +194,14 @@ export function useOnboarding() {
 
       const addFreeContentStep = progress.steps.find((s) => s.id === "add_free_content")
       if (addFreeContentStep && !addFreeContentStep.completed && !attemptedSteps.current.has("add_free_content")) {
-        const freeContentQuery = query(collection(db, "free_content"), where("uid", "==", user.uid))
-        const freeContentSnapshot = await getDocs(freeContentQuery)
+        const freeUploadsQuery = query(
+          collection(db, "uploads"),
+          where("uid", "==", user.uid),
+          where("isFreeContent", "==", true),
+        )
+        const freeUploadsSnapshot = await getDocs(freeUploadsQuery)
 
-        if (!freeContentSnapshot.empty) {
+        if (!freeUploadsSnapshot.empty) {
           console.log("[v0] useOnboarding - add_free_content conditions met")
           stepsToComplete.push("add_free_content")
         }
@@ -185,10 +217,13 @@ export function useOnboarding() {
 
       const createBundleStep = progress.steps.find((s) => s.id === "create_bundle")
       if (createBundleStep && !createBundleStep.completed && !attemptedSteps.current.has("create_bundle")) {
+        const bundlesQuery = query(collection(db, "bundles"), where("creatorId", "==", user.uid))
+        const bundlesSnapshot = await getDocs(bundlesQuery)
+
         const productBoxesQuery = query(collection(db, "productBoxes"), where("creatorId", "==", user.uid))
         const productBoxesSnapshot = await getDocs(productBoxesQuery)
 
-        if (!productBoxesSnapshot.empty) {
+        if (!bundlesSnapshot.empty || !productBoxesSnapshot.empty) {
           console.log("[v0] useOnboarding - create_bundle conditions met")
           stepsToComplete.push("create_bundle")
         }
@@ -291,7 +326,8 @@ export function useOnboarding() {
     loading,
     error,
     completeStep,
+    toggleStep, // Expose toggleStep function
     dismiss,
-    refetch, // Expose refetch function
+    refetch,
   }
 }

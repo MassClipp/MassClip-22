@@ -20,7 +20,7 @@ const STEP_ROUTES: Record<string, string> = {
 }
 
 export function OnboardingChecklist() {
-  const { progress, loading, dismiss, completeStep } = useOnboarding()
+  const { progress, loading, dismiss, toggleStep } = useOnboarding()
   const router = useRouter()
 
   useEffect(() => {
@@ -80,11 +80,9 @@ export function OnboardingChecklist() {
     if (isCircleClick) {
       e.stopPropagation()
       try {
-        if (!completed) {
-          await completeStep(stepId)
-        }
+        await toggleStep(stepId)
       } catch (err) {
-        console.error("[v0] OnboardingChecklist - Error completing step:", err)
+        console.error("[v0] OnboardingChecklist - Error toggling step:", err)
       }
     } else {
       // Navigate to the route if clicking elsewhere
@@ -133,7 +131,7 @@ export function OnboardingChecklist() {
             >
               <div
                 className="flex-shrink-0 step-circle cursor-pointer"
-                title={step.completed ? "Completed" : "Click to mark complete"}
+                title={step.completed ? "Click to uncheck" : "Click to mark complete"}
               >
                 {step.completed ? (
                   <CheckCircle2 className="h-5 w-5 text-green-400" />
