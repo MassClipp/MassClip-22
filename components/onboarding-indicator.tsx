@@ -2,7 +2,7 @@
 
 import { useOnboarding } from "@/hooks/use-onboarding"
 import { usePathname } from "next/navigation"
-import { CheckCircle2, Circle, ChevronRight, X, ChevronDown, Sparkles } from "lucide-react"
+import { CheckCircle2, Circle, ChevronRight, X, ChevronDown } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { cn } from "@/lib/utils"
@@ -37,11 +37,11 @@ export function OnboardingIndicator() {
       return (
         <button
           onClick={() => setIsMinimized(false)}
-          className="fixed bottom-6 right-6 z-50 bg-gradient-to-r from-green-600 to-emerald-600 p-[1px] rounded-full shadow-2xl hover:scale-105 transition-transform"
+          className="fixed bottom-6 right-6 z-50 bg-zinc-900 border border-zinc-800 rounded-lg shadow-lg hover:shadow-xl transition-all hover:scale-[1.02]"
         >
-          <div className="bg-zinc-900 rounded-full px-4 py-3 flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-green-400" />
-            <span className="text-white font-medium text-sm">Complete!</span>
+          <div className="px-4 py-3 flex items-center gap-2">
+            <div className="h-2 w-2 rounded-full bg-emerald-500" />
+            <span className="text-white font-medium text-sm">Setup Complete</span>
             <ChevronDown className="h-4 w-4 text-zinc-400" />
           </div>
         </button>
@@ -50,27 +50,33 @@ export function OnboardingIndicator() {
 
     return (
       <div className="fixed bottom-6 right-6 z-50 w-96 max-w-[calc(100vw-3rem)]">
-        <div className="bg-gradient-to-r from-green-600 to-emerald-600 p-[1px] rounded-lg shadow-2xl">
-          <div className="bg-zinc-900 rounded-lg p-6">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-green-400" />
-                <h3 className="font-semibold text-white">Objectives Complete!</h3>
-              </div>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setIsMinimized(true)}
-                  className="p-1 hover:bg-zinc-800 rounded transition-colors"
-                  title="Minimize"
-                >
-                  <ChevronDown className="h-4 w-4 text-zinc-400" />
-                </button>
-                <button onClick={dismiss} className="p-1 hover:bg-zinc-800 rounded transition-colors" title="Dismiss">
-                  <X className="h-4 w-4 text-zinc-400" />
-                </button>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-lg shadow-lg">
+          <div className="relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/10 to-transparent" />
+            <div className="relative p-6">
+              <div className="flex items-center justify-between mb-2">
+                <div className="space-y-1">
+                  <h3 className="font-semibold text-white text-lg tracking-tight">Setup Complete</h3>
+                  <p className="text-zinc-400 text-sm">Ready to earn your first $50</p>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setIsMinimized(true)}
+                    className="p-1.5 hover:bg-zinc-800 rounded-md transition-colors"
+                    title="Minimize"
+                  >
+                    <ChevronDown className="h-4 w-4 text-zinc-500" />
+                  </button>
+                  <button
+                    onClick={dismiss}
+                    className="p-1.5 hover:bg-zinc-800 rounded-md transition-colors"
+                    title="Dismiss"
+                  >
+                    <X className="h-4 w-4 text-zinc-500" />
+                  </button>
+                </div>
               </div>
             </div>
-            <p className="text-zinc-400 text-sm">Let's make your first $50</p>
           </div>
         </div>
       </div>

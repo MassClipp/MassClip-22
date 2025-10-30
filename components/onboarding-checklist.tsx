@@ -5,7 +5,7 @@ import type React from "react"
 import { useOnboarding } from "@/hooks/use-onboarding"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { CheckCircle2, Circle, ChevronRight, Sparkles, X } from "lucide-react"
+import { CheckCircle2, Circle, ChevronRight, X } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { useEffect } from "react"
@@ -44,19 +44,25 @@ export function OnboardingChecklist() {
   if (progress.isComplete) {
     console.log("[v0] OnboardingChecklist - Showing completion state")
     return (
-      <Card className="border-green-800 bg-gradient-to-br from-green-900/20 to-zinc-900/50">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-green-400" />
-              <CardTitle className="text-white">Objectives Complete!</CardTitle>
+      <Card className="border-zinc-800 bg-zinc-900/50 overflow-hidden">
+        <div className="relative">
+          <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/10 to-transparent" />
+          <CardHeader className="relative">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <CardTitle className="text-white text-lg font-semibold tracking-tight">Setup Complete</CardTitle>
+                <CardDescription className="text-zinc-400 text-sm">Ready to earn your first $50</CardDescription>
+              </div>
+              <button
+                onClick={dismiss}
+                className="p-1.5 hover:bg-zinc-800 rounded-md transition-colors"
+                title="Dismiss"
+              >
+                <X className="h-4 w-4 text-zinc-500" />
+              </button>
             </div>
-            <button onClick={dismiss} className="p-1 hover:bg-zinc-800 rounded transition-colors" title="Dismiss">
-              <X className="h-4 w-4 text-zinc-400" />
-            </button>
-          </div>
-          <CardDescription>Let's make your first $50</CardDescription>
-        </CardHeader>
+          </CardHeader>
+        </div>
       </Card>
     )
   }
