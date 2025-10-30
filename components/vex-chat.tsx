@@ -22,6 +22,7 @@ import {
   ChevronRight,
   ChevronLeft,
   ArrowDown,
+  Target,
 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -119,6 +120,7 @@ function VexChat({ children }: VexChatProps) {
     { icon: Package, label: "My Purchases", href: "/dashboard/purchases" },
     { icon: Gift, label: "Free Content", href: "/dashboard/free-content" },
     { icon: User, label: "View Storefront", href: "/dashboard/view-storefront" },
+    { icon: Target, label: "Sales Objectives", href: "/dashboard" },
   ]
 
   // Suggestions list (moved here to fix undeclared variable error)
@@ -1311,6 +1313,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                           >
                             <Clock className="h-3 w-3 mr-1.5" />
                             Free Trial: {trialStatus.daysRemaining} {trialStatus.daysRemaining === 1 ? "day" : "days"}{" "}
+                            {/* Added space */}
                             left
                           </Badge>
                         </div>

@@ -28,6 +28,7 @@ import {
   UploadIcon,
   Download,
   Pause,
+  ExternalLink,
 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
@@ -464,7 +465,11 @@ export default function ViewStorefrontPage() {
                     rows={3}
                   />
                   <div className="flex gap-2 justify-center">
-                    <Button size="sm" onClick={handleSaveBio} className="bg-white text-black hover:bg-zinc-100">
+                    <Button
+                      size="sm"
+                      onClick={handleSaveBio}
+                      className="bg-white text-black hover:bg-zinc-100 h-7 px-2"
+                    >
                       <Check className="w-4 h-4 mr-1" />
                       Save
                     </Button>
@@ -475,7 +480,7 @@ export default function ViewStorefrontPage() {
                         setIsEditingBio(false)
                         setTempBio(bio)
                       }}
-                      className="text-zinc-400 hover:text-white"
+                      className="text-zinc-400 hover:text-white h-7 px-2"
                     >
                       <X className="w-4 h-4 mr-1" />
                       Cancel
@@ -816,6 +821,17 @@ export default function ViewStorefrontPage() {
 
           {/* Go Live Controls - Centered on mobile, right-aligned on desktop */}
           <div className="flex flex-col items-center sm:items-end gap-3">
+            {username && (
+              <Button
+                onClick={() => window.open(`/creator/${username}`, "_blank")}
+                variant="outline"
+                size="sm"
+                className="border-zinc-700 hover:bg-zinc-800 text-zinc-300 hover:text-white mb-2"
+              >
+                <ExternalLink className="w-4 h-4 mr-2" />
+                View Storefront
+              </Button>
+            )}
             <div className="flex items-center gap-3 bg-zinc-900/80 backdrop-blur-sm border border-zinc-800 rounded-lg px-4 py-2.5">
               <div className="flex flex-col items-end">
                 <span className="text-xs font-medium text-white">Go Live</span>
