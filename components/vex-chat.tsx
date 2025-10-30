@@ -114,7 +114,6 @@ function VexChat({ children }: VexChatProps) {
   const navigationItems = [
     { icon: Upload, label: "Upload", href: "/dashboard/upload" },
     { icon: Heart, label: "Favorites", href: "/dashboard/favorites" },
-    { icon: CreditCard, label: "Upgrade", href: "/dashboard/upgrade", highlight: true },
     { icon: Package, label: "My Purchases", href: "/dashboard/purchases" },
     { icon: Gift, label: "Free Content", href: "/dashboard/free-content" },
   ]
@@ -900,7 +899,6 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
           } bg-zinc-950/60 backdrop-blur-xl border-r border-white/10`}
         >
           {isSidebarCollapsed ? (
-            // Icon-only sidebar
             <div className="flex flex-col h-full">
               <div className="p-3 border-b border-white/5">
                 <Button
@@ -914,18 +912,50 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                 </Button>
               </div>
 
-              <div className="flex-1 p-2 space-y-1">
-                {navigationItems.map((item) => (
+              <div className="flex-1 p-2 space-y-1 overflow-y-auto">
+                {/* Upgrade at top */}
+                <Button
+                  onClick={() => handleNavigation("/dashboard/upgrade")}
+                  variant="ghost"
+                  size="sm"
+                  className="w-full h-10 p-0 rounded-lg transition-all duration-200 bg-gradient-to-br from-blue-500/20 to-cyan-500/20 text-blue-400 hover:from-blue-500/30 hover:to-cyan-500/30 border border-blue-500/20"
+                  title="Upgrade"
+                >
+                  <CreditCard className="h-4 w-4" />
+                </Button>
+
+                {/* Divider */}
+                <div className="h-px bg-white/5 my-2" />
+
+                {/* Business Management items */}
+                {businessManagementItems.map((item) => (
                   <Button
                     key={item.href}
                     onClick={() => handleNavigation(item.href)}
                     variant="ghost"
                     size="sm"
                     className={`w-full h-10 p-0 rounded-lg transition-all duration-200 ${
-                      item.highlight
-                        ? "bg-gradient-to-br from-blue-500/20 to-cyan-500/20 text-blue-400 hover:from-blue-500/30 hover:to-cyan-500/30 border border-blue-500/20"
+                      item.gradient
+                        ? "bg-gradient-to-r from-purple-500/20 via-blue-500/20 to-pink-500/20 text-purple-400 hover:from-purple-500/30 hover:via-blue-500/30 hover:to-pink-500/30 border border-purple-500/20"
                         : "text-zinc-400 hover:text-white hover:bg-white/5"
                     }`}
+                    title={item.label}
+                  >
+                    <item.icon className="h-4 w-4" />
+                  </Button>
+                ))}
+
+                {/* Divider */}
+                <div className="h-px bg-white/5 my-2" />
+
+                {/* Navigation items */}
+                {navigationItems.map((item) => (
+                  <Button
+                    key={item.href}
+                    onClick={() => handleNavigation(item.href)}
+                    variant="ghost"
+                    size="sm"
+                    className="w-full h-10 p-0 rounded-lg transition-all duration-200 text-zinc-400 hover:text-white hover:bg-white/5"
                     title={item.label}
                   >
                     <item.icon className="h-4 w-4" />
@@ -934,7 +964,6 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
               </div>
             </div>
           ) : (
-            // Full sidebar content
             <div className="flex flex-col h-full">
               <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
                 <div className="flex items-center gap-3">
@@ -955,6 +984,14 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
               <ScrollArea className="flex-1">
                 <div className="flex flex-col h-full">
                   <div className="px-3 py-4 border-b border-white/5">
+                    <button
+                      onClick={() => handleNavigation("/dashboard/upgrade")}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-all duration-200 bg-gradient-to-br from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 font-medium mb-3"
+                    >
+                      <CreditCard className="h-4 w-4" />
+                      <span className="font-medium">Upgrade</span>
+                    </button>
+
                     <button
                       onClick={() => {
                         createNewChat()
@@ -1060,15 +1097,9 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                         <button
                           key={item.href}
                           onClick={() => handleNavigation(item.href)}
-                          className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-all duration-200 group ${
-                            item.highlight
-                              ? "bg-gradient-to-br from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 font-medium"
-                              : "text-zinc-400 hover:text-white hover:bg-white/5"
-                          }`}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-all duration-200 group text-zinc-400 hover:text-white hover:bg-white/5"
                         >
-                          <item.icon
-                            className={`h-4 w-4 ${item.highlight ? "" : "group-hover:scale-110 transition-transform duration-200"}`}
-                          />
+                          <item.icon className="h-4 w-4 group-hover:scale-110 transition-transform duration-200" />
                           <span className="font-medium">{item.label}</span>
                         </button>
                       ))}
@@ -1236,6 +1267,14 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
               <div className="flex flex-col h-full">
                 <div className="px-3 py-4 border-b border-white/5">
                   <button
+                    onClick={() => handleNavigation("/dashboard/upgrade")}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-all duration-200 bg-gradient-to-br from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 font-medium mb-3"
+                  >
+                    <CreditCard className="h-4 w-4" />
+                    <span className="font-medium">Upgrade</span>
+                  </button>
+
+                  <button
                     onClick={() => {
                       createNewChat()
                       router.push("/dashboard/vex")
@@ -1339,21 +1378,16 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                       <button
                         key={item.href}
                         onClick={() => handleNavigation(item.href)}
-                        className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-all duration-200 group ${
-                          item.highlight
-                            ? "bg-gradient-to-br from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 font-medium"
-                            : "text-zinc-400 hover:text-white hover:bg-white/5"
-                        }`}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-all duration-200 group text-zinc-400 hover:text-white hover:bg-white/5"
                       >
-                        <item.icon
-                          className={`h-4 w-4 ${item.highlight ? "" : "group-hover:scale-110 transition-transform duration-200"}`}
-                        />
+                        <item.icon className="h-4 w-4 group-hover:scale-110 transition-transform duration-200" />
                         <span className="font-medium">{item.label}</span>
                       </button>
                     ))}
                   </nav>
                 </div>
 
+                {/* Profile Section */}
                 <div className="px-3 py-4 border-t border-white/5 space-y-3">
                   {!isLoadingTrialStatus && !isLoadingMembershipStatus && (
                     <>
