@@ -1,9 +1,8 @@
 "use client"
-
 import type React from "react"
 import { getDoc } from "firebase/firestore"
 import { useState, useEffect, useRef } from "react"
-import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
+import { useFirebaseAuth } from "react" // Fixed import statement
 import { useUserPlan } from "@/hooks/use-user-plan"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -369,7 +368,13 @@ export default function ViewStorefrontPage() {
       <div className="flex items-center justify-center min-h-screen bg-black">
         <div className="text-center">
           <h2 className="text-xl font-semibold text-white mb-2">Profile Required</h2>
-          <p className="text-zinc-400">Please complete your profile to view your storefront.</p>
+          <p className="text-zinc-400 mb-6">Please complete your profile to view your storefront.</p>
+          <Button
+            onClick={() => router.push("/dashboard/profile")}
+            className="bg-white text-black hover:bg-zinc-100 font-medium"
+          >
+            Go to Profile Settings
+          </Button>
         </div>
       </div>
     )

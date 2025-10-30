@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useStripeEarnings } from "@/hooks/use-stripe-earnings"
 import { Check, Lock } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { OnboardingIndicator } from "@/components/onboarding-indicator"
 
 interface Objective {
   id: string
@@ -203,6 +204,8 @@ export function SalesObjectives() {
 
   return (
     <div className="min-h-screen px-4 py-8 sm:px-6 lg:px-8">
+      <OnboardingIndicator />
+
       {/* Header */}
       <div className="mb-12">
         <h1 className="text-4xl font-bold text-white mb-3 tracking-tight">Sales Objectives</h1>
