@@ -202,33 +202,23 @@ export function SalesObjectives() {
   }
 
   return (
-    <div className="min-h-screen bg-black px-4 py-8 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-black">
       {/* Header */}
-      <div className="mb-12">
+      <div className="mb-12 px-8 pt-8">
         <h1 className="text-4xl font-bold text-white mb-3 tracking-tight">Sales Objectives</h1>
         <p className="text-zinc-400 text-lg">Track your progress and unlock new tiers</p>
       </div>
 
       {/* Tiers */}
-      <div className="space-y-6">
+      <div className="space-y-8 px-8 pb-8">
         {tiers.map((tier, tierIndex) => {
           const completedObjectives = tier.objectives.filter((obj) => obj.completed).length
           const totalObjectives = tier.objectives.length
-          const tierProgress = (completedObjectives / totalObjectives) * 100
 
           return (
-            <div
-              key={tier.id}
-              className={cn(
-                "relative overflow-hidden rounded-lg border transition-all duration-300",
-                tier.unlocked
-                  ? "border-zinc-800 bg-zinc-950/50 hover:border-zinc-700"
-                  : "border-zinc-900 bg-zinc-950/30 opacity-60",
-                tier.completed && "border-emerald-900/50 bg-emerald-950/10",
-              )}
-            >
+            <div key={tier.id} className={cn("transition-all duration-300", !tier.unlocked && "opacity-60")}>
               {/* Tier Header */}
-              <div className="p-6 border-b border-zinc-900">
+              <div className="mb-6">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-4">
                     {/* Tier Number Badge */}
@@ -263,57 +253,53 @@ export function SalesObjectives() {
                     <div className="text-xs text-zinc-500 uppercase tracking-wider">Completed</div>
                   </div>
                 </div>
+              </div>
 
-                {/* Objectives */}
-                <div className="p-6">
-                  <div className="space-y-3">
-                    {tier.objectives.map((objective) => (
+              {/* Objectives */}
+              <div className="space-y-3">
+                {tier.objectives.map((objective) => (
+                  <div
+                    key={objective.id}
+                    className={cn(
+                      "flex items-center justify-between p-4 rounded-lg border transition-all",
+                      objective.completed
+                        ? "border-emerald-900/50 bg-emerald-950/20"
+                        : tier.unlocked
+                          ? "border-zinc-800 bg-zinc-900/30"
+                          : "border-zinc-900 bg-zinc-900/10",
+                    )}
+                  >
+                    <div className="flex items-center gap-4 flex-1">
+                      {/* Checkbox */}
                       <div
-                        key={objective.id}
                         className={cn(
-                          "flex items-center justify-between p-4 rounded-lg border transition-all",
-                          objective.completed
-                            ? "border-emerald-900/50 bg-emerald-950/20"
-                            : tier.unlocked
-                              ? "border-zinc-800 bg-zinc-900/30"
-                              : "border-zinc-900 bg-zinc-900/10",
+                          "flex h-6 w-6 items-center justify-center rounded-full border-2 transition-all",
+                          objective.completed ? "border-emerald-500 bg-emerald-500" : "border-zinc-700 bg-transparent",
                         )}
                       >
-                        <div className="flex items-center gap-4 flex-1">
-                          {/* Checkbox */}
-                          <div
-                            className={cn(
-                              "flex h-6 w-6 items-center justify-center rounded-full border-2 transition-all",
-                              objective.completed
-                                ? "border-emerald-500 bg-emerald-500"
-                                : "border-zinc-700 bg-transparent",
-                            )}
-                          >
-                            {objective.completed && <Check className="h-4 w-4 text-black" />}
-                          </div>
-
-                          {/* Objective Info */}
-                          <div className="flex-1">
-                            <div className="font-semibold text-white mb-0.5">{objective.title}</div>
-                            <div className="text-sm text-zinc-500">{objective.description}</div>
-                          </div>
-                        </div>
-
-                        {/* Progress */}
-                        <div className="text-right ml-4">
-                          <div
-                            className={cn(
-                              "text-sm font-medium",
-                              objective.completed ? "text-emerald-400" : "text-zinc-400",
-                            )}
-                          >
-                            {objective.progress.toFixed(0)}%
-                          </div>
-                        </div>
+                        {objective.completed && <Check className="h-4 w-4 text-black" />}
                       </div>
-                    ))}
+
+                      {/* Objective Info */}
+                      <div className="flex-1">
+                        <div className="font-semibold text-white mb-0.5">{objective.title}</div>
+                        <div className="text-sm text-zinc-500">{objective.description}</div>
+                      </div>
+                    </div>
+
+                    {/* Progress */}
+                    <div className="text-right ml-4">
+                      <div
+                        className={cn(
+                          "text-sm font-medium",
+                          objective.completed ? "text-emerald-400" : "text-zinc-400",
+                        )}
+                      >
+                        {objective.progress.toFixed(0)}%
+                      </div>
+                    </div>
                   </div>
-                </div>
+                ))}
               </div>
             </div>
           )
