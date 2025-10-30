@@ -924,10 +924,24 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                   <CreditCard className="h-4 w-4" />
                 </Button>
 
+                {/* Vex AI */}
+                <Button
+                  onClick={() => {
+                    createNewChat()
+                    router.push("/dashboard/vex")
+                  }}
+                  variant="ghost"
+                  size="sm"
+                  className="w-full h-10 p-0 rounded-lg transition-all duration-200 text-zinc-400 hover:text-white hover:bg-white/5"
+                  title="Vex AI"
+                >
+                  <MessageSquare className="h-4 w-4" />
+                </Button>
+
                 {/* Divider */}
                 <div className="h-px bg-white/5 my-2" />
 
-                {/* Business Management items */}
+                {/* Business Management Items */}
                 {businessManagementItems.map((item) => (
                   <Button
                     key={item.href}
@@ -936,7 +950,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                     size="sm"
                     className={`w-full h-10 p-0 rounded-lg transition-all duration-200 ${
                       item.gradient
-                        ? "bg-gradient-to-r from-purple-500/20 via-blue-500/20 to-pink-500/20 text-purple-400 hover:from-purple-500/30 hover:via-blue-500/30 hover:to-pink-500/30 border border-purple-500/20"
+                        ? "bg-gradient-to-r from-purple-500/30 via-blue-500/30 to-pink-500/30 text-white hover:from-purple-500/40 hover:via-blue-500/40 hover:to-pink-500/40"
                         : "text-zinc-400 hover:text-white hover:bg-white/5"
                     }`}
                     title={item.label}
@@ -948,7 +962,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                 {/* Divider */}
                 <div className="h-px bg-white/5 my-2" />
 
-                {/* Navigation items */}
+                {/* Navigation Items */}
                 {navigationItems.map((item) => (
                   <Button
                     key={item.href}
@@ -986,12 +1000,14 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                   <div className="px-3 py-4 border-b border-white/5">
                     <button
                       onClick={() => handleNavigation("/dashboard/upgrade")}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-all duration-200 bg-gradient-to-br from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 font-medium mb-3"
+                      className="w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-all duration-200 bg-gradient-to-br from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 font-medium"
                     >
                       <CreditCard className="h-4 w-4" />
                       <span className="font-medium">Upgrade</span>
                     </button>
+                  </div>
 
+                  <div className="px-3 py-4 border-b border-white/5">
                     <button
                       onClick={() => {
                         createNewChat()
@@ -1387,7 +1403,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                   </nav>
                 </div>
 
-                {/* Profile Section */}
+                {/* ... existing profile section code ... */}
                 <div className="px-3 py-4 border-t border-white/5 space-y-3">
                   {!isLoadingTrialStatus && !isLoadingMembershipStatus && (
                     <>
@@ -1402,8 +1418,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                           >
                             <Clock className="h-3 w-3 mr-1.5" />
                             Free Trial: {trialStatus.daysRemaining} {trialStatus.daysRemaining === 1 ? "day" : "days"}{" "}
-                            {/* Added space */}
-                            left
+                            {/* Added space */} left
                           </Badge>
                         </div>
                       ) : shouldShowTrialButton ? (
