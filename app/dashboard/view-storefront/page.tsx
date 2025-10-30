@@ -2,7 +2,7 @@
 import type React from "react"
 import { getDoc } from "firebase/firestore"
 import { useState, useEffect, useRef } from "react"
-import { useFirebaseAuth } from "react" // Fixed import statement
+import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 import { useUserPlan } from "@/hooks/use-user-plan"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -427,7 +427,7 @@ export default function ViewStorefrontPage() {
                     <Button
                       size="sm"
                       onClick={handleSaveUsername}
-                      className="bg-white text-black hover:bg-zinc-100 h-7 px-2"
+                      className="bg-white text-black hover:bg-zinc-100 font-medium"
                     >
                       <Check className="w-3 h-3" />
                     </Button>
@@ -805,169 +805,169 @@ export default function ViewStorefrontPage() {
               </div>
             </div>
           </div>
-        </div>
 
-        <div className="mb-8 sm:mb-12">
-          {/* Stats Row */}
-          <div className="flex items-center justify-center sm:justify-start gap-4 sm:gap-8 mb-6 text-xs sm:text-sm">
-            <div className="flex items-center gap-2 text-zinc-500">
-              <Calendar className="w-3 h-3 sm:w-4 sm:h-4" />
-              <span>Member since {getMemberSince()}</span>
-            </div>
-            <div className="flex items-center gap-2 text-zinc-500">
-              <Users className="w-3 h-3 sm:w-4 sm:h-4" />
-              <span>{freeContent.length} free</span>
-            </div>
-            <div className="flex items-center gap-2 text-zinc-500">
-              <Heart className="w-3 h-3 sm:w-4 sm:h-4" />
-              <span>{premiumContent.length} premium</span>
-            </div>
-          </div>
-
-          {/* Go Live Controls - Centered on mobile, right-aligned on desktop */}
-          <div className="flex flex-col items-center sm:items-end gap-3">
-            {username && (
-              <Button
-                onClick={() => window.open(`/creator/${username}`, "_blank")}
-                variant="outline"
-                size="sm"
-                className="border-zinc-700 hover:bg-zinc-800 text-zinc-300 hover:text-white mb-2"
-              >
-                <ExternalLink className="w-4 h-4 mr-2" />
-                View Storefront
-              </Button>
-            )}
-            <div className="flex items-center gap-3 bg-zinc-900/80 backdrop-blur-sm border border-zinc-800 rounded-lg px-4 py-2.5">
-              <div className="flex flex-col items-end">
-                <span className="text-xs font-medium text-white">Go Live</span>
-                {!isProUser && trialEligible && <span className="text-[10px] text-zinc-500 mt-0.5">Free trial</span>}
+          <div className="mb-8 sm:mb-12">
+            {/* Stats Row */}
+            <div className="flex items-center justify-center sm:justify-start gap-4 sm:gap-8 mb-6 text-xs sm:text-sm">
+              <div className="flex items-center gap-2 text-zinc-500">
+                <Calendar className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span>Member since {getMemberSince()}</span>
               </div>
-              <Switch
-                checked={storefrontActive}
-                onCheckedChange={handleToggleStorefront}
-                disabled={updating || (!isProUser && !storefrontActive && !planData?.plan?.includes("starter"))}
-                className="data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-zinc-700"
-              />
-              {storefrontActive ? (
-                <Badge className="bg-green-500/10 text-green-400 border-green-500/20">Live</Badge>
-              ) : (
-                <Badge variant="secondary" className="bg-zinc-700 text-zinc-300">
-                  Offline
-                </Badge>
+              <div className="flex items-center gap-2 text-zinc-500">
+                <Users className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span>{freeContent.length} free</span>
+              </div>
+              <div className="flex items-center gap-2 text-zinc-500">
+                <Heart className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span>{premiumContent.length} premium</span>
+              </div>
+            </div>
+
+            {/* Go Live Controls - Centered on mobile, right-aligned on desktop */}
+            <div className="flex flex-col items-center sm:items-end gap-3">
+              {username && (
+                <Button
+                  onClick={() => window.open(`/creator/${username}`, "_blank")}
+                  variant="outline"
+                  size="sm"
+                  className="border-zinc-700 hover:bg-zinc-800 text-zinc-300 hover:text-white mb-2"
+                >
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  View Storefront
+                </Button>
+              )}
+              <div className="flex items-center gap-3 bg-zinc-900/80 backdrop-blur-sm border border-zinc-800 rounded-lg px-4 py-2.5">
+                <div className="flex flex-col items-end">
+                  <span className="text-xs font-medium text-white">Go Live</span>
+                  {!isProUser && trialEligible && <span className="text-[10px] text-zinc-500 mt-0.5">Free trial</span>}
+                </div>
+                <Switch
+                  checked={storefrontActive}
+                  onCheckedChange={handleToggleStorefront}
+                  disabled={updating || (!isProUser && !storefrontActive && !planData?.plan?.includes("starter"))}
+                  className="data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-zinc-700"
+                />
+                {storefrontActive ? (
+                  <Badge className="bg-green-500/10 text-green-400 border-green-500/20">Live</Badge>
+                ) : (
+                  <Badge variant="secondary" className="bg-zinc-700 text-zinc-300">
+                    Offline
+                  </Badge>
+                )}
+              </div>
+              {!isProUser && !planData?.plan?.includes("starter") && (
+                <Button
+                  onClick={handleGoLiveClick}
+                  className="bg-white text-black hover:bg-zinc-100 font-medium text-sm px-6"
+                >
+                  Go Live
+                </Button>
               )}
             </div>
-            {!isProUser && !planData?.plan?.includes("starter") && (
-              <Button
-                onClick={handleGoLiveClick}
-                className="bg-white text-black hover:bg-zinc-100 font-medium text-sm px-6"
+          </div>
+
+          {/* Tabs */}
+          <div className="mb-6 sm:mb-8">
+            <div className="flex items-center justify-center sm:justify-start gap-6 sm:gap-8 border-b border-zinc-800/50">
+              <button
+                onClick={() => setActiveTab("free")}
+                className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
+                  activeTab === "free" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
+                }`}
               >
-                Go Live
-              </Button>
-            )}
+                Free Content
+                {activeTab === "free" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
+              </button>
+              <button
+                onClick={() => setActiveTab("premium")}
+                className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
+                  activeTab === "premium" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
+                }`}
+              >
+                Premium Content
+                {activeTab === "premium" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
+              </button>
+            </div>
           </div>
-        </div>
 
-        {/* Tabs */}
-        <div className="mb-6 sm:mb-8">
-          <div className="flex items-center justify-center sm:justify-start gap-6 sm:gap-8 border-b border-zinc-800/50">
-            <button
-              onClick={() => setActiveTab("free")}
-              className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
-                activeTab === "free" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
-              }`}
-            >
-              Free Content
-              {activeTab === "free" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
-            </button>
-            <button
-              onClick={() => setActiveTab("premium")}
-              className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
-                activeTab === "premium" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
-              }`}
-            >
-              Premium Content
-              {activeTab === "premium" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
-            </button>
-          </div>
-        </div>
-
-        {/* Content with action buttons */}
-        <div className="pt-4 sm:pt-8">
-          {currentContent.length > 0 ? (
-            <div
-              className={
-                activeTab === "premium"
-                  ? "flex flex-col items-center gap-6 sm:grid sm:grid-cols-3 sm:gap-8 sm:justify-items-center"
-                  : "grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 sm:gap-6 justify-items-center"
-              }
-            >
+          {/* Content with action buttons */}
+          <div className="pt-4 sm:pt-8">
+            {currentContent.length > 0 ? (
               <div
                 className={
                   activeTab === "premium"
-                    ? "w-full max-w-sm aspect-[3/4] rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer flex flex-col items-center justify-center gap-3 group"
-                    : "w-full aspect-[9/16] rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer flex flex-col items-center justify-center gap-3 group"
+                    ? "flex flex-col items-center gap-6 sm:grid sm:grid-cols-3 sm:gap-8 sm:justify-items-center"
+                    : "grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 sm:gap-6 justify-items-center"
                 }
-                onClick={() => router.push(activeTab === "free" ? "/dashboard/free-content" : "/dashboard/bundles")}
               >
-                <div className="w-12 h-12 rounded-full bg-zinc-800 group-hover:bg-zinc-700 transition-colors flex items-center justify-center">
-                  {activeTab === "free" ? (
-                    <UploadIcon className="w-6 h-6 text-zinc-400 group-hover:text-white transition-colors" />
+                <div
+                  className={
+                    activeTab === "premium"
+                      ? "w-full max-w-sm aspect-[3/4] rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer flex flex-col items-center justify-center gap-3 group"
+                      : "w-full aspect-[9/16] rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer flex flex-col items-center justify-center gap-3 group"
+                  }
+                  onClick={() => router.push(activeTab === "free" ? "/dashboard/free-content" : "/dashboard/bundles")}
+                >
+                  <div className="w-12 h-12 rounded-full bg-zinc-800 group-hover:bg-zinc-700 transition-colors flex items-center justify-center">
+                    {activeTab === "free" ? (
+                      <UploadIcon className="w-6 h-6 text-zinc-400 group-hover:text-white transition-colors" />
+                    ) : (
+                      <Package className="w-6 h-6 text-zinc-400 group-hover:text-white transition-colors" />
+                    )}
+                  </div>
+                  <p className="text-sm text-zinc-400 group-hover:text-zinc-300 transition-colors font-medium">
+                    {activeTab === "free" ? "Add Content" : "Create Bundle"}
+                  </p>
+                </div>
+
+                {activeTab === "premium"
+                  ? premiumContent.map((item) => (
+                      <BundleCard
+                        key={item.id}
+                        item={item}
+                        user={user}
+                        creatorId={user.uid}
+                        creatorUsername={username}
+                        isPreview={true}
+                      />
+                    ))
+                  : freeContent.map((item) => <VideoContentCard key={item.id} item={item} />)}
+              </div>
+            ) : (
+              <div className="text-center py-16 sm:py-24">
+                <div
+                  className="w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-6 bg-zinc-900 rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer flex items-center justify-center group"
+                  onClick={() => router.push(activeTab === "free" ? "/dashboard/free-content" : "/dashboard/bundles")}
+                >
+                  {activeTab === "premium" ? (
+                    <Package className="w-8 h-8 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
                   ) : (
-                    <Package className="w-6 h-6 text-zinc-400 group-hover:text-white transition-colors" />
+                    <Play className="w-8 h-8 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
                   )}
                 </div>
-                <p className="text-sm text-zinc-400 group-hover:text-zinc-300 transition-colors font-medium">
-                  {activeTab === "free" ? "Add Content" : "Create Bundle"}
+                <h3 className="text-base sm:text-lg font-medium text-white mb-2">No {activeTab} content yet</h3>
+                <p className="text-zinc-500 text-xs sm:text-sm mb-6">
+                  {activeTab === "free" ? "Upload your first piece of content" : "Create your first bundle"}
                 </p>
+                <Button
+                  onClick={() => router.push(activeTab === "free" ? "/dashboard/free-content" : "/dashboard/bundles")}
+                  className="bg-white text-black hover:bg-zinc-100 font-medium"
+                >
+                  {activeTab === "free" ? (
+                    <>
+                      <UploadIcon className="w-4 h-4 mr-2" />
+                      Upload Content
+                    </>
+                  ) : (
+                    <>
+                      <Package className="w-4 h-4 mr-2" />
+                      Create Bundle
+                    </>
+                  )}
+                </Button>
               </div>
-
-              {activeTab === "premium"
-                ? premiumContent.map((item) => (
-                    <BundleCard
-                      key={item.id}
-                      item={item}
-                      user={user}
-                      creatorId={user.uid}
-                      creatorUsername={username}
-                      isPreview={true}
-                    />
-                  ))
-                : freeContent.map((item) => <VideoContentCard key={item.id} item={item} />)}
-            </div>
-          ) : (
-            <div className="text-center py-16 sm:py-24">
-              <div
-                className="w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-6 bg-zinc-900 rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer flex items-center justify-center group"
-                onClick={() => router.push(activeTab === "free" ? "/dashboard/free-content" : "/dashboard/bundles")}
-              >
-                {activeTab === "premium" ? (
-                  <Package className="w-8 h-8 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
-                ) : (
-                  <Play className="w-8 h-8 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
-                )}
-              </div>
-              <h3 className="text-base sm:text-lg font-medium text-white mb-2">No {activeTab} content yet</h3>
-              <p className="text-zinc-500 text-xs sm:text-sm mb-6">
-                {activeTab === "free" ? "Upload your first piece of content" : "Create your first bundle"}
-              </p>
-              <Button
-                onClick={() => router.push(activeTab === "free" ? "/dashboard/free-content" : "/dashboard/bundles")}
-                className="bg-white text-black hover:bg-zinc-100 font-medium"
-              >
-                {activeTab === "free" ? (
-                  <>
-                    <UploadIcon className="w-4 h-4 mr-2" />
-                    Upload Content
-                  </>
-                ) : (
-                  <>
-                    <Package className="w-4 h-4 mr-2" />
-                    Create Bundle
-                  </>
-                )}
-              </Button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </div>
