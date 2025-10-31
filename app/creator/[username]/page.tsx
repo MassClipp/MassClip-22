@@ -179,8 +179,8 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
       hasActiveMembership,
     })
 
-    // Block access if storefront is offline OR user doesn't have active membership
-    if (!storefrontActive || !hasActiveMembership) {
+    // Block access only if storefront is explicitly set to offline
+    if (!storefrontActive) {
       console.log(`[Page] Storefront access denied for username: ${username}`)
       return (
         <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
@@ -197,11 +197,9 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
                 </svg>
               </div>
             </div>
-            <h1 className="text-2xl font-bold mb-2">Storefront Offline</h1>
+            <h1 className="text-2xl font-bold mb-2">Store Offline</h1>
             <p className="text-gray-400 mb-6">
-              {!hasActiveMembership
-                ? "This creator needs an active membership to make their storefront available."
-                : "This creator's storefront is currently offline. Please check back later."}
+              This creator's storefront is currently offline. Please check back later.
             </p>
             <a
               href="/"
