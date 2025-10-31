@@ -140,7 +140,9 @@ export default function FreeTrialPage() {
               </div>
               <div>
                 <h3 className="text-2xl font-semibold text-white">Starter Plan</h3>
-                <p className="text-gray-400">For new creators testing the waters</p>
+                <p className="text-gray-400">
+                  Take your first step towards earning consistently on a storefront to sell your content
+                </p>
               </div>
             </div>
 
@@ -195,7 +197,7 @@ export default function FreeTrialPage() {
               </div>
               <div>
                 <h3 className="text-2xl font-semibold text-white">Creator VIP</h3>
-                <p className="text-cyan-300">Everything you need to succeed</p>
+                <p className="text-cyan-300">Scale your content selling business and manage your growth effectively</p>
               </div>
             </div>
 

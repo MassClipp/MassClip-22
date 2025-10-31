@@ -259,7 +259,9 @@ export default function UpgradePage() {
                 </div>
                 <div>
                   <h2 className="text-2xl font-light text-white">Starter Plan</h2>
-                  <p className="text-zinc-400">For new creators testing the waters</p>
+                  <p className="text-zinc-400">
+                    Take your first step towards earning consistently on a storefront to sell your content
+                  </p>
                 </div>
               </div>
               <div className="text-right">
@@ -318,7 +320,9 @@ export default function UpgradePage() {
                 </div>
                 <div>
                   <h2 className="text-2xl font-light text-white">Creator VIP</h2>
-                  <p className="text-zinc-400">For creators who treat content like a business</p>
+                  <p className="text-zinc-400">
+                    Scale your content selling business and manage your growth effectively
+                  </p>
                 </div>
               </div>
               <div className="text-right">
