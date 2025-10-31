@@ -248,8 +248,9 @@ export default function RootLayout({
           />
         </noscript>
 
-        <script
-          type="text/javascript"
+        <Script
+          id="microsoft-clarity"
+          strategy="afterInteractive"
           dangerouslySetInnerHTML={{
             __html: `
             (function(c,l,a,r,i,t,y){
@@ -257,6 +258,7 @@ export default function RootLayout({
                 t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
                 y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
             })(window, document, "clarity", "script", "tr9t8yy9cv");
+            console.log("[v0] Microsoft Clarity initialized with ID: tr9t8yy9cv");
             `,
           }}
         />
