@@ -17,6 +17,10 @@
     {
       "path": "/api/trial/check-expired",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/onboarding-emails/check-and-send",
+      "schedule": "0 10 * * *"
     }
   ]
 }
