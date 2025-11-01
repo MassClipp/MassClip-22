@@ -1,9 +1,6 @@
 import type React from "react"
-import { DownloadLimitProvider } from "@/components/providers/download-limit-provider"
-import { RedirectHelper } from "@/components/redirect-helper"
-import { Toaster } from "@/components/ui/toaster"
-import VexChat from "@/components/vex-chat"
-import { OnboardingIndicator } from "@/components/onboarding-indicator"
+import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
+import { AppSidebar } from "@/components/app-sidebar"
 
 export default function DashboardLayout({
   children,
@@ -11,11 +8,9 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   return (
-    <DownloadLimitProvider>
-      <RedirectHelper />
-      <OnboardingIndicator />
-      <VexChat>{children}</VexChat>
-      <Toaster />
-    </DownloadLimitProvider>
+    <SidebarProvider>
+      <AppSidebar />
+      <SidebarInset>{children}</SidebarInset>
+    </SidebarProvider>
   )
 }
