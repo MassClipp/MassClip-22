@@ -248,21 +248,6 @@ export default function RootLayout({
           />
         </noscript>
 
-        <Script
-          id="microsoft-clarity"
-          strategy="afterInteractive"
-          dangerouslySetInnerHTML={{
-            __html: `
-            (function(c,l,a,r,i,t,y){
-                c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
-                t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
-                y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-            })(window, document, "clarity", "script", "tr9t8yy9cv");
-            console.log("[v0] Microsoft Clarity initialized with ID: tr9t8yy9cv");
-            `,
-          }}
-        />
-
         <link rel="preload" href="/og-image.png" as="image" />
         <link rel="dns-prefetch" href="https://player.vimeo.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
@@ -293,6 +278,21 @@ export default function RootLayout({
           </AuthProvider>
         </Providers>
         <Toaster />
+
+        <Script
+          id="microsoft-clarity"
+          strategy="afterInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+            (function(c,l,a,r,i,t,y){
+                c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+                t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+                y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+            })(window, document, "clarity", "script", "tr9t8yy9cv");
+            console.log("[v0] Microsoft Clarity initialized with ID: tr9t8yy9cv");
+            `,
+          }}
+        />
       </body>
     </html>
   )
