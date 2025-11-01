@@ -1,10 +1,11 @@
 "use client"
 
 import { useState } from "react"
-import { BookOpen, Plus, Sparkles } from "lucide-react"
+import { BookOpen, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { PaywallWrapper } from "@/components/paywall-wrapper"
+import { EbookEditor } from "@/components/ebook-editor"
 
 export default function EbooksPage() {
   const [activeTab, setActiveTab] = useState<"my-ebooks" | "create">("my-ebooks")
@@ -16,15 +17,12 @@ export default function EbooksPage() {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-white flex items-center gap-3">
-              <BookOpen className="h-8 w-8 text-blue-400" />
+              <BookOpen className="h-8 w-8 text-white" />
               eBook Creation
             </h1>
             <p className="text-zinc-400 mt-1">Create, edit, and publish professional eBooks with AI assistance</p>
           </div>
-          <Button
-            onClick={() => setActiveTab("create")}
-            className="bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white shadow-lg"
-          >
+          <Button onClick={() => setActiveTab("create")} className="bg-white text-black hover:bg-zinc-200">
             <Plus className="h-4 w-4 mr-2" />
             New eBook
           </Button>
@@ -35,7 +33,7 @@ export default function EbooksPage() {
           <button
             onClick={() => setActiveTab("my-ebooks")}
             className={`px-4 py-2 text-sm font-medium transition-colors ${
-              activeTab === "my-ebooks" ? "text-white border-b-2 border-blue-500" : "text-zinc-400 hover:text-white"
+              activeTab === "my-ebooks" ? "text-white border-b-2 border-white" : "text-zinc-400 hover:text-white"
             }`}
           >
             My eBooks
@@ -43,7 +41,7 @@ export default function EbooksPage() {
           <button
             onClick={() => setActiveTab("create")}
             className={`px-4 py-2 text-sm font-medium transition-colors ${
-              activeTab === "create" ? "text-white border-b-2 border-blue-500" : "text-zinc-400 hover:text-white"
+              activeTab === "create" ? "text-white border-b-2 border-white" : "text-zinc-400 hover:text-white"
             }`}
           >
             Create New
@@ -69,19 +67,7 @@ export default function EbooksPage() {
             </CardContent>
           </Card>
         ) : (
-          <Card className="bg-zinc-900/50 border-zinc-800">
-            <CardHeader>
-              <CardTitle className="text-white flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-blue-400" />
-                Create New eBook
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-12">
-                <p className="text-zinc-400">eBook creation interface coming soon...</p>
-              </div>
-            </CardContent>
-          </Card>
+          <EbookEditor />
         )}
       </div>
     </PaywallWrapper>
