@@ -1,10 +1,35 @@
+"use client"
+
+import { useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { SalesObjectives } from "@/components/sales-objectives"
+import { useOnboarding } from "@/hooks/use-onboarding"
+
 export default function DashboardPage() {
-  return (
-    <div className="flex h-full items-center justify-center p-8">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold">Welcome to MassClip</h1>
-        <p className="mt-4 text-muted-foreground">Select an option from the sidebar to get started</p>
+  const router = useRouter()
+  const { progress, loading } = useOnboarding()
+
+  useEffect(() => {
+    console.log("[v0] Dashboard - Progress state:", {
+      loading,
+      isComplete: progress?.isComplete,
+      completedSteps: progress?.completedSteps?.length,
+      totalSteps: progress?.steps?.length,
+    })
+
+    // Now dashboard shows Sales Objectives instead
+  }, [router, loading, progress])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-black">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-4"></div>
+          <p className="text-zinc-400">Loading...</p>
+        </div>
       </div>
-    </div>
-  )
+    )
+  }
+
+  return <SalesObjectives />
 }
