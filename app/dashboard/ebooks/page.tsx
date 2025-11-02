@@ -19,8 +19,8 @@ interface EBook {
   coverUrl: string
   pageCount: number
   status: "draft" | "published"
-  createdAt: any
-  updatedAt: any
+  createdAt: string // Changed from any to string (ISO date string)
+  updatedAt: string // Changed from any to string (ISO date string)
 }
 
 export default function EBooksPage() {
@@ -229,11 +229,7 @@ export default function EBooksPage() {
                     <div className="flex items-center justify-between text-xs text-zinc-500">
                       <span>{ebook.pageCount} pages</span>
                       <span>
-                        {ebook.createdAt &&
-                          formatDistanceToNow(
-                            ebook.createdAt.toDate ? ebook.createdAt.toDate() : new Date(ebook.createdAt),
-                            { addSuffix: true },
-                          )}
+                        {ebook.createdAt ? formatDistanceToNow(new Date(ebook.createdAt), { addSuffix: true }) : ""}
                       </span>
                     </div>
                   </CardContent>

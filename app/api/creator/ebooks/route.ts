@@ -26,15 +26,20 @@ export async function GET(request: NextRequest) {
       ebooksSnapshot = await adminDb.collection("ebooks").where("creatorId", "==", uid).get()
     }
 
-    const ebooks = ebooksSnapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }))
+    const ebooks = ebooksSnapshot.docs.map((doc) => {
+      const data = doc.data()
+      return {
+        id: doc.id,
+        ...data,
+        createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+        updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+      }
+    })
 
     ebooks.sort((a: any, b: any) => {
-      const aTime = a.createdAt?.toDate?.() || new Date(a.createdAt || 0)
-      const bTime = b.createdAt?.toDate?.() || new Date(b.createdAt || 0)
-      return bTime.getTime() - aTime.getTime()
+      const aTime = new Date(a.createdAt).getTime()
+      const bTime = new Date(b.createdAt).getTime()
+      return bTime - aTime
     })
 
     console.log(`[v0] Found ${ebooks.length} eBooks for user ${uid}`)
