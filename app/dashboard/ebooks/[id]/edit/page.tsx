@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
-import { ArrowLeft, Loader2, X } from "lucide-react"
+import { ArrowLeft, Loader2, X, Upload } from "lucide-react"
 import { useRouter } from "next/navigation"
 
 interface EBook {
@@ -36,6 +36,7 @@ export default function EditEBookPage({ params }: { params: { id: string } }) {
   const [coverPreview, setCoverPreview] = useState("")
   const [pageFiles, setPageFiles] = useState<File[]>([])
   const [pagePreviews, setPagePreviews] = useState<string[]>([])
+  const [existingPages, setExistingPages] = useState<string[]>([])
 
   useEffect(() => {
     if (user && params.id) {
@@ -61,13 +62,14 @@ export default function EditEBookPage({ params }: { params: { id: string } }) {
       }
 
       const data = await response.json()
+      console.log("[v0] Edit page - eBook data:", data)
       setEbook(data.ebook)
       setTitle(data.ebook.title)
-      setDescription(data.ebook.description)
+      setDescription(data.ebook.description || "")
       setCoverPreview(data.ebook.coverUrl)
-      setPagePreviews(data.ebook.pages || [])
+      setExistingPages(data.ebook.pages || [])
     } catch (error) {
-      console.error("Error fetching eBook:", error)
+      console.error("[v0] Error fetching eBook:", error)
       toast({
         title: "Error",
         description: "Failed to load eBook",
@@ -104,7 +106,7 @@ export default function EditEBookPage({ params }: { params: { id: string } }) {
     })
   }
 
-  const removePage = (index: number) => {
+  const removeNewPage = (index: number) => {
     setPageFiles((prev) => prev.filter((_, i) => i !== index))
     setPagePreviews((prev) => prev.filter((_, i) => i !== index))
   }
@@ -123,9 +125,12 @@ export default function EditEBookPage({ params }: { params: { id: string } }) {
       setSaving(true)
       const idToken = await user?.getIdToken()
 
+      console.log("[v0] Starting eBook update...")
+
       // Upload cover if changed
       let coverUrl = ebook?.coverUrl || ""
       if (coverFile) {
+        console.log("[v0] Uploading new cover...")
         const coverFormData = new FormData()
         coverFormData.append("file", coverFile)
         coverFormData.append("ebookId", params.id)
@@ -141,15 +146,19 @@ export default function EditEBookPage({ params }: { params: { id: string } }) {
         if (coverResponse.ok) {
           const coverData = await coverResponse.json()
           coverUrl = coverData.url
+          console.log("[v0] Cover uploaded:", coverUrl)
         }
       }
 
       // Upload new pages
       const newPageUrls: string[] = []
-      for (const file of pageFiles) {
+      for (let i = 0; i < pageFiles.length; i++) {
+        console.log(`[v0] Uploading page ${i + 1}/${pageFiles.length}...`)
+        const file = pageFiles[i]
         const pageFormData = new FormData()
         pageFormData.append("file", file)
         pageFormData.append("ebookId", params.id)
+        pageFormData.append("pageNumber", String(existingPages.length + i + 1))
 
         const pageResponse = await fetch("/api/upload/ebook-page", {
           method: "POST",
@@ -162,10 +171,14 @@ export default function EditEBookPage({ params }: { params: { id: string } }) {
         if (pageResponse.ok) {
           const pageData = await pageResponse.json()
           newPageUrls.push(pageData.url)
+          console.log(`[v0] Page ${i + 1} uploaded:`, pageData.url)
         }
       }
 
+      const allPages = [...existingPages, ...newPageUrls]
+
       // Update eBook metadata
+      console.log("[v0] Updating eBook metadata...")
       const updateResponse = await fetch(`/api/creator/ebooks/${params.id}`, {
         method: "PATCH",
         headers: {
@@ -176,8 +189,8 @@ export default function EditEBookPage({ params }: { params: { id: string } }) {
           title,
           description,
           coverUrl,
-          pages: [...(ebook?.pages || []), ...newPageUrls],
-          pageCount: (ebook?.pages?.length || 0) + newPageUrls.length,
+          pages: allPages,
+          pageCount: allPages.length,
         }),
       })
 
@@ -185,6 +198,7 @@ export default function EditEBookPage({ params }: { params: { id: string } }) {
         throw new Error("Failed to update eBook")
       }
 
+      console.log("[v0] eBook updated successfully")
       toast({
         title: "Success",
         description: "eBook updated successfully",
@@ -192,7 +206,7 @@ export default function EditEBookPage({ params }: { params: { id: string } }) {
 
       router.push("/dashboard/ebooks")
     } catch (error) {
-      console.error("Error updating eBook:", error)
+      console.error("[v0] Error updating eBook:", error)
       toast({
         title: "Error",
         description: "Failed to update eBook",
@@ -270,58 +284,61 @@ export default function EditEBookPage({ params }: { params: { id: string } }) {
                     alt="Cover preview"
                     className="w-full h-full object-cover"
                   />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => {
-                      setCoverFile(null)
-                      setCoverPreview("")
-                    }}
-                    className="absolute top-2 right-2 bg-black/50 hover:bg-black/70"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
                 </div>
               )}
 
               <div>
-                <Input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleCoverChange}
-                  className="bg-zinc-900 border-zinc-800 text-white"
-                />
+                <Label htmlFor="cover-upload" className="cursor-pointer">
+                  <div className="flex items-center gap-2 px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-lg hover:bg-zinc-800 transition-colors w-fit">
+                    <Upload className="h-4 w-4 text-zinc-400" />
+                    <span className="text-sm text-zinc-300">{coverFile ? "Change Cover" : "Upload New Cover"}</span>
+                  </div>
+                </Label>
+                <Input id="cover-upload" type="file" accept="image/*" onChange={handleCoverChange} className="hidden" />
               </div>
             </div>
           </Card>
 
           {/* Pages */}
           <Card className="bg-black border-zinc-800 p-6">
-            <h2 className="text-xl font-medium text-white mb-4">
-              Pages * ({(ebook?.pages?.length || 0) + pageFiles.length})
-            </h2>
+            <h2 className="text-xl font-medium text-white mb-4">Pages ({existingPages.length + pageFiles.length})</h2>
             <div className="space-y-4">
-              {pagePreviews.length > 0 && (
+              {(existingPages.length > 0 || pagePreviews.length > 0) && (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  {pagePreviews.map((preview, index) => (
-                    <div key={index} className="relative aspect-[3/4] bg-zinc-900 rounded-lg overflow-hidden">
+                  {/* Existing pages */}
+                  {existingPages.map((pageUrl, index) => (
+                    <div
+                      key={`existing-${index}`}
+                      className="relative aspect-[3/4] bg-zinc-900 rounded-lg overflow-hidden"
+                    >
                       <img
-                        src={preview || "/placeholder.svg"}
+                        src={pageUrl || "/placeholder.svg"}
                         alt={`Page ${index + 1}`}
                         className="w-full h-full object-cover"
                       />
-                      {index >= (ebook?.pages?.length || 0) && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => removePage(index - (ebook?.pages?.length || 0))}
-                          className="absolute top-2 right-2 bg-black/50 hover:bg-black/70"
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      )}
                       <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-xs text-center py-1">
                         Page {index + 1}
+                      </div>
+                    </div>
+                  ))}
+                  {/* New page uploads */}
+                  {pagePreviews.map((preview, index) => (
+                    <div key={`new-${index}`} className="relative aspect-[3/4] bg-zinc-900 rounded-lg overflow-hidden">
+                      <img
+                        src={preview || "/placeholder.svg"}
+                        alt={`New page ${index + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeNewPage(index)}
+                        className="absolute top-2 right-2 bg-black/50 hover:bg-black/70"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                      <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-xs text-center py-1">
+                        Page {existingPages.length + index + 1} (New)
                       </div>
                     </div>
                   ))}
@@ -329,12 +346,19 @@ export default function EditEBookPage({ params }: { params: { id: string } }) {
               )}
 
               <div>
+                <Label htmlFor="pages-upload" className="cursor-pointer">
+                  <div className="flex items-center gap-2 px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-lg hover:bg-zinc-800 transition-colors w-fit">
+                    <Upload className="h-4 w-4 text-zinc-400" />
+                    <span className="text-sm text-zinc-300">Add More Pages</span>
+                  </div>
+                </Label>
                 <Input
+                  id="pages-upload"
                   type="file"
                   accept="image/*"
                   multiple
                   onChange={handlePagesChange}
-                  className="bg-zinc-900 border-zinc-800 text-white"
+                  className="hidden"
                 />
                 <p className="text-xs text-zinc-500 mt-2">Upload images for your eBook pages</p>
               </div>
