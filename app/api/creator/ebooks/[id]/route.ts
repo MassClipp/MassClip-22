@@ -1,35 +1,36 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { adminDb } from "@/lib/firebase-admin"
+import { adminAuth, adminDb } from "@/lib/firebase-admin"
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const userId = request.headers.get("x-user-id")
-
-    if (!userId) {
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader?.startsWith("Bearer ")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const docRef = adminDb.collection("ebooks").doc(params.id)
-    const doc = await docRef.get()
+    const token = authHeader.split("Bearer ")[1]
+    const decodedToken = await adminAuth.verifyIdToken(token)
+    const uid = decodedToken.uid
 
-    if (!doc.exists) {
+    const ebookDoc = await adminDb.collection("ebooks").doc(params.id).get()
+
+    if (!ebookDoc.exists) {
       return NextResponse.json({ error: "eBook not found" }, { status: 404 })
     }
 
-    const data = doc.data()
-
-    if (data?.creatorId !== userId) {
+    const ebookData = ebookDoc.data()
+    if (ebookData?.creatorId !== uid) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
     }
 
-    return NextResponse.json({
-      ebook: {
-        id: doc.id,
-        ...data,
-        createdAt: data?.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-        updatedAt: data?.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-      },
-    })
+    const serializedData = {
+      id: ebookDoc.id,
+      ...ebookData,
+      createdAt: ebookData?.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+      updatedAt: ebookData?.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+    }
+
+    return NextResponse.json({ ebook: serializedData })
   } catch (error) {
     console.error("Error fetching eBook:", error)
     return NextResponse.json({ error: "Failed to fetch eBook" }, { status: 500 })
@@ -38,44 +39,37 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const userId = request.headers.get("x-user-id")
-
-    if (!userId) {
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader?.startsWith("Bearer ")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const docRef = adminDb.collection("ebooks").doc(params.id)
-    const doc = await docRef.get()
+    const token = authHeader.split("Bearer ")[1]
+    const decodedToken = await adminAuth.verifyIdToken(token)
+    const uid = decodedToken.uid
 
-    if (!doc.exists) {
+    const ebookDoc = await adminDb.collection("ebooks").doc(params.id).get()
+
+    if (!ebookDoc.exists) {
       return NextResponse.json({ error: "eBook not found" }, { status: 404 })
     }
 
-    const data = doc.data()
-
-    if (data?.creatorId !== userId) {
+    const ebookData = ebookDoc.data()
+    if (ebookData?.creatorId !== uid) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
     }
 
-    const body = await request.json()
-    const updates = {
-      ...body,
-      updatedAt: new Date(),
-    }
+    const updates = await request.json()
 
-    await docRef.update(updates)
+    await adminDb
+      .collection("ebooks")
+      .doc(params.id)
+      .update({
+        ...updates,
+        updatedAt: new Date(),
+      })
 
-    const updatedDoc = await docRef.get()
-    const updatedData = updatedDoc.data()
-
-    return NextResponse.json({
-      ebook: {
-        id: updatedDoc.id,
-        ...updatedData,
-        createdAt: updatedData?.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-        updatedAt: updatedData?.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-      },
-    })
+    return NextResponse.json({ message: "eBook updated successfully" })
   } catch (error) {
     console.error("Error updating eBook:", error)
     return NextResponse.json({ error: "Failed to update eBook" }, { status: 500 })
@@ -84,28 +78,29 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const userId = request.headers.get("x-user-id")
-
-    if (!userId) {
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader?.startsWith("Bearer ")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const docRef = adminDb.collection("ebooks").doc(params.id)
-    const doc = await docRef.get()
+    const token = authHeader.split("Bearer ")[1]
+    const decodedToken = await adminAuth.verifyIdToken(token)
+    const uid = decodedToken.uid
 
-    if (!doc.exists) {
+    const ebookDoc = await adminDb.collection("ebooks").doc(params.id).get()
+
+    if (!ebookDoc.exists) {
       return NextResponse.json({ error: "eBook not found" }, { status: 404 })
     }
 
-    const data = doc.data()
-
-    if (data?.creatorId !== userId) {
+    const ebookData = ebookDoc.data()
+    if (ebookData?.creatorId !== uid) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
     }
 
-    await docRef.delete()
+    await adminDb.collection("ebooks").doc(params.id).delete()
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ message: "eBook deleted successfully" })
   } catch (error) {
     console.error("Error deleting eBook:", error)
     return NextResponse.json({ error: "Failed to delete eBook" }, { status: 500 })
