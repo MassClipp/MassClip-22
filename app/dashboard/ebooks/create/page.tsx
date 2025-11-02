@@ -131,7 +131,10 @@ export default function CreateEBookPage() {
 
       if (!createResponse.ok) {
         const errorData = await createResponse.json()
-        throw new Error(errorData.details || "Failed to create eBook")
+        console.error("[v0] API error response:", errorData)
+
+        // Show specific error message from API
+        throw new Error(errorData.details || errorData.error || "Failed to create eBook")
       }
 
       const { ebookId } = await createResponse.json()

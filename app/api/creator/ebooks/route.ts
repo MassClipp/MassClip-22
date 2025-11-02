@@ -78,53 +78,80 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { title, description, pageCount, price } = body
 
+    console.log("[v0] Request body:", { title, description, pageCount, price })
+
     if (!title) {
-      return NextResponse.json({ error: "Title is required" }, { status: 400 })
+      return NextResponse.json({ error: "Title is required", details: "Title is required" }, { status: 400 })
     }
 
     if (!price || price < 0.5) {
-      return NextResponse.json({ error: "Price must be at least $0.50" }, { status: 400 })
+      return NextResponse.json({ error: "Invalid price", details: "Price must be at least $0.50" }, { status: 400 })
     }
 
     const userDoc = await adminDb.collection("users").doc(uid).get()
     const userData = userDoc.data()
     const stripeAccountId = userData?.stripeAccountId
 
+    console.log("[v0] User Stripe account ID:", stripeAccountId)
+
     if (!stripeAccountId) {
+      console.log("[v0] No Stripe account found for user")
       return NextResponse.json(
-        { error: "Stripe account not connected. Please connect your Stripe account first." },
+        {
+          error: "Stripe account not connected",
+          details: "Please connect your Stripe account in Settings before creating paid eBooks.",
+        },
         { status: 400 },
       )
     }
 
-    const product = await stripe.products.create(
-      {
-        name: title,
-        description: description || undefined,
-        metadata: {
-          type: "ebook",
-          creator_id: uid,
+    console.log("[v0] Creating Stripe product...")
+    let product
+    let stripePrice
+    try {
+      product = await stripe.products.create(
+        {
+          name: title,
+          description: description || undefined,
+          metadata: {
+            type: "ebook",
+            creator_id: uid,
+          },
         },
-      },
-      {
-        stripeAccount: stripeAccountId,
-      },
-    )
+        {
+          stripeAccount: stripeAccountId,
+        },
+      )
+      console.log("[v0] Stripe product created:", product.id)
 
-    const stripePrice = await stripe.prices.create(
-      {
-        product: product.id,
-        unit_amount: Math.round(price * 100),
-        currency: "usd",
-        metadata: {
-          type: "ebook",
-          creator_id: uid,
+      stripePrice = await stripe.prices.create(
+        {
+          product: product.id,
+          unit_amount: Math.round(price * 100),
+          currency: "usd",
+          metadata: {
+            type: "ebook",
+            creator_id: uid,
+          },
         },
-      },
-      {
-        stripeAccount: stripeAccountId,
-      },
-    )
+        {
+          stripeAccount: stripeAccountId,
+        },
+      )
+      console.log("[v0] Stripe price created:", stripePrice.id)
+    } catch (stripeError) {
+      console.error("[v0] Stripe error:", stripeError)
+      return NextResponse.json(
+        {
+          error: "Stripe error",
+          details:
+            stripeError instanceof Error
+              ? stripeError.message
+              : "Failed to create Stripe product. Please check your Stripe account connection.",
+        },
+        { status: 500 },
+      )
+    }
 
     const ebookData = {
       creatorId: uid,
