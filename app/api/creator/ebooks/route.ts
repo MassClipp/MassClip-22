@@ -1,9 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { adminAuth, adminDb } from "@/lib/firebase-admin"
 import Stripe from "stripe"
+import { ConnectedStripeAccountsService } from "@/lib/connected-stripe-accounts-service"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
-  apiVersion: "2022-11-15",
+  apiVersion: "2024-06-20",
 })
 
 export async function GET(request: NextRequest) {
@@ -88,23 +89,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid price", details: "Price must be at least $0.50" }, { status: 400 })
     }
 
+    console.log("[v0] Checking for Stripe account...")
+    const connectedAccount = await ConnectedStripeAccountsService.getAccount(uid)
     const userDoc = await adminDb.collection("users").doc(uid).get()
     const userData = userDoc.data()
-    let stripeAccountId = userData?.stripeAccountId
 
-    console.log("[v0] Checking users collection for Stripe account:", stripeAccountId)
+    const stripeAccountId =
+      connectedAccount?.stripe_user_id || connectedAccount?.stripeAccountId || userData?.stripeAccountId
 
-    // If not found in users collection, check connectedStripeAccounts collection
-    if (!stripeAccountId) {
-      console.log("[v0] Checking connectedStripeAccounts collection...")
-      const connectedAccountDoc = await adminDb.collection("connectedStripeAccounts").doc(uid).get()
-
-      if (connectedAccountDoc.exists) {
-        const connectedAccount = connectedAccountDoc.data()
-        stripeAccountId = connectedAccount?.stripeAccountId || connectedAccount?.stripe_user_id
-        console.log("[v0] Found Stripe account in connectedStripeAccounts:", stripeAccountId)
-      }
-    }
+    console.log("[v0] Stripe account check:", {
+      hasConnectedAccount: !!connectedAccount,
+      hasUserStripeId: !!userData?.stripeAccountId,
+      finalStripeAccountId: stripeAccountId,
+    })
 
     if (!stripeAccountId) {
       console.log("[v0] No Stripe account found for user")
@@ -120,12 +117,9 @@ export async function POST(request: NextRequest) {
     console.log("[v0] Verifying Stripe account status...")
     try {
       const account = await stripe.accounts.retrieve(stripeAccountId)
-      console.log("[v0] Stripe account status:", {
-        charges_enabled: account.charges_enabled,
-        details_submitted: account.details_submitted,
-      })
 
       if (!account.charges_enabled) {
+        console.log("[v0] Stripe account cannot accept charges")
         return NextResponse.json(
           {
             error: "Stripe account not ready",
@@ -134,14 +128,20 @@ export async function POST(request: NextRequest) {
           { status: 400 },
         )
       }
+
+      console.log("[v0] Stripe account verified:", {
+        id: account.id,
+        charges_enabled: account.charges_enabled,
+        details_submitted: account.details_submitted,
+      })
     } catch (verifyError) {
-      console.error("[v0] Stripe account verification error:", verifyError)
+      console.error("[v0] Failed to verify Stripe account:", verifyError)
       return NextResponse.json(
         {
           error: "Stripe verification failed",
-          details: "Failed to verify Stripe account. Please reconnect your Stripe account in Settings.",
+          details: "Unable to verify your Stripe account. Please reconnect your Stripe account in Settings.",
         },
-        { status: 400 },
+        { status: 500 },
       )
     }
 
