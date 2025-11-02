@@ -17,6 +17,7 @@ interface EBook {
   pageCount: number
   pages: string[]
   status: "draft" | "published"
+  price?: number
   createdAt: string
   updatedAt: string
 }
@@ -53,7 +54,6 @@ export default function ViewEBookPage({ params }: { params: { id: string } }) {
       }
 
       const data = await response.json()
-      console.log("[v0] eBook data received:", data)
       setEbook(data.ebook)
     } catch (error) {
       console.error("[v0] Error fetching eBook:", error)
@@ -90,7 +90,7 @@ export default function ViewEBookPage({ params }: { params: { id: string } }) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-black">
+      <div className="flex items-center justify-center min-h-screen bg-zinc-950">
         <Loader2 className="h-8 w-8 text-zinc-500 animate-spin" />
       </div>
     )
@@ -98,7 +98,7 @@ export default function ViewEBookPage({ params }: { params: { id: string } }) {
 
   if (!ebook) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center p-6">
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-6">
         <div className="text-center">
           <BookOpen className="h-16 w-16 text-zinc-700 mx-auto mb-4" />
           <h3 className="text-xl font-medium text-white mb-2">eBook Not Found</h3>
@@ -153,19 +153,19 @@ export default function ViewEBookPage({ params }: { params: { id: string } }) {
           <AnimatePresence mode="wait">
             <motion.div
               key={currentPage}
-              initial={{ opacity: 0, scale: 0.95 }}
+              initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.3 }}
-              className="relative w-full max-w-3xl mx-auto aspect-[3/4] bg-zinc-900 rounded-xl overflow-hidden shadow-2xl border border-zinc-800"
+              exit={{ opacity: 0, scale: 0.98 }}
+              transition={{ duration: 0.2 }}
+              className="relative w-full flex items-center justify-center"
             >
               <img
                 src={allPages[currentPage] || "/placeholder.svg"}
                 alt={currentPage === 0 ? "Cover" : `Page ${currentPage}`}
-                className="w-full h-full object-contain"
+                className="w-full h-auto max-h-[80vh] object-contain rounded-lg"
               />
               {currentPage === 0 && (
-                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-6 sm:p-8">
+                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-6 sm:p-8 rounded-b-lg">
                   <h2 className="text-xl sm:text-3xl font-light text-white mb-2">{ebook.title}</h2>
                   <p className="text-zinc-300 text-sm sm:text-base">{ebook.description}</p>
                 </div>
@@ -189,7 +189,6 @@ export default function ViewEBookPage({ params }: { params: { id: string } }) {
               <span className="hidden sm:inline">Previous</span>
             </Button>
 
-            {/* Page indicators */}
             <div className="flex gap-2 overflow-x-auto max-w-xs sm:max-w-md scrollbar-hide">
               {allPages.map((_, index) => (
                 <button
