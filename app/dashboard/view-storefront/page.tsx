@@ -44,13 +44,15 @@ interface ContentItem {
   fileUrl: string
   duration: string
   views: number
-  type: "video" | "audio" | "image" | "bundle"
+  type: "video" | "audio" | "image" | "bundle" | "ebook"
   isPremium: boolean
   price?: number
   contentCount?: number
   description?: string
   stripePriceId?: string
   stripeProductId?: string
+  coverUrl?: string
+  pageCount?: number
 }
 
 export default function ViewStorefrontPage() {
@@ -71,7 +73,8 @@ export default function ViewStorefrontPage() {
   }>({})
   const [freeContent, setFreeContent] = useState<ContentItem[]>([])
   const [premiumContent, setPremiumContent] = useState<ContentItem[]>([])
-  const [activeTab, setActiveTab] = useState<"free" | "premium">("free")
+  const [ebooksContent, setEbooksContent] = useState<ContentItem[]>([])
+  const [activeTab, setActiveTab] = useState<"free" | "premium" | "ebooks">("free")
   const [createdAt, setCreatedAt] = useState<string>("")
 
   // Editing states
@@ -133,6 +136,12 @@ export default function ViewStorefrontPage() {
           if (premiumResponse.ok) {
             const premiumData = await premiumResponse.json()
             setPremiumContent(premiumData.content || [])
+          }
+
+          const ebooksResponse = await fetch(`/api/creator/${user.uid}/published-ebooks`)
+          if (ebooksResponse.ok) {
+            const ebooksData = await ebooksResponse.json()
+            setEbooksContent(ebooksData.content || [])
           }
 
           const token = await user.getIdToken()
@@ -310,7 +319,7 @@ export default function ViewStorefrontPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
+        body: JSON.JSONstringify({
           idToken,
           plan: "creator_vip",
         }),
@@ -380,7 +389,7 @@ export default function ViewStorefrontPage() {
     )
   }
 
-  const currentContent = activeTab === "free" ? freeContent : premiumContent
+  const currentContent = activeTab === "free" ? freeContent : activeTab === "premium" ? premiumContent : ebooksContent
 
   return (
     <div className="min-h-screen bg-black fixed inset-0 overflow-y-auto">
@@ -821,6 +830,10 @@ export default function ViewStorefrontPage() {
                 <Heart className="w-3 h-3 sm:w-4 sm:h-4" />
                 <span>{premiumContent.length} premium</span>
               </div>
+              <div className="flex items-center gap-2 text-zinc-500">
+                <Package className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span>{ebooksContent.length} eBooks</span>
+              </div>
             </div>
 
             {/* Go Live Controls - Centered on mobile, right-aligned on desktop */}
@@ -887,6 +900,15 @@ export default function ViewStorefrontPage() {
                 Premium Content
                 {activeTab === "premium" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
               </button>
+              <button
+                onClick={() => setActiveTab("ebooks")}
+                className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
+                  activeTab === "ebooks" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
+                }`}
+              >
+                eBooks
+                {activeTab === "ebooks" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
+              </button>
             </div>
           </div>
 
@@ -895,18 +917,26 @@ export default function ViewStorefrontPage() {
             {currentContent.length > 0 ? (
               <div
                 className={
-                  activeTab === "premium"
+                  activeTab === "premium" || activeTab === "ebooks"
                     ? "flex flex-col items-center gap-6 sm:grid sm:grid-cols-3 sm:gap-8 sm:justify-items-center"
                     : "grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 sm:gap-6 justify-items-center"
                 }
               >
                 <div
                   className={
-                    activeTab === "premium"
+                    activeTab === "premium" || activeTab === "ebooks"
                       ? "w-full max-w-sm aspect-[3/4] rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer flex flex-col items-center justify-center gap-3 group"
                       : "w-full aspect-[9/16] rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer flex flex-col items-center justify-center gap-3 group"
                   }
-                  onClick={() => router.push(activeTab === "free" ? "/dashboard/free-content" : "/dashboard/bundles")}
+                  onClick={() =>
+                    router.push(
+                      activeTab === "free"
+                        ? "/dashboard/free-content"
+                        : activeTab === "ebooks"
+                          ? "/dashboard/ebooks/create"
+                          : "/dashboard/bundles",
+                    )
+                  }
                 >
                   <div className="w-12 h-12 rounded-full bg-zinc-800 group-hover:bg-zinc-700 transition-colors flex items-center justify-center">
                     {activeTab === "free" ? (
@@ -916,7 +946,7 @@ export default function ViewStorefrontPage() {
                     )}
                   </div>
                   <p className="text-sm text-zinc-400 group-hover:text-zinc-300 transition-colors font-medium">
-                    {activeTab === "free" ? "Add Content" : "Create Bundle"}
+                    {activeTab === "free" ? "Add Content" : activeTab === "ebooks" ? "Create eBook" : "Create Bundle"}
                   </p>
                 </div>
 
@@ -931,15 +961,25 @@ export default function ViewStorefrontPage() {
                         isPreview={true}
                       />
                     ))
-                  : freeContent.map((item) => <VideoContentCard key={item.id} item={item} />)}
+                  : activeTab === "ebooks"
+                    ? ebooksContent.map((item) => <EBookCard key={item.id} item={item} username={username} />)
+                    : freeContent.map((item) => <VideoContentCard key={item.id} item={item} />)}
               </div>
             ) : (
               <div className="text-center py-16 sm:py-24">
                 <div
                   className="w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-6 bg-zinc-900 rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer flex items-center justify-center group"
-                  onClick={() => router.push(activeTab === "free" ? "/dashboard/free-content" : "/dashboard/bundles")}
+                  onClick={() =>
+                    router.push(
+                      activeTab === "free"
+                        ? "/dashboard/free-content"
+                        : activeTab === "ebooks"
+                          ? "/dashboard/ebooks/create"
+                          : "/dashboard/bundles",
+                    )
+                  }
                 >
-                  {activeTab === "premium" ? (
+                  {activeTab === "premium" || activeTab === "ebooks" ? (
                     <Package className="w-8 h-8 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
                   ) : (
                     <Play className="w-8 h-8 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
@@ -947,16 +987,33 @@ export default function ViewStorefrontPage() {
                 </div>
                 <h3 className="text-base sm:text-lg font-medium text-white mb-2">No {activeTab} content yet</h3>
                 <p className="text-zinc-500 text-xs sm:text-sm mb-6">
-                  {activeTab === "free" ? "Upload your first piece of content" : "Create your first bundle"}
+                  {activeTab === "free"
+                    ? "Upload your first piece of content"
+                    : activeTab === "ebooks"
+                      ? "Create your first eBook"
+                      : "Create your first bundle"}
                 </p>
                 <Button
-                  onClick={() => router.push(activeTab === "free" ? "/dashboard/free-content" : "/dashboard/bundles")}
+                  onClick={() =>
+                    router.push(
+                      activeTab === "free"
+                        ? "/dashboard/free-content"
+                        : activeTab === "ebooks"
+                          ? "/dashboard/ebooks/create"
+                          : "/dashboard/bundles",
+                    )
+                  }
                   className="bg-white text-black hover:bg-zinc-100 font-medium"
                 >
                   {activeTab === "free" ? (
                     <>
                       <UploadIcon className="w-4 h-4 mr-2" />
                       Upload Content
+                    </>
+                  ) : activeTab === "ebooks" ? (
+                    <>
+                      <Package className="w-4 h-4 mr-2" />
+                      Create eBook
                     </>
                   ) : (
                     <>
@@ -1135,6 +1192,52 @@ function VideoContentCard({ item }: { item: ContentItem }) {
         <h3 className="text-white text-xs sm:text-sm font-medium line-clamp-2 leading-tight" title={item.title}>
           {item.title}
         </h3>
+      </div>
+    </div>
+  )
+}
+
+function EBookCard({ item, username }: { item: ContentItem; username: string | null }) {
+  const router = useRouter()
+
+  const handleClick = () => {
+    if (username) {
+      router.push(`/creator/${username}/ebook/${item.id}`)
+    }
+  }
+
+  return (
+    <div className="group cursor-pointer w-full max-w-sm" onClick={handleClick}>
+      <div className="relative aspect-[3/4] rounded-lg overflow-hidden mb-3 transition-all duration-300 border border-zinc-800 group-hover:border-white/50">
+        {item.coverUrl || item.thumbnailUrl ? (
+          <img src={item.coverUrl || item.thumbnailUrl} alt={item.title} className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full bg-gradient-to-br from-zinc-800 to-zinc-900 flex items-center justify-center">
+            <Package className="w-16 h-16 text-zinc-600" />
+          </div>
+        )}
+
+        {/* Price badge */}
+        {item.price && (
+          <div className="absolute top-3 right-3 bg-black/80 backdrop-blur-sm px-3 py-1.5 rounded-full">
+            <span className="text-white text-sm font-medium">${(item.price / 100).toFixed(2)}</span>
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-1">
+        <h3
+          className="text-white text-sm font-medium line-clamp-2 leading-tight group-hover:text-zinc-300 transition-colors"
+          title={item.title}
+        >
+          {item.title}
+        </h3>
+        {item.pageCount && (
+          <p className="text-zinc-500 text-xs">
+            {item.pageCount} {item.pageCount === 1 ? "page" : "pages"}
+          </p>
+        )}
+        {item.description && <p className="text-zinc-400 text-xs line-clamp-2 leading-relaxed">{item.description}</p>}
       </div>
     </div>
   )
