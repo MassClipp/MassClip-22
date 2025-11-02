@@ -149,7 +149,7 @@ export default function ViewEBookPage({ params }: { params: { id: string } }) {
       </div>
 
       <div className="py-8 px-4 sm:px-6 lg:px-8 pb-32">
-        <div className="mx-auto">
+        <div className="flex justify-center">
           <AnimatePresence mode="wait">
             <motion.div
               key={currentPage}
@@ -157,12 +157,12 @@ export default function ViewEBookPage({ params }: { params: { id: string } }) {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               transition={{ duration: 0.3 }}
-              className="relative w-full max-w-2xl mx-auto max-h-[70vh] bg-zinc-900 rounded-xl overflow-hidden shadow-2xl border border-zinc-800"
+              className="relative w-full bg-zinc-900 rounded-xl overflow-hidden shadow-2xl border border-zinc-800"
             >
               <img
                 src={allPages[currentPage] || "/placeholder.svg"}
                 alt={currentPage === 0 ? "Cover" : `Page ${currentPage}`}
-                className="w-full h-full object-contain"
+                className="w-full h-auto object-contain"
               />
               {currentPage === 0 && (
                 <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-6 sm:p-8">

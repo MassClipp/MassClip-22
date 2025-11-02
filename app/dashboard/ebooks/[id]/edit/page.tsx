@@ -278,11 +278,11 @@ export default function EditEBookPage({ params }: { params: { id: string } }) {
             <h2 className="text-xl font-medium text-white mb-4">Cover Image *</h2>
             <div className="space-y-4">
               {coverPreview && (
-                <div className="relative w-48 aspect-[3/4] bg-zinc-900 rounded-lg overflow-hidden">
+                <div className="relative w-full max-w-md bg-zinc-900 rounded-lg overflow-hidden">
                   <img
                     src={coverPreview || "/placeholder.svg"}
                     alt="Cover preview"
-                    className="w-full h-full object-cover"
+                    className="w-full h-auto object-contain max-h-[500px]"
                   />
                 </div>
               )}
@@ -327,7 +327,7 @@ export default function EditEBookPage({ params }: { params: { id: string } }) {
                       <img
                         src={preview || "/placeholder.svg"}
                         alt={`New page ${index + 1}`}
-                        className="w-full h-full object-cover"
+                        className="w-full h-auto object-contain max-h-[500px]"
                       />
                       <Button
                         variant="ghost"

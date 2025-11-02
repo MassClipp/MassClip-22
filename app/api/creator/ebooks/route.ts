@@ -1,5 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { adminAuth, adminDb } from "@/lib/firebase-admin"
+import Stripe from "stripe"
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
+  apiVersion: "2022-11-15",
+})
 
 export async function GET(request: NextRequest) {
   try {
@@ -71,11 +76,55 @@ export async function POST(request: NextRequest) {
     const uid = decodedToken.uid
 
     const body = await request.json()
-    const { title, description, pageCount } = body
+    const { title, description, pageCount, price } = body
 
     if (!title) {
       return NextResponse.json({ error: "Title is required" }, { status: 400 })
     }
+
+    if (!price || price < 0.5) {
+      return NextResponse.json({ error: "Price must be at least $0.50" }, { status: 400 })
+    }
+
+    const userDoc = await adminDb.collection("users").doc(uid).get()
+    const userData = userDoc.data()
+    const stripeAccountId = userData?.stripeAccountId
+
+    if (!stripeAccountId) {
+      return NextResponse.json(
+        { error: "Stripe account not connected. Please connect your Stripe account first." },
+        { status: 400 },
+      )
+    }
+
+    const product = await stripe.products.create(
+      {
+        name: title,
+        description: description || undefined,
+        metadata: {
+          type: "ebook",
+          creator_id: uid,
+        },
+      },
+      {
+        stripeAccount: stripeAccountId,
+      },
+    )
+
+    const stripePrice = await stripe.prices.create(
+      {
+        product: product.id,
+        unit_amount: Math.round(price * 100),
+        currency: "usd",
+        metadata: {
+          type: "ebook",
+          creator_id: uid,
+        },
+      },
+      {
+        stripeAccount: stripeAccountId,
+      },
+    )
 
     const ebookData = {
       creatorId: uid,
@@ -85,6 +134,9 @@ export async function POST(request: NextRequest) {
       pageCount: pageCount || 0,
       pages: [],
       status: "draft",
+      price: price,
+      stripeProductId: product.id,
+      stripePriceId: stripePrice.id,
       createdAt: new Date(),
       updatedAt: new Date(),
     }

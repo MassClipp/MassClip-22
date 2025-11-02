@@ -29,6 +29,7 @@ export default function CreateEBookPage() {
 
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
+  const [price, setPrice] = useState("")
   const [coverFile, setCoverFile] = useState<File | null>(null)
   const [coverPreview, setCoverPreview] = useState<string>("")
   const [pageFiles, setPageFiles] = useState<PageFile[]>([])
@@ -80,6 +81,15 @@ export default function CreateEBookPage() {
       return
     }
 
+    if (!price || Number.parseFloat(price) < 0.5) {
+      toast({
+        title: "Invalid Price",
+        description: "Please enter a price of at least $0.50",
+        variant: "destructive",
+      })
+      return
+    }
+
     if (!coverFile) {
       toast({
         title: "Missing Cover",
@@ -105,7 +115,6 @@ export default function CreateEBookPage() {
 
       console.log("[v0] Creating eBook record...")
 
-      // Create eBook record first
       const createResponse = await fetch("/api/creator/ebooks", {
         method: "POST",
         headers: {
@@ -116,6 +125,7 @@ export default function CreateEBookPage() {
           title: title.trim(),
           description: description.trim(),
           pageCount: pageFiles.length,
+          price: Number.parseFloat(price),
         }),
       })
 
@@ -127,7 +137,6 @@ export default function CreateEBookPage() {
       const { ebookId } = await createResponse.json()
       console.log("[v0] eBook created with ID:", ebookId)
 
-      // Upload cover
       console.log("[v0] Uploading cover...")
       const coverFormData = new FormData()
       coverFormData.append("file", coverFile)
@@ -148,7 +157,6 @@ export default function CreateEBookPage() {
 
       console.log("[v0] Cover uploaded successfully")
 
-      // Upload pages
       console.log("[v0] Uploading pages...")
       for (let i = 0; i < pageFiles.length; i++) {
         const pageFormData = new FormData()
@@ -242,6 +250,26 @@ export default function CreateEBookPage() {
                     className="bg-zinc-900 border-zinc-800 text-white min-h-[100px]"
                   />
                 </div>
+
+                <div>
+                  <Label htmlFor="price" className="text-zinc-300">
+                    Price (USD) *
+                  </Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400">$</span>
+                    <Input
+                      id="price"
+                      type="number"
+                      min="0.50"
+                      step="0.01"
+                      value={price}
+                      onChange={(e) => setPrice(e.target.value)}
+                      placeholder="9.99"
+                      className="bg-zinc-900 border-zinc-800 text-white pl-7"
+                    />
+                  </div>
+                  <p className="text-xs text-zinc-500 mt-1">Minimum price: $0.50</p>
+                </div>
               </CardContent>
             </Card>
 
@@ -259,11 +287,11 @@ export default function CreateEBookPage() {
                 />
 
                 {coverPreview ? (
-                  <div className="relative aspect-[3/4] bg-zinc-900 rounded-lg overflow-hidden">
+                  <div className="relative bg-zinc-900 rounded-lg overflow-hidden">
                     <img
                       src={coverPreview || "/placeholder.svg"}
                       alt="Cover preview"
-                      className="w-full h-full object-cover"
+                      className="w-full h-auto object-contain max-h-[400px]"
                     />
                     <Button
                       variant="ghost"
@@ -376,35 +404,39 @@ export default function CreateEBookPage() {
               <CardTitle className="text-white">Preview</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                {/* Cover Image First */}
+              <div className="flex flex-wrap gap-4">
                 {coverPreview && (
                   <motion.div
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    className="relative aspect-[3/4] bg-zinc-900 rounded-lg overflow-hidden border-2 border-blue-500"
+                    className="relative bg-zinc-900 rounded-lg overflow-hidden border-2 border-blue-500"
+                    style={{ width: "auto", maxWidth: "200px" }}
                   >
-                    <img src={coverPreview || "/placeholder.svg"} alt="Cover" className="w-full h-full object-cover" />
+                    <img
+                      src={coverPreview || "/placeholder.svg"}
+                      alt="Cover"
+                      className="w-full h-auto object-contain"
+                    />
                     <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2">
                       <p className="text-xs text-white font-medium">Cover</p>
                     </div>
                   </motion.div>
                 )}
 
-                {/* Page Images */}
                 {pageFiles.map((page, index) => (
                   <motion.div
                     key={page.id}
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: index * 0.05 }}
-                    className="relative aspect-[3/4] bg-zinc-900 rounded-lg overflow-hidden border border-zinc-700"
+                    className="relative bg-zinc-900 rounded-lg overflow-hidden border border-zinc-700"
+                    style={{ width: "auto", maxWidth: "200px" }}
                   >
                     {page.preview ? (
                       <img
                         src={page.preview || "/placeholder.svg"}
                         alt={`Page ${index + 1}`}
-                        className="w-full h-full object-cover"
+                        className="w-full h-auto object-contain"
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
