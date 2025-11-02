@@ -23,6 +23,7 @@ import {
   ChevronLeft,
   ArrowDown,
   Target,
+  BookOpen,
 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -121,6 +122,7 @@ function VexChat({ children }: VexChatProps) {
   const businessManagementItems = [
     { icon: Target, label: "Sales Objectives", href: "/dashboard", gradient: true },
     { icon: Package, label: "Bundles", href: "/dashboard/bundles" },
+    { icon: BookOpen, label: "eBooks", href: "/dashboard/ebooks" }, // Added eBooks navigation item
     { icon: DollarSign, label: "Earnings", href: "/dashboard/earnings" },
     { icon: User, label: "View Storefront", href: "/dashboard/view-storefront" },
   ]
