@@ -103,6 +103,8 @@ export default function CreateEBookPage() {
       const idToken = await user?.getIdToken()
       if (!idToken) throw new Error("Not authenticated")
 
+      console.log("[v0] Creating eBook record...")
+
       // Create eBook record first
       const createResponse = await fetch("/api/creator/ebooks", {
         method: "POST",
@@ -118,12 +120,15 @@ export default function CreateEBookPage() {
       })
 
       if (!createResponse.ok) {
-        throw new Error("Failed to create eBook")
+        const errorData = await createResponse.json()
+        throw new Error(errorData.details || "Failed to create eBook")
       }
 
       const { ebookId } = await createResponse.json()
+      console.log("[v0] eBook created with ID:", ebookId)
 
       // Upload cover
+      console.log("[v0] Uploading cover...")
       const coverFormData = new FormData()
       coverFormData.append("file", coverFile)
       coverFormData.append("ebookId", ebookId)
@@ -137,10 +142,14 @@ export default function CreateEBookPage() {
       })
 
       if (!coverResponse.ok) {
-        throw new Error("Failed to upload cover")
+        const errorData = await coverResponse.json()
+        throw new Error(errorData.details || "Failed to upload cover")
       }
 
+      console.log("[v0] Cover uploaded successfully")
+
       // Upload pages
+      console.log("[v0] Uploading pages...")
       for (let i = 0; i < pageFiles.length; i++) {
         const pageFormData = new FormData()
         pageFormData.append("file", pageFiles[i].file)
@@ -156,7 +165,9 @@ export default function CreateEBookPage() {
         })
 
         if (!pageResponse.ok) {
-          console.error(`Failed to upload page ${i + 1}`)
+          console.error(`[v0] Failed to upload page ${i + 1}`)
+        } else {
+          console.log(`[v0] Page ${i + 1} uploaded successfully`)
         }
       }
 
@@ -167,7 +178,7 @@ export default function CreateEBookPage() {
 
       router.push("/dashboard/ebooks")
     } catch (error) {
-      console.error("Error creating eBook:", error)
+      console.error("[v0] Error creating eBook:", error)
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to create eBook",
@@ -351,6 +362,57 @@ export default function CreateEBookPage() {
             </Card>
           </div>
         </div>
+
+        {(coverPreview || pageFiles.length > 0) && (
+          <Card className="mt-6 bg-black border-zinc-800">
+            <CardHeader>
+              <CardTitle className="text-white">Preview</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                {/* Cover Image First */}
+                {coverPreview && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="relative aspect-[3/4] bg-zinc-900 rounded-lg overflow-hidden border-2 border-blue-500"
+                  >
+                    <img src={coverPreview || "/placeholder.svg"} alt="Cover" className="w-full h-full object-cover" />
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2">
+                      <p className="text-xs text-white font-medium">Cover</p>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* Page Images */}
+                {pageFiles.map((page, index) => (
+                  <motion.div
+                    key={page.id}
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: index * 0.05 }}
+                    className="relative aspect-[3/4] bg-zinc-900 rounded-lg overflow-hidden border border-zinc-700"
+                  >
+                    {page.preview ? (
+                      <img
+                        src={page.preview || "/placeholder.svg"}
+                        alt={`Page ${index + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <FileText className="h-8 w-8 text-zinc-600" />
+                      </div>
+                    )}
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2">
+                      <p className="text-xs text-white font-medium">Page {index + 1}</p>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <div className="mt-8 flex justify-end gap-3">
           <Button
