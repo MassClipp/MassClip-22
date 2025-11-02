@@ -114,9 +114,9 @@ export default function ViewEBookPage({ params }: { params: { id: string } }) {
   const totalPages = allPages.length
 
   return (
-    <div className="min-h-screen bg-black">
-      <div className="fixed top-0 left-0 right-0 z-50 bg-black/80 backdrop-blur-sm border-b border-zinc-800">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+    <div className="min-h-screen bg-zinc-950">
+      <div className="sticky top-0 z-50 bg-zinc-950/95 backdrop-blur-sm border-b border-zinc-800">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Button
               variant="ghost"
@@ -127,8 +127,8 @@ export default function ViewEBookPage({ params }: { params: { id: string } }) {
               Back
             </Button>
             <div>
-              <h1 className="text-lg font-medium text-white">{ebook.title}</h1>
-              <p className="text-sm text-zinc-500">
+              <h1 className="text-base sm:text-lg font-medium text-white">{ebook.title}</h1>
+              <p className="text-xs sm:text-sm text-zinc-500">
                 Page {currentPage + 1} of {totalPages}
               </p>
             </div>
@@ -136,7 +136,7 @@ export default function ViewEBookPage({ params }: { params: { id: string } }) {
           <div className="flex items-center gap-3">
             <Badge
               variant={ebook.status === "published" ? "default" : "secondary"}
-              className={ebook.status === "published" ? "bg-white text-black" : "bg-zinc-700 text-zinc-300"}
+              className={ebook.status === "published" ? "bg-emerald-500 text-white" : "bg-zinc-700 text-zinc-300"}
             >
               {ebook.status}
             </Badge>
@@ -148,16 +148,16 @@ export default function ViewEBookPage({ params }: { params: { id: string } }) {
         </div>
       </div>
 
-      <div className="pt-20 pb-24 px-6">
-        <div className="max-w-4xl mx-auto">
+      <div className="py-8 px-4 sm:px-6 lg:px-8 pb-32">
+        <div className="max-w-5xl mx-auto">
           <AnimatePresence mode="wait">
             <motion.div
               key={currentPage}
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
               transition={{ duration: 0.3 }}
-              className="relative aspect-[3/4] bg-zinc-900 rounded-lg overflow-hidden shadow-2xl"
+              className="relative w-full max-w-3xl mx-auto aspect-[3/4] bg-zinc-900 rounded-xl overflow-hidden shadow-2xl border border-zinc-800"
             >
               <img
                 src={allPages[currentPage] || "/placeholder.svg"}
@@ -165,9 +165,9 @@ export default function ViewEBookPage({ params }: { params: { id: string } }) {
                 className="w-full h-full object-contain"
               />
               {currentPage === 0 && (
-                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-6">
-                  <h2 className="text-2xl font-light text-white mb-2">{ebook.title}</h2>
-                  <p className="text-zinc-300 text-sm">{ebook.description}</p>
+                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-6 sm:p-8">
+                  <h2 className="text-xl sm:text-3xl font-light text-white mb-2">{ebook.title}</h2>
+                  <p className="text-zinc-300 text-sm sm:text-base">{ebook.description}</p>
                 </div>
               )}
             </motion.div>
@@ -175,28 +175,28 @@ export default function ViewEBookPage({ params }: { params: { id: string } }) {
         </div>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-black/80 backdrop-blur-sm border-t border-zinc-800">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-zinc-950/95 backdrop-blur-sm border-t border-zinc-800">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex items-center justify-between gap-4">
             <Button
               onClick={prevPage}
               disabled={currentPage === 0}
               variant="outline"
               size="lg"
-              className="disabled:opacity-50 bg-transparent"
+              className="disabled:opacity-30 bg-transparent border-zinc-700 hover:bg-zinc-800"
             >
-              <ChevronLeft className="h-5 w-5 mr-2" />
-              Previous
+              <ChevronLeft className="h-5 w-5 sm:mr-2" />
+              <span className="hidden sm:inline">Previous</span>
             </Button>
 
             {/* Page indicators */}
-            <div className="flex gap-2 overflow-x-auto max-w-md">
+            <div className="flex gap-2 overflow-x-auto max-w-xs sm:max-w-md scrollbar-hide">
               {allPages.map((_, index) => (
                 <button
                   key={index}
                   onClick={() => setCurrentPage(index)}
-                  className={`w-2 h-2 rounded-full transition-all ${
-                    index === currentPage ? "bg-white w-8" : "bg-zinc-600 hover:bg-zinc-500"
+                  className={`flex-shrink-0 h-2 rounded-full transition-all ${
+                    index === currentPage ? "bg-white w-8" : "bg-zinc-600 hover:bg-zinc-500 w-2"
                   }`}
                   aria-label={`Go to page ${index + 1}`}
                 />
@@ -208,10 +208,10 @@ export default function ViewEBookPage({ params }: { params: { id: string } }) {
               disabled={currentPage === totalPages - 1}
               variant="outline"
               size="lg"
-              className="disabled:opacity-50 bg-transparent"
+              className="disabled:opacity-30 bg-transparent border-zinc-700 hover:bg-zinc-800"
             >
-              Next
-              <ChevronRight className="h-5 w-5 ml-2" />
+              <span className="hidden sm:inline">Next</span>
+              <ChevronRight className="h-5 w-5 sm:ml-2" />
             </Button>
           </div>
         </div>

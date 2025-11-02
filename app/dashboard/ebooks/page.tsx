@@ -5,11 +5,17 @@ import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
-import { Plus, Loader2, BookOpen, Edit, Trash2, Eye, MoreVertical } from "lucide-react"
+import { Plus, Loader2, BookOpen, Edit, Trash2, Eye, MoreVertical, Globe, GlobeLock } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
 import { Badge } from "@/components/ui/badge"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu"
 import { formatDistanceToNow } from "date-fns"
 
 interface EBook {
@@ -112,6 +118,40 @@ export default function EBooksPage() {
     }
   }
 
+  const handleTogglePublish = async (id: string, currentStatus: "draft" | "published") => {
+    const newStatus = currentStatus === "published" ? "draft" : "published"
+
+    try {
+      const idToken = await user?.getIdToken()
+      const response = await fetch(`/api/creator/ebooks/${id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ status: newStatus }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to update eBook status")
+      }
+
+      setEbooks((prev) => prev.map((ebook) => (ebook.id === id ? { ...ebook, status: newStatus } : ebook)))
+
+      toast({
+        title: "Success",
+        description: `eBook ${newStatus === "published" ? "published" : "unpublished"} successfully`,
+      })
+    } catch (error) {
+      console.error("Error updating eBook status:", error)
+      toast({
+        title: "Error",
+        description: "Failed to update eBook status",
+        variant: "destructive",
+      })
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -202,6 +242,24 @@ export default function EBooksPage() {
                             <Edit className="h-4 w-4 mr-2" />
                             Edit
                           </DropdownMenuItem>
+                          <DropdownMenuSeparator className="bg-zinc-800" />
+                          <DropdownMenuItem
+                            onClick={() => handleTogglePublish(ebook.id, ebook.status)}
+                            className="text-zinc-300 hover:text-white"
+                          >
+                            {ebook.status === "published" ? (
+                              <>
+                                <GlobeLock className="h-4 w-4 mr-2" />
+                                Unpublish
+                              </>
+                            ) : (
+                              <>
+                                <Globe className="h-4 w-4 mr-2" />
+                                Publish to Storefront
+                              </>
+                            )}
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator className="bg-zinc-800" />
                           <DropdownMenuItem
                             onClick={() => handleDelete(ebook.id)}
                             className="text-red-400 hover:text-red-300"
@@ -215,7 +273,9 @@ export default function EBooksPage() {
                     <div className="absolute top-2 left-2">
                       <Badge
                         variant={ebook.status === "published" ? "default" : "secondary"}
-                        className={ebook.status === "published" ? "bg-white text-black" : "bg-zinc-700 text-zinc-300"}
+                        className={
+                          ebook.status === "published" ? "bg-emerald-500 text-white" : "bg-zinc-700 text-zinc-300"
+                        }
                       >
                         {ebook.status}
                       </Badge>
