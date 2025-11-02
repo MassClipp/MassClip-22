@@ -14,26 +14,34 @@ export async function GET(request: NextRequest) {
     const decodedToken = await adminAuth.verifyIdToken(token)
     const uid = decodedToken.uid
 
-    const ebooksSnapshot = await adminDb
-      .collection("ebooks")
-      .where("creatorId", "==", uid)
-      .orderBy("createdAt", "desc")
-      .get()
+    let ebooksSnapshot
+    try {
+      ebooksSnapshot = await adminDb
+        .collection("ebooks")
+        .where("creatorId", "==", uid)
+        .orderBy("createdAt", "desc")
+        .get()
+    } catch (indexError) {
+      console.log("[v0] Index not available, fetching without orderBy")
+      ebooksSnapshot = await adminDb.collection("ebooks").where("creatorId", "==", uid).get()
+    }
 
     const ebooks = ebooksSnapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
     }))
 
+    ebooks.sort((a: any, b: any) => {
+      const aTime = a.createdAt?.toDate?.() || new Date(a.createdAt || 0)
+      const bTime = b.createdAt?.toDate?.() || new Date(b.createdAt || 0)
+      return bTime.getTime() - aTime.getTime()
+    })
+
     console.log(`[v0] Found ${ebooks.length} eBooks for user ${uid}`)
 
     return NextResponse.json({ ebooks })
   } catch (error) {
     console.error("[v0] Error fetching eBooks:", error)
-    if (error instanceof Error && error.message.includes("index")) {
-      console.log("[v0] eBooks collection index not ready, returning empty array")
-      return NextResponse.json({ ebooks: [] })
-    }
     return NextResponse.json(
       {
         error: "Failed to fetch eBooks",

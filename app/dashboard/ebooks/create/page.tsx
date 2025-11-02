@@ -171,12 +171,19 @@ export default function CreateEBookPage() {
         }
       }
 
+      console.log("[v0] Pages uploaded successfully")
+
       toast({
         title: "Success",
         description: "eBook created successfully",
       })
 
-      router.push("/dashboard/ebooks")
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+
+      router.replace("/dashboard/ebooks")
+      setTimeout(() => {
+        window.location.href = "/dashboard/ebooks"
+      }, 100)
     } catch (error) {
       console.error("[v0] Error creating eBook:", error)
       toast({
