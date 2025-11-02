@@ -19,6 +19,7 @@ import {
   Instagram,
   Twitter,
   Globe,
+  BookOpen,
 } from "lucide-react"
 import { useAuthState } from "react-firebase-hooks/auth"
 import { auth, db } from "@/lib/firebase"
@@ -66,13 +67,15 @@ interface ContentItem {
 
 export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimalProps) {
   const [user] = useAuthState(auth)
-  const [activeTab, setActiveTab] = useState<"free" | "premium">("free")
+  const [activeTab, setActiveTab] = useState<"free" | "premium" | "ebooks">("free")
   const [contentTypeFilter, setContentTypeFilter] = useState<"all" | "video" | "audio" | "image">("all")
   const [freeContent, setFreeContent] = useState<ContentItem[]>([])
   const [premiumContent, setPremiumContent] = useState<ContentItem[]>([])
+  const [ebooksContent, setEbooksContent] = useState<ContentItem[]>([])
   const [loading, setLoading] = useState(true)
   const [freeContentCount, setFreeContentCount] = useState(0)
   const [premiumContentCount, setPremiumContentCount] = useState(0)
+  const [ebooksContentCount, setEbooksContentCount] = useState(0)
   const [showToast, setShowToast] = useState(false)
 
   const getMemberSince = () => {
@@ -181,6 +184,16 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
         } else {
           console.error("Failed to fetch premium content:", premiumResponse.status)
         }
+
+        const ebooksResponse = await fetch(`/api/creator/${creator.uid}/published-ebooks`)
+        if (ebooksResponse.ok) {
+          const ebooksData = await ebooksResponse.json()
+          console.log("📚 eBooks response:", ebooksData)
+          setEbooksContent(ebooksData.content || [])
+          setEbooksContentCount(ebooksData.content?.length || 0)
+        } else {
+          console.error("Failed to fetch eBooks:", ebooksResponse.status)
+        }
       } catch (error) {
         console.error("Error fetching content:", error)
       } finally {
@@ -214,7 +227,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
     })
   }
 
-  const currentContent = activeTab === "free" ? freeContent : premiumContent
+  const currentContent = activeTab === "free" ? freeContent : activeTab === "premium" ? premiumContent : ebooksContent
   const filteredContent = getFilteredContent()
   const availableTypes = activeTab === "free" ? getAvailableContentTypes(freeContent) : []
   const showContentTypeFilter = activeTab === "free" && availableTypes.length > 1
@@ -229,7 +242,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
   })
 
   useEffect(() => {
-    if (activeTab === "premium") {
+    if (activeTab === "premium" || activeTab === "ebooks") {
       setContentTypeFilter("all")
     }
   }, [activeTab])
@@ -414,6 +427,12 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
             <Heart className="w-3 h-3 sm:w-4 sm:h-4" />
             <span>{premiumContentCount} premium</span>
           </div>
+          {ebooksContentCount > 0 && (
+            <div className="flex items-center gap-2 text-zinc-500">
+              <BookOpen className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span>{ebooksContentCount} ebooks</span>
+            </div>
+          )}
         </div>
 
         {/* Tabs with underline style and content type filter */}
@@ -456,6 +475,18 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
               Premium Content
               {activeTab === "premium" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
             </button>
+
+            {ebooksContentCount > 0 && (
+              <button
+                onClick={() => setActiveTab("ebooks")}
+                className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
+                  activeTab === "ebooks" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
+                }`}
+              >
+                eBooks
+                {activeTab === "ebooks" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
+              </button>
+            )}
           </div>
         </div>
 
@@ -468,13 +499,21 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
           ) : filteredContent.length > 0 ? (
             <div
               className={
-                activeTab === "premium"
+                activeTab === "premium" || activeTab === "ebooks"
                   ? "flex flex-col items-center gap-6 sm:grid sm:grid-cols-3 sm:gap-8 sm:justify-items-center"
                   : "grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 sm:gap-6 justify-items-center"
               }
             >
               {filteredContent.map((item) =>
-                activeTab === "premium" ? (
+                activeTab === "ebooks" ? (
+                  <BundleCard
+                    key={item.id}
+                    item={item}
+                    user={user}
+                    creatorId={creator.uid}
+                    creatorUsername={creator.username}
+                  />
+                ) : activeTab === "premium" ? (
                   <BundleCard
                     key={item.id}
                     item={item}
