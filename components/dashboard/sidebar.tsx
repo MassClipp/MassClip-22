@@ -17,6 +17,7 @@ import {
   Tags,
   Store,
   Heart,
+  BookOpen,
 } from "lucide-react"
 import { SidebarNavItem } from "./sidebar-nav-item"
 import Logo from "@/components/logo"
@@ -97,6 +98,11 @@ const navItems = [
         title: "Bundles",
         href: "/dashboard/bundles",
         icon: Package,
+      },
+      {
+        title: "eBooks",
+        href: "/dashboard/ebooks",
+        icon: BookOpen,
       },
       {
         title: "View Storefront",

@@ -23,7 +23,6 @@ import {
   ChevronLeft,
   ArrowDown,
   Target,
-  BookOpen,
 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -124,7 +123,6 @@ function VexChat({ children }: VexChatProps) {
     { icon: Package, label: "Bundles", href: "/dashboard/bundles" },
     { icon: DollarSign, label: "Earnings", href: "/dashboard/earnings" },
     { icon: User, label: "View Storefront", href: "/dashboard/view-storefront" },
-    { icon: BookOpen, label: "eBook", href: "/dashboard/ebooks" }, // Added eBook navigation item
   ]
 
   // Suggestions list (moved here to fix undeclared variable error)
@@ -588,7 +586,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
           })
 
           if (titleResponse.ok) {
-            const titleData = await titleResponse.json() // Changed to response.json()
+            const titleData = await titleResponse.json()
             chatTitle = titleData.title || chatTitle
           }
         } catch (titleError) {
@@ -1420,7 +1418,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                           >
                             <Clock className="h-3 w-3 mr-1.5" />
                             Free Trial: {trialStatus.daysRemaining} {trialStatus.daysRemaining === 1 ? "day" : "days"}{" "}
-                            left
+                            {/* Added space */} left
                           </Badge>
                         </div>
                       ) : shouldShowTrialButton ? (
