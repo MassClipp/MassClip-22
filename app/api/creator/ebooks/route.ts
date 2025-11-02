@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { adminAuth, adminDb } from "@/lib/firebase-admin"
 import Stripe from "stripe"
+import { ConnectedStripeAccountsService } from "@/lib/connected-stripe-accounts-service"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
   apiVersion: "2022-11-15",
@@ -90,9 +91,20 @@ export async function POST(request: NextRequest) {
 
     const userDoc = await adminDb.collection("users").doc(uid).get()
     const userData = userDoc.data()
-    const stripeAccountId = userData?.stripeAccountId
 
-    console.log("[v0] User Stripe account ID:", stripeAccountId)
+    let stripeAccountId = userData?.stripeAccountId
+
+    if (!stripeAccountId) {
+      console.log("[v0] Checking connectedStripeAccounts collection...")
+      const connectedAccount = await ConnectedStripeAccountsService.getAccount(uid)
+
+      if (connectedAccount) {
+        stripeAccountId = connectedAccount.stripeAccountId || connectedAccount.stripe_user_id
+        console.log("[v0] Found Stripe account in connectedStripeAccounts:", stripeAccountId?.substring(0, 10) + "...")
+      }
+    } else {
+      console.log("[v0] Found Stripe account in users collection:", stripeAccountId?.substring(0, 10) + "...")
+    }
 
     if (!stripeAccountId) {
       console.log("[v0] No Stripe account found for user")
@@ -100,6 +112,46 @@ export async function POST(request: NextRequest) {
         {
           error: "Stripe account not connected",
           details: "Please connect your Stripe account in Settings before creating paid eBooks.",
+        },
+        { status: 400 },
+      )
+    }
+
+    console.log("[v0] Validating Stripe account status...")
+    try {
+      const account = await stripe.accounts.retrieve(stripeAccountId)
+      console.log("[v0] Stripe account status:", {
+        charges_enabled: account.charges_enabled,
+        details_submitted: account.details_submitted,
+        payouts_enabled: account.payouts_enabled,
+      })
+
+      if (!account.charges_enabled) {
+        return NextResponse.json(
+          {
+            error: "Stripe account not ready",
+            details: "Your Stripe account cannot accept payments yet. Please complete your Stripe onboarding.",
+          },
+          { status: 400 },
+        )
+      }
+
+      if (account.requirements?.past_due && account.requirements.past_due.length > 0) {
+        return NextResponse.json(
+          {
+            error: "Stripe account has requirements",
+            details:
+              "Your Stripe account has overdue requirements. Please visit your Stripe dashboard to complete them.",
+          },
+          { status: 400 },
+        )
+      }
+    } catch (stripeError: any) {
+      console.error("[v0] Stripe account verification failed:", stripeError)
+      return NextResponse.json(
+        {
+          error: "Stripe verification failed",
+          details: "Unable to verify your Stripe account. Please reconnect your Stripe account in Settings.",
         },
         { status: 400 },
       )
