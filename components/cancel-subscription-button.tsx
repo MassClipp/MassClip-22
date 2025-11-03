@@ -22,25 +22,38 @@ export function CancelSubscriptionButton() {
   const { toast } = useToast()
   const router = useRouter()
   const { user } = useAuth()
-  const [subscriptionData, setSubscriptionData] = useState<any>(null)
+  const [planName, setPlanName] = useState<string>("subscription")
 
   useEffect(() => {
-    const fetchSubscription = async () => {
+    const fetchPlanName = async () => {
       if (!user) return
+
       try {
         const token = await user.getIdToken()
         const response = await fetch("/api/membership-status", {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         })
+
         if (response.ok) {
           const data = await response.json()
-          setSubscriptionData(data)
+          if (data.plan === "facelessprenuer") {
+            setPlanName("Facelessprenuer")
+          } else if (data.plan === "faceless_pro") {
+            setPlanName("Faceless Pro")
+          } else if (data.plan === "creator_pro") {
+            setPlanName("Creator VIP")
+          } else {
+            setPlanName("subscription")
+          }
         }
       } catch (error) {
-        console.error("Error fetching subscription:", error)
+        console.error("Error fetching plan name:", error)
       }
     }
-    fetchSubscription()
+
+    fetchPlanName()
   }, [user])
 
   const handleCancel = async () => {
@@ -94,13 +107,6 @@ export function CancelSubscriptionButton() {
       setIsLoading(false)
     }
   }
-
-  const planName =
-    subscriptionData?.plan === "facelessprenuer"
-      ? "Facelessprenuer"
-      : subscriptionData?.plan === "faceless_pro"
-        ? "Faceless Pro"
-        : "Creator VIP"
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>

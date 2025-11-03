@@ -35,8 +35,8 @@ const PLAN_CONFIGS = {
       isActive: true,
     },
   },
-  facelessprenuer: {
-    plan: "facelessprenuer" as const,
+  creator_pro: {
+    plan: "creator_pro" as const,
     features: {
       maxBundles: null,
       maxVideosPerBundle: null,
@@ -49,8 +49,8 @@ const PLAN_CONFIGS = {
       isActive: true,
     },
   },
-  creator_pro: {
-    plan: "creator_pro" as const,
+  facelessprenuer: {
+    plan: "facelessprenuer" as const,
     features: {
       maxBundles: null,
       maxVideosPerBundle: null,
