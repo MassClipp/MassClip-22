@@ -25,8 +25,11 @@ interface EBook {
   coverUrl: string
   pageCount: number
   status: "draft" | "published"
-  createdAt: string // Changed from any to string (ISO date string)
-  updatedAt: string // Changed from any to string (ISO date string)
+  price?: number
+  stripeProductId?: string
+  stripePriceId?: string
+  createdAt: string
+  updatedAt: string
 }
 
 export default function EBooksPage() {
@@ -285,11 +288,21 @@ export default function EBooksPage() {
                   <p className="text-sm text-zinc-400 line-clamp-2">{ebook.description}</p>
                 </CardHeader>
                 <CardContent className="p-4 pt-0">
-                  <div className="flex items-center justify-between text-xs text-zinc-500">
-                    <span>{ebook.pageCount} pages</span>
-                    <span>
-                      {ebook.createdAt ? formatDistanceToNow(new Date(ebook.createdAt), { addSuffix: true }) : ""}
-                    </span>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs text-zinc-500">
+                      <span>{ebook.pageCount} pages</span>
+                      <span>
+                        {ebook.createdAt ? formatDistanceToNow(new Date(ebook.createdAt), { addSuffix: true }) : ""}
+                      </span>
+                    </div>
+                    {ebook.price && (
+                      <div className="flex items-center justify-between pt-2 border-t border-zinc-800">
+                        <span className="text-lg font-semibold text-white">${ebook.price.toFixed(2)}</span>
+                        <span className="text-xs text-zinc-500">
+                          {ebook.status === "published" ? "For Sale" : "Not Listed"}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
