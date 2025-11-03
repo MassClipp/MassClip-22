@@ -1277,13 +1277,14 @@ function EBookCard({ item, username }: { item: ContentItem; username: string | n
             >
               See Details
             </button>
+            {/* CHANGE: Fixed creatorId to use user.uid instead of item.id */}
             <UnlockButton
               ebookId={item.id}
               price={item.price || 0}
               title={item.title}
               stripePriceId={item.stripePriceId}
               user={user}
-              creatorId={item.id}
+              creatorId={user?.uid}
               variant="default"
               className="flex-1 bg-white text-black hover:bg-zinc-100 rounded-md font-medium text-sm px-4 py-2.5 transition-colors"
             />

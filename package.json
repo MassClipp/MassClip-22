@@ -77,7 +77,7 @@
     "openai": "latest",
     "path": "latest",
     "prisma": "latest",
-    "probe-image-size": "latest",
+    "probe-image-size": "7.2.3",
     "react": "^19",
     "react-day-picker": "latest",
     "react-dom": "^19",

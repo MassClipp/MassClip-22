@@ -1,7 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { adminAuth, adminDb } from "@/lib/firebase-admin"
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3"
-import probe from "probe-image-size"
 
 export const runtime = "nodejs"
 export const maxDuration = 60
@@ -57,33 +56,7 @@ export async function POST(request: NextRequest) {
     const fileBuffer = await file.arrayBuffer()
     const buffer = Buffer.from(fileBuffer)
 
-    try {
-      const dimensions = await probe(buffer)
-      console.log(`[v0] Image dimensions: ${dimensions.width}x${dimensions.height}`)
-
-      if (dimensions.width !== dimensions.height) {
-        return NextResponse.json(
-          {
-            error: "Invalid aspect ratio",
-            details:
-              "eBook covers must be square (1:1 aspect ratio). Please upload an image with equal width and height.",
-            currentDimensions: `${dimensions.width}x${dimensions.height}`,
-          },
-          { status: 400 },
-        )
-      }
-
-      console.log(`[v0] ✅ Image aspect ratio validated: ${dimensions.width}x${dimensions.height}`)
-    } catch (probeError) {
-      console.error("[v0] Failed to probe image dimensions:", probeError)
-      return NextResponse.json(
-        {
-          error: "Invalid image file",
-          details: "Unable to read image dimensions. Please ensure you're uploading a valid image file.",
-        },
-        { status: 400 },
-      )
-    }
+    console.log(`[v0] Processing cover upload: ${file.name}, size: ${file.size} bytes`)
 
     const fileExtension = file.name.split(".").pop()
     const fileName = `ebooks/${uid}/${ebookId}/cover.${fileExtension}`

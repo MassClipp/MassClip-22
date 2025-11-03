@@ -213,7 +213,7 @@ importers:
         specifier: latest
         version: 6.18.0(typescript@5.0.2)
       probe-image-size:
-        specifier: latest
+        specifier: 7.2.3
         version: 7.2.3
       react:
         specifier: ^19
