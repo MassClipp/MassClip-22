@@ -150,6 +150,39 @@ export async function POST(request: NextRequest) {
     const bundleStripePriceId = bundle.priceId || bundle.stripePriceId
     const stripeAccountId = bundle.stripeAccountId
 
+    if (!bundleStripePriceId) {
+      console.error("❌ [Checkout API] Missing Stripe price ID for item:", {
+        itemId,
+        itemType,
+        title: bundle.title,
+        availableFields: Object.keys(bundle),
+      })
+      return NextResponse.json(
+        {
+          error: "Item pricing not configured",
+          code: "MISSING_PRICE_ID",
+          message: "This item does not have a valid Stripe price configured. Please contact the creator.",
+        },
+        { status: 400 },
+      )
+    }
+
+    if (!stripeAccountId) {
+      console.error("❌ [Checkout API] Missing Stripe account ID for item:", {
+        itemId,
+        itemType,
+        creatorId: bundle.creatorId,
+      })
+      return NextResponse.json(
+        {
+          error: "Creator account not configured",
+          code: "MISSING_STRIPE_ACCOUNT",
+          message: "The creator has not properly configured their payment account.",
+        },
+        { status: 400 },
+      )
+    }
+
     // Get creator's connected Stripe account
     const connectedAccount = await getConnectedStripeAccount(bundle.creatorId)
 

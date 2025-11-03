@@ -46,8 +46,47 @@ export default function CreateEBookPage() {
         })
         return
       }
-      setCoverFile(file)
-      setCoverPreview(URL.createObjectURL(file))
+
+      const img = new Image()
+      const objectUrl = URL.createObjectURL(file)
+
+      img.onload = () => {
+        const aspectRatio = img.width / img.height
+        const isSquare = Math.abs(aspectRatio - 1.0) < 0.05 // 5% tolerance
+
+        URL.revokeObjectURL(objectUrl)
+
+        if (!isSquare) {
+          toast({
+            title: "Invalid Cover Dimensions",
+            description: `eBook covers must be square (1:1 aspect ratio). Your image is ${img.width}×${img.height}. Please upload a square image.`,
+            variant: "destructive",
+          })
+          // Clear the file input
+          if (coverInputRef.current) {
+            coverInputRef.current.value = ""
+          }
+          return
+        }
+
+        // If validation passes, set the cover
+        setCoverFile(file)
+        setCoverPreview(objectUrl)
+      }
+
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl)
+        toast({
+          title: "Invalid Image",
+          description: "Could not read the image file. Please try a different image.",
+          variant: "destructive",
+        })
+        if (coverInputRef.current) {
+          coverInputRef.current.value = ""
+        }
+      }
+
+      img.src = objectUrl
     }
   }
 
