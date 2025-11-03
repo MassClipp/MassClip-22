@@ -3,7 +3,7 @@ import { adminDb as db } from "@/lib/firebase-admin"
 import { FieldValue } from "firebase-admin/firestore"
 
 // --- Types ---
-type MembershipPlan = "free" | "creator_pro" | "starter"
+type MembershipPlan = "free" | "creator_pro" | "starter" | "faceless_pro" | "facelessprenuer"
 type MembershipStatus = "active" | "inactive" | "canceled" | "past_due" | "trialing"
 
 const PLAN_CONFIGS = {
@@ -18,6 +18,34 @@ const PLAN_CONFIGS = {
       premiumContent: false,
       prioritySupport: false,
       unlimitedDownloads: false,
+      isActive: true,
+    },
+  },
+  faceless_pro: {
+    plan: "faceless_pro" as const,
+    features: {
+      maxBundles: 999999,
+      maxVideosPerBundle: 999999,
+      maxFolders: 999999,
+      noWatermark: false,
+      platformFeePercentage: 10,
+      premiumContent: false,
+      prioritySupport: false,
+      unlimitedDownloads: false,
+      isActive: true,
+    },
+  },
+  facelessprenuer: {
+    plan: "facelessprenuer" as const,
+    features: {
+      maxBundles: null,
+      maxVideosPerBundle: null,
+      maxFolders: null,
+      noWatermark: true,
+      platformFeePercentage: 10,
+      premiumContent: true,
+      prioritySupport: true,
+      unlimitedDownloads: true,
       isActive: true,
     },
   },
@@ -61,13 +89,12 @@ const PRICE_ID_TO_PLAN: Record<string, keyof typeof PLAN_CONFIGS> = {
   [process.env.CREATOR_PRO_FIRST || ""]: "creator_pro",
   [process.env.CREATOR_PRO_REGULAR || ""]: "creator_pro",
 
-  // Faceless Pro (formerly Starter Plan)
-  [process.env.FACELESS_PRO_FIRST || ""]: "starter",
-  [process.env.FACELESS_PRO_REGULAR || ""]: "starter",
+  // Faceless Pro (new $29/month plan, no trial)
+  [process.env.FACELESS_PRO_FIRST || ""]: "faceless_pro",
 
-  // Facelessprenuer (formerly Creator VIP)
-  [process.env.FACELESSPRENUER_FIRST || ""]: "creator_pro",
-  [process.env.FACELESSPRENUER_REGULAR || ""]: "creator_pro",
+  // Facelessprenuer (new $39/month plan with 3-day trial)
+  [process.env.FACELESSPRENUER_FIRST || ""]: "facelessprenuer",
+  [process.env.FACELESSPRENUER_REGULAR || ""]: "facelessprenuer",
 }
 
 // --- Helper Functions ---

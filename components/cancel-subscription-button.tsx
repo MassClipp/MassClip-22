@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import {
@@ -22,6 +22,26 @@ export function CancelSubscriptionButton() {
   const { toast } = useToast()
   const router = useRouter()
   const { user } = useAuth()
+  const [subscriptionData, setSubscriptionData] = useState<any>(null)
+
+  useEffect(() => {
+    const fetchSubscription = async () => {
+      if (!user) return
+      try {
+        const token = await user.getIdToken()
+        const response = await fetch("/api/membership-status", {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (response.ok) {
+          const data = await response.json()
+          setSubscriptionData(data)
+        }
+      } catch (error) {
+        console.error("Error fetching subscription:", error)
+      }
+    }
+    fetchSubscription()
+  }, [user])
 
   const handleCancel = async () => {
     if (!user) {
@@ -75,6 +95,13 @@ export function CancelSubscriptionButton() {
     }
   }
 
+  const planName =
+    subscriptionData?.plan === "facelessprenuer"
+      ? "Facelessprenuer"
+      : subscriptionData?.plan === "faceless_pro"
+        ? "Faceless Pro"
+        : "Creator VIP"
+
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
@@ -89,10 +116,10 @@ export function CancelSubscriptionButton() {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-red-500" />
-            Cancel Your Creator VIP Subscription
+            Cancel Your {planName} Subscription
           </DialogTitle>
           <DialogDescription className="text-zinc-400">
-            Are you sure you want to cancel your Creator VIP subscription?
+            Are you sure you want to cancel your {planName} subscription?
           </DialogDescription>
         </DialogHeader>
 
@@ -102,7 +129,7 @@ export function CancelSubscriptionButton() {
             <ul className="list-disc pl-5 space-y-1 text-sm text-zinc-300">
               <li>Your subscription will remain active until the end of your current billing period</li>
               <li>You'll automatically return to the Free plan after that date</li>
-              <li>You can resubscribe at any time to regain Creator VIP features</li>
+              <li>You can resubscribe at any time to regain {planName} features</li>
               <li>No refunds are provided for partial billing periods</li>
             </ul>
           </div>

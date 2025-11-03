@@ -249,6 +249,11 @@ export async function POST(request: Request) {
           return NextResponse.json({ received: true })
         }
 
+        await adminDb.collection("users").doc(uid).update({
+          storefrontActive: false,
+          updatedAt: FieldValue.serverTimestamp(),
+        })
+
         await adminDb.collection("memberships").doc(uid).delete()
         await adminDb.collection("freeUsers").doc(uid).set({
           uid,
@@ -258,7 +263,7 @@ export async function POST(request: Request) {
           createdAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         })
-        console.log(`[FACELESS PRO WEBHOOK] User ${uid} moved to free tier`)
+        console.log(`[FACELESS PRO WEBHOOK] User ${uid} moved to free tier and storefront deactivated`)
         break
       }
 

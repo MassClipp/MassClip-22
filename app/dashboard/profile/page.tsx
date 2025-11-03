@@ -781,9 +781,13 @@ export default function ProfilePage() {
                                   <div>
                                     <p className="text-amber-200 text-sm font-medium mb-1">Subscription Canceled</p>
                                     <p className="text-amber-300/80 text-xs leading-relaxed">
-                                      Your VIP access continues until{" "}
-                                      {safelyFormatDate(subscriptionData.currentPeriodEnd)}. After this date, you will
-                                      lose access to selling features and your storefront will be disabled.
+                                      Your{" "}
+                                      {subscriptionData?.plan === "facelessprenuer"
+                                        ? "Facelessprenuer"
+                                        : "Faceless Pro"}{" "}
+                                      access continues until {safelyFormatDate(subscriptionData.currentPeriodEnd)}.
+                                      After this date, you will lose access to selling features and your storefront will
+                                      be disabled.
                                     </p>
                                   </div>
                                 </div>
@@ -836,9 +840,10 @@ export default function ProfilePage() {
                               <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
                                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
                                 <span className="text-sm text-zinc-200">
-                                  {subscriptionData?.plan === "faceless_pro"
+                                  {subscriptionData?.plan === "faceless_pro" ||
+                                  subscriptionData?.plan === "facelessprenuer"
                                     ? "Only 10% Platform Fee"
-                                    : "Only 10% Platform Fee"}
+                                    : "20% Platform Fee"}
                                 </span>
                               </div>
                             </>
