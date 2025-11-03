@@ -2,7 +2,9 @@
 
 import Stripe from "stripe"
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+const stripeKey = process.env.STRIPE_TEST_KEY || process.env.STRIPE_SECRET_KEY_TEST || process.env.STRIPE_SECRET_KEY!
+
+const stripe = new Stripe(stripeKey, {
   apiVersion: "2023-10-16",
 })
 
@@ -10,10 +12,11 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 export { stripe }
 
 // Environment detection
-export const isTestMode = !process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_")
+export const isTestMode =
+  !!process.env.STRIPE_TEST_KEY ||
+  !!process.env.STRIPE_SECRET_KEY_TEST ||
+  !process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_")
 export const isLiveMode = process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_")
-
-export default stripe
 
 // Helper function to retrieve sessions from connected accounts
 export async function retrieveSessionWithAccount(sessionId: string, connectedAccountId: string) {
@@ -58,3 +61,5 @@ export async function retrieveSessionSmart(sessionId: string, connectedAccountId
     throw error
   }
 }
+
+export default stripe
