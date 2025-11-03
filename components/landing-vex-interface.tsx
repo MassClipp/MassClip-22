@@ -356,10 +356,10 @@ export function LandingVexInterface() {
               <div className="max-w-4xl w-full space-y-8">
                 <div className="text-center space-y-4">
                   <h1 className="text-5xl lg:text-7xl font-medium text-white tracking-tight">
-                    Earn Passive Income With Your Faceless Content.
+                    Your Faceless Business Starts Here
                   </h1>
                   <p className="text-lg lg:text-xl text-white/60 font-light max-w-3xl mx-auto">
-                    Thousands of creators generate daily revenue selling content. Why not join them?
+                    You already have a faceless theme page, now it's time to start that faceless business.
                   </p>
                 </div>
 
@@ -450,7 +450,7 @@ export function LandingVexInterface() {
                 </div>
 
                 <p className="text-sm text-white/40 text-center font-light">
-                  Upload up to 5 files without signup • Sign up for unlimited uploads and to take action
+                  Everything you need to monetize your faceless content -- all in one platform.
                 </p>
 
                 <p className="lg:hidden text-xs text-white/30 text-center font-light mt-4">
