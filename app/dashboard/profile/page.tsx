@@ -761,53 +761,36 @@ export default function ProfilePage() {
                           </Badge>
                         </div>
 
-                        {subscriptionData?.currentPeriodEnd && (
-                          <div className="p-4 rounded-lg border border-zinc-700/50 bg-zinc-800/20">
-                            <div className="flex justify-between items-center mb-3">
-                              <span className="text-sm font-medium text-zinc-300">
-                                {subscriptionData?.cancelAtPeriodEnd || subscriptionData?.status === "canceled"
-                                  ? "Access Ends"
-                                  : "Next Billing"}
-                              </span>
-                              <span className="text-sm font-mono text-white">
-                                {safelyFormatDate(subscriptionData.currentPeriodEnd)}
-                              </span>
+                        {subscriptionData?.cancelAtPeriodEnd || subscriptionData?.status === "canceled" ? (
+                          <div className="p-3 rounded-md bg-amber-900/20 border border-amber-500/30">
+                            <div className="flex items-start gap-3">
+                              <div className="w-2 h-2 rounded-full bg-amber-500 mt-2 flex-shrink-0"></div>
+                              <div>
+                                <p className="text-amber-200 text-sm font-medium mb-1">Subscription Canceled</p>
+                                <p className="text-amber-300/80 text-xs leading-relaxed">
+                                  Your{" "}
+                                  {subscriptionData?.plan === "facelessprenuer" ? "Facelessprenuer" : "Faceless Pro"}{" "}
+                                  access continues until {safelyFormatDate(subscriptionData.currentPeriodEnd)}. After
+                                  this date, you will lose access to selling features and your storefront will be
+                                  automatically disabled.
+                                </p>
+                              </div>
                             </div>
-
-                            {subscriptionData?.cancelAtPeriodEnd || subscriptionData?.status === "canceled" ? (
-                              <div className="p-3 rounded-md bg-amber-900/20 border border-amber-500/30">
-                                <div className="flex items-start gap-3">
-                                  <div className="w-2 h-2 rounded-full bg-amber-500 mt-2 flex-shrink-0"></div>
-                                  <div>
-                                    <p className="text-amber-200 text-sm font-medium mb-1">Subscription Canceled</p>
-                                    <p className="text-amber-300/80 text-xs leading-relaxed">
-                                      Your{" "}
-                                      {subscriptionData?.plan === "facelessprenuer"
-                                        ? "Facelessprenuer"
-                                        : "Faceless Pro"}{" "}
-                                      access continues until {safelyFormatDate(subscriptionData.currentPeriodEnd)}.
-                                      After this date, you will lose access to selling features and your storefront will
-                                      be disabled.
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-                            ) : subscriptionData?.isActive ? (
-                              <div className="p-3 rounded-md bg-emerald-900/20 border border-emerald-500/30">
-                                <div className="flex items-start gap-3">
-                                  <div className="w-2 h-2 rounded-full bg-emerald-500 mt-2 flex-shrink-0"></div>
-                                  <div>
-                                    <p className="text-emerald-200 text-sm font-medium mb-1">Active Subscription</p>
-                                    <p className="text-emerald-300/80 text-xs leading-relaxed">
-                                      Your subscription will automatically renew on{" "}
-                                      {safelyFormatDate(subscriptionData.currentPeriodEnd)}.
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-                            ) : null}
                           </div>
-                        )}
+                        ) : subscriptionData?.isActive ? (
+                          <div className="p-3 rounded-md bg-emerald-900/20 border border-emerald-500/30">
+                            <div className="flex items-start gap-3">
+                              <div className="w-2 h-2 rounded-full bg-emerald-500 mt-2 flex-shrink-0"></div>
+                              <div>
+                                <p className="text-emerald-200 text-sm font-medium mb-1">Active Subscription</p>
+                                <p className="text-emerald-300/80 text-xs leading-relaxed">
+                                  Your subscription will automatically renew on{" "}
+                                  {safelyFormatDate(subscriptionData.currentPeriodEnd)}.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
 
                       <div className="space-y-4">
@@ -840,10 +823,9 @@ export default function ProfilePage() {
                               <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
                                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
                                 <span className="text-sm text-zinc-200">
-                                  {subscriptionData?.plan === "faceless_pro" ||
-                                  subscriptionData?.plan === "facelessprenuer"
+                                  {subscriptionData?.plan === "faceless_pro"
                                     ? "Only 10% Platform Fee"
-                                    : "20% Platform Fee"}
+                                    : "Only 10% Platform Fee"}
                                 </span>
                               </div>
                             </>

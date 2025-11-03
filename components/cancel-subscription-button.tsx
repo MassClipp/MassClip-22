@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import {
@@ -22,39 +22,7 @@ export function CancelSubscriptionButton() {
   const { toast } = useToast()
   const router = useRouter()
   const { user } = useAuth()
-  const [planName, setPlanName] = useState<string>("subscription")
-
-  useEffect(() => {
-    const fetchPlanName = async () => {
-      if (!user) return
-
-      try {
-        const token = await user.getIdToken()
-        const response = await fetch("/api/membership-status", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
-
-        if (response.ok) {
-          const data = await response.json()
-          if (data.plan === "facelessprenuer") {
-            setPlanName("Facelessprenuer")
-          } else if (data.plan === "faceless_pro") {
-            setPlanName("Faceless Pro")
-          } else if (data.plan === "creator_pro") {
-            setPlanName("Creator VIP")
-          } else {
-            setPlanName("subscription")
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching plan name:", error)
-      }
-    }
-
-    fetchPlanName()
-  }, [user])
+  const planName = "Creator VIP" // Assuming planName is a variable that holds the current plan name
 
   const handleCancel = async () => {
     if (!user) {
@@ -135,8 +103,9 @@ export function CancelSubscriptionButton() {
             <ul className="list-disc pl-5 space-y-1 text-sm text-zinc-300">
               <li>Your subscription will remain active until the end of your current billing period</li>
               <li>You'll automatically return to the Free plan after that date</li>
-              <li>You can resubscribe at any time to regain {planName} features</li>
+              <li>You can resubscribe at any time to regain premium features</li>
               <li>No refunds are provided for partial billing periods</li>
+              <li>Your storefront will be automatically deactivated when your subscription ends</li>
             </ul>
           </div>
         </div>
