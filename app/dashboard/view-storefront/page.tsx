@@ -28,6 +28,15 @@ import {
   Download,
   Pause,
   ExternalLink,
+  Youtube,
+  Music,
+  ShoppingBag,
+  MessageCircle,
+  Twitch,
+  Facebook,
+  Linkedin,
+  Github,
+  Mail,
 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
@@ -71,6 +80,18 @@ export default function ViewStorefrontPage() {
     instagram?: string
     twitter?: string
     website?: string
+    youtube?: string
+    tiktok?: string
+    discord?: string
+    twitch?: string
+    shopify?: string
+    skool?: string
+    facebook?: string
+    linkedin?: string
+    github?: string
+    spotify?: string
+    appleMusic?: string
+    email?: string
   }>({})
   const [freeContent, setFreeContent] = useState<ContentItem[]>([])
   const [premiumContent, setPremiumContent] = useState<ContentItem[]>([])
@@ -88,6 +109,18 @@ export default function ViewStorefrontPage() {
     instagram?: string
     twitter?: string
     website?: string
+    youtube?: string
+    tiktok?: string
+    discord?: string
+    twitch?: string
+    shopify?: string
+    skool?: string
+    facebook?: string
+    linkedin?: string
+    github?: string
+    spotify?: string
+    appleMusic?: string
+    email?: string
   }>({})
   const [storefrontActive, setStorefrontActive] = useState(false)
   const [updating, setUpdating] = useState(false)
@@ -535,7 +568,79 @@ export default function ViewStorefrontPage() {
                   <Input
                     value={tempSocials.twitter || ""}
                     onChange={(e) => setTempSocials({ ...tempSocials, twitter: e.target.value })}
-                    placeholder="Twitter username"
+                    placeholder="Twitter/X username"
+                    className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
+                  />
+                  <Input
+                    value={tempSocials.tiktok || ""}
+                    onChange={(e) => setTempSocials({ ...tempSocials, tiktok: e.target.value })}
+                    placeholder="TikTok username"
+                    className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
+                  />
+                  <Input
+                    value={tempSocials.youtube || ""}
+                    onChange={(e) => setTempSocials({ ...tempSocials, youtube: e.target.value })}
+                    placeholder="YouTube channel URL"
+                    className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
+                  />
+                  <Input
+                    value={tempSocials.twitch || ""}
+                    onChange={(e) => setTempSocials({ ...tempSocials, twitch: e.target.value })}
+                    placeholder="Twitch username"
+                    className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
+                  />
+                  <Input
+                    value={tempSocials.discord || ""}
+                    onChange={(e) => setTempSocials({ ...tempSocials, discord: e.target.value })}
+                    placeholder="Discord invite link"
+                    className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
+                  />
+                  <Input
+                    value={tempSocials.skool || ""}
+                    onChange={(e) => setTempSocials({ ...tempSocials, skool: e.target.value })}
+                    placeholder="Skool community URL"
+                    className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
+                  />
+                  <Input
+                    value={tempSocials.shopify || ""}
+                    onChange={(e) => setTempSocials({ ...tempSocials, shopify: e.target.value })}
+                    placeholder="Shopify store URL"
+                    className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
+                  />
+                  <Input
+                    value={tempSocials.facebook || ""}
+                    onChange={(e) => setTempSocials({ ...tempSocials, facebook: e.target.value })}
+                    placeholder="Facebook profile/page"
+                    className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
+                  />
+                  <Input
+                    value={tempSocials.linkedin || ""}
+                    onChange={(e) => setTempSocials({ ...tempSocials, linkedin: e.target.value })}
+                    placeholder="LinkedIn profile URL"
+                    className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
+                  />
+                  <Input
+                    value={tempSocials.github || ""}
+                    onChange={(e) => setTempSocials({ ...tempSocials, github: e.target.value })}
+                    placeholder="GitHub username"
+                    className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
+                  />
+                  <Input
+                    value={tempSocials.spotify || ""}
+                    onChange={(e) => setTempSocials({ ...tempSocials, spotify: e.target.value })}
+                    placeholder="Spotify artist URL"
+                    className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
+                  />
+                  <Input
+                    value={tempSocials.appleMusic || ""}
+                    onChange={(e) => setTempSocials({ ...tempSocials, appleMusic: e.target.value })}
+                    placeholder="Apple Music URL"
+                    className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
+                  />
+                  <Input
+                    value={tempSocials.email || ""}
+                    onChange={(e) => setTempSocials({ ...tempSocials, email: e.target.value })}
+                    placeholder="Contact email"
                     className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
                   />
                   <Input
@@ -564,7 +669,7 @@ export default function ViewStorefrontPage() {
                   </div>
                 </div>
               ) : (
-                <div className="flex gap-2 justify-center">
+                <div className="flex gap-2 justify-center flex-wrap">
                   {socialLinks.instagram && (
                     <Button
                       variant="ghost"
@@ -583,6 +688,126 @@ export default function ViewStorefrontPage() {
                       onClick={() => window.open(`https://twitter.com/${socialLinks.twitter}`, "_blank")}
                     >
                       <Twitter className="w-4 h-4" />
+                    </Button>
+                  )}
+                  {socialLinks.tiktok && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                      onClick={() => window.open(`https://tiktok.com/@${socialLinks.tiktok}`, "_blank")}
+                    >
+                      <Music className="w-4 h-4" />
+                    </Button>
+                  )}
+                  {socialLinks.youtube && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                      onClick={() => window.open(socialLinks.youtube, "_blank")}
+                    >
+                      <Youtube className="w-4 h-4" />
+                    </Button>
+                  )}
+                  {socialLinks.twitch && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                      onClick={() => window.open(`https://twitch.tv/${socialLinks.twitch}`, "_blank")}
+                    >
+                      <Twitch className="w-4 h-4" />
+                    </Button>
+                  )}
+                  {socialLinks.discord && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                      onClick={() => window.open(socialLinks.discord, "_blank")}
+                    >
+                      <MessageCircle className="w-4 h-4" />
+                    </Button>
+                  )}
+                  {socialLinks.skool && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                      onClick={() => window.open(socialLinks.skool, "_blank")}
+                    >
+                      <Users className="w-4 h-4" />
+                    </Button>
+                  )}
+                  {socialLinks.shopify && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                      onClick={() => window.open(socialLinks.shopify, "_blank")}
+                    >
+                      <ShoppingBag className="w-4 h-4" />
+                    </Button>
+                  )}
+                  {socialLinks.facebook && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                      onClick={() => window.open(socialLinks.facebook, "_blank")}
+                    >
+                      <Facebook className="w-4 h-4" />
+                    </Button>
+                  )}
+                  {socialLinks.linkedin && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                      onClick={() => window.open(socialLinks.linkedin, "_blank")}
+                    >
+                      <Linkedin className="w-4 h-4" />
+                    </Button>
+                  )}
+                  {socialLinks.github && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                      onClick={() => window.open(`https://github.com/${socialLinks.github}`, "_blank")}
+                    >
+                      <Github className="w-4 h-4" />
+                    </Button>
+                  )}
+                  {socialLinks.spotify && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                      onClick={() => window.open(socialLinks.spotify, "_blank")}
+                    >
+                      <Music className="w-4 h-4" />
+                    </Button>
+                  )}
+                  {socialLinks.appleMusic && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                      onClick={() => window.open(socialLinks.appleMusic, "_blank")}
+                    >
+                      <Music className="w-4 h-4" />
+                    </Button>
+                  )}
+                  {socialLinks.email && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                      onClick={() => window.open(`mailto:${socialLinks.email}`, "_blank")}
+                    >
+                      <Mail className="w-4 h-4" />
                     </Button>
                   )}
                   {socialLinks.website && (
@@ -739,7 +964,79 @@ export default function ViewStorefrontPage() {
                     <Input
                       value={tempSocials.twitter || ""}
                       onChange={(e) => setTempSocials({ ...tempSocials, twitter: e.target.value })}
-                      placeholder="Twitter username"
+                      placeholder="Twitter/X username"
+                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                    />
+                    <Input
+                      value={tempSocials.tiktok || ""}
+                      onChange={(e) => setTempSocials({ ...tempSocials, tiktok: e.target.value })}
+                      placeholder="TikTok username"
+                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                    />
+                    <Input
+                      value={tempSocials.youtube || ""}
+                      onChange={(e) => setTempSocials({ ...tempSocials, youtube: e.target.value })}
+                      placeholder="YouTube channel URL"
+                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                    />
+                    <Input
+                      value={tempSocials.twitch || ""}
+                      onChange={(e) => setTempSocials({ ...tempSocials, twitch: e.target.value })}
+                      placeholder="Twitch username"
+                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                    />
+                    <Input
+                      value={tempSocials.discord || ""}
+                      onChange={(e) => setTempSocials({ ...tempSocials, discord: e.target.value })}
+                      placeholder="Discord invite link"
+                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                    />
+                    <Input
+                      value={tempSocials.skool || ""}
+                      onChange={(e) => setTempSocials({ ...tempSocials, skool: e.target.value })}
+                      placeholder="Skool community URL"
+                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                    />
+                    <Input
+                      value={tempSocials.shopify || ""}
+                      onChange={(e) => setTempSocials({ ...tempSocials, shopify: e.target.value })}
+                      placeholder="Shopify store URL"
+                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                    />
+                    <Input
+                      value={tempSocials.facebook || ""}
+                      onChange={(e) => setTempSocials({ ...tempSocials, facebook: e.target.value })}
+                      placeholder="Facebook profile/page"
+                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                    />
+                    <Input
+                      value={tempSocials.linkedin || ""}
+                      onChange={(e) => setTempSocials({ ...tempSocials, linkedin: e.target.value })}
+                      placeholder="LinkedIn profile URL"
+                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                    />
+                    <Input
+                      value={tempSocials.github || ""}
+                      onChange={(e) => setTempSocials({ ...tempSocials, github: e.target.value })}
+                      placeholder="GitHub username"
+                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                    />
+                    <Input
+                      value={tempSocials.spotify || ""}
+                      onChange={(e) => setTempSocials({ ...tempSocials, spotify: e.target.value })}
+                      placeholder="Spotify artist URL"
+                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                    />
+                    <Input
+                      value={tempSocials.appleMusic || ""}
+                      onChange={(e) => setTempSocials({ ...tempSocials, appleMusic: e.target.value })}
+                      placeholder="Apple Music URL"
+                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                    />
+                    <Input
+                      value={tempSocials.email || ""}
+                      onChange={(e) => setTempSocials({ ...tempSocials, email: e.target.value })}
+                      placeholder="Contact email"
                       className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
                     />
                     <Input
@@ -768,7 +1065,7 @@ export default function ViewStorefrontPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     {socialLinks.instagram && (
                       <Button
                         variant="ghost"
@@ -787,6 +1084,126 @@ export default function ViewStorefrontPage() {
                         onClick={() => window.open(`https://twitter.com/${socialLinks.twitter}`, "_blank")}
                       >
                         <Twitter className="w-4 h-4" />
+                      </Button>
+                    )}
+                    {socialLinks.tiktok && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                        onClick={() => window.open(`https://tiktok.com/@${socialLinks.tiktok}`, "_blank")}
+                      >
+                        <Music className="w-4 h-4" />
+                      </Button>
+                    )}
+                    {socialLinks.youtube && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                        onClick={() => window.open(socialLinks.youtube, "_blank")}
+                      >
+                        <Youtube className="w-4 h-4" />
+                      </Button>
+                    )}
+                    {socialLinks.twitch && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                        onClick={() => window.open(`https://twitch.tv/${socialLinks.twitch}`, "_blank")}
+                      >
+                        <Twitch className="w-4 h-4" />
+                      </Button>
+                    )}
+                    {socialLinks.discord && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                        onClick={() => window.open(socialLinks.discord, "_blank")}
+                      >
+                        <MessageCircle className="w-4 h-4" />
+                      </Button>
+                    )}
+                    {socialLinks.skool && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                        onClick={() => window.open(socialLinks.skool, "_blank")}
+                      >
+                        <Users className="w-4 h-4" />
+                      </Button>
+                    )}
+                    {socialLinks.shopify && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                        onClick={() => window.open(socialLinks.shopify, "_blank")}
+                      >
+                        <ShoppingBag className="w-4 h-4" />
+                      </Button>
+                    )}
+                    {socialLinks.facebook && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                        onClick={() => window.open(socialLinks.facebook, "_blank")}
+                      >
+                        <Facebook className="w-4 h-4" />
+                      </Button>
+                    )}
+                    {socialLinks.linkedin && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                        onClick={() => window.open(socialLinks.linkedin, "_blank")}
+                      >
+                        <Linkedin className="w-4 h-4" />
+                      </Button>
+                    )}
+                    {socialLinks.github && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                        onClick={() => window.open(`https://github.com/${socialLinks.github}`, "_blank")}
+                      >
+                        <Github className="w-4 h-4" />
+                      </Button>
+                    )}
+                    {socialLinks.spotify && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                        onClick={() => window.open(socialLinks.spotify, "_blank")}
+                      >
+                        <Music className="w-4 h-4" />
+                      </Button>
+                    )}
+                    {socialLinks.appleMusic && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                        onClick={() => window.open(socialLinks.appleMusic, "_blank")}
+                      >
+                        <Music className="w-4 h-4" />
+                      </Button>
+                    )}
+                    {socialLinks.email && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                        onClick={() => window.open(`mailto:${socialLinks.email}`, "_blank")}
+                      >
+                        <Mail className="w-4 h-4" />
                       </Button>
                     )}
                     {socialLinks.website && (
@@ -815,217 +1232,217 @@ export default function ViewStorefrontPage() {
               </div>
             </div>
           </div>
+        </div>
 
-          <div className="mb-8 sm:mb-12">
-            {/* Stats Row */}
-            <div className="flex items-center justify-center sm:justify-start gap-4 sm:gap-8 mb-6 text-xs sm:text-sm">
-              <div className="flex items-center gap-2 text-zinc-500">
-                <Calendar className="w-3 h-3 sm:w-4 sm:h-4" />
-                <span>Member since {getMemberSince()}</span>
-              </div>
-              <div className="flex items-center gap-2 text-zinc-500">
-                <Users className="w-3 h-3 sm:w-4 sm:h-4" />
-                <span>{freeContent.length} free</span>
-              </div>
-              <div className="flex items-center gap-2 text-zinc-500">
-                <Heart className="w-3 h-3 sm:w-4 sm:h-4" />
-                <span>{premiumContent.length} premium</span>
-              </div>
-              <div className="flex items-center gap-2 text-zinc-500">
-                <Package className="w-3 h-3 sm:w-4 sm:h-4" />
-                <span>{ebooksContent.length} eBooks</span>
-              </div>
+        <div className="mb-8 sm:mb-12">
+          {/* Stats Row */}
+          <div className="flex items-center justify-center sm:justify-start gap-4 sm:gap-8 mb-6 text-xs sm:text-sm">
+            <div className="flex items-center gap-2 text-zinc-500">
+              <Calendar className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span>Member since {getMemberSince()}</span>
             </div>
-
-            {/* Go Live Controls - Centered on mobile, right-aligned on desktop */}
-            <div className="flex flex-col items-center sm:items-end gap-3">
-              {username && (
-                <Button
-                  onClick={() => window.open(`/creator/${username}`, "_blank")}
-                  variant="outline"
-                  size="sm"
-                  className="border-zinc-700 hover:bg-zinc-800 text-zinc-300 hover:text-white mb-2"
-                >
-                  <ExternalLink className="w-4 h-4 mr-2" />
-                  View Storefront
-                </Button>
-              )}
-              <div className="flex items-center gap-3 bg-zinc-900/80 backdrop-blur-sm border border-zinc-800 rounded-lg px-4 py-2.5">
-                <div className="flex flex-col items-end">
-                  <span className="text-xs font-medium text-white">Go Live</span>
-                  {!isProUser && trialEligible && <span className="text-[10px] text-zinc-500 mt-0.5">Free trial</span>}
-                </div>
-                <Switch
-                  checked={storefrontActive}
-                  onCheckedChange={handleToggleStorefront}
-                  disabled={updating || (!isProUser && !storefrontActive && !planData?.plan?.includes("starter"))}
-                  className="data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-zinc-700"
-                />
-                {storefrontActive ? (
-                  <Badge className="bg-green-500/10 text-green-400 border-green-500/20">Live</Badge>
-                ) : (
-                  <Badge variant="secondary" className="bg-zinc-700 text-zinc-300">
-                    Offline
-                  </Badge>
-                )}
-              </div>
-              {!isProUser && !planData?.plan?.includes("starter") && (
-                <Button
-                  onClick={handleGoLiveClick}
-                  className="bg-white text-black hover:bg-zinc-100 font-medium text-sm px-6"
-                >
-                  Go Live
-                </Button>
-              )}
+            <div className="flex items-center gap-2 text-zinc-500">
+              <Users className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span>{freeContent.length} free</span>
+            </div>
+            <div className="flex items-center gap-2 text-zinc-500">
+              <Heart className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span>{premiumContent.length} premium</span>
+            </div>
+            <div className="flex items-center gap-2 text-zinc-500">
+              <Package className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span>{ebooksContent.length} eBooks</span>
             </div>
           </div>
 
-          {/* Tabs */}
-          <div className="mb-6 sm:mb-8">
-            <div className="flex items-center justify-center sm:justify-start gap-6 sm:gap-8 border-b border-zinc-800/50">
-              <button
-                onClick={() => setActiveTab("free")}
-                className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
-                  activeTab === "free" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
-                }`}
+          {/* Go Live Controls - Centered on mobile, right-aligned on desktop */}
+          <div className="flex flex-col items-center sm:items-end gap-3">
+            {username && (
+              <Button
+                onClick={() => window.open(`/creator/${username}`, "_blank")}
+                variant="outline"
+                size="sm"
+                className="border-zinc-700 hover:bg-zinc-800 text-zinc-300 hover:text-white mb-2"
               >
-                Free Content
-                {activeTab === "free" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
-              </button>
-              <button
-                onClick={() => setActiveTab("premium")}
-                className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
-                  activeTab === "premium" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
-                }`}
-              >
-                Premium Content
-                {activeTab === "premium" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
-              </button>
-              <button
-                onClick={() => setActiveTab("ebooks")}
-                className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
-                  activeTab === "ebooks" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
-                }`}
-              >
-                eBooks
-                {activeTab === "ebooks" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
-              </button>
+                <ExternalLink className="w-4 h-4 mr-2" />
+                View Storefront
+              </Button>
+            )}
+            <div className="flex items-center gap-3 bg-zinc-900/80 backdrop-blur-sm border border-zinc-800 rounded-lg px-4 py-2.5">
+              <div className="flex flex-col items-end">
+                <span className="text-xs font-medium text-white">Go Live</span>
+                {!isProUser && trialEligible && <span className="text-[10px] text-zinc-500 mt-0.5">Free trial</span>}
+              </div>
+              <Switch
+                checked={storefrontActive}
+                onCheckedChange={handleToggleStorefront}
+                disabled={updating || (!isProUser && !storefrontActive && !planData?.plan?.includes("starter"))}
+                className="data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-zinc-700"
+              />
+              {storefrontActive ? (
+                <Badge className="bg-green-500/10 text-green-400 border-green-500/20">Live</Badge>
+              ) : (
+                <Badge variant="secondary" className="bg-zinc-700 text-zinc-300">
+                  Offline
+                </Badge>
+              )}
             </div>
+            {!isProUser && !planData?.plan?.includes("starter") && (
+              <Button
+                onClick={handleGoLiveClick}
+                className="bg-white text-black hover:bg-zinc-100 font-medium text-sm px-6"
+              >
+                Go Live
+              </Button>
+            )}
           </div>
+        </div>
 
-          {/* Content with action buttons */}
-          <div className="pt-4 sm:pt-8">
-            {currentContent.length > 0 ? (
+        {/* Tabs */}
+        <div className="mb-6 sm:mb-8">
+          <div className="flex items-center justify-center sm:justify-start gap-6 sm:gap-8 border-b border-zinc-800/50">
+            <button
+              onClick={() => setActiveTab("free")}
+              className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
+                activeTab === "free" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
+              }`}
+            >
+              Free Content
+              {activeTab === "free" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
+            </button>
+            <button
+              onClick={() => setActiveTab("premium")}
+              className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
+                activeTab === "premium" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
+              }`}
+            >
+              Premium Content
+              {activeTab === "premium" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
+            </button>
+            <button
+              onClick={() => setActiveTab("ebooks")}
+              className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
+                activeTab === "ebooks" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
+              }`}
+            >
+              eBooks
+              {activeTab === "ebooks" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
+            </button>
+          </div>
+        </div>
+
+        {/* Content with action buttons */}
+        <div className="pt-4 sm:pt-8">
+          {currentContent.length > 0 ? (
+            <div
+              className={
+                activeTab === "premium" || activeTab === "ebooks"
+                  ? "flex flex-col items-center gap-6 sm:grid sm:grid-cols-3 sm:gap-8 sm:justify-items-center"
+                  : "grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 sm:gap-6 justify-items-center"
+              }
+            >
               <div
                 className={
                   activeTab === "premium" || activeTab === "ebooks"
-                    ? "flex flex-col items-center gap-6 sm:grid sm:grid-cols-3 sm:gap-8 sm:justify-items-center"
-                    : "grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 sm:gap-6 justify-items-center"
+                    ? "w-full max-w-sm aspect-[3/4] rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer flex flex-col items-center justify-center gap-3 group"
+                    : "w-full aspect-[9/16] rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer flex flex-col items-center justify-center gap-3 group"
+                }
+                onClick={() =>
+                  router.push(
+                    activeTab === "free"
+                      ? "/dashboard/free-content"
+                      : activeTab === "ebooks"
+                        ? "/dashboard/ebooks/create"
+                        : "/dashboard/bundles",
+                  )
                 }
               >
-                <div
-                  className={
-                    activeTab === "premium" || activeTab === "ebooks"
-                      ? "w-full max-w-sm aspect-[3/4] rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer flex flex-col items-center justify-center gap-3 group"
-                      : "w-full aspect-[9/16] rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer flex flex-col items-center justify-center gap-3 group"
-                  }
-                  onClick={() =>
-                    router.push(
-                      activeTab === "free"
-                        ? "/dashboard/free-content"
-                        : activeTab === "ebooks"
-                          ? "/dashboard/ebooks/create"
-                          : "/dashboard/bundles",
-                    )
-                  }
-                >
-                  <div className="w-12 h-12 rounded-full bg-zinc-800 group-hover:bg-zinc-700 transition-colors flex items-center justify-center">
-                    {activeTab === "free" ? (
-                      <UploadIcon className="w-6 h-6 text-zinc-400 group-hover:text-white transition-colors" />
-                    ) : (
-                      <Package className="w-6 h-6 text-zinc-400 group-hover:text-white transition-colors" />
-                    )}
-                  </div>
-                  <p className="text-sm text-zinc-400 group-hover:text-zinc-300 transition-colors font-medium">
-                    {activeTab === "free" ? "Add Content" : activeTab === "ebooks" ? "Create eBook" : "Create Bundle"}
-                  </p>
-                </div>
-
-                {activeTab === "premium"
-                  ? premiumContent.map((item) => (
-                      <BundleCard
-                        key={item.id}
-                        item={item}
-                        user={user}
-                        creatorId={user.uid}
-                        creatorUsername={username}
-                        isPreview={true}
-                      />
-                    ))
-                  : activeTab === "ebooks"
-                    ? ebooksContent.map((item) => <EBookCard key={item.id} item={item} username={username} />)
-                    : freeContent.map((item) => <VideoContentCard key={item.id} item={item} />)}
-              </div>
-            ) : (
-              <div className="text-center py-16 sm:py-24">
-                <div
-                  className="w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-6 bg-zinc-900 rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer flex items-center justify-center group"
-                  onClick={() =>
-                    router.push(
-                      activeTab === "free"
-                        ? "/dashboard/free-content"
-                        : activeTab === "ebooks"
-                          ? "/dashboard/ebooks/create"
-                          : "/dashboard/bundles",
-                    )
-                  }
-                >
-                  {activeTab === "premium" || activeTab === "ebooks" ? (
-                    <Package className="w-8 h-8 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
-                  ) : (
-                    <Play className="w-8 h-8 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
-                  )}
-                </div>
-                <h3 className="text-base sm:text-lg font-medium text-white mb-2">No {activeTab} content yet</h3>
-                <p className="text-zinc-500 text-xs sm:text-sm mb-6">
-                  {activeTab === "free"
-                    ? "Upload your first piece of content"
-                    : activeTab === "ebooks"
-                      ? "Create your first eBook"
-                      : "Create your first bundle"}
-                </p>
-                <Button
-                  onClick={() =>
-                    router.push(
-                      activeTab === "free"
-                        ? "/dashboard/free-content"
-                        : activeTab === "ebooks"
-                          ? "/dashboard/ebooks/create"
-                          : "/dashboard/bundles",
-                    )
-                  }
-                  className="bg-white text-black hover:bg-zinc-100 font-medium"
-                >
+                <div className="w-12 h-12 rounded-full bg-zinc-800 group-hover:bg-zinc-700 transition-colors flex items-center justify-center">
                   {activeTab === "free" ? (
-                    <>
-                      <UploadIcon className="w-4 h-4 mr-2" />
-                      Upload Content
-                    </>
-                  ) : activeTab === "ebooks" ? (
-                    <>
-                      <Package className="w-4 h-4 mr-2" />
-                      Create eBook
-                    </>
+                    <UploadIcon className="w-6 h-6 text-zinc-400 group-hover:text-white transition-colors" />
                   ) : (
-                    <>
-                      <Package className="w-4 h-4 mr-2" />
-                      Create Bundle
-                    </>
+                    <Package className="w-6 h-6 text-zinc-400 group-hover:text-white transition-colors" />
                   )}
-                </Button>
+                </div>
+                <p className="text-sm text-zinc-400 group-hover:text-zinc-300 transition-colors font-medium">
+                  {activeTab === "free" ? "Add Content" : activeTab === "ebooks" ? "Create eBook" : "Create Bundle"}
+                </p>
               </div>
-            )}
-          </div>
+
+              {activeTab === "premium"
+                ? premiumContent.map((item) => (
+                    <BundleCard
+                      key={item.id}
+                      item={item}
+                      user={user}
+                      creatorId={user.uid}
+                      creatorUsername={username}
+                      isPreview={true}
+                    />
+                  ))
+                : activeTab === "ebooks"
+                  ? ebooksContent.map((item) => <EBookCard key={item.id} item={item} username={username} />)
+                  : freeContent.map((item) => <VideoContentCard key={item.id} item={item} />)}
+            </div>
+          ) : (
+            <div className="text-center py-16 sm:py-24">
+              <div
+                className="w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-6 bg-zinc-900 rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer flex items-center justify-center group"
+                onClick={() =>
+                  router.push(
+                    activeTab === "free"
+                      ? "/dashboard/free-content"
+                      : activeTab === "ebooks"
+                        ? "/dashboard/ebooks/create"
+                        : "/dashboard/bundles",
+                  )
+                }
+              >
+                {activeTab === "premium" || activeTab === "ebooks" ? (
+                  <Package className="w-8 h-8 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
+                ) : (
+                  <Play className="w-8 h-8 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
+                )}
+              </div>
+              <h3 className="text-base sm:text-lg font-medium text-white mb-2">No {activeTab} content yet</h3>
+              <p className="text-zinc-500 text-xs sm:text-sm mb-6">
+                {activeTab === "free"
+                  ? "Upload your first piece of content"
+                  : activeTab === "ebooks"
+                    ? "Create your first eBook"
+                    : "Create your first bundle"}
+              </p>
+              <Button
+                onClick={() =>
+                  router.push(
+                    activeTab === "free"
+                      ? "/dashboard/free-content"
+                      : activeTab === "ebooks"
+                        ? "/dashboard/ebooks/create"
+                        : "/dashboard/bundles",
+                  )
+                }
+                className="bg-white text-black hover:bg-zinc-100 font-medium"
+              >
+                {activeTab === "free" ? (
+                  <>
+                    <UploadIcon className="w-4 h-4 mr-2" />
+                    Upload Content
+                  </>
+                ) : activeTab === "ebooks" ? (
+                  <>
+                    <Package className="w-4 h-4 mr-2" />
+                    Create eBook
+                  </>
+                ) : (
+                  <>
+                    <Package className="w-4 h-4 mr-2" />
+                    Create Bundle
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </div>

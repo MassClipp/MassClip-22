@@ -450,7 +450,7 @@ export function LandingVexInterface() {
                 </div>
 
                 <p className="text-sm text-white/40 text-center font-light">
-                  Everything you need to monetize your faceless content -- all in one platform.
+                  Everything you need to monetize your faceless content — all in one platform.
                 </p>
 
                 <p className="lg:hidden text-xs text-white/30 text-center font-light mt-4">
