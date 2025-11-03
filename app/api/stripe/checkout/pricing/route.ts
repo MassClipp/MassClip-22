@@ -7,9 +7,9 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
 })
 
-const STARTER_PRICE_ID = "price_1SKKFPDheyb0pkWFBT6lf7V7" // $3/month flat (no trial)
-const CREATOR_VIP_FIRST_TIME_PRICE_ID = "price_1SK7SzDheyb0pkWFaKOzIOzf" // $15/month with 3-day trial
-const CREATOR_VIP_REGULAR_PRICE_ID = "price_1SK7SzDheyb0pkWFaKOzIOzf" // $15/month no trial
+const FACELESS_PRO_PRICE_ID = process.env.FACELESS_PRO_FIRST! // $29/month (no trial)
+const FACELESSPRENUER_FIRST_TIME_PRICE_ID = process.env.FACELESSPRENUER_FIRST! // $39/month with 3-day trial
+const FACELESSPRENUER_REGULAR_PRICE_ID = process.env.FACELESSPRENUER_REGULAR! // $39/month no trial
 
 export async function POST(request: NextRequest) {
   console.log("🚀 [Membership Checkout] Starting session creation...")
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
       const freeUserDoc = await adminDb.collection("freeUsers").doc(uid).get()
       if (freeUserDoc.exists) {
         const freeUserData = freeUserDoc.data()
-        hasUsedTrial = freeUserData?.hasUsedFreeTrial || false // Changed from hasUsedFirstWeekDiscount
+        hasUsedTrial = freeUserData?.hasUsedFreeTrial || false
         console.log(`📊 [Membership Checkout] User trial status: ${hasUsedTrial}`)
       }
     } catch (error) {
@@ -56,21 +56,21 @@ export async function POST(request: NextRequest) {
     let priceId: string
     let trialPeriodDays: number | undefined = undefined
 
-    if (plan === "starter") {
-      priceId = STARTER_PRICE_ID
-      console.log(`💲 [Membership Checkout] Starter Plan - $3/month (no trial)`)
-    } else if (plan === "creator_vip" || plan === "creator_pro") {
-      priceId = hasUsedTrial ? CREATOR_VIP_REGULAR_PRICE_ID : CREATOR_VIP_FIRST_TIME_PRICE_ID
+    if (plan === "faceless_pro") {
+      priceId = FACELESS_PRO_PRICE_ID
+      console.log(`💲 [Membership Checkout] Faceless Pro - $29/month (no trial)`)
+    } else if (plan === "facelessprenuer") {
+      priceId = hasUsedTrial ? FACELESSPRENUER_REGULAR_PRICE_ID : FACELESSPRENUER_FIRST_TIME_PRICE_ID
       trialPeriodDays = hasUsedTrial ? undefined : 3
       console.log(
-        `💲 [Membership Checkout] Creator VIP - ${hasUsedTrial ? "$15/month (no trial)" : "3-day free trial then $15/month"}`,
+        `💲 [Membership Checkout] Facelessprenuer - ${hasUsedTrial ? "$39/month (no trial)" : "3-day free trial then $39/month"}`,
       )
     }
-    // Default to Creator VIP
+    // Default to Facelessprenuer
     else {
-      priceId = hasUsedTrial ? CREATOR_VIP_REGULAR_PRICE_ID : CREATOR_VIP_FIRST_TIME_PRICE_ID
+      priceId = hasUsedTrial ? FACELESSPRENUER_REGULAR_PRICE_ID : FACELESSPRENUER_FIRST_TIME_PRICE_ID
       trialPeriodDays = hasUsedTrial ? undefined : 3
-      console.log(`💲 [Membership Checkout] No plan specified, defaulting to Creator VIP`)
+      console.log(`💲 [Membership Checkout] No plan specified, defaulting to Facelessprenuer`)
     }
 
     console.log(`💲 [Membership Checkout] Using Stripe Price ID: ${priceId}`)
@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
       buyerUid: uid,
       buyerEmail: email || "",
       buyerName: name || email?.split("@")[0] || "",
-      plan: plan === "starter" ? "starter" : "creator_pro",
+      plan: plan === "faceless_pro" ? "faceless_pro" : "facelessprenuer",
       contentType: "membership",
       source: "dashboard_membership_upgrade",
       isFirstTimeDiscount: (trialPeriodDays !== undefined && !hasUsedTrial).toString(),
@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
       metadata: metadata,
       subscription_data: {
         metadata: metadata,
-        ...(trialPeriodDays && { trial_period_days: trialPeriodDays }), // Add trial period if applicable
+        ...(trialPeriodDays && { trial_period_days: trialPeriodDays }),
       },
     }
 

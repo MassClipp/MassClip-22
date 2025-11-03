@@ -3,21 +3,19 @@ import Stripe from "stripe"
 import { adminDb } from "@/lib/firebase-admin"
 import { FieldValue } from "firebase-admin/firestore"
 
-// STARTER PLAN WEBHOOK - Only handles Starter subscriptions
+const FACELESS_PRO_PRICE_IDS = [process.env.FACELESS_PRO_FIRST].filter(Boolean)
 
-const STARTER_PRICE_IDS = [process.env.STARTER_PLAN_FIRST, process.env.STARTER_PLAN_REGULAR].filter(Boolean)
-
-const STARTER_PLAN_CONFIG = {
-  plan: "starter" as const,
+const FACELESS_PRO_PLAN_CONFIG = {
+  plan: "faceless_pro" as const,
   features: {
     unlimitedDownloads: false,
     premiumContent: false,
     noWatermark: false,
     prioritySupport: false,
-    platformFeePercentage: 20,
-    maxVideosPerBundle: 15,
-    maxBundles: 5,
-    maxFolders: 3,
+    platformFeePercentage: 10,
+    maxVideosPerBundle: 999999,
+    maxBundles: 999999,
+    maxFolders: 999999,
     isActive: true,
   },
 }
@@ -28,7 +26,7 @@ function getStripe(): Stripe {
   return new Stripe(key, { apiVersion: "2023-10-16" })
 }
 
-async function updateStarterMembership(opts: {
+async function updateFacelessProMembership(opts: {
   uid: string
   email?: string | null
   priceId: string
@@ -39,7 +37,7 @@ async function updateStarterMembership(opts: {
 }) {
   const { uid, email, priceId, stripeCustomerId, stripeSubscriptionId, currentPeriodEnd, status } = opts
 
-  console.log(`[STARTER WEBHOOK] Updating membership for ${uid}`)
+  console.log(`[FACELESS PRO WEBHOOK] Updating membership for ${uid}`)
   console.log(`  Status: ${status}`)
   console.log(`  Price ID: ${priceId}`)
 
@@ -48,7 +46,7 @@ async function updateStarterMembership(opts: {
   const membershipData = {
     uid,
     email: email || null,
-    plan: STARTER_PLAN_CONFIG.plan,
+    plan: FACELESS_PRO_PLAN_CONFIG.plan,
     status,
     isActive,
     stripeCustomerId,
@@ -58,7 +56,7 @@ async function updateStarterMembership(opts: {
     downloadsUsed: 0,
     bundlesCreated: 0,
     features: {
-      ...STARTER_PLAN_CONFIG.features,
+      ...FACELESS_PRO_PLAN_CONFIG.features,
       isActive,
     },
     createdAt: FieldValue.serverTimestamp(),
@@ -66,17 +64,17 @@ async function updateStarterMembership(opts: {
   }
 
   await adminDb.collection("memberships").doc(uid).set(membershipData, { merge: true })
-  console.log(`[STARTER WEBHOOK] ✅ Membership updated successfully`)
+  console.log(`[FACELESS PRO WEBHOOK] ✅ Membership updated successfully`)
 }
 
 export async function POST(request: Request) {
   try {
-    console.log("=== STARTER PLAN WEBHOOK RECEIVED ===")
+    console.log("=== FACELESS PRO PLAN WEBHOOK RECEIVED ===")
 
-    const webhookSecret = process.env.STARTER_PLAN_WH
+    const webhookSecret = process.env.FACELESS_PRO_WEBHOOK
 
     if (!webhookSecret) {
-      return NextResponse.json({ error: "Missing STARTER_PLAN_WH webhook secret" }, { status: 500 })
+      return NextResponse.json({ error: "Missing FACELESS_PRO_WEBHOOK webhook secret" }, { status: 500 })
     }
 
     const stripe = getStripe()
@@ -90,9 +88,9 @@ export async function POST(request: Request) {
     let event: Stripe.Event
     try {
       event = stripe.webhooks.constructEvent(payload, sig, webhookSecret)
-      console.log(`[STARTER WEBHOOK] Event: ${event.type} (${event.id})`)
+      console.log(`[FACELESS PRO WEBHOOK] Event: ${event.type} (${event.id})`)
     } catch (err: any) {
-      console.error(`[STARTER WEBHOOK] Signature verification failed: ${err.message}`)
+      console.error(`[FACELESS PRO WEBHOOK] Signature verification failed: ${err.message}`)
       return NextResponse.json({ error: "Invalid signature" }, { status: 400 })
     }
 
@@ -102,7 +100,7 @@ export async function POST(request: Request) {
       eventId: event.id,
       receivedAt: FieldValue.serverTimestamp(),
       rawEvent: JSON.parse(payload),
-      webhook: "starter-plan",
+      webhook: "faceless-pro-plan",
     })
 
     switch (event.type) {
@@ -115,16 +113,16 @@ export async function POST(request: Request) {
         const priceId = session.metadata?.priceId
 
         if (!uid || !subscriptionId || !customerId || !priceId) {
-          console.log("[STARTER WEBHOOK] Missing required fields")
+          console.log("[FACELESS PRO WEBHOOK] Missing required fields")
           return NextResponse.json({ received: true })
         }
 
-        if (!STARTER_PRICE_IDS.includes(priceId)) {
-          console.log(`[STARTER WEBHOOK] Ignoring non-Starter price: ${priceId}`)
+        if (!FACELESS_PRO_PRICE_IDS.includes(priceId)) {
+          console.log(`[FACELESS PRO WEBHOOK] Ignoring non-Faceless Pro price: ${priceId}`)
           return NextResponse.json({ received: true })
         }
 
-        await updateStarterMembership({
+        await updateFacelessProMembership({
           uid,
           email,
           priceId,
@@ -146,14 +144,14 @@ export async function POST(request: Request) {
           const subscriptionId = invoice.subscription
 
           if (!subscriptionId || typeof subscriptionId !== "string") {
-            console.log("[STARTER WEBHOOK] No subscription ID in invoice")
+            console.log("[FACELESS PRO WEBHOOK] No subscription ID in invoice")
             return NextResponse.json({ received: true })
           }
 
           try {
             sub = await stripe.subscriptions.retrieve(subscriptionId)
           } catch (error) {
-            console.error("[STARTER WEBHOOK] Failed to retrieve subscription:", error)
+            console.error("[FACELESS PRO WEBHOOK] Failed to retrieve subscription:", error)
             return NextResponse.json({ received: true })
           }
         }
@@ -164,12 +162,12 @@ export async function POST(request: Request) {
         const currentPeriodEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000) : null
 
         if (!uid || !priceId || !customerId) {
-          console.log("[STARTER WEBHOOK] Missing required fields in subscription")
+          console.log("[FACELESS PRO WEBHOOK] Missing required fields in subscription")
           return NextResponse.json({ received: true })
         }
 
-        if (!STARTER_PRICE_IDS.includes(priceId)) {
-          console.log(`[STARTER WEBHOOK] Ignoring non-Starter price: ${priceId}`)
+        if (!FACELESS_PRO_PRICE_IDS.includes(priceId)) {
+          console.log(`[FACELESS PRO WEBHOOK] Ignoring non-Faceless Pro price: ${priceId}`)
           return NextResponse.json({ received: true })
         }
 
@@ -178,10 +176,10 @@ export async function POST(request: Request) {
           const cust = await stripe.customers.retrieve(customerId)
           if (!("deleted" in cust)) email = cust.email
         } catch (e) {
-          console.log("[STARTER WEBHOOK] Could not retrieve customer email")
+          console.log("[FACELESS PRO WEBHOOK] Could not retrieve customer email")
         }
 
-        await updateStarterMembership({
+        await updateFacelessProMembership({
           uid,
           email,
           priceId,
@@ -202,9 +200,9 @@ export async function POST(request: Request) {
           return NextResponse.json({ received: true })
         }
 
-        // Only process if this is a Starter subscription
-        if (!priceId || !STARTER_PRICE_IDS.includes(priceId)) {
-          console.log(`[STARTER WEBHOOK] Ignoring non-Starter subscription update: ${priceId}`)
+        // Only process if this is a Faceless Pro subscription
+        if (!priceId || !FACELESS_PRO_PRICE_IDS.includes(priceId)) {
+          console.log(`[FACELESS PRO WEBHOOK] Ignoring non-Faceless Pro subscription update: ${priceId}`)
           return NextResponse.json({ received: true })
         }
 
@@ -212,13 +210,12 @@ export async function POST(request: Request) {
         const membershipDoc = await membershipRef.get()
 
         if (!membershipDoc.exists) {
-          console.log(`[STARTER WEBHOOK] Membership doesn't exist for ${uid}, creating it`)
-          // Create the membership instead of just updating
+          console.log(`[FACELESS PRO WEBHOOK] Membership doesn't exist for ${uid}, creating it`)
           const customerId = typeof sub.customer === "string" ? sub.customer : null
           const currentPeriodEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000) : null
 
           if (customerId) {
-            await updateStarterMembership({
+            await updateFacelessProMembership({
               uid,
               email: null,
               priceId,
@@ -239,7 +236,7 @@ export async function POST(request: Request) {
             currentPeriodEnd,
             updatedAt: FieldValue.serverTimestamp(),
           })
-          console.log(`[STARTER WEBHOOK] Subscription canceled for ${uid}`)
+          console.log(`[FACELESS PRO WEBHOOK] Subscription canceled for ${uid}`)
         }
         break
       }
@@ -261,17 +258,17 @@ export async function POST(request: Request) {
           createdAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         })
-        console.log(`[STARTER WEBHOOK] User ${uid} moved to free tier`)
+        console.log(`[FACELESS PRO WEBHOOK] User ${uid} moved to free tier`)
         break
       }
 
       default:
-        console.log(`[STARTER WEBHOOK] Unhandled event: ${event.type}`)
+        console.log(`[FACELESS PRO WEBHOOK] Unhandled event: ${event.type}`)
     }
 
     return NextResponse.json({ received: true })
   } catch (error: any) {
-    console.error("[STARTER WEBHOOK] Error:", error)
+    console.error("[FACELESS PRO WEBHOOK] Error:", error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }

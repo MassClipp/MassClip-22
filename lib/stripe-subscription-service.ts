@@ -11,7 +11,7 @@ export interface StripeSubscriptionStatus {
   status: string
   currentPeriodEnd: Date | null
   cancelAtPeriodEnd: boolean
-  plan: "free" | "creator_pro" | "starter"
+  plan: "free" | "facelessprenuer" | "faceless_pro"
 }
 
 export async function getStripeSubscriptionStatus(userId: string): Promise<StripeSubscriptionStatus> {
@@ -71,10 +71,21 @@ export async function getStripeSubscriptionStatus(userId: string): Promise<Strip
       subscription.cancel_at_period_end || ["canceled", "incomplete_expired"].includes(subscription.status)
 
     const priceId = subscription.items.data[0]?.price.id
-    const starterPriceIds = [process.env.STARTER_PLAN_FIRST, process.env.STARTER_PLAN_REGULAR].filter(Boolean)
+    const facelessProPriceIds = [process.env.FACELESS_PRO_FIRST].filter(Boolean)
+    const facelessprenuerPriceIds = [process.env.FACELESSPRENUER_FIRST, process.env.FACELESSPRENUER_REGULAR].filter(
+      Boolean,
+    )
 
-    const isStarterPlan = priceId && starterPriceIds.includes(priceId)
-    const determinedPlan = isActive ? (isStarterPlan ? "starter" : "creator_pro") : "free"
+    const isFacelessPro = priceId && facelessProPriceIds.includes(priceId)
+    const isFacelessprenuer = priceId && facelessprenuerPriceIds.includes(priceId)
+
+    const determinedPlan = isActive
+      ? isFacelessPro
+        ? "faceless_pro"
+        : isFacelessprenuer
+          ? "facelessprenuer"
+          : "free"
+      : "free"
 
     await adminDb.collection("memberships").doc(userId).update({
       isActive: isActive,
