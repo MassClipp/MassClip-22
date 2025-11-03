@@ -327,7 +327,7 @@ export default function EditEBookPage({ params }: { params: { id: string } }) {
                       <img
                         src={preview || "/placeholder.svg"}
                         alt={`New page ${index + 1}`}
-                        className="w-full h-auto object-contain max-h-[500px]"
+                        className="w-full h-full object-cover"
                       />
                       <Button
                         variant="ghost"

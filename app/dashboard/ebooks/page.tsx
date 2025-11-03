@@ -211,7 +211,7 @@ export default function EBooksPage() {
                     <img
                       src={ebook.coverUrl || "/placeholder.svg"}
                       alt={ebook.title}
-                      className="w-full h-full object-contain"
+                      className="w-full h-full object-cover"
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">

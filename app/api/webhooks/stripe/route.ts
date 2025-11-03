@@ -301,6 +301,110 @@ async function processDownloadPurchase(session: Stripe.Checkout.Session) {
   )
 }
 
+async function processEbookPurchase(session: Stripe.Checkout.Session) {
+  console.log(`📚 [eBook Webhook] Processing eBook purchase: ${session.id}`)
+
+  const metadata = session.metadata || {}
+  const { ebookId, buyerUid, creatorId, buyerEmail, buyerName } = metadata
+
+  if (!ebookId) {
+    throw new Error("Missing eBook ID in session metadata")
+  }
+
+  if (!buyerUid) {
+    throw new Error("Missing buyer UID in session metadata")
+  }
+
+  // Get eBook details
+  const ebookDoc = await adminDb.collection("ebooks").doc(ebookId).get()
+  if (!ebookDoc.exists) {
+    throw new Error(`eBook not found: ${ebookId}`)
+  }
+
+  const ebookData = ebookDoc.data()!
+  console.log(`📖 [eBook Webhook] eBook data:`, {
+    id: ebookId,
+    title: ebookData.title,
+    pageCount: ebookData.pageCount,
+    price: ebookData.price,
+  })
+
+  // Get creator details
+  let creatorData = { name: "Unknown Creator", username: "unknown", email: "" }
+  if (creatorId) {
+    const creatorDoc = await adminDb.collection("users").doc(creatorId).get()
+    if (creatorDoc.exists) {
+      const creator = creatorDoc.data()!
+      creatorData = {
+        name: creator.displayName || creator.name || creator.username || "Unknown Creator",
+        username: creator.username || "unknown",
+        email: creator.email || "",
+      }
+    }
+  }
+
+  const ebookPrice = ebookData.price || 0
+  const stripePrice = session.amount_total ? session.amount_total / 100 : 0
+  const finalPrice = ebookPrice > 0 ? ebookPrice : stripePrice
+
+  console.log(
+    `💰 [eBook Webhook] Price sources - eBook: $${ebookPrice}, Stripe: $${stripePrice}, Final: $${finalPrice}`,
+  )
+
+  const purchaseData = {
+    id: session.id,
+    ebookId: ebookId,
+    ebookTitle: ebookData.title || "Untitled eBook",
+    ebookDescription: ebookData.description || "",
+    ebookCoverUrl: ebookData.coverUrl || "",
+    ebookPageCount: ebookData.pageCount || 0,
+
+    // Creator info
+    creatorId: creatorId || "unknown",
+    creatorName: creatorData.name,
+    creatorUsername: creatorData.username,
+    creatorDisplayName: creatorData.name,
+
+    // Buyer info
+    buyerUid: buyerUid,
+    userId: buyerUid,
+    buyerEmail: buyerEmail || "",
+    buyerName: buyerName || "Anonymous User",
+    buyerDisplayName: buyerName || "Anonymous User",
+    isAuthenticated: buyerUid !== "anonymous",
+
+    price: finalPrice,
+    amount: finalPrice,
+    purchaseAmount: finalPrice * 100,
+    currency: session.currency || "usd",
+    status: "completed",
+
+    // Stripe details
+    sessionId: session.id,
+    paymentIntentId: session.payment_intent,
+    stripeCustomerId: session.customer,
+
+    // Timestamps
+    createdAt: new Date().toISOString(),
+    completedAt: new Date().toISOString(),
+    purchasedAt: new Date().toISOString(),
+    timestamp: new Date(),
+
+    // Access control
+    accessToken: `ebook_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    source: "stripe_webhook",
+    webhookProcessed: true,
+    contentType: "ebook",
+  }
+
+  // Store in ebookPurchases collection
+  await adminDb.collection("ebookPurchases").doc(session.id).set(purchaseData)
+
+  console.log(
+    `✅ [eBook Webhook] eBook purchase created: ${session.id} for user ${buyerUid} - "${ebookData.title}" at $${finalPrice}`,
+  )
+}
+
 export async function POST(request: Request) {
   const sig = headers().get("stripe-signature") || headers().get("Stripe-Signature")
   const body = await request.text()
@@ -370,8 +474,9 @@ export async function POST(request: Request) {
         const metadata = session.metadata || {}
         const contentType = metadata.contentType
         const bundleId = metadata.bundleId || metadata.productBoxId
+        const ebookId = metadata.ebookId
 
-        if (contentType === "membership" || (!contentType && !bundleId)) {
+        if (contentType === "membership" || (!contentType && !bundleId && !ebookId)) {
           console.log(`\n========== MEMBERSHIP CHECKOUT ==========`)
           console.log(`[v0] 📋 Metadata plan: ${metadata.plan || "NOT SPECIFIED"}`)
           console.log(`[v0] 🆔 Session ID: ${session.id}`)
@@ -384,6 +489,8 @@ export async function POST(request: Request) {
 
         if (contentType === "download_purchase") {
           await processDownloadPurchase(session)
+        } else if (contentType === "ebook" || ebookId) {
+          await processEbookPurchase(session)
         } else if (contentType === "bundle" || bundleId) {
           // Handle bundle purchase
           await processBundlePurchase(session)
