@@ -186,6 +186,60 @@ export default function PurchaseSuccessPage() {
     }
   }
 
+  const handleDownloadEbook = async () => {
+    if (!purchaseData?.item?.id || !sessionId) {
+      alert("Missing required information to download")
+      return
+    }
+
+    const ebookId = purchaseData.item.id
+    const ebookTitle = purchaseData.item.title || "ebook"
+
+    try {
+      setDownloading(true)
+      console.log("[v0] Starting eBook download:", ebookId)
+
+      const headers: HeadersInit = {
+        "Content-Type": "application/json",
+      }
+
+      // Add auth token if user is logged in
+      if (user) {
+        const token = await user.getIdToken()
+        headers["Authorization"] = `Bearer ${token}`
+      }
+
+      const response = await fetch(`/api/ebooks/${ebookId}/download`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ sessionId }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || "Failed to download eBook")
+      }
+
+      // Download the ZIP file
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `${ebookTitle.replace(/[^\w\s-]/gi, "")}.zip`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+
+      console.log("[v0] eBook download completed successfully")
+    } catch (error) {
+      console.error("[v0] eBook download failed:", error)
+      alert(error instanceof Error ? error.message : "Failed to download eBook")
+    } finally {
+      setDownloading(false)
+    }
+  }
+
   const formatAmount = (amount = 0, currency = "usd") => {
     try {
       return new Intl.NumberFormat("en-US", {
@@ -393,7 +447,7 @@ export default function PurchaseSuccessPage() {
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-gray-400">Content Type</span>
                     <Badge variant="outline" className="border-white/30 text-gray-300">
-                      {purchase.type === "bundle" ? "Bundle" : "Product Box"}
+                      {purchase.type === "bundle" ? "Bundle" : purchase.type === "ebook" ? "Ebook" : "Product Box"}
                     </Badge>
                   </div>
                 </div>
@@ -425,7 +479,9 @@ export default function PurchaseSuccessPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {itemId && (
               <Button asChild size="lg" className="bg-teal-600 hover:bg-teal-700 text-white shadow-lg">
-                <Link href={`/${purchase.type === "bundle" ? "bundles" : "product-box"}/${itemId}/content`}>
+                <Link
+                  href={`/${purchase.type === "bundle" ? "bundles" : purchase.type === "ebook" ? "dashboard/ebooks" : "product-box"}/${itemId}${purchase.type === "ebook" ? "" : "/content"}`}
+                >
                   <Eye className="h-4 w-4 mr-2" />
                   View Content
                 </Link>
@@ -444,7 +500,7 @@ export default function PurchaseSuccessPage() {
             </Button>
           </div>
 
-          {/* Download ZIP Button */}
+          {/* Download ZIP Button for Bundles */}
           {purchase.type === "bundle" && itemId && (
             <Button
               onClick={handleDownloadZip}
@@ -462,6 +518,29 @@ export default function PurchaseSuccessPage() {
                 <>
                   <Download className="h-4 w-4 mr-2" />
                   Download All as ZIP
+                </>
+              )}
+            </Button>
+          )}
+
+          {/* Download eBook Button for Ebooks */}
+          {purchase.type === "ebook" && itemId && (
+            <Button
+              onClick={handleDownloadEbook}
+              disabled={downloading}
+              size="lg"
+              variant="outline"
+              className="w-full border-teal-500/50 text-teal-400 hover:bg-teal-500/10 bg-transparent shadow-lg"
+            >
+              {downloading ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Preparing Download...
+                </>
+              ) : (
+                <>
+                  <Download className="h-4 w-4 mr-2" />
+                  Download eBook
                 </>
               )}
             </Button>

@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { CheckCircle } from "lucide-react"
+import { CheckCircle, Download, RefreshCw } from "lucide-react"
 
 export default function SuccessPage() {
   const searchParams = useSearchParams()
@@ -14,13 +14,14 @@ export default function SuccessPage() {
   const [isProcessing, setIsProcessing] = useState(true)
   const [verificationResult, setVerificationResult] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
+  const [downloading, setDownloading] = useState(false)
 
   const paymentIntentId = searchParams.get("payment_intent")
   const connectedAccountId = searchParams.get("account_id")
+  const sessionId = searchParams.get("session_id")
 
   useEffect(() => {
     // Handle legacy session_id parameter by converting to payment_intent
-    const sessionId = searchParams.get("session_id")
     if (sessionId && !paymentIntentId) {
       let conversionUrl = `/api/purchase/convert-session-to-payment-intent?session_id=${sessionId}`
       if (connectedAccountId) {
@@ -73,6 +74,60 @@ export default function SuccessPage() {
 
   const handleViewPurchases = () => {
     router.push("/dashboard/purchases")
+  }
+
+  const handleDownloadEbook = async () => {
+    if (!verificationResult?.purchase?.itemId || !sessionId) {
+      alert("Missing required information to download")
+      return
+    }
+
+    const ebookId = verificationResult.purchase.itemId
+    const ebookTitle = verificationResult.purchase.itemTitle || "ebook"
+
+    try {
+      setDownloading(true)
+      console.log("[v0] Starting eBook download:", ebookId)
+
+      const headers: HeadersInit = {
+        "Content-Type": "application/json",
+      }
+
+      // Add auth token if user is logged in
+      if (user) {
+        const token = await user.getIdToken()
+        headers["Authorization"] = `Bearer ${token}`
+      }
+
+      const response = await fetch(`/api/ebooks/${ebookId}/download`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ sessionId }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || "Failed to download eBook")
+      }
+
+      // Download the ZIP file
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `${ebookTitle.replace(/[^\w\s-]/gi, "")}.zip`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+
+      console.log("[v0] eBook download completed successfully")
+    } catch (error) {
+      console.error("[v0] eBook download failed:", error)
+      alert(error instanceof Error ? error.message : "Failed to download eBook")
+    } finally {
+      setDownloading(false)
+    }
   }
 
   // Authentication check
@@ -138,12 +193,35 @@ export default function SuccessPage() {
 
   // Success state
   if (verificationResult?.success) {
+    const isEbookPurchase = verificationResult.purchase?.type === "ebook"
+
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <Card className="w-full max-w-md">
-          <CardContent className="p-6 text-center">
+          <CardContent className="p-6 text-center space-y-4">
             <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
             <h2 className="text-xl font-medium text-gray-900 mb-6">You're all good</h2>
+
+            {isEbookPurchase && sessionId && (
+              <Button
+                onClick={handleDownloadEbook}
+                disabled={downloading}
+                className="w-full bg-teal-600 hover:bg-teal-700 text-white mb-2"
+              >
+                {downloading ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Preparing Download...
+                  </>
+                ) : (
+                  <>
+                    <Download className="h-4 w-4 mr-2" />
+                    Download eBook
+                  </>
+                )}
+              </Button>
+            )}
+
             <Button onClick={handleViewPurchases} className="w-full bg-red-600 hover:bg-red-700">
               My Purchases
             </Button>
