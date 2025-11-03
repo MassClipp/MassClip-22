@@ -1199,6 +1199,7 @@ function VideoContentCard({ item }: { item: ContentItem }) {
 
 function EBookCard({ item, username }: { item: ContentItem; username: string | null }) {
   const router = useRouter()
+  const [isHovered, setIsHovered] = useState(false)
 
   const handleClick = () => {
     if (username) {
@@ -1206,38 +1207,74 @@ function EBookCard({ item, username }: { item: ContentItem; username: string | n
     }
   }
 
+  const formatPrice = (price: number | undefined | null): string => {
+    if (typeof price === "number" && !isNaN(price) && isFinite(price)) {
+      return (price / 100).toFixed(2)
+    }
+    return "0.00"
+  }
+
   return (
-    <div className="group cursor-pointer w-full max-w-sm" onClick={handleClick}>
-      <div className="relative aspect-[3/4] rounded-lg overflow-hidden mb-3 transition-all duration-300 border border-zinc-800 group-hover:border-white/50">
+    <div
+      onClick={handleClick}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      className="bg-zinc-900 rounded-lg overflow-hidden border border-zinc-700/30 hover:border-zinc-600/40 transition-all duration-300 w-full max-w-[340px] sm:max-w-[320px] relative cursor-pointer group"
+    >
+      {/* Cover Image Section */}
+      <div className="relative aspect-[3/4] bg-zinc-800 overflow-hidden">
         {item.coverUrl || item.thumbnailUrl ? (
-          <img src={item.coverUrl || item.thumbnailUrl} alt={item.title} className="w-full h-full object-cover" />
+          <img
+            src={item.coverUrl || item.thumbnailUrl}
+            alt={item.title}
+            className={`w-full h-full object-cover transition-transform duration-500 ${isHovered ? "scale-110" : "scale-100"}`}
+          />
         ) : (
-          <div className="w-full h-full bg-gradient-to-br from-zinc-800 to-zinc-900 flex items-center justify-center">
-            <Package className="w-16 h-16 text-zinc-600" />
+          <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
+            <Package className="w-12 h-12 sm:w-16 sm:h-16 text-zinc-600" />
           </div>
         )}
 
-        {/* Price badge */}
-        {item.price && (
-          <div className="absolute top-3 right-3 bg-black/80 backdrop-blur-sm px-3 py-1.5 rounded-full">
-            <span className="text-white text-sm font-medium">${(item.price / 100).toFixed(2)}</span>
+        {/* Page Count Badge */}
+        {item.pageCount && (
+          <div className="absolute top-2 right-2 sm:top-4 sm:right-4 bg-black/90 backdrop-blur-sm px-3 py-1.5 sm:px-4 sm:py-2 rounded-full">
+            <span className="text-xs sm:text-sm text-white font-medium">
+              {item.pageCount} {item.pageCount === 1 ? "page" : "pages"}
+            </span>
           </div>
         )}
       </div>
 
-      <div className="space-y-1">
-        <h3
-          className="text-white text-sm font-medium line-clamp-2 leading-tight group-hover:text-zinc-300 transition-colors"
-          title={item.title}
-        >
-          {item.title}
-        </h3>
-        {item.pageCount && (
-          <p className="text-zinc-500 text-xs">
-            {item.pageCount} {item.pageCount === 1 ? "page" : "pages"}
-          </p>
-        )}
-        {item.description && <p className="text-zinc-400 text-xs line-clamp-2 leading-relaxed">{item.description}</p>}
+      {/* Content Section */}
+      <div className="p-4 sm:p-5 space-y-3 bg-gradient-to-br from-black via-black to-zinc-800/30 relative">
+        <div className="space-y-2">
+          <h3 className="text-white text-lg sm:text-xl font-semibold line-clamp-2 leading-tight" title={item.title}>
+            {item.title}
+          </h3>
+          {item.description && (
+            <p className="text-zinc-400 text-sm sm:text-base line-clamp-2 leading-relaxed">{item.description}</p>
+          )}
+        </div>
+
+        <div className="space-y-3 pt-2">
+          <div className="flex items-center justify-between">
+            <span className="text-white text-2xl sm:text-3xl font-light tracking-tight">
+              ${formatPrice(item.price)}
+            </span>
+          </div>
+
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              if (username) {
+                router.push(`/creator/${username}/ebook/${item.id}`)
+              }
+            }}
+            className="w-full border border-white/20 text-white hover:bg-white/5 rounded-md font-medium text-sm px-4 py-2.5 transition-colors"
+          >
+            View Details
+          </button>
+        </div>
       </div>
     </div>
   )
