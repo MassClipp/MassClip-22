@@ -1224,7 +1224,7 @@ function EBookCard({ item, username }: { item: ContentItem; username: string | n
       className="bg-zinc-900 rounded-lg overflow-hidden border border-zinc-700/30 hover:border-zinc-600/40 transition-all duration-300 w-full max-w-[340px] sm:max-w-[320px] relative cursor-pointer group"
     >
       {/* Cover Image Section */}
-      <div className="relative aspect-[3/4] bg-zinc-800 overflow-hidden">
+      <div className="relative aspect-square bg-zinc-800 overflow-hidden">
         {item.coverUrl || item.thumbnailUrl ? (
           <img
             src={item.coverUrl || item.thumbnailUrl}

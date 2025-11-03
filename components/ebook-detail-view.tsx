@@ -20,7 +20,7 @@ interface EbookDetailViewProps {
     stripePriceId: string
     stripeProductId: string
     createdAt: string
-    pages: any[]
+    pages: Array<{ url: string; title?: string; pageNumber: number } | string>
   }
   creator: {
     uid: string
@@ -43,6 +43,13 @@ export default function EbookDetailView({ ebook, creator }: EbookDetailViewProps
     return "0.00"
   }
 
+  const pageTitles = ebook.pages
+    .map((page) => {
+      if (typeof page === "string") return null
+      return page.title
+    })
+    .filter((title): title is string => !!title && title.trim() !== "")
+
   return (
     <div className="min-h-screen bg-black">
       <div className="fixed inset-0 bg-gradient-to-br from-zinc-900/40 via-black to-zinc-800/30 pointer-events-none" />
@@ -62,7 +69,7 @@ export default function EbookDetailView({ ebook, creator }: EbookDetailViewProps
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
           {/* Left Column - Cover Image */}
           <div className="space-y-6">
-            <div className="relative aspect-[3/4] bg-zinc-900 rounded-lg overflow-hidden border border-zinc-800">
+            <div className="relative aspect-square bg-zinc-900 rounded-lg overflow-hidden border border-zinc-800">
               {ebook.coverUrl && !imageError ? (
                 <img
                   src={ebook.coverUrl || "/placeholder.svg"}
@@ -146,6 +153,23 @@ export default function EbookDetailView({ ebook, creator }: EbookDetailViewProps
                   <div className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
                   Lifetime access to content
                 </li>
+                {pageTitles.length > 0 && (
+                  <>
+                    <li className="flex items-start gap-2 mt-4">
+                      <div className="w-1.5 h-1.5 rounded-full bg-zinc-600 mt-2" />
+                      <div>
+                        <p className="text-white font-medium mb-1">Chapters:</p>
+                        <ul className="space-y-1 text-sm">
+                          {pageTitles.map((title, index) => (
+                            <li key={index} className="text-zinc-500">
+                              {title}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </li>
+                  </>
+                )}
               </ul>
             </div>
           </div>

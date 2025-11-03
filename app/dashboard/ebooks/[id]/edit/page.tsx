@@ -10,8 +10,14 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
-import { ArrowLeft, Loader2, X, Upload } from "lucide-react"
+import { ArrowLeft, Loader2, X, Upload, Trash2 } from "lucide-react"
 import { useRouter } from "next/navigation"
+
+interface EBookPage {
+  url: string
+  title?: string
+  pageNumber: number
+}
 
 interface EBook {
   id: string
@@ -19,7 +25,7 @@ interface EBook {
   description: string
   coverUrl: string
   pageCount: number
-  pages: string[]
+  pages: EBookPage[]
   status: "draft" | "published"
 }
 
@@ -36,7 +42,9 @@ export default function EditEBookPage({ params }: { params: { id: string } }) {
   const [coverPreview, setCoverPreview] = useState("")
   const [pageFiles, setPageFiles] = useState<File[]>([])
   const [pagePreviews, setPagePreviews] = useState<string[]>([])
-  const [existingPages, setExistingPages] = useState<string[]>([])
+  const [existingPages, setExistingPages] = useState<EBookPage[]>([])
+  const [pageTitles, setPageTitles] = useState<{ [key: number]: string }>({})
+  const [newPageTitles, setNewPageTitles] = useState<{ [key: number]: string }>({})
 
   useEffect(() => {
     if (user && params.id) {
@@ -67,7 +75,27 @@ export default function EditEBookPage({ params }: { params: { id: string } }) {
       setTitle(data.ebook.title)
       setDescription(data.ebook.description || "")
       setCoverPreview(data.ebook.coverUrl)
-      setExistingPages(data.ebook.pages || [])
+
+      const pages = data.ebook.pages || []
+      const formattedPages: EBookPage[] = pages.map((page: any, index: number) => {
+        if (typeof page === "string") {
+          return { url: page, pageNumber: index + 1, title: "" }
+        }
+        return {
+          url: page.url || page,
+          pageNumber: page.pageNumber || index + 1,
+          title: page.title || "",
+        }
+      })
+      setExistingPages(formattedPages)
+
+      const titles: { [key: number]: string } = {}
+      formattedPages.forEach((page) => {
+        if (page.title) {
+          titles[page.pageNumber] = page.title
+        }
+      })
+      setPageTitles(titles)
     } catch (error) {
       console.error("[v0] Error fetching eBook:", error)
       toast({
@@ -109,6 +137,30 @@ export default function EditEBookPage({ params }: { params: { id: string } }) {
   const removeNewPage = (index: number) => {
     setPageFiles((prev) => prev.filter((_, i) => i !== index))
     setPagePreviews((prev) => prev.filter((_, i) => i !== index))
+    const newTitles = { ...newPageTitles }
+    delete newTitles[existingPages.length + index + 1]
+    setNewPageTitles(newTitles)
+  }
+
+  const deleteExistingPage = (index: number) => {
+    setExistingPages((prev) => prev.filter((_, i) => i !== index))
+    // Remove title for deleted page
+    const newTitles = { ...pageTitles }
+    delete newTitles[index + 1]
+    setPageTitles(newTitles)
+
+    toast({
+      title: "Page removed",
+      description: "The page will be deleted when you save changes",
+    })
+  }
+
+  const updatePageTitle = (pageNumber: number, title: string, isNew = false) => {
+    if (isNew) {
+      setNewPageTitles((prev) => ({ ...prev, [pageNumber]: title }))
+    } else {
+      setPageTitles((prev) => ({ ...prev, [pageNumber]: title }))
+    }
   }
 
   const handleSave = async () => {
@@ -151,14 +203,15 @@ export default function EditEBookPage({ params }: { params: { id: string } }) {
       }
 
       // Upload new pages
-      const newPageUrls: string[] = []
+      const newPages: EBookPage[] = []
       for (let i = 0; i < pageFiles.length; i++) {
         console.log(`[v0] Uploading page ${i + 1}/${pageFiles.length}...`)
         const file = pageFiles[i]
+        const pageNumber = existingPages.length + i + 1
         const pageFormData = new FormData()
         pageFormData.append("file", file)
         pageFormData.append("ebookId", params.id)
-        pageFormData.append("pageNumber", String(existingPages.length + i + 1))
+        pageFormData.append("pageNumber", String(pageNumber))
 
         const pageResponse = await fetch("/api/upload/ebook-page", {
           method: "POST",
@@ -170,12 +223,22 @@ export default function EditEBookPage({ params }: { params: { id: string } }) {
 
         if (pageResponse.ok) {
           const pageData = await pageResponse.json()
-          newPageUrls.push(pageData.url)
+          newPages.push({
+            url: pageData.url,
+            pageNumber: pageNumber,
+            title: newPageTitles[pageNumber] || "",
+          })
           console.log(`[v0] Page ${i + 1} uploaded:`, pageData.url)
         }
       }
 
-      const allPages = [...existingPages, ...newPageUrls]
+      const updatedExistingPages = existingPages.map((page, index) => ({
+        ...page,
+        pageNumber: index + 1,
+        title: pageTitles[index + 1] || page.title || "",
+      }))
+
+      const allPages = [...updatedExistingPages, ...newPages]
 
       // Update eBook metadata
       console.log("[v0] Updating eBook metadata...")
@@ -278,11 +341,11 @@ export default function EditEBookPage({ params }: { params: { id: string } }) {
             <h2 className="text-xl font-medium text-white mb-4">Cover Image *</h2>
             <div className="space-y-4">
               {coverPreview && (
-                <div className="relative w-full max-w-md bg-zinc-900 rounded-lg overflow-hidden">
+                <div className="relative w-full max-w-md aspect-square bg-zinc-900 rounded-lg overflow-hidden">
                   <img
                     src={coverPreview || "/placeholder.svg"}
                     alt="Cover preview"
-                    className="w-full h-auto object-contain max-h-[500px]"
+                    className="w-full h-full object-cover"
                   />
                 </div>
               )}
@@ -295,6 +358,7 @@ export default function EditEBookPage({ params }: { params: { id: string } }) {
                   </div>
                 </Label>
                 <Input id="cover-upload" type="file" accept="image/*" onChange={handleCoverChange} className="hidden" />
+                <p className="text-xs text-zinc-500 mt-2">Recommended: Square image (1:1 aspect ratio)</p>
               </div>
             </div>
           </Card>
@@ -304,41 +368,81 @@ export default function EditEBookPage({ params }: { params: { id: string } }) {
             <h2 className="text-xl font-medium text-white mb-4">Pages ({existingPages.length + pageFiles.length})</h2>
             <div className="space-y-4">
               {(existingPages.length > 0 || pagePreviews.length > 0) && (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="space-y-4">
                   {/* Existing pages */}
-                  {existingPages.map((pageUrl, index) => (
-                    <div
-                      key={`existing-${index}`}
-                      className="relative aspect-[3/4] bg-zinc-900 rounded-lg overflow-hidden"
-                    >
-                      <img
-                        src={pageUrl || "/placeholder.svg"}
-                        alt={`Page ${index + 1}`}
-                        className="w-full h-full object-cover"
-                      />
-                      <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-xs text-center py-1">
-                        Page {index + 1}
+                  {existingPages.map((page, index) => (
+                    <div key={`existing-${index}`} className="space-y-2">
+                      <div className="flex items-start gap-4">
+                        <div className="relative aspect-square w-32 bg-zinc-900 rounded-lg overflow-hidden flex-shrink-0">
+                          <img
+                            src={page.url || "/placeholder.svg"}
+                            alt={`Page ${index + 1}`}
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-xs text-center py-1">
+                            Page {index + 1}
+                          </div>
+                        </div>
+                        <div className="flex-1 space-y-2">
+                          <div>
+                            <Label htmlFor={`page-title-${index}`} className="text-zinc-400 text-sm">
+                              Page Title / Chapter (Optional)
+                            </Label>
+                            <Input
+                              id={`page-title-${index}`}
+                              value={pageTitles[index + 1] || ""}
+                              onChange={(e) => updatePageTitle(index + 1, e.target.value, false)}
+                              placeholder={`e.g., "Introduction" or "Chapter 1"`}
+                              className="bg-zinc-900 border-zinc-800 text-white text-sm"
+                            />
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => deleteExistingPage(index)}
+                            className="text-red-400 hover:text-red-300 hover:bg-red-950/20"
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete Page
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   ))}
                   {/* New page uploads */}
                   {pagePreviews.map((preview, index) => (
-                    <div key={`new-${index}`} className="relative aspect-[3/4] bg-zinc-900 rounded-lg overflow-hidden">
-                      <img
-                        src={preview || "/placeholder.svg"}
-                        alt={`New page ${index + 1}`}
-                        className="w-full h-full object-cover"
-                      />
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeNewPage(index)}
-                        className="absolute top-2 right-2 bg-black/50 hover:bg-black/70"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                      <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-xs text-center py-1">
-                        Page {existingPages.length + index + 1} (New)
+                    <div key={`new-${index}`} className="space-y-2">
+                      <div className="flex items-start gap-4">
+                        <div className="relative aspect-square w-32 bg-zinc-900 rounded-lg overflow-hidden flex-shrink-0">
+                          <img
+                            src={preview || "/placeholder.svg"}
+                            alt={`New page ${index + 1}`}
+                            className="w-full h-full object-cover"
+                          />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => removeNewPage(index)}
+                            className="absolute top-2 right-2 bg-black/50 hover:bg-black/70 h-6 w-6"
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                          <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-xs text-center py-1">
+                            Page {existingPages.length + index + 1} (New)
+                          </div>
+                        </div>
+                        <div className="flex-1">
+                          <Label htmlFor={`new-page-title-${index}`} className="text-zinc-400 text-sm">
+                            Page Title / Chapter (Optional)
+                          </Label>
+                          <Input
+                            id={`new-page-title-${index}`}
+                            value={newPageTitles[existingPages.length + index + 1] || ""}
+                            onChange={(e) => updatePageTitle(existingPages.length + index + 1, e.target.value, true)}
+                            placeholder={`e.g., "Introduction" or "Chapter 1"`}
+                            className="bg-zinc-900 border-zinc-800 text-white text-sm"
+                          />
+                        </div>
                       </div>
                     </div>
                   ))}

@@ -206,7 +206,7 @@ export default function EBooksPage() {
               transition={{ duration: 0.3, delay: index * 0.1 }}
             >
               <Card className="bg-black border-zinc-800 overflow-hidden hover:border-zinc-700 transition-all group">
-                <div className="relative aspect-[3/4] bg-zinc-900">
+                <div className="relative aspect-square bg-zinc-900">
                   {ebook.coverUrl ? (
                     <img
                       src={ebook.coverUrl || "/placeholder.svg"}

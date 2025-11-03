@@ -99,7 +99,7 @@ export default function BundleCard({ item, user, creatorId, creatorUsername, isP
       className="bg-zinc-900 rounded-lg overflow-hidden border border-zinc-700/30 hover:border-zinc-600/40 transition-all duration-300 w-full max-w-[340px] sm:max-w-[320px] relative cursor-pointer group"
     >
       <div
-        className={`relative ${isEbook ? "aspect-[3/4]" : "aspect-square"} bg-zinc-800 overflow-hidden`}
+        className={`relative ${isEbook ? "aspect-square" : "aspect-square"} bg-zinc-800 overflow-hidden`}
         onMouseEnter={() => setIsThumbnailHovered(true)}
         onMouseLeave={() => setIsThumbnailHovered(false)}
       >
