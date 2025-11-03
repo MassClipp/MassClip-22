@@ -544,287 +544,287 @@ export default function ViewStorefrontPage() {
                 </div>
               )}
 
-              {!isEditingSocials && (
-                <h3 className="text-zinc-500 text-xs font-medium uppercase tracking-wider mt-4 mb-2">Links</h3>
-              )}
+              {/* Links Section */}
+              <div className="w-full max-w-sm space-y-3">
+                <h3 className="text-zinc-400 text-xs font-medium uppercase tracking-wider text-center">Links</h3>
 
-              {/* Social Links */}
-              {isEditingSocials ? (
-                <div className="space-y-2 w-full max-w-xs">
-                  <Input
-                    value={tempSocials.instagram || ""}
-                    onChange={(e) => setTempSocials({ ...tempSocials, instagram: e.target.value })}
-                    placeholder="Instagram username"
-                    className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
-                  />
-                  <Input
-                    value={tempSocials.twitter || ""}
-                    onChange={(e) => setTempSocials({ ...tempSocials, twitter: e.target.value })}
-                    placeholder="Twitter/X username"
-                    className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
-                  />
-                  <Input
-                    value={tempSocials.tiktok || ""}
-                    onChange={(e) => setTempSocials({ ...tempSocials, tiktok: e.target.value })}
-                    placeholder="TikTok username"
-                    className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
-                  />
-                  <Input
-                    value={tempSocials.youtube || ""}
-                    onChange={(e) => setTempSocials({ ...tempSocials, youtube: e.target.value })}
-                    placeholder="YouTube channel URL"
-                    className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
-                  />
-                  <Input
-                    value={tempSocials.twitch || ""}
-                    onChange={(e) => setTempSocials({ ...tempSocials, twitch: e.target.value })}
-                    placeholder="Twitch username"
-                    className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
-                  />
-                  <Input
-                    value={tempSocials.discord || ""}
-                    onChange={(e) => setTempSocials({ ...tempSocials, discord: e.target.value })}
-                    placeholder="Discord invite link"
-                    className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
-                  />
-                  <Input
-                    value={tempSocials.skool || ""}
-                    onChange={(e) => setTempSocials({ ...tempSocials, skool: e.target.value })}
-                    placeholder="Skool community URL"
-                    className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
-                  />
-                  <Input
-                    value={tempSocials.shopify || ""}
-                    onChange={(e) => setTempSocials({ ...tempSocials, shopify: e.target.value })}
-                    placeholder="Shopify store URL"
-                    className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
-                  />
-                  <Input
-                    value={tempSocials.facebook || ""}
-                    onChange={(e) => setTempSocials({ ...tempSocials, facebook: e.target.value })}
-                    placeholder="Facebook profile/page"
-                    className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
-                  />
-                  <Input
-                    value={tempSocials.linkedin || ""}
-                    onChange={(e) => setTempSocials({ ...tempSocials, linkedin: e.target.value })}
-                    placeholder="LinkedIn profile URL"
-                    className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
-                  />
-                  <Input
-                    value={tempSocials.github || ""}
-                    onChange={(e) => setTempSocials({ ...tempSocials, github: e.target.value })}
-                    placeholder="GitHub username"
-                    className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
-                  />
-                  <Input
-                    value={tempSocials.spotify || ""}
-                    onChange={(e) => setTempSocials({ ...tempSocials, spotify: e.target.value })}
-                    placeholder="Spotify artist URL"
-                    className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
-                  />
-                  <Input
-                    value={tempSocials.appleMusic || ""}
-                    onChange={(e) => setTempSocials({ ...tempSocials, appleMusic: e.target.value })}
-                    placeholder="Apple Music URL"
-                    className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
-                  />
-                  <Input
-                    value={tempSocials.email || ""}
-                    onChange={(e) => setTempSocials({ ...tempSocials, email: e.target.value })}
-                    placeholder="Contact email"
-                    className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
-                  />
-                  <Input
-                    value={tempSocials.website || ""}
-                    onChange={(e) => setTempSocials({ ...tempSocials, website: e.target.value })}
-                    placeholder="Website URL"
-                    className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
-                  />
-                  <div className="flex gap-2 justify-center">
-                    <Button size="sm" onClick={handleSaveSocials} className="bg-white text-black hover:bg-zinc-100">
-                      <Check className="w-4 h-4 mr-1" />
-                      Save
-                    </Button>
+                {isEditingSocials ? (
+                  <div className="space-y-2">
+                    <Input
+                      value={tempSocials.instagram || ""}
+                      onChange={(e) => setTempSocials({ ...tempSocials, instagram: e.target.value })}
+                      placeholder="Instagram username"
+                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
+                    />
+                    <Input
+                      value={tempSocials.twitter || ""}
+                      onChange={(e) => setTempSocials({ ...tempSocials, twitter: e.target.value })}
+                      placeholder="Twitter/X username"
+                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
+                    />
+                    <Input
+                      value={tempSocials.tiktok || ""}
+                      onChange={(e) => setTempSocials({ ...tempSocials, tiktok: e.target.value })}
+                      placeholder="TikTok username"
+                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
+                    />
+                    <Input
+                      value={tempSocials.youtube || ""}
+                      onChange={(e) => setTempSocials({ ...tempSocials, youtube: e.target.value })}
+                      placeholder="YouTube channel URL"
+                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
+                    />
+                    <Input
+                      value={tempSocials.twitch || ""}
+                      onChange={(e) => setTempSocials({ ...tempSocials, twitch: e.target.value })}
+                      placeholder="Twitch username"
+                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
+                    />
+                    <Input
+                      value={tempSocials.discord || ""}
+                      onChange={(e) => setTempSocials({ ...tempSocials, discord: e.target.value })}
+                      placeholder="Discord invite link"
+                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
+                    />
+                    <Input
+                      value={tempSocials.skool || ""}
+                      onChange={(e) => setTempSocials({ ...tempSocials, skool: e.target.value })}
+                      placeholder="Skool community URL"
+                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
+                    />
+                    <Input
+                      value={tempSocials.shopify || ""}
+                      onChange={(e) => setTempSocials({ ...tempSocials, shopify: e.target.value })}
+                      placeholder="Shopify store URL"
+                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
+                    />
+                    <Input
+                      value={tempSocials.facebook || ""}
+                      onChange={(e) => setTempSocials({ ...tempSocials, facebook: e.target.value })}
+                      placeholder="Facebook profile/page"
+                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
+                    />
+                    <Input
+                      value={tempSocials.linkedin || ""}
+                      onChange={(e) => setTempSocials({ ...tempSocials, linkedin: e.target.value })}
+                      placeholder="LinkedIn profile URL"
+                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
+                    />
+                    <Input
+                      value={tempSocials.github || ""}
+                      onChange={(e) => setTempSocials({ ...tempSocials, github: e.target.value })}
+                      placeholder="GitHub username"
+                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
+                    />
+                    <Input
+                      value={tempSocials.spotify || ""}
+                      onChange={(e) => setTempSocials({ ...tempSocials, spotify: e.target.value })}
+                      placeholder="Spotify artist URL"
+                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
+                    />
+                    <Input
+                      value={tempSocials.appleMusic || ""}
+                      onChange={(e) => setTempSocials({ ...tempSocials, appleMusic: e.target.value })}
+                      placeholder="Apple Music URL"
+                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
+                    />
+                    <Input
+                      value={tempSocials.email || ""}
+                      onChange={(e) => setTempSocials({ ...tempSocials, email: e.target.value })}
+                      placeholder="Contact email"
+                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
+                    />
+                    <Input
+                      value={tempSocials.website || ""}
+                      onChange={(e) => setTempSocials({ ...tempSocials, website: e.target.value })}
+                      placeholder="Website URL"
+                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
+                    />
+                    <div className="flex gap-2 justify-center">
+                      <Button size="sm" onClick={handleSaveSocials} className="bg-white text-black hover:bg-zinc-100">
+                        <Check className="w-4 h-4 mr-1" />
+                        Save
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setIsEditingSocials(false)
+                          setTempSocials(socialLinks)
+                        }}
+                        className="text-zinc-400 hover:text-white"
+                      >
+                        <X className="w-4 h-4 mr-1" />
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex gap-2 justify-center flex-wrap">
+                    {socialLinks.instagram && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                        onClick={() => window.open(`https://instagram.com/${socialLinks.instagram}`, "_blank")}
+                      >
+                        Instagram
+                      </Button>
+                    )}
+                    {socialLinks.twitter && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                        onClick={() => window.open(`https://twitter.com/${socialLinks.twitter}`, "_blank")}
+                      >
+                        Twitter
+                      </Button>
+                    )}
+                    {socialLinks.tiktok && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                        onClick={() => window.open(`https://tiktok.com/@${socialLinks.tiktok}`, "_blank")}
+                      >
+                        TikTok
+                      </Button>
+                    )}
+                    {socialLinks.youtube && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                        onClick={() => window.open(socialLinks.youtube, "_blank")}
+                      >
+                        YouTube
+                      </Button>
+                    )}
+                    {socialLinks.twitch && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                        onClick={() => window.open(`https://twitch.tv/${socialLinks.twitch}`, "_blank")}
+                      >
+                        Twitch
+                      </Button>
+                    )}
+                    {socialLinks.discord && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                        onClick={() => window.open(socialLinks.discord, "_blank")}
+                      >
+                        Discord
+                      </Button>
+                    )}
+                    {socialLinks.skool && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                        onClick={() => window.open(socialLinks.skool, "_blank")}
+                      >
+                        Skool
+                      </Button>
+                    )}
+                    {socialLinks.shopify && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                        onClick={() => window.open(socialLinks.shopify, "_blank")}
+                      >
+                        Shopify
+                      </Button>
+                    )}
+                    {socialLinks.facebook && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                        onClick={() => window.open(socialLinks.facebook, "_blank")}
+                      >
+                        Facebook
+                      </Button>
+                    )}
+                    {socialLinks.linkedin && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                        onClick={() => window.open(socialLinks.linkedin, "_blank")}
+                      >
+                        LinkedIn
+                      </Button>
+                    )}
+                    {socialLinks.github && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                        onClick={() => window.open(`https://github.com/${socialLinks.github}`, "_blank")}
+                      >
+                        GitHub
+                      </Button>
+                    )}
+                    {socialLinks.spotify && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                        onClick={() => window.open(socialLinks.spotify, "_blank")}
+                      >
+                        Spotify
+                      </Button>
+                    )}
+                    {socialLinks.appleMusic && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                        onClick={() => window.open(socialLinks.appleMusic, "_blank")}
+                      >
+                        Apple Music
+                      </Button>
+                    )}
+                    {socialLinks.email && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                        onClick={() => window.open(`mailto:${socialLinks.email}`, "_blank")}
+                      >
+                        Email
+                      </Button>
+                    )}
+                    {socialLinks.website && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                        onClick={() => window.open(socialLinks.website, "_blank")}
+                      >
+                        Website
+                      </Button>
+                    )}
                     <Button
-                      size="sm"
                       variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
                       onClick={() => {
-                        setIsEditingSocials(false)
                         setTempSocials(socialLinks)
+                        setIsEditingSocials(true)
                       }}
-                      className="text-zinc-400 hover:text-white"
                     >
-                      <X className="w-4 h-4 mr-1" />
-                      Cancel
+                      <Plus className="w-4 h-4" />
                     </Button>
                   </div>
-                </div>
-              ) : (
-                <div className="flex gap-2 justify-center flex-wrap">
-                  {socialLinks.instagram && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
-                      onClick={() => window.open(`https://instagram.com/${socialLinks.instagram}`, "_blank")}
-                    >
-                      Instagram
-                    </Button>
-                  )}
-                  {socialLinks.twitter && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
-                      onClick={() => window.open(`https://twitter.com/${socialLinks.twitter}`, "_blank")}
-                    >
-                      Twitter
-                    </Button>
-                  )}
-                  {socialLinks.tiktok && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
-                      onClick={() => window.open(`https://tiktok.com/@${socialLinks.tiktok}`, "_blank")}
-                    >
-                      TikTok
-                    </Button>
-                  )}
-                  {socialLinks.youtube && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
-                      onClick={() => window.open(socialLinks.youtube, "_blank")}
-                    >
-                      YouTube
-                    </Button>
-                  )}
-                  {socialLinks.twitch && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
-                      onClick={() => window.open(`https://twitch.tv/${socialLinks.twitch}`, "_blank")}
-                    >
-                      Twitch
-                    </Button>
-                  )}
-                  {socialLinks.discord && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
-                      onClick={() => window.open(socialLinks.discord, "_blank")}
-                    >
-                      Discord
-                    </Button>
-                  )}
-                  {socialLinks.skool && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
-                      onClick={() => window.open(socialLinks.skool, "_blank")}
-                    >
-                      Skool
-                    </Button>
-                  )}
-                  {socialLinks.shopify && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
-                      onClick={() => window.open(socialLinks.shopify, "_blank")}
-                    >
-                      Shopify
-                    </Button>
-                  )}
-                  {socialLinks.facebook && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
-                      onClick={() => window.open(socialLinks.facebook, "_blank")}
-                    >
-                      Facebook
-                    </Button>
-                  )}
-                  {socialLinks.linkedin && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
-                      onClick={() => window.open(socialLinks.linkedin, "_blank")}
-                    >
-                      LinkedIn
-                    </Button>
-                  )}
-                  {socialLinks.github && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
-                      onClick={() => window.open(`https://github.com/${socialLinks.github}`, "_blank")}
-                    >
-                      GitHub
-                    </Button>
-                  )}
-                  {socialLinks.spotify && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
-                      onClick={() => window.open(socialLinks.spotify, "_blank")}
-                    >
-                      Spotify
-                    </Button>
-                  )}
-                  {socialLinks.appleMusic && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
-                      onClick={() => window.open(socialLinks.appleMusic, "_blank")}
-                    >
-                      Apple Music
-                    </Button>
-                  )}
-                  {socialLinks.email && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
-                      onClick={() => window.open(`mailto:${socialLinks.email}`, "_blank")}
-                    >
-                      Email
-                    </Button>
-                  )}
-                  {socialLinks.website && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
-                      onClick={() => window.open(socialLinks.website, "_blank")}
-                    >
-                      Website
-                    </Button>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
-                    onClick={() => {
-                      setTempSocials(socialLinks)
-                      setIsEditingSocials(true)
-                    }}
-                  >
-                    <Plus className="w-4 h-4" />
-                  </Button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
 
@@ -945,286 +945,287 @@ export default function ViewStorefrontPage() {
                   </div>
                 )}
 
-                {!isEditingSocials && (
-                  <h3 className="text-zinc-500 text-xs font-medium uppercase tracking-wider mt-4 mb-2">Links</h3>
-                )}
+                {/* Links Section */}
+                <div className="space-y-2">
+                  <h3 className="text-zinc-400 text-xs font-medium uppercase tracking-wider">Links</h3>
 
-                {isEditingSocials ? (
-                  <div className="space-y-2">
-                    <Input
-                      value={tempSocials.instagram || ""}
-                      onChange={(e) => setTempSocials({ ...tempSocials, instagram: e.target.value })}
-                      placeholder="Instagram username"
-                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
-                    />
-                    <Input
-                      value={tempSocials.twitter || ""}
-                      onChange={(e) => setTempSocials({ ...tempSocials, twitter: e.target.value })}
-                      placeholder="Twitter/X username"
-                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
-                    />
-                    <Input
-                      value={tempSocials.tiktok || ""}
-                      onChange={(e) => setTempSocials({ ...tempSocials, tiktok: e.target.value })}
-                      placeholder="TikTok username"
-                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
-                    />
-                    <Input
-                      value={tempSocials.youtube || ""}
-                      onChange={(e) => setTempSocials({ ...tempSocials, youtube: e.target.value })}
-                      placeholder="YouTube channel URL"
-                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
-                    />
-                    <Input
-                      value={tempSocials.twitch || ""}
-                      onChange={(e) => setTempSocials({ ...tempSocials, twitch: e.target.value })}
-                      placeholder="Twitch username"
-                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
-                    />
-                    <Input
-                      value={tempSocials.discord || ""}
-                      onChange={(e) => setTempSocials({ ...tempSocials, discord: e.target.value })}
-                      placeholder="Discord invite link"
-                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
-                    />
-                    <Input
-                      value={tempSocials.skool || ""}
-                      onChange={(e) => setTempSocials({ ...tempSocials, skool: e.target.value })}
-                      placeholder="Skool community URL"
-                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
-                    />
-                    <Input
-                      value={tempSocials.shopify || ""}
-                      onChange={(e) => setTempSocials({ ...tempSocials, shopify: e.target.value })}
-                      placeholder="Shopify store URL"
-                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
-                    />
-                    <Input
-                      value={tempSocials.facebook || ""}
-                      onChange={(e) => setTempSocials({ ...tempSocials, facebook: e.target.value })}
-                      placeholder="Facebook profile/page"
-                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
-                    />
-                    <Input
-                      value={tempSocials.linkedin || ""}
-                      onChange={(e) => setTempSocials({ ...tempSocials, linkedin: e.target.value })}
-                      placeholder="LinkedIn profile URL"
-                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
-                    />
-                    <Input
-                      value={tempSocials.github || ""}
-                      onChange={(e) => setTempSocials({ ...tempSocials, github: e.target.value })}
-                      placeholder="GitHub username"
-                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
-                    />
-                    <Input
-                      value={tempSocials.spotify || ""}
-                      onChange={(e) => setTempSocials({ ...tempSocials, spotify: e.target.value })}
-                      placeholder="Spotify artist URL"
-                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
-                    />
-                    <Input
-                      value={tempSocials.appleMusic || ""}
-                      onChange={(e) => setTempSocials({ ...tempSocials, appleMusic: e.target.value })}
-                      placeholder="Apple Music URL"
-                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
-                    />
-                    <Input
-                      value={tempSocials.email || ""}
-                      onChange={(e) => setTempSocials({ ...tempSocials, email: e.target.value })}
-                      placeholder="Contact email"
-                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
-                    />
-                    <Input
-                      value={tempSocials.website || ""}
-                      onChange={(e) => setTempSocials({ ...tempSocials, website: e.target.value })}
-                      placeholder="Website URL"
-                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
-                    />
-                    <div className="flex gap-2">
-                      <Button size="sm" onClick={handleSaveSocials} className="bg-white text-black hover:bg-zinc-100">
-                        <Check className="w-4 h-4 mr-1" />
-                        Save
-                      </Button>
+                  {isEditingSocials ? (
+                    <div className="space-y-2">
+                      <Input
+                        value={tempSocials.instagram || ""}
+                        onChange={(e) => setTempSocials({ ...tempSocials, instagram: e.target.value })}
+                        placeholder="Instagram username"
+                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                      />
+                      <Input
+                        value={tempSocials.twitter || ""}
+                        onChange={(e) => setTempSocials({ ...tempSocials, twitter: e.target.value })}
+                        placeholder="Twitter/X username"
+                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                      />
+                      <Input
+                        value={tempSocials.tiktok || ""}
+                        onChange={(e) => setTempSocials({ ...tempSocials, tiktok: e.target.value })}
+                        placeholder="TikTok username"
+                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                      />
+                      <Input
+                        value={tempSocials.youtube || ""}
+                        onChange={(e) => setTempSocials({ ...tempSocials, youtube: e.target.value })}
+                        placeholder="YouTube channel URL"
+                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                      />
+                      <Input
+                        value={tempSocials.twitch || ""}
+                        onChange={(e) => setTempSocials({ ...tempSocials, twitch: e.target.value })}
+                        placeholder="Twitch username"
+                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                      />
+                      <Input
+                        value={tempSocials.discord || ""}
+                        onChange={(e) => setTempSocials({ ...tempSocials, discord: e.target.value })}
+                        placeholder="Discord invite link"
+                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                      />
+                      <Input
+                        value={tempSocials.skool || ""}
+                        onChange={(e) => setTempSocials({ ...tempSocials, skool: e.target.value })}
+                        placeholder="Skool community URL"
+                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                      />
+                      <Input
+                        value={tempSocials.shopify || ""}
+                        onChange={(e) => setTempSocials({ ...tempSocials, shopify: e.target.value })}
+                        placeholder="Shopify store URL"
+                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                      />
+                      <Input
+                        value={tempSocials.facebook || ""}
+                        onChange={(e) => setTempSocials({ ...tempSocials, facebook: e.target.value })}
+                        placeholder="Facebook profile/page"
+                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                      />
+                      <Input
+                        value={tempSocials.linkedin || ""}
+                        onChange={(e) => setTempSocials({ ...tempSocials, linkedin: e.target.value })}
+                        placeholder="LinkedIn profile URL"
+                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                      />
+                      <Input
+                        value={tempSocials.github || ""}
+                        onChange={(e) => setTempSocials({ ...tempSocials, github: e.target.value })}
+                        placeholder="GitHub username"
+                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                      />
+                      <Input
+                        value={tempSocials.spotify || ""}
+                        onChange={(e) => setTempSocials({ ...tempSocials, spotify: e.target.value })}
+                        placeholder="Spotify artist URL"
+                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                      />
+                      <Input
+                        value={tempSocials.appleMusic || ""}
+                        onChange={(e) => setTempSocials({ ...tempSocials, appleMusic: e.target.value })}
+                        placeholder="Apple Music URL"
+                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                      />
+                      <Input
+                        value={tempSocials.email || ""}
+                        onChange={(e) => setTempSocials({ ...tempSocials, email: e.target.value })}
+                        placeholder="Contact email"
+                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                      />
+                      <Input
+                        value={tempSocials.website || ""}
+                        onChange={(e) => setTempSocials({ ...tempSocials, website: e.target.value })}
+                        placeholder="Website URL"
+                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                      />
+                      <div className="flex gap-2">
+                        <Button size="sm" onClick={handleSaveSocials} className="bg-white text-black hover:bg-zinc-100">
+                          <Check className="w-4 h-4 mr-1" />
+                          Save
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setIsEditingSocials(false)
+                            setTempSocials(socialLinks)
+                          }}
+                          className="text-zinc-400 hover:text-white"
+                        >
+                          <X className="w-4 h-4 mr-1" />
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2 flex-wrap">
+                      {socialLinks.instagram && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                          onClick={() => window.open(`https://instagram.com/${socialLinks.instagram}`, "_blank")}
+                        >
+                          Instagram
+                        </Button>
+                      )}
+                      {socialLinks.twitter && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                          onClick={() => window.open(`https://twitter.com/${socialLinks.twitter}`, "_blank")}
+                        >
+                          Twitter
+                        </Button>
+                      )}
+                      {socialLinks.tiktok && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                          onClick={() => window.open(`https://tiktok.com/@${socialLinks.tiktok}`, "_blank")}
+                        >
+                          TikTok
+                        </Button>
+                      )}
+                      {socialLinks.youtube && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                          onClick={() => window.open(socialLinks.youtube, "_blank")}
+                        >
+                          YouTube
+                        </Button>
+                      )}
+                      {socialLinks.twitch && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                          onClick={() => window.open(`https://twitch.tv/${socialLinks.twitch}`, "_blank")}
+                        >
+                          Twitch
+                        </Button>
+                      )}
+                      {socialLinks.discord && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                          onClick={() => window.open(socialLinks.discord, "_blank")}
+                        >
+                          Discord
+                        </Button>
+                      )}
+                      {socialLinks.skool && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                          onClick={() => window.open(socialLinks.skool, "_blank")}
+                        >
+                          Skool
+                        </Button>
+                      )}
+                      {socialLinks.shopify && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                          onClick={() => window.open(socialLinks.shopify, "_blank")}
+                        >
+                          Shopify
+                        </Button>
+                      )}
+                      {socialLinks.facebook && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                          onClick={() => window.open(socialLinks.facebook, "_blank")}
+                        >
+                          Facebook
+                        </Button>
+                      )}
+                      {socialLinks.linkedin && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                          onClick={() => window.open(socialLinks.linkedin, "_blank")}
+                        >
+                          LinkedIn
+                        </Button>
+                      )}
+                      {socialLinks.github && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                          onClick={() => window.open(`https://github.com/${socialLinks.github}`, "_blank")}
+                        >
+                          GitHub
+                        </Button>
+                      )}
+                      {socialLinks.spotify && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                          onClick={() => window.open(socialLinks.spotify, "_blank")}
+                        >
+                          Spotify
+                        </Button>
+                      )}
+                      {socialLinks.appleMusic && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                          onClick={() => window.open(socialLinks.appleMusic, "_blank")}
+                        >
+                          Apple Music
+                        </Button>
+                      )}
+                      {socialLinks.email && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                          onClick={() => window.open(`mailto:${socialLinks.email}`, "_blank")}
+                        >
+                          Email
+                        </Button>
+                      )}
+                      {socialLinks.website && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                          onClick={() => window.open(socialLinks.website, "_blank")}
+                        >
+                          Website
+                        </Button>
+                      )}
                       <Button
-                        size="sm"
                         variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
                         onClick={() => {
-                          setIsEditingSocials(false)
                           setTempSocials(socialLinks)
+                          setIsEditingSocials(true)
                         }}
-                        className="text-zinc-400 hover:text-white"
                       >
-                        <X className="w-4 h-4 mr-1" />
-                        Cancel
+                        <Plus className="w-4 h-4" />
                       </Button>
                     </div>
-                  </div>
-                ) : (
-                  <div className="flex gap-2 flex-wrap">
-                    {socialLinks.instagram && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
-                        onClick={() => window.open(`https://instagram.com/${socialLinks.instagram}`, "_blank")}
-                      >
-                        Instagram
-                      </Button>
-                    )}
-                    {socialLinks.twitter && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
-                        onClick={() => window.open(`https://twitter.com/${socialLinks.twitter}`, "_blank")}
-                      >
-                        Twitter
-                      </Button>
-                    )}
-                    {socialLinks.tiktok && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
-                        onClick={() => window.open(`https://tiktok.com/@${socialLinks.tiktok}`, "_blank")}
-                      >
-                        TikTok
-                      </Button>
-                    )}
-                    {socialLinks.youtube && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
-                        onClick={() => window.open(socialLinks.youtube, "_blank")}
-                      >
-                        YouTube
-                      </Button>
-                    )}
-                    {socialLinks.twitch && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
-                        onClick={() => window.open(`https://twitch.tv/${socialLinks.twitch}`, "_blank")}
-                      >
-                        Twitch
-                      </Button>
-                    )}
-                    {socialLinks.discord && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
-                        onClick={() => window.open(socialLinks.discord, "_blank")}
-                      >
-                        Discord
-                      </Button>
-                    )}
-                    {socialLinks.skool && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
-                        onClick={() => window.open(socialLinks.skool, "_blank")}
-                      >
-                        Skool
-                      </Button>
-                    )}
-                    {socialLinks.shopify && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
-                        onClick={() => window.open(socialLinks.shopify, "_blank")}
-                      >
-                        Shopify
-                      </Button>
-                    )}
-                    {socialLinks.facebook && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
-                        onClick={() => window.open(socialLinks.facebook, "_blank")}
-                      >
-                        Facebook
-                      </Button>
-                    )}
-                    {socialLinks.linkedin && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
-                        onClick={() => window.open(socialLinks.linkedin, "_blank")}
-                      >
-                        LinkedIn
-                      </Button>
-                    )}
-                    {socialLinks.github && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
-                        onClick={() => window.open(`https://github.com/${socialLinks.github}`, "_blank")}
-                      >
-                        GitHub
-                      </Button>
-                    )}
-                    {socialLinks.spotify && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
-                        onClick={() => window.open(socialLinks.spotify, "_blank")}
-                      >
-                        Spotify
-                      </Button>
-                    )}
-                    {socialLinks.appleMusic && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
-                        onClick={() => window.open(socialLinks.appleMusic, "_blank")}
-                      >
-                        Apple Music
-                      </Button>
-                    )}
-                    {socialLinks.email && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
-                        onClick={() => window.open(`mailto:${socialLinks.email}`, "_blank")}
-                      >
-                        Email
-                      </Button>
-                    )}
-                    {socialLinks.website && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
-                        onClick={() => window.open(socialLinks.website, "_blank")}
-                      >
-                        Website
-                      </Button>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
-                      onClick={() => {
-                        setTempSocials(socialLinks)
-                        setIsEditingSocials(true)
-                      }}
-                    >
-                      <Plus className="w-4 h-4" />
-                    </Button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             </div>
           </div>
