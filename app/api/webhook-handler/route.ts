@@ -133,13 +133,16 @@ async function updateFacelessprenuerMembership(opts: {
 
 export async function POST(request: Request) {
   try {
-    console.log("=== FACELESSPRENUER WEBHOOK RECEIVED ===")
+    console.log("=== VIP/CREATOR PRO WEBHOOK RECEIVED ===")
 
     const webhookSecret =
       process.env.WH_SECRET_TEST || process.env.FACELESSPRENUER_WEBHOOK || process.env.STRIPE_WEBHOOK_SECRET
 
     if (!webhookSecret) {
-      return NextResponse.json({ error: "Missing webhook secret" }, { status: 500 })
+      return NextResponse.json(
+        { error: "Missing webhook secret (WH_SECRET_TEST, FACELESSPRENUER_WEBHOOK, or STRIPE_WEBHOOK_SECRET)" },
+        { status: 500 },
+      )
     }
 
     const stripe = getStripe()
@@ -153,9 +156,9 @@ export async function POST(request: Request) {
     let event: Stripe.Event
     try {
       event = stripe.webhooks.constructEvent(payload, sig, webhookSecret)
-      console.log(`[FACELESSPRENUER WEBHOOK] Event: ${event.type} (${event.id})`)
+      console.log(`[VIP WEBHOOK] Event: ${event.type} (${event.id})`)
     } catch (err: any) {
-      console.error(`[FACELESSPRENUER WEBHOOK] Signature verification failed: ${err.message}`)
+      console.error(`[VIP WEBHOOK] Signature verification failed: ${err.message}`)
       return NextResponse.json({ error: "Invalid signature" }, { status: 400 })
     }
 
@@ -165,7 +168,7 @@ export async function POST(request: Request) {
       eventId: event.id,
       receivedAt: FieldValue.serverTimestamp(),
       rawEvent: JSON.parse(payload),
-      webhook: "facelessprenuer",
+      webhook: "creator-pro",
     })
 
     switch (event.type) {
@@ -178,12 +181,7 @@ export async function POST(request: Request) {
         const priceId = session.metadata?.priceId
 
         if (!uid || !subscriptionId || !customerId || !priceId) {
-          console.log("[FACELESSPRENUER WEBHOOK] Missing required fields")
-          return NextResponse.json({ received: true })
-        }
-
-        if (!FACELESSPRENUER_PRICE_IDS.includes(priceId) && !CREATOR_PRO_PRICE_IDS.includes(priceId)) {
-          console.log(`[FACELESSPRENUER WEBHOOK] Ignoring non-Facelessprenuer price: ${priceId}`)
+          console.log("[VIP WEBHOOK] Missing required fields")
           return NextResponse.json({ received: true })
         }
 
@@ -196,7 +194,7 @@ export async function POST(request: Request) {
             stripeSubscriptionId: subscriptionId,
             status: "active",
           })
-        } else {
+        } else if (CREATOR_PRO_PRICE_IDS.includes(priceId)) {
           await updateCreatorProMembership({
             uid,
             email,
@@ -205,6 +203,8 @@ export async function POST(request: Request) {
             stripeSubscriptionId: subscriptionId,
             status: "active",
           })
+        } else {
+          console.log(`[VIP WEBHOOK] Ignoring unrecognized price: ${priceId}`)
         }
         break
       }
@@ -220,14 +220,14 @@ export async function POST(request: Request) {
           const subscriptionId = invoice.subscription
 
           if (!subscriptionId || typeof subscriptionId !== "string") {
-            console.log("[FACELESSPRENUER WEBHOOK] No subscription ID in invoice")
+            console.log("[VIP WEBHOOK] No subscription ID in invoice")
             return NextResponse.json({ received: true })
           }
 
           try {
             sub = await stripe.subscriptions.retrieve(subscriptionId)
           } catch (error) {
-            console.error("[FACELESSPRENUER WEBHOOK] Failed to retrieve subscription:", error)
+            console.error("[VIP WEBHOOK] Failed to retrieve subscription:", error)
             return NextResponse.json({ received: true })
           }
         }
@@ -238,12 +238,7 @@ export async function POST(request: Request) {
         const currentPeriodEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000) : null
 
         if (!uid || !priceId || !customerId) {
-          console.log("[FACELESSPRENUER WEBHOOK] Missing required fields in subscription")
-          return NextResponse.json({ received: true })
-        }
-
-        if (!FACELESSPRENUER_PRICE_IDS.includes(priceId) && !CREATOR_PRO_PRICE_IDS.includes(priceId)) {
-          console.log(`[FACELESSPRENUER WEBHOOK] Ignoring non-Facelessprenuer price: ${priceId}`)
+          console.log("[VIP WEBHOOK] Missing required fields in subscription")
           return NextResponse.json({ received: true })
         }
 
@@ -252,7 +247,7 @@ export async function POST(request: Request) {
           const cust = await stripe.customers.retrieve(customerId)
           if (!("deleted" in cust)) email = cust.email
         } catch (e) {
-          console.log("[FACELESSPRENUER WEBHOOK] Could not retrieve customer email")
+          console.log("[VIP WEBHOOK] Could not retrieve customer email")
         }
 
         if (FACELESSPRENUER_PRICE_IDS.includes(priceId)) {
@@ -265,7 +260,7 @@ export async function POST(request: Request) {
             currentPeriodEnd,
             status: sub.status as any,
           })
-        } else {
+        } else if (CREATOR_PRO_PRICE_IDS.includes(priceId)) {
           await updateCreatorProMembership({
             uid,
             email,
@@ -275,6 +270,8 @@ export async function POST(request: Request) {
             currentPeriodEnd,
             status: sub.status as any,
           })
+        } else {
+          console.log(`[VIP WEBHOOK] Ignoring unrecognized price: ${priceId}`)
         }
         break
       }
@@ -292,7 +289,7 @@ export async function POST(request: Request) {
         const isCreatorPro = priceId && CREATOR_PRO_PRICE_IDS.includes(priceId)
 
         if (!isFacelessprenuer && !isCreatorPro) {
-          console.log(`[FACELESSPRENUER WEBHOOK] Ignoring non-premium subscription update: ${priceId}`)
+          console.log(`[VIP WEBHOOK] Ignoring unrecognized subscription update: ${priceId}`)
           return NextResponse.json({ received: true })
         }
 
@@ -300,7 +297,7 @@ export async function POST(request: Request) {
         const membershipDoc = await membershipRef.get()
 
         if (!membershipDoc.exists) {
-          console.log(`[FACELESSPRENUER WEBHOOK] Membership doesn't exist for ${uid}, creating it`)
+          console.log(`[VIP WEBHOOK] Membership doesn't exist for ${uid}, creating it`)
           const customerId = typeof sub.customer === "string" ? sub.customer : null
           const currentPeriodEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000) : null
 
@@ -315,7 +312,7 @@ export async function POST(request: Request) {
                 currentPeriodEnd,
                 status: sub.status as any,
               })
-            } else {
+            } else if (isCreatorPro) {
               await updateCreatorProMembership({
                 uid,
                 email: null,
@@ -338,7 +335,7 @@ export async function POST(request: Request) {
             currentPeriodEnd,
             updatedAt: FieldValue.serverTimestamp(),
           })
-          console.log(`[FACELESSPRENUER WEBHOOK] Subscription canceled for ${uid}`)
+          console.log(`[VIP WEBHOOK] Subscription canceled for ${uid}`)
         }
         break
       }
@@ -365,17 +362,17 @@ export async function POST(request: Request) {
           createdAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         })
-        console.log(`[FACELESSPRENUER WEBHOOK] User ${uid} moved to free tier and storefront deactivated`)
+        console.log(`[VIP WEBHOOK] User ${uid} moved to free tier and storefront deactivated`)
         break
       }
 
       default:
-        console.log(`[FACELESSPRENUER WEBHOOK] Unhandled event: ${event.type}`)
+        console.log(`[VIP WEBHOOK] Unhandled event: ${event.type}`)
     }
 
     return NextResponse.json({ received: true })
   } catch (error: any) {
-    console.error("[FACELESSPRENUER WEBHOOK] Error:", error)
+    console.error("[VIP WEBHOOK] Error:", error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }

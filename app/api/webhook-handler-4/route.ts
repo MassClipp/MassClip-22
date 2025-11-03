@@ -74,7 +74,10 @@ export async function POST(request: Request) {
     const webhookSecret = process.env.WH_SECRET_TEST || process.env.FACELESS_PRO_WEBHOOK
 
     if (!webhookSecret) {
-      return NextResponse.json({ error: "Missing FACELESS_PRO_WEBHOOK webhook secret" }, { status: 500 })
+      return NextResponse.json(
+        { error: "Missing webhook secret (WH_SECRET_TEST or FACELESS_PRO_WEBHOOK)" },
+        { status: 500 },
+      )
     }
 
     const stripe = getStripe()
