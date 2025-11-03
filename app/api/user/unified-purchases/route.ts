@@ -248,6 +248,7 @@ export async function GET(request: NextRequest) {
             creatorId: data.creatorId,
             creatorUsername,
             type: "product_box",
+            thumbnailUrl: null,
             metadata: {
               title: data.productBoxTitle || "Untitled Product",
               description: data.description || "",
@@ -264,6 +265,68 @@ export async function GET(request: NextRequest) {
       }
     } catch (error) {
       console.warn(`⚠️ [Unified Purchases API] Could not fetch product box purchases (collection may not exist):`, error)
+    }
+
+    // Fetch eBook purchases
+    try {
+      let ebookPurchasesSnapshot
+      try {
+        ebookPurchasesSnapshot = await db
+          .collection("ebookPurchases")
+          .where("buyerUid", "==", userId)
+          .orderBy("createdAt", "desc")
+          .get()
+        console.log(`✅ [Unified Purchases API] eBook purchases query with ordering successful`)
+      } catch (indexError) {
+        console.warn("⚠️ [Unified Purchases API] eBook index missing, using simple query")
+        ebookPurchasesSnapshot = await db.collection("ebookPurchases").where("buyerUid", "==", userId).get()
+        console.log(`✅ [Unified Purchases API] eBook purchases simple query successful`)
+      }
+
+      console.log(`📊 [Unified Purchases API] Found ${ebookPurchasesSnapshot.docs.length} eBook purchases`)
+
+      for (const doc of ebookPurchasesSnapshot.docs) {
+        try {
+          const data = doc.data()
+
+          let priceInDollars = 0
+          if (data.price !== undefined && data.price !== null) {
+            priceInDollars = Number(data.price)
+          } else if (data.purchaseAmount !== undefined && data.purchaseAmount !== null) {
+            priceInDollars = Number(data.purchaseAmount) / 100
+          } else if (data.amount !== undefined && data.amount !== null) {
+            const amountValue = Number(data.amount)
+            priceInDollars = amountValue > 100 ? amountValue / 100 : amountValue
+          }
+
+          purchases.push({
+            id: doc.id,
+            title: data.ebookTitle || "Untitled eBook",
+            description: data.ebookDescription || "",
+            price: priceInDollars,
+            currency: data.currency || "usd",
+            status: data.status || "completed",
+            createdAt: data.createdAt || data.completedAt || new Date(),
+            updatedAt: data.updatedAt || data.createdAt || new Date(),
+            ebookId: data.ebookId,
+            creatorId: data.creatorId,
+            creatorUsername: data.creatorUsername || data.creatorDisplayName || "Unknown Creator",
+            type: "ebook",
+            thumbnailUrl: data.ebookCoverUrl || null,
+            metadata: {
+              title: data.ebookTitle || "Untitled eBook",
+              description: data.ebookDescription || "",
+              pageCount: data.ebookPageCount || 0,
+              thumbnailUrl: data.ebookCoverUrl || null,
+              price: priceInDollars,
+            },
+          })
+        } catch (docError) {
+          console.error(`❌ [Unified Purchases API] Error processing eBook purchase ${doc.id}:`, docError)
+        }
+      }
+    } catch (error) {
+      console.warn(`⚠️ [Unified Purchases API] Could not fetch eBook purchases:`, error)
     }
 
     // Sort all purchases by date manually

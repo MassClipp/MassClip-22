@@ -99,7 +99,9 @@ export default function EbookDetailView({ ebook, creator }: EbookDetailViewProps
           <div className="space-y-6">
             <div>
               <h1 className="text-3xl sm:text-4xl font-bold text-white mb-4">{ebook.title}</h1>
-              {ebook.description && <p className="text-zinc-400 text-lg leading-relaxed">{ebook.description}</p>}
+              {ebook.description && ebook.description.trim() !== "" && ebook.description !== ebook.title && (
+                <p className="text-zinc-400 text-lg leading-relaxed whitespace-pre-wrap">{ebook.description}</p>
+              )}
             </div>
 
             <div className="flex items-center gap-4">

@@ -23,15 +23,17 @@ interface Purchase {
   updatedAt: any
   productBoxId?: string
   bundleId?: string
+  ebookId?: string // Add ebookId field
   creatorId?: string
   creatorUsername?: string
-  type?: "product_box" | "bundle" | "subscription"
+  type?: "product_box" | "bundle" | "subscription" | "ebook" // Add ebook type
   downloadUrl?: string
   thumbnailUrl?: string
   metadata?: {
     title?: string
     description?: string
     contentCount?: number
+    pageCount?: number // Add pageCount for eBooks
     thumbnailUrl?: string
     [key: string]: any
   }
@@ -94,6 +96,7 @@ export default function PurchasesPage() {
         updatedAt: purchase.updatedAt || new Date(),
         productBoxId: purchase.productBoxId || null,
         bundleId: purchase.bundleId || null,
+        ebookId: purchase.ebookId || null, // Add ebookId field
         creatorId: purchase.creatorId || "",
         creatorUsername: purchase.creatorUsername || "Unknown Creator",
         type: purchase.type || "product_box",
@@ -102,6 +105,7 @@ export default function PurchasesPage() {
         metadata: {
           ...purchase.metadata,
           contentCount: purchase.metadata?.contentCount || 0,
+          pageCount: purchase.metadata?.pageCount || 0, // Add pageCount for eBooks
           thumbnailUrl: purchase.metadata?.thumbnailUrl || purchase.thumbnailUrl || "",
         },
       }))
@@ -120,7 +124,8 @@ export default function PurchasesPage() {
       purchase.thumbnailUrl ||
       purchase.metadata?.thumbnailUrl ||
       (purchase.type === "bundle" ? `/api/bundles/${purchase.bundleId}/thumbnail` : null) ||
-      (purchase.productBoxId ? `/api/product-box/${purchase.productBoxId}/thumbnail` : null)
+      (purchase.productBoxId ? `/api/product-box/${purchase.productBoxId}/thumbnail` : null) ||
+      (purchase.type === "ebook" ? `/api/ebooks/${purchase.ebookId}/thumbnail` : null) // Add eBook thumbnail URL
     )
   }
 
@@ -265,6 +270,12 @@ export default function PurchasesPage() {
                               {purchase.metadata.contentCount} item{purchase.metadata.contentCount !== 1 ? "s" : ""}
                             </p>
                           )}
+                          {purchase.type === "ebook" && purchase.metadata?.pageCount !== undefined && (
+                            <p className="text-gray-500 text-xs uppercase tracking-wider">
+                              {purchase.metadata.pageCount} page{purchase.metadata.pageCount !== 1 ? "s" : ""}
+                            </p>
+                          )}
+                          {/* </CHANGE> */}
                         </div>
 
                         {/* Price */}
@@ -286,12 +297,15 @@ export default function PurchasesPage() {
                           href={
                             purchase.type === "bundle"
                               ? `/bundles/${purchase.bundleId}/content`
-                              : `/product-box/${purchase.productBoxId}/content`
+                              : purchase.type === "ebook"
+                                ? `/dashboard/ebooks/${purchase.ebookId}`
+                                : `/product-box/${purchase.productBoxId}/content`
                           }
                         >
                           <Eye className="h-4 w-4 mr-2" />
                           Access Content
                         </Link>
+                        {/* </CHANGE> */}
                       </Button>
                     </div>
                   </div>
