@@ -311,8 +311,38 @@ async function processEbookPurchase(session: Stripe.Checkout.Session) {
     throw new Error("Missing eBook ID in session metadata")
   }
 
-  if (!buyerUid) {
-    throw new Error("Missing buyer UID in session metadata")
+  let finalBuyerUid = buyerUid
+  let finalBuyerEmail = buyerEmail
+  let finalBuyerName = buyerName
+
+  if (!buyerUid || buyerUid === "anonymous") {
+    console.log(`📚 [eBook Webhook] Guest checkout detected, extracting customer info from session`)
+
+    // Try to get customer info from Stripe session
+    const customerId = typeof session.customer === "string" ? session.customer : null
+
+    if (customerId) {
+      try {
+        const customer = await stripe.customers.retrieve(customerId)
+        if (!("deleted" in customer)) {
+          finalBuyerEmail = customer.email || session.customer_details?.email || buyerEmail
+          finalBuyerName = customer.name || session.customer_details?.name || buyerName || "Guest User"
+          finalBuyerUid = `guest_${customerId}` // Create a guest UID based on Stripe customer ID
+          console.log(`📚 [eBook Webhook] Guest user info: ${finalBuyerEmail}, ${finalBuyerName}`)
+        }
+      } catch (error) {
+        console.error(`📚 [eBook Webhook] Failed to retrieve customer:`, error)
+      }
+    }
+
+    // Fallback to session customer details
+    if (!finalBuyerEmail) {
+      finalBuyerEmail = session.customer_details?.email || "unknown@guest.com"
+      finalBuyerName = session.customer_details?.name || "Guest User"
+      finalBuyerUid = `guest_${session.id}` // Use session ID as fallback
+    }
+
+    console.log(`📚 [eBook Webhook] Final guest info - UID: ${finalBuyerUid}, Email: ${finalBuyerEmail}`)
   }
 
   // Get eBook details
@@ -365,13 +395,12 @@ async function processEbookPurchase(session: Stripe.Checkout.Session) {
     creatorUsername: creatorData.username,
     creatorDisplayName: creatorData.name,
 
-    // Buyer info
-    buyerUid: buyerUid,
-    userId: buyerUid,
-    buyerEmail: buyerEmail || "",
-    buyerName: buyerName || "Anonymous User",
-    buyerDisplayName: buyerName || "Anonymous User",
-    isAuthenticated: buyerUid !== "anonymous",
+    buyerUid: finalBuyerUid,
+    userId: finalBuyerUid,
+    buyerEmail: finalBuyerEmail,
+    buyerName: finalBuyerName,
+    buyerDisplayName: finalBuyerName,
+    isAuthenticated: buyerUid !== "anonymous" && !finalBuyerUid.startsWith("guest_"),
 
     price: finalPrice,
     amount: finalPrice,
@@ -401,7 +430,7 @@ async function processEbookPurchase(session: Stripe.Checkout.Session) {
   await adminDb.collection("ebookPurchases").doc(session.id).set(purchaseData)
 
   console.log(
-    `✅ [eBook Webhook] eBook purchase created: ${session.id} for user ${buyerUid} - "${ebookData.title}" at $${finalPrice}`,
+    `✅ [eBook Webhook] eBook purchase created: ${session.id} for user ${finalBuyerUid} - "${ebookData.title}" at $${finalPrice}`,
   )
 }
 

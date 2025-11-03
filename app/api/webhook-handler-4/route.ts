@@ -65,7 +65,7 @@ async function updateStarterMembership(opts: {
     updatedAt: FieldValue.serverTimestamp(),
   }
 
-  await adminDb.collection("memberships").doc(uid).set(membershipData)
+  await adminDb.collection("memberships").doc(uid).set(membershipData, { merge: true })
   console.log(`[STARTER WEBHOOK] ✅ Membership updated successfully`)
 }
 
@@ -137,10 +137,26 @@ export async function POST(request: Request) {
 
       case "customer.subscription.created":
       case "invoice.payment_succeeded": {
-        const sub =
-          event.type === "customer.subscription.created"
-            ? (event.data.object as Stripe.Subscription)
-            : await stripe.subscriptions.retrieve((event.data.object as Stripe.Invoice).subscription as string)
+        let sub: Stripe.Subscription
+
+        if (event.type === "customer.subscription.created") {
+          sub = event.data.object as Stripe.Subscription
+        } else {
+          const invoice = event.data.object as Stripe.Invoice
+          const subscriptionId = invoice.subscription
+
+          if (!subscriptionId || typeof subscriptionId !== "string") {
+            console.log("[STARTER WEBHOOK] No subscription ID in invoice")
+            return NextResponse.json({ received: true })
+          }
+
+          try {
+            sub = await stripe.subscriptions.retrieve(subscriptionId)
+          } catch (error) {
+            console.error("[STARTER WEBHOOK] Failed to retrieve subscription:", error)
+            return NextResponse.json({ received: true })
+          }
+        }
 
         const uid = sub.metadata?.buyerUid
         const priceId = sub.items?.data?.[0]?.price?.id
@@ -148,7 +164,7 @@ export async function POST(request: Request) {
         const currentPeriodEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000) : null
 
         if (!uid || !priceId || !customerId) {
-          console.log("[STARTER WEBHOOK] Missing required fields")
+          console.log("[STARTER WEBHOOK] Missing required fields in subscription")
           return NextResponse.json({ received: true })
         }
 
@@ -192,9 +208,32 @@ export async function POST(request: Request) {
           return NextResponse.json({ received: true })
         }
 
+        const membershipRef = adminDb.collection("memberships").doc(uid)
+        const membershipDoc = await membershipRef.get()
+
+        if (!membershipDoc.exists) {
+          console.log(`[STARTER WEBHOOK] Membership doesn't exist for ${uid}, creating it`)
+          // Create the membership instead of just updating
+          const customerId = typeof sub.customer === "string" ? sub.customer : null
+          const currentPeriodEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000) : null
+
+          if (customerId) {
+            await updateStarterMembership({
+              uid,
+              email: null,
+              priceId,
+              stripeCustomerId: customerId,
+              stripeSubscriptionId: sub.id,
+              currentPeriodEnd,
+              status: sub.status as any,
+            })
+          }
+          return NextResponse.json({ received: true })
+        }
+
         if (sub.cancel_at_period_end) {
           const currentPeriodEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000) : null
-          await adminDb.collection("memberships").doc(uid).update({
+          await membershipRef.update({
             status: "canceled",
             isActive: false,
             currentPeriodEnd,
