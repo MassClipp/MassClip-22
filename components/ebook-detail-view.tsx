@@ -56,7 +56,6 @@ export default function EbookDetailView({ ebook, creator }: EbookDetailViewProps
       <div className="fixed inset-0 bg-gradient-to-t from-zinc-900/20 via-transparent to-zinc-800/10 pointer-events-none" />
 
       <div className="relative max-w-7xl mx-auto px-4 sm:px-8 py-8 sm:py-16">
-        {/* Back Button */}
         <Button
           variant="ghost"
           onClick={() => router.push(`/creator/${creator.username}`)}
@@ -67,7 +66,6 @@ export default function EbookDetailView({ ebook, creator }: EbookDetailViewProps
         </Button>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
-          {/* Left Column - Cover Image */}
           <div className="space-y-6">
             <div className="relative aspect-square bg-zinc-900 rounded-lg overflow-hidden border border-zinc-800">
               {ebook.coverUrl && !imageError ? (
@@ -84,7 +82,6 @@ export default function EbookDetailView({ ebook, creator }: EbookDetailViewProps
               )}
             </div>
 
-            {/* Creator Info */}
             <div className="flex items-center gap-4 p-4 bg-zinc-900/50 rounded-lg border border-zinc-800">
               <Avatar className="w-12 h-12 border-2 border-zinc-700">
                 <AvatarImage src={creator.profilePic || "/placeholder.svg"} alt={creator.displayName} />
@@ -99,14 +96,12 @@ export default function EbookDetailView({ ebook, creator }: EbookDetailViewProps
             </div>
           </div>
 
-          {/* Right Column - Details */}
           <div className="space-y-6">
             <div>
               <h1 className="text-3xl sm:text-4xl font-bold text-white mb-4">{ebook.title}</h1>
               {ebook.description && <p className="text-zinc-400 text-lg leading-relaxed">{ebook.description}</p>}
             </div>
 
-            {/* Stats */}
             <div className="flex items-center gap-4">
               <Badge variant="secondary" className="bg-zinc-800 text-zinc-300 px-4 py-2">
                 <BookOpen className="w-4 h-4 mr-2" />
@@ -114,7 +109,6 @@ export default function EbookDetailView({ ebook, creator }: EbookDetailViewProps
               </Badge>
             </div>
 
-            {/* Price and Purchase */}
             <div className="space-y-4 p-6 bg-zinc-900/50 rounded-lg border border-zinc-800">
               <div className="flex items-baseline gap-2">
                 <span className="text-4xl font-bold text-white">${formatPrice(ebook.price)}</span>
@@ -137,7 +131,6 @@ export default function EbookDetailView({ ebook, creator }: EbookDetailViewProps
               </p>
             </div>
 
-            {/* What's Included */}
             {pageTitles.length > 0 && (
               <div className="space-y-3">
                 <h3 className="text-white font-semibold text-lg">Chapters</h3>

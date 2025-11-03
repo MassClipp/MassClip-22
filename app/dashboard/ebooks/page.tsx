@@ -45,18 +45,6 @@ export default function EBooksPage() {
     }
   }, [user])
 
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (!document.hidden && user) {
-        console.log("[v0] Page visible, refetching eBooks")
-        fetchEBooks()
-      }
-    }
-
-    document.addEventListener("visibilitychange", handleVisibilityChange)
-    return () => document.removeEventListener("visibilitychange", handleVisibilityChange)
-  }, [user])
-
   const fetchEBooks = async () => {
     if (!user) return
 
@@ -64,7 +52,6 @@ export default function EBooksPage() {
       setLoading(true)
       const idToken = await user.getIdToken()
 
-      console.log("[v0] Fetching eBooks from API")
       const response = await fetch("/api/creator/ebooks", {
         headers: {
           Authorization: `Bearer ${idToken}`,
@@ -76,10 +63,9 @@ export default function EBooksPage() {
       }
 
       const data = await response.json()
-      console.log("[v0] Received eBooks:", data.ebooks?.length || 0)
       setEbooks(data.ebooks || [])
     } catch (error) {
-      console.error("[v0] Error fetching eBooks:", error)
+      console.error("Error fetching eBooks:", error)
       toast({
         title: "Error",
         description: "Failed to load eBooks",
@@ -212,6 +198,7 @@ export default function EBooksPage() {
                       src={ebook.coverUrl || "/placeholder.svg"}
                       alt={ebook.title}
                       className="w-full h-full object-cover"
+                      loading="lazy"
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">

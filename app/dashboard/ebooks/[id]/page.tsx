@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, type KeyboardEvent } from "react"
+import { useState, useEffect } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
@@ -8,7 +8,6 @@ import { ArrowLeft, Loader2, BookOpen, Edit, ChevronLeft, ChevronRight } from "l
 import { useRouter } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import { motion, AnimatePresence } from "framer-motion"
-import Image from "next/image"
 
 interface EBook {
   id: string
@@ -29,6 +28,8 @@ export default function ViewEBookPage({ params }: { params: { id: string } }) {
   const [ebook, setEbook] = useState<EBook | null>(null)
   const [loading, setLoading] = useState(true)
   const [currentPage, setCurrentPage] = useState(0)
+  const [imageLoading, setImageLoading] = useState(true)
+  const [imageError, setImageError] = useState(false)
 
   useEffect(() => {
     if (user && params.id) {
@@ -54,10 +55,9 @@ export default function ViewEBookPage({ params }: { params: { id: string } }) {
       }
 
       const data = await response.json()
-      console.log("[v0] eBook data received:", data)
       setEbook(data.ebook)
     } catch (error) {
-      console.error("[v0] Error fetching eBook:", error)
+      console.error("Error fetching eBook:", error)
       toast({
         title: "Error",
         description: "Failed to load eBook",
@@ -71,17 +71,21 @@ export default function ViewEBookPage({ params }: { params: { id: string } }) {
   const nextPage = () => {
     if (ebook && currentPage < ebook.pages.length) {
       setCurrentPage(currentPage + 1)
+      setImageLoading(true)
+      setImageError(false)
     }
   }
 
   const prevPage = () => {
     if (currentPage > 0) {
       setCurrentPage(currentPage - 1)
+      setImageLoading(true)
+      setImageError(false)
     }
   }
 
   useEffect(() => {
-    const handleKeyPress = (e: KeyboardEvent) => {
+    const handleKeyPress = (e: globalThis.KeyboardEvent) => {
       if (e.key === "ArrowRight") nextPage()
       if (e.key === "ArrowLeft") prevPage()
     }
@@ -113,6 +117,7 @@ export default function ViewEBookPage({ params }: { params: { id: string } }) {
 
   const allPages = [ebook.coverUrl, ...ebook.pages]
   const totalPages = allPages.length
+  const currentImageUrl = allPages[currentPage]
 
   return (
     <div className="min-h-screen bg-zinc-950">
@@ -160,17 +165,31 @@ export default function ViewEBookPage({ params }: { params: { id: string } }) {
               transition={{ duration: 0.3 }}
               className="relative w-full max-w-4xl bg-zinc-900 rounded-xl overflow-hidden shadow-2xl border border-zinc-800"
             >
-              <div className="relative w-full aspect-square">
-                <Image
-                  src={allPages[currentPage] || "/placeholder.svg"}
-                  alt={currentPage === 0 ? "Cover" : `Page ${currentPage}`}
-                  fill
-                  priority={currentPage === 0}
-                  className="object-contain"
-                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 80vw, 1200px"
-                />
+              <div className="relative w-full aspect-square flex items-center justify-center bg-zinc-900">
+                {imageLoading && !imageError && (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Loader2 className="h-8 w-8 text-zinc-600 animate-spin" />
+                  </div>
+                )}
+                {imageError ? (
+                  <div className="flex flex-col items-center justify-center text-zinc-600">
+                    <BookOpen className="h-16 w-16 mb-2" />
+                    <p className="text-sm">Failed to load image</p>
+                  </div>
+                ) : (
+                  <img
+                    src={currentImageUrl || "/placeholder.svg"}
+                    alt={currentPage === 0 ? "Cover" : `Page ${currentPage}`}
+                    className="w-full h-full object-contain"
+                    onLoad={() => setImageLoading(false)}
+                    onError={() => {
+                      setImageLoading(false)
+                      setImageError(true)
+                    }}
+                  />
+                )}
               </div>
-              {currentPage === 0 && (
+              {currentPage === 0 && !imageError && (
                 <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-6 sm:p-8">
                   <h2 className="text-xl sm:text-3xl font-light text-white mb-2">{ebook.title}</h2>
                   <p className="text-zinc-300 text-sm sm:text-base">{ebook.description}</p>
@@ -195,12 +214,15 @@ export default function ViewEBookPage({ params }: { params: { id: string } }) {
               <span className="hidden sm:inline">Previous</span>
             </Button>
 
-            {/* Page indicators */}
             <div className="flex gap-2 overflow-x-auto max-w-xs sm:max-w-md scrollbar-hide">
               {allPages.map((_, index) => (
                 <button
                   key={index}
-                  onClick={() => setCurrentPage(index)}
+                  onClick={() => {
+                    setCurrentPage(index)
+                    setImageLoading(true)
+                    setImageError(false)
+                  }}
                   className={`flex-shrink-0 h-2 rounded-full transition-all ${
                     index === currentPage ? "bg-white w-8" : "bg-zinc-600 hover:bg-zinc-500 w-2"
                   }`}
