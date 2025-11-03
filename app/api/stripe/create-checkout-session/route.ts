@@ -76,13 +76,14 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     console.log("📝 [Checkout API] Request body:", { ...body, idToken: body.idToken ? "[REDACTED]" : "MISSING" })
 
-    const { idToken, priceId, bundleId, successUrl, cancelUrl, productBoxId, customerEmail, buyerUserId } = body
+    const { idToken, priceId, bundleId, successUrl, cancelUrl, productBoxId, ebookId, customerEmail, buyerUserId } =
+      body
 
     // Determine what we're selling
-    const itemId = bundleId || productBoxId
+    const itemId = bundleId || productBoxId || ebookId
     if (!itemId) {
       console.error("❌ [Checkout API] Missing item ID")
-      return NextResponse.json({ error: "Missing product or bundle ID" }, { status: 400 })
+      return NextResponse.json({ error: "Missing product, bundle, or eBook ID" }, { status: 400 })
     }
 
     // Get buyer information from authentication
@@ -97,10 +98,10 @@ export async function POST(request: NextRequest) {
         buyerUid = decodedToken.uid
         buyerEmail = decodedToken.email || ""
         buyerName = decodedToken.name || decodedToken.email?.split("@")[0] || ""
-        
+
         // Get buyer's subscription plan for platform fee calculation
         buyerPlan = await getUserPlan(buyerUid)
-        
+
         console.log("✅ [Checkout API] Authenticated buyer:", { buyerUid, buyerEmail, buyerPlan })
       } catch (error) {
         console.error("❌ [Checkout API] Token verification failed:", error)
@@ -112,16 +113,29 @@ export async function POST(request: NextRequest) {
       console.log("⚠️ [Checkout API] No authentication token, proceeding as anonymous buyer with free plan")
     }
 
-    // Get bundle details from bundles collection
+    // Get item details from appropriate collection
     console.log("📦 [Checkout API] Fetching item:", itemId)
-    const bundleDoc = await db.collection("bundles").doc(itemId).get()
-    if (!bundleDoc.exists) {
-      console.error("❌ [Checkout API] Bundle not found:", itemId)
-      return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
+    let itemDoc = await db.collection("bundles").doc(itemId).get()
+    let itemType = "bundle"
+
+    if (!itemDoc.exists) {
+      itemDoc = await db.collection("productBoxes").doc(itemId).get()
+      itemType = "product_box"
     }
 
-    const bundle = bundleDoc.data()!
-    console.log("✅ [Checkout API] Bundle found:", {
+    if (!itemDoc.exists) {
+      itemDoc = await db.collection("ebooks").doc(itemId).get()
+      itemType = "ebook"
+    }
+
+    if (!itemDoc.exists) {
+      console.error("❌ [Checkout API] Item not found:", itemId)
+      return NextResponse.json({ error: "Item not found" }, { status: 404 })
+    }
+
+    const bundle = itemDoc.data()!
+    console.log("✅ [Checkout API] Item found:", {
+      type: itemType,
       title: bundle.title,
       price: bundle.price,
       priceId: bundle.priceId,
@@ -138,7 +152,7 @@ export async function POST(request: NextRequest) {
 
     // Get creator's connected Stripe account
     const connectedAccount = await getConnectedStripeAccount(bundle.creatorId)
-    
+
     if (!connectedAccount || !connectedAccount.stripe_user_id) {
       return NextResponse.json(
         {
@@ -189,7 +203,6 @@ export async function POST(request: NextRequest) {
       buyerUid,
       buyerEmail,
       buyerPlan,
-      platformFeeCents,
       isAuthenticated: buyerUid !== "anonymous",
     })
 
@@ -200,20 +213,21 @@ export async function POST(request: NextRequest) {
 
     // CRITICAL: Include comprehensive buyer metadata with platform fee info
     const sessionMetadata: any = {
-      bundleId: itemId,
-      productBoxId: itemId, // For compatibility
+      bundleId: itemType === "bundle" ? itemId : undefined,
+      productBoxId: itemType === "product_box" ? itemId : undefined,
+      ebookId: itemType === "ebook" ? itemId : undefined, // Added ebookId to metadata
       creatorId: bundle.creatorId || "",
       buyerUid, // CRITICAL: Buyer identification
       buyerEmail,
       buyerName,
       buyerPlan, // CRITICAL: For platform fee calculation
       isAuthenticated: buyerUid !== "anonymous" ? "true" : "false",
-      contentType: "bundle",
+      contentType: itemType, // Use dynamic content type
       itemTitle: bundle.title || "Digital Content",
       originalDomain: currentDomain,
       timestamp: new Date().toISOString(),
       stripeAccountId: stripeAccountId, // CRITICAL: For webhook to retrieve session from correct account
-      
+
       // Platform fee information
       platformFeePercentage: platformFeePercentage.toString(),
       platformFeeCents: platformFeeCents.toString(),

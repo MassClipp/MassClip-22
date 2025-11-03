@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation"
 interface UnlockButtonProps {
   bundleId?: string
   productBoxId?: string
+  ebookId?: string // Added ebookId prop
   price: number
   title: string
   className?: string
@@ -22,6 +23,7 @@ interface UnlockButtonProps {
 export function UnlockButton({
   bundleId,
   productBoxId,
+  ebookId, // Added ebookId parameter
   price,
   title,
   className = "",
@@ -47,7 +49,7 @@ export function UnlockButton({
         // Show custom toast with gradient background and login button
         toast({
           title: "Login Required",
-          description: "You need to login or create an account to purchase bundles.",
+          description: "You need to login or create an account to purchase content.",
           variant: "default",
           className: "bg-gradient-to-br from-black via-black to-zinc-800/30 border-zinc-700/50 text-white",
           action: (
@@ -79,16 +81,27 @@ export function UnlockButton({
         return
       }
 
-      const itemId = bundleId || productBoxId
+      const itemId = bundleId || productBoxId || ebookId
       if (!itemId) {
-        throw new Error("No product or bundle ID provided")
+        throw new Error("No product, bundle, or eBook ID provided")
       }
 
       console.log("🔓 [Unlock Button] Starting checkout:", {
         itemId,
+        itemType: ebookId ? "ebook" : bundleId ? "bundle" : "product_box",
         userUid: currentUser?.uid || "anonymous",
         hasToken: !!idToken,
       })
+
+      const requestBody: any = {
+        idToken,
+        successUrl: `${window.location.origin}/purchase-success?session_id={CHECKOUT_SESSION_ID}`,
+        cancelUrl: window.location.href,
+      }
+
+      if (bundleId) requestBody.bundleId = bundleId
+      if (productBoxId) requestBody.productBoxId = productBoxId
+      if (ebookId) requestBody.ebookId = ebookId
 
       // Create checkout session with authentication token
       const response = await fetch("/api/stripe/create-checkout-session", {
@@ -96,12 +109,7 @@ export function UnlockButton({
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          bundleId: itemId,
-          idToken, // CRITICAL: Include the Firebase auth token
-          successUrl: `${window.location.origin}/purchase-success?session_id={CHECKOUT_SESSION_ID}`,
-          cancelUrl: window.location.href,
-        }),
+        body: JSON.stringify(requestBody),
       })
 
       if (!response.ok) {
