@@ -2,17 +2,26 @@ import { type NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
 import { auth, isFirebaseAdminInitialized, adminDb } from "@/lib/firebase-admin"
 
-// Initialize Stripe with the secret key from environment variables
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+const stripeKey = process.env.STRIPE_TEST_KEY || process.env.STRIPE_SECRET_KEY
+if (!stripeKey) {
+  throw new Error("Missing Stripe API key. Set STRIPE_TEST_KEY or STRIPE_SECRET_KEY environment variable.")
+}
+
+const stripe = new Stripe(stripeKey, {
   apiVersion: "2024-06-20",
 })
 
-const FACELESS_PRO_PRICE_ID = process.env.FACELESS_PRO_FIRST! // $29/month (no trial)
-const FACELESSPRENUER_FIRST_TIME_PRICE_ID = process.env.FACELESSPRENUER_FIRST! // $39/month with 3-day trial
-const FACELESSPRENUER_REGULAR_PRICE_ID = process.env.FACELESSPRENUER_REGULAR! // $39/month no trial
+const FACELESS_PRO_PRICE_ID = process.env.FACELESS_PRO_FIRST
+const FACELESSPRENUER_FIRST_TIME_PRICE_ID = process.env.FACELESSPRENUER_FIRST
+const FACELESSPRENUER_REGULAR_PRICE_ID = process.env.FACELESSPRENUER_REGULAR
 
 export async function POST(request: NextRequest) {
   console.log("🚀 [Membership Checkout] Starting session creation...")
+  console.log("💲 [Membership Checkout] Price IDs configured:", {
+    facelessPro: FACELESS_PRO_PRICE_ID ? "✓" : "✗",
+    facelessprenuerFirst: FACELESSPRENUER_FIRST_TIME_PRICE_ID ? "✓" : "✗",
+    facelessprenuerRegular: FACELESSPRENUER_REGULAR_PRICE_ID ? "✓" : "✗",
+  })
 
   if (!isFirebaseAdminInitialized()) {
     console.error("❌ [Membership Checkout] CRITICAL: Firebase Admin SDK is not initialized.")
@@ -57,9 +66,25 @@ export async function POST(request: NextRequest) {
     let trialPeriodDays: number | undefined = undefined
 
     if (plan === "faceless_pro") {
+      if (!FACELESS_PRO_PRICE_ID) {
+        console.error("❌ [Membership Checkout] Missing FACELESS_PRO_FIRST environment variable")
+        return NextResponse.json(
+          { error: "Faceless Pro plan is not configured. Please contact support." },
+          { status: 500 },
+        )
+      }
       priceId = FACELESS_PRO_PRICE_ID
       console.log(`💲 [Membership Checkout] Faceless Pro - $29/month (no trial)`)
     } else if (plan === "facelessprenuer") {
+      if (!FACELESSPRENUER_FIRST_TIME_PRICE_ID || !FACELESSPRENUER_REGULAR_PRICE_ID) {
+        console.error(
+          "❌ [Membership Checkout] Missing FACELESSPRENUER_FIRST or FACELESSPRENUER_REGULAR environment variable",
+        )
+        return NextResponse.json(
+          { error: "Facelessprenuer plan is not configured. Please contact support." },
+          { status: 500 },
+        )
+      }
       priceId = hasUsedTrial ? FACELESSPRENUER_REGULAR_PRICE_ID : FACELESSPRENUER_FIRST_TIME_PRICE_ID
       trialPeriodDays = hasUsedTrial ? undefined : 3
       console.log(
@@ -68,6 +93,15 @@ export async function POST(request: NextRequest) {
     }
     // Default to Facelessprenuer
     else {
+      if (!FACELESSPRENUER_FIRST_TIME_PRICE_ID || !FACELESSPRENUER_REGULAR_PRICE_ID) {
+        console.error(
+          "❌ [Membership Checkout] Missing FACELESSPRENUER_FIRST or FACELESSPRENUER_REGULAR environment variable",
+        )
+        return NextResponse.json(
+          { error: "Facelessprenuer plan is not configured. Please contact support." },
+          { status: 500 },
+        )
+      }
       priceId = hasUsedTrial ? FACELESSPRENUER_REGULAR_PRICE_ID : FACELESSPRENUER_FIRST_TIME_PRICE_ID
       trialPeriodDays = hasUsedTrial ? undefined : 3
       console.log(`💲 [Membership Checkout] No plan specified, defaulting to Facelessprenuer`)
