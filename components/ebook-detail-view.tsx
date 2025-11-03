@@ -138,40 +138,19 @@ export default function EbookDetailView({ ebook, creator }: EbookDetailViewProps
             </div>
 
             {/* What's Included */}
-            <div className="space-y-3">
-              <h3 className="text-white font-semibold text-lg">What's Included</h3>
-              <ul className="space-y-2 text-zinc-400">
-                <li className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
-                  {ebook.pageCount} high-quality pages
-                </li>
-                <li className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
-                  Instant digital access
-                </li>
-                <li className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
-                  Lifetime access to content
-                </li>
-                {pageTitles.length > 0 && (
-                  <>
-                    <li className="flex items-start gap-2 mt-4">
-                      <div className="w-1.5 h-1.5 rounded-full bg-zinc-600 mt-2" />
-                      <div>
-                        <p className="text-white font-medium mb-1">Chapters:</p>
-                        <ul className="space-y-1 text-sm">
-                          {pageTitles.map((title, index) => (
-                            <li key={index} className="text-zinc-500">
-                              {title}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
+            {pageTitles.length > 0 && (
+              <div className="space-y-3">
+                <h3 className="text-white font-semibold text-lg">Chapters</h3>
+                <ul className="space-y-2 text-zinc-400">
+                  {pageTitles.map((title, index) => (
+                    <li key={index} className="flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
+                      {title}
                     </li>
-                  </>
-                )}
-              </ul>
-            </div>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         </div>
       </div>

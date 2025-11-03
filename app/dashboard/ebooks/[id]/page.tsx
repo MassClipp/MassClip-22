@@ -8,6 +8,7 @@ import { ArrowLeft, Loader2, BookOpen, Edit, ChevronLeft, ChevronRight } from "l
 import { useRouter } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import { motion, AnimatePresence } from "framer-motion"
+import Image from "next/image"
 
 interface EBook {
   id: string
@@ -157,13 +158,18 @@ export default function ViewEBookPage({ params }: { params: { id: string } }) {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               transition={{ duration: 0.3 }}
-              className="relative w-full bg-zinc-900 rounded-xl overflow-hidden shadow-2xl border border-zinc-800"
+              className="relative w-full max-w-4xl bg-zinc-900 rounded-xl overflow-hidden shadow-2xl border border-zinc-800"
             >
-              <img
-                src={allPages[currentPage] || "/placeholder.svg"}
-                alt={currentPage === 0 ? "Cover" : `Page ${currentPage}`}
-                className="w-full h-auto object-contain"
-              />
+              <div className="relative w-full aspect-square">
+                <Image
+                  src={allPages[currentPage] || "/placeholder.svg"}
+                  alt={currentPage === 0 ? "Cover" : `Page ${currentPage}`}
+                  fill
+                  priority={currentPage === 0}
+                  className="object-contain"
+                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 80vw, 1200px"
+                />
+              </div>
               {currentPage === 0 && (
                 <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-6 sm:p-8">
                   <h2 className="text-xl sm:text-3xl font-light text-white mb-2">{ebook.title}</h2>
