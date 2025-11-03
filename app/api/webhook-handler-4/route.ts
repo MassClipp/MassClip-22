@@ -71,7 +71,7 @@ export async function POST(request: Request) {
   try {
     console.log("=== FACELESS PRO PLAN WEBHOOK RECEIVED ===")
 
-    const webhookSecret = process.env.FACELESS_PRO_WEBHOOK
+    const webhookSecret = process.env.WH_SECRET_TEST || process.env.FACELESS_PRO_WEBHOOK
 
     if (!webhookSecret) {
       return NextResponse.json({ error: "Missing FACELESS_PRO_WEBHOOK webhook secret" }, { status: 500 })
