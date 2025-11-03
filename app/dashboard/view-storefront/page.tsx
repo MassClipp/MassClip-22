@@ -13,9 +13,6 @@ import { Badge } from "@/components/ui/badge"
 import {
   Loader2,
   Plus,
-  Instagram,
-  Twitter,
-  Globe,
   Edit2,
   Check,
   X,
@@ -28,15 +25,6 @@ import {
   Download,
   Pause,
   ExternalLink,
-  Youtube,
-  Music,
-  ShoppingBag,
-  MessageCircle,
-  Twitch,
-  Facebook,
-  Linkedin,
-  Github,
-  Mail,
 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
@@ -556,6 +544,10 @@ export default function ViewStorefrontPage() {
                 </div>
               )}
 
+              {!isEditingSocials && (
+                <h3 className="text-zinc-500 text-xs font-medium uppercase tracking-wider mt-4 mb-2">Links</h3>
+              )}
+
               {/* Social Links */}
               {isEditingSocials ? (
                 <div className="space-y-2 w-full max-w-xs">
@@ -674,150 +666,150 @@ export default function ViewStorefrontPage() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
                       onClick={() => window.open(`https://instagram.com/${socialLinks.instagram}`, "_blank")}
                     >
-                      <Instagram className="w-4 h-4" />
+                      Instagram
                     </Button>
                   )}
                   {socialLinks.twitter && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
                       onClick={() => window.open(`https://twitter.com/${socialLinks.twitter}`, "_blank")}
                     >
-                      <Twitter className="w-4 h-4" />
+                      Twitter
                     </Button>
                   )}
                   {socialLinks.tiktok && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
                       onClick={() => window.open(`https://tiktok.com/@${socialLinks.tiktok}`, "_blank")}
                     >
-                      <Music className="w-4 h-4" />
+                      TikTok
                     </Button>
                   )}
                   {socialLinks.youtube && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
                       onClick={() => window.open(socialLinks.youtube, "_blank")}
                     >
-                      <Youtube className="w-4 h-4" />
+                      YouTube
                     </Button>
                   )}
                   {socialLinks.twitch && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
                       onClick={() => window.open(`https://twitch.tv/${socialLinks.twitch}`, "_blank")}
                     >
-                      <Twitch className="w-4 h-4" />
+                      Twitch
                     </Button>
                   )}
                   {socialLinks.discord && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
                       onClick={() => window.open(socialLinks.discord, "_blank")}
                     >
-                      <MessageCircle className="w-4 h-4" />
+                      Discord
                     </Button>
                   )}
                   {socialLinks.skool && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
                       onClick={() => window.open(socialLinks.skool, "_blank")}
                     >
-                      <Users className="w-4 h-4" />
+                      Skool
                     </Button>
                   )}
                   {socialLinks.shopify && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
                       onClick={() => window.open(socialLinks.shopify, "_blank")}
                     >
-                      <ShoppingBag className="w-4 h-4" />
+                      Shopify
                     </Button>
                   )}
                   {socialLinks.facebook && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
                       onClick={() => window.open(socialLinks.facebook, "_blank")}
                     >
-                      <Facebook className="w-4 h-4" />
+                      Facebook
                     </Button>
                   )}
                   {socialLinks.linkedin && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
                       onClick={() => window.open(socialLinks.linkedin, "_blank")}
                     >
-                      <Linkedin className="w-4 h-4" />
+                      LinkedIn
                     </Button>
                   )}
                   {socialLinks.github && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
                       onClick={() => window.open(`https://github.com/${socialLinks.github}`, "_blank")}
                     >
-                      <Github className="w-4 h-4" />
+                      GitHub
                     </Button>
                   )}
                   {socialLinks.spotify && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
                       onClick={() => window.open(socialLinks.spotify, "_blank")}
                     >
-                      <Music className="w-4 h-4" />
+                      Spotify
                     </Button>
                   )}
                   {socialLinks.appleMusic && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
                       onClick={() => window.open(socialLinks.appleMusic, "_blank")}
                     >
-                      <Music className="w-4 h-4" />
+                      Apple Music
                     </Button>
                   )}
                   {socialLinks.email && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
                       onClick={() => window.open(`mailto:${socialLinks.email}`, "_blank")}
                     >
-                      <Mail className="w-4 h-4" />
+                      Email
                     </Button>
                   )}
                   {socialLinks.website && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
                       onClick={() => window.open(socialLinks.website, "_blank")}
                     >
-                      <Globe className="w-4 h-4" />
+                      Website
                     </Button>
                   )}
                   <Button
@@ -953,6 +945,10 @@ export default function ViewStorefrontPage() {
                   </div>
                 )}
 
+                {!isEditingSocials && (
+                  <h3 className="text-zinc-500 text-xs font-medium uppercase tracking-wider mt-4 mb-2">Links</h3>
+                )}
+
                 {isEditingSocials ? (
                   <div className="space-y-2">
                     <Input
@@ -1070,150 +1066,150 @@ export default function ViewStorefrontPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
                         onClick={() => window.open(`https://instagram.com/${socialLinks.instagram}`, "_blank")}
                       >
-                        <Instagram className="w-4 h-4" />
+                        Instagram
                       </Button>
                     )}
                     {socialLinks.twitter && (
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
                         onClick={() => window.open(`https://twitter.com/${socialLinks.twitter}`, "_blank")}
                       >
-                        <Twitter className="w-4 h-4" />
+                        Twitter
                       </Button>
                     )}
                     {socialLinks.tiktok && (
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
                         onClick={() => window.open(`https://tiktok.com/@${socialLinks.tiktok}`, "_blank")}
                       >
-                        <Music className="w-4 h-4" />
+                        TikTok
                       </Button>
                     )}
                     {socialLinks.youtube && (
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
                         onClick={() => window.open(socialLinks.youtube, "_blank")}
                       >
-                        <Youtube className="w-4 h-4" />
+                        YouTube
                       </Button>
                     )}
                     {socialLinks.twitch && (
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
                         onClick={() => window.open(`https://twitch.tv/${socialLinks.twitch}`, "_blank")}
                       >
-                        <Twitch className="w-4 h-4" />
+                        Twitch
                       </Button>
                     )}
                     {socialLinks.discord && (
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
                         onClick={() => window.open(socialLinks.discord, "_blank")}
                       >
-                        <MessageCircle className="w-4 h-4" />
+                        Discord
                       </Button>
                     )}
                     {socialLinks.skool && (
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
                         onClick={() => window.open(socialLinks.skool, "_blank")}
                       >
-                        <Users className="w-4 h-4" />
+                        Skool
                       </Button>
                     )}
                     {socialLinks.shopify && (
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
                         onClick={() => window.open(socialLinks.shopify, "_blank")}
                       >
-                        <ShoppingBag className="w-4 h-4" />
+                        Shopify
                       </Button>
                     )}
                     {socialLinks.facebook && (
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
                         onClick={() => window.open(socialLinks.facebook, "_blank")}
                       >
-                        <Facebook className="w-4 h-4" />
+                        Facebook
                       </Button>
                     )}
                     {socialLinks.linkedin && (
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
                         onClick={() => window.open(socialLinks.linkedin, "_blank")}
                       >
-                        <Linkedin className="w-4 h-4" />
+                        LinkedIn
                       </Button>
                     )}
                     {socialLinks.github && (
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
                         onClick={() => window.open(`https://github.com/${socialLinks.github}`, "_blank")}
                       >
-                        <Github className="w-4 h-4" />
+                        GitHub
                       </Button>
                     )}
                     {socialLinks.spotify && (
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
                         onClick={() => window.open(socialLinks.spotify, "_blank")}
                       >
-                        <Music className="w-4 h-4" />
+                        Spotify
                       </Button>
                     )}
                     {socialLinks.appleMusic && (
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
                         onClick={() => window.open(socialLinks.appleMusic, "_blank")}
                       >
-                        <Music className="w-4 h-4" />
+                        Apple Music
                       </Button>
                     )}
                     {socialLinks.email && (
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
                         onClick={() => window.open(`mailto:${socialLinks.email}`, "_blank")}
                       >
-                        <Mail className="w-4 h-4" />
+                        Email
                       </Button>
                     )}
                     {socialLinks.website && (
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-md px-3 py-1.5 h-auto"
                         onClick={() => window.open(socialLinks.website, "_blank")}
                       >
-                        <Globe className="w-4 h-4" />
+                        Website
                       </Button>
                     )}
                     <Button
