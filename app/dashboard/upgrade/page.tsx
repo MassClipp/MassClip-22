@@ -243,7 +243,7 @@ export default function UpgradePage() {
       </div>
 
       <div className="space-y-6">
-        {/* Starter Plan */}
+        {/* Faceless Pro Plan */}
         <Card className="relative overflow-hidden border border-zinc-700/50 bg-gradient-to-br from-zinc-900/90 to-black/90">
           {subscriptionStatus?.currentPlan === "starter" && (
             <div className="absolute right-0 top-0 bg-gradient-to-r from-slate-400 to-cyan-400 px-3 py-1 text-xs font-medium text-black">
@@ -258,14 +258,14 @@ export default function UpgradePage() {
                   <Shield className="h-6 w-6 text-zinc-300" />
                 </div>
                 <div>
-                  <h2 className="text-2xl font-light text-white">Starter Plan</h2>
+                  <h2 className="text-2xl font-light text-white">Faceless Pro</h2>
                   <p className="text-zinc-400">
                     Take your first step towards earning consistently on a storefront to sell your content
                   </p>
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-4xl font-light text-white">$3</p>
+                <p className="text-4xl font-light text-white">$29</p>
                 <span className="text-sm text-zinc-400">/month</span>
               </div>
             </div>
@@ -304,7 +304,7 @@ export default function UpgradePage() {
           </div>
         </Card>
 
-        {/* Creator VIP Plan */}
+        {/* Facelessprenuer Plan */}
         <Card className="relative overflow-hidden border border-zinc-700/50 bg-gradient-to-br from-zinc-900/90 to-black/90">
           {!statusLoading && (
             <div className="absolute right-0 top-0 bg-gradient-to-r from-cyan-400 to-blue-400 px-3 py-1 text-xs font-bold text-black">
@@ -319,7 +319,7 @@ export default function UpgradePage() {
                   <Crown className="h-6 w-6 text-cyan-300" />
                 </div>
                 <div>
-                  <h2 className="text-2xl font-light text-white">Creator VIP</h2>
+                  <h2 className="text-2xl font-light text-white">Facelessprenuer</h2>
                   <p className="text-zinc-400">
                     Scale your content selling business and manage your growth effectively
                   </p>
@@ -330,11 +330,11 @@ export default function UpgradePage() {
                   <>
                     <p className="text-4xl font-light text-white">3 days</p>
                     <span className="text-sm text-zinc-400">free trial</span>
-                    <p className="text-lg text-zinc-500 mt-1">then $15/month</p>
+                    <p className="text-lg text-zinc-500 mt-1">then $39/month</p>
                   </>
                 ) : (
                   <>
-                    <p className="text-4xl font-light text-white">$15</p>
+                    <p className="text-4xl font-light text-white">$39</p>
                     <span className="text-sm text-zinc-400">/month</span>
                   </>
                 )}
@@ -369,7 +369,7 @@ export default function UpgradePage() {
                 onClick={() => handleUpgradeClick("creator_vip")}
                 className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white"
               >
-                Upgrade to Creator VIP
+                Upgrade to Facelessprenuer
               </Button>
             )}
           </div>

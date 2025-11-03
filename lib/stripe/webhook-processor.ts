@@ -60,6 +60,14 @@ const PRICE_ID_TO_PLAN: Record<string, keyof typeof PLAN_CONFIGS> = {
   [process.env.STARTER_PLAN_REGULAR || ""]: "starter",
   [process.env.CREATOR_PRO_FIRST || ""]: "creator_pro",
   [process.env.CREATOR_PRO_REGULAR || ""]: "creator_pro",
+
+  // Faceless Pro (formerly Starter Plan)
+  [process.env.FACELESS_PRO_FIRST || ""]: "starter",
+  [process.env.FACELESS_PRO_REGULAR || ""]: "starter",
+
+  // Facelessprenuer (formerly Creator VIP)
+  [process.env.FACELESSPRENUER_FIRST || ""]: "creator_pro",
+  [process.env.FACELESSPRENUER_REGULAR || ""]: "creator_pro",
 }
 
 // --- Helper Functions ---

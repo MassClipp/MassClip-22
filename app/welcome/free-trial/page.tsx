@@ -132,14 +132,14 @@ export default function FreeTrialPage() {
 
         {/* Comparison Cards */}
         <div className="grid md:grid-cols-2 gap-8 mb-8">
-          {/* Starter Plan */}
+          {/* Faceless Pro Plan */}
           <div className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-2xl p-8 flex flex-col">
             <div className="flex items-center gap-3 mb-6">
               <div className="p-2 rounded-lg bg-zinc-800/50 border border-zinc-700/50">
                 <Shield className="h-6 w-6 text-zinc-300" />
               </div>
               <div>
-                <h3 className="text-2xl font-semibold text-white">Starter Plan</h3>
+                <h3 className="text-2xl font-semibold text-white">Faceless Pro</h3>
                 <p className="text-gray-400">
                   Take your first step towards earning consistently on a storefront to sell your content
                 </p>
@@ -147,7 +147,7 @@ export default function FreeTrialPage() {
             </div>
 
             <div className="text-center mb-6 py-4">
-              <p className="text-5xl font-light text-white">$3</p>
+              <p className="text-5xl font-light text-white">$29</p>
               <span className="text-sm text-gray-400">/month</span>
             </div>
 
@@ -183,7 +183,7 @@ export default function FreeTrialPage() {
             </Button>
           </div>
 
-          {/* Creator VIP Trial */}
+          {/* Facelessprenuer Trial */}
           <div className="bg-gradient-to-br from-cyan-500/10 to-blue-500/10 backdrop-blur-sm border-2 border-cyan-500/30 rounded-2xl p-8 relative flex flex-col">
             <div className="absolute -top-3 left-1/2 -translate-x-1/2">
               <div className="px-4 py-1 rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm font-medium">
@@ -196,7 +196,7 @@ export default function FreeTrialPage() {
                 <Crown className="h-6 w-6 text-cyan-300" />
               </div>
               <div>
-                <h3 className="text-2xl font-semibold text-white">Creator VIP</h3>
+                <h3 className="text-2xl font-semibold text-white">Facelessprenuer</h3>
                 <p className="text-cyan-300">Scale your content selling business and manage your growth effectively</p>
               </div>
             </div>
@@ -204,7 +204,7 @@ export default function FreeTrialPage() {
             <div className="text-center mb-6 py-4">
               <p className="text-5xl font-light text-white">3 days</p>
               <span className="text-sm text-cyan-300">free trial</span>
-              <p className="text-lg text-gray-400 mt-2">then $15/month</p>
+              <p className="text-lg text-gray-400 mt-2">then $39/month</p>
             </div>
 
             <ul className="space-y-4 mb-6 flex-1">
