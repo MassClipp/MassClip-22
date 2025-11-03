@@ -36,6 +36,7 @@ import { db } from "@/lib/firebase"
 import BundleCard from "@/components/bundle-card"
 import { useOnboarding } from "@/hooks/use-onboarding"
 import { OnboardingIndicator } from "@/components/onboarding-indicator"
+import { UnlockButton } from "@/components/unlock-button"
 
 interface ContentItem {
   id: string
@@ -1200,6 +1201,7 @@ function VideoContentCard({ item }: { item: ContentItem }) {
 function EBookCard({ item, username }: { item: ContentItem; username: string | null }) {
   const router = useRouter()
   const [isHovered, setIsHovered] = useState(false)
+  const { user } = useFirebaseAuth()
 
   const handleClick = () => {
     if (username) {
@@ -1263,17 +1265,29 @@ function EBookCard({ item, username }: { item: ContentItem; username: string | n
             </span>
           </div>
 
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              if (username) {
-                router.push(`/creator/${username}/ebook/${item.id}`)
-              }
-            }}
-            className="w-full border border-white/20 text-white hover:bg-white/5 rounded-md font-medium text-sm px-4 py-2.5 transition-colors"
-          >
-            View Details
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                if (username) {
+                  router.push(`/creator/${username}/ebook/${item.id}`)
+                }
+              }}
+              className="flex-1 border border-white/20 text-white hover:bg-white/5 rounded-md font-medium text-sm px-4 py-2.5 transition-colors"
+            >
+              See Details
+            </button>
+            <UnlockButton
+              ebookId={item.id}
+              price={item.price || 0}
+              title={item.title}
+              stripePriceId={item.stripePriceId}
+              user={user}
+              creatorId={item.id}
+              variant="default"
+              className="flex-1 bg-white text-black hover:bg-zinc-100 rounded-md font-medium text-sm px-4 py-2.5 transition-colors"
+            />
+          </div>
         </div>
       </div>
     </div>
