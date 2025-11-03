@@ -15,7 +15,7 @@ interface EBook {
   description: string
   coverUrl: string
   pageCount: number
-  pages: string[]
+  pages: (string | { url: string; title?: string })[] // Support both old and new format
   status: "draft" | "published"
   createdAt: string
   updatedAt: string
@@ -55,6 +55,8 @@ export default function ViewEBookPage({ params }: { params: { id: string } }) {
       }
 
       const data = await response.json()
+      console.log("[v0] eBook data received:", data.ebook) // Debug logging
+      console.log("[v0] Pages data:", data.ebook?.pages) // Debug logging
       setEbook(data.ebook)
     } catch (error) {
       console.error("Error fetching eBook:", error)
@@ -93,6 +95,17 @@ export default function ViewEBookPage({ params }: { params: { id: string } }) {
     return () => window.removeEventListener("keydown", handleKeyPress)
   }, [currentPage, ebook])
 
+  const normalizePages = (pages: (string | { url: string; title?: string })[]): string[] => {
+    if (!pages || !Array.isArray(pages)) return []
+    return pages.map((page) => (typeof page === "string" ? page : page.url)).filter(Boolean)
+  }
+
+  const allPages = ebook ? [ebook.coverUrl, ...normalizePages(ebook.pages)] : []
+  const totalPages = allPages.length
+  const currentImageUrl = allPages[currentPage]
+
+  console.log("[v0] Current page:", currentPage, "URL:", currentImageUrl) // Debug logging
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-black">
@@ -114,10 +127,6 @@ export default function ViewEBookPage({ params }: { params: { id: string } }) {
       </div>
     )
   }
-
-  const allPages = [ebook.coverUrl, ...ebook.pages]
-  const totalPages = allPages.length
-  const currentImageUrl = allPages[currentPage]
 
   return (
     <div className="min-h-screen bg-zinc-950">
@@ -175,21 +184,27 @@ export default function ViewEBookPage({ params }: { params: { id: string } }) {
                   <div className="flex flex-col items-center justify-center text-zinc-600">
                     <BookOpen className="h-16 w-16 mb-2" />
                     <p className="text-sm">Failed to load image</p>
+                    <p className="text-xs mt-2 text-zinc-700">URL: {currentImageUrl}</p>
                   </div>
                 ) : (
                   <img
+                    key={currentImageUrl}
                     src={currentImageUrl || "/placeholder.svg"}
                     alt={currentPage === 0 ? "Cover" : `Page ${currentPage}`}
                     className="w-full h-full object-contain"
-                    onLoad={() => setImageLoading(false)}
-                    onError={() => {
+                    onLoad={() => {
+                      console.log("[v0] Image loaded successfully:", currentImageUrl) // Debug logging
+                      setImageLoading(false)
+                    }}
+                    onError={(e) => {
+                      console.error("[v0] Image failed to load:", currentImageUrl, e) // Debug logging
                       setImageLoading(false)
                       setImageError(true)
                     }}
                   />
                 )}
               </div>
-              {currentPage === 0 && !imageError && (
+              {currentPage === 0 && !imageError && !imageLoading && (
                 <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-6 sm:p-8">
                   <h2 className="text-xl sm:text-3xl font-light text-white mb-2">{ebook.title}</h2>
                   <p className="text-zinc-300 text-sm sm:text-base">{ebook.description}</p>
