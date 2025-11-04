@@ -25,7 +25,11 @@ export default function TestMembershipPermissionsPage() {
 
   const fetchCurrentPlan = async () => {
     try {
-      const response = await fetch("/api/user/membership-status")
+      const response = await fetch("/api/membership-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user?.uid }),
+      })
       const data = await response.json()
       setCurrentPlan(data.plan || "free")
       setPermissions(data.features)

@@ -5,7 +5,7 @@ import { doc, getDoc, updateDoc, setDoc, Timestamp, increment } from "firebase/f
 import { db } from "@/lib/firebase"
 import { useAuth } from "@/contexts/auth-context"
 
-export type UserPlan = "free" | "creator_pro" | "starter"
+export type UserPlan = "free" | "creator_pro" | "starter" | "faceless_pro" | "facelessprenuer"
 
 export interface UserPlanData {
   plan: UserPlan
@@ -53,12 +53,20 @@ export function useUserPlan() {
           if (membershipData.isActive) {
             // If plan is creator_pro or creator_vip, set to creator_pro for backwards compatibility
             // If plan is starter, set to starter
+            // If plan is faceless_pro, set to faceless_pro
+            // If plan is facelessprenuer, set to facelessprenuer
             if (membershipData.plan === "creator_pro" || membershipData.plan === "creator_vip") {
               finalPlan = "creator_pro"
               console.log("[v0] useUserPlan - User is VIP (creator_pro/creator_vip), setting plan to creator_pro")
             } else if (membershipData.plan === "starter") {
               finalPlan = "starter" as UserPlan
               console.log("[v0] useUserPlan - User is Starter, setting plan to starter")
+            } else if (membershipData.plan === "faceless_pro") {
+              finalPlan = "faceless_pro" as UserPlan
+              console.log("[v0] useUserPlan - User is Faceless Pro, setting plan to faceless_pro")
+            } else if (membershipData.plan === "facelessprenuer") {
+              finalPlan = "facelessprenuer" as UserPlan
+              console.log("[v0] useUserPlan - User is Facelessprenuer, setting plan to facelessprenuer")
             } else {
               console.log("[v0] useUserPlan - Unknown plan:", membershipData.plan, "defaulting to free")
             }
@@ -76,7 +84,12 @@ export function useUserPlan() {
 
         console.log("[v0] useUserPlan - Final plan determined:", finalPlan)
 
-        if (finalPlan === "creator_pro" || finalPlan === "starter") {
+        if (
+          finalPlan === "creator_pro" ||
+          finalPlan === "starter" ||
+          finalPlan === "faceless_pro" ||
+          finalPlan === "facelessprenuer"
+        ) {
           setPlanData({
             plan: finalPlan,
             downloads: 0,
@@ -142,7 +155,13 @@ export function useUserPlan() {
   const recordDownload = useCallback(async () => {
     if (!user || !planData) return { success: false, message: "User not authenticated" }
 
-    if (planData.plan === "creator_pro" || planData.plan === "starter") return { success: true }
+    if (
+      planData.plan === "creator_pro" ||
+      planData.plan === "starter" ||
+      planData.plan === "faceless_pro" ||
+      planData.plan === "facelessprenuer"
+    )
+      return { success: true }
 
     try {
       if (planData.downloads >= planData.downloadsLimit) {
@@ -190,7 +209,8 @@ export function useUserPlan() {
     planData,
     loading,
     error,
-    isProUser: planData?.plan === "creator_pro",
+    isProUser:
+      planData?.plan === "creator_pro" || planData?.plan === "faceless_pro" || planData?.plan === "facelessprenuer",
     recordDownload,
     remainingDownloads: planData ? Math.max(0, planData.downloadsLimit - planData.downloads) : 0,
     hasReachedLimit,
