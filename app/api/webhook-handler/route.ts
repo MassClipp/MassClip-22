@@ -278,16 +278,37 @@ export async function POST(request: Request) {
           const invoice = event.data.object as Stripe.Invoice
           const subscriptionId = invoice.subscription
 
-          if (!subscriptionId || typeof subscriptionId !== "string") {
-            console.log("[WEBHOOK] No subscription ID in invoice")
+          console.log(`[WEBHOOK] Processing invoice.payment_succeeded`)
+          console.log(`[WEBHOOK] Invoice ID: ${invoice.id}`)
+          console.log(`[WEBHOOK] Subscription ID from invoice: ${subscriptionId}`)
+          console.log(`[WEBHOOK] Subscription type: ${typeof subscriptionId}`)
+
+          if (!subscriptionId) {
+            console.log("[WEBHOOK] No subscription ID in invoice - this might be a one-time payment")
             return NextResponse.json({ received: true })
           }
 
-          try {
-            sub = await stripe.subscriptions.retrieve(subscriptionId)
-          } catch (error) {
-            console.error("[WEBHOOK] Failed to retrieve subscription:", error)
-            return NextResponse.json({ received: true })
+          if (typeof subscriptionId !== "string") {
+            console.log("[WEBHOOK] Subscription ID is not a string, it's an object. Extracting ID...")
+            const subId = (subscriptionId as any)?.id
+            if (!subId) {
+              console.error("[WEBHOOK] Could not extract subscription ID from object")
+              return NextResponse.json({ error: "Invalid subscription ID format" }, { status: 400 })
+            }
+
+            try {
+              sub = await stripe.subscriptions.retrieve(subId)
+            } catch (error: any) {
+              console.error("[WEBHOOK] Failed to retrieve subscription:", error.message)
+              return NextResponse.json({ error: `Failed to retrieve subscription: ${error.message}` }, { status: 500 })
+            }
+          } else {
+            try {
+              sub = await stripe.subscriptions.retrieve(subscriptionId)
+            } catch (error: any) {
+              console.error("[WEBHOOK] Failed to retrieve subscription:", error.message)
+              return NextResponse.json({ error: `Failed to retrieve subscription: ${error.message}` }, { status: 500 })
+            }
           }
         }
 
@@ -295,6 +316,12 @@ export async function POST(request: Request) {
         const priceId = sub.items?.data?.[0]?.price?.id
         const customerId = typeof sub.customer === "string" ? sub.customer : null
         const currentPeriodEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000) : null
+
+        console.log(`[WEBHOOK] Subscription details:`)
+        console.log(`  UID: ${uid}`)
+        console.log(`  Price ID: ${priceId}`)
+        console.log(`  Customer ID: ${customerId}`)
+        console.log(`  Status: ${sub.status}`)
 
         if (!uid || !priceId || !customerId) {
           console.log("[WEBHOOK] Missing required fields in subscription")
