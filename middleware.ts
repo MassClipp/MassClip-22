@@ -13,5 +13,12 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/api/webhooks/stripe", "/api/webhook-handler*"],
+  matcher: [
+    "/api/webhooks/stripe",
+    "/api/webhook-handler",
+    "/api/webhook-handler-2",
+    "/api/webhook-handler-3",
+    "/api/webhook-handler-4",
+    "/api/webhook-handler-5",
+  ],
 }
