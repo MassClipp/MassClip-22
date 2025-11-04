@@ -33,6 +33,19 @@ const FACELESS_PRO_CONFIG = {
   },
 }
 
+export async function GET() {
+  return NextResponse.json({
+    message: "This is a POST-only endpoint for simulating purchases.",
+    usage: "Go to /admin/test-membership-permissions to use the simulate purchase feature.",
+    endpoint: "/api/debug/simulate-purchase",
+    method: "POST",
+    body: {
+      uid: "user_id",
+      plan: "faceless_pro | facelessprenuer",
+    },
+  })
+}
+
 export async function POST(request: Request) {
   try {
     const { plan, uid } = await request.json()
