@@ -147,9 +147,9 @@ export default function TestMembershipPermissionsPage() {
           )}
 
           <div className="space-y-3">
-            <h3 className="text-sm font-medium">Simulate Purchase (Full Webhook Flow)</h3>
+            <h3 className="text-sm font-medium">Simulate Purchase (Webhook Flow)</h3>
             <p className="text-xs text-muted-foreground">
-              Simulates a complete purchase with all webhook logic, including correct price IDs and subscription data
+              Simulates a successful Stripe purchase and processes it through the same logic as the webhook handlers
             </p>
             <div className="grid gap-3">
               <Button
@@ -174,9 +174,9 @@ export default function TestMembershipPermissionsPage() {
           </div>
 
           <div className="space-y-3">
-            <h3 className="text-sm font-medium">Set Plan (Quick Test)</h3>
+            <h3 className="text-sm font-medium">Manual Plan Setting (Direct Database Update)</h3>
             <p className="text-xs text-muted-foreground">
-              Directly set your plan in the database without going through Stripe
+              Directly updates your membership in the database without going through Stripe
             </p>
             <div className="grid gap-3">
               <Button
