@@ -8,7 +8,7 @@ import { CheckCircle, ArrowRight, Sparkles, Crown, Zap, Shield, Folder, Package 
 import { useAuth } from "@/contexts/auth-context"
 import { getSiteUrl } from "@/lib/url-utils"
 
-type PlanType = "starter" | "creator_vip" | "unknown"
+type PlanType = "starter" | "creator_vip" | "facelessprenuer" | "faceless_pro" | "unknown"
 
 export default function SubscriptionSuccess() {
   const { user } = useAuth()
@@ -56,16 +56,23 @@ export default function SubscriptionSuccess() {
           const data = await response.json()
 
           const plan = data.plan || "creator_vip"
-          setPlanType(plan === "starter" ? "starter" : "creator_vip")
+          setPlanType(plan)
 
           setStatus("success")
           setMessage("Your subscription has been activated successfully!")
 
           if (typeof window !== "undefined" && (window as any).fbq) {
             ;(window as any).fbq("track", "Purchase", {
-              value: plan === "starter" ? 3.0 : 15.0,
+              value: plan === "starter" ? 3.0 : plan === "faceless_pro" ? 29.0 : 39.0,
               currency: "USD",
-              content_name: plan === "starter" ? "Starter Plan Subscription" : "Creator VIP Subscription",
+              content_name:
+                plan === "starter"
+                  ? "Starter Plan Subscription"
+                  : plan === "faceless_pro"
+                    ? "Faceless Pro Subscription"
+                    : plan === "facelessprenuer"
+                      ? "Facelessprenuer Subscription"
+                      : "Creator VIP Subscription",
               content_type: "subscription",
             })
           }
@@ -121,6 +128,54 @@ export default function SubscriptionSuccess() {
         },
       ],
     },
+    faceless_pro: {
+      title: "Welcome to Faceless Pro!",
+      description: "Your subscription is now active. Start creating and selling premium content!",
+      features: [
+        {
+          icon: Package,
+          title: "25 Videos Per Bundle",
+          description: "Create larger bundles",
+          color: "emerald",
+        },
+        {
+          icon: Folder,
+          title: "10 Bundles",
+          description: "More content options",
+          color: "cyan",
+        },
+        {
+          icon: Shield,
+          title: "15% Platform Fee",
+          description: "Better creator rate",
+          color: "purple",
+        },
+      ],
+    },
+    facelessprenuer: {
+      title: "Welcome to Facelessprenuer!",
+      description: "Your subscription is now active. Get ready to unlock unlimited creative potential!",
+      features: [
+        {
+          icon: Crown,
+          title: "Unlimited Access",
+          description: "All premium features unlocked",
+          color: "emerald",
+        },
+        {
+          icon: Zap,
+          title: "10% Platform Fee",
+          description: "Keep more of your earnings",
+          color: "cyan",
+        },
+        {
+          icon: Sparkles,
+          title: "Full Vex AI",
+          description: "AI-powered bundle creation",
+          color: "purple",
+        },
+      ],
+    },
     creator_vip: {
       title: "Welcome to Creator VIP!",
       description: "Your subscription is now active. Get ready to unlock unlimited creative potential!",
@@ -147,7 +202,14 @@ export default function SubscriptionSuccess() {
     },
   }
 
-  const content = planType === "starter" ? planContent.starter : planContent.creator_vip
+  const content =
+    planType === "starter"
+      ? planContent.starter
+      : planType === "faceless_pro"
+        ? planContent.faceless_pro
+        : planType === "facelessprenuer"
+          ? planContent.facelessprenuer
+          : planContent.creator_vip
 
   return (
     <div className="relative min-h-screen bg-gradient-to-br from-black via-zinc-900 to-black text-white flex items-center justify-center overflow-hidden">
