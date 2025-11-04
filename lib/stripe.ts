@@ -2,7 +2,7 @@
 
 import Stripe from "stripe"
 
-const stripeKey = process.env.STRIPE_TEST_KEY || process.env.STRIPE_SECRET_KEY_TEST || process.env.STRIPE_SECRET_KEY!
+const stripeKey = process.env.STRIPE_SECRET_KEY!
 
 const stripe = new Stripe(stripeKey, {
   apiVersion: "2023-10-16",

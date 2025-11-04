@@ -2,9 +2,9 @@ import { type NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
 import { auth, isFirebaseAdminInitialized, adminDb } from "@/lib/firebase-admin"
 
-const stripeKey = process.env.STRIPE_TEST_KEY || process.env.STRIPE_SECRET_KEY
+const stripeKey = process.env.STRIPE_SECRET_KEY
 if (!stripeKey) {
-  throw new Error("Missing Stripe API key. Set STRIPE_TEST_KEY or STRIPE_SECRET_KEY environment variable.")
+  throw new Error("Missing Stripe API key. Set STRIPE_SECRET_KEY environment variable.")
 }
 
 const stripe = new Stripe(stripeKey, {
