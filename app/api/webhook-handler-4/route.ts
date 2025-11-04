@@ -21,8 +21,8 @@ const FACELESS_PRO_PLAN_CONFIG = {
 }
 
 function getStripe(): Stripe {
-  const key = process.env.STRIPE_SECRET_KEY
-  if (!key) throw new Error("Missing STRIPE_SECRET_KEY")
+  const key = process.env.STRIPE_TEST_KEY || process.env.STRIPE_SECRET_KEY
+  if (!key) throw new Error("Missing STRIPE_TEST_KEY or STRIPE_SECRET_KEY")
   return new Stripe(key, { apiVersion: "2023-10-16" })
 }
 
