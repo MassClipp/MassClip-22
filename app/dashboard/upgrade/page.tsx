@@ -179,12 +179,15 @@ export default function UpgradePage() {
   const handleUpgradeClick = async (plan: "starter" | "creator_vip") => {
     try {
       const idToken = await user?.getIdToken?.()
+
+      const planName = plan === "starter" ? "faceless_pro" : "facelessprenuer"
+
       const res = await fetch("/api/stripe/checkout/pricing", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           idToken,
-          plan,
+          plan: planName,
         }),
       })
 

@@ -11,7 +11,7 @@ const stripe = new Stripe(stripeKey, {
   apiVersion: "2024-06-20",
 })
 
-const FACELESS_PRO_PRICE_ID = process.env.FACELESS_PRO_FIRST
+const FACELESS_PRO_PRICE_ID = "price_1SPRJ0Dheyb0pkWFYaWwRDzO"
 const FACELESSPRENUER_FIRST_TIME_PRICE_ID = process.env.FACELESSPRENUER_FIRST
 const FACELESSPRENUER_REGULAR_PRICE_ID = process.env.FACELESSPRENUER_REGULAR
 
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
     let priceId: string
     let trialPeriodDays: number | undefined = undefined
 
-    if (plan === "faceless_pro") {
+    if (plan === "faceless_pro" || plan === "starter") {
       if (!FACELESS_PRO_PRICE_ID) {
         console.error("❌ [Membership Checkout] Missing FACELESS_PRO_FIRST environment variable")
         return NextResponse.json(
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
       }
       priceId = FACELESS_PRO_PRICE_ID
       console.log(`💲 [Membership Checkout] Faceless Pro - $29/month (no trial)`)
-    } else if (plan === "facelessprenuer") {
+    } else if (plan === "facelessprenuer" || plan === "creator_vip") {
       if (!FACELESSPRENUER_FIRST_TIME_PRICE_ID || !FACELESSPRENUER_REGULAR_PRICE_ID) {
         console.error(
           "❌ [Membership Checkout] Missing FACELESSPRENUER_FIRST or FACELESSPRENUER_REGULAR environment variable",
