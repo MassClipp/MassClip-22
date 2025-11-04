@@ -12,6 +12,7 @@ type Plan = "free" | "faceless_pro" | "facelessprenuer"
 export default function TestMembershipPermissionsPage() {
   const { user } = useAuth()
   const [loading, setLoading] = useState(false)
+  const [simulatingPurchase, setSimulatingPurchase] = useState(false)
   const [currentPlan, setCurrentPlan] = useState<Plan>("free")
   const [permissions, setPermissions] = useState<any>(null)
   const [message, setMessage] = useState("")
@@ -60,6 +61,36 @@ export default function TestMembershipPermissionsPage() {
     } catch (error: any) {
       setMessage(`❌ Error: ${error.message}`)
       setLoading(false)
+    }
+  }
+
+  const simulatePurchase = async (plan: "faceless_pro" | "facelessprenuer") => {
+    if (!user) return
+
+    setSimulatingPurchase(true)
+    setMessage("")
+
+    try {
+      const response = await fetch("/api/debug/simulate-purchase", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ uid: user.uid, plan }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setMessage(`✅ Successfully simulated ${plan} purchase! Refreshing...`)
+        setTimeout(() => {
+          window.location.reload()
+        }, 1000)
+      } else {
+        setMessage(`❌ Error: ${data.error}`)
+        setSimulatingPurchase(false)
+      }
+    } catch (error: any) {
+      setMessage(`❌ Error: ${error.message}`)
+      setSimulatingPurchase(false)
     }
   }
 
@@ -116,11 +147,41 @@ export default function TestMembershipPermissionsPage() {
           )}
 
           <div className="space-y-3">
-            <h3 className="text-sm font-medium">Set Plan</h3>
+            <h3 className="text-sm font-medium">Simulate Purchase (Full Webhook Flow)</h3>
+            <p className="text-xs text-muted-foreground">
+              Simulates a complete purchase with all webhook logic, including correct price IDs and subscription data
+            </p>
+            <div className="grid gap-3">
+              <Button
+                onClick={() => simulatePurchase("faceless_pro")}
+                disabled={simulatingPurchase || loading}
+                variant="default"
+                className="w-full justify-start"
+              >
+                {simulatingPurchase && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Simulate Faceless Pro Purchase
+              </Button>
+              <Button
+                onClick={() => simulatePurchase("facelessprenuer")}
+                disabled={simulatingPurchase || loading}
+                variant="default"
+                className="w-full justify-start"
+              >
+                {simulatingPurchase && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Simulate Facelessprenuer Purchase
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <h3 className="text-sm font-medium">Set Plan (Quick Test)</h3>
+            <p className="text-xs text-muted-foreground">
+              Directly set your plan in the database without going through Stripe
+            </p>
             <div className="grid gap-3">
               <Button
                 onClick={() => setPlan("free")}
-                disabled={loading || currentPlan === "free"}
+                disabled={loading || currentPlan === "free" || simulatingPurchase}
                 variant={currentPlan === "free" ? "secondary" : "outline"}
                 className="w-full justify-start"
               >
@@ -129,7 +190,7 @@ export default function TestMembershipPermissionsPage() {
               </Button>
               <Button
                 onClick={() => setPlan("faceless_pro")}
-                disabled={loading || currentPlan === "faceless_pro"}
+                disabled={loading || currentPlan === "faceless_pro" || simulatingPurchase}
                 variant={currentPlan === "faceless_pro" ? "secondary" : "outline"}
                 className="w-full justify-start"
               >
@@ -138,7 +199,7 @@ export default function TestMembershipPermissionsPage() {
               </Button>
               <Button
                 onClick={() => setPlan("facelessprenuer")}
-                disabled={loading || currentPlan === "facelessprenuer"}
+                disabled={loading || currentPlan === "facelessprenuer" || simulatingPurchase}
                 variant={currentPlan === "facelessprenuer" ? "secondary" : "outline"}
                 className="w-full justify-start"
               >
