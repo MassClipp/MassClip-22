@@ -120,9 +120,16 @@ async function updateFacelessprenuerMembership(opts: {
 }) {
   const { uid, email, priceId, stripeCustomerId, stripeSubscriptionId, currentPeriodEnd, status } = opts
 
-  console.log(`[FACELESSPRENUER WEBHOOK] Updating membership for ${uid}`)
-  console.log(`  Status: ${status}`)
-  console.log(`  Price ID: ${priceId}`)
+  console.log(`[v0] ========================================`)
+  console.log(`[v0] FACELESSPRENUER MEMBERSHIP UPDATE`)
+  console.log(`[v0] ========================================`)
+  console.log(`[v0] UID: ${uid}`)
+  console.log(`[v0] Email: ${email}`)
+  console.log(`[v0] Status: ${status}`)
+  console.log(`[v0] Price ID: ${priceId}`)
+  console.log(`[v0] Stripe Customer ID: ${stripeCustomerId}`)
+  console.log(`[v0] Stripe Subscription ID: ${stripeSubscriptionId}`)
+  console.log(`[v0] Current Period End: ${currentPeriodEnd}`)
 
   const isActive = status === "active" || status === "trialing"
 
@@ -146,8 +153,19 @@ async function updateFacelessprenuerMembership(opts: {
     updatedAt: FieldValue.serverTimestamp(),
   }
 
-  await adminDb.collection("memberships").doc(uid).set(membershipData, { merge: true })
-  console.log(`[FACELESSPRENUER WEBHOOK] ✅ Membership updated successfully`)
+  console.log(`[v0] Membership Data to Write:`, JSON.stringify(membershipData, null, 2))
+  console.log(`[v0] Writing to Firestore path: memberships/${uid}`)
+
+  try {
+    await adminDb.collection("memberships").doc(uid).set(membershipData, { merge: true })
+    console.log(`[v0] ✅ Firestore write successful!`)
+    console.log(`[v0] ========================================`)
+  } catch (error: any) {
+    console.error(`[v0] ❌ Firestore write FAILED:`, error.message)
+    console.error(`[v0] Error details:`, error)
+    console.log(`[v0] ========================================`)
+    throw error
+  }
 }
 
 async function updateFacelessProMembership(opts: {
@@ -274,39 +292,43 @@ export async function POST(request: Request) {
 
         if (event.type === "customer.subscription.created") {
           sub = event.data.object as Stripe.Subscription
+          console.log(`[v0] Processing customer.subscription.created`)
         } else {
           const invoice = event.data.object as Stripe.Invoice
           const subscriptionId = invoice.subscription
 
-          console.log(`[WEBHOOK] Processing invoice.payment_succeeded`)
-          console.log(`[WEBHOOK] Invoice ID: ${invoice.id}`)
-          console.log(`[WEBHOOK] Subscription ID from invoice: ${subscriptionId}`)
-          console.log(`[WEBHOOK] Subscription type: ${typeof subscriptionId}`)
+          console.log(`[v0] ========================================`)
+          console.log(`[v0] Processing invoice.payment_succeeded`)
+          console.log(`[v0] Invoice ID: ${invoice.id}`)
+          console.log(`[v0] Invoice Amount: ${invoice.amount_paid}`)
+          console.log(`[v0] Subscription ID from invoice: ${subscriptionId}`)
+          console.log(`[v0] Subscription type: ${typeof subscriptionId}`)
+          console.log(`[v0] ========================================`)
 
           if (!subscriptionId) {
-            console.log("[WEBHOOK] No subscription ID in invoice - this might be a one-time payment")
+            console.log("[v0] No subscription ID in invoice - this might be a one-time payment")
             return NextResponse.json({ received: true })
           }
 
           if (typeof subscriptionId !== "string") {
-            console.log("[WEBHOOK] Subscription ID is not a string, it's an object. Extracting ID...")
+            console.log("[v0] Subscription ID is not a string, it's an object. Extracting ID...")
             const subId = (subscriptionId as any)?.id
             if (!subId) {
-              console.error("[WEBHOOK] Could not extract subscription ID from object")
+              console.error("[v0] Could not extract subscription ID from object")
               return NextResponse.json({ error: "Invalid subscription ID format" }, { status: 400 })
             }
 
             try {
               sub = await stripe.subscriptions.retrieve(subId)
             } catch (error: any) {
-              console.error("[WEBHOOK] Failed to retrieve subscription:", error.message)
+              console.error("[v0] Failed to retrieve subscription:", error.message)
               return NextResponse.json({ error: `Failed to retrieve subscription: ${error.message}` }, { status: 500 })
             }
           } else {
             try {
               sub = await stripe.subscriptions.retrieve(subscriptionId)
             } catch (error: any) {
-              console.error("[WEBHOOK] Failed to retrieve subscription:", error.message)
+              console.error("[v0] Failed to retrieve subscription:", error.message)
               return NextResponse.json({ error: `Failed to retrieve subscription: ${error.message}` }, { status: 500 })
             }
           }
@@ -317,14 +339,21 @@ export async function POST(request: Request) {
         const customerId = typeof sub.customer === "string" ? sub.customer : null
         const currentPeriodEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000) : null
 
-        console.log(`[WEBHOOK] Subscription details:`)
-        console.log(`  UID: ${uid}`)
-        console.log(`  Price ID: ${priceId}`)
-        console.log(`  Customer ID: ${customerId}`)
-        console.log(`  Status: ${sub.status}`)
+        console.log(`[v0] ========================================`)
+        console.log(`[v0] Subscription Metadata:`)
+        console.log(`[v0] All metadata keys:`, Object.keys(sub.metadata || {}))
+        console.log(`[v0] Full metadata:`, JSON.stringify(sub.metadata, null, 2))
+        console.log(`[v0] Extracted UID: ${uid}`)
+        console.log(`[v0] Extracted Price ID: ${priceId}`)
+        console.log(`[v0] Extracted Customer ID: ${customerId}`)
+        console.log(`[v0] Subscription Status: ${sub.status}`)
+        console.log(`[v0] ========================================`)
 
         if (!uid || !priceId || !customerId) {
-          console.log("[WEBHOOK] Missing required fields in subscription")
+          console.log("[v0] ❌ Missing required fields in subscription")
+          console.log(`[v0] UID present: ${!!uid}`)
+          console.log(`[v0] Price ID present: ${!!priceId}`)
+          console.log(`[v0] Customer ID present: ${!!customerId}`)
           return NextResponse.json({ received: true })
         }
 
