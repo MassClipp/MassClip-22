@@ -53,6 +53,7 @@ export default function UpgradePage() {
     hasUsedFreeTrial: boolean
   } | null>(null)
   const [statusLoading, setStatusLoading] = useState(true)
+  const [checkingOut, setCheckingOut] = useState(false)
 
   useEffect(() => {
     const success = searchParams.get("success")
@@ -176,32 +177,43 @@ export default function UpgradePage() {
     }
   }
 
-  const handleUpgradeClick = async (plan: "starter" | "creator_vip") => {
-    try {
-      const idToken = await user?.getIdToken?.()
+  const handleUpgradeClick = async (plan: "faceless_pro" | "facelessprenuer") => {
+    if (checkingOut) return // Prevent double clicks
 
-      const planName = plan === "starter" ? "faceless_pro" : "facelessprenuer"
+    try {
+      setCheckingOut(true)
+      console.log("[v0] Starting checkout for plan:", plan)
+
+      const idToken = await user?.getIdToken?.()
+      if (!idToken) {
+        console.error("[v0] No auth token available")
+        return
+      }
 
       const res = await fetch("/api/stripe/checkout/pricing", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           idToken,
-          plan: planName,
+          plan, // Now passing "faceless_pro" or "facelessprenuer" directly
         }),
       })
 
       if (!res.ok) {
-        console.warn("[Upgrade] Failed to create checkout session for membership.")
+        const errorData = await res.json()
+        console.error("[v0] Checkout failed:", errorData)
         return
       }
 
       const data = (await res.json()) as { url?: string }
       if (data?.url) {
+        console.log("[v0] Redirecting to checkout:", data.url)
         window.location.href = data.url
       }
     } catch (err) {
-      console.error("[Upgrade] Error starting membership checkout:", err)
+      console.error("[v0] Error starting checkout:", err)
+    } finally {
+      setTimeout(() => setCheckingOut(false), 2000) // Reset after 2 seconds
     }
   }
 
@@ -298,10 +310,11 @@ export default function UpgradePage() {
               </Button>
             ) : (
               <Button
-                onClick={() => handleUpgradeClick("starter")}
-                className="w-full bg-gradient-to-r from-slate-500 to-cyan-500 hover:from-slate-400 hover:to-cyan-400 text-white"
+                onClick={() => handleUpgradeClick("faceless_pro")}
+                disabled={checkingOut}
+                className="w-full bg-gradient-to-r from-slate-500 to-cyan-500 hover:from-slate-400 hover:to-cyan-400 text-white disabled:opacity-50"
               >
-                Get Started
+                {checkingOut ? "Processing..." : "Get Started"}
               </Button>
             )}
           </div>
@@ -369,10 +382,11 @@ export default function UpgradePage() {
               </Button>
             ) : (
               <Button
-                onClick={() => handleUpgradeClick("creator_vip")}
-                className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white"
+                onClick={() => handleUpgradeClick("facelessprenuer")}
+                disabled={checkingOut}
+                className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white disabled:opacity-50"
               >
-                Upgrade to Facelessprenuer
+                {checkingOut ? "Processing..." : "Upgrade to Facelessprenuer"}
               </Button>
             )}
           </div>

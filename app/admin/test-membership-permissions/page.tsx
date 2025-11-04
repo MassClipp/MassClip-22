@@ -49,15 +49,16 @@ export default function TestMembershipPermissionsPage() {
       const data = await response.json()
 
       if (response.ok) {
-        setMessage(`✅ Successfully set plan to ${plan}`)
-        setCurrentPlan(plan)
-        await fetchCurrentPlan()
+        setMessage(`✅ Successfully set plan to ${plan}. Refreshing...`)
+        setTimeout(() => {
+          window.location.reload()
+        }, 1000)
       } else {
         setMessage(`❌ Error: ${data.error}`)
+        setLoading(false)
       }
     } catch (error: any) {
       setMessage(`❌ Error: ${error.message}`)
-    } finally {
       setLoading(false)
     }
   }
