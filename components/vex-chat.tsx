@@ -1152,7 +1152,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                                     headers: { "Content-Type": "application/json" },
                                     body: JSON.stringify({
                                       idToken,
-                                      plan: "creator_vip",
+                                      plan: "facelessprenuer",
                                     }),
                                   })
 
@@ -1434,7 +1434,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                                   headers: { "Content-Type": "application/json" },
                                   body: JSON.stringify({
                                     idToken,
-                                    plan: "creator_vip",
+                                    plan: "facelessprenuer",
                                   }),
                                 })
 
