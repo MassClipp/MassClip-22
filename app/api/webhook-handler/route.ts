@@ -63,8 +63,8 @@ const FACELESS_PRO_CONFIG = {
 }
 
 function getStripe(): Stripe {
-  const key = process.env.STRIPE_SECRET_KEY
-  if (!key) throw new Error("Missing STRIPE_SECRET_KEY")
+  const key = process.env.STRIPE_TEST_KEY || process.env.STRIPE_SECRET_KEY
+  if (!key) throw new Error("Missing STRIPE_TEST_KEY or STRIPE_SECRET_KEY")
   return new Stripe(key, { apiVersion: "2023-10-16" })
 }
 
@@ -196,11 +196,17 @@ export async function POST(request: Request) {
     console.log("=== FACELESSPRENUER/FACELESS PRO WEBHOOK RECEIVED ===")
 
     const webhookSecret =
-      process.env.WH_SECRET_TEST || process.env.FACELESSPRENUER_WEBHOOK || process.env.STRIPE_WEBHOOK_SECRET
+      process.env.WH_SECRET_TEST_2 ||
+      process.env.WH_SECRET_TEST ||
+      process.env.FACELESSPRENUER_WEBHOOK ||
+      process.env.STRIPE_WEBHOOK_SECRET
 
     if (!webhookSecret) {
       return NextResponse.json(
-        { error: "Missing webhook secret (WH_SECRET_TEST, FACELESSPRENUER_WEBHOOK, or STRIPE_WEBHOOK_SECRET)" },
+        {
+          error:
+            "Missing webhook secret (WH_SECRET_TEST_2, WH_SECRET_TEST, FACELESSPRENUER_WEBHOOK, or STRIPE_WEBHOOK_SECRET)",
+        },
         { status: 500 },
       )
     }
