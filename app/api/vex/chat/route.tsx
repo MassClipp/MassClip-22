@@ -329,85 +329,71 @@ export async function POST(request: Request) {
     let bundleLimitsContext = ""
     let folderContext = ""
     let planPermissionsContext = ""
-    let userPlan = "starter" // Changed default from "free" to "starter"
-    let subscriptionData: any = {} // Initialize subscriptionData
+    let userPlan = "free"
+    let subscriptionData: any = {}
     let trialStatus: any = null
-    // </CHANGE>
     const authHeader = request.headers.get("authorization")
 
     if (authHeader && authHeader.startsWith("Bearer ")) {
       try {
-        const tokenParts = authHeader.split("Bearer ")
-        if (tokenParts.length !== 2 || !tokenParts[1] || !tokenParts[1].trim()) {
-          console.error("[v0] Invalid authorization header format")
-        } else {
-          const token = tokenParts[1].trim()
+        const token = authHeader.split("Bearer ")[1]
 
-          // Validate token format (JWT should have 3 parts separated by dots)
-          if (token.split(".").length === 3) {
-            const decodedToken = await getAuth().verifyIdToken(token)
-            userId = decodedToken.uid
-            console.log("[v0] User authenticated:", userId)
+        if (token.split(".").length === 3) {
+          const decodedToken = await getAuth().verifyIdToken(token)
+          userId = decodedToken.uid
+          console.log("[v0] User authenticated:", userId)
 
-            const tierInfoData = await getUserTierInfo(userId)
-            userPlan = tierInfoData.tier || "starter" // Changed default from "free" to "starter"
-            subscriptionData = await checkSubscription(userId)
+          const tierInfoData = await getUserTierInfo(userId)
+          userPlan = tierInfoData.tier || "free"
+          subscriptionData = await checkSubscription(userId)
 
-            try {
-              const membershipDoc = await db.collection("memberships").doc(userId).get()
-              if (membershipDoc.exists) {
-                const membershipData = membershipDoc.data()
-                if (membershipData?.status === "trialing" && membershipData?.currentPeriodEnd) {
-                  const endDate =
-                    membershipData.currentPeriodEnd.toDate?.() ||
-                    new Date(membershipData.currentPeriodEnd._seconds * 1000)
-                  const now = new Date()
-                  const daysRemaining = Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+          try {
+            const membershipDoc = await db.collection("memberships").doc(userId).get()
+            if (membershipDoc.exists) {
+              const membershipData = membershipDoc.data()
+              if (membershipData?.status === "trialing" && membershipData?.currentPeriodEnd) {
+                const endDate =
+                  membershipData.currentPeriodEnd.toDate?.() ||
+                  new Date(membershipData.currentPeriodEnd._seconds * 1000)
+                const now = new Date()
+                const daysRemaining = Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
 
-                  if (daysRemaining > 0) {
-                    trialStatus = {
-                      isOnTrial: true,
-                      daysRemaining,
-                      trialEndDate: endDate.toISOString(),
-                    }
+                if (daysRemaining > 0) {
+                  trialStatus = {
+                    isOnTrial: true,
+                    daysRemaining,
+                    trialEndDate: endDate.toISOString(),
                   }
                 }
               }
-            } catch (error) {
-              console.error("[v0] Error checking trial status:", error)
             }
-            // </CHANGE>
-            // Added instruction to avoid mentioning keywords
-            // Build plan permissions context
-            planPermissionsContext = `
+          } catch (error) {
+            console.error("[v0] Error checking trial status:", error)
+          }
+
+          planPermissionsContext = `
 
 ===== YOUR PLAN PERMISSIONS =====
 
-Current Plan: ${userPlan === "creator_pro" || userPlan === "creator_vip" ? "Creator VIP ($15/month)" : userPlan === "starter" ? "Starter Plan ($3/month)" : "Free Plan"}${trialStatus?.isOnTrial ? ` (FREE TRIAL - ${trialStatus.daysRemaining} days remaining)` : ""}
+Current Plan: ${userPlan === "faceless_pro" ? "Faceless Pro ($29/month)" : userPlan === "facelessprenuer" ? "Facelessprenuer ($39/month)" : userPlan === "creator_pro" || userPlan === "creator_vip" ? "Facelessprenuer ($39/month)" : "Free Plan"}${trialStatus?.isOnTrial ? ` (FREE TRIAL - ${trialStatus.daysRemaining} days remaining)` : ""}
 
 ${
-  userPlan === "starter"
+  userPlan === "faceless_pro"
     ? `
-**STARTER PLAN LIMITS ($3/month):**
-• Folders: ${subscriptionData.features.maxFolders} folders with subfolders allowed
-• Bundles: ${subscriptionData.features.maxBundles} bundles maximum on storefront
-• Videos per bundle: ${subscriptionData.features.maxVideosPerBundle} videos maximum
-• Vex AI: Basic Vex AI - file metadata & folder organization only
-• Transcript Analysis: NOT AVAILABLE (Creator VIP only - Full Vex AI feature)
-• Bundle Creation via Vex: NOT AVAILABLE (Creator VIP only - Full Vex AI feature)
-• Platform Fee: ${subscriptionData.features.platformFeePercentage}% on sales
+**FACELESS PRO FEATURES ($29/month):**
+• Folders: UNLIMITED folders with subfolders
+• Bundles: UNLIMITED bundles on storefront
+• Videos per bundle: UNLIMITED videos
+• Vex AI: Full Vex AI - bundle creation + transcript analysis
+• Transcript Analysis: AVAILABLE - You can analyze and reference video transcripts
+• Bundle Creation via Vex: AVAILABLE - You can create bundles for users
+• Platform Fee: ${subscriptionData.features.platformFeePercentage}% on sales (reduced from 20%)
 
-⚠️ IMPORTANT RESTRICTIONS:
-- You CAN create subfolders for Starter users (they have ${subscriptionData.features.maxFolders} folders with subfolders)
-- You CANNOT analyze or reference transcript content for Starter users (Basic Vex AI only)
-- You CANNOT create bundles via Vex for Starter users (they must create manually)
-- Starter users can organize content into their ${subscriptionData.features.maxFolders} folders with subfolders
-
-If user asks about transcript analysis or bundle creation, tell them to upgrade to Creator VIP ($15/month) for Full Vex AI.
+✅ You have full access to all Vex AI features including transcript analysis and bundle creation.
 `
-    : userPlan === "creator_pro" || userPlan === "creator_vip"
+    : userPlan === "facelessprenuer" || userPlan === "creator_pro" || userPlan === "creator_vip"
       ? `
-**CREATOR VIP FEATURES ($15/month):**${trialStatus?.isOnTrial ? ` (FREE TRIAL - ${trialStatus.daysRemaining} days remaining)` : ""}
+**FACELESSPRENUER FEATURES ($39/month):**${trialStatus?.isOnTrial ? ` (FREE TRIAL - ${trialStatus.daysRemaining} days remaining)` : ""}
 • Folders: UNLIMITED folders with subfolders
 • Bundles: UNLIMITED bundles on storefront
 • Videos per bundle: UNLIMITED videos
@@ -421,60 +407,69 @@ If user asks about transcript analysis or bundle creation, tell them to upgrade 
       : `
 **FREE PLAN:**
 • Limited features
-• Upgrade to Starter Plan ($3/month) or Creator VIP ($15/month) for more features
+• Upgrade to Faceless Pro ($29/month) or Facelessprenuer ($39/month) for more features
 `
 }
-`
-            // </CHANGE>
 
-            bundleLimitsContext = `
+===== MEMBERSHIP CANCELLATION =====
+
+If a user asks how to cancel their membership or subscription:
+1. Tell them to scroll to the bottom of the sidebar
+2. Click on "Settings"
+3. Click "Edit Profile"
+4. Go to the "Membership" tab
+5. They'll find the cancellation option there
+
+Be friendly and helpful when explaining this. Don't try to convince them to stay, just provide clear instructions.
+`
+
+          bundleLimitsContext = `
 
 BUNDLE LIMITS:
 Current bundles: ${tierInfoData.bundlesCreated || 0}
 Bundle limit: ${tierInfoData.bundlesLimit === null ? "unlimited" : tierInfoData.bundlesLimit || 5}
 Can create bundles: ${!tierInfoData.reachedBundleLimit && subscriptionData.features.canCreateBundles ? "YES" : "NO"}
-User tier: ${tierInfoData.tier || "starter"}
+User tier: ${tierInfoData.tier || "free"}
 Max videos per bundle: ${tierInfoData.maxVideosPerBundle === null ? "unlimited" : tierInfoData.maxVideosPerBundle || 15}
 
-${tierInfoData.reachedBundleLimit ? `⚠️ BUNDLE LIMIT REACHED: User has reached their limit of ${tierInfoData.bundlesLimit || 5} bundles. ${(tierInfoData.tier || "starter") === "starter" ? "They need to upgrade to Creator VIP ($15/month) for unlimited bundles." : "They should contact support."}` : ""}
+${tierInfoData.reachedBundleLimit ? `⚠️ BUNDLE LIMIT REACHED: User has reached their limit of ${tierInfoData.bundlesLimit || 5} bundles. They need to upgrade to Faceless Pro ($29/month) or Facelessprenuer ($39/month) for unlimited bundles.` : ""}
 `
-            // </CHANGE>
 
-            try {
-              console.log("[v0] Querying folders for userId:", userId)
+          try {
+            console.log("[v0] Querying folders for userId:", userId)
 
-              const foldersSnapshot = await db
+            const foldersSnapshot = await db
+              .collection("folders")
+              .where("userId", "==", userId)
+              .where("isDeleted", "==", false)
+              .orderBy("name")
+              .get()
+
+            console.log("[v0] Folders query returned:", foldersSnapshot.size, "documents")
+
+            if (foldersSnapshot.empty) {
+              console.log("[v0] No folders found with userId, trying uid field...")
+              const foldersSnapshotUid = await db
                 .collection("folders")
-                .where("userId", "==", userId)
+                .where("uid", "==", userId)
                 .where("isDeleted", "==", false)
                 .orderBy("name")
                 .get()
+              console.log("[v0] Folders query with uid returned:", foldersSnapshotUid.size, "documents")
+            }
 
-              console.log("[v0] Folders query returned:", foldersSnapshot.size, "documents")
+            if (!foldersSnapshot.empty) {
+              const folders = foldersSnapshot.docs.map((doc) => {
+                const data = doc.data()
+                console.log("[v0] Found folder:", doc.id, data.name, "userId:", data.userId, "uid:", data.uid)
+                return {
+                  id: doc.id,
+                  name: data.name,
+                  fileCount: data.fileCount || 0,
+                }
+              })
 
-              if (foldersSnapshot.empty) {
-                console.log("[v0] No folders found with userId, trying uid field...")
-                const foldersSnapshotUid = await db
-                  .collection("folders")
-                  .where("uid", "==", userId)
-                  .where("isDeleted", "==", false)
-                  .orderBy("name")
-                  .get()
-                console.log("[v0] Folders query with uid returned:", foldersSnapshotUid.size, "documents")
-              }
-
-              if (!foldersSnapshot.empty) {
-                const folders = foldersSnapshot.docs.map((doc) => {
-                  const data = doc.data()
-                  console.log("[v0] Found folder:", doc.id, data.name, "userId:", data.userId, "uid:", data.uid)
-                  return {
-                    id: doc.id,
-                    name: data.name,
-                    fileCount: data.fileCount || 0,
-                  }
-                })
-
-                folderContext = `
+              folderContext = `
 
 USER'S CONTENT FOLDERS:
 ${folders.map((folder) => `- "${folder.name}" (${folder.fileCount} files) [ID: ${folder.id}]`).join("\n")}
@@ -487,306 +482,294 @@ You can help organize content into these folders by:
 
 When organizing files, use the folder names exactly as shown above.
 `
-                console.log("[v0] Folder context loaded:", folders.length, "folders")
-              }
-            } catch (error) {
-              console.log("[v0] Failed to load folder context:", error)
+              console.log("[v0] Folder context loaded:", folders.length, "folders")
+            }
+          } catch (error) {
+            console.log("[v0] Failed to load folder context:", error)
+          }
+
+          const analysisDoc = await db.collection("vex_content_analysis").doc(userId).get()
+          if (analysisDoc.exists) {
+            const analysisData = analysisDoc.data()
+
+            const analyzedAt = analysisData?.analyzedAt?.toDate?.() || analysisData?.lastUpdated?.toDate?.()
+            const isStale = !analyzedAt || Date.now() - analyzedAt.getTime() > 5 * 60 * 1000
+
+            if (isStale) {
+              console.log("[v0] Analysis data is stale, triggering refresh...")
+              fetch(`${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/api/vex/analyze-uploads`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${token}`,
+                },
+              }).catch((err) => console.warn("[v0] Failed to trigger analysis refresh:", err))
             }
 
-            const analysisDoc = await db.collection("vex_content_analysis").doc(userId).get()
-            if (analysisDoc.exists) {
-              const analysisData = analysisDoc.data()
+            const contentByFolder = analysisData?.contentByFolder || {}
+            const contentByNiche = analysisData?.contentByNiche || {}
+            const unorganizedContent = analysisData?.unorganizedContent || []
+            const detectedNiches = analysisData?.detectedNiches || []
 
-              // Check if analysis is stale (older than 5 minutes)
-              const analyzedAt = analysisData?.analyzedAt?.toDate?.() || analysisData?.lastUpdated?.toDate?.()
-              const isStale = !analyzedAt || Date.now() - analyzedAt.getTime() > 5 * 60 * 1000
+            const validUnorganizedContent = unorganizedContent.filter((item: any) => {
+              const title = item.title || ""
+              const isGenericTitle =
+                title === "Untitled" ||
+                title === "Unknown" ||
+                title === "New Video" ||
+                /^(IMG|VID|DSC|MOV)_\d+$/.test(title) ||
+                /^\d+$/.test(title) ||
+                /^(Clip|Video|Content)\s+\d+$/.test(title)
 
-              if (isStale) {
-                console.log("[v0] Analysis data is stale, triggering refresh...")
-                // Trigger refresh in background, don't wait for it
-                fetch(`${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/api/vex/analyze-uploads`, {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`,
-                  },
-                }).catch((err) => console.warn("[v0] Failed to trigger analysis refresh:", err))
+              if (isGenericTitle) {
+                console.log(`[v0] Filtering out potentially invalid content: "${title}"`)
               }
 
-              const contentByFolder = analysisData?.contentByFolder || {}
-              const contentByNiche = analysisData?.contentByNiche || {}
-              const unorganizedContent = analysisData?.unorganizedContent || []
-              const detectedNiches = analysisData?.detectedNiches || []
+              return !isGenericTitle && title.length > 0
+            })
 
-              // Filter out generic/invalid titles from unorganized content
-              const validUnorganizedContent = unorganizedContent.filter((item: any) => {
-                const title = item.title || ""
-                const isGenericTitle =
-                  title === "Untitled" ||
-                  title === "Unknown" ||
-                  title === "New Video" ||
-                  /^(IMG|VID|DSC|MOV)_\d+$/.test(title) ||
-                  /^\d+$/.test(title) ||
-                  /^(Clip|Video|Content)\s+\d+$/.test(title)
+            let folderContentsContext = ""
+            let totalFolderItems = 0
 
-                if (isGenericTitle) {
-                  console.log(`[v0] Filtering out potentially invalid content: "${title}"`)
+            if (Object.keys(contentByFolder).length > 0) {
+              folderContentsContext = "\n\nCONTENT IN EACH FOLDER:\n"
+              for (const [folderName, items] of Object.entries(contentByFolder)) {
+                let itemsArray: any[] = []
+
+                if (Array.isArray(items)) {
+                  itemsArray = items
+                } else if (typeof items === "object" && items !== null) {
+                  itemsArray = Object.values(items)
                 }
 
-                return !isGenericTitle && title.length > 0
-              })
+                totalFolderItems += itemsArray.length
+                console.log(`[v0] Folder "${folderName}" contains ${itemsArray.length} items`)
 
-              // Build folder contents context with ALL items from each folder
-              let folderContentsContext = ""
-              let totalFolderItems = 0
+                const itemsList = itemsArray
+                  .map((item: any) => `  - ${item.title || item.filename || "Untitled"} (${item.type || "unknown"})`)
+                  .join("\n")
 
-              if (Object.keys(contentByFolder).length > 0) {
-                folderContentsContext = "\n\nCONTENT IN EACH FOLDER:\n"
-                for (const [folderName, items] of Object.entries(contentByFolder)) {
-                  // Handle both array and object structures
-                  let itemsArray: any[] = []
+                folderContentsContext += `\n"${folderName}" folder (${itemsArray.length} items):\n${itemsList}\n`
+              }
+            }
 
-                  if (Array.isArray(items)) {
-                    itemsArray = items
-                  } else if (typeof items === "object" && items !== null) {
-                    // If it's an object with numeric keys (like {0: item, 1: item}), convert to array
-                    itemsArray = Object.values(items)
-                  }
+            let nicheContentsContext = ""
+            if (Object.keys(contentByNiche).length > 0) {
+              nicheContentsContext = "\n\nCONTENT BY DETECTED NICHE (AI-analyzed):\n"
+              for (const [niche, items] of Object.entries(contentByNiche)) {
+                let itemsArray: any[] = []
 
-                  totalFolderItems += itemsArray.length
-                  console.log(`[v0] Folder "${folderName}" contains ${itemsArray.length} items`)
+                if (Array.isArray(items)) {
+                  itemsArray = items
+                } else if (typeof items === "object" && items !== null) {
+                  itemsArray = Object.values(items)
+                }
 
-                  const itemsList = itemsArray
-                    .map((item: any) => `  - ${item.title || item.filename || "Untitled"} (${item.type || "unknown"})`)
-                    .join("\n")
+                const itemsList = itemsArray
+                  .slice(0, 10)
+                  .map((item: any) => {
+                    const confidence = item.nicheConfidence
+                      ? ` (${Math.round(item.nicheConfidence * 100)}% confidence)`
+                      : ""
+                    return `  - ${item.title || item.filename || "Untitled"}${confidence}`
+                  })
+                  .join("\n")
 
-                  folderContentsContext += `\n"${folderName}" folder (${itemsArray.length} items):\n${itemsList}\n`
+                nicheContentsContext += `\n${niche.charAt(0).toUpperCase() + niche.slice(1)} (${itemsArray.length} items):\n${itemsList}\n`
+                if (itemsArray.length > 10) {
+                  nicheContentsContext += `  ... and ${itemsArray.length - 10} more ${niche} items\n`
                 }
               }
+            }
 
-              let nicheContentsContext = ""
-              if (Object.keys(contentByNiche).length > 0) {
-                nicheContentsContext = "\n\nCONTENT BY DETECTED NICHE (AI-analyzed):\n"
-                for (const [niche, items] of Object.entries(contentByNiche)) {
-                  let itemsArray: any[] = []
+            console.log(`[v0] Total items in folders: ${totalFolderItems}`)
+            console.log(`[v0] Total unorganized items: ${validUnorganizedContent.length}`)
 
-                  if (Array.isArray(items)) {
-                    itemsArray = items
-                  } else if (typeof items === "object" && items !== null) {
-                    itemsArray = Object.values(items)
-                  }
+            let intelligenceContext = "\n\n🧠 VEX INTELLIGENCE SYSTEM:\n"
+            intelligenceContext += "You have access to advanced metadata analysis and cultural understanding.\n\n"
 
-                  const itemsList = itemsArray
-                    .slice(0, 10)
-                    .map((item: any) => {
-                      const confidence = item.nicheConfidence
-                        ? ` (${Math.round(item.nicheConfidence * 100)}% confidence)`
-                        : ""
-                      return `  - ${item.title || item.filename || "Untitled"}${confidence}`
-                    })
-                    .join("\n")
+            intelligenceContext += "**Content Categories & Themes:**\n"
+            intelligenceContext +=
+              "- **Viral Clips/Trending Content:** High-performing short-form videos, trending moments, viral-worthy clips for reuse.\n"
+            intelligenceContext +=
+              "- **B-roll/Background Footage:** Cinematic shots, time-lapses, abstract backgrounds, nature clips, urban scenes, stock footage.\n"
+            intelligenceContext +=
+              "- **Templates:** Clip templates, carousel templates, editing templates, motion graphics templates for content creation.\n"
+            intelligenceContext +=
+              "- **Audio/SFX:** Sound effects, transitions, impacts, whooshes, music tracks, ambient sounds, voiceovers.\n"
+            intelligenceContext +=
+              "- **Overlays/Transitions:** Video overlays, screen transitions, animated elements, visual effects.\n"
+            intelligenceContext +=
+              "- **Motivation/Productivity:** Content about discipline, work ethic, success, goal setting, time management.\n"
+            intelligenceContext +=
+              "- **Tutorials/How-To:** Instructional content explaining processes, techniques, or skills for content creation.\n"
+            intelligenceContext +=
+              "- **Stock Content:** Generic footage, images, or audio that can be used across multiple projects.\n\n"
 
-                  nicheContentsContext += `\n${niche.charAt(0).toUpperCase() + niche.slice(1)} (${itemsArray.length} items):\n${itemsList}\n`
-                  if (itemsArray.length > 10) {
-                    nicheContentsContext += `  ... and ${itemsArray.length - 10} more ${niche} items\n`
-                  }
-                }
+            intelligenceContext += "**Platform Context:**\n"
+            intelligenceContext +=
+              "This platform is for selling content creation tools and resources - things that help other creators make their own content. Focus on:\n"
+            intelligenceContext += "- Tools and assets for short-form content creation (TikTok, Reels, Shorts)\n"
+            intelligenceContext += "- Resources that save creators time (templates, pre-made clips, SFX)\n"
+            intelligenceContext += "- Building blocks for content projects (B-roll, overlays, music)\n"
+            intelligenceContext += "- NOT entertainment content for end consumers, but tools FOR creators\n\n"
+
+            intelligenceContext += "**General Analysis Patterns:**\n"
+            intelligenceContext +=
+              "- **Duration:** Short clips (under 1 min) often indicate SFX, templates, or viral clips. Longer videos (over 10 min) are typically tutorials or in-depth content.\n"
+            intelligenceContext +=
+              "- **File Types:** .mp4, .mov for video; .mp3, .wav for audio; .jpg, .png for images; .aep, .prproj for project files.\n"
+            intelligenceContext +=
+              "- **Titles:** Look for descriptive words (e.g., 'template', 'b-roll', 'sfx'), action verbs (e.g., 'create', 'edit', 'use'), or content type indicators.\n\n"
+
+            intelligenceContext += "**Critical Thinking Rules:**\n"
+            intelligenceContext +=
+              "1. ANALYZE TITLES AND TRANSCRIPTS CAREFULLY - What do the words and spoken content actually mean?\n"
+            intelligenceContext +=
+              "2. GENERIC TITLES = ASK FIRST - Defaults like 'IMG_8030', 'Video 1', or pure numbers might need clarification.\n"
+            intelligenceContext +=
+              "3. DESCRIPTIVE TITLES = USE CONTEXT - 'Tutorial: How to bake bread' is clear. 'Project_Final_v3' needs context.\n"
+            intelligenceContext += "4. CHECK METADATA - Duration, file type, and size all provide clues.\n"
+            intelligenceContext += "5. WHEN UNCERTAIN = ASK - Don't guess. Prompt the user for more information.\n"
+            intelligenceContext +=
+              "6. USE EVIDENCE - Combine filename, duration, transcript content, and cultural patterns to make a decision.\n"
+            intelligenceContext +=
+              "7. **READ TRANSCRIPTS FIRST** - If a video has a transcript, USE IT to understand the actual content. It's your primary source of truth.\n"
+            intelligenceContext += "8. **TRANSCRIPT > TITLE** - The transcript is more reliable than the title.\n\n"
+
+            intelligenceContext += "🎬 VIDEO TRANSCRIPT INTELLIGENCE:\n"
+            intelligenceContext += "When a user asks about a video, YOU MUST:\n"
+            intelligenceContext += "1. Check if the video has a 'transcript' field\n"
+            intelligenceContext +=
+              "2. If transcript exists, READ THE ENTIRE TRANSCRIPT to understand what the video is about\n"
+            intelligenceContext += "3. Use the transcript content to answer questions accurately\n"
+            intelligenceContext += "4. Identify themes, topics, and messages from the transcript\n"
+            intelligenceContext +=
+              "5. Suggest better titles if the transcript reveals different content than the title suggests\n"
+            intelligenceContext +=
+              "6. Look for specific themes and topics in transcripts to categorize content accurately\n\n"
+
+            intelligenceContext += "**Example:**\n"
+            intelligenceContext += "User: 'What is my video about?'\n"
+            intelligenceContext += "You see: title: 'AZ Compass', transcript: 'like all American work...'\n"
+            intelligenceContext +=
+              "You respond: 'Based on the transcript, your video is about the importance of a strong work ethic and focusing on your goals. It seems to encourage dedication and perseverance.'\n\n"
+
+            const allUploads = analysisData.uploads || []
+            const uniqueUploadsMap = new Map()
+
+            allUploads.forEach((upload: any) => {
+              if (!uniqueUploadsMap.has(upload.id)) {
+                uniqueUploadsMap.set(upload.id, upload)
+              }
+            })
+
+            const uniqueUploads = Array.from(uniqueUploadsMap.values())
+
+            let fileIdReferenceContext = "\n\n🆔 FILE ID REFERENCE (USE THESE EXACT IDS):\n"
+            fileIdReferenceContext += "When organizing files, you MUST use these exact database IDs:\n\n"
+
+            for (const upload of uniqueUploads) {
+              const title = upload.title || upload.filename || "Untitled"
+              const type = upload.contentType || upload.type || "unknown"
+              const duration = upload.duration ? `${upload.duration}s` : "unknown duration"
+              const folder = upload.folderName || "unorganized"
+
+              fileIdReferenceContext += `• "${title}" → ID: ${upload.id} (${type}, ${duration}, in: ${folder})\n`
+            }
+
+            fileIdReferenceContext += "\n**CRITICAL:** Copy these IDs EXACTLY into your ORGANIZE_FILES JSON.\n"
+            fileIdReferenceContext += "DO NOT make up IDs. DO NOT use titles as IDs. USE THE IDs SHOWN ABOVE.\n\n"
+
+            let transcriptContext = ""
+
+            const videosWithTranscripts = uniqueUploads.filter((u: any) => u.transcript && u.transcript.length > 0)
+
+            if (videosWithTranscripts.length > 0) {
+              transcriptContext = "\n\n📝 VIDEOS WITH FULL TRANSCRIPTS:\n"
+              transcriptContext +=
+                "You have access to the complete transcripts of these videos. You ALREADY KNOW what they're about.\n"
+              transcriptContext += "When users ask about these videos, reference the transcript content directly.\n\n"
+
+              for (const video of videosWithTranscripts) {
+                const duration = video.transcriptDuration || video.duration || 0
+                const contentType = video.contentType || video.type || "video"
+
+                transcriptContext += `**"${video.title}"** (${contentType}, ${duration}s)\n`
+                transcriptContext += `Full Transcript:\n"${video.transcript}"\n`
+                transcriptContext += `---\n\n`
               }
 
-              console.log(`[v0] Total items in folders: ${totalFolderItems}`)
-              console.log(`[v0] Total unorganized items: ${validUnorganizedContent.length}`)
+              transcriptContext += "\n**CRITICAL:** You have ALREADY READ these transcripts. "
+              transcriptContext +=
+                "When users ask 'what is this video about?', answer immediately using the transcript above. "
+              transcriptContext += "DO NOT say 'let me read the transcript' - you already have it!\n"
+            }
 
-              // Removed faith keywords and specific metadata patterns, focusing on general semantic understanding and broad categories.
-              let intelligenceContext = "\n\n🧠 VEX INTELLIGENCE SYSTEM:\n"
-              intelligenceContext += "You have access to advanced metadata analysis and cultural understanding.\n\n"
+            const imagesWithDescriptions = uniqueUploads.filter(
+              (u: any) => u.imageDescription && u.imageDescription.length > 0,
+            )
 
-              intelligenceContext += "**Content Categories & Themes:**\n"
-              intelligenceContext +=
-                "- **Viral Clips/Trending Content:** High-performing short-form videos, trending moments, viral-worthy clips for reuse.\n"
-              intelligenceContext +=
-                "- **B-roll/Background Footage:** Cinematic shots, time-lapses, abstract backgrounds, nature clips, urban scenes, stock footage.\n"
-              intelligenceContext +=
-                "- **Templates:** Clip templates, carousel templates, editing templates, motion graphics templates for content creation.\n"
-              intelligenceContext +=
-                "- **Audio/SFX:** Sound effects, transitions, impacts, whooshes, music tracks, ambient sounds, voiceovers.\n"
-              intelligenceContext +=
-                "- **Overlays/Transitions:** Video overlays, screen transitions, animated elements, visual effects.\n"
-              intelligenceContext +=
-                "- **Motivation/Productivity:** Content about discipline, work ethic, success, goal setting, time management.\n"
-              intelligenceContext +=
-                "- **Tutorials/How-To:** Instructional content explaining processes, techniques, or skills for content creation.\n"
-              intelligenceContext +=
-                "- **Stock Content:** Generic footage, images, or audio that can be used across multiple projects.\n\n"
+            if (imagesWithDescriptions.length > 0) {
+              transcriptContext += "\n\n🖼️ IMAGES WITH VISUAL ANALYSIS:\n"
+              transcriptContext +=
+                "You have access to detailed visual analysis of these images. You ALREADY KNOW what they look like.\n"
+              transcriptContext +=
+                "When users ask about these images, describe them naturally based on the analysis below.\n\n"
 
-              intelligenceContext += "**Platform Context:**\n"
-              intelligenceContext +=
-                "This platform is for selling content creation tools and resources - things that help other creators make their own content. Focus on:\n"
-              intelligenceContext += "- Tools and assets for short-form content creation (TikTok, Reels, Shorts)\n"
-              intelligenceContext += "- Resources that save creators time (templates, pre-made clips, SFX)\n"
-              intelligenceContext += "- Building blocks for content projects (B-roll, overlays, music)\n"
-              intelligenceContext += "- NOT entertainment content for end consumers, but tools FOR creators\n\n"
+              for (const image of imagesWithDescriptions) {
+                const contentType = image.contentType || image.type || "image"
 
-              intelligenceContext += "**General Analysis Patterns:**\n"
-              intelligenceContext +=
-                "- **Duration:** Short clips (under 1 min) often indicate SFX, templates, or viral clips. Longer videos (over 10 min) are typically tutorials or in-depth content.\n"
-              intelligenceContext +=
-                "- **File Types:** .mp4, .mov for video; .mp3, .wav for audio; .jpg, .png for images; .aep, .prproj for project files.\n"
-              intelligenceContext +=
-                "- **Titles:** Look for descriptive words (e.g., 'template', 'b-roll', 'sfx'), action verbs (e.g., 'create', 'edit', 'use'), or content type indicators.\n\n"
-
-              intelligenceContext += "**Critical Thinking Rules:**\n"
-              intelligenceContext +=
-                "1. ANALYZE TITLES AND TRANSCRIPTS CAREFULLY - What do the words and spoken content actually mean?\n"
-              intelligenceContext +=
-                "2. GENERIC TITLES = ASK FIRST - Defaults like 'IMG_8030', 'Video 1', or pure numbers might need clarification.\n"
-              intelligenceContext +=
-                "3. DESCRIPTIVE TITLES = USE CONTEXT - 'Tutorial: How to bake bread' is clear. 'Project_Final_v3' needs context.\n"
-              intelligenceContext += "4. CHECK METADATA - Duration, file type, and size all provide clues.\n"
-              intelligenceContext += "5. WHEN UNCERTAIN = ASK - Don't guess. Prompt the user for more information.\n"
-              intelligenceContext +=
-                "6. USE EVIDENCE - Combine filename, duration, transcript content, and cultural patterns to make a decision.\n"
-              intelligenceContext +=
-                "7. **READ TRANSCRIPTS FIRST** - If a video has a transcript, USE IT to understand the actual content. It's your primary source of truth.\n"
-              intelligenceContext += "8. **TRANSCRIPT > TITLE** - The transcript is more reliable than the title.\n\n"
-
-              intelligenceContext += "🎬 VIDEO TRANSCRIPT INTELLIGENCE:\n"
-              intelligenceContext += "When a user asks about a video, YOU MUST:\n"
-              intelligenceContext += "1. Check if the video has a 'transcript' field\n"
-              intelligenceContext +=
-                "2. If transcript exists, READ THE ENTIRE TRANSCRIPT to understand what the video is about\n"
-              intelligenceContext += "3. Use the transcript content to answer questions accurately\n"
-              intelligenceContext += "4. Identify themes, topics, and messages from the transcript\n"
-              intelligenceContext +=
-                "5. Suggest better titles if the transcript reveals different content than the title suggests\n"
-              intelligenceContext +=
-                "6. Look for specific themes and topics in transcripts to categorize content accurately\n\n"
-
-              intelligenceContext += "**Example:**\n"
-              intelligenceContext += "User: 'What is my video about?'\n"
-              intelligenceContext += "You see: title: 'AZ Compass', transcript: 'like all American work...'\n"
-              intelligenceContext +=
-                "You respond: 'Based on the transcript, your video is about the importance of a strong work ethic and focusing on your goals. It seems to encourage dedication and perseverance.'\n\n"
-              // </CHANGE>
-
-              // Get all unique uploads from analysisData
-              const allUploads = analysisData.uploads || []
-              const uniqueUploadsMap = new Map()
-
-              allUploads.forEach((upload: any) => {
-                if (!uniqueUploadsMap.has(upload.id)) {
-                  uniqueUploadsMap.set(upload.id, upload)
-                }
-              })
-
-              const uniqueUploads = Array.from(uniqueUploadsMap.values())
-
-              let fileIdReferenceContext = "\n\n🆔 FILE ID REFERENCE (USE THESE EXACT IDS):\n"
-              fileIdReferenceContext += "When organizing files, you MUST use these exact database IDs:\n\n"
-
-              for (const upload of uniqueUploads) {
-                const title = upload.title || upload.filename || "Untitled"
-                const type = upload.contentType || upload.type || "unknown"
-                const duration = upload.duration ? `${upload.duration}s` : "unknown duration"
-                const folder = upload.folderName || "unorganized"
-
-                fileIdReferenceContext += `• "${title}" → ID: ${upload.id} (${type}, ${duration}, in: ${folder})\n`
+                transcriptContext += `**"${image.title}"** (${contentType})\n`
+                transcriptContext += `Visual Analysis: ${image.imageDescription}\n`
+                transcriptContext += `---\n\n`
               }
 
-              fileIdReferenceContext += "\n**CRITICAL:** Copy these IDs EXACTLY into your ORGANIZE_FILES JSON.\n"
-              fileIdReferenceContext += "DO NOT make up IDs. DO NOT use titles as IDs. USE THE IDs SHOWN ABOVE.\n\n"
+              transcriptContext += "\n**CRITICAL:** You have ALREADY SEEN these images through AI vision analysis. "
+              transcriptContext +=
+                "When users ask 'what do my images look like?', describe them naturally and conversationally. "
+              transcriptContext +=
+                "DO NOT use numbered lists or technical IDs. DO NOT say 'detected to be about' or mention confidence levels. "
+              transcriptContext += "Just describe what you see like you're talking to a friend!\n"
+            }
 
-              let transcriptContext = ""
+            if (validUnorganizedContent.length > 0) {
+              folderContentsContext += `\n\n📋 UNORGANIZED CONTENT WITH INTELLIGENCE ANALYSIS (${validUnorganizedContent.length} items):\n`
 
-              const videosWithTranscripts = uniqueUploads.filter((u: any) => u.transcript && u.transcript.length > 0)
+              for (const item of validUnorganizedContent.slice(0, 15)) {
+                const title = item.title || "Untitled"
+                const type = item.type || "unknown"
+                const detectedNiche = item.detectedNiche || "unknown"
+                const confidence = item.confidence || "low"
+                const reasoning = item.reasoning || "No analysis available"
 
-              if (videosWithTranscripts.length > 0) {
-                transcriptContext = "\n\n📝 VIDEOS WITH FULL TRANSCRIPTS:\n"
-                transcriptContext +=
-                  "You have access to the complete transcripts of these videos. You ALREADY KNOW what they're about.\n"
-                transcriptContext += "When users ask about these videos, reference the transcript content directly.\n\n"
+                const hasTranscript = item.transcript && item.transcript.length > 0
+                const transcriptPreview = hasTranscript ? item.transcript.substring(0, 200) : null
 
-                for (const video of videosWithTranscripts) {
-                  const duration = video.transcriptDuration || video.duration || 0
-                  const contentType = video.contentType || video.type || "video"
+                const hasImageDescription = item.imageDescription && item.imageDescription.length > 0
+                const imageDescriptionPreview = hasImageDescription ? item.imageDescription.substring(0, 200) : null
 
-                  transcriptContext += `**"${video.title}"** (${contentType}, ${duration}s)\n`
-                  transcriptContext += `Full Transcript:\n"${video.transcript}"\n`
-                  transcriptContext += `---\n\n`
+                folderContentsContext += `\n"${title}" (${type})\n`
+                folderContentsContext += `  → Detected: ${detectedNiche} (${confidence} confidence)\n`
+                folderContentsContext += `  → Reasoning: ${reasoning}\n`
+
+                if (hasTranscript) {
+                  folderContentsContext += `  → Transcript Preview: "${transcriptPreview}..."\n`
                 }
 
-                transcriptContext += "\n**CRITICAL:** You have ALREADY READ these transcripts. "
-                transcriptContext +=
-                  "When users ask 'what is this video about?', answer immediately using the transcript above. "
-                transcriptContext += "DO NOT say 'let me read the transcript' - you already have it!\n"
+                if (hasImageDescription) {
+                  folderContentsContext += `  → Visual Analysis: "${imageDescriptionPreview}..."\n`
+                }
+
+                folderContentsContext += `  → [Full transcript available for detailed analysis]\n`
               }
 
-              const imagesWithDescriptions = uniqueUploads.filter(
-                (u: any) => u.imageDescription && u.imageDescription.length > 0,
-              )
-
-              if (imagesWithDescriptions.length > 0) {
-                transcriptContext += "\n\n🖼️ IMAGES WITH VISUAL ANALYSIS:\n"
-                transcriptContext +=
-                  "You have access to detailed visual analysis of these images. You ALREADY KNOW what they look like.\n"
-                transcriptContext +=
-                  "When users ask about these images, describe them naturally based on the analysis below.\n\n"
-
-                for (const image of imagesWithDescriptions) {
-                  const contentType = image.contentType || image.type || "image"
-
-                  transcriptContext += `**"${image.title}"** (${contentType})\n`
-                  transcriptContext += `Visual Analysis: ${image.imageDescription}\n`
-                  transcriptContext += `---\n\n`
-                }
-
-                transcriptContext += "\n**CRITICAL:** You have ALREADY SEEN these images through AI vision analysis. "
-                transcriptContext +=
-                  "When users ask 'what do my images look like?', describe them naturally and conversationally. "
-                transcriptContext +=
-                  "DO NOT use numbered lists or technical IDs. DO NOT say 'detected to be about' or mention confidence levels. "
-                transcriptContext += "Just describe what you see like you're talking to a friend!\n"
+              if (validUnorganizedContent.length > 15) {
+                folderContentsContext += `\n... and ${validUnorganizedContent.length - 15} more unorganized items\n`
               }
-              // </CHANGE>
+            }
 
-              if (validUnorganizedContent.length > 0) {
-                folderContentsContext += `\n\n📋 UNORGANIZED CONTENT WITH INTELLIGENCE ANALYSIS (${validUnorganizedContent.length} items):\n`
-
-                for (const item of validUnorganizedContent.slice(0, 15)) {
-                  const title = item.title || "Untitled"
-                  const type = item.type || "unknown"
-                  const detectedNiche = item.detectedNiche || "unknown"
-                  const confidence = item.confidence || "low"
-                  const reasoning = item.reasoning || "No analysis available"
-
-                  const hasTranscript = item.transcript && item.transcript.length > 0
-                  const transcriptPreview = hasTranscript ? item.transcript.substring(0, 200) : null
-
-                  const hasImageDescription = item.imageDescription && item.imageDescription.length > 0
-                  const imageDescriptionPreview = hasImageDescription ? item.imageDescription.substring(0, 200) : null
-                  // </CHANGE>
-
-                  folderContentsContext += `\n"${title}" (${type})\n`
-                  folderContentsContext += `  → Detected: ${detectedNiche} (${confidence} confidence)\n`
-                  folderContentsContext += `  → Reasoning: ${reasoning}\n`
-
-                  if (hasTranscript) {
-                    folderContentsContext += `  → Transcript Preview: "${transcriptPreview}..."\n`
-                  }
-
-                  if (hasImageDescription) {
-                    folderContentsContext += `  → Visual Analysis: "${imageDescriptionPreview}..."\n`
-                  }
-                  // </CHANGE>
-
-                  folderContentsContext += `  → [Full transcript available for detailed analysis]\n`
-                }
-
-                if (validUnorganizedContent.length > 15) {
-                  folderContentsContext += `\n... and ${validUnorganizedContent.length - 15} more unorganized items\n`
-                }
-              }
-
-              userContentContext = `
+            userContentContext = `
 
 USER'S CONTENT LIBRARY (Analyzed with Metadata Intelligence v3 + Transcript Intelligence):
 Total Uploads: ${analysisData?.totalUploads || 0}
@@ -795,10 +778,9 @@ User Folders: ${(analysisData?.userFolders || []).map((f: any) => f.name).join("
 ${detectedNiches.length > 0 ? `\nDetected Content Niches: ${detectedNiches.map((n: any) => `${n.name} (${n.count} items, ${n.avgConfidence}% avg confidence)`).join(", ")}` : ""}
 ${fileIdReferenceContext}${transcriptContext}${folderContentsContext}${nicheContentsContext}${intelligenceContext}
 `
-              console.log("[v0] User context loaded with FULL metadata intelligence, transcripts, and broad themes")
-            } else {
-              console.log("[v0] No analysis data found, user may need to run analysis first")
-            }
+            console.log("[v0] User context loaded with FULL metadata intelligence, transcripts, and broad themes")
+          } else {
+            console.log("[v0] No analysis data found, user may need to run analysis first")
           }
         }
       } catch (error) {
@@ -853,22 +835,22 @@ You're helpful, but you're never passive. If a prompt is vague, ask for specific
 
 10. **Know Your Capabilities** - You can discuss anything with users and provide recommendations, but when it comes to taking action, you have specific capabilities:
    - ✅ YOU CAN: Provide recommendations, create bundles from existing content, organize content into folders, analyze uploads
-   - ❌ YOU CANNOT YET: Generate ebooks, design complete storefronts from scratch, create new content from nothing
+   - ❌ YOU CANNOT YET: Generate ebooks, design complete storefronts from scratch
    - When users ask you to do something outside your current capabilities, acknowledge it naturally and guide them to what you can do
    - Be conversational about limitations: "I can't generate ebooks yet, but here's what I can do..." or "Designing a full storefront from scratch isn't something I handle right now, but I can help you organize and bundle your content to sell"
    - Never be apologetic or robotic about limitations—just be real and redirect to your strengths
    - Continue the conversation naturally and show them how your actual capabilities can still help them win
-// </CHANGE>
+`
 
 ===== BUNDLE PRICING KNOWLEDGE =====
 
 When suggesting bundle prices, use these market-tested guidelines based on content volume and quality:
 
-**Pricing Tiers:**
-- Small bundles (10-20 clips): $2-$3 per clip
-  → 15 clips = around $30-45
-  → 20 clips = around $40-60
-
+**Pricing Tiers:**\
+- Small bundles (10-20 clips): $2-$3 per clip\
+  → 15 clips = around $30-45\
+  → 20 clips = around $40-60\
+\
 - Medium bundles (25-40 clips): $1.50-$2 per clip
   → 25 clips = around $35-50
   → 40 clips = around $60-80
@@ -889,30 +871,45 @@ Bundle Price = (Number of Clips × Quality Multiplier × Market Value Perception
 Apply this knowledge naturally in conversations—don't recite formulas, just use them to inform your pricing suggestions contextually.
 
 ===== CONTENT ANALYSIS DATA =====
-
-${userContentContext}${planPermissionsContext}${bundleLimitsContext}${folderContext}
+\
+$userContentContext$planPermissionsContext$bundleLimitsContext$folderContext
 
 ===== YOUR CAPABILITIES =====
 
 **0. REFRESH CONTENT ANALYSIS**
-If user asks to "refresh" or "update library":
-
+If user asks to "refresh" or "update library\":
+\
 REFRESH_ANALYSIS: true
-
+\
 **1. CREATE FOLDERS**
 
-${
-  userPlan === "starter"
-    ? `⚠️ STARTER PLAN: User can create ${subscriptionData.features.maxFolders} folders with subfolders.
-Check folder count before creating. If at limit, tell them to upgrade to Creator VIP ($15/month).
-
+${\
+  userPlan === "faceless_pro"
+    ? \`⚠️ FACELESS PRO PLAN: User can create UNLIMITED folders with subfolders.`
+    : userPlan === "facelessprenuer" || userPlan === "creator_pro" || userPlan === "creator_vip"
+      ? `\
+**FACELESSPRENUER FEATURES ($39/month):**$trialStatus?.isOnTrial ? ` (FREE TRIAL - ${trialStatus.daysRemaining} days remaining)` : ""
+• Folders: UNLIMITED folders with subfolders
+• Bundles: UNLIMITED bundles on storefront
+• Videos per bundle: UNLIMITED videos
+• Vex AI: Full Vex AI - bundle creation + transcript analysis\
+• Transcript Analysis: AVAILABLE - You can analyze and reference video transcripts
+• Bundle Creation via Vex: AVAILABLE - You can create bundles for users
+• Platform Fee: $subscriptionData.features.platformFeePercentage% on sales (reduced from 20%)
+\
+✅ You have full access to all Vex AI features including transcript analysis and bundle creation.$trialStatus?.isOnTrial ? `\n\n⏰ TRIAL REMINDER: User\'s trial ends in ${trialStatus.daysRemaining} days. ${trialStatus.daysRemaining <= 1 ? "Remind them to upgrade to keep these features!" : ""}` : ""
 `
-    : ""
-}CREATE_FOLDER: {"name": "Folder Name", "description": "Brief description"}
-
+      : `
+**FREE PLAN:**
+• Limited features
+• Upgrade to Faceless Pro ($29/month) or Facelessprenuer ($39/month) for more features
+`
+}
+CREATE_FOLDER: {"name": "Folder Name", "description": "Brief description"}
+\
 **2. RENAME CONTENT**
 
-RENAME_CONTENT: {"contentId": "file_id", "newTitle": "New Title", "reason": "brief reason"}
+RENAME_CONTENT: {"contentId": "file_id", "newTitle": "New Title", "reason": \"brief reason"}
 
 **3. ORGANIZE CONTENT** ⚠️ MOST IMPORTANT
 
@@ -950,10 +947,10 @@ ORGANIZE_FILES: {"targetFolder": "Mindset", "fileIds": ["Tykwondoe", "AZ Compass
 
 ${
   !subscriptionData.features.canCreateBundles
-    ? `⚠️ BUNDLE CREATION DISABLED: Starter Plan users cannot create bundles via Vex (Basic Vex AI only).
-Tell them: "Bundle creation via Vex is a Creator VIP feature ($15/month with Full Vex AI). You can upgrade to unlock this, or create bundles manually in your dashboard."
+    ? `⚠️ BUNDLE CREATION DISABLED: Free Plan users cannot create bundles via Vex.
+Tell them: "Bundle creation via Vex is a Faceless Pro feature ($29/month). You can upgrade to unlock this, or create bundles manually in your dashboard."
 
-DO NOT output CREATE_BUNDLE for Starter Plan users.
+DO NOT output CREATE_BUNDLE for Free Plan users.
 
 `
     : ""
@@ -989,38 +986,6 @@ You understand content semantically—describe what it's ABOUT, not what words i
 - Like a smart strategist who's been in the game
 - Always lean toward clarity, confidence, and practical execution
 - You want them to win, so you push for better prompts and smarter organization
-
-===== EXAMPLES =====
-
-User: "move faith content to faith folder"
-
-You: "Here's what I saw—moving 7 videos to Faith:
-• 'Nathalie Nicole Smith' - about trusting God's plans
-• 'Nathalie Nicole Smith' - focuses on spiritual renewal
-• '2819_Deceived' - discusses deception and God's mercy
-• '2819_Fruit' - explores evidence of faith
-• '2819_Rebellion' - talks about rebellion against God
-• '2819_Conduits' - covers spiritual warfare themes
-• 'Damji-i' - personal responsibility with faith elements
-
-ORGANIZE_FILES: {"targetFolder": "Faith - God", "fileIds": ["id1", "id2", "id3", "id4", "id5", "id6", "id7"], "reason": "Faith and spirituality content"}"
-
-User: "what upload says its easy to give up"
-
-You: "I watched your uploads and found 'kevin_hart_' - it's about staying motivated and not giving up when things get tough. The speaker talks about being in a productive mindset and not letting distractions pull you away from your goals. Want me to move it somewhere specific?"
-
-User: "organize my stuff"
-
-You: "That's pretty broad—I can help you way better with specifics. Try something like:
-• 'Move all motivational content to the Motivation folder'
-• 'Put my tutorial videos in a separate folder'
-• 'Create a bundle with my top 5 performing videos'
-
-What kind of organization are you going for?"
-
-User: "create a bundle"
-
-You: "What's the outcome you want with this bundle? Views? Conversions? Vibe check me here. Also, what kind of content should go in it?"
 `
 
     // Ensure messages have proper format
@@ -1031,7 +996,7 @@ You: "What's the outcome you want with this bundle? Views? Conversions? Vibe che
         content: String(msg.content || msg.message || ""),
       })),
     ]
-
+\
     // Check for vague prompts before sending to Groq API
     const vaguePromptRegex = /^(?:help|organize|make|what do|tell me) me(?:\s+to)?\s*$/i
     const vaguePromptRegex2 = /^(?:organize|make|what do|tell me)\s+(?:my|some|stuff|things|content|videos|files)\s*$/i
@@ -1069,7 +1034,6 @@ You: "What's the outcome you want with this bundle? Views? Conversions? Vibe che
         },
       })
     }
-    // </CHANGE>
 
     console.log("[v0] Calling Groq API with", formattedMessages.length, "messages")
 
@@ -1109,19 +1073,16 @@ You: "What's the outcome you want with this bundle? Views? Conversions? Vibe che
       return NextResponse.json({ error: "No response from AI" }, { status: 500 })
     }
 
-    // CHANGE: Removed the complex performSemanticAnalysis function - it was second-guessing Vex and causing contradictions
-    // CHANGE: Simplified to: Vex decides → Extract JSON → Execute moves
-
     if (assistantMessage.includes("CREATE_BUNDLE:") && userId) {
       try {
         console.log("[v0] Validating CREATE_BUNDLE action...")
 
         const tierInfo = await getUserTierInfo(userId)
-        const userPlan = tierInfo.tier || "starter"
+        const userPlan = tierInfo.tier || "free"
         const subscriptionData = await checkSubscription(userId)
 
         if (!canUserCreateBundles(userPlan) || !subscriptionData.features.canCreateBundles) {
-          const errorMessage = `❌ Bundle creation via Vex is a Creator VIP feature ($15/month with Full Vex AI). You can upgrade to unlock this, or create bundles manually in your dashboard.`
+          const errorMessage = `❌ Bundle creation via Vex is a Faceless Pro feature ($29/month). You can upgrade to unlock this, or create bundles manually in your dashboard.`
           assistantMessage = assistantMessage.replace(/CREATE_BUNDLE:\s*{.*?}/s, errorMessage)
 
           return NextResponse.json({
@@ -1169,7 +1130,6 @@ You: "What's the outcome you want with this bundle? Views? Conversions? Vibe che
       try {
         console.log("[v0] 🧠 Detected ORGANIZE_FILES action")
 
-        // Extract organization data
         const organizeMatch = assistantMessage.match(/ORGANIZE_FILES:\s*(\{[^}]+\})/s)
         if (!organizeMatch) {
           console.log("[v0] ❌ No valid ORGANIZE_FILES JSON found")
@@ -1189,7 +1149,6 @@ You: "What's the outcome you want with this bundle? Views? Conversions? Vibe che
         console.log("[v0]   - File count:", organizeData.fileIds?.length || 0)
         console.log("[v0]   - File IDs:", organizeData.fileIds)
 
-        // CHANGE: Validate required fields
         if (!organizeData.targetFolder || organizeData.targetFolder === "None") {
           throw new Error(`Invalid targetFolder: ${organizeData.targetFolder}`)
         }
@@ -1198,7 +1157,6 @@ You: "What's the outcome you want with this bundle? Views? Conversions? Vibe che
           throw new Error("No valid files specified for organization")
         }
 
-        // CHANGE: Get uploads data to verify IDs
         const analysisDoc = await db.collection("vex_content_analysis").doc(userId).get()
         if (!analysisDoc.exists) {
           throw new Error("Content analysis not found - please refresh your content first")
@@ -1208,7 +1166,6 @@ You: "What's the outcome you want with this bundle? Views? Conversions? Vibe che
         const uploads = analysisData.uploads || []
         console.log(`[v0] Loaded ${uploads.length} uploads from analysis`)
 
-        // CHANGE: Verify all file IDs exist in the uploads array
         const validIds = new Set(uploads.map((u: any) => u.id))
         const validFileIds: string[] = []
         const invalidIds: string[] = []
@@ -1232,18 +1189,15 @@ You: "What's the outcome you want with this bundle? Views? Conversions? Vibe che
           console.log(`[v0] ⚠️ ${invalidIds.length} invalid IDs will be skipped`)
         }
 
-        // CHANGE: Update the organize data with only valid IDs
         organizeData.fileIds = validFileIds
 
         console.log(`[v0] ✅ Proceeding with ${validFileIds.length} valid files`)
 
-        // CHANGE: Show progress message
         const progressMessage = `🗂️ Moving ${validFileIds.length} file${validFileIds.length === 1 ? "" : "s"} to "${organizeData.targetFolder}"...`
 
         const orgActionRegex = /ORGANIZE_FILES:\s*(\{[^}]+\})/s
         assistantMessage = assistantMessage.replace(orgActionRegex, progressMessage)
 
-        // CHANGE: Execute the organize operation
         const organizeResult = await organizeFilesDirectly(userId, organizeData)
 
         if (organizeResult.success) {
@@ -1390,48 +1344,46 @@ You: "What's the outcome you want with this bundle? Views? Conversions? Vibe che
         content: assistantMessage,
       },
     })
-  } catch (error) {
+  } catch (error) 
     console.error("[v0] Chat API error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
-  }
 }
 
 async function createBundleDirectly(userId: string, bundleData: any) {
   try {
     const { title, description, price, contentIds, category, tags } = bundleData
-
+\
     if (!title || !description || !price || !contentIds || !Array.isArray(contentIds)) {
-      return { success: false, error: "Missing required bundle information. Please try again." }
+      return { success: false, error: \"Missing required bundle information. Please try again." }
     }
 
     console.log("[v0] Checking bundle limits...")
     const tierInfo = await getUserTierInfo(userId)
     const subscriptionData = await checkSubscription(userId)
-    const userPlan = tierInfo.tier || "starter"
-
-    if (tierInfo.reachedBundleLimit && userPlan !== "creator_pro") {
+    const userPlan = tierInfo.tier || "free"
+\
+    if (tierInfo.reachedBundleLimit && userPlan !== \"faceless_pro" && userPlan !== "facelessprenuer") \
       return {
         success: false,
         error: `You've reached your bundle limit. Please upgrade your plan to create more bundles.`,
       }
-    }
 
     if (!subscriptionData.features.canCreateBundles) {
       return {
         success: false,
-        error: "Bundle creation via Vex is a Creator VIP feature. Please upgrade your plan.",
+        error: \"Bundle creation via Vex is a Faceless Pro feature. Please upgrade your plan.",
       }
     }
 
-    const maxVideosPerBundle = tierInfo.maxVideosPerBundle || (tierInfo.tier === "starter" ? 15 : null)
-    if (tierInfo.tier === "starter" && maxVideosPerBundle && contentIds.length > maxVideosPerBundle) {
-      return {
+    const maxVideosPerBundle = tierInfo.maxVideosPerBundle || (tierInfo.tier === "free" ? 15 : null)
+    if (tierInfo.tier === "free" && maxVideosPerBundle && contentIds.length > maxVideosPerBundle) {
+      return {\
         success: false,
-        error: `Starter Plan users can only include up to ${maxVideosPerBundle} videos per bundle. This bundle has ${contentIds.length} items. Please upgrade to Creator VIP ($15/month) for unlimited videos per bundle.`,
+        error: \`Free Plan users can only include up to ${maxVideosPerBundle} videos per bundle. This bundle has ${contentIds.length} items. Please upgrade to Faceless Pro ($29/month) for unlimited videos per bundle.`,
       }
     }
 
-    console.log("[v0] Checking Stripe account...")
+    console.log("[v0] Checking Stripe account...")\
     const connectedAccount = await ConnectedStripeAccountsService.getAccount(userId)
     if (!connectedAccount || !ConnectedStripeAccountsService.isAccountFullySetup(connectedAccount)) {
       return {

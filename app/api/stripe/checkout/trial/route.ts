@@ -39,32 +39,33 @@ export async function POST(req: NextRequest) {
       await setDoc(doc(db, "users", userId), { stripeCustomerId }, { merge: true })
     }
 
-    // Create checkout session with 14-day free trial
+    // Create checkout session with 3-day free trial for Faceless Pro
     const session = await stripe.checkout.sessions.create({
       customer: stripeCustomerId,
       mode: "subscription",
       payment_method_collection: "if_required", // Don't require payment method for trial
       line_items: [
         {
-          price: process.env.STRIPE_PRICE_ID!, // Creator Pro price ID
+          price: process.env.FACELESS_PRO_FIRST!, // Faceless Pro price ID
           quantity: 1,
         },
       ],
       subscription_data: {
-        trial_period_days: 14,
+        trial_period_days: 3,
         metadata: {
           firebaseUID: userId,
-          plan: "creator_pro",
+          plan: "faceless_pro",
         },
       },
       success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/vex?trial=started`,
       cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/welcome`,
       metadata: {
         firebaseUID: userId,
-        plan: "creator_pro",
+        plan: "faceless_pro",
         isTrial: "true",
       },
     })
+    // </CHANGE>
 
     // Mark onboarding as complete
     await setDoc(

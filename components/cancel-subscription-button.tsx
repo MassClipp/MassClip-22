@@ -16,13 +16,17 @@ import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/auth-context"
 import { AlertTriangle } from "lucide-react"
 
-export function CancelSubscriptionButton() {
+interface CancelSubscriptionButtonProps {
+  planName?: string
+}
+
+export function CancelSubscriptionButton({ planName = "your subscription" }: CancelSubscriptionButtonProps) {
+  // </CHANGE>
   const [isLoading, setIsLoading] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
   const { toast } = useToast()
   const router = useRouter()
   const { user } = useAuth()
-  const planName = "Creator VIP" // Assuming planName is a variable that holds the current plan name
 
   const handleCancel = async () => {
     if (!user) {
