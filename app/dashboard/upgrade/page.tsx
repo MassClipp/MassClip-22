@@ -49,7 +49,7 @@ export default function UpgradePage() {
   const [subscriptionStatus, setSubscriptionStatus] = useState<{
     hasActiveSubscription: boolean
     isOnTrial: boolean
-    currentPlan: "starter" | "creator_vip" | null
+    currentPlan: "starter" | "faceless_pro" | "facelessprenuer" | null
     hasUsedFreeTrial: boolean
   } | null>(null)
   const [statusLoading, setStatusLoading] = useState(true)
@@ -110,17 +110,17 @@ export default function UpgradePage() {
           membership: membershipData,
         })
 
-        const hasActiveSubscription = membershipData.isActive && membershipData.status === "active"
+        const hasActiveSubscription =
+          membershipData.isActive || (membershipData.status === "canceled" && membershipData.cancelAtPeriodEnd)
         const isOnTrial = trialData.isOnTrial || membershipData.status === "trialing"
 
-        let currentPlan: "starter" | "creator_vip" | null = null
+        let currentPlan: "faceless_pro" | "facelessprenuer" | null = null
         if (hasActiveSubscription || isOnTrial) {
-          currentPlan =
-            membershipData.plan === "creator_pro" || membershipData.plan === "creator_vip"
-              ? "creator_vip"
-              : membershipData.plan === "starter"
-                ? "starter"
-                : null
+          if (membershipData.plan === "facelessprenuer") {
+            currentPlan = "facelessprenuer"
+          } else if (membershipData.plan === "faceless_pro") {
+            currentPlan = "faceless_pro"
+          }
         }
 
         setSubscriptionStatus({
@@ -260,7 +260,7 @@ export default function UpgradePage() {
       <div className="space-y-6">
         {/* Faceless Pro Plan */}
         <Card className="relative overflow-hidden border border-zinc-700/50 bg-gradient-to-br from-zinc-900/90 to-black/90">
-          {subscriptionStatus?.currentPlan === "starter" && (
+          {subscriptionStatus?.currentPlan === "faceless_pro" && (
             <div className="absolute right-0 top-0 bg-gradient-to-r from-slate-400 to-cyan-400 px-3 py-1 text-xs font-medium text-black">
               CURRENT PLAN
             </div>
@@ -300,13 +300,13 @@ export default function UpgradePage() {
               ))}
             </div>
 
-            {subscriptionStatus?.currentPlan === "starter" ? (
+            {subscriptionStatus?.currentPlan === "faceless_pro" ? (
               <Button
                 onClick={() => router.push("/dashboard/profile?tab=membership")}
                 variant="outline"
                 className="w-full border-cyan-400/50 bg-cyan-500/10 text-cyan-300"
               >
-                Manage Subscription
+                Manage Membership
               </Button>
             ) : (
               <Button
@@ -324,7 +324,7 @@ export default function UpgradePage() {
         <Card className="relative overflow-hidden border border-zinc-700/50 bg-gradient-to-br from-zinc-900/90 to-black/90">
           {!statusLoading && (
             <div className="absolute right-0 top-0 bg-gradient-to-r from-cyan-400 to-blue-400 px-3 py-1 text-xs font-bold text-black">
-              {subscriptionStatus?.currentPlan === "creator_vip" ? "CURRENT PLAN" : "RECOMMENDED"}
+              {subscriptionStatus?.currentPlan === "facelessprenuer" ? "CURRENT PLAN" : "RECOMMENDED"}
             </div>
           )}
 
@@ -372,13 +372,13 @@ export default function UpgradePage() {
               ))}
             </div>
 
-            {subscriptionStatus?.currentPlan === "creator_vip" ? (
+            {subscriptionStatus?.currentPlan === "facelessprenuer" ? (
               <Button
                 onClick={() => router.push("/dashboard/profile?tab=membership")}
                 variant="outline"
                 className="w-full border-cyan-400/50 bg-cyan-500/10 text-cyan-300"
               >
-                Manage Subscription
+                Manage Membership
               </Button>
             ) : (
               <Button

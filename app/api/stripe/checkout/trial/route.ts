@@ -51,21 +51,21 @@ export async function POST(req: NextRequest) {
         },
       ],
       subscription_data: {
-        trial_period_days: 14,
+        trial_period_days: 14, // 14-day free trial for Faceless Pro
         metadata: {
           firebaseUID: userId,
           plan: "faceless_pro",
         },
       },
-      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/vex?trial=started`,
+      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/welcome`,
       metadata: {
         firebaseUID: userId,
         plan: "faceless_pro",
         isTrial: "true",
+        buyerUid: userId,
       },
     })
-    // </CHANGE>
 
     // Mark onboarding as complete
     await setDoc(
