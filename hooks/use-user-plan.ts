@@ -209,8 +209,8 @@ export function useUserPlan() {
     planData,
     loading,
     error,
-    isProUser:
-      planData?.plan === "creator_pro" || planData?.plan === "faceless_pro" || planData?.plan === "facelessprenuer",
+    // faceless_pro (starter plan) should have limited features
+    isProUser: planData?.plan === "creator_pro" || planData?.plan === "facelessprenuer",
     recordDownload,
     remainingDownloads: planData ? Math.max(0, planData.downloadsLimit - planData.downloads) : 0,
     hasReachedLimit,
