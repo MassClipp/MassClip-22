@@ -3,10 +3,8 @@ import { getAuth, connectAuthEmulator } from "firebase/auth"
 import { getFirestore, connectFirestoreEmulator } from "firebase/firestore"
 import type { NextAuthOptions } from "next-auth"
 import GoogleProvider from "next-auth/providers/google"
-import { initializeApp as initializeAdminApp, getApps as getAdminApps } from "firebase-admin/app"
-import { getFirestore as getAdminFirestore } from "firebase-admin/firestore"
-import { cert } from "firebase-admin/app"
 import { FirestoreAdapter } from "@auth/firebase-adapter"
+import { cert } from "firebase-admin/app"
 
 // Firebase configuration
 const firebaseConfig = {
@@ -52,18 +50,7 @@ if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
   }
 }
 
-// Initialize Firebase Admin if not already initialized
-if (!getAdminApps().length) {
-  initializeAdminApp({
-    credential: cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-    }),
-  })
-}
-
-const adminDb = getAdminFirestore()
+// Firebase Admin is now initialized lazily via lib/firebase-admin.ts when needed at runtime
 
 export const authOptions: NextAuthOptions = {
   adapter: FirestoreAdapter({
