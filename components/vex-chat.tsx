@@ -846,6 +846,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
     !trialStatus.isOnTrial &&
     !((membershipStatus.plan === "creator_vip" || membershipStatus.plan === "creator_pro") && membershipStatus.isActive)
 
+  // Existing useEffect block for logging trial button visibility check
   useEffect(() => {
     if (!isLoadingTrialStatus && !isLoadingMembershipStatus) {
       console.log("[v0] Trial Button Visibility Check:", {
