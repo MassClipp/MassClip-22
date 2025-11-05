@@ -71,10 +71,19 @@ export async function getStripeSubscriptionStatus(userId: string): Promise<Strip
       subscription.cancel_at_period_end || ["canceled", "incomplete_expired"].includes(subscription.status)
 
     const priceId = subscription.items.data[0]?.price.id
-    const facelessProPriceIds = [process.env.FACELESS_PRO_FIRST].filter(Boolean)
+    const facelessProPriceIds = [
+      process.env.FACELESS_PRO_FIRST,
+      "price_1S4ZlnDheyb0pkWFVxbaxaNV", // Test price ID
+    ].filter(Boolean)
     const facelessprenuerPriceIds = [process.env.FACELESSPRENUER_FIRST, process.env.FACELESSPRENUER_REGULAR].filter(
       Boolean,
     )
+
+    console.log("[v0] Checking subscription price ID:", {
+      priceId,
+      facelessProPriceIds,
+      facelessprenuerPriceIds,
+    })
 
     const isFacelessPro = priceId && facelessProPriceIds.includes(priceId)
     const isFacelessprenuer = priceId && facelessprenuerPriceIds.includes(priceId)
@@ -86,6 +95,13 @@ export async function getStripeSubscriptionStatus(userId: string): Promise<Strip
           ? "facelessprenuer"
           : "free"
       : "free"
+
+    console.log("[v0] Plan determined:", {
+      determinedPlan,
+      isFacelessPro,
+      isFacelessprenuer,
+      isActive,
+    })
 
     await adminDb.collection("memberships").doc(userId).update({
       isActive: isActive,
