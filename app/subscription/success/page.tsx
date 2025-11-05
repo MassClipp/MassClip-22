@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
-import { CheckCircle, ArrowRight, Sparkles, Crown, Zap, Shield, Folder, Package } from "lucide-react"
+import { CheckCircle, ArrowRight } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { getSiteUrl } from "@/lib/url-utils"
 
@@ -107,98 +107,18 @@ export default function SubscriptionSuccess() {
     starter: {
       title: "Welcome to Starter Plan!",
       description: "Your subscription is now active. Start building your content library!",
-      features: [
-        {
-          icon: Folder,
-          title: "3 Folders",
-          description: "Organize your content",
-          color: "emerald",
-        },
-        {
-          icon: Package,
-          title: "5 Bundles",
-          description: "Create and sell bundles",
-          color: "cyan",
-        },
-        {
-          icon: Shield,
-          title: "20% Platform Fee",
-          description: "Standard creator rate",
-          color: "purple",
-        },
-      ],
     },
     faceless_pro: {
       title: "Welcome to Faceless Pro!",
       description: "Your subscription is now active. Start creating and selling premium content!",
-      features: [
-        {
-          icon: Package,
-          title: "25 Videos Per Bundle",
-          description: "Create larger bundles",
-          color: "emerald",
-        },
-        {
-          icon: Folder,
-          title: "10 Bundles",
-          description: "More content options",
-          color: "cyan",
-        },
-        {
-          icon: Shield,
-          title: "15% Platform Fee",
-          description: "Better creator rate",
-          color: "purple",
-        },
-      ],
     },
     facelessprenuer: {
       title: "Welcome to Facelessprenuer!",
       description: "Your subscription is now active. Get ready to unlock unlimited creative potential!",
-      features: [
-        {
-          icon: Crown,
-          title: "Unlimited Access",
-          description: "All premium features unlocked",
-          color: "emerald",
-        },
-        {
-          icon: Zap,
-          title: "10% Platform Fee",
-          description: "Keep more of your earnings",
-          color: "cyan",
-        },
-        {
-          icon: Sparkles,
-          title: "Full Vex AI",
-          description: "AI-powered bundle creation",
-          color: "purple",
-        },
-      ],
     },
     creator_vip: {
       title: "Welcome to Creator VIP!",
       description: "Your subscription is now active. Get ready to unlock unlimited creative potential!",
-      features: [
-        {
-          icon: Crown,
-          title: "Unlimited Access",
-          description: "All premium features unlocked",
-          color: "emerald",
-        },
-        {
-          icon: Zap,
-          title: "10% Platform Fee",
-          description: "Keep more of your earnings",
-          color: "cyan",
-        },
-        {
-          icon: Sparkles,
-          title: "Full Vex AI",
-          description: "AI-powered bundle creation",
-          color: "purple",
-        },
-      ],
     },
   }
 
@@ -260,38 +180,6 @@ export default function SubscriptionSuccess() {
             >
               {status === "success" ? content.description : message}
             </motion.p>
-
-            {status === "success" && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5, duration: 0.5 }}
-                className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8"
-              >
-                {content.features.map((feature, index) => {
-                  const Icon = feature.icon
-                  const colorClasses = {
-                    emerald: "bg-emerald-500/10 text-emerald-400",
-                    cyan: "bg-cyan-500/10 text-cyan-400",
-                    purple: "bg-purple-500/10 text-purple-400",
-                  }
-                  return (
-                    <div
-                      key={index}
-                      className="bg-zinc-800/40 backdrop-blur-sm rounded-xl p-4 border border-zinc-700/50"
-                    >
-                      <div className="flex justify-center mb-2">
-                        <div className={`p-2 rounded-lg ${colorClasses[feature.color as keyof typeof colorClasses]}`}>
-                          <Icon className="h-6 w-6" />
-                        </div>
-                      </div>
-                      <h3 className="font-semibold text-white mb-1">{feature.title}</h3>
-                      <p className="text-sm text-zinc-400">{feature.description}</p>
-                    </div>
-                  )
-                })}
-              </motion.div>
-            )}
 
             <motion.div
               initial={{ opacity: 0, y: 10 }}

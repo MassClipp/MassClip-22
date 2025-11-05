@@ -1128,7 +1128,7 @@ export default function BundlesPage() {
               <h1 className="text-2xl sm:text-3xl font-light text-white mb-2">
                 Bundles{" "}
                 <span className="text-zinc-500 text-lg font-normal">
-                  {productBoxes.length}/{isProUser ? "∞" : bundleLimit}
+                  {productBoxes.length}/{isProUser ? bundleLimit : bundleLimit}
                 </span>
               </h1>
               <p className="text-zinc-400 text-sm">Create and manage premium content packages for your audience</p>

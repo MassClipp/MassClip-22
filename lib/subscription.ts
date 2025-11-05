@@ -30,12 +30,12 @@ const STARTER_DEFAULTS = {
   premiumContent: false,
   noWatermark: false,
   prioritySupport: false,
-  platformFeePercentage: 20, // 20% for Starter
-  maxVideosPerBundle: 15, // 15 videos per bundle for Starter
-  maxBundles: 5, // 5 bundles for Starter
-  maxFolders: 3, // 3 folders for Starter
-  canCreateSubfolders: true, // Starter can create subfolders
-  canAnalyzeTranscripts: false, // Basic Vex AI only - no transcript analysis
+  platformFeePercentage: 20, // Faceless Pro: 20% platform fee
+  maxVideosPerBundle: 15, // Faceless Pro: 15 videos per bundle
+  maxBundles: 5, // Faceless Pro: 5 bundles max
+  maxFolders: 3, // Faceless Pro: 3 folders
+  canCreateSubfolders: true,
+  canAnalyzeTranscripts: false, // Basic Vex AI only
   canCreateBundles: false,
 }
 
@@ -61,7 +61,6 @@ export async function checkSubscription(userId?: string): Promise<SubscriptionDa
         currentPeriodEnd: membership.currentPeriodEnd,
         features: isStarterPlan
           ? {
-              // Starter plan features
               unlimitedDownloads: false,
               premiumContent: false,
               noWatermark: false,
@@ -75,7 +74,6 @@ export async function checkSubscription(userId?: string): Promise<SubscriptionDa
               canCreateBundles: false,
             }
           : {
-              // Creator Pro features
               unlimitedDownloads: true,
               premiumContent: true,
               noWatermark: true,

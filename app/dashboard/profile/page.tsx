@@ -756,7 +756,9 @@ export default function ProfilePage() {
                                 ? "Facelessprenuer"
                                 : subscriptionData?.plan === "starter"
                                   ? "Faceless Pro"
-                                  : "Free"}
+                                  : subscriptionData?.isActive
+                                    ? "Active"
+                                    : "Free"}
                           </Badge>
                         </div>
 
