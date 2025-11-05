@@ -43,10 +43,10 @@ export async function POST(req: NextRequest) {
     const session = await stripe.checkout.sessions.create({
       customer: stripeCustomerId,
       mode: "subscription",
-      payment_method_collection: "if_required", // Don't require payment method for trial
+      payment_method_collection: "always", // Collect payment method but don't charge during trial
       line_items: [
         {
-          price: process.env.FACELESS_PRO_FIRST!, // Faceless Pro price ID
+          price: process.env.FACELESS_PRO_FIRST!, // Faceless Pro price ID with trial
           quantity: 1,
         },
       ],
