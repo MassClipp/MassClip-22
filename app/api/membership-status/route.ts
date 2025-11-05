@@ -1,54 +1,141 @@
-import { NextResponse } from "next/server"
-import { auth } from "@/lib/firebase-admin"
-import { db } from "@/lib/firebase-admin"
-import { PLAN_NAMES } from "@/lib/plan-config"
+import { NextResponse, type NextRequest } from "next/server"
+import { initializeFirebaseAdmin } from "@/lib/firebase-admin"
+import { getStripeSubscriptionStatus } from "@/lib/stripe-subscription-service"
+import { getAuth } from "firebase-admin/auth"
+import { getMembership } from "@/lib/memberships-service"
+import { getFreeUserLimits } from "@/lib/free-users-service"
 
-export async function GET(request: Request) {
+initializeFirebaseAdmin()
+const auth = getAuth()
+
+export async function GET(request: NextRequest) {
   try {
+    // Get userId from auth token
     const authHeader = request.headers.get("authorization")
-    if (!authHeader?.startsWith("Bearer ")) {
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const token = authHeader.split("Bearer ")[1]
-    const decodedToken = await auth.verifyIdToken(token)
-    const uid = decodedToken.uid
+    const idToken = authHeader.replace("Bearer ", "")
+    let decodedToken
+    try {
+      decodedToken = await auth.verifyIdToken(idToken)
+    } catch (error) {
+      console.error("Token verification failed:", error)
+      return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
+    }
 
-    // Fetch user's membership from Firestore
-    const membershipDoc = await db.collection("memberships").doc(uid).get()
+    const userId = decodedToken.uid
 
-    if (!membershipDoc.exists) {
+    // Get membership from the memberships service
+    const membership = await getMembership(userId)
+
+    if (!membership) {
+      const starterLimits = await getFreeUserLimits(userId)
+
+      return NextResponse.json({
+        plan: "starter",
+        isActive: false,
+        status: "inactive",
+        features: {
+          unlimitedDownloads: false,
+          premiumContent: false,
+          noWatermark: false,
+          prioritySupport: false,
+          platformFeePercentage: 20,
+          maxVideosPerBundle: starterLimits.maxVideosPerBundle, // 15 for Starter
+          maxBundles: starterLimits.bundlesLimit, // 5 for Starter
+        },
+      })
+    }
+
+    // Check if user is on trial or has active Creator Pro
+    const isCreatorPro = membership.plan === "creator_pro" || membership.status === "trialing"
+    const platformFee = isCreatorPro ? 10 : 20
+
+    let maxVideosPerBundle: number | null = null
+    let maxBundles: number | null = null
+
+    if (isCreatorPro) {
+      // Creator Pro has unlimited
+      maxVideosPerBundle = null
+      maxBundles = null
+    } else {
+      // Starter plan - get actual limits (5 bundles, 15 videos per bundle)
+      const starterLimits = await getFreeUserLimits(userId)
+      maxVideosPerBundle = starterLimits.maxVideosPerBundle
+      maxBundles = starterLimits.bundlesLimit
+    }
+
+    return NextResponse.json({
+      plan: membership.plan,
+      isActive: membership.status === "active" || membership.status === "trialing",
+      status: membership.status,
+      currentPeriodEnd: membership.currentPeriodEnd,
+      cancelAtPeriodEnd: membership.cancelAtPeriodEnd,
+      features: {
+        unlimitedDownloads: isCreatorPro,
+        premiumContent: isCreatorPro,
+        noWatermark: isCreatorPro,
+        prioritySupport: isCreatorPro,
+        platformFeePercentage: platformFee,
+        maxVideosPerBundle,
+        maxBundles,
+      },
+    })
+  } catch (error) {
+    console.error("Error fetching membership status:", error)
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unknown error" }, { status: 500 })
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const { userId } = await request.json()
+
+    if (!userId) {
+      return NextResponse.json({ error: "Missing userId" }, { status: 400 })
+    }
+
+    initializeFirebaseAdmin()
+
+    const stripeStatus = await getStripeSubscriptionStatus(userId)
+
+    if (!stripeStatus.isActive) {
       return NextResponse.json({
         plan: "free",
         isActive: false,
         status: "inactive",
+        features: {
+          unlimitedDownloads: false,
+          premiumContent: false,
+          noWatermark: false,
+          prioritySupport: false,
+          platformFeePercentage: 20,
+          maxVideosPerBundle: 10,
+          maxBundles: 2,
+        },
       })
     }
 
-    const membershipData = membershipDoc.data()
-
-    // Normalize plan name to match PLAN_NAMES constants
-    let plan = membershipData?.plan || "free"
-
-    // Map any legacy plan names to standardized names
-    if (plan === "faceless_pro" || plan === "pro") {
-      plan = PLAN_NAMES.STARTER
-    } else if (plan === "facelessprenuer") {
-      plan = PLAN_NAMES.CREATOR_PRO
-    }
-
-    console.log("[v0] membership-status - User:", uid, "Plan:", plan, "Raw plan:", membershipData?.plan)
-
     return NextResponse.json({
-      plan,
-      isActive: membershipData?.isActive || false,
-      status: membershipData?.status || "inactive",
-      cancelAtPeriodEnd: membershipData?.cancelAtPeriodEnd || false,
-      currentPeriodEnd: membershipData?.currentPeriodEnd,
-      stripeSubscriptionId: membershipData?.stripeSubscriptionId,
+      plan: stripeStatus.plan,
+      isActive: stripeStatus.isActive,
+      status: stripeStatus.status,
+      currentPeriodEnd: stripeStatus.currentPeriodEnd,
+      cancelAtPeriodEnd: stripeStatus.cancelAtPeriodEnd,
+      features: {
+        unlimitedDownloads: true,
+        premiumContent: true,
+        noWatermark: true,
+        prioritySupport: true,
+        platformFeePercentage: 10,
+        maxVideosPerBundle: null,
+        maxBundles: null,
+      },
     })
   } catch (error) {
-    console.error("[v0] membership-status - Error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    console.error("Error fetching membership status:", error)
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unknown error" }, { status: 500 })
   }
 }

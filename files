@@ -1,0 +1,84 @@
+// app/api/stripe/checkout/membership/route.ts
+import { NextResponse } from 'next/server';
+import Stripe from 'stripe';
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: '2022-11-15',
+});
+
+const FALLBACK_TEST_PRICE_ID = "price_1RuLpLDheyb0pkWF5v2Psykg";
+
+export async function POST(request: Request) {
+  const { idToken, overridePriceId } = await request.json();
+  const priceId = (overridePriceId as string) || (process.env.STRIPE_PRICE_ID as string) || FALLBACK_TEST_PRICE_ID;
+  if (!priceId) {
+    return NextResponse.json({ error: "Missing STRIPE_PRICE_ID" }, { status: 400 });
+  }
+
+  // /** rest of code here **/
+
+  const metadata = {
+    buyerUid: uid,
+    buyerEmail: email,
+    buyerName: name || (email ? email.split("@")[0] : ""),
+    plan: "creator_pro",
+    contentType: "membership",
+    source: "dashboard_membership",
+    priceId, // added
+  };
+
+  // /** rest of code here **/
+}
+
+// app/dashboard/membership/page.tsx
+import { TEMP_PAYMENT_LINK } from '@/constants';
+import { handleUpgradeClick } from '@/utils';
+
+const TEST_PRICE_ID = "price_1RuLpLDheyb0pkWF5v2Psykg";
+
+export default function MembershipPage() {
+  // /** rest of code here **/
+
+  const handleUpgradeClick = async () => {
+    const idToken = await getIdToken();
+    const response = await fetch('/api/stripe/checkout/membership', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ idToken, priceId: TEST_PRICE_ID }),
+    });
+
+    // /** rest of code here **/
+  };
+
+  // /** rest of code here **/
+}
+
+// app/api/stripe/webhook/route.ts
+import { NextResponse } from 'next/server';
+import Stripe from 'stripe';
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: '2022-11-15',
+});
+
+const FALLBACK_TEST_PRICE_ID = "price_1RuLpLDheyb0pkWF5v2Psykg";
+
+function getPriceId(session: Stripe.Checkout.Session): string {
+  const first = session.subscription?.items?.data?.[0];
+  return first?.price?.id || session.metadata?.priceId || process.env.STRIPE_PRICE_ID || FALLBACK_TEST_PRICE_ID;
+}
+
+async function syncMembershipFromSubscription(sub: Stripe.Subscription) {
+  const priceId = (sub.items?.data?.[0]?.price?.id as string) || process.env.STRIPE_PRICE_ID || FALLBACK_TEST_PRICE_ID;
+
+  // /** rest of code here **/
+}
+
+export async function POST(request: Request) {
+  const sig = request.headers.get('stripe-signature')!;
+  const event = stripe.webhooks.constructEvent(await request.text(), sig, process.env.STRIPE_WEBHOOK_SECRET!);
+
+  // /** rest of code here **/
+}

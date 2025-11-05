@@ -1,0 +1,72 @@
+import type { Category } from "./types"
+
+export const categories: Category[] = [
+  // Trending category removed as requested
+  {
+    id: "transitions",
+    name: "Smooth Transitions",
+    videos: [
+      {
+        id: "t1",
+        title: "Slide Transition Pack",
+        description: "Collection of smooth slide transitions",
+        thumbnail: "/presentation-slide-transition.png",
+        previewUrl: "/abstract-geometric-transition.png",
+        downloadUrl: "#",
+        duration: "0:45",
+        category: "transitions",
+        tags: ["slide", "transition", "pack"],
+        vimeoId: "1075439121",
+      },
+      {
+        id: "t2",
+        title: "Zoom Transition",
+        description: "Dynamic zoom in/out transition",
+        thumbnail: "/dynamic-zoom-thumbnail.png",
+        previewUrl: "/abstract-zoom-blur.png",
+        downloadUrl: "#",
+        duration: "0:12",
+        category: "transitions",
+        tags: ["zoom", "transition"],
+        vimeoId: "1075439121",
+      },
+      {
+        id: "t3",
+        title: "Glitch Effect Transition",
+        description: "Modern glitch effect for transitions",
+        thumbnail: "/abstract-glitch-thumbnail.png",
+        previewUrl: "/digital-distortion.png",
+        downloadUrl: "#",
+        duration: "0:10",
+        category: "transitions",
+        tags: ["glitch", "effect", "transition"],
+        vimeoId: "1075439121",
+      },
+      {
+        id: "t4",
+        title: "Smooth Wipe Transition",
+        description: "Clean wipe transitions for professional videos",
+        thumbnail: "/diagonal-wipe-transition.png",
+        previewUrl: "/diagonal-wipe-transition.png",
+        downloadUrl: "#",
+        duration: "0:15",
+        category: "transitions",
+        tags: ["wipe", "smooth", "transition"],
+        vimeoId: "1075439121",
+      },
+      {
+        id: "t5",
+        title: "Spin Transition",
+        description: "Rotating spin transition effect",
+        thumbnail: "/molecular-spin-change.png",
+        previewUrl: "/molecular-spin-change.png",
+        downloadUrl: "#",
+        duration: "0:08",
+        category: "transitions",
+        tags: ["spin", "rotate", "transition"],
+        vimeoId: "1075439121",
+      },
+    ],
+  },
+  // Other categories remain the same...
+]
