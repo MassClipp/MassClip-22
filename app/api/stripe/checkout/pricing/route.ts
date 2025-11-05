@@ -11,7 +11,7 @@ const stripe = new Stripe(stripeKey, {
   apiVersion: "2024-06-20",
 })
 
-const FACELESS_PRO_PRICE_ID = "price_1S4ZlnDheyb0pkWFVxbaxaNV"
+const FACELESS_PRO_PRICE_ID = "price_1SQBMvDheyb0pkWFPGz7vke7" // Updated to new test price ID
 const FACELESSPRENUER_FIRST_TIME_PRICE_ID = process.env.FACELESSPRENUER_FIRST
 const FACELESSPRENUER_REGULAR_PRICE_ID = process.env.FACELESSPRENUER_REGULAR
 

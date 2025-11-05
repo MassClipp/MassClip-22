@@ -5,7 +5,7 @@ import { FieldValue } from "firebase-admin/firestore"
 
 const FACELESS_PRO_PRICE_IDS = [
   process.env.FACELESS_PRO_FIRST,
-  "price_1S4ZlnDheyb0pkWFVxbaxaNV", // Test price ID
+  "price_1SQBMvDheyb0pkWFPGz7vke7", // Updated to new test price ID
 ].filter(Boolean)
 
 console.log("[v0] Faceless Pro webhook initialized with price IDs:", FACELESS_PRO_PRICE_IDS)

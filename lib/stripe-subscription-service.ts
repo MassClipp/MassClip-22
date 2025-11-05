@@ -73,7 +73,7 @@ export async function getStripeSubscriptionStatus(userId: string): Promise<Strip
     const priceId = subscription.items.data[0]?.price.id
     const facelessProPriceIds = [
       process.env.FACELESS_PRO_FIRST,
-      "price_1S4ZlnDheyb0pkWFVxbaxaNV", // Test price ID
+      "price_1SQBMvDheyb0pkWFPGz7vke7", // Updated to new test price ID
     ].filter(Boolean)
     const facelessprenuerPriceIds = [process.env.FACELESSPRENUER_FIRST, process.env.FACELESSPRENUER_REGULAR].filter(
       Boolean,
