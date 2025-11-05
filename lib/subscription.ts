@@ -14,7 +14,6 @@ export interface SubscriptionData {
     unlimitedDownloads: boolean
     premiumContent: boolean
     noWatermark: boolean
-    prioritySupport: boolean
     platformFeePercentage: number
     maxVideosPerBundle: number | null
     maxBundles: number | null
@@ -29,7 +28,6 @@ const STARTER_DEFAULTS = {
   unlimitedDownloads: false,
   premiumContent: false,
   noWatermark: false,
-  prioritySupport: false,
   platformFeePercentage: 20, // Faceless Pro: 20% platform fee
   maxVideosPerBundle: 15, // Faceless Pro: 15 videos per bundle
   maxBundles: 5, // Faceless Pro: 5 bundles max
@@ -64,7 +62,6 @@ export async function checkSubscription(userId?: string): Promise<SubscriptionDa
               unlimitedDownloads: false,
               premiumContent: false,
               noWatermark: false,
-              prioritySupport: false,
               platformFeePercentage: 20,
               maxVideosPerBundle: 15,
               maxBundles: 5,
@@ -77,7 +74,6 @@ export async function checkSubscription(userId?: string): Promise<SubscriptionDa
               unlimitedDownloads: true,
               premiumContent: true,
               noWatermark: true,
-              prioritySupport: true,
               platformFeePercentage: 10,
               maxVideosPerBundle: null,
               maxBundles: null,
@@ -123,7 +119,6 @@ export async function checkSubscription(userId?: string): Promise<SubscriptionDa
           unlimitedDownloads: false,
           premiumContent: false,
           noWatermark: false,
-          prioritySupport: false,
           platformFeePercentage,
           maxVideosPerBundle,
           maxBundles,
@@ -158,7 +153,6 @@ export function getSubscriptionFeatures(plan: string) {
         unlimitedDownloads: true,
         premiumContent: true,
         noWatermark: true,
-        prioritySupport: true,
         platformFeePercentage: 10, // 10% for Creator Pro
         maxVideosPerBundle: null, // Unlimited for Creator Pro
         maxBundles: null, // Unlimited for Creator Pro
