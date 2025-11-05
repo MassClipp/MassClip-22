@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
       await setDoc(doc(db, "users", userId), { stripeCustomerId }, { merge: true })
     }
 
-    // Create checkout session with 3-day free trial for Faceless Pro
+    // Create checkout session with 14-day free trial for Faceless Pro
     const session = await stripe.checkout.sessions.create({
       customer: stripeCustomerId,
       mode: "subscription",
@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
         },
       ],
       subscription_data: {
-        trial_period_days: 3,
+        trial_period_days: 14,
         metadata: {
           firebaseUID: userId,
           plan: "faceless_pro",
