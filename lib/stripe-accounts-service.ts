@@ -1,7 +1,5 @@
 import Stripe from "stripe"
 import type { FirebaseFirestore } from "firebase-admin/firestore"
-import { adminDb } from "@/lib/firebase-admin"
-import { FieldValue } from "firebase-admin/firestore"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
@@ -22,6 +20,9 @@ export interface ConnectedStripeAccount {
  * Save or update a connected Stripe account in Firestore
  */
 export async function saveConnectedStripeAccount(userId: string, stripeAccount: Stripe.Account): Promise<void> {
+  const { adminDb } = await import("@/lib/firebase-admin")
+  const { FieldValue } = await import("firebase-admin/firestore")
+
   try {
     const docRef = adminDb.collection("connectedStripeAccounts").doc(userId)
     const docSnapshot = await docRef.get()
@@ -60,6 +61,8 @@ export async function saveConnectedStripeAccount(userId: string, stripeAccount: 
  * Get a connected Stripe account from Firestore
  */
 export async function getConnectedStripeAccount(userId: string): Promise<ConnectedStripeAccount | null> {
+  const { adminDb } = await import("@/lib/firebase-admin")
+
   try {
     const docRef = adminDb.collection("connectedStripeAccounts").doc(userId)
     const docSnapshot = await docRef.get()
@@ -81,6 +84,8 @@ export async function getConnectedStripeAccount(userId: string): Promise<Connect
  * Update Stripe account status from live Stripe data
  */
 export async function refreshStripeAccountStatus(userId: string): Promise<ConnectedStripeAccount | null> {
+  const { adminDb } = await import("@/lib/firebase-admin")
+
   try {
     console.log(`🔄 Refreshing Stripe account status for user: ${userId}`)
 
@@ -117,6 +122,8 @@ export async function refreshStripeAccountStatus(userId: string): Promise<Connec
  * Delete a connected Stripe account record
  */
 export async function deleteConnectedStripeAccount(userId: string): Promise<void> {
+  const { adminDb } = await import("@/lib/firebase-admin")
+
   try {
     await adminDb.collection("connectedStripeAccounts").doc(userId).delete()
     console.log(`✅ Deleted connected Stripe account for user: ${userId}`)
@@ -130,6 +137,8 @@ export async function deleteConnectedStripeAccount(userId: string): Promise<void
  * Get all connected Stripe accounts (for batch operations)
  */
 export async function getAllConnectedStripeAccounts(): Promise<ConnectedStripeAccount[]> {
+  const { adminDb } = await import("@/lib/firebase-admin")
+
   try {
     const snapshot = await adminDb.collection("connectedStripeAccounts").get()
     return snapshot.docs.map((doc) => doc.data() as ConnectedStripeAccount)

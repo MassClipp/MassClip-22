@@ -1,5 +1,3 @@
-import { db } from "@/lib/firebase-admin"
-
 /**
  * 🎯 UNIFIED PURCHASE SERVICE - READ ONLY
  * This service ONLY reads purchase data from the database
@@ -11,6 +9,8 @@ export class UnifiedPurchaseService {
    * READ ONLY - does not create purchases
    */
   static async getUserPurchaseByPaymentIntent(userId: string, paymentIntentId: string) {
+    const { db } = await import("@/lib/firebase-admin")
+
     try {
       console.log(`🔍 [Purchase Service] Looking up purchase by payment intent: ${paymentIntentId}`)
 
@@ -44,6 +44,8 @@ export class UnifiedPurchaseService {
    * READ ONLY - does not create purchases
    */
   static async getUserPurchaseBySessionId(userId: string, sessionId: string) {
+    const { db } = await import("@/lib/firebase-admin")
+
     try {
       console.log(`🔍 [Purchase Service] Looking up purchase by session ID: ${sessionId}`)
 
@@ -73,6 +75,8 @@ export class UnifiedPurchaseService {
    * READ ONLY - does not create purchases
    */
   static async getUserPurchases(userId: string) {
+    const { db } = await import("@/lib/firebase-admin")
+
     try {
       console.log(`🔍 [Purchase Service] Getting all purchases for user: ${userId}`)
 
@@ -106,6 +110,8 @@ export class UnifiedPurchaseService {
    * READ ONLY - does not create purchases
    */
   static async checkUserAccess(userId: string, itemId: string) {
+    const { db } = await import("@/lib/firebase-admin")
+
     try {
       console.log(`🔍 [Purchase Service] Checking access for user ${userId} to item ${itemId}`)
 

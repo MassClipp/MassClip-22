@@ -1,6 +1,3 @@
-import { db } from "@/lib/firebase-admin"
-import { FieldValue } from "firebase-admin/firestore"
-
 // Free User Tracking Interface
 export interface FreeUserData {
   uid: string
@@ -67,6 +64,8 @@ export interface CreatorProUserData {
 export class UserTrackingService {
   // Create or update free user record (idempotent, merges defaults)
   static async createFreeUser(userData: Partial<FreeUserData>): Promise<void> {
+    const { db } = await import("@/lib/firebase-admin")
+
     if (!userData.uid) throw new Error("createFreeUser requires uid")
     if (typeof userData.email === "undefined") {
       // Keep email optional at call-site, but store empty string if unknown
@@ -105,6 +104,8 @@ export class UserTrackingService {
 
   // Create or update creator pro user record (idempotent, merges defaults)
   static async createCreatorProUser(userData: Partial<CreatorProUserData>): Promise<void> {
+    const { db } = await import("@/lib/firebase-admin")
+
     if (!userData.uid) throw new Error("createCreatorProUser requires uid")
     if (!userData.stripeCustomerId) throw new Error("createCreatorProUser requires stripeCustomerId")
     if (!userData.subscriptionId) throw new Error("createCreatorProUser requires subscriptionId")
@@ -145,11 +146,15 @@ export class UserTrackingService {
   }
 
   static async getFreeUser(uid: string): Promise<FreeUserData | null> {
+    const { db } = await import("@/lib/firebase-admin")
+
     const doc = await db.collection("freeUsers").doc(uid).get()
     return doc.exists ? (doc.data() as FreeUserData) : null
   }
 
   static async getCreatorProUser(uid: string): Promise<CreatorProUserData | null> {
+    const { db } = await import("@/lib/firebase-admin")
+
     const doc = await db.collection("creatorProUsers").doc(uid).get()
     return doc.exists ? (doc.data() as CreatorProUserData) : null
   }
@@ -162,6 +167,8 @@ export class UserTrackingService {
     email: string,
     additionalData?: Partial<CreatorProUserData>,
   ): Promise<void> {
+    const { db } = await import("@/lib/firebase-admin")
+
     // Mark free user as upgraded if present
     const freeUser = await this.getFreeUser(uid)
     if (freeUser) {
@@ -187,6 +194,8 @@ export class UserTrackingService {
 
   // Soft downgrade: mark creatorProUsers canceled, ensure freeUsers with free caps
   static async downgradeToFree(uid: string, email?: string): Promise<void> {
+    const { db } = await import("@/lib/firebase-admin")
+
     const now = new Date()
     const proUser = await this.getCreatorProUser(uid)
 
@@ -232,6 +241,9 @@ export class UserTrackingService {
   }
 
   static async incrementDownloadUsage(uid: string): Promise<void> {
+    const { db } = await import("@/lib/firebase-admin")
+    const { FieldValue } = await import("firebase-admin/firestore")
+
     const now = new Date()
     const proUser = await this.getCreatorProUser(uid)
     if (proUser && proUser.subscriptionStatus === "active") {
@@ -269,6 +281,9 @@ export class UserTrackingService {
   }
 
   static async incrementBundleCount(uid: string): Promise<void> {
+    const { db } = await import("@/lib/firebase-admin")
+    const { FieldValue } = await import("firebase-admin/firestore")
+
     const now = new Date()
     const proUser = await this.getCreatorProUser(uid)
     if (proUser && proUser.subscriptionStatus === "active") {
@@ -335,6 +350,8 @@ export class UserTrackingService {
   }
 
   static async resetMonthlyUsage(uid: string): Promise<void> {
+    const { db } = await import("@/lib/firebase-admin")
+
     const now = new Date()
     await db.collection("freeUsers").doc(uid).update({
       downloadsUsed: 0,

@@ -1,4 +1,3 @@
-import { db } from "@/lib/firebase-admin"
 import Stripe from "stripe"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -29,6 +28,8 @@ export interface ConnectedStripeAccount {
 
 export class ConnectedStripeAccountsService {
   static async getAccount(userId: string): Promise<ConnectedStripeAccount | null> {
+    const { db } = await import("@/lib/firebase-admin")
+
     try {
       const doc = await db.collection("connectedStripeAccounts").doc(userId).get()
       if (!doc.exists) {
@@ -42,6 +43,8 @@ export class ConnectedStripeAccountsService {
   }
 
   static async saveAccount(userId: string, accountData: Partial<ConnectedStripeAccount>): Promise<void> {
+    const { db } = await import("@/lib/firebase-admin")
+
     try {
       await db.collection("connectedStripeAccounts").doc(userId).set(accountData, { merge: true })
     } catch (error) {
@@ -51,6 +54,8 @@ export class ConnectedStripeAccountsService {
   }
 
   static async deleteAccount(userId: string): Promise<void> {
+    const { db } = await import("@/lib/firebase-admin")
+
     try {
       await db.collection("connectedStripeAccounts").doc(userId).delete()
     } catch (error) {
@@ -60,6 +65,8 @@ export class ConnectedStripeAccountsService {
   }
 
   static async listAccounts(): Promise<{ userId: string; account: ConnectedStripeAccount }[]> {
+    const { db } = await import("@/lib/firebase-admin")
+
     try {
       const snapshot = await db.collection("connectedStripeAccounts").get()
       return snapshot.docs.map((doc) => ({
