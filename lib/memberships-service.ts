@@ -263,3 +263,5 @@ export async function deleteMembership(uid: string): Promise<void> {
   await adminDb.collection("memberships").doc(uid).delete()
   console.log(`✅ Deleted membership record for user: ${uid}`)
 }
+
+export { toTierInfo } from "./tier-info"
