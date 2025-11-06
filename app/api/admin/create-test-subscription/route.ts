@@ -2,11 +2,13 @@ import { type NextRequest, NextResponse } from "next/server"
 import { initializeFirebaseAdmin, db } from "@/lib/firebase/firebaseAdmin"
 import { getAuth } from "firebase-admin/auth"
 
-initializeFirebaseAdmin()
-const auth = getAuth()
+export const dynamic = "force-dynamic"
 
 export async function POST(request: NextRequest) {
   try {
+    initializeFirebaseAdmin()
+    const auth = getAuth()
+
     // Verify authentication
     const authHeader = request.headers.get("authorization")
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
