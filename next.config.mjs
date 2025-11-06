@@ -1,21 +1,27 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'standalone',
+  
   serverExternalPackages: ["firebase-admin"],
+  
   experimental: {
     optimizePackageImports: ['lucide-react', '@radix-ui/react-icons'],
     serverActions: {
       bodySizeLimit: '2mb',
     },
+    isrMemoryCacheSize: 0,
   },
+  
   eslint: {
     ignoreDuringBuilds: true,
   },
+  
   typescript: {
     ignoreBuildErrors: true,
   },
+  
   webpack: (config, { isServer }) => {
     if (isServer) {
-      // Mark firebase-admin as external to prevent bundling during build
       config.externals = config.externals || []
       config.externals.push({
         'firebase-admin': 'commonjs firebase-admin',
@@ -24,6 +30,11 @@ const nextConfig = {
         'firebase-admin/firestore': 'commonjs firebase-admin/firestore',
         'firebase-admin/storage': 'commonjs firebase-admin/storage',
       })
+      
+      config.ignoreWarnings = [
+        { module: /firebase-admin/ },
+        { message: /Firebase/ },
+      ]
     }
     
     if (process.env.ANALYZE === 'true') {
@@ -36,6 +47,7 @@ const nextConfig = {
     
     return config
   },
+  
   images: {
     domains: [
       "lh3.googleusercontent.com",
@@ -46,7 +58,9 @@ const nextConfig = {
     unoptimized: false,
     formats: ['image/webp', 'image/avif'],
   },
+  
   compress: true,
+  
   async headers() {
     return [
       {
