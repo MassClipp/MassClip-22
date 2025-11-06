@@ -100,7 +100,8 @@ export default function ProfilePage() {
   } | null>(null)
 
   const isProUser =
-    (subscriptionData?.plan === "creator_pro" || subscriptionData?.plan === "pro") && subscriptionData?.isActive
+    (subscriptionData?.plan === "facelessprenuer" || subscriptionData?.plan === "faceless_pro") &&
+    subscriptionData?.isActive
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true)
@@ -752,13 +753,11 @@ export default function ProfilePage() {
                           >
                             {trialStatus?.isOnTrial
                               ? "Facelessprenuer (Trial)"
-                              : subscriptionData?.plan === "creator_pro" || subscriptionData?.plan === "pro"
+                              : subscriptionData?.plan === "facelessprenuer"
                                 ? "Facelessprenuer"
-                                : subscriptionData?.plan === "starter"
+                                : subscriptionData?.plan === "faceless_pro"
                                   ? "Faceless Pro"
-                                  : subscriptionData?.isActive
-                                    ? "Active"
-                                    : "Free"}
+                                  : "Free"}
                           </Badge>
                         </div>
 
@@ -770,9 +769,7 @@ export default function ProfilePage() {
                                 <p className="text-amber-200 text-sm font-medium mb-1">Subscription Canceled</p>
                                 <p className="text-amber-300/80 text-xs leading-relaxed">
                                   Your{" "}
-                                  {subscriptionData?.plan === "creator_pro" || subscriptionData?.plan === "pro"
-                                    ? "Facelessprenuer"
-                                    : "Faceless Pro"}{" "}
+                                  {subscriptionData?.plan === "facelessprenuer" ? "Facelessprenuer" : "Faceless Pro"}{" "}
                                   access continues until {safelyFormatDate(subscriptionData.currentPeriodEnd)}. After
                                   this date, you will lose access to selling features and your storefront will be
                                   automatically disabled.
@@ -799,10 +796,10 @@ export default function ProfilePage() {
                       <div className="space-y-4">
                         <h3 className="text-lg font-medium text-white">Plan Features</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          {(subscriptionData?.plan === "creator_pro" || subscriptionData?.plan === "pro") &&
+                          {(subscriptionData?.plan === "facelessprenuer" ||
+                            subscriptionData?.plan === "faceless_pro") &&
                           subscriptionData?.isActive ? (
                             <>
-                              {/* Facelessprenuer (Creator Pro) features */}
                               <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
                                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
                                 <span className="text-sm text-zinc-200">Unlimited Folders with Subfolders</span>
@@ -825,12 +822,15 @@ export default function ProfilePage() {
                               </div>
                               <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
                                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-                                <span className="text-sm text-zinc-200">Only 10% Platform Fee</span>
+                                <span className="text-sm text-zinc-200">
+                                  {subscriptionData?.plan === "faceless_pro"
+                                    ? "Only 10% Platform Fee"
+                                    : "Only 10% Platform Fee"}
+                                </span>
                               </div>
                             </>
                           ) : (
                             <>
-                              {/* Faceless Pro (Starter) features */}
                               <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
                                 <div className="w-1.5 h-1.5 rounded-full bg-zinc-500"></div>
                                 <span className="text-sm text-zinc-300">3 folders with subfolders</span>
@@ -859,7 +859,7 @@ export default function ProfilePage() {
                       </div>
 
                       <div className="flex flex-wrap gap-3 pt-4 border-t border-zinc-800/50">
-                        {(subscriptionData?.plan !== "creator_pro" && subscriptionData?.plan !== "pro") ||
+                        {(subscriptionData?.plan !== "facelessprenuer" && subscriptionData?.plan !== "faceless_pro") ||
                         !subscriptionData?.isActive ? (
                           <Button
                             onClick={() => router.push("/dashboard/upgrade")}

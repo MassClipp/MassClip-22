@@ -6,8 +6,6 @@ import Stripe from "stripe"
 import { ConnectedStripeAccountsService } from "@/lib/connected-stripe-accounts-service"
 import { getUserTierInfo, incrementUserBundles } from "@/lib/user-tier-service"
 
-export const dynamic = "force-dynamic"
-
 // Initialize Firebase Admin
 if (!getApps().length) {
   const serviceAccount = {

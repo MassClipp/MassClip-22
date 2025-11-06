@@ -7,20 +7,12 @@ import admin from "firebase-admin"
 
 let adminApp: App | null = null
 
-const isBuildTime =
-  process.env.NEXT_PHASE === "phase-production-build" || (process.env.NODE_ENV === "production" && !process.env.VERCEL)
-
 /**
  * Initializes the Firebase Admin SDK, ensuring it only runs once.
  * This function is exported because other modules in your project depend on it.
  * @returns The initialized Firebase Admin App instance.
  */
 export function initializeFirebaseAdmin(): App {
-  if (isBuildTime) {
-    console.log("⏭️ [Firebase Admin] Skipping initialization during build time")
-    return null as any
-  }
-
   if (adminApp) {
     return adminApp
   }
@@ -63,10 +55,6 @@ export function initializeFirebaseAdmin(): App {
 
 // Export a utility function to check the initialization status.
 export const isFirebaseAdminInitialized = () => {
-  if (isBuildTime) {
-    return false
-  }
-
   try {
     if (!adminApp) {
       adminApp = initializeFirebaseAdmin()
@@ -79,10 +67,6 @@ export const isFirebaseAdminInitialized = () => {
 }
 
 export const getAdminDb = (): Firestore => {
-  if (isBuildTime) {
-    return {} as Firestore
-  }
-
   if (!adminApp) {
     adminApp = initializeFirebaseAdmin()
   }
@@ -90,10 +74,6 @@ export const getAdminDb = (): Firestore => {
 }
 
 export const getAdminAuth = (): Auth => {
-  if (isBuildTime) {
-    return {} as Auth
-  }
-
   if (!adminApp) {
     adminApp = initializeFirebaseAdmin()
   }
@@ -101,10 +81,6 @@ export const getAdminAuth = (): Auth => {
 }
 
 export const getAdminStorage = (): Storage => {
-  if (isBuildTime) {
-    return {} as Storage
-  }
-
   if (!adminApp) {
     adminApp = initializeFirebaseAdmin()
   }

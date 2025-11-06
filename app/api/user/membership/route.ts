@@ -2,7 +2,6 @@ import { NextResponse, type NextRequest } from "next/server"
 import { getAuthenticatedUser } from "@/lib/firebase-admin"
 import { ensureMembership, getTierInfo } from "@/lib/memberships-service"
 
-export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
 
 export async function GET(request: NextRequest) {

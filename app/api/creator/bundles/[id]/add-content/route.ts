@@ -4,8 +4,6 @@ import { getAuth } from "firebase-admin/auth"
 import { getFirestore, Timestamp } from "firebase-admin/firestore"
 import { getUserTierInfo } from "@/lib/user-tier-service"
 
-export const dynamic = "force-dynamic"
-
 // Initialize Firebase Admin with only the required fields to avoid missing env crashes
 if (!getApps().length) {
   const projectId = process.env.FIREBASE_PROJECT_ID

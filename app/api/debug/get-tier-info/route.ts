@@ -2,8 +2,6 @@ import { type NextRequest, NextResponse } from "next/server"
 import { verifyIdToken } from "@/lib/auth-utils"
 import { getUserTierInfo } from "@/lib/user-tier-service"
 
-export const dynamic = "force-dynamic"
-
 export async function GET(request: NextRequest) {
   try {
     const authHeader = request.headers.get("Authorization")

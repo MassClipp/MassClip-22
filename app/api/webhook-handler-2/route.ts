@@ -4,8 +4,6 @@ import { headers } from "next/headers"
 import { adminDb } from "@/lib/firebase-admin"
 import { completeBundleSlotPurchase } from "@/lib/bundle-slots-service"
 
-export const dynamic = "force-dynamic"
-
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2023-10-16",
 })
