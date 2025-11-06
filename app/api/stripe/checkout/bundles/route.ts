@@ -3,6 +3,8 @@ import Stripe from "stripe"
 import { auth, isFirebaseAdminInitialized } from "@/lib/firebase-admin"
 import { createBundleSlotPurchase, BUNDLE_SLOT_TIERS } from "@/lib/bundle-slots-service"
 
+export const dynamic = "force-dynamic"
+
 // Initialize Stripe with the secret key
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",

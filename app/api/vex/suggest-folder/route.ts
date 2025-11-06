@@ -5,6 +5,8 @@ import { generateText } from "ai"
 import { canAnalyzeTranscripts } from "@/lib/subscription"
 import { getUserTierInfo } from "@/lib/user-tier-service"
 
+export const dynamic = "force-dynamic"
+
 // Initialize Firebase Admin
 initializeFirebaseAdmin()
 

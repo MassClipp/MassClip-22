@@ -7,6 +7,8 @@ import { ConnectedStripeAccountsService } from "@/lib/connected-stripe-accounts-
 import { getUserTierInfo, incrementUserBundles } from "@/lib/user-tier-service"
 import { canUserCreateBundles } from "@/lib/subscription"
 
+export const dynamic = "force-dynamic"
+
 // Initialize Firebase Admin
 initializeFirebaseAdmin()
 

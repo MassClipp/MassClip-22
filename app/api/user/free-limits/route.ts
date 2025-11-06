@@ -2,6 +2,8 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getFreeUserLimits } from "@/lib/free-users-service"
 import { verifyIdToken } from "@/lib/firebase-admin"
 
+export const dynamic = "force-dynamic"
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)

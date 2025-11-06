@@ -3,6 +3,8 @@ import { getAuth } from "firebase-admin/auth"
 import { initializeApp, getApps, cert } from "firebase-admin/app"
 import { getUserTierInfo } from "@/lib/user-tier-service"
 
+export const dynamic = "force-dynamic"
+
 // Initialize Firebase Admin
 if (!getApps().length) {
   const serviceAccount = {
