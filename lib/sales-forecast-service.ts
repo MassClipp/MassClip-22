@@ -2,8 +2,18 @@ import { getFirestore } from "firebase-admin/firestore"
 import { initializeApp, getApps, cert } from "firebase-admin/app"
 import Stripe from "stripe"
 
-// Initialize Firebase Admin if not already initialized
-if (!getApps().length) {
+// Function to detect build time
+function isBuildTime(): boolean {
+  return (
+    process.env.NEXT_PHASE === "phase-production-build" ||
+    process.env.NEXT_PHASE === "phase-export" ||
+    process.env.CI === "true" ||
+    (typeof window === "undefined" && !process.env.FIREBASE_PROJECT_ID)
+  )
+}
+
+// Initialize Firebase Admin if not already initialized and not during build time
+if (!isBuildTime() && !getApps().length) {
   const serviceAccount = {
     type: "service_account",
     project_id: process.env.FIREBASE_PROJECT_ID,
@@ -22,7 +32,16 @@ if (!getApps().length) {
   })
 }
 
-const db = getFirestore()
+const db = isBuildTime()
+  ? ({
+      collection: () => ({
+        doc: () => ({
+          get: async () => ({ exists: false, data: () => ({}) }),
+        }),
+      }),
+    } as any)
+  : getFirestore()
+
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
 })

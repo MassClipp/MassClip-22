@@ -4,8 +4,18 @@ import { initializeApp, getApps } from "firebase-admin/app"
 import { getFirestore } from "firebase-admin/firestore"
 import { cert } from "firebase-admin/app"
 
-// Initialize Firebase Admin if not already initialized
-if (!getApps().length) {
+// Function to detect build time
+function isBuildTime(): boolean {
+  return (
+    process.env.NEXT_PHASE === "phase-production-build" ||
+    process.env.NEXT_PHASE === "phase-export" ||
+    process.env.CI === "true" ||
+    (typeof window === "undefined" && !process.env.FIREBASE_PROJECT_ID)
+  )
+}
+
+// Initialize Firebase Admin if not already initialized and not during build time
+if (!isBuildTime() && !getApps().length) {
   initializeApp({
     credential: cert({
       projectId: process.env.FIREBASE_PROJECT_ID,
@@ -15,7 +25,17 @@ if (!getApps().length) {
   })
 }
 
-const adminDb = getFirestore()
+const adminDb = isBuildTime()
+  ? ({
+      collection: () => ({
+        doc: () => ({
+          get: async () => ({ exists: false }),
+          set: async () => {},
+          update: async () => {},
+        }),
+      }),
+    } as any)
+  : getFirestore()
 
 export const authOptions: NextAuthOptions = {
   providers: [

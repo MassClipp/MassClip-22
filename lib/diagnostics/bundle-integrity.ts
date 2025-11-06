@@ -1,8 +1,18 @@
 import { getFirestore } from "firebase-admin/firestore"
 import { initializeApp, getApps, cert } from "firebase-admin/app"
 
-// Initialize Firebase Admin if not already initialized
-if (!getApps().length) {
+// Function to detect build time
+function isBuildTime(): boolean {
+  return (
+    process.env.NEXT_PHASE === "phase-production-build" ||
+    process.env.NEXT_PHASE === "phase-export" ||
+    process.env.CI === "true" ||
+    (typeof window === "undefined" && !process.env.FIREBASE_PROJECT_ID)
+  )
+}
+
+// Initialize Firebase Admin if not already initialized and not in build time
+if (!isBuildTime() && !getApps().length) {
   try {
     initializeApp({
       credential: cert({
@@ -16,7 +26,24 @@ if (!getApps().length) {
   }
 }
 
-const db = getFirestore()
+const db = isBuildTime()
+  ? ({
+      collection: () => ({
+        doc: () => ({
+          get: async () => ({ exists: false, data: () => ({}) }),
+          set: async () => {},
+          update: async () => {},
+          collection: () => ({
+            get: async () => ({ docs: [], forEach: () => {} }),
+          }),
+        }),
+        where: () => ({
+          get: async () => ({ docs: [], forEach: () => {} }),
+        }),
+        get: async () => ({ docs: [], map: () => [] }),
+      }),
+    } as any)
+  : getFirestore()
 
 export interface BundleContentItem {
   id: string
