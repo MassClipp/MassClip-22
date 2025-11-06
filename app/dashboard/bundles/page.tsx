@@ -108,17 +108,22 @@ export default function BundlesPage() {
   const router = useRouter()
 
   const { limits: freeTierLimits, loading: limitsLoading } = useFreeTierLimits()
-  const { planData, isProUser } = useUserPlan()
+  const { planData, isProUser, isFacelessPro } = useUserPlan()
 
-  const bundleLimit = isProUser ? Number.POSITIVE_INFINITY : freeTierLimits?.bundlesLimit || 5
-  const videosPerBundleLimit = isProUser ? Number.POSITIVE_INFINITY : freeTierLimits?.maxVideosPerBundle || 15
-  const tierName = freeTierLimits?.tier || "starter"
+  const bundleLimit = isProUser ? Number.POSITIVE_INFINITY : isFacelessPro ? 5 : freeTierLimits?.bundlesLimit || 5
+  const videosPerBundleLimit = isProUser
+    ? Number.POSITIVE_INFINITY
+    : isFacelessPro
+      ? 15
+      : freeTierLimits?.maxVideosPerBundle || 15
+  const tierName = isFacelessPro ? "faceless_pro" : freeTierLimits?.tier || "starter"
 
   useEffect(() => {
     console.log("[v0] ===== BUNDLE LIMITS DEBUG =====")
     console.log("[v0] User plan data:", {
       planData,
       isProUser,
+      isFacelessPro,
       freeTierLimits,
       limitsLoading,
     })
@@ -127,13 +132,14 @@ export default function BundlesPage() {
       videosPerBundleLimit,
       tierName,
       currentBundleCount: productBoxes.length,
-      isAtLimit: !isProUser && productBoxes.length >= bundleLimit,
+      isAtLimit: !isProUser && !isFacelessPro && productBoxes.length >= bundleLimit,
     })
     console.log("[v0] Raw freeTierLimits object:", JSON.stringify(freeTierLimits, null, 2))
     console.log("[v0] ================================")
   }, [
     planData,
     isProUser,
+    isFacelessPro,
     freeTierLimits,
     limitsLoading,
     bundleLimit,
@@ -142,7 +148,7 @@ export default function BundlesPage() {
     productBoxes.length,
   ])
 
-  const isAtBundleLimit = !isProUser && productBoxes.length >= bundleLimit
+  const isAtBundleLimit = !isProUser && !isFacelessPro && productBoxes.length >= bundleLimit
 
   const [availableUploads, setAvailableUploads] = useState<ContentItem[]>([])
   const [showAddContentModal, setShowAddContentModal] = useState<string | null>(null)
@@ -1139,7 +1145,7 @@ export default function BundlesPage() {
                 {/* Make the Create Bundle button clickable and redirect to upgrade when at limit */}
                 <Button
                   onClick={() => {
-                    if (!isProUser && productBoxes.length >= bundleLimit) {
+                    if (!isProUser && !isFacelessPro && productBoxes.length >= bundleLimit) {
                       router.push("/dashboard/upgrade")
                     } else {
                       setShowCreateModal(true)
@@ -1148,7 +1154,9 @@ export default function BundlesPage() {
                   className="bg-white text-black hover:bg-zinc-200"
                 >
                   <Plus className="h-4 w-4 mr-2" />
-                  {!isProUser && productBoxes.length >= bundleLimit ? "Want more bundles?" : "Create Bundle"}
+                  {!isProUser && !isFacelessPro && productBoxes.length >= bundleLimit
+                    ? "Want more bundles?"
+                    : "Create Bundle"}
                 </Button>
               </DialogTrigger>
               <DialogContent className="bg-zinc-900 border-zinc-800 text-white">
@@ -1331,7 +1339,7 @@ export default function BundlesPage() {
               {/* Update the empty state button to redirect to upgrade when at limit */}
               <Button
                 onClick={() => {
-                  if (!isProUser && productBoxes.length >= bundleLimit) {
+                  if (!isProUser && !isFacelessPro && productBoxes.length >= bundleLimit) {
                     router.push("/dashboard/upgrade")
                   } else {
                     setShowCreateModal(true)
@@ -1340,7 +1348,9 @@ export default function BundlesPage() {
                 className="bg-white text-black hover:bg-zinc-200"
               >
                 <Plus className="h-4 w-4 mr-2" />
-                {!isProUser && productBoxes.length >= bundleLimit ? "Want more bundles?" : "Create Your First Bundle"}
+                {!isProUser && !isFacelessPro && productBoxes.length >= bundleLimit
+                  ? "Want more bundles?"
+                  : "Create Your First Bundle"}
               </Button>
             </div>
           ) : (
