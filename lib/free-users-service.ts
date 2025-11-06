@@ -1,4 +1,4 @@
-import { FieldValue } from "firebase-admin/firestore"
+import { adminDb } from "@/lib/firebase-admin"
 
 export interface FreeUserDoc {
   uid: string
@@ -57,7 +57,6 @@ const STARTER_TIER_DEFAULTS = {
 export async function getFreeUser(uid: string): Promise<FreeUserDoc | null> {
   try {
     console.log("🔄 Getting freeUser for uid:", uid.substring(0, 8) + "...")
-    const { adminDb } = await import("@/lib/firebase-admin")
     const docRef = adminDb.collection("freeUsers").doc(uid)
     const docSnap = await docRef.get()
 
@@ -90,6 +89,8 @@ export async function createFreeUser(uid: string, email: string): Promise<FreeUs
     return existing
   }
 
+  const { FieldValue } = await import("firebase-admin/firestore")
+
   const now = new Date()
   const currentPeriodStart = new Date(now.getFullYear(), now.getMonth(), 1) // First day of current month
 
@@ -108,7 +109,6 @@ export async function createFreeUser(uid: string, email: string): Promise<FreeUs
   }
 
   try {
-    const { adminDb } = await import("@/lib/firebase-admin")
     const docRef = adminDb.collection("freeUsers").doc(uid)
     await docRef.set(freeUserDoc)
     console.log("✅ Created new freeUser successfully with Starter tier attributes")
@@ -141,7 +141,8 @@ export async function checkAndResetMonthlyLimits(uid: string): Promise<FreeUserD
   if (!lastResetDate || lastResetDate < currentMonthStart) {
     console.log("🔄 Resetting monthly limits for user:", uid.substring(0, 8) + "...")
 
-    const { adminDb } = await import("@/lib/firebase-admin")
+    const { FieldValue } = await import("firebase-admin/firestore")
+
     const docRef = adminDb.collection("freeUsers").doc(uid)
     await docRef.update({
       downloadsUsed: 0,
@@ -172,7 +173,8 @@ export async function incrementFreeUserDownloads(uid: string): Promise<{ success
       return { success: false, reason: "Monthly download limit reached (15 downloads)" }
     }
 
-    const { adminDb } = await import("@/lib/firebase-admin")
+    const { FieldValue } = await import("firebase-admin/firestore")
+
     const docRef = adminDb.collection("freeUsers").doc(uid)
     await docRef.update({
       downloadsUsed: FieldValue.increment(1),
@@ -202,7 +204,8 @@ export async function incrementFreeUserBundles(uid: string): Promise<{ success: 
       return { success: false, reason: "Bundle limit reached (2 bundles max)" }
     }
 
-    const { adminDb } = await import("@/lib/firebase-admin")
+    const { FieldValue } = await import("firebase-admin/firestore")
+
     const docRef = adminDb.collection("freeUsers").doc(uid)
     await docRef.update({
       bundlesCreated: FieldValue.increment(1),
@@ -297,7 +300,8 @@ export async function getFreeUserLimits(uid: string): Promise<{
   if (needsUpdate) {
     console.log("🔄 Auto-updating outdated limits to Starter plan defaults for user:", uid.substring(0, 8) + "...")
 
-    const { adminDb } = await import("@/lib/firebase-admin")
+    const { FieldValue } = await import("firebase-admin/firestore")
+
     const docRef = adminDb.collection("freeUsers").doc(uid)
     await docRef.update({
       bundlesLimit: STARTER_TIER_DEFAULTS.bundlesLimit, // 5
@@ -380,7 +384,8 @@ export async function upgradeFreeUserToPro(uid: string): Promise<void> {
   console.log("🔄 Upgrading free user to pro:", uid.substring(0, 8) + "...")
 
   try {
-    const { adminDb } = await import("@/lib/firebase-admin")
+    const { FieldValue } = await import("firebase-admin/firestore")
+
     const docRef = adminDb.collection("freeUsers").doc(uid)
 
     // We'll keep the freeUsers record but mark it as inactive
@@ -403,7 +408,8 @@ export async function downgradeFreeUserFromTrial(uid: string): Promise<void> {
   console.log("🔄 Downgrading user from trial to starter plan:", uid.substring(0, 8) + "...")
 
   try {
-    const { adminDb } = await import("@/lib/firebase-admin")
+    const { FieldValue } = await import("firebase-admin/firestore")
+
     const docRef = adminDb.collection("freeUsers").doc(uid)
     const docSnap = await docRef.get()
 
