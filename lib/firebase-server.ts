@@ -2,11 +2,28 @@ import { initializeApp, getApps, cert } from "firebase-admin/app"
 import { getFirestore } from "firebase-admin/firestore"
 import { getAuth } from "firebase-admin/auth"
 
+function isBuildTime(): boolean {
+  return (
+    process.env.NEXT_PHASE === "phase-production-build" ||
+    process.env.NEXT_PHASE === "phase-export" ||
+    process.env.CI === "true"
+  )
+}
+
 let adminApp: any = null
 let adminDb: any = null
 let adminAuth: any = null
 
 export function getFirebaseAdmin() {
+  if (isBuildTime()) {
+    console.log("⏭️  [Firebase Server] Skipping initialization during build time")
+    return {
+      app: null,
+      db: null,
+      auth: null,
+    }
+  }
+
   if (!adminApp) {
     try {
       // Check if Firebase Admin is already initialized
@@ -57,6 +74,11 @@ export function getAdminAuth() {
 
 // Initialize Firebase Admin SDK
 function initializeFirebaseAdmin() {
+  if (isBuildTime()) {
+    console.log("⏭️  [Firebase Server] Skipping initializeFirebaseAdmin during build time")
+    return
+  }
+
   if (getApps().length === 0) {
     try {
       const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n")
@@ -82,17 +104,33 @@ function initializeFirebaseAdmin() {
   }
 }
 
-// Export the Firestore database instance
-export const db = getFirebaseAdmin().db
+export const db = new Proxy({} as any, {
+  get(target, prop) {
+    const { db } = getFirebaseAdmin()
+    if (!db) return undefined
+    return db[prop]
+  },
+})
 
-// Export the Firebase Auth instance
-export const auth = getFirebaseAdmin().auth
+export const auth = new Proxy({} as any, {
+  get(target, prop) {
+    const { auth } = getFirebaseAdmin()
+    if (!auth) return undefined
+    return auth[prop]
+  },
+})
 
 // For compatibility with existing code
 export default {
-  app: getFirebaseAdmin().app,
-  db: getFirebaseAdmin().db,
-  auth: getFirebaseAdmin().auth,
+  get app() {
+    return getFirebaseAdmin().app
+  },
+  get db() {
+    return getFirebaseAdmin().db
+  },
+  get auth() {
+    return getFirebaseAdmin().auth
+  },
 }
 
 export { initializeFirebaseAdmin }

@@ -2,9 +2,22 @@ import { initializeApp, getApps, cert } from "firebase-admin/app"
 import { getFirestore } from "firebase-admin/firestore"
 import { getAuth } from "firebase-admin/auth"
 
+function isBuildTime(): boolean {
+  return (
+    process.env.NEXT_PHASE === "phase-production-build" ||
+    process.env.NEXT_PHASE === "phase-export" ||
+    process.env.CI === "true"
+  )
+}
+
 let adminApp: any = null
 
 export function initializeFirebaseAdmin() {
+  if (isBuildTime()) {
+    console.log("⏭️  [Firebase/firebaseAdmin] Skipping initialization during build time")
+    return null
+  }
+
   if (getApps().length > 0) {
     return getApps()[0]
   }
@@ -27,12 +40,29 @@ export function initializeFirebaseAdmin() {
   return adminApp
 }
 
-// Initialize the app
-const app = initializeFirebaseAdmin()
+const getApp = () => {
+  if (isBuildTime()) return null
+  return initializeFirebaseAdmin()
+}
 
-// Export the services
-export const adminAuth = getAuth(app)
-export const adminDb = getFirestore(app)
+export const adminAuth = new Proxy({} as any, {
+  get(target, prop) {
+    const app = getApp()
+    if (!app) return undefined
+    const auth = getAuth(app)
+    return auth[prop]
+  },
+})
+
+export const adminDb = new Proxy({} as any, {
+  get(target, prop) {
+    const app = getApp()
+    if (!app) return undefined
+    const db = getFirestore(app)
+    return db[prop]
+  },
+})
+
 export const firestore = adminDb
 
 // Legacy exports
