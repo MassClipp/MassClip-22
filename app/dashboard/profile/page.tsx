@@ -696,7 +696,7 @@ export default function ProfilePage() {
                         <div
                           className={`p-4 rounded-lg border ${
                             trialStatus.daysRemaining <= 1
-                              ? "bg-orange-900/20 border-orange-500/30"
+                              ? "bg-orange-900/20 border-orange-500/50"
                               : "bg-cyan-900/20 border-cyan-500/30"
                           }`}
                         >
@@ -817,9 +817,7 @@ export default function ProfilePage() {
                       <div className="space-y-4">
                         <h3 className="text-lg font-medium text-white">Plan Features</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          {(subscriptionData?.plan === "facelessprenuer" ||
-                            subscriptionData?.plan === "faceless_pro") &&
-                          subscriptionData?.isActive ? (
+                          {subscriptionData?.plan === "facelessprenuer" && subscriptionData?.isActive ? (
                             <>
                               <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
                                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
@@ -843,11 +841,32 @@ export default function ProfilePage() {
                               </div>
                               <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
                                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                                <span className="text-sm text-zinc-200">Only 10% Platform Fee</span>
+                              </div>
+                            </>
+                          ) : subscriptionData?.plan === "faceless_pro" && subscriptionData?.isActive ? (
+                            <>
+                              <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
+                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                                <span className="text-sm text-zinc-200">3 folders with subfolders</span>
+                              </div>
+                              <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
+                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                                <span className="text-sm text-zinc-200">5 bundles max on storefront</span>
+                              </div>
+                              <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
+                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                                <span className="text-sm text-zinc-200">15 videos per bundle limit</span>
+                              </div>
+                              <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
+                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
                                 <span className="text-sm text-zinc-200">
-                                  {subscriptionData?.plan === "faceless_pro"
-                                    ? "Only 10% Platform Fee"
-                                    : "Only 10% Platform Fee"}
+                                  Basic Vex AI - file metadata & folder organization
                                 </span>
+                              </div>
+                              <div className="flex items-center gap-3 p-3 rounded-md bg-zinc-800/30">
+                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                                <span className="text-sm text-zinc-200">20% platform fee on sales</span>
                               </div>
                             </>
                           ) : (
