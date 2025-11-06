@@ -1,220 +1,97 @@
-import type { App } from "firebase-admin/app"
-import { getApps, cert } from "firebase-admin/app"
-import { getFirestore, FieldValue, type Firestore } from "firebase-admin/firestore"
-import { getAuth, type Auth, type DecodedIdToken } from "firebase-admin/auth"
-import { getStorage, type Storage } from "firebase-admin/storage"
-import admin from "firebase-admin"
+import { initializeApp, getApps, cert, type App } from "firebase-admin/app"
+import { getFirestore, type Firestore } from "firebase-admin/firestore"
+import { getAuth, type Auth } from "firebase-admin/auth"
 
 const isBuildTime =
   process.env.NEXT_PHASE === "phase-production-build" ||
-  (process.env.NODE_ENV === "production" && !process.env.VERCEL_ENV)
+  (process.env.NODE_ENV === "production" && !process.env.FIREBASE_PROJECT_ID)
 
 let adminApp: App | null = null
+let adminDbInstance: Firestore | null = null
+let adminAuthInstance: Auth | null = null
 
-/**
- * Initializes the Firebase Admin SDK, ensuring it only runs once.
- * This function is exported because other modules in your project depend on it.
- * @returns The initialized Firebase Admin App instance.
- */
-export function initializeFirebaseAdmin(): App {
+function initializeFirebaseAdmin(): App | null {
+  // Skip initialization during build time
   if (isBuildTime) {
     console.log("⏭️ [Firebase Admin] Skipping initialization during build time")
-    return null as any
+    return null
   }
 
+  // Return existing app if already initialized
   if (adminApp) {
     return adminApp
   }
 
-  if (getApps().length > 0 && getApps()[0]) {
-    adminApp = getApps()[0]!
+  const existingApps = getApps()
+  if (existingApps.length > 0) {
+    adminApp = existingApps[0]
+    console.log("✅ Firebase Admin already initialized")
     return adminApp
   }
 
-  const { FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY } = process.env
-
-  if (!FIREBASE_PROJECT_ID || !FIREBASE_CLIENT_EMAIL || !FIREBASE_PRIVATE_KEY) {
-    console.error("❌ [Firebase Admin] CRITICAL: Missing Firebase Admin credentials.")
-    console.error("Available env vars:", {
-      FIREBASE_PROJECT_ID: !!FIREBASE_PROJECT_ID,
-      FIREBASE_CLIENT_EMAIL: !!FIREBASE_CLIENT_EMAIL,
-      FIREBASE_PRIVATE_KEY: !!FIREBASE_PRIVATE_KEY,
-    })
-    throw new Error("Missing Firebase Admin credentials in environment variables.")
-  }
-
   try {
-    console.log("🔄 [Firebase Admin] Initializing Firebase Admin SDK...")
-    const privateKey = FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n")
-    adminApp = admin.initializeApp({
+    const projectId = process.env.FIREBASE_PROJECT_ID
+    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL
+    const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n")
+
+    if (!projectId || !clientEmail || !privateKey) {
+      console.warn("⚠️ Firebase Admin credentials not found")
+      return null
+    }
+
+    adminApp = initializeApp({
       credential: cert({
-        projectId: FIREBASE_PROJECT_ID,
-        clientEmail: FIREBASE_CLIENT_EMAIL,
+        projectId,
+        clientEmail,
         privateKey,
       }),
-      projectId: FIREBASE_PROJECT_ID,
     })
-    console.log("✅ [Firebase Admin] Firebase Admin SDK initialized successfully.")
+
+    console.log("✅ Firebase Admin initialized successfully")
     return adminApp
   } catch (error) {
-    console.error("❌ [Firebase Admin] CRITICAL: Firebase Admin SDK initialization failed.", error)
-    throw new Error(`Failed to initialize Firebase Admin: ${error instanceof Error ? error.message : "Unknown error"}`)
+    console.error("❌ Failed to initialize Firebase Admin:", error)
+    return null
   }
 }
 
-// Export a utility function to check the initialization status.
-export const isFirebaseAdminInitialized = () => {
-  if (isBuildTime) return false
-
-  try {
-    if (!adminApp) {
-      adminApp = initializeFirebaseAdmin()
-    }
-    return !!adminApp && getApps().length > 0
-  } catch (error) {
-    console.error("❌ [Firebase Admin] Initialization check failed:", error)
-    return false
-  }
-}
-
-export const getAdminDb = (): Firestore => {
-  if (isBuildTime) return null as any
-
+export const getAdminApp = (): App | null => {
+  if (isBuildTime) return null
   if (!adminApp) {
-    adminApp = initializeFirebaseAdmin()
+    initializeFirebaseAdmin()
   }
-  return getFirestore(adminApp)
+  return adminApp
 }
 
-export const getAdminAuth = (): Auth => {
-  if (isBuildTime) return null as any
-
-  if (!adminApp) {
-    adminApp = initializeFirebaseAdmin()
-  }
-  return getAuth(adminApp)
-}
-
-export const getAdminStorage = (): Storage => {
-  if (isBuildTime) return null as any
-
-  if (!adminApp) {
-    adminApp = initializeFirebaseAdmin()
-  }
-  return getStorage(adminApp)
-}
-
-// Export lazy-initialized instances
 export const adminDb: Firestore = new Proxy({} as Firestore, {
   get(target, prop) {
-    return getAdminDb()[prop as keyof Firestore]
-  },
-})
-
-export const auth: Auth = new Proxy({} as Auth, {
-  get(target, prop) {
-    return getAdminAuth()[prop as keyof Auth]
-  },
-})
-
-export const storage: Storage = new Proxy({} as Storage, {
-  get(target, prop) {
-    return getAdminStorage()[prop as keyof Storage]
-  },
-})
-
-// Aliases for backward compatibility and consistent naming.
-export const adminAuth = auth
-export const firestore = adminDb
-export const db = adminDb
-export const firebaseAdmin = {
-  auth: () => getAdminAuth(),
-  firestore: () => getAdminDb(),
-  storage: () => getAdminStorage(),
-  app: () => adminApp || initializeFirebaseAdmin(),
-}
-
-export default new Proxy({} as App, {
-  get(target, prop) {
-    if (!adminApp) {
-      adminApp = initializeFirebaseAdmin()
+    if (isBuildTime) {
+      throw new Error("Firebase cannot be used during build time")
     }
-    return adminApp[prop as keyof App]
-  },
-})
-
-/**
- * Generic retry helper with exponential back-off, used elsewhere in the project.
- */
-export async function withRetry<T>(op: () => Promise<T>, maxRetries = 3, delay = 1000): Promise<T> {
-  let lastError: unknown
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      return await op()
-    } catch (err) {
-      lastError = err
-      console.error(`❌ [Firestore] Attempt ${attempt} failed:`, err)
-      if (attempt < maxRetries) {
-        console.log(`🔄 [Firestore] Retrying in ${delay}ms...`)
-        await new Promise((r) => setTimeout(r, delay))
-        delay *= 2 // Exponential back-off
+    if (!adminDbInstance) {
+      const app = getAdminApp()
+      if (app) {
+        adminDbInstance = getFirestore(app)
       }
     }
-  }
-  throw lastError
-}
+    return adminDbInstance?.[prop as keyof Firestore]
+  },
+})
 
-/**
- * Verifies a Firebase ID token.
- */
-export async function verifyIdToken(idToken: string): Promise<DecodedIdToken> {
-  if (!isFirebaseAdminInitialized()) {
-    throw new Error("Firebase Admin SDK is not initialized. Cannot verify ID token.")
-  }
-  try {
-    return await getAdminAuth().verifyIdToken(idToken)
-  } catch (error: any) {
-    console.error(`❌ [Auth] Token verification failed: ${error.message}`)
-    throw error
-  }
-}
-
-/**
- * Gets the authenticated user from request headers.
- */
-export async function getAuthenticatedUser(
-  headers: Headers | Record<string, string>,
-): Promise<{ uid: string; email?: string }> {
-  const getHeader = (key: string) => (headers instanceof Headers ? headers.get(key) : headers[key])
-  const authHeader = getHeader("authorization")
-
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    throw new Error("Missing or invalid Authorization header.")
-  }
-
-  const token = authHeader.substring(7)
-  const decoded = await verifyIdToken(token)
-  return { uid: decoded.uid, email: decoded.email }
-}
-
-/**
- * Creates or updates a user profile in Firestore.
- */
-export async function createOrUpdateUserProfile(userId: string, profileData: Record<string, unknown>) {
-  if (!isFirebaseAdminInitialized()) {
-    throw new Error("Firebase Admin SDK is not initialized. Cannot update profile.")
-  }
-  const ref = getAdminDb().collection("users").doc(userId)
-  const now = FieldValue.serverTimestamp()
-
-  return withRetry(async () => {
-    const doc = await ref.get()
-    if (doc.exists) {
-      await ref.update({ ...profileData, updatedAt: now })
-    } else {
-      await ref.set({ ...profileData, createdAt: now, updatedAt: now }, { merge: true })
+export const adminAuth: Auth = new Proxy({} as Auth, {
+  get(target, prop) {
+    if (isBuildTime) {
+      throw new Error("Firebase cannot be used during build time")
     }
-  })
-}
+    if (!adminAuthInstance) {
+      const app = getAdminApp()
+      if (app) {
+        adminAuthInstance = getAuth(app)
+      }
+    }
+    return adminAuthInstance?.[prop as keyof Auth]
+  },
+})
 
-export { FieldValue }
+// Initialize on module load (but will skip during build)
+initializeFirebaseAdmin()
