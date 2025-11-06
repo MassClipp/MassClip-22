@@ -1,0 +1,13 @@
+/* Video watermark styles */
+.video-watermark {
+  z-index: 30;
+  transition: opacity 0.3s ease;
+}
+
+/* Ensure watermark stays visible in fullscreen */
+:fullscreen .video-watermark,
+:-webkit-full-screen .video-watermark,
+:-moz-full-screen .video-watermark,
+:-ms-fullscreen .video-watermark {
+  z-index: 9999 !important;
+}
