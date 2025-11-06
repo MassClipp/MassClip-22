@@ -844,7 +844,8 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
     !trialStatus.hasUsedFreeTrial &&
     !trialStatus.hasActiveCreatorVIP &&
     !trialStatus.isOnTrial &&
-    !((membershipStatus.plan === "creator_vip" || membershipStatus.plan === "creator_pro") && membershipStatus.isActive)
+    membershipStatus.plan === "free" && // Only show if user is on free plan
+    !membershipStatus.isActive // Only show if no active subscription
 
   useEffect(() => {
     if (!isLoadingTrialStatus && !isLoadingMembershipStatus) {
