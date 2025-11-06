@@ -107,9 +107,29 @@ export default function EBookCheckoutDebugPage() {
       const purchasesData = await purchasesResponse.json()
       console.log("[v0] Purchase verification result:", purchasesData)
 
+      const ebookResponse = await fetch(`/api/creator/ebooks/${ebookId}`, {
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+        },
+      })
+
+      let ebookContent = null
+      if (ebookResponse.ok) {
+        const ebookData = await ebookResponse.json()
+        ebookContent = {
+          hasPages: ebookData.pages && ebookData.pages.length > 0,
+          pageCount: ebookData.pages?.length || 0,
+          hasCover: !!ebookData.coverUrl,
+          pages: ebookData.pages || [],
+          coverUrl: ebookData.coverUrl || null,
+        }
+        console.log("[v0] eBook content verification:", ebookContent)
+      }
+
       setPurchaseVerification({
         ebookId,
         ...purchasesData,
+        ebookContent,
       })
 
       if (purchasesData.hasPurchase) {
@@ -379,6 +399,64 @@ export default function EBookCheckoutDebugPage() {
                             <pre className="text-xs text-zinc-300 overflow-x-auto bg-zinc-800 p-2 rounded">
                               {JSON.stringify(purchaseVerification.purchases, null, 2)}
                             </pre>
+                          </div>
+                        )}
+
+                        {purchaseVerification.ebookContent && (
+                          <div className="mt-4 pt-4 border-t border-zinc-700">
+                            <div className="text-zinc-400 text-xs mb-2 font-semibold">eBook Content Verification:</div>
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2">
+                                {purchaseVerification.ebookContent.hasPages ? (
+                                  <CheckCircle2 className="h-4 w-4 text-green-400" />
+                                ) : (
+                                  <XCircle className="h-4 w-4 text-red-400" />
+                                )}
+                                <span
+                                  className={
+                                    purchaseVerification.ebookContent.hasPages ? "text-green-400" : "text-red-400"
+                                  }
+                                >
+                                  {purchaseVerification.ebookContent.hasPages
+                                    ? `Has ${purchaseVerification.ebookContent.pageCount} page(s)`
+                                    : "No pages uploaded"}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {purchaseVerification.ebookContent.hasCover ? (
+                                  <CheckCircle2 className="h-4 w-4 text-green-400" />
+                                ) : (
+                                  <AlertCircle className="h-4 w-4 text-yellow-400" />
+                                )}
+                                <span
+                                  className={
+                                    purchaseVerification.ebookContent.hasCover ? "text-green-400" : "text-yellow-400"
+                                  }
+                                >
+                                  {purchaseVerification.ebookContent.hasCover ? "Has cover image" : "No cover image"}
+                                </span>
+                              </div>
+
+                              {!purchaseVerification.ebookContent.hasPages && (
+                                <div className="mt-2 p-2 bg-red-500/10 border border-red-500/20 rounded">
+                                  <p className="text-red-400 text-xs font-semibold">⚠️ Critical: No pages found!</p>
+                                  <p className="text-zinc-400 text-xs mt-1">
+                                    Buyers will receive an error when trying to download. Upload pages to fix this.
+                                  </p>
+                                </div>
+                              )}
+
+                              {purchaseVerification.ebookContent.hasPages && (
+                                <div className="mt-2 p-2 bg-green-500/10 border border-green-500/20 rounded">
+                                  <p className="text-green-400 text-xs font-semibold">✓ Content Ready for Download</p>
+                                  <p className="text-zinc-400 text-xs mt-1">
+                                    Buyers will receive a ZIP file with {purchaseVerification.ebookContent.pageCount}{" "}
+                                    page(s)
+                                    {purchaseVerification.ebookContent.hasCover && " + cover image"}.
+                                  </p>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         )}
                       </div>
