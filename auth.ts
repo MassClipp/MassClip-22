@@ -8,6 +8,10 @@ import { getFirestore as getAdminFirestore } from "firebase-admin/firestore"
 import { cert } from "firebase-admin/app"
 import { FirestoreAdapter } from "@auth/firebase-adapter"
 
+const isBuildTime =
+  process.env.NEXT_PHASE === "phase-production-build" ||
+  (process.env.NODE_ENV === "production" && !process.env.VERCEL_ENV)
+
 // Firebase configuration
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -52,18 +56,33 @@ if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
   }
 }
 
-// Initialize Firebase Admin if not already initialized
-if (!getAdminApps().length) {
-  initializeAdminApp({
-    credential: cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-    }),
-  })
+if (!isBuildTime && !getAdminApps().length) {
+  try {
+    initializeAdminApp({
+      credential: cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+      }),
+    })
+    console.log("✅ Firebase Admin initialized in auth.ts")
+  } catch (error) {
+    console.error("❌ Failed to initialize Firebase Admin in auth.ts:", error)
+  }
+} else if (isBuildTime) {
+  console.log("⏭️ [auth.ts] Skipping Firebase Admin initialization during build time")
 }
 
-const adminDb = getAdminFirestore()
+let _adminDb: ReturnType<typeof getAdminFirestore> | null = null
+const getAdminDb = () => {
+  if (isBuildTime) {
+    return null as any
+  }
+  if (!_adminDb) {
+    _adminDb = getAdminFirestore()
+  }
+  return _adminDb
+}
 
 export const authOptions: NextAuthOptions = {
   adapter: FirestoreAdapter({
