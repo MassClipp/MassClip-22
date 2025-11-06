@@ -3,6 +3,9 @@ const nextConfig = {
   serverExternalPackages: ["firebase-admin"],
   experimental: {
     optimizePackageImports: ['lucide-react', '@radix-ui/react-icons'],
+    serverActions: {
+      bodySizeLimit: '2mb',
+    },
   },
   eslint: {
     ignoreDuringBuilds: true,
@@ -10,37 +13,9 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  experimental: {
-    ...nextConfig?.experimental,
-    serverActions: {
-      bodySizeLimit: '2mb',
-    },
-  },
-  // Tell Next.js to skip static optimization for all API routes
-  async rewrites() {
-    return {
-      beforeFiles: [],
-      afterFiles: [],
-      fallback: [],
-    }
-  },
-  generateBuildId: async () => {
-    return 'build-' + Date.now()
-  },
-  images: {
-    domains: [
-      "lh3.googleusercontent.com",
-      "firebasestorage.googleapis.com",
-      "storage.googleapis.com",
-      "pub-3626123a908346a7a8be8d9295f44e26.r2.dev",
-    ],
-    unoptimized: false,
-    formats: ['image/webp', 'image/avif'],
-  },
-  compress: true,
   webpack: (config, { isServer }) => {
     if (isServer) {
-      // Mark firebase-admin as external to prevent bundling
+      // Mark firebase-admin as external to prevent bundling during build
       config.externals = config.externals || []
       config.externals.push({
         'firebase-admin': 'commonjs firebase-admin',
@@ -61,6 +36,17 @@ const nextConfig = {
     
     return config
   },
+  images: {
+    domains: [
+      "lh3.googleusercontent.com",
+      "firebasestorage.googleapis.com",
+      "storage.googleapis.com",
+      "pub-3626123a908346a7a8be8d9295f44e26.r2.dev",
+    ],
+    unoptimized: false,
+    formats: ['image/webp', 'image/avif'],
+  },
+  compress: true,
   async headers() {
     return [
       {
