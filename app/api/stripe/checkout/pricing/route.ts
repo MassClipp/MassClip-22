@@ -11,18 +11,12 @@ const stripe = new Stripe(stripeKey, {
   apiVersion: "2024-06-20",
 })
 
-const FACELESS_PRO_PRICE_ID = "price_1SQBMvDheyb0pkWFPGz7vke7" // Updated to use the test price ID requested by user
+const FACELESS_PRO_PRICE_ID = "price_1SPRJ0Dheyb0pkWFYaWwRDzO"
 const FACELESSPRENUER_FIRST_TIME_PRICE_ID = process.env.FACELESSPRENUER_FIRST
 const FACELESSPRENUER_REGULAR_PRICE_ID = process.env.FACELESSPRENUER_REGULAR
 
 export async function POST(request: NextRequest) {
   console.log("🚀 [Membership Checkout] Starting session creation...")
-  console.log("[v0] Environment check:", {
-    hasFacelessProFirst: !!process.env.FACELESS_PRO_FIRST,
-    hasFacelessprenuerFirst: !!FACELESSPRENUER_FIRST_TIME_PRICE_ID,
-    hasFacelessprenuerRegular: !!FACELESSPRENUER_REGULAR_PRICE_ID,
-    usingTestPriceId: FACELESS_PRO_PRICE_ID,
-  })
 
   if (!isFirebaseAdminInitialized()) {
     console.error("❌ [Membership Checkout] CRITICAL: Firebase Admin SDK is not initialized.")
@@ -33,7 +27,6 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { idToken, plan } = body
     console.log("📝 [Membership Checkout] Request:", { plan })
-    console.log("[v0] Request body:", { plan, hasIdToken: !!idToken })
 
     if (!idToken) {
       console.error("❌ [Membership Checkout] Missing idToken.")
@@ -60,7 +53,6 @@ export async function POST(request: NextRequest) {
       priceId = FACELESS_PRO_PRICE_ID
       planName = "faceless_pro"
       console.log(`💲 [Membership Checkout] Faceless Pro - $29/month (no trial)`)
-      console.log("[v0] Selected Faceless Pro price ID:", priceId)
     } else if (plan === "facelessprenuer") {
       if (!FACELESSPRENUER_FIRST_TIME_PRICE_ID || !FACELESSPRENUER_REGULAR_PRICE_ID) {
         console.error("❌ [Membership Checkout] Missing Facelessprenuer price IDs")
@@ -102,10 +94,7 @@ export async function POST(request: NextRequest) {
       plan: planName,
       contentType: "membership",
       source: "dashboard_membership_upgrade",
-      priceId: priceId,
     }
-
-    console.log("[v0] Session metadata:", metadata)
 
     // --- Get Site URL for Redirects ---
     const host = request.headers.get("host")!
@@ -133,27 +122,13 @@ export async function POST(request: NextRequest) {
       },
     }
 
-    console.log("[v0] About to create Stripe session with params:", {
-      priceId,
-      email,
-      trialPeriodDays,
-      metadata,
-    })
-
     const session = await stripe.checkout.sessions.create(sessionParams)
 
     console.log("✅ [Membership Checkout] Session created:", session.id)
-    console.log("[v0] Session URL:", session.url)
 
     return NextResponse.json({ url: session.url, sessionId: session.id })
   } catch (error: any) {
     console.error("❌ [Membership Checkout] Error:", error)
-    console.error("[v0] Full error details:", {
-      message: error.message,
-      type: error.type,
-      code: error.code,
-      stack: error.stack,
-    })
     if (error instanceof Stripe.errors.StripeError) {
       return NextResponse.json({ error: error.message, code: error.code }, { status: 400 })
     }

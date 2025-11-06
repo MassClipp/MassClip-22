@@ -45,12 +45,7 @@ const FACELESSPRENUER_CONFIG = {
 
 // FACELESS PRO WEBHOOK - Handles Faceless Pro subscriptions
 
-const FACELESS_PRO_PRICE_IDS = [
-  process.env.FACELESS_PRO_FIRST,
-  process.env.FACELESS_PRO_REGULAR,
-  "price_1SQBMvDheyb0pkWFPGz7vke7", // Test price ID
-  "price_1SPRLKDheyb0pkWFnRvP15AO", // Actual Stripe price ID from webhook
-].filter(Boolean)
+const FACELESS_PRO_PRICE_IDS = [process.env.FACELESS_PRO_FIRST, process.env.FACELESS_PRO_REGULAR].filter(Boolean)
 
 const FACELESS_PRO_CONFIG = {
   plan: "faceless_pro" as const,

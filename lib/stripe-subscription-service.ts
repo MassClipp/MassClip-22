@@ -1,4 +1,5 @@
 import Stripe from "stripe"
+import { adminDb } from "@/lib/firebase-admin"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2023-10-16",
@@ -15,8 +16,6 @@ export interface StripeSubscriptionStatus {
 
 export async function getStripeSubscriptionStatus(userId: string): Promise<StripeSubscriptionStatus> {
   try {
-    const { adminDb } = await import("@/lib/firebase-admin")
-
     // Get membership document
     const membershipDoc = await adminDb.collection("memberships").doc(userId).get()
 
@@ -72,20 +71,10 @@ export async function getStripeSubscriptionStatus(userId: string): Promise<Strip
       subscription.cancel_at_period_end || ["canceled", "incomplete_expired"].includes(subscription.status)
 
     const priceId = subscription.items.data[0]?.price.id
-    const facelessProPriceIds = [
-      process.env.FACELESS_PRO_FIRST,
-      "price_1SQBMvDheyb0pkWFPGz7vke7", // Test price ID
-      "price_1SPRLKDheyb0pkWFnRvP15AO", // Added actual Stripe price ID from webhook
-    ].filter(Boolean)
+    const facelessProPriceIds = [process.env.FACELESS_PRO_FIRST].filter(Boolean)
     const facelessprenuerPriceIds = [process.env.FACELESSPRENUER_FIRST, process.env.FACELESSPRENUER_REGULAR].filter(
       Boolean,
     )
-
-    console.log("[v0] Checking subscription price ID:", {
-      priceId,
-      facelessProPriceIds,
-      facelessprenuerPriceIds,
-    })
 
     const isFacelessPro = priceId && facelessProPriceIds.includes(priceId)
     const isFacelessprenuer = priceId && facelessprenuerPriceIds.includes(priceId)
@@ -97,13 +86,6 @@ export async function getStripeSubscriptionStatus(userId: string): Promise<Strip
           ? "facelessprenuer"
           : "free"
       : "free"
-
-    console.log("[v0] Plan determined:", {
-      determinedPlan,
-      isFacelessPro,
-      isFacelessprenuer,
-      isActive,
-    })
 
     await adminDb.collection("memberships").doc(userId).update({
       isActive: isActive,

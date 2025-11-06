@@ -3,8 +3,6 @@ import { adminAuth, adminDb } from "@/lib/firebase-admin"
 import { getUserTierInfo } from "@/lib/user-tier-service"
 import { getUserBundleSlots } from "@/lib/bundle-slots-service"
 
-export const dynamic = "force-dynamic"
-
 export async function GET(request: NextRequest) {
   try {
     const authHeader = request.headers.get("authorization")

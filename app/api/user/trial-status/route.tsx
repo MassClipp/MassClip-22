@@ -23,8 +23,7 @@ export async function GET(req: NextRequest) {
     const membership = await getMembership(userId)
 
     const hasActivePaidPlan =
-      membership &&
-      (membership.status === "active" || membership.status === "trialing" || membership.status === "canceled") &&
+      membership?.status === "active" &&
       (membership?.plan === "faceless_pro" ||
         membership?.plan === "facelessprenuer" ||
         membership?.plan === "creator_pro" ||
@@ -32,7 +31,7 @@ export async function GET(req: NextRequest) {
 
     const hasActiveOrCanceledPlan =
       membership &&
-      (membership.status === "active" || membership.status === "trialing" || membership.status === "canceled") &&
+      (membership.status === "active" || membership.status === "canceled") &&
       (membership?.plan === "faceless_pro" ||
         membership?.plan === "facelessprenuer" ||
         membership?.plan === "creator_pro" ||

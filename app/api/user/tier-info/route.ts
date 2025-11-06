@@ -3,8 +3,6 @@ import { getUserTierInfo } from "@/lib/user-tier-service"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/auth"
 
-export const dynamic = "force-dynamic"
-
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)

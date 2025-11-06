@@ -846,7 +846,6 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
     !trialStatus.isOnTrial &&
     !((membershipStatus.plan === "creator_vip" || membershipStatus.plan === "creator_pro") && membershipStatus.isActive)
 
-  // Existing useEffect block for logging trial button visibility check
   useEffect(() => {
     if (!isLoadingTrialStatus && !isLoadingMembershipStatus) {
       console.log("[v0] Trial Button Visibility Check:", {
@@ -978,6 +977,18 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                     <item.icon className="h-4 w-4" />
                   </Button>
                 ))}
+              </div>
+
+              <div className="p-2 border-t border-white/5">
+                <Button
+                  onClick={() => handleNavigation("/dashboard/profile")}
+                  variant="ghost"
+                  size="sm"
+                  className="w-full h-10 p-0 rounded-lg transition-all duration-200 text-zinc-400 hover:text-white hover:bg-white/5"
+                  title="Settings"
+                >
+                  <Settings className="h-4 w-4" />
+                </Button>
               </div>
             </div>
           ) : (

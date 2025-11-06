@@ -14,7 +14,6 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
 })
 
-export const dynamic = "force-dynamic"
 export const maxDuration = 30
 
 export async function POST(request: Request) {

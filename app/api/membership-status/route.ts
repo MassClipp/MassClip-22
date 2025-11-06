@@ -5,8 +5,6 @@ import { getAuth } from "firebase-admin/auth"
 import { getMembership } from "@/lib/memberships-service"
 import { getFreeUserLimits } from "@/lib/free-users-service"
 
-export const dynamic = "force-dynamic"
-
 initializeFirebaseAdmin()
 const auth = getAuth()
 
