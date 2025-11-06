@@ -49,16 +49,12 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // Faceless Pro: limited (5 bundles, 15 videos, 20% fee)
-    // Facelessprenuer: unlimited (null bundles/videos, 10% fee)
-    const isFacelessPro = membership.plan === "faceless_pro"
     const isFacelessprenuer = membership.plan === "facelessprenuer"
     const isCreatorPro = membership.plan === "creator_pro" || membership.status === "trialing"
+    const isFacelessPro = membership.plan === "faceless_pro"
 
-    // Determine if user has unlimited features
+    // Facelessprenuer and Creator Pro get 10% fee and unlimited
     const hasUnlimited = isFacelessprenuer || isCreatorPro
-
-    // Determine platform fee
     const platformFee = hasUnlimited ? 10 : 20
 
     let maxVideosPerBundle: number | null = null
@@ -69,7 +65,7 @@ export async function GET(request: NextRequest) {
       maxVideosPerBundle = null
       maxBundles = null
     } else if (isFacelessPro) {
-      // Faceless Pro has limits: 5 bundles, 15 videos per bundle
+      // Faceless Pro has specific limits: 15 videos, 5 bundles, 20% fee
       maxVideosPerBundle = 15
       maxBundles = 5
     } else {

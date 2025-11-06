@@ -89,10 +89,9 @@ export async function POST(request: Request) {
     const isActive = membershipStatusAPI.isActive
     const plan = membershipStatusAPI.plan
 
-    const isFacelessPro = plan === "faceless_pro"
     const isFacelessprenuer = plan === "facelessprenuer"
-    const isCreatorPro = plan === "creator_pro"
-    const hasUnlimited = isFacelessprenuer || isCreatorPro
+    const isFacelessPro = plan === "faceless_pro"
+    const hasUnlimited = isFacelessprenuer
 
     const permissions = {
       unlimitedDownloads: isActive && hasUnlimited,
