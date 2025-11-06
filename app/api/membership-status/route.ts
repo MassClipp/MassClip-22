@@ -49,17 +49,29 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // Check if user is on trial or has active Creator Pro
+    // Faceless Pro: limited (5 bundles, 15 videos, 20% fee)
+    // Facelessprenuer: unlimited (null bundles/videos, 10% fee)
+    const isFacelessPro = membership.plan === "faceless_pro"
+    const isFacelessprenuer = membership.plan === "facelessprenuer"
     const isCreatorPro = membership.plan === "creator_pro" || membership.status === "trialing"
-    const platformFee = isCreatorPro ? 10 : 20
+
+    // Determine if user has unlimited features
+    const hasUnlimited = isFacelessprenuer || isCreatorPro
+
+    // Determine platform fee
+    const platformFee = hasUnlimited ? 10 : 20
 
     let maxVideosPerBundle: number | null = null
     let maxBundles: number | null = null
 
-    if (isCreatorPro) {
-      // Creator Pro has unlimited
+    if (hasUnlimited) {
+      // Facelessprenuer and Creator Pro have unlimited
       maxVideosPerBundle = null
       maxBundles = null
+    } else if (isFacelessPro) {
+      // Faceless Pro has limits: 5 bundles, 15 videos per bundle
+      maxVideosPerBundle = 15
+      maxBundles = 5
     } else {
       // Starter plan - get actual limits (5 bundles, 15 videos per bundle)
       const starterLimits = await getFreeUserLimits(userId)
@@ -74,10 +86,10 @@ export async function GET(request: NextRequest) {
       currentPeriodEnd: membership.currentPeriodEnd,
       cancelAtPeriodEnd: membership.cancelAtPeriodEnd,
       features: {
-        unlimitedDownloads: isCreatorPro,
-        premiumContent: isCreatorPro,
-        noWatermark: isCreatorPro,
-        prioritySupport: isCreatorPro,
+        unlimitedDownloads: hasUnlimited,
+        premiumContent: hasUnlimited,
+        noWatermark: hasUnlimited,
+        prioritySupport: hasUnlimited,
         platformFeePercentage: platformFee,
         maxVideosPerBundle,
         maxBundles,

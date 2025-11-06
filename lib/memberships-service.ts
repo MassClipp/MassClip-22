@@ -1,7 +1,7 @@
 import { adminDb } from "@/lib/firebase-admin"
 import { FieldValue } from "firebase-admin/firestore"
 
-export type MembershipPlan = "creator_pro" | "starter"
+export type MembershipPlan = "creator_pro" | "starter" | "faceless_pro" | "facelessprenuer"
 export type MembershipStatus = "active" | "inactive" | "canceled" | "past_due" | "trialing" | "incomplete"
 
 export interface MembershipFeatures {
@@ -51,6 +51,26 @@ const STARTER_FEATURES: MembershipFeatures = {
 }
 
 const PRO_FEATURES: MembershipFeatures = {
+  unlimitedDownloads: true,
+  premiumContent: true,
+  noWatermark: true,
+  prioritySupport: true,
+  platformFeePercentage: 10,
+  maxVideosPerBundle: null, // unlimited
+  maxBundles: null, // unlimited
+}
+
+const FACELESS_PRO_FEATURES: MembershipFeatures = {
+  unlimitedDownloads: false,
+  premiumContent: false,
+  noWatermark: false,
+  prioritySupport: false,
+  platformFeePercentage: 20,
+  maxVideosPerBundle: 15,
+  maxBundles: 5,
+}
+
+const FACELESSPRENUER_FEATURES: MembershipFeatures = {
   unlimitedDownloads: true,
   premiumContent: true,
   noWatermark: true,
@@ -237,6 +257,78 @@ export async function setStarter(
 
   await adminDb.collection("memberships").doc(uid).set(membershipData)
   console.log("✅ Starter membership created successfully with plan: starter")
+}
+
+export async function setFacelessPro(
+  uid: string,
+  params: {
+    email?: string | null
+    stripeCustomerId: string
+    stripeSubscriptionId: string
+    currentPeriodEnd?: Date | null
+    priceId?: string | null
+    connectedAccountId?: string
+    status?: Exclude<MembershipStatus, "inactive">
+  },
+) {
+  console.log("🔄 Creating Faceless Pro membership for:", uid.substring(0, 8) + "...")
+
+  const membershipData: Partial<MembershipDoc> = {
+    uid,
+    email: params.email || null,
+    plan: "faceless_pro",
+    status: params.status || "active",
+    isActive: params.status === "active" || params.status === "trialing",
+    stripeCustomerId: params.stripeCustomerId,
+    stripeSubscriptionId: params.stripeSubscriptionId,
+    currentPeriodEnd: params.currentPeriodEnd || null,
+    priceId: params.priceId || null,
+    connectedAccountId: params.connectedAccountId || null,
+    downloadsUsed: 0,
+    bundlesCreated: 0,
+    features: { ...FACELESS_PRO_FEATURES },
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }
+
+  await adminDb.collection("memberships").doc(uid).set(membershipData)
+  console.log("✅ Faceless Pro membership created successfully")
+}
+
+export async function setFacelessprenuer(
+  uid: string,
+  params: {
+    email?: string | null
+    stripeCustomerId: string
+    stripeSubscriptionId: string
+    currentPeriodEnd?: Date | null
+    priceId?: string | null
+    connectedAccountId?: string
+    status?: Exclude<MembershipStatus, "inactive">
+  },
+) {
+  console.log("🔄 Creating Facelessprenuer membership for:", uid.substring(0, 8) + "...")
+
+  const membershipData: Partial<MembershipDoc> = {
+    uid,
+    email: params.email || null,
+    plan: "facelessprenuer",
+    status: params.status || "active",
+    isActive: params.status === "active" || params.status === "trialing",
+    stripeCustomerId: params.stripeCustomerId,
+    stripeSubscriptionId: params.stripeSubscriptionId,
+    currentPeriodEnd: params.currentPeriodEnd || null,
+    priceId: params.priceId || null,
+    connectedAccountId: params.connectedAccountId || null,
+    downloadsUsed: 0,
+    bundlesCreated: 0,
+    features: { ...FACELESSPRENUER_FEATURES },
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }
+
+  await adminDb.collection("memberships").doc(uid).set(membershipData)
+  console.log("✅ Facelessprenuer membership created successfully")
 }
 
 export async function setCreatorProStatus(uid: string, status: MembershipStatus, updates?: Partial<MembershipDoc>) {

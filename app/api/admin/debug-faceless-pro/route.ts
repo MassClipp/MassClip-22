@@ -89,14 +89,19 @@ export async function POST(request: Request) {
     const isActive = membershipStatusAPI.isActive
     const plan = membershipStatusAPI.plan
 
+    const isFacelessPro = plan === "faceless_pro"
+    const isFacelessprenuer = plan === "facelessprenuer"
+    const isCreatorPro = plan === "creator_pro"
+    const hasUnlimited = isFacelessprenuer || isCreatorPro
+
     const permissions = {
-      unlimitedDownloads: isActive && (plan === "faceless_pro" || plan === "facelessprenuer"),
-      premiumContent: isActive && (plan === "faceless_pro" || plan === "facelessprenuer"),
-      noWatermark: isActive && (plan === "faceless_pro" || plan === "facelessprenuer"),
-      prioritySupport: isActive && (plan === "faceless_pro" || plan === "facelessprenuer"),
-      platformFeePercentage: isActive && (plan === "faceless_pro" || plan === "facelessprenuer") ? 10 : 20,
-      maxVideosPerBundle: isActive && (plan === "faceless_pro" || plan === "facelessprenuer") ? null : 15,
-      maxBundles: isActive && (plan === "faceless_pro" || plan === "facelessprenuer") ? null : 5,
+      unlimitedDownloads: isActive && hasUnlimited,
+      premiumContent: isActive && hasUnlimited,
+      noWatermark: isActive && hasUnlimited,
+      prioritySupport: isActive && hasUnlimited,
+      platformFeePercentage: isActive && hasUnlimited ? 10 : 20,
+      maxVideosPerBundle: isActive && hasUnlimited ? null : 15,
+      maxBundles: isActive && hasUnlimited ? null : 5,
     }
 
     console.log("[v0] Permissions:", permissions)
