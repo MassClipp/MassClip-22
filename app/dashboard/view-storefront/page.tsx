@@ -1279,7 +1279,14 @@ export default function ViewStorefrontPage() {
               <Switch
                 checked={storefrontActive}
                 onCheckedChange={handleToggleStorefront}
-                disabled={updating || (!isProUser && !storefrontActive && !planData?.plan?.includes("starter"))}
+                disabled={
+                  updating ||
+                  (!isProUser &&
+                    !storefrontActive &&
+                    !planData?.plan?.includes("starter") &&
+                    !planData?.plan?.includes("facelessprenuer") &&
+                    !planData?.plan?.includes("faceless_pro"))
+                }
                 className="data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-zinc-700"
               />
               {storefrontActive ? (
@@ -1290,14 +1297,17 @@ export default function ViewStorefrontPage() {
                 </Badge>
               )}
             </div>
-            {!isProUser && !planData?.plan?.includes("starter") && (
-              <Button
-                onClick={handleGoLiveClick}
-                className="bg-white text-black hover:bg-zinc-100 font-medium text-sm px-6"
-              >
-                Go Live
-              </Button>
-            )}
+            {!isProUser &&
+              !planData?.plan?.includes("starter") &&
+              !planData?.plan?.includes("facelessprenuer") &&
+              !planData?.plan?.includes("faceless_pro") && (
+                <Button
+                  onClick={handleGoLiveClick}
+                  className="bg-white text-black hover:bg-zinc-100 font-medium text-sm px-6"
+                >
+                  Go Live
+                </Button>
+              )}
           </div>
         </div>
 
