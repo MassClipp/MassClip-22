@@ -47,7 +47,7 @@ export async function getUserTierInfo(uid: string): Promise<TierInfo> {
   }
 
   console.log("🔄 Getting real-time bundle count...")
-  const { getFirestore } = await import("firebase-admin/firestore")
+  const { getFirestore } = await import("./firebase-admin")
   const db = getFirestore()
 
   const bundlesQuery = db.collection("bundles").where("creatorId", "==", uid)
