@@ -1,5 +1,4 @@
 import { adminDb } from "@/lib/firebase-admin"
-import { FieldValue } from "firebase-admin/firestore"
 
 export interface FreeUserDoc {
   uid: string
@@ -101,9 +100,9 @@ export async function createFreeUser(uid: string, email: string): Promise<FreeUs
     bundlesCreated: 0,
     ...STARTER_TIER_DEFAULTS,
     // Timestamps
-    createdAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-    lastResetDate: FieldValue.serverTimestamp(),
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    lastResetDate: new Date(),
     currentPeriodStart: currentPeriodStart,
   }
 
@@ -143,9 +142,9 @@ export async function checkAndResetMonthlyLimits(uid: string): Promise<FreeUserD
     const docRef = adminDb.collection("freeUsers").doc(uid)
     await docRef.update({
       downloadsUsed: 0,
-      lastResetDate: FieldValue.serverTimestamp(),
+      lastResetDate: new Date(),
       currentPeriodStart: currentMonthStart,
-      updatedAt: FieldValue.serverTimestamp(),
+      updatedAt: new Date(),
     })
 
     console.log("✅ Monthly limits reset successfully")
@@ -172,8 +171,8 @@ export async function incrementFreeUserDownloads(uid: string): Promise<{ success
 
     const docRef = adminDb.collection("freeUsers").doc(uid)
     await docRef.update({
-      downloadsUsed: FieldValue.increment(1),
-      updatedAt: FieldValue.serverTimestamp(),
+      downloadsUsed: freeUser.downloadsUsed + 1,
+      updatedAt: new Date(),
     })
 
     console.log("✅ Incremented freeUser downloads:", freeUser.downloadsUsed + 1, "/", freeUser.downloadsLimit)
@@ -201,8 +200,8 @@ export async function incrementFreeUserBundles(uid: string): Promise<{ success: 
 
     const docRef = adminDb.collection("freeUsers").doc(uid)
     await docRef.update({
-      bundlesCreated: FieldValue.increment(1),
-      updatedAt: FieldValue.serverTimestamp(),
+      bundlesCreated: freeUser.bundlesCreated + 1,
+      updatedAt: new Date(),
     })
 
     console.log("✅ Incremented freeUser bundles:", freeUser.bundlesCreated + 1, "/", freeUser.bundlesLimit)
@@ -300,7 +299,7 @@ export async function getFreeUserLimits(uid: string): Promise<{
       maxFolders: STARTER_TIER_DEFAULTS.maxFolders, // 3
       canCreateSubfolders: STARTER_TIER_DEFAULTS.canCreateSubfolders, // true
       platformFeePercentage: STARTER_TIER_DEFAULTS.platformFeePercentage, // 20
-      updatedAt: FieldValue.serverTimestamp(),
+      updatedAt: new Date(),
     })
 
     console.log("✅ Updated user limits to Starter plan defaults")
@@ -380,10 +379,10 @@ export async function upgradeFreeUserToPro(uid: string): Promise<void> {
     // We'll keep the freeUsers record but mark it as inactive
     // The memberships collection will handle the pro features
     await docRef.update({
-      updatedAt: FieldValue.serverTimestamp(),
+      updatedAt: new Date(),
       // Add a flag to indicate this user has been upgraded
       upgradedToPro: true,
-      upgradeDate: FieldValue.serverTimestamp(),
+      upgradeDate: new Date(),
     })
 
     console.log("✅ Free user marked as upgraded to pro")
@@ -410,7 +409,7 @@ export async function downgradeFreeUserFromTrial(uid: string): Promise<void> {
         bundlesLimit: 5, // Starter tier
         maxVideosPerBundle: 15, // Starter tier
         platformFeePercentage: 20,
-        updatedAt: FieldValue.serverTimestamp(),
+        updatedAt: new Date(),
       })
       console.log("✅ Updated existing freeUser record to Starter plan limits")
     } else {
@@ -421,9 +420,9 @@ export async function downgradeFreeUserFromTrial(uid: string): Promise<void> {
         bundlesCreated: 0,
         ...STARTER_TIER_DEFAULTS,
         hasUsedFreeTrial: true, // Mark that they've used their trial
-        createdAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-        lastResetDate: FieldValue.serverTimestamp(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        lastResetDate: new Date(),
         currentPeriodStart: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
       }
       await docRef.set(freeUserDoc)
@@ -435,7 +434,7 @@ export async function downgradeFreeUserFromTrial(uid: string): Promise<void> {
     await userRef.update({
       trialActive: false,
       plan: "starter", // Changed from "free" to "starter"
-      updatedAt: FieldValue.serverTimestamp(),
+      updatedAt: new Date(),
     })
 
     console.log("✅ User downgraded from trial to Starter plan successfully")

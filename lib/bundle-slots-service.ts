@@ -1,5 +1,5 @@
 import { adminDb } from "@/lib/firebase-admin"
-import { FieldValue } from "firebase-admin/firestore"
+// import { FieldValue } from "firebase-admin/firestore"
 
 export interface BundleSlotPurchase {
   id: string
@@ -49,6 +49,8 @@ export async function createBundleSlotPurchase(
 ): Promise<string> {
   console.log("🔄 Creating bundle slot purchase:", { uid: uid.substring(0, 8) + "...", tier })
 
+  const { FieldValue } = await import("firebase-admin/firestore")
+
   const tierInfo = BUNDLE_SLOT_TIERS[tier]
   const purchaseId = adminDb.collection("bundleSlotPurchases").doc().id
 
@@ -79,6 +81,8 @@ export async function completeBundleSlotPurchase(
   stripePaymentIntentId: string,
 ): Promise<void> {
   console.log("🔄 Completing bundle slot purchase:", stripeSessionId)
+
+  const { FieldValue } = await import("firebase-admin/firestore")
 
   // Find purchase by session ID
   const purchaseQuery = adminDb
@@ -123,6 +127,8 @@ export interface UserBundleSlots {
 
 export async function applyBundleSlotsToUser(uid: string, slots: number, purchaseId: string): Promise<void> {
   console.log("🔄 Applying bundle slots to user:", { uid: uid.substring(0, 8) + "...", slots })
+
+  const { FieldValue } = await import("firebase-admin/firestore")
 
   const freeUserRef = adminDb.collection("freeUsers").doc(uid)
   const freeUserDoc = await freeUserRef.get()
@@ -200,6 +206,8 @@ export async function getUserBundleSlots(uid: string): Promise<UserBundleSlots |
 
 export async function consumeBundleSlot(uid: string): Promise<{ success: boolean; reason?: string }> {
   console.log("🔄 Consuming bundle slot for user:", uid.substring(0, 8) + "...")
+
+  const { FieldValue } = await import("firebase-admin/firestore")
 
   const userSlotsRef = adminDb.collection("userBundleSlots").doc(uid)
   const userSlotsDoc = await userSlotsRef.get()
