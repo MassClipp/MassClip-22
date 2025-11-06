@@ -12,6 +12,7 @@ export interface MembershipFeatures {
   platformFeePercentage: number
   maxVideosPerBundle: number | null
   maxBundles: number | null
+  maxFolders: number | null
 }
 
 export interface MembershipDoc {
@@ -48,6 +49,7 @@ const STARTER_FEATURES: MembershipFeatures = {
   platformFeePercentage: 20,
   maxVideosPerBundle: 15,
   maxBundles: 5,
+  maxFolders: 3,
 }
 
 const PRO_FEATURES: MembershipFeatures = {
@@ -58,6 +60,7 @@ const PRO_FEATURES: MembershipFeatures = {
   platformFeePercentage: 10,
   maxVideosPerBundle: null, // unlimited
   maxBundles: null, // unlimited
+  maxFolders: null,
 }
 
 const FACELESS_PRO_FEATURES: MembershipFeatures = {
@@ -68,6 +71,7 @@ const FACELESS_PRO_FEATURES: MembershipFeatures = {
   platformFeePercentage: 20,
   maxVideosPerBundle: 15,
   maxBundles: 5,
+  maxFolders: 3,
 }
 
 const FACELESSPRENUER_FEATURES: MembershipFeatures = {
@@ -78,6 +82,7 @@ const FACELESSPRENUER_FEATURES: MembershipFeatures = {
   platformFeePercentage: 10,
   maxVideosPerBundle: null, // unlimited
   maxBundles: null, // unlimited
+  maxFolders: null,
 }
 
 export async function getMembership(uid: string): Promise<MembershipDoc | null> {
@@ -388,6 +393,7 @@ export function toTierInfo(m: MembershipDoc) {
     bundlesLimit: m.features.unlimitedDownloads ? null : m.features.maxBundles,
     maxVideosPerBundle: m.features.maxVideosPerBundle,
     platformFeePercentage: m.features.platformFeePercentage,
+    maxFolders: m.features.maxFolders,
     reachedDownloadLimit: false, // never reached for pro
     reachedBundleLimit: false, // never reached for pro
   }

@@ -85,6 +85,16 @@ export async function POST(request: Request) {
 
     console.log("[v0] Membership status API:", membershipStatusAPI)
 
+    const foldersSnapshot = await adminDb
+      .collection("folders")
+      .where("userId", "==", userId)
+      .where("parentId", "==", null)
+      .where("isDeleted", "==", false)
+      .get()
+
+    const folderCount = foldersSnapshot.size
+    console.log("[v0] Folder count:", folderCount)
+
     // 5. Determine permissions
     const isActive = membershipStatusAPI.isActive
     const plan = membershipStatusAPI.plan
@@ -101,6 +111,7 @@ export async function POST(request: Request) {
       platformFeePercentage: isActive && hasUnlimited ? 10 : 20,
       maxVideosPerBundle: isActive && hasUnlimited ? null : 15,
       maxBundles: isActive && hasUnlimited ? null : 5,
+      maxFolders: isActive && hasUnlimited ? null : 3,
     }
 
     console.log("[v0] Permissions:", permissions)
@@ -108,6 +119,14 @@ export async function POST(request: Request) {
     // 6. Get user info
     const userDoc = await adminDb.collection("users").doc(userId).get()
     const userEmail = userDoc.exists ? userDoc.data()?.email : null
+
+    const folderUsage = {
+      currentFolderCount: folderCount,
+      maxFolders: permissions.maxFolders,
+      isAtLimit: permissions.maxFolders !== null && folderCount >= permissions.maxFolders,
+    }
+
+    console.log("[v0] Folder usage:", folderUsage)
 
     return NextResponse.json({
       userId,
@@ -117,6 +136,7 @@ export async function POST(request: Request) {
       priceIdChecks,
       membershipStatusAPI,
       permissions,
+      folderUsage,
     })
   } catch (error) {
     console.error("[v0] Error in debug-faceless-pro:", error)

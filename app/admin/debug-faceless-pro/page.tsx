@@ -58,6 +58,14 @@ interface DebugData {
     platformFeePercentage: number
     maxVideosPerBundle: number | null
     maxBundles: number | null
+    maxFolders: number | null
+  }
+
+  // Folder usage tracking
+  folderUsage: {
+    currentFolderCount: number
+    maxFolders: number | null
+    isAtLimit: boolean
   }
 }
 
@@ -306,6 +314,32 @@ export default function DebugFacelessProPage() {
                   value={debugData.permissions.maxVideosPerBundle?.toString() || "Unlimited"}
                 />
                 <InfoRow label="Max Bundles" value={debugData.permissions.maxBundles?.toString() || "Unlimited"} />
+                <InfoRow label="Max Folders" value={debugData.permissions.maxFolders?.toString() || "Unlimited"} />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Folder Usage */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Folder Usage</CardTitle>
+              <CardDescription>Current folder count vs limit</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-3">
+                <InfoRow label="Current Folder Count" value={debugData.folderUsage.currentFolderCount.toString()} />
+                <InfoRow
+                  label="Max Folders Allowed"
+                  value={debugData.folderUsage.maxFolders?.toString() || "Unlimited"}
+                />
+                <StatusRow label="At Folder Limit" value={debugData.folderUsage.isAtLimit} />
+                {debugData.folderUsage.isAtLimit && (
+                  <div className="rounded-lg border border-red-500 bg-red-500/10 p-4">
+                    <p className="text-sm text-red-500">
+                      ⚠️ User has reached their folder limit. They should not be able to create more folders.
+                    </p>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
