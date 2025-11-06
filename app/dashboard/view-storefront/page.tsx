@@ -293,7 +293,13 @@ export default function ViewStorefrontPage() {
   const handleToggleStorefront = async () => {
     if (!user) return
 
-    if (!isProUser && !storefrontActive && !planData?.plan?.includes("starter")) {
+    const hasValidPlan =
+      isProUser ||
+      planData?.plan?.includes("starter") ||
+      planData?.plan?.includes("facelessprenuer") ||
+      planData?.plan?.includes("faceless_pro")
+
+    if (!hasValidPlan && !storefrontActive) {
       toast({
         title: "Upgrade Required",
         description: "You need a subscription to activate your storefront",
