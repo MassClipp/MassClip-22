@@ -1,5 +1,5 @@
-import { adminDb } from "@/lib/firebase-admin"
 import { FieldValue } from "firebase-admin/firestore"
+import { adminDb } from "@/lib/firebase-admin"
 
 export interface BundleSlotPurchase {
   id: string

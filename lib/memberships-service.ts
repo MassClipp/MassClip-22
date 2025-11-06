@@ -1,4 +1,3 @@
-import { adminDb } from "@/lib/firebase-admin"
 import { FieldValue } from "firebase-admin/firestore"
 
 export type MembershipPlan = "creator_pro" | "starter"
@@ -64,6 +63,7 @@ export async function getMembership(uid: string): Promise<MembershipDoc | null> 
   try {
     console.log("🔄 Getting membership for uid:", uid.substring(0, 8) + "...")
 
+    const { adminDb } = await import("@/lib/firebase-admin")
     const docRef = adminDb.collection("memberships").doc(uid)
     const docSnap = await docRef.get()
 
@@ -199,6 +199,7 @@ export async function setCreatorPro(
     updatedAt: FieldValue.serverTimestamp(),
   }
 
+  const { adminDb } = await import("@/lib/firebase-admin")
   await adminDb.collection("memberships").doc(uid).set(membershipData)
   console.log("✅ Creator Pro membership created successfully")
 }
@@ -235,6 +236,7 @@ export async function setStarter(
     updatedAt: FieldValue.serverTimestamp(),
   }
 
+  const { adminDb } = await import("@/lib/firebase-admin")
   await adminDb.collection("memberships").doc(uid).set(membershipData)
   console.log("✅ Starter membership created successfully with plan: starter")
 }
@@ -242,6 +244,7 @@ export async function setStarter(
 export async function setCreatorProStatus(uid: string, status: MembershipStatus, updates?: Partial<MembershipDoc>) {
   console.log("🔄 Updating membership status to:", status, "for:", uid.substring(0, 8) + "...")
 
+  const { adminDb } = await import("@/lib/firebase-admin")
   await adminDb
     .collection("memberships")
     .doc(uid)
@@ -260,6 +263,8 @@ export async function setCreatorProStatus(uid: string, status: MembershipStatus,
 
 export async function incrementDownloads(uid: string) {
   // Pro users - just increment for analytics, no limits
+
+  const { adminDb } = await import("@/lib/firebase-admin")
   await adminDb
     .collection("memberships")
     .doc(uid)
@@ -274,6 +279,8 @@ export async function incrementDownloads(uid: string) {
 
 export async function incrementBundles(uid: string) {
   // Pro users - just increment for analytics, no limits
+
+  const { adminDb } = await import("@/lib/firebase-admin")
   await adminDb
     .collection("memberships")
     .doc(uid)
@@ -302,6 +309,7 @@ export function toTierInfo(m: MembershipDoc) {
 }
 
 export async function cancelMembership(uid: string): Promise<void> {
+  const { adminDb } = await import("@/lib/firebase-admin")
   await adminDb.collection("memberships").doc(uid).update({
     status: "canceled",
     isActive: false,
@@ -311,6 +319,7 @@ export async function cancelMembership(uid: string): Promise<void> {
 }
 
 export async function deleteMembership(uid: string): Promise<void> {
+  const { adminDb } = await import("@/lib/firebase-admin")
   await adminDb.collection("memberships").doc(uid).delete()
   console.log(`✅ Deleted membership record for user: ${uid}`)
 }
