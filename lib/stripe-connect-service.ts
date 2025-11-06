@@ -1,6 +1,6 @@
-import { adminDb } from "@/lib/firebase-admin"
 import Stripe from "stripe"
-import { FieldValue } from "firebase-admin/firestore"
+import { type FirebaseFirestore, FieldValue } from "firebase-admin/firestore"
+import { adminDb } from "@/lib/firebase-admin"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
@@ -13,7 +13,7 @@ export interface ConnectedStripeAccount {
   refresh_token: string
   livemode: boolean
   scope: string
-  
+
   // Account metadata
   charges_enabled: boolean
   payouts_enabled: boolean
@@ -22,12 +22,12 @@ export interface ConnectedStripeAccount {
   email: string
   business_type: string
   type: string
-  
+
   // Platform metadata
   userId: string
   createdAt: FirebaseFirestore.Timestamp
   updatedAt: FirebaseFirestore.Timestamp
-  
+
   // Additional Stripe metadata
   default_currency: string
   business_profile?: {
@@ -48,13 +48,13 @@ export interface ConnectedStripeAccount {
 export function generateStripeConnectUrl(userId: string): string {
   const clientId = process.env.STRIPE_CLIENT_ID
   const redirectUri = `${process.env.NEXT_PUBLIC_SITE_URL}/api/stripe/connect/oauth-callback`
-  
+
   if (!clientId) {
     throw new Error("STRIPE_CLIENT_ID environment variable is required")
   }
-  
+
   const state = encodeURIComponent(JSON.stringify({ userId }))
-  
+
   const params = new URLSearchParams({
     response_type: "code",
     client_id: clientId,
@@ -62,7 +62,7 @@ export function generateStripeConnectUrl(userId: string): string {
     redirect_uri: redirectUri,
     state: state,
   })
-  
+
   return `https://connect.stripe.com/oauth/authorize?${params.toString()}`
 }
 
@@ -77,13 +77,13 @@ export async function exchangeOAuthCode(code: string): Promise<{
   scope: string
 }> {
   const clientSecret = process.env.STRIPE_SECRET_KEY
-  
+
   if (!clientSecret) {
     throw new Error("STRIPE_SECRET_KEY environment variable is required")
   }
-  
+
   console.log("🔄 Exchanging OAuth code for access token...")
-  
+
   const response = await fetch("https://connect.stripe.com/oauth/token", {
     method: "POST",
     headers: {
@@ -95,16 +95,16 @@ export async function exchangeOAuthCode(code: string): Promise<{
       grant_type: "authorization_code",
     }).toString(),
   })
-  
+
   if (!response.ok) {
     const errorText = await response.text()
     console.error("❌ OAuth token exchange failed:", errorText)
     throw new Error(`OAuth token exchange failed: ${response.status} ${errorText}`)
   }
-  
+
   const data = await response.json()
   console.log("✅ OAuth token exchange successful")
-  
+
   return {
     stripe_user_id: data.stripe_user_id,
     access_token: data.access_token,
@@ -119,7 +119,7 @@ export async function exchangeOAuthCode(code: string): Promise<{
  */
 export async function getStripeAccountDetails(accountId: string): Promise<Stripe.Account> {
   console.log(`🔄 Fetching Stripe account details for: ${accountId}`)
-  
+
   try {
     const account = await stripe.accounts.retrieve(accountId)
     console.log("✅ Successfully retrieved Stripe account details")
@@ -142,21 +142,21 @@ export async function saveConnectedAccount(
     livemode: boolean
     scope: string
   },
-  accountDetails: Stripe.Account
+  accountDetails: Stripe.Account,
 ): Promise<void> {
   console.log(`🔄 Saving connected Stripe account for user: ${userId}`)
-  
+
   try {
     const docRef = adminDb.collection("connectedStripeAccounts").doc(userId)
-    
-    const accountData: Omit<ConnectedStripeAccount, 'createdAt' | 'updatedAt'> = {
+
+    const accountData: Omit<ConnectedStripeAccount, "createdAt" | "updatedAt"> = {
       // OAuth tokens
       stripe_user_id: oauthData.stripe_user_id,
       access_token: oauthData.access_token,
       refresh_token: oauthData.refresh_token,
       livemode: oauthData.livemode,
       scope: oauthData.scope,
-      
+
       // Account metadata
       charges_enabled: accountDetails.charges_enabled,
       payouts_enabled: accountDetails.payouts_enabled,
@@ -166,27 +166,31 @@ export async function saveConnectedAccount(
       business_type: accountDetails.business_type || "",
       type: accountDetails.type || "",
       default_currency: accountDetails.default_currency || "usd",
-      
+
       // Platform metadata
       userId: userId,
-      
+
       // Additional metadata
-      business_profile: accountDetails.business_profile ? {
-        name: accountDetails.business_profile.name || undefined,
-        url: accountDetails.business_profile.url || undefined,
-        support_email: accountDetails.business_profile.support_email || undefined,
-      } : undefined,
-      
-      requirements: accountDetails.requirements ? {
-        currently_due: accountDetails.requirements.currently_due || [],
-        past_due: accountDetails.requirements.past_due || [],
-        pending_verification: accountDetails.requirements.pending_verification || [],
-      } : undefined,
+      business_profile: accountDetails.business_profile
+        ? {
+            name: accountDetails.business_profile.name || undefined,
+            url: accountDetails.business_profile.url || undefined,
+            support_email: accountDetails.business_profile.support_email || undefined,
+          }
+        : undefined,
+
+      requirements: accountDetails.requirements
+        ? {
+            currently_due: accountDetails.requirements.currently_due || [],
+            past_due: accountDetails.requirements.past_due || [],
+            pending_verification: accountDetails.requirements.pending_verification || [],
+          }
+        : undefined,
     }
-    
+
     // Check if document exists
     const docSnapshot = await docRef.get()
-    
+
     if (docSnapshot.exists) {
       // Update existing document
       await docRef.update({
@@ -203,19 +207,21 @@ export async function saveConnectedAccount(
       })
       console.log(`✅ Created new connected Stripe account for user: ${userId}`)
     }
-    
+
     // Also update the user's document for backward compatibility
-    await adminDb.collection("users").doc(userId).update({
-      stripeAccountId: oauthData.stripe_user_id,
-      stripeAccountStatus: accountDetails.details_submitted ? "active" : "pending",
-      stripeChargesEnabled: accountDetails.charges_enabled,
-      stripePayoutsEnabled: accountDetails.payouts_enabled,
-      stripeDetailsSubmitted: accountDetails.details_submitted,
-      updatedAt: FieldValue.serverTimestamp(),
-    })
-    
+    await adminDb
+      .collection("users")
+      .doc(userId)
+      .update({
+        stripeAccountId: oauthData.stripe_user_id,
+        stripeAccountStatus: accountDetails.details_submitted ? "active" : "pending",
+        stripeChargesEnabled: accountDetails.charges_enabled,
+        stripePayoutsEnabled: accountDetails.payouts_enabled,
+        stripeDetailsSubmitted: accountDetails.details_submitted,
+        updatedAt: FieldValue.serverTimestamp(),
+      })
+
     console.log(`✅ Updated user document for backward compatibility: ${userId}`)
-    
   } catch (error) {
     console.error(`❌ Failed to save connected Stripe account for user ${userId}:`, error)
     throw error
@@ -229,11 +235,11 @@ export async function getConnectedAccount(userId: string): Promise<ConnectedStri
   try {
     const docRef = adminDb.collection("connectedStripeAccounts").doc(userId)
     const docSnapshot = await docRef.get()
-    
+
     if (!docSnapshot.exists) {
       return null
     }
-    
+
     return docSnapshot.data() as ConnectedStripeAccount
   } catch (error) {
     console.error(`❌ Failed to get connected Stripe account for user ${userId}:`, error)
@@ -247,11 +253,11 @@ export async function getConnectedAccount(userId: string): Promise<ConnectedStri
 export async function hasActiveStripeAccount(userId: string): Promise<boolean> {
   try {
     const account = await getConnectedAccount(userId)
-    
+
     if (!account) {
       return false
     }
-    
+
     return account.charges_enabled && account.details_submitted
   } catch (error) {
     console.error(`❌ Failed to check Stripe account status for user ${userId}:`, error)
@@ -265,16 +271,16 @@ export async function hasActiveStripeAccount(userId: string): Promise<boolean> {
 export async function refreshConnectedAccount(userId: string): Promise<ConnectedStripeAccount | null> {
   try {
     console.log(`🔄 Refreshing connected Stripe account for user: ${userId}`)
-    
+
     const existingAccount = await getConnectedAccount(userId)
     if (!existingAccount) {
       console.log(`ℹ️ No connected account found for user: ${userId}`)
       return null
     }
-    
+
     // Get fresh data from Stripe
     const accountDetails = await getStripeAccountDetails(existingAccount.stripe_user_id)
-    
+
     // Update with fresh data
     await saveConnectedAccount(
       userId,
@@ -285,21 +291,21 @@ export async function refreshConnectedAccount(userId: string): Promise<Connected
         livemode: existingAccount.livemode,
         scope: existingAccount.scope,
       },
-      accountDetails
+      accountDetails,
     )
-    
+
     // Return updated data
     return await getConnectedAccount(userId)
   } catch (error) {
     console.error(`❌ Failed to refresh connected account for user ${userId}:`, error)
-    
+
     // If account doesn't exist in Stripe, clean up our records
-    if (error instanceof Stripe.errors.StripeError && error.code === 'account_invalid') {
+    if (error instanceof Error && error.message.includes("account_invalid")) {
       console.log(`🧹 Cleaning up invalid Stripe account for user: ${userId}`)
       await adminDb.collection("connectedStripeAccounts").doc(userId).delete()
       return null
     }
-    
+
     throw error
   }
 }
@@ -309,8 +315,9 @@ export async function refreshConnectedAccount(userId: string): Promise<Connected
  */
 export async function deleteConnectedAccount(userId: string): Promise<void> {
   try {
-    await adminDb.collection("connectedStripeAccounts").doc(userId).delete()
-    
+    const docRef = adminDb.collection("connectedStripeAccounts").doc(userId)
+    await docRef.delete()
+
     // Also clean up user document
     await adminDb.collection("users").doc(userId).update({
       stripeAccountId: null,
@@ -320,7 +327,7 @@ export async function deleteConnectedAccount(userId: string): Promise<void> {
       stripeDetailsSubmitted: false,
       updatedAt: FieldValue.serverTimestamp(),
     })
-    
+
     console.log(`✅ Deleted connected Stripe account for user: ${userId}`)
   } catch (error) {
     console.error(`❌ Failed to delete connected account for user ${userId}:`, error)

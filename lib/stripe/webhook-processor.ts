@@ -1,6 +1,5 @@
 import Stripe from "stripe"
-import { adminDb as db } from "@/lib/firebase-admin"
-import { FieldValue } from "firebase-admin/firestore"
+import { adminDb as db, FieldValue } from "@/lib/firebase-admin"
 
 // --- Types ---
 type MembershipPlan = "free" | "creator_pro" | "starter" | "facelessprenuer" | "faceless_pro"
@@ -112,7 +111,6 @@ async function findUserByCustomerId(customerId: string): Promise<string | null> 
 }
 
 async function setMembership(uid: string, data: any) {
-  if (!db) throw new Error("Firestore not initialized")
   const docRef = db.collection("memberships").doc(uid)
 
   console.log(`[v0] 💾 ========== WRITING TO FIRESTORE ==========`)

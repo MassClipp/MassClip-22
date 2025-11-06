@@ -1,5 +1,4 @@
 import Stripe from "stripe"
-import { adminDb } from "@/lib/firebase-admin"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2023-10-16",
@@ -16,6 +15,8 @@ export interface StripeSubscriptionStatus {
 
 export async function getStripeSubscriptionStatus(userId: string): Promise<StripeSubscriptionStatus> {
   try {
+    const { adminDb } = await import("@/lib/firebase-admin")
+
     // Get membership document
     const membershipDoc = await adminDb.collection("memberships").doc(userId).get()
 
