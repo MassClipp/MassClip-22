@@ -8,6 +8,8 @@ import { getUserTierInfo } from "@/lib/user-tier-service"
 // Initialize Firebase Admin
 initializeFirebaseAdmin()
 
+export const dynamic = "force-dynamic"
+
 interface Upload {
   id: string
   title: string

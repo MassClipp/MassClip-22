@@ -5,6 +5,10 @@ import { getAuth, type Auth, type DecodedIdToken } from "firebase-admin/auth"
 import { getStorage, type Storage } from "firebase-admin/storage"
 import admin from "firebase-admin"
 
+const isBuildTime =
+  process.env.NEXT_PHASE === "phase-production-build" ||
+  (process.env.NODE_ENV === "production" && !process.env.VERCEL_ENV)
+
 let adminApp: App | null = null
 
 /**
@@ -13,6 +17,11 @@ let adminApp: App | null = null
  * @returns The initialized Firebase Admin App instance.
  */
 export function initializeFirebaseAdmin(): App {
+  if (isBuildTime) {
+    console.log("⏭️ [Firebase Admin] Skipping initialization during build time")
+    return null as any
+  }
+
   if (adminApp) {
     return adminApp
   }
@@ -55,6 +64,8 @@ export function initializeFirebaseAdmin(): App {
 
 // Export a utility function to check the initialization status.
 export const isFirebaseAdminInitialized = () => {
+  if (isBuildTime) return false
+
   try {
     if (!adminApp) {
       adminApp = initializeFirebaseAdmin()
@@ -67,6 +78,8 @@ export const isFirebaseAdminInitialized = () => {
 }
 
 export const getAdminDb = (): Firestore => {
+  if (isBuildTime) return null as any
+
   if (!adminApp) {
     adminApp = initializeFirebaseAdmin()
   }
@@ -74,6 +87,8 @@ export const getAdminDb = (): Firestore => {
 }
 
 export const getAdminAuth = (): Auth => {
+  if (isBuildTime) return null as any
+
   if (!adminApp) {
     adminApp = initializeFirebaseAdmin()
   }
@@ -81,6 +96,8 @@ export const getAdminAuth = (): Auth => {
 }
 
 export const getAdminStorage = (): Storage => {
+  if (isBuildTime) return null as any
+
   if (!adminApp) {
     adminApp = initializeFirebaseAdmin()
   }

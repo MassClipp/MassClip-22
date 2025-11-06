@@ -2,6 +2,8 @@ import { type NextRequest, NextResponse } from "next/server"
 import { incrementFreeUserDownloads, incrementFreeUserBundles, canUserAddVideoToBundle } from "@/lib/free-users-service"
 import { verifyIdToken } from "firebase-admin/auth"
 
+export const dynamic = "force-dynamic"
+
 export async function POST(request: NextRequest) {
   try {
     const authHeader = request.headers.get("authorization")
