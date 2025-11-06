@@ -7,12 +7,30 @@ import admin from "firebase-admin"
 
 let adminApp: App | null = null
 
+const isBuildTime = () => {
+  // Check if we're in Next.js build phase
+  if (process.env.NEXT_PHASE === "phase-production-build" || process.env.NEXT_PHASE === "phase-export") {
+    return true
+  }
+  // Check if we're in a CI/build environment without runtime credentials
+  if (process.env.CI && !process.env.VERCEL_ENV) {
+    return true
+  }
+  return false
+}
+
 /**
  * Initializes the Firebase Admin SDK, ensuring it only runs once.
  * This function is exported because other modules in your project depend on it.
  * @returns The initialized Firebase Admin App instance.
  */
 export function initializeFirebaseAdmin(): App {
+  if (isBuildTime()) {
+    console.log("⏭️  [Firebase Admin] Skipping initialization during build time")
+    // Return a mock app to prevent errors during static analysis
+    return {} as App
+  }
+
   if (adminApp) {
     return adminApp
   }
@@ -55,6 +73,10 @@ export function initializeFirebaseAdmin(): App {
 
 // Export a utility function to check the initialization status.
 export const isFirebaseAdminInitialized = () => {
+  if (isBuildTime()) {
+    return false
+  }
+
   try {
     if (!adminApp) {
       adminApp = initializeFirebaseAdmin()
@@ -67,6 +89,10 @@ export const isFirebaseAdminInitialized = () => {
 }
 
 export const getAdminDb = (): Firestore => {
+  if (isBuildTime()) {
+    throw new Error("Cannot access Firestore during build time. This should only be called at runtime.")
+  }
+
   if (!adminApp) {
     adminApp = initializeFirebaseAdmin()
   }
@@ -74,6 +100,10 @@ export const getAdminDb = (): Firestore => {
 }
 
 export const getAdminAuth = (): Auth => {
+  if (isBuildTime()) {
+    throw new Error("Cannot access Firebase Auth during build time. This should only be called at runtime.")
+  }
+
   if (!adminApp) {
     adminApp = initializeFirebaseAdmin()
   }
@@ -81,6 +111,10 @@ export const getAdminAuth = (): Auth => {
 }
 
 export const getAdminStorage = (): Storage => {
+  if (isBuildTime()) {
+    throw new Error("Cannot access Firebase Storage during build time. This should only be called at runtime.")
+  }
+
   if (!adminApp) {
     adminApp = initializeFirebaseAdmin()
   }
