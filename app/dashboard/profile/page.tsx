@@ -766,13 +766,34 @@ export default function ProfilePage() {
                             <div className="flex items-start gap-3">
                               <div className="w-2 h-2 rounded-full bg-amber-500 mt-2 flex-shrink-0"></div>
                               <div>
-                                <p className="text-amber-200 text-sm font-medium mb-1">Subscription Canceled</p>
+                                <p className="text-amber-200 text-sm font-medium mb-1">
+                                  {trialStatus?.isOnTrial ? "Trial Canceled" : "Subscription Canceled"}
+                                </p>
                                 <p className="text-amber-300/80 text-xs leading-relaxed">
-                                  Your{" "}
-                                  {subscriptionData?.plan === "facelessprenuer" ? "Facelessprenuer" : "Faceless Pro"}{" "}
-                                  access continues until {safelyFormatDate(subscriptionData.currentPeriodEnd)}. After
-                                  this date, you will lose access to selling features and your storefront will be
-                                  automatically disabled.
+                                  {trialStatus?.isOnTrial ? (
+                                    <>
+                                      Your free trial will end in {trialStatus.daysRemaining}{" "}
+                                      {trialStatus.daysRemaining === 1 ? "day" : "days"}
+                                      {trialStatus.trialEndDate &&
+                                        ` on ${new Date(trialStatus.trialEndDate).toLocaleDateString("en-US", {
+                                          month: "short",
+                                          day: "numeric",
+                                          year: "numeric",
+                                        })}`}
+                                      . After this, you will lose access to selling features and your storefront will be
+                                      automatically disabled.
+                                    </>
+                                  ) : (
+                                    <>
+                                      Your{" "}
+                                      {subscriptionData?.plan === "facelessprenuer"
+                                        ? "Facelessprenuer"
+                                        : "Faceless Pro"}{" "}
+                                      access continues until {safelyFormatDate(subscriptionData.currentPeriodEnd)}.
+                                      After this date, you will lose access to selling features and your storefront will
+                                      be automatically disabled.
+                                    </>
+                                  )}
                                 </p>
                               </div>
                             </div>

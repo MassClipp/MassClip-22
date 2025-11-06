@@ -3,7 +3,7 @@ import Stripe from "stripe"
 import { adminDb } from "@/lib/firebase-admin"
 import { FieldValue } from "firebase-admin/firestore"
 
-const FACELESS_PRO_PRICE_IDS = [process.env.FACELESS_PRO_FIRST].filter(Boolean)
+const FACELESS_PRO_PRICE_IDS = [process.env.FACELESS_PRO_FIRST, "price_1SQBMvDheyb0pkWFPGz7vke7"].filter(Boolean)
 
 const FACELESS_PRO_PLAN_CONFIG = {
   plan: "faceless_pro" as const,
