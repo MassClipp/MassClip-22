@@ -9,7 +9,7 @@ import { useAuth } from "@/contexts/auth-context"
 
 interface PlanTest {
   planName: string
-  expectedPlan: "starter" | "creator_pro"
+  expectedPlan: "faceless_pro" | "facelessprenuer"
   expectedAttributes: {
     platformFeePercentage: number
     maxBundles: number | null
@@ -32,8 +32,8 @@ interface TestResult {
 
 const PLAN_TESTS: PlanTest[] = [
   {
-    planName: "Starter Plan",
-    expectedPlan: "starter",
+    planName: "Faceless Pro ($29/month)",
+    expectedPlan: "faceless_pro",
     expectedAttributes: {
       platformFeePercentage: 20,
       maxBundles: 5,
@@ -46,8 +46,8 @@ const PLAN_TESTS: PlanTest[] = [
     },
   },
   {
-    planName: "Creator Pro",
-    expectedPlan: "creator_pro",
+    planName: "Facelessprenuer ($39/month)",
+    expectedPlan: "facelessprenuer",
     expectedAttributes: {
       platformFeePercentage: 10,
       maxBundles: null,
@@ -200,8 +200,8 @@ export default function VerifyPlanPermissionsPage() {
         <div>
           <h1 className="text-3xl font-bold text-white mb-2">Plan Permissions Verification</h1>
           <p className="text-zinc-400">
-            Comprehensive test to verify all plan attributes and permissions are correctly assigned for Starter and
-            Creator Pro plans
+            Comprehensive test to verify all plan attributes and permissions are correctly assigned for Faceless Pro and
+            Facelessprenuer plans
           </p>
           {!user && (
             <div className="mt-4 p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
@@ -260,12 +260,12 @@ export default function VerifyPlanPermissionsPage() {
                 <Badge
                   variant="outline"
                   className={
-                    currentPlan === "starter"
-                      ? "bg-blue-500/10 text-blue-500 border-blue-500/20"
+                    currentPlan === "faceless_pro"
+                      ? "bg-cyan-500/10 text-cyan-500 border-cyan-500/20"
                       : "bg-purple-500/10 text-purple-500 border-purple-500/20"
                   }
                 >
-                  {currentPlan === "starter" ? "STARTER PLAN" : "CREATOR PRO"}
+                  {currentPlan === "faceless_pro" ? "FACELESS PRO" : "FACELESSPRENUER"}
                 </Badge>
               </div>
             </CardHeader>
@@ -273,7 +273,7 @@ export default function VerifyPlanPermissionsPage() {
               <p className="text-zinc-400">
                 Testing permissions for:{" "}
                 <span className="text-white font-semibold">
-                  {currentPlan === "starter" ? "Starter Plan" : "Creator Pro"}
+                  {currentPlan === "faceless_pro" ? "Faceless Pro ($29/month)" : "Facelessprenuer ($39/month)"}
                 </span>
               </p>
             </CardContent>
@@ -477,7 +477,7 @@ export default function VerifyPlanPermissionsPage() {
                 <div key={index}>
                   <h3
                     className={`text-lg font-semibold mb-3 ${
-                      test.expectedPlan === "starter" ? "text-blue-400" : "text-purple-400"
+                      test.expectedPlan === "faceless_pro" ? "text-cyan-400" : "text-purple-400"
                     }`}
                   >
                     {test.planName}
