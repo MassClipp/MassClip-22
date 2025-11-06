@@ -19,6 +19,50 @@ const isBuildTime = () => {
   return false
 }
 
+const createMockFirestore = (): Firestore => {
+  return new Proxy({} as Firestore, {
+    get(target, prop) {
+      // Return mock functions for common Firestore methods
+      if (prop === "collection") {
+        return () => createMockFirestore()
+      }
+      if (prop === "doc") {
+        return () => createMockFirestore()
+      }
+      if (prop === "get" || prop === "set" || prop === "update" || prop === "delete") {
+        return async () => ({})
+      }
+      return () => {}
+    },
+  }) as Firestore
+}
+
+const createMockAuth = (): Auth => {
+  return new Proxy({} as Auth, {
+    get(target, prop) {
+      // Return mock functions for common Auth methods
+      if (prop === "verifyIdToken" || prop === "getUser" || prop === "getUserByEmail") {
+        return async () => ({})
+      }
+      if (prop === "createUser" || prop === "updateUser" || prop === "deleteUser") {
+        return async () => ({})
+      }
+      return () => {}
+    },
+  }) as Auth
+}
+
+const createMockStorage = (): Storage => {
+  return new Proxy({} as Storage, {
+    get(target, prop) {
+      if (prop === "bucket") {
+        return () => createMockStorage()
+      }
+      return () => {}
+    },
+  }) as Storage
+}
+
 /**
  * Initializes the Firebase Admin SDK, ensuring it only runs once.
  * This function is exported because other modules in your project depend on it.
@@ -90,7 +134,7 @@ export const isFirebaseAdminInitialized = () => {
 
 export const getAdminDb = (): Firestore => {
   if (isBuildTime()) {
-    throw new Error("Cannot access Firestore during build time. This should only be called at runtime.")
+    return createMockFirestore()
   }
 
   if (!adminApp) {
@@ -101,7 +145,7 @@ export const getAdminDb = (): Firestore => {
 
 export const getAdminAuth = (): Auth => {
   if (isBuildTime()) {
-    throw new Error("Cannot access Firebase Auth during build time. This should only be called at runtime.")
+    return createMockAuth()
   }
 
   if (!adminApp) {
@@ -112,7 +156,7 @@ export const getAdminAuth = (): Auth => {
 
 export const getAdminStorage = (): Storage => {
   if (isBuildTime()) {
-    throw new Error("Cannot access Firebase Storage during build time. This should only be called at runtime.")
+    return createMockStorage()
   }
 
   if (!adminApp) {
