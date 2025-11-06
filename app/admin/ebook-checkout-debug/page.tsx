@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Loader2 } from "lucide-react"
+import { Loader2, CheckCircle2, XCircle, AlertCircle } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 export default function EBookCheckoutDebugPage() {
@@ -15,6 +15,9 @@ export default function EBookCheckoutDebugPage() {
   const [debugInfo, setDebugInfo] = useState<any>({})
   const [checkoutPayload, setCheckoutPayload] = useState<any>(null)
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null)
+  const [webhookStatus, setWebhookStatus] = useState<any>({})
+  const [purchaseVerification, setPurchaseVerification] = useState<any>({})
+  const [verifyingPurchase, setVerifyingPurchase] = useState<string | null>(null)
 
   useEffect(() => {
     if (user?.uid) {
@@ -87,12 +90,81 @@ export default function EBookCheckoutDebugPage() {
     }
   }
 
+  const verifyEbookPurchase = async (ebookId: string, sessionId?: string) => {
+    console.log("[v0] Verifying eBook purchase:", { ebookId, sessionId })
+    setVerifyingPurchase(ebookId)
+
+    try {
+      const idToken = await user?.getIdToken()
+
+      // Check ebookPurchases collection
+      const purchasesResponse = await fetch(`/api/admin/verify-ebook-purchase?ebookId=${ebookId}&userId=${user?.uid}`, {
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+        },
+      })
+
+      const purchasesData = await purchasesResponse.json()
+      console.log("[v0] Purchase verification result:", purchasesData)
+
+      setPurchaseVerification({
+        ebookId,
+        ...purchasesData,
+      })
+
+      if (purchasesData.hasPurchase) {
+        toast({
+          title: "Purchase Verified",
+          description: `Found ${purchasesData.purchaseCount} purchase(s) for this eBook`,
+        })
+      } else {
+        toast({
+          title: "No Purchase Found",
+          description: "This eBook has not been purchased yet",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("[v0] Error verifying purchase:", error)
+      toast({
+        title: "Verification Error",
+        description: error instanceof Error ? error.message : "Failed to verify purchase",
+        variant: "destructive",
+      })
+    } finally {
+      setVerifyingPurchase(null)
+    }
+  }
+
+  const checkWebhookEvents = async (ebookId: string) => {
+    console.log("[v0] Checking webhook events for eBook:", ebookId)
+
+    try {
+      const idToken = await user?.getIdToken()
+      const response = await fetch(`/api/admin/check-webhook-events?ebookId=${ebookId}`, {
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+        },
+      })
+
+      const data = await response.json()
+      console.log("[v0] Webhook events:", data)
+
+      setWebhookStatus({
+        ebookId,
+        ...data,
+      })
+    } catch (error) {
+      console.error("[v0] Error checking webhooks:", error)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-black text-white p-8">
       <div className="max-w-6xl mx-auto space-y-8">
         <div>
           <h1 className="text-3xl font-bold mb-2">eBook Checkout Debug</h1>
-          <p className="text-zinc-400">Debug page to trace eBook checkout flow and identify issues</p>
+          <p className="text-zinc-400">Comprehensive debug page to test and verify the complete eBook purchase flow</p>
         </div>
 
         {/* User Info */}
@@ -177,6 +249,52 @@ export default function EBookCheckoutDebugPage() {
                     </div>
                   </div>
 
+                  <div className="bg-zinc-900 rounded p-3 space-y-2">
+                    <div className="text-sm font-semibold text-zinc-300 mb-2">Validation Checks:</div>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex items-center gap-2">
+                        {ebook.stripePriceId ? (
+                          <CheckCircle2 className="h-4 w-4 text-green-400" />
+                        ) : (
+                          <XCircle className="h-4 w-4 text-red-400" />
+                        )}
+                        <span className={ebook.stripePriceId ? "text-green-400" : "text-red-400"}>
+                          Stripe Price ID configured
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {ebook.stripeProductId ? (
+                          <CheckCircle2 className="h-4 w-4 text-green-400" />
+                        ) : (
+                          <XCircle className="h-4 w-4 text-red-400" />
+                        )}
+                        <span className={ebook.stripeProductId ? "text-green-400" : "text-red-400"}>
+                          Stripe Product ID configured
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {ebook.status === "published" ? (
+                          <CheckCircle2 className="h-4 w-4 text-green-400" />
+                        ) : (
+                          <AlertCircle className="h-4 w-4 text-yellow-400" />
+                        )}
+                        <span className={ebook.status === "published" ? "text-green-400" : "text-yellow-400"}>
+                          {ebook.status === "published" ? "Published" : "Draft (not visible on storefront)"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {ebook.price > 0 ? (
+                          <CheckCircle2 className="h-4 w-4 text-green-400" />
+                        ) : (
+                          <XCircle className="h-4 w-4 text-red-400" />
+                        )}
+                        <span className={ebook.price > 0 ? "text-green-400" : "text-red-400"}>
+                          Price set (${((ebook.price || 0) / 100).toFixed(2)})
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
                   {ebook.status === "draft" && (
                     <div className="bg-yellow-500/10 border border-yellow-500/30 rounded p-3">
                       <p className="text-yellow-400 text-sm">
@@ -189,26 +307,89 @@ export default function EBookCheckoutDebugPage() {
                     </div>
                   )}
 
-                  <Button
-                    onClick={() => testCheckout(ebook)}
-                    disabled={checkoutLoading === ebook.id || !ebook.stripePriceId}
-                    className="w-full bg-white text-black hover:bg-zinc-200"
-                  >
-                    {checkoutLoading === ebook.id ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Testing...
-                      </>
-                    ) : (
-                      "Test Checkout"
-                    )}
-                  </Button>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <Button
+                      onClick={() => testCheckout(ebook)}
+                      disabled={checkoutLoading === ebook.id || !ebook.stripePriceId}
+                      className="bg-white text-black hover:bg-zinc-200"
+                    >
+                      {checkoutLoading === ebook.id ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Testing...
+                        </>
+                      ) : (
+                        "Test Checkout"
+                      )}
+                    </Button>
+
+                    <Button
+                      onClick={() => verifyEbookPurchase(ebook.id)}
+                      disabled={verifyingPurchase === ebook.id}
+                      variant="outline"
+                      className="border-zinc-600 hover:bg-zinc-800"
+                    >
+                      {verifyingPurchase === ebook.id ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Verifying...
+                        </>
+                      ) : (
+                        "Verify Purchase"
+                      )}
+                    </Button>
+
+                    <Button
+                      onClick={() => checkWebhookEvents(ebook.id)}
+                      variant="outline"
+                      className="border-zinc-600 hover:bg-zinc-800"
+                    >
+                      Check Webhooks
+                    </Button>
+                  </div>
 
                   {debugInfo.ebookId === ebook.id && (
                     <div className="bg-zinc-900 border border-zinc-700 rounded p-3">
-                      <div className="text-sm text-zinc-400 mb-2">Response:</div>
+                      <div className="text-sm font-semibold text-zinc-300 mb-2">Checkout Response:</div>
                       <pre className="text-xs text-zinc-300 overflow-x-auto">
                         {JSON.stringify(debugInfo.response || debugInfo.error, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+
+                  {purchaseVerification.ebookId === ebook.id && (
+                    <div className="bg-zinc-900 border border-zinc-700 rounded p-3">
+                      <div className="text-sm font-semibold text-zinc-300 mb-2">Purchase Verification:</div>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex items-center gap-2">
+                          {purchaseVerification.hasPurchase ? (
+                            <CheckCircle2 className="h-4 w-4 text-green-400" />
+                          ) : (
+                            <XCircle className="h-4 w-4 text-red-400" />
+                          )}
+                          <span className={purchaseVerification.hasPurchase ? "text-green-400" : "text-red-400"}>
+                            {purchaseVerification.hasPurchase
+                              ? `Found ${purchaseVerification.purchaseCount} purchase(s)`
+                              : "No purchases found"}
+                          </span>
+                        </div>
+                        {purchaseVerification.purchases && purchaseVerification.purchases.length > 0 && (
+                          <div className="mt-2">
+                            <div className="text-zinc-400 text-xs mb-1">Purchase Details:</div>
+                            <pre className="text-xs text-zinc-300 overflow-x-auto bg-zinc-800 p-2 rounded">
+                              {JSON.stringify(purchaseVerification.purchases, null, 2)}
+                            </pre>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {webhookStatus.ebookId === ebook.id && (
+                    <div className="bg-zinc-900 border border-zinc-700 rounded p-3">
+                      <div className="text-sm font-semibold text-zinc-300 mb-2">Webhook Events:</div>
+                      <pre className="text-xs text-zinc-300 overflow-x-auto">
+                        {JSON.stringify(webhookStatus, null, 2)}
                       </pre>
                     </div>
                   )}
@@ -228,19 +409,66 @@ export default function EBookCheckoutDebugPage() {
           </div>
         )}
 
-        {/* Instructions */}
         <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-6">
-          <h2 className="text-xl font-semibold mb-2">How to Use</h2>
+          <h2 className="text-xl font-semibold mb-2">How to Use This Debug Page</h2>
           <ol className="list-decimal list-inside space-y-2 text-sm text-zinc-300">
-            <li>Check that your eBooks are listed above</li>
-            <li>Verify that each eBook has Stripe Product ID and Price ID set</li>
             <li>
-              <strong>Make sure eBooks are published</strong> (status should be "published", not "draft")
+              <strong>Check Validation:</strong> Review the validation checks for each eBook (Stripe IDs, published
+              status, price)
             </li>
-            <li>Click "Test Checkout" on an eBook to simulate the checkout flow</li>
-            <li>Check the console logs for detailed debugging information</li>
-            <li>Review the checkout payload and response to identify issues</li>
+            <li>
+              <strong>Test Checkout:</strong> Click "Test Checkout" to simulate the checkout flow and verify session
+              creation
+            </li>
+            <li>
+              <strong>Verify Purchase:</strong> After completing a purchase, click "Verify Purchase" to check if it was
+              recorded in the database
+            </li>
+            <li>
+              <strong>Check Webhooks:</strong> Click "Check Webhooks" to see if Stripe webhook events were received and
+              processed
+            </li>
+            <li>
+              <strong>Review Console:</strong> Check browser console for detailed debugging information throughout the
+              flow
+            </li>
+            <li>
+              <strong>Inspect Responses:</strong> Review checkout payload, purchase verification, and webhook status
+              sections for issues
+            </li>
           </ol>
+        </div>
+
+        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-6">
+          <h2 className="text-xl font-semibold mb-2">Common Issues & Solutions</h2>
+          <div className="space-y-3 text-sm text-zinc-300">
+            <div>
+              <strong className="text-red-400">Missing Stripe Price ID:</strong>
+              <p className="text-zinc-400 mt-1">
+                The eBook needs a Stripe Price ID. Make sure you've created the eBook with a price and it's synced with
+                Stripe.
+              </p>
+            </div>
+            <div>
+              <strong className="text-red-400">Draft Status:</strong>
+              <p className="text-zinc-400 mt-1">
+                eBooks in draft status won't appear on your storefront. Publish them from /dashboard/ebooks.
+              </p>
+            </div>
+            <div>
+              <strong className="text-red-400">Purchase Not Found:</strong>
+              <p className="text-zinc-400 mt-1">
+                If purchase verification fails, check: 1) Webhook was received, 2) ebookPurchases collection in
+                Firebase, 3) Stripe webhook logs.
+              </p>
+            </div>
+            <div>
+              <strong className="text-red-400">Webhook Not Processing:</strong>
+              <p className="text-zinc-400 mt-1">
+                Verify webhook secret is configured correctly and Stripe is sending events to your webhook endpoint.
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     </div>
