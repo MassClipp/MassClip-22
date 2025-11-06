@@ -151,34 +151,34 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // If creating a root folder, check folder count limit
-      if (!parentId || parentId === "root") {
-        const maxFolders = subscription.features.maxFolders
+      const maxFolders = subscription.features.maxFolders
 
-        if (maxFolders !== null) {
-          // Count existing root folders
-          const rootFoldersSnapshot = await db
-            .collection("folders")
-            .where("userId", "==", userId)
-            .where("parentId", "==", null)
-            .where("isDeleted", "==", false)
-            .get()
+      if (maxFolders !== null) {
+        // Count ALL existing folders (root + subfolders)
+        const allFoldersSnapshot = await db
+          .collection("folders")
+          .where("userId", "==", userId)
+          .where("isDeleted", "==", false)
+          .get()
 
-          console.log(
-            `[v0] Folder limit check: ${rootFoldersSnapshot.size}/${maxFolders} folders (plan: ${subscription.plan})`,
+        console.log(
+          `[v0] Folder limit check: ${allFoldersSnapshot.size}/${maxFolders} total folders (plan: ${subscription.plan})`,
+        )
+
+        if (allFoldersSnapshot.size >= maxFolders) {
+          const planName =
+            subscription.plan === "starter" ? "Starter" : subscription.plan === "faceless_pro" ? "Faceless Pro" : "Free"
+          return NextResponse.json(
+            {
+              error: `Folder limit reached (${maxFolders} folders max on ${planName} plan)`,
+              details:
+                subscription.plan === "faceless_pro"
+                  ? "Upgrade to Facelessprenuer for unlimited folders"
+                  : "Upgrade to Creator Pro for unlimited folders",
+              code: "FOLDER_LIMIT_REACHED",
+            },
+            { status: 403 },
           )
-
-          if (rootFoldersSnapshot.size >= maxFolders) {
-            const planName = subscription.plan === "starter" ? "Starter" : "Free"
-            return NextResponse.json(
-              {
-                error: `Folder limit reached (${maxFolders} folders max on ${planName} plan)`,
-                details: "Upgrade to Creator Pro for unlimited folders",
-                code: "FOLDER_LIMIT_REACHED",
-              },
-              { status: 403 },
-            )
-          }
         }
       }
 
