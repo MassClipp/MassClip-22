@@ -24,7 +24,7 @@ const PLAN_CONFIGS = {
   faceless_pro: {
     plan: "faceless_pro" as const,
     features: {
-      maxBundles: 5,
+      maxBundles: 10,
       maxVideosPerBundle: 25,
       maxFolders: 5,
       noWatermark: true,
