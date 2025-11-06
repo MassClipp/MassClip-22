@@ -22,26 +22,62 @@ export async function POST(request: NextRequest) {
 
     // STEP 1: Look for purchase document in bundlePurchases collection
     console.log(`🔍 [Verify Session] Looking up purchase in bundlePurchases collection`)
-    
+
     // Try to find by sessionId field first
-    const purchaseQuery = await db.collection("bundlePurchases").where("sessionId", "==", sessionId).limit(1).get()
-    
+    const bundlePurchaseQuery = await db
+      .collection("bundlePurchases")
+      .where("sessionId", "==", sessionId)
+      .limit(1)
+      .get()
+
     let purchaseDoc = null
     let purchaseData = null
+    let purchaseType: "bundle" | "ebook" = "bundle"
 
-    if (!purchaseQuery.empty) {
-      purchaseDoc = purchaseQuery.docs[0]
+    if (!bundlePurchaseQuery.empty) {
+      purchaseDoc = bundlePurchaseQuery.docs[0]
       purchaseData = purchaseDoc.data()
-      console.log(`✅ [Verify Session] Found purchase document by sessionId query`)
+      purchaseType = "bundle"
+      console.log(`✅ [Verify Session] Found bundle purchase document by sessionId query`)
     } else {
       // Try using sessionId as document ID (fallback)
       console.log(`🔍 [Verify Session] Trying sessionId as document ID: bundlePurchases/${sessionId}`)
       const directDoc = await db.collection("bundlePurchases").doc(sessionId).get()
-      
+
       if (directDoc.exists) {
         purchaseDoc = directDoc
         purchaseData = directDoc.data()!
-        console.log(`✅ [Verify Session] Found purchase document by direct ID lookup`)
+        purchaseType = "bundle"
+        console.log(`✅ [Verify Session] Found bundle purchase document by direct ID lookup`)
+      }
+    }
+
+    // If not found in bundlePurchases, check ebookPurchases
+    if (!purchaseData) {
+      console.log(`🔍 [Verify Session] Looking up purchase in ebookPurchases collection`)
+
+      const ebookPurchaseQuery = await db
+        .collection("ebookPurchases")
+        .where("sessionId", "==", sessionId)
+        .limit(1)
+        .get()
+
+      if (!ebookPurchaseQuery.empty) {
+        purchaseDoc = ebookPurchaseQuery.docs[0]
+        purchaseData = purchaseDoc.data()
+        purchaseType = "ebook"
+        console.log(`✅ [Verify Session] Found ebook purchase document by sessionId query`)
+      } else {
+        // Try using sessionId as document ID (fallback)
+        console.log(`🔍 [Verify Session] Trying sessionId as document ID: ebookPurchases/${sessionId}`)
+        const directDoc = await db.collection("ebookPurchases").doc(sessionId).get()
+
+        if (directDoc.exists) {
+          purchaseDoc = directDoc
+          purchaseData = directDoc.data()!
+          purchaseType = "ebook"
+          console.log(`✅ [Verify Session] Found ebook purchase document by direct ID lookup`)
+        }
       }
     }
 
@@ -57,25 +93,26 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log(`✅ [Verify Session] Found purchase document`)
+    console.log(`✅ [Verify Session] Found ${purchaseType} purchase document`)
     console.log(`🔍 [Verify Session] Purchase data:`, {
       sessionId: purchaseData.sessionId,
-      bundleId: purchaseData.bundleId,
+      itemId: purchaseData.bundleId || purchaseData.ebookId,
       buyerUid: purchaseData.buyerUid,
       status: purchaseData.status,
       webhookProcessed: purchaseData.webhookProcessed,
-      bundleTitle: purchaseData.bundleTitle,
-      contentItems: purchaseData.bundleContent?.length || 0,
+      title: purchaseData.bundleTitle || purchaseData.ebookTitle,
+      type: purchaseType,
     })
 
     // STEP 2: Validate required fields
-    if (!purchaseData.bundleId) {
-      console.error(`❌ [Verify Session] No bundleId in purchase data`)
+    const itemId = purchaseData.bundleId || purchaseData.ebookId
+    if (!itemId) {
+      console.error(`❌ [Verify Session] No item ID in purchase data`)
       return NextResponse.json(
         {
           success: false,
-          error: "Bundle not found",
-          details: "Purchase data is missing bundle information",
+          error: "Item not found",
+          details: "Purchase data is missing item information",
         },
         { status: 400 },
       )
@@ -83,11 +120,13 @@ export async function POST(request: NextRequest) {
 
     // STEP 3: Get Stripe session data for verification
     let session: Stripe.Checkout.Session | null = null
-    
+
     // Try to retrieve from connected account if we have the creator's Stripe account ID
     if (purchaseData.creatorStripeAccountId) {
       try {
-        console.log(`🔍 [Verify Session] Retrieving session from connected account: ${purchaseData.creatorStripeAccountId}`)
+        console.log(
+          `🔍 [Verify Session] Retrieving session from connected account: ${purchaseData.creatorStripeAccountId}`,
+        )
         session = await stripe.checkout.sessions.retrieve(sessionId, {
           expand: ["line_items", "payment_intent"],
           stripeAccount: purchaseData.creatorStripeAccountId,
@@ -113,17 +152,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // STEP 4: Get bundle details if not already in purchase data
-    let bundleData = null
-    if (purchaseData.bundleId) {
-      console.log(`🔍 [Verify Session] Looking up bundle: ${purchaseData.bundleId}`)
-      const bundleDoc = await db.collection("bundles").doc(purchaseData.bundleId).get()
-      if (bundleDoc.exists) {
-        bundleData = bundleDoc.data()
-        console.log(`✅ [Verify Session] Retrieved bundle data: ${bundleData?.title}`)
-      } else {
-        console.warn(`⚠️ [Verify Session] Bundle not found: ${purchaseData.bundleId}`)
-      }
+    // STEP 4: Get item details (bundle or ebook)
+    let itemData = null
+    const collectionName = purchaseType === "bundle" ? "bundles" : "ebooks"
+    console.log(`🔍 [Verify Session] Looking up ${purchaseType}: ${itemId}`)
+    const itemDoc = await db.collection(collectionName).doc(itemId).get()
+    if (itemDoc.exists) {
+      itemData = itemDoc.data()
+      console.log(`✅ [Verify Session] Retrieved ${purchaseType} data: ${itemData?.title}`)
+    } else {
+      console.warn(`⚠️ [Verify Session] ${purchaseType} not found: ${itemId}`)
     }
 
     // STEP 5: Get creator details
@@ -139,7 +177,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // STEP 6: Build response using purchase data (which contains all the info from webhook)
+    // STEP 6: Build response using purchase data
     const response = {
       success: true,
       session: {
@@ -148,7 +186,9 @@ export async function POST(request: NextRequest) {
         currency: session?.currency || purchaseData.currency || "usd",
         payment_status: session?.payment_status || purchaseData.paymentStatus || "paid",
         customerEmail: session?.customer_details?.email || purchaseData.buyerEmail || "",
-        created: session ? new Date(session.created * 1000).toISOString() : purchaseData.timestamp?.toDate?.()?.toISOString() || new Date().toISOString(),
+        created: session
+          ? new Date(session.created * 1000).toISOString()
+          : purchaseData.timestamp?.toDate?.()?.toISOString() || new Date().toISOString(),
       },
       purchase: {
         sessionId: purchaseData.sessionId,
@@ -156,25 +196,40 @@ export async function POST(request: NextRequest) {
         userId: purchaseData.buyerUid || "",
         userEmail: purchaseData.buyerEmail || "",
         userName: purchaseData.buyerDisplayName || "",
-        itemId: purchaseData.bundleId,
+        itemId: itemId,
         amount: purchaseData.purchaseAmount || 0,
         currency: purchaseData.currency || "usd",
-        type: "bundle",
+        type: purchaseType,
         status: purchaseData.status || "completed",
       },
       item: {
-        id: purchaseData.bundleId,
-        title: purchaseData.bundleTitle || bundleData?.title || "Bundle",
-        description: purchaseData.bundleDescription || bundleData?.description || "",
-        thumbnailUrl: purchaseData.bundleThumbnail || bundleData?.thumbnailUrl || bundleData?.coverImage || "",
-        creator: creatorData ? {
-          id: purchaseData.creatorId,
-          name: creatorData.displayName || creatorData.name || purchaseData.creatorDisplayName || "",
-          username: creatorData.username || purchaseData.creatorUsername || "",
-        } : null,
+        id: itemId,
+        title:
+          purchaseData.bundleTitle ||
+          purchaseData.ebookTitle ||
+          itemData?.title ||
+          (purchaseType === "bundle" ? "Bundle" : "eBook"),
+        description: purchaseData.bundleDescription || purchaseData.ebookDescription || itemData?.description || "",
+        thumbnailUrl:
+          purchaseData.bundleThumbnail ||
+          purchaseData.ebookCoverUrl ||
+          itemData?.thumbnailUrl ||
+          itemData?.coverUrl ||
+          itemData?.coverImage ||
+          "",
+        creator: creatorData
+          ? {
+              id: purchaseData.creatorId,
+              name: creatorData.displayName || creatorData.name || purchaseData.creatorDisplayName || "",
+              username: creatorData.username || purchaseData.creatorUsername || "",
+            }
+          : null,
       },
-      // Include bundle content info
-      bundleContent: {
+    }
+
+    // Add type-specific content info
+    if (purchaseType === "bundle") {
+      ;(response as any).bundleContent = {
         items: purchaseData.bundleContent || [],
         totalItems: purchaseData.bundleTotalItems || 0,
         totalSize: purchaseData.bundleTotalSize || 0,
@@ -183,15 +238,20 @@ export async function POST(request: NextRequest) {
         totalDurationFormatted: purchaseData.bundleTotalDurationFormatted || "0:00",
         contentBreakdown: purchaseData.bundleContentBreakdown || {},
       }
+    } else if (purchaseType === "ebook") {
+      ;(response as any).ebookContent = {
+        pageCount: purchaseData.ebookPageCount || itemData?.pageCount || 0,
+        coverUrl: purchaseData.ebookCoverUrl || itemData?.coverUrl || "",
+      }
     }
 
     console.log(`✅ [Verify Session] Verification successful for session: ${sessionId}`)
     console.log(`📊 [Verify Session] Response summary:`, {
       sessionId: response.session.id,
       amount: response.session.amount,
-      bundleTitle: response.item.title,
+      itemTitle: response.item.title,
       creatorName: response.item.creator?.name,
-      contentItems: response.bundleContent.totalItems,
+      type: purchaseType,
     })
 
     return NextResponse.json(response)
