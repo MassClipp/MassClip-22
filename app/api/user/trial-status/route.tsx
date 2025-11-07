@@ -22,23 +22,30 @@ export async function GET(req: NextRequest) {
     // Get membership status (this will return null if trial has expired)
     const membership = await getMembership(userId)
 
+    // Faceless Pro users should still be able to see the trial offer to upgrade
+    const hasPurchasedFacelessprenuer = membership && membership?.plan === "facelessprenuer"
+
+    const hasFacelessPro = membership && membership?.plan === "faceless_pro"
+
+    const now = new Date()
+    const currentPeriodEnd = membership?.currentPeriodEnd
+      ? typeof membership.currentPeriodEnd === "object" && "toDate" in membership.currentPeriodEnd
+        ? (membership.currentPeriodEnd as any).toDate()
+        : membership.currentPeriodEnd instanceof Date
+          ? membership.currentPeriodEnd
+          : new Date(membership.currentPeriodEnd)
+      : null
+
+    const isInGracePeriod = membership?.cancelAtPeriodEnd && currentPeriodEnd && currentPeriodEnd > now
+
     const hasActivePaidPlan =
-      membership?.status === "active" &&
+      (membership?.status === "active" || isInGracePeriod) &&
       (membership?.plan === "faceless_pro" ||
         membership?.plan === "facelessprenuer" ||
         membership?.plan === "creator_pro" ||
         membership?.plan === "creator_vip")
 
-    const hasPurchasedFacelessprenuer =
-      membership &&
-      (membership.status === "active" || membership.status === "canceled") &&
-      membership?.plan === "facelessprenuer"
-
-    const hasFacelessPro =
-      membership &&
-      (membership.status === "active" || membership.status === "canceled") &&
-      membership?.plan === "faceless_pro"
-
+    // Only users who purchased Facelessprenuer have used the trial
     if (hasPurchasedFacelessprenuer) {
       hasUsedFreeTrial = true
     }
@@ -52,6 +59,7 @@ export async function GET(req: NextRequest) {
       hasActivePaidPlan,
       hasPurchasedFacelessprenuer,
       hasFacelessPro,
+      isInGracePeriod, // Added for debugging
     })
 
     if (hasActivePaidPlan) {
@@ -64,6 +72,7 @@ export async function GET(req: NextRequest) {
         hasActiveCreatorVIP: membership?.plan === "creator_vip",
         hasPurchasedFacelessprenuer,
         hasFacelessPro,
+        isInGracePeriod: false, // Added for debugging
       })
     }
 
@@ -76,10 +85,10 @@ export async function GET(req: NextRequest) {
         hasActiveCreatorVIP: false,
         hasPurchasedFacelessprenuer,
         hasFacelessPro,
+        isInGracePeriod: false, // Added for debugging
       })
     }
 
-    const now = new Date()
     let trialEndDate: Date | null = null
 
     if (membership.currentPeriodEnd) {
@@ -109,6 +118,7 @@ export async function GET(req: NextRequest) {
       hasActiveCreatorVIP: membership?.plan === "creator_vip",
       hasPurchasedFacelessprenuer,
       hasFacelessPro,
+      isInGracePeriod, // Added for debugging
     })
 
     return NextResponse.json({
@@ -119,6 +129,7 @@ export async function GET(req: NextRequest) {
       hasActiveCreatorVIP: membership?.plan === "creator_vip",
       hasPurchasedFacelessprenuer,
       hasFacelessPro,
+      isInGracePeriod, // Added for debugging
     })
   } catch (error) {
     console.error("[Trial Status] Error:", error)

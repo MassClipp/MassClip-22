@@ -228,15 +228,30 @@ export async function processSubscriptionUpdated(subscription: Stripe.Subscripti
   console.log(`[v0] 🔄 Updating subscription for user ${userId}`)
   console.log(`[v0] 💰 Price ID: ${priceId}`)
   console.log(`[v0] 📊 Status: ${subscription.status}`)
+  console.log(`[v0] 🔄 Cancel at period end: ${subscription.cancel_at_period_end}`)
 
   const planConfig = getPlanConfig(priceId)
-  const isActive = subscription.status === "active" || subscription.status === "trialing"
+
+  // If subscription is canceled but user still has access until period end, keep them active
+  const now = Date.now() / 1000
+  const hasAccessUntilPeriodEnd = subscription.current_period_end > now
+  const isCanceledButActive = subscription.cancel_at_period_end && hasAccessUntilPeriodEnd
+
+  // User is active if status is active/trialing OR if they're in grace period after cancellation
+  const isActive = subscription.status === "active" || subscription.status === "trialing" || isCanceledButActive
+
+  console.log(`[v0] 📅 Current period end: ${new Date(subscription.current_period_end * 1000).toISOString()}`)
+  console.log(`[v0] ✅ Has access until period end: ${hasAccessUntilPeriodEnd}`)
+  console.log(`[v0] 🔄 Is canceled but active: ${isCanceledButActive}`)
+  console.log(`[v0] 🎯 Final isActive: ${isActive}`)
 
   const membershipData = {
     uid: userId,
-    plan: planConfig.plan,
+    plan: planConfig.plan, // Keep the actual plan name during grace period
     status: subscription.status,
-    isActive,
+    isActive, // True during grace period
+    canceledAt: subscription.cancel_at_period_end ? new Date() : null,
+    cancelAtPeriodEnd: subscription.cancel_at_period_end,
     stripeCustomerId: customerId,
     stripeSubscriptionId: subscription.id,
     currentPeriodEnd: new Date(subscription.current_period_end * 1000),
@@ -245,7 +260,7 @@ export async function processSubscriptionUpdated(subscription: Stripe.Subscripti
     bundlesCreated: 0,
     features: {
       ...planConfig.features,
-      isActive, // Override with actual subscription status
+      isActive, // Keep features active during grace period
     },
   }
 

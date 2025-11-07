@@ -75,9 +75,23 @@ export async function GET(request: NextRequest) {
       maxBundles = starterLimits.bundlesLimit
     }
 
+    const now = new Date()
+    const currentPeriodEnd = membership.currentPeriodEnd
+      ? typeof membership.currentPeriodEnd === "object" && "toDate" in membership.currentPeriodEnd
+        ? (membership.currentPeriodEnd as any).toDate()
+        : membership.currentPeriodEnd instanceof Date
+          ? membership.currentPeriodEnd
+          : new Date(membership.currentPeriodEnd)
+      : null
+
+    const isInGracePeriod = membership.cancelAtPeriodEnd && currentPeriodEnd && currentPeriodEnd > now
+
+    // User is active if status is active/trialing OR if in grace period after cancellation
+    const isActive = membership.status === "active" || membership.status === "trialing" || isInGracePeriod
+
     return NextResponse.json({
       plan: membership.plan,
-      isActive: membership.status === "active" || membership.status === "trialing",
+      isActive, // Include grace period in isActive check
       status: membership.status,
       currentPeriodEnd: membership.currentPeriodEnd,
       cancelAtPeriodEnd: membership.cancelAtPeriodEnd,
