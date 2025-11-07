@@ -236,7 +236,7 @@ export default function UpgradePage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 pb-safe">
       {showSuccessMessage && (
         <div className="bg-gradient-to-r from-green-500/20 to-emerald-500/20 border border-green-400/30 rounded-lg p-4 mb-6">
           <div className="flex items-center gap-3">
@@ -333,28 +333,28 @@ export default function UpgradePage() {
           )}
 
           <div className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-400/30">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+              <div className="flex items-start md:items-center gap-3">
+                <div className="p-2 rounded-lg bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-400/30 flex-shrink-0">
                   <Crown className="h-6 w-6 text-cyan-300" />
                 </div>
-                <div>
+                <div className="flex-1 min-w-0">
                   <h2 className="text-2xl font-light text-white">Facelessprenuer</h2>
-                  <p className="text-zinc-400">
+                  <p className="text-sm md:text-base text-zinc-400 line-clamp-2">
                     Scale your content selling business and manage your growth effectively
                   </p>
                 </div>
               </div>
-              <div className="text-right">
+              <div className="text-left md:text-right flex-shrink-0">
                 {showFirstWeekPromo ? (
                   <>
-                    <p className="text-4xl font-light text-white">3 days</p>
+                    <p className="text-3xl md:text-4xl font-light text-white">3 days</p>
                     <span className="text-sm text-zinc-400">free trial</span>
-                    <p className="text-lg text-zinc-500 mt-1">then $39/month</p>
+                    <p className="text-base md:text-lg text-zinc-500 mt-1">then $39/month</p>
                   </>
                 ) : (
                   <>
-                    <p className="text-4xl font-light text-white">$39</p>
+                    <p className="text-3xl md:text-4xl font-light text-white">$39</p>
                     <span className="text-sm text-zinc-400">/month</span>
                   </>
                 )}
@@ -369,9 +369,9 @@ export default function UpgradePage() {
                 "Full Vex AI - bundle creation & transcript analysis",
                 "Only 10% platform fee on sales",
               ].map((feature, index) => (
-                <div key={index} className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-cyan-400" />
-                  <span className="text-white text-sm">{feature}</span>
+                <div key={index} className="flex items-start gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-cyan-400 flex-shrink-0 mt-0.5" />
+                  <span className="text-white text-sm leading-relaxed">{feature}</span>
                 </div>
               ))}
             </div>

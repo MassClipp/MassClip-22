@@ -5,6 +5,14 @@
 /* Import Inter font */
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap");
 
+/* Added safe area support for mobile browsers */
+:root {
+  --safe-area-inset-top: env(safe-area-inset-top, 0px);
+  --safe-area-inset-right: env(safe-area-inset-right, 0px);
+  --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-inset-left: env(safe-area-inset-left, 0px);
+}
+
 @layer base {
   :root {
     --background: 0 0% 7%;
@@ -1001,5 +1009,77 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* Added safe area utility classes for mobile */
+.pb-safe {
+  padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
+}
+
+.pt-safe {
+  padding-top: calc(1.5rem + env(safe-area-inset-top));
+}
+
+.px-safe {
+  padding-left: calc(1rem + env(safe-area-inset-left));
+  padding-right: calc(1rem + env(safe-area-inset-right));
+}
+
+.mb-safe {
+  margin-bottom: calc(1.5rem + env(safe-area-inset-bottom));
+}
+
+.mt-safe {
+  margin-top: calc(1.5rem + env(safe-area-inset-top));
+}
+
+/* Ensure fixed elements respect safe areas on mobile */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .fixed-bottom-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .fixed-top-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+}
+
+/* Mobile viewport optimizations */
+@media (max-width: 768px) {
+  /* Ensure content doesn't get hidden behind Safari UI */
+  body {
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
+  }
+
+  html {
+    height: -webkit-fill-available;
+  }
+
+  /* Account for Safari bottom toolbar */
+  .mobile-safe-bottom {
+    padding-bottom: max(1.5rem, env(safe-area-inset-bottom, 1.5rem));
+  }
+
+  /* Draggable elements should not interfere with touch scrolling */
+  .touch-none {
+    touch-action: none;
+  }
+}
+
+/* Improve touch targets for mobile */
+@media (max-width: 768px) {
+  button,
+  a,
+  [role="button"] {
+    min-height: 44px; /* iOS recommended touch target size */
+    min-width: 44px;
+  }
+
+  /* Smaller buttons can be an exception if they're not primary actions */
+  .btn-sm {
+    min-height: 36px;
+    min-width: 36px;
   }
 }

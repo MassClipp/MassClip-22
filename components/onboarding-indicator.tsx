@@ -2,9 +2,9 @@
 
 import { useOnboarding } from "@/hooks/use-onboarding"
 import { usePathname } from "next/navigation"
-import { CheckCircle2, Circle, ChevronRight, X, ChevronDown } from "lucide-react"
+import { CheckCircle2, Circle, ChevronRight, X, ChevronDown, GripVertical } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 
@@ -22,7 +22,76 @@ export function OnboardingIndicator() {
   const pathname = usePathname()
   const router = useRouter()
   const [isMinimized, setIsMinimized] = useState(false)
-  const [isDismissed, setIsDismissed] = useState(false) // Declare setIsDismissed
+  const [isDismissed, setIsDismissed] = useState(false)
+
+  const [position, setPosition] = useState({ x: 0, y: 0 })
+  const [isDragging, setIsDragging] = useState(false)
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
+  const dragRef = useRef<HTMLDivElement>(null)
+
+  const handleDragStart = (clientX: number, clientY: number) => {
+    setIsDragging(true)
+    setDragStart({
+      x: clientX - position.x,
+      y: clientY - position.y,
+    })
+  }
+
+  const handleDragMove = (clientX: number, clientY: number) => {
+    if (!isDragging) return
+
+    const newX = clientX - dragStart.x
+    const newY = clientY - dragStart.y
+
+    // Constrain within viewport
+    const maxX = window.innerWidth - 200
+    const maxY = window.innerHeight - 200
+
+    setPosition({
+      x: Math.max(-maxX / 2, Math.min(maxX / 2, newX)),
+      y: Math.max(-maxY / 2, Math.min(maxY / 2, newY)),
+    })
+  }
+
+  const handleDragEnd = () => {
+    setIsDragging(false)
+  }
+
+  // Mouse events
+  useEffect(() => {
+    if (!isDragging) return
+
+    const handleMouseMove = (e: MouseEvent) => handleDragMove(e.clientX, e.clientY)
+    const handleMouseUp = () => handleDragEnd()
+
+    window.addEventListener("mousemove", handleMouseMove)
+    window.addEventListener("mouseup", handleMouseUp)
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove)
+      window.removeEventListener("mouseup", handleMouseUp)
+    }
+  }, [isDragging, dragStart])
+
+  // Touch events
+  useEffect(() => {
+    if (!isDragging) return
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches[0]) {
+        handleDragMove(e.touches[0].clientX, e.touches[0].clientY)
+      }
+    }
+    const handleTouchEnd = () => handleDragEnd()
+
+    window.addEventListener("touchmove", handleTouchMove)
+    window.addEventListener("touchend", handleTouchEnd)
+
+    return () => {
+      window.removeEventListener("touchmove", handleTouchMove)
+      window.removeEventListener("touchend", handleTouchEnd)
+    }
+  }, [isDragging, dragStart])
 
   if (pathname === "/dashboard") {
     return null
@@ -35,16 +104,28 @@ export function OnboardingIndicator() {
   if (progress.isComplete) {
     if (isMinimized) {
       return (
-        <button
-          onClick={() => setIsMinimized(false)}
-          className="fixed bottom-6 right-6 z-50 bg-zinc-900 border border-zinc-800 rounded-lg shadow-lg hover:shadow-xl transition-all hover:scale-[1.02]"
+        <div
+          ref={dragRef}
+          style={{
+            transform: `translate(${position.x}px, ${position.y}px)`,
+            cursor: isDragging ? "grabbing" : "grab",
+          }}
+          className="fixed bottom-6 right-6 z-50 touch-none"
         >
-          <div className="px-4 py-3 flex items-center gap-2">
-            <div className="h-2 w-2 rounded-full bg-emerald-500" />
-            <span className="text-white font-medium text-sm">Setup Complete</span>
-            <ChevronDown className="h-4 w-4 text-zinc-400" />
-          </div>
-        </button>
+          <button
+            onClick={() => setIsMinimized(false)}
+            onMouseDown={(e) => handleDragStart(e.clientX, e.clientY)}
+            onTouchStart={(e) => e.touches[0] && handleDragStart(e.touches[0].clientX, e.touches[0].clientY)}
+            className="bg-zinc-900 border border-zinc-800 rounded-lg shadow-lg hover:shadow-xl transition-all hover:scale-[1.02] active:scale-95"
+          >
+            <div className="px-4 py-3 flex items-center gap-2">
+              <GripVertical className="h-4 w-4 text-zinc-500" />
+              <div className="h-2 w-2 rounded-full bg-emerald-500" />
+              <span className="text-white font-medium text-sm">Setup Complete</span>
+              <ChevronDown className="h-4 w-4 text-zinc-400" />
+            </div>
+          </button>
+        </div>
       )
     }
 
@@ -89,29 +170,55 @@ export function OnboardingIndicator() {
 
   if (isMinimized) {
     return (
-      <button
-        onClick={() => setIsMinimized(false)}
-        className="fixed bottom-6 right-6 z-50 bg-gradient-to-r from-blue-600 to-purple-600 p-[1px] rounded-full shadow-2xl hover:scale-105 transition-transform"
+      <div
+        ref={dragRef}
+        style={{
+          transform: `translate(${position.x}px, ${position.y}px)`,
+          cursor: isDragging ? "grabbing" : "grab",
+        }}
+        className="fixed bottom-6 right-6 z-50 touch-none"
       >
-        <div className="bg-zinc-900 rounded-full px-4 py-3 flex items-center gap-2">
-          <CheckCircle2 className="h-5 w-5 text-blue-400" />
-          <span className="text-white font-medium text-sm">
-            {completedCount}/{totalCount}
-          </span>
-          <ChevronDown className="h-4 w-4 text-zinc-400" />
-        </div>
-      </button>
+        <button
+          onClick={() => setIsMinimized(false)}
+          onMouseDown={(e) => handleDragStart(e.clientX, e.clientY)}
+          onTouchStart={(e) => e.touches[0] && handleDragStart(e.touches[0].clientX, e.touches[0].clientY)}
+          className="bg-gradient-to-r from-blue-600 to-purple-600 p-[1px] rounded-full shadow-2xl hover:scale-105 active:scale-95 transition-transform"
+        >
+          <div className="bg-zinc-900 rounded-full px-4 py-3 flex items-center gap-2">
+            <GripVertical className="h-4 w-4 text-zinc-500" />
+            <CheckCircle2 className="h-5 w-5 text-blue-400" />
+            <span className="text-white font-medium text-sm">
+              {completedCount}/{totalCount}
+            </span>
+            <ChevronDown className="h-4 w-4 text-zinc-400" />
+          </div>
+        </button>
+      </div>
     )
   }
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 w-96 max-w-[calc(100vw-3rem)]">
+    <div
+      ref={dragRef}
+      style={{
+        transform: `translate(${position.x}px, ${position.y}px)`,
+      }}
+      className="fixed bottom-6 right-6 z-50 w-96 max-w-[calc(100vw-3rem)] touch-none"
+    >
       <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-[1px] rounded-lg shadow-2xl">
         <div className="bg-zinc-900 rounded-lg">
           {/* Header */}
           <div className="p-4 border-b border-zinc-800">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
+                <button
+                  onMouseDown={(e) => handleDragStart(e.clientX, e.clientY)}
+                  onTouchStart={(e) => e.touches[0] && handleDragStart(e.touches[0].clientX, e.touches[0].clientY)}
+                  className="cursor-grab active:cursor-grabbing p-1 hover:bg-zinc-800 rounded transition-colors"
+                  title="Drag to move"
+                >
+                  <GripVertical className="h-4 w-4 text-zinc-500" />
+                </button>
                 <h3 className="font-semibold text-white">Getting Started</h3>
                 <Badge variant="secondary" className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-xs">
                   {Math.round(progressPercent)}%

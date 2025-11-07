@@ -96,7 +96,7 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "https://massclip.pro",
   },
-  viewport: "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no",
+  viewport: "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover",
   generator: "v0.dev",
   icons: {
     icon: "/favicon.png",
@@ -196,7 +196,7 @@ export default function RootLayout({
         {/* Static viewport meta tag as a fallback */}
         <meta
           name="viewport"
-          content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no"
+          content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
         />
 
         {/* Load zoom prevention script before anything else */}
