@@ -61,8 +61,8 @@ export async function GET(request: NextRequest) {
       maxVideosPerBundle = null
       maxBundles = null
     } else if (isFacelessPro) {
-      // Faceless Pro has specific limits: 15 videos, 5 bundles, 15% fee
-      maxVideosPerBundle = 15
+      // Updated Faceless Pro limits to match subscription.ts: 25 videos per bundle
+      maxVideosPerBundle = 25
       maxBundles = 5
     } else {
       // Starter plan - get actual limits (5 bundles, 15 videos per bundle)
@@ -139,7 +139,8 @@ export async function POST(request: Request) {
             maxVideosPerBundle = null
             maxBundles = null
           } else if (isFacelessPro) {
-            maxVideosPerBundle = 15
+            // Updated Faceless Pro limits to match subscription.ts: 25 videos per bundle
+            maxVideosPerBundle = 25
             maxBundles = 5
           } else {
             const starterLimits = await getFreeUserLimits(userId)
