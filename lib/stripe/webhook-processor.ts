@@ -24,12 +24,12 @@ const PLAN_CONFIGS = {
   faceless_pro: {
     plan: "faceless_pro" as const,
     features: {
-      maxBundles: 10,
-      maxVideosPerBundle: 25,
-      maxFolders: 5,
-      noWatermark: true,
-      platformFeePercentage: 15,
-      premiumContent: true,
+      maxBundles: 5,
+      maxVideosPerBundle: 15,
+      maxFolders: 3,
+      noWatermark: false,
+      platformFeePercentage: 20,
+      premiumContent: false,
       prioritySupport: false,
       unlimitedDownloads: false,
       isActive: true,

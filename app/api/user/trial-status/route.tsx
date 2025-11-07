@@ -29,15 +29,17 @@ export async function GET(req: NextRequest) {
         membership?.plan === "creator_pro" ||
         membership?.plan === "creator_vip")
 
-    const hasActiveOrCanceledPlan =
+    const hasPurchasedFacelessprenuer =
       membership &&
       (membership.status === "active" || membership.status === "canceled") &&
-      (membership?.plan === "faceless_pro" ||
-        membership?.plan === "facelessprenuer" ||
-        membership?.plan === "creator_pro" ||
-        membership?.plan === "creator_vip")
+      membership?.plan === "facelessprenuer"
 
-    if (hasActiveOrCanceledPlan) {
+    const hasFacelessPro =
+      membership &&
+      (membership.status === "active" || membership.status === "canceled") &&
+      membership?.plan === "faceless_pro"
+
+    if (hasPurchasedFacelessprenuer) {
       hasUsedFreeTrial = true
     }
 
@@ -48,6 +50,8 @@ export async function GET(req: NextRequest) {
       currentPeriodEnd: membership?.currentPeriodEnd,
       hasUsedFreeTrial,
       hasActivePaidPlan,
+      hasPurchasedFacelessprenuer,
+      hasFacelessPro,
     })
 
     if (hasActivePaidPlan) {
@@ -58,6 +62,7 @@ export async function GET(req: NextRequest) {
         trialEndDate: null,
         hasUsedFreeTrial: true,
         hasActiveCreatorVIP: true,
+        hasPurchasedFacelessprenuer,
       })
     }
 
@@ -68,6 +73,7 @@ export async function GET(req: NextRequest) {
         trialEndDate: null,
         hasUsedFreeTrial,
         hasActiveCreatorVIP: false,
+        hasPurchasedFacelessprenuer,
       })
     }
 
@@ -99,6 +105,8 @@ export async function GET(req: NextRequest) {
       isOnTrial: daysRemaining > 0,
       hasUsedFreeTrial,
       hasActiveCreatorVIP: hasActivePaidPlan,
+      hasPurchasedFacelessprenuer,
+      hasFacelessPro,
     })
 
     return NextResponse.json({
@@ -107,6 +115,8 @@ export async function GET(req: NextRequest) {
       trialEndDate: trialEndDate,
       hasUsedFreeTrial,
       hasActiveCreatorVIP: hasActivePaidPlan,
+      hasPurchasedFacelessprenuer,
+      hasFacelessPro,
     })
   } catch (error) {
     console.error("[Trial Status] Error:", error)
