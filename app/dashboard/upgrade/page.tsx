@@ -253,9 +253,9 @@ export default function UpgradePage() {
 
       <div className="text-center space-y-3">
         <h1 className="text-4xl font-light text-white">
-          Choose Your{" "}
+          Get Your Storefront Live With{" "}
           <span className="bg-gradient-to-br from-slate-300 via-cyan-200 to-white bg-clip-text text-transparent">
-            Plan
+            These Plans
           </span>
         </h1>
         <p className="text-lg text-white/70 max-w-2xl mx-auto">Select the plan that fits your content creation needs</p>

@@ -388,77 +388,90 @@ Current Plan: ${userPlan === "faceless_pro" ? "Faceless Pro ($29/month)" : userP
 ${
   userPlan === "faceless_pro"
     ? `
-**FACELESS PRO FEATURES ($29/month):**${trialStatus?.isOnTrial ? ` (FREE TRIAL - ${trialStatus.daysRemaining} days remaining)` : ""}
-• Folders: 3 folders with subfolders allowed
-• Bundles: 5 bundles maximum on storefront
-• Videos per bundle: 15 videos maximum per bundle
-• Vex AI: Basic Vex AI - file metadata & folder organization only
-• Transcript Analysis: NOT AVAILABLE (Facelessprenuer only - Full Vex AI feature)
-• Bundle Creation via Vex: NOT AVAILABLE (Facelessprenuer only - Full Vex AI feature)
-• Platform Fee: 20% on sales
+**FACELESS PRO PLAN ($29/month):**${trialStatus?.isOnTrial ? ` (FREE TRIAL - ${trialStatus.daysRemaining} days remaining)` : ""}
+• 3 folders with subfolders
+• 5 bundles max on storefront
+• 15 videos per bundle limit
+• Basic Vex AI - file metadata & folder organization only
+• 20% platform fee on sales
 
-⚠️ IMPORTANT RESTRICTIONS:
-- You CAN create subfolders for Faceless Pro users (they have 3 folders with subfolders)
-- You CAN help them organize files into folders and suggest metadata
-- You CANNOT analyze or reference transcript content for Faceless Pro users (Basic Vex AI only)
-- You CANNOT create bundles via Vex for Faceless Pro users (they must create manually in dashboard)
-- Faceless Pro users can manually create up to 5 bundles with up to 15 videos each in their dashboard
+❌ YOU CANNOT:
+• Analyze or read video transcripts (Facelessprenuer only)
+• Create bundles for the user (Facelessprenuer only)
+• Reference transcript content in any way (Facelessprenuer only)
 
-If user asks about transcript analysis or bundle creation via Vex, tell them to upgrade to Facelessprenuer ($39/month) for Full Vex AI with transcript analysis and bundle creation.${trialStatus?.isOnTrial ? `\n\n⏰ TRIAL REMINDER: User's trial ends in ${trialStatus.daysRemaining} days. ${trialStatus.daysRemaining <= 1 ? "Remind them to upgrade to keep these features!" : ""}` : ""}
-// </CHANGE>
+✅ YOU CAN:
+• Help organize files into folders
+• Suggest folder names and metadata
+• Explain how to manually create bundles in their dashboard
+
+🔒 IMPORTANT: When users ask about transcript analysis or bundle creation, be DIRECT and say:
+"I cannot analyze transcripts or create bundles on the Faceless Pro plan. These features require Facelessprenuer ($39/month) which includes Full Vex AI. I can only help you organize files and suggest metadata on your current plan."
+
+${trialStatus?.isOnTrial ? `⏰ Trial ends in ${trialStatus.daysRemaining} days.` : ""}
 `
     : userPlan === "facelessprenuer"
       ? `
-**FACELESSPRENUER FEATURES ($39/month):**${trialStatus?.isOnTrial ? ` (FREE TRIAL - ${trialStatus.daysRemaining} days remaining)` : ""}
-• Folders: UNLIMITED folders with subfolders
-• Bundles: UNLIMITED bundles on storefront
-• Videos per bundle: UNLIMITED videos
-• Vex AI: Full Vex AI - bundle creation + transcript analysis
-• Transcript Analysis: AVAILABLE - You can analyze and reference video transcripts
-• Bundle Creation via Vex: AVAILABLE - You can create bundles for users
-• Platform Fee: 10% on sales (LOWEST FEE)
-• Downloads: UNLIMITED
-• Priority Support: YES
+**FACELESSPRENUER PLAN ($39/month):**${trialStatus?.isOnTrial ? ` (FREE TRIAL - ${trialStatus.daysRemaining} days remaining)` : ""}
+• Unlimited folders with subfolders
+• Unlimited bundles on storefront
+• Unlimited videos per bundle
+• Full Vex AI - bundle creation & transcript analysis
+• 10% platform fee on sales
 
-✅ You have full access to all Vex AI features including transcript analysis and bundle creation.${trialStatus?.isOnTrial ? `\n\n⏰ TRIAL REMINDER: User's trial ends in ${trialStatus.daysRemaining} days. ${trialStatus.daysRemaining <= 1 ? "Remind them to upgrade to keep these features!" : ""}` : ""}
+✅ YOU HAVE FULL ACCESS TO:
+• Analyze and read video transcripts
+• Create bundles for users
+• Reference transcript content
+• All file organization features
+
+${trialStatus?.isOnTrial ? `⏰ Trial ends in ${trialStatus.daysRemaining} days.` : ""}
 `
       : userPlan === "starter"
         ? `
-**STARTER PLAN LIMITS ($3/month):**
-• Folders: ${subscriptionData.features.maxFolders} folders with subfolders allowed
-• Bundles: ${subscriptionData.features.maxBundles} bundles maximum on storefront
-• Videos per bundle: ${subscriptionData.features.maxVideosPerBundle} videos maximum
-• Vex AI: Basic Vex AI - file metadata & folder organization only
-• Transcript Analysis: NOT AVAILABLE (Facelessprenuer only - Full Vex AI feature)
-• Bundle Creation via Vex: NOT AVAILABLE (Facelessprenuer only - Full Vex AI feature)
-• Platform Fee: ${subscriptionData.features.platformFeePercentage}% on sales
+**STARTER PLAN ($3/month):**
+• ${subscriptionData.features.maxFolders} folders with subfolders
+• ${subscriptionData.features.maxBundles} bundles maximum
+• ${subscriptionData.features.maxVideosPerBundle} videos per bundle
+• Basic Vex AI - file metadata & folder organization only
+• ${subscriptionData.features.platformFeePercentage}% platform fee on sales
 
-⚠️ IMPORTANT RESTRICTIONS:
-- You CAN create subfolders for Starter users (they have ${subscriptionData.features.maxFolders} folders with subfolders)
-- You CANNOT analyze or reference transcript content for Starter users (Basic Vex AI only)
-- You CANNOT create bundles via Vex for Starter users (they must create manually)
-- Starter users can organize content into their ${subscriptionData.features.maxFolders} folders with subfolders
+❌ YOU CANNOT:
+• Analyze or read video transcripts (Facelessprenuer only)
+• Create bundles for the user (Facelessprenuer only)
 
-If user asks about transcript analysis or bundle creation, tell them to upgrade to Facelessprenuer ($39/month) for Full Vex AI.
-// </CHANGE>
+✅ YOU CAN:
+• Help organize files into folders
+• Suggest folder names and metadata
 `
         : userPlan === "creator_pro" || userPlan === "creator_vip"
           ? `
-**CREATOR VIP FEATURES ($15/month):**${trialStatus?.isOnTrial ? ` (FREE TRIAL - ${trialStatus.daysRemaining} days remaining)` : ""}
-• Folders: UNLIMITED folders with subfolders
-• Bundles: UNLIMITED bundles on storefront
-• Videos per bundle: UNLIMITED videos
-• Vex AI: Full Vex AI - bundle creation + transcript analysis
-• Transcript Analysis: AVAILABLE - You can analyze and reference video transcripts
-• Bundle Creation via Vex: AVAILABLE - You can create bundles for users
-• Platform Fee: ${subscriptionData.features.platformFeePercentage}% on sales (reduced from 20%)
+**CREATOR VIP PLAN ($15/month):**${trialStatus?.isOnTrial ? ` (FREE TRIAL - ${trialStatus.daysRemaining} days remaining)` : ""}
+• Unlimited folders with subfolders
+• Unlimited bundles on storefront
+• Unlimited videos per bundle
+• Full Vex AI - bundle creation & transcript analysis
+• ${subscriptionData.features.platformFeePercentage}% platform fee on sales
 
-✅ You have full access to all Vex AI features including transcript analysis and bundle creation.${trialStatus?.isOnTrial ? `\n\n⏰ TRIAL REMINDER: User's trial ends in ${trialStatus.daysRemaining} days. ${trialStatus.daysRemaining <= 1 ? "Remind them to upgrade to keep these features!" : ""}` : ""}
+✅ YOU HAVE FULL ACCESS TO:
+• Analyze and read video transcripts
+• Create bundles for users
+• All file organization features
+
+${trialStatus?.isOnTrial ? `⏰ Trial ends in ${trialStatus.daysRemaining} days.` : ""}
 `
           : `
 **FREE PLAN:**
-• Limited features
-• Upgrade to Faceless Pro ($29/month) for Basic Vex AI + manual bundle creation, or Facelessprenuer ($39/month) for Full Vex AI with transcript analysis and bundle creation
+• No paid features
+• Upgrade to Faceless Pro ($29/month) for Basic Vex AI + manual bundle creation
+• Or upgrade to Facelessprenuer ($39/month) for Full Vex AI with transcript analysis and bundle creation
+
+❌ YOU CANNOT:
+• Analyze transcripts
+• Create bundles
+• Access any Vex AI features
+
+Be DIRECT: Tell users they need to upgrade to use Vex AI features.
 `
 }
 

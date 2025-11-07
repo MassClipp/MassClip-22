@@ -10,10 +10,6 @@ interface PlanPermissions {
   plan: string
   priceId: string
   features: {
-    unlimitedDownloads: boolean
-    premiumContent: boolean
-    noWatermark: boolean
-    prioritySupport: boolean
     platformFeePercentage: number
     maxVideosPerBundle: number | null
     maxBundles: number | null
@@ -107,10 +103,6 @@ export default function DebugPlanPermissionsPage() {
             {facelessProPermissions ? (
               <div className="space-y-2">
                 <h3 className="font-semibold text-sm mb-4 text-muted-foreground">FEATURES</h3>
-                {renderFeature("Unlimited Downloads", facelessProPermissions.features.unlimitedDownloads)}
-                {renderFeature("Premium Content", facelessProPermissions.features.premiumContent)}
-                {renderFeature("No Watermark", facelessProPermissions.features.noWatermark)}
-                {renderFeature("Priority Support", facelessProPermissions.features.prioritySupport)}
                 {renderFeature("Platform Fee", `${facelessProPermissions.features.platformFeePercentage}%` as any)}
                 {renderFeature("Max Videos Per Bundle", facelessProPermissions.features.maxVideosPerBundle)}
                 {renderFeature("Max Bundles", facelessProPermissions.features.maxBundles)}
@@ -139,10 +131,6 @@ export default function DebugPlanPermissionsPage() {
             {facelessPrenuerPermissions ? (
               <div className="space-y-2">
                 <h3 className="font-semibold text-sm mb-4 text-muted-foreground">FEATURES</h3>
-                {renderFeature("Unlimited Downloads", facelessPrenuerPermissions.features.unlimitedDownloads)}
-                {renderFeature("Premium Content", facelessPrenuerPermissions.features.premiumContent)}
-                {renderFeature("No Watermark", facelessPrenuerPermissions.features.noWatermark)}
-                {renderFeature("Priority Support", facelessPrenuerPermissions.features.prioritySupport)}
                 {renderFeature("Platform Fee", `${facelessPrenuerPermissions.features.platformFeePercentage}%` as any)}
                 {renderFeature("Max Videos Per Bundle", facelessPrenuerPermissions.features.maxVideosPerBundle)}
                 {renderFeature("Max Bundles", facelessPrenuerPermissions.features.maxBundles)}

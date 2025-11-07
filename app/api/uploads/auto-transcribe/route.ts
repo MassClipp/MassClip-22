@@ -22,17 +22,18 @@ export async function POST(request: NextRequest) {
     const userId = decodedToken.uid
     console.log(`✅ [Auto-Transcribe] Authenticated user: ${userId}`)
 
-    const { checkSubscription } = await import("@/lib/subscription")
-    const subscription = await checkSubscription(userId)
+    // Vex will check permissions separately when trying to access them
+    // const { checkSubscription } = await import("@/lib/subscription")
+    // const subscription = await checkSubscription(userId)
 
-    if (!subscription.features.canAnalyzeTranscripts) {
-      console.log("⏭️ [Auto-Transcribe] User does not have transcript analysis permission (Free plan)")
-      return NextResponse.json({
-        success: true,
-        skipped: true,
-        reason: "Transcript analysis not available on Free plan",
-      })
-    }
+    // if (!subscription.features.canAnalyzeTranscripts) {
+    //   console.log("⏭️ [Auto-Transcribe] User does not have transcript analysis permission (Free plan)")
+    //   return NextResponse.json({
+    //     success: true,
+    //     skipped: true,
+    //     reason: "Transcript analysis not available on Free plan",
+    //   })
+    // }
 
     const { uploadId, videoUrl, mimeType } = await request.json()
     console.log(`📦 [Auto-Transcribe] Data:`, { uploadId, videoUrl, mimeType })

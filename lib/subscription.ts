@@ -6,15 +6,11 @@ export type SubscriptionStatus = "active" | "inactive" | "canceled" | "past_due"
 
 export interface SubscriptionData {
   isActive: boolean
-  plan: "starter" | "pro" | "creator_pro" | "faceless_pro" | "facelessprenuer" // Added faceless plans
+  plan: "starter" | "pro" | "creator_pro" | "faceless_pro" | "facelessprenuer"
   stripeCustomerId?: string
   stripeSubscriptionId?: string
   currentPeriodEnd?: Date
   features: {
-    unlimitedDownloads: boolean
-    premiumContent: boolean
-    noWatermark: boolean
-    prioritySupport: boolean
     platformFeePercentage: number
     maxVideosPerBundle: number | null
     maxBundles: number | null
@@ -26,45 +22,33 @@ export interface SubscriptionData {
 }
 
 const STARTER_DEFAULTS = {
-  unlimitedDownloads: false,
-  premiumContent: false,
-  noWatermark: false,
-  prioritySupport: false,
-  platformFeePercentage: 20, // 20% for Starter
-  maxVideosPerBundle: 15, // 15 videos per bundle for Starter
-  maxBundles: 5, // 5 bundles for Starter
-  maxFolders: 3, // 3 folders for Starter
-  canCreateSubfolders: true, // Starter can create subfolders
-  canAnalyzeTranscripts: false, // Basic Vex AI only - no transcript analysis
-  canCreateBundles: false,
-}
-
-const FACELESS_PRO_FEATURES = {
-  unlimitedDownloads: false,
-  premiumContent: false,
-  noWatermark: false,
-  prioritySupport: false,
   platformFeePercentage: 20,
   maxVideosPerBundle: 15,
   maxBundles: 5,
   maxFolders: 3,
   canCreateSubfolders: true,
-  canAnalyzeTranscripts: false, // Basic Vex AI only - file metadata & folder organization
-  canCreateBundles: false, // Cannot create bundles via Vex AI (manual creation only)
+  canAnalyzeTranscripts: false,
+  canCreateBundles: false,
+}
+
+const FACELESS_PRO_FEATURES = {
+  platformFeePercentage: 20,
+  maxVideosPerBundle: 15,
+  maxBundles: 5,
+  maxFolders: 3,
+  canCreateSubfolders: true,
+  canAnalyzeTranscripts: false,
+  canCreateBundles: false,
 }
 
 const FACELESSPRENUER_FEATURES = {
-  unlimitedDownloads: false,
-  premiumContent: false,
-  noWatermark: false,
-  prioritySupport: false,
   platformFeePercentage: 10,
   maxVideosPerBundle: null,
   maxBundles: null,
   maxFolders: null,
   canCreateSubfolders: true,
-  canAnalyzeTranscripts: true, // Full Vex AI - can analyze transcripts
-  canCreateBundles: true, // Can create bundles via Vex AI
+  canAnalyzeTranscripts: true,
+  canCreateBundles: true,
 }
 
 export async function checkSubscription(userId?: string): Promise<SubscriptionData> {
@@ -91,10 +75,6 @@ export async function checkSubscription(userId?: string): Promise<SubscriptionDa
       } else {
         // creator_pro or pro
         features = {
-          unlimitedDownloads: true,
-          premiumContent: true,
-          noWatermark: true,
-          prioritySupport: true,
           platformFeePercentage: 10,
           maxVideosPerBundle: null,
           maxBundles: null,
@@ -146,10 +126,6 @@ export async function checkSubscription(userId?: string): Promise<SubscriptionDa
         isActive: false,
         plan: "starter",
         features: {
-          unlimitedDownloads: false,
-          premiumContent: false,
-          noWatermark: false,
-          prioritySupport: false,
           platformFeePercentage,
           maxVideosPerBundle,
           maxBundles,
@@ -188,10 +164,6 @@ export function getSubscriptionFeatures(plan: string) {
     case "pro":
     case "creator_pro":
       return {
-        unlimitedDownloads: true,
-        premiumContent: true,
-        noWatermark: true,
-        prioritySupport: true,
         platformFeePercentage: 10,
         maxVideosPerBundle: null,
         maxBundles: null,
