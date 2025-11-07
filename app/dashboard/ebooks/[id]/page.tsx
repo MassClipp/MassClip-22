@@ -19,6 +19,7 @@ interface EBook {
   status: "draft" | "published"
   createdAt: string
   updatedAt: string
+  creatorId: string // New field to store creator ID
 }
 
 export default function ViewEBookPage({ params }: { params: { id: string } }) {
@@ -55,8 +56,9 @@ export default function ViewEBookPage({ params }: { params: { id: string } }) {
       }
 
       const data = await response.json()
-      console.log("[v0] eBook data received:", data.ebook) // Debug logging
-      console.log("[v0] Pages data:", data.ebook?.pages) // Debug logging
+      console.log("[v0] eBook data received:", data.ebook)
+      console.log("[v0] Pages data:", data.ebook?.pages)
+      console.log("[v0] Creator ID:", data.ebook?.creatorId, "User ID:", user.uid)
       setEbook(data.ebook)
     } catch (error) {
       console.error("Error fetching eBook:", error)
@@ -104,7 +106,7 @@ export default function ViewEBookPage({ params }: { params: { id: string } }) {
   const totalPages = allPages.length
   const currentImageUrl = allPages[currentPage]
 
-  console.log("[v0] Current page:", currentPage, "URL:", currentImageUrl) // Debug logging
+  console.log("[v0] Current page:", currentPage, "URL:", currentImageUrl)
 
   if (loading) {
     return (
@@ -127,6 +129,8 @@ export default function ViewEBookPage({ params }: { params: { id: string } }) {
       </div>
     )
   }
+
+  const isCreator = ebook && user && ebook.creatorId === user.uid
 
   return (
     <div className="min-h-screen bg-zinc-950">
@@ -155,10 +159,12 @@ export default function ViewEBookPage({ params }: { params: { id: string } }) {
             >
               {ebook.status}
             </Badge>
-            <Button onClick={() => router.push(`/dashboard/ebooks/${ebook.id}/edit`)} variant="outline" size="sm">
-              <Edit className="h-4 w-4 mr-2" />
-              Edit
-            </Button>
+            {isCreator && (
+              <Button onClick={() => router.push(`/dashboard/ebooks/${ebook.id}/edit`)} variant="outline" size="sm">
+                <Edit className="h-4 w-4 mr-2" />
+                Edit
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -193,11 +199,11 @@ export default function ViewEBookPage({ params }: { params: { id: string } }) {
                     alt={currentPage === 0 ? "Cover" : `Page ${currentPage}`}
                     className="w-full h-full object-contain"
                     onLoad={() => {
-                      console.log("[v0] Image loaded successfully:", currentImageUrl) // Debug logging
+                      console.log("[v0] Image loaded successfully:", currentImageUrl)
                       setImageLoading(false)
                     }}
                     onError={(e) => {
-                      console.error("[v0] Image failed to load:", currentImageUrl, e) // Debug logging
+                      console.error("[v0] Image failed to load:", currentImageUrl, e)
                       setImageLoading(false)
                       setImageError(true)
                     }}

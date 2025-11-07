@@ -110,13 +110,17 @@ export default function BundlesPage() {
   const { limits: freeTierLimits, loading: limitsLoading } = useFreeTierLimits()
   const { planData, isProUser, isFacelessPro } = useUserPlan()
 
-  const bundleLimit = isProUser ? Number.POSITIVE_INFINITY : isFacelessPro ? 5 : freeTierLimits?.bundlesLimit || 5
-  const videosPerBundleLimit = isProUser
-    ? Number.POSITIVE_INFINITY
-    : isFacelessPro
-      ? 15
+  const bundleLimit =
+    isProUser || planData?.plan === "facelessprenuer" || planData?.plan === "faceless_pro"
+      ? Number.POSITIVE_INFINITY
+      : freeTierLimits?.bundlesLimit || 5
+
+  const videosPerBundleLimit =
+    isProUser || planData?.plan === "facelessprenuer" || planData?.plan === "faceless_pro"
+      ? Number.POSITIVE_INFINITY
       : freeTierLimits?.maxVideosPerBundle || 15
-  const tierName = isFacelessPro ? "faceless_pro" : freeTierLimits?.tier || "starter"
+
+  const tierName = planData?.plan || freeTierLimits?.tier || "starter"
 
   useEffect(() => {
     console.log("[v0] ===== BUNDLE LIMITS DEBUG =====")
@@ -148,7 +152,11 @@ export default function BundlesPage() {
     productBoxes.length,
   ])
 
-  const isAtBundleLimit = !isProUser && !isFacelessPro && productBoxes.length >= bundleLimit
+  const isAtBundleLimit =
+    !isProUser &&
+    planData?.plan !== "facelessprenuer" &&
+    planData?.plan !== "faceless_pro" &&
+    productBoxes.length >= bundleLimit
 
   const [availableUploads, setAvailableUploads] = useState<ContentItem[]>([])
   const [showAddContentModal, setShowAddContentModal] = useState<string | null>(null)

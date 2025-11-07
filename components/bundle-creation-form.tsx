@@ -73,6 +73,8 @@ export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormPr
         const response = await fetch(`/api/user/check-bundle-limits?type=create`)
         const data = await response.json()
 
+        console.log("[v0] Bundle limit check:", data)
+
         setCanCreateBundle(data.canCreate)
         setBundleLimitInfo(data)
       } catch (error) {
