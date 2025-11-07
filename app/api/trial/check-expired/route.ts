@@ -72,6 +72,9 @@ export async function GET(request: NextRequest) {
           plan: "free",
           updatedAt: new Date(),
         })
+
+        const membershipRef = db.collection("memberships").doc(uid)
+        batch.delete(membershipRef)
       }
     })
 
@@ -171,6 +174,9 @@ export async function POST(request: NextRequest) {
           plan: "free",
           updatedAt: new Date(),
         })
+
+        const membershipRef = db.collection("memberships").doc(uid)
+        batch.delete(membershipRef)
       }
     })
 
