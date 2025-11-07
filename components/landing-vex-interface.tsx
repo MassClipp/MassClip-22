@@ -355,7 +355,7 @@ export function LandingVexInterface() {
             <div className="flex-1 flex flex-col items-center justify-center px-4 pb-32">
               <div className="max-w-4xl w-full space-y-8">
                 <div className="text-center space-y-4">
-                  <h1 className="text-5xl lg:text-7xl font-medium text-white tracking-tight">
+                  <h1 className="text-3xl md:text-5xl lg:text-7xl font-medium text-white tracking-tight">
                     Your Faceless Business Starts Here
                   </h1>
                   <p className="text-lg lg:text-xl text-white/60 font-light max-w-3xl mx-auto">
