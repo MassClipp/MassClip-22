@@ -359,7 +359,7 @@ export function LandingVexInterface() {
                     Your Faceless Business Starts Here
                   </h1>
                   <p className="text-lg lg:text-xl text-white/60 font-light max-w-3xl mx-auto">
-                    You already have a faceless theme page, now it's time to start that faceless business.
+                    Ready to commit to scaling your faceless brand?
                   </p>
                 </div>
 
