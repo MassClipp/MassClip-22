@@ -218,7 +218,11 @@ export default function UpgradePage() {
   }
 
   const isPayingOrOnTrial = subscriptionStatus?.hasActiveSubscription || subscriptionStatus?.isOnTrial
-  const showFirstWeekPromo = subscriptionStatus && !subscriptionStatus.hasUsedFreeTrial && !subscriptionStatus.isOnTrial
+  const showFirstWeekPromo =
+    subscriptionStatus &&
+    !subscriptionStatus.hasUsedFreeTrial &&
+    !subscriptionStatus.isOnTrial &&
+    subscriptionStatus.currentPlan !== "facelessprenuer"
 
   if (statusLoading) {
     return (

@@ -55,14 +55,15 @@ export async function GET(req: NextRequest) {
     })
 
     if (hasActivePaidPlan) {
-      console.log("[v0] Trial Status - User has active paid plan, returning hasUsedFreeTrial: true")
+      console.log("[v0] Trial Status - User has active paid plan")
       return NextResponse.json({
         isOnTrial: false,
         daysRemaining: 0,
         trialEndDate: null,
-        hasUsedFreeTrial: true,
-        hasActiveCreatorVIP: true,
+        hasUsedFreeTrial, // Will be true only if they purchased Facelessprenuer
+        hasActiveCreatorVIP: membership?.plan === "creator_vip",
         hasPurchasedFacelessprenuer,
+        hasFacelessPro,
       })
     }
 
@@ -74,6 +75,7 @@ export async function GET(req: NextRequest) {
         hasUsedFreeTrial,
         hasActiveCreatorVIP: false,
         hasPurchasedFacelessprenuer,
+        hasFacelessPro,
       })
     }
 
@@ -104,7 +106,7 @@ export async function GET(req: NextRequest) {
       daysRemaining,
       isOnTrial: daysRemaining > 0,
       hasUsedFreeTrial,
-      hasActiveCreatorVIP: hasActivePaidPlan,
+      hasActiveCreatorVIP: membership?.plan === "creator_vip",
       hasPurchasedFacelessprenuer,
       hasFacelessPro,
     })
@@ -114,7 +116,7 @@ export async function GET(req: NextRequest) {
       daysRemaining: Math.max(0, daysRemaining),
       trialEndDate: trialEndDate,
       hasUsedFreeTrial,
-      hasActiveCreatorVIP: hasActivePaidPlan,
+      hasActiveCreatorVIP: membership?.plan === "creator_vip",
       hasPurchasedFacelessprenuer,
       hasFacelessPro,
     })
