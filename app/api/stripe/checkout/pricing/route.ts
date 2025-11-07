@@ -92,6 +92,7 @@ export async function POST(request: NextRequest) {
       buyerEmail: email || "",
       buyerName: name || email?.split("@")[0] || "",
       plan: planName,
+      priceId: priceId, // CRITICAL: Include priceId in metadata for webhooks
       contentType: "membership",
       source: "dashboard_membership_upgrade",
     }

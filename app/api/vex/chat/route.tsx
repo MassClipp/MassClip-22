@@ -389,15 +389,23 @@ ${
   userPlan === "faceless_pro"
     ? `
 **FACELESS PRO FEATURES ($29/month):**${trialStatus?.isOnTrial ? ` (FREE TRIAL - ${trialStatus.daysRemaining} days remaining)` : ""}
-• Folders: UNLIMITED folders with subfolders
-• Bundles: UNLIMITED bundles on storefront
-• Videos per bundle: UNLIMITED videos
-• Vex AI: Full Vex AI - bundle creation + transcript analysis
-• Transcript Analysis: AVAILABLE - You can analyze and reference video transcripts
-• Bundle Creation via Vex: AVAILABLE - You can create bundles for users
-• Platform Fee: 15% on sales
+• Folders: 3 folders with subfolders allowed
+• Bundles: 5 bundles maximum on storefront
+• Videos per bundle: 15 videos maximum per bundle
+• Vex AI: Basic Vex AI - file metadata & folder organization only
+• Transcript Analysis: NOT AVAILABLE (Facelessprenuer only - Full Vex AI feature)
+• Bundle Creation via Vex: NOT AVAILABLE (Facelessprenuer only - Full Vex AI feature)
+• Platform Fee: 20% on sales
 
-✅ You have full access to all Vex AI features including transcript analysis and bundle creation.${trialStatus?.isOnTrial ? `\n\n⏰ TRIAL REMINDER: User's trial ends in ${trialStatus.daysRemaining} days. ${trialStatus.daysRemaining <= 1 ? "Remind them to upgrade to keep these features!" : ""}` : ""}
+⚠️ IMPORTANT RESTRICTIONS:
+- You CAN create subfolders for Faceless Pro users (they have 3 folders with subfolders)
+- You CAN help them organize files into folders and suggest metadata
+- You CANNOT analyze or reference transcript content for Faceless Pro users (Basic Vex AI only)
+- You CANNOT create bundles via Vex for Faceless Pro users (they must create manually in dashboard)
+- Faceless Pro users can manually create up to 5 bundles with up to 15 videos each in their dashboard
+
+If user asks about transcript analysis or bundle creation via Vex, tell them to upgrade to Facelessprenuer ($39/month) for Full Vex AI with transcript analysis and bundle creation.${trialStatus?.isOnTrial ? `\n\n⏰ TRIAL REMINDER: User's trial ends in ${trialStatus.daysRemaining} days. ${trialStatus.daysRemaining <= 1 ? "Remind them to upgrade to keep these features!" : ""}` : ""}
+// </CHANGE>
 `
     : userPlan === "facelessprenuer"
       ? `
@@ -421,8 +429,8 @@ ${
 • Bundles: ${subscriptionData.features.maxBundles} bundles maximum on storefront
 • Videos per bundle: ${subscriptionData.features.maxVideosPerBundle} videos maximum
 • Vex AI: Basic Vex AI - file metadata & folder organization only
-• Transcript Analysis: NOT AVAILABLE (Faceless Pro or Facelessprenuer only - Full Vex AI feature)
-• Bundle Creation via Vex: NOT AVAILABLE (Faceless Pro or Facelessprenuer only - Full Vex AI feature)
+• Transcript Analysis: NOT AVAILABLE (Facelessprenuer only - Full Vex AI feature)
+• Bundle Creation via Vex: NOT AVAILABLE (Facelessprenuer only - Full Vex AI feature)
 • Platform Fee: ${subscriptionData.features.platformFeePercentage}% on sales
 
 ⚠️ IMPORTANT RESTRICTIONS:
@@ -431,7 +439,8 @@ ${
 - You CANNOT create bundles via Vex for Starter users (they must create manually)
 - Starter users can organize content into their ${subscriptionData.features.maxFolders} folders with subfolders
 
-If user asks about transcript analysis or bundle creation, tell them to upgrade to Faceless Pro ($29/month) or Facelessprenuer ($39/month) for Full Vex AI.
+If user asks about transcript analysis or bundle creation, tell them to upgrade to Facelessprenuer ($39/month) for Full Vex AI.
+// </CHANGE>
 `
         : userPlan === "creator_pro" || userPlan === "creator_vip"
           ? `
@@ -449,7 +458,7 @@ If user asks about transcript analysis or bundle creation, tell them to upgrade 
           : `
 **FREE PLAN:**
 • Limited features
-• Upgrade to Faceless Pro ($29/month) or Facelessprenuer ($39/month) for more features
+• Upgrade to Faceless Pro ($29/month) for Basic Vex AI + manual bundle creation, or Facelessprenuer ($39/month) for Full Vex AI with transcript analysis and bundle creation
 `
 }
 
@@ -1146,7 +1155,7 @@ You: "What's the outcome you want with this bundle? Views? Conversions? Vibe che
       return NextResponse.json({ error: "No response from AI" }, { status: 500 })
     }
 
-    // CHANGE: Removed the complex performSemanticAnalysis function - it was second-guessing Vex and causing contradictions
+    // CHANGE: Removed the performSemanticAnalysis function - it was second-guessing Vex and causing contradictions
     // CHANGE: Simplified to: Vex decides → Extract JSON → Execute moves
 
     if (assistantMessage.includes("CREATE_BUNDLE:") && userId) {

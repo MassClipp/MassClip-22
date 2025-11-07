@@ -175,15 +175,17 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
 
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!)
   const subscription = await stripe.subscriptions.retrieve(subscriptionId)
-  const priceId = subscription.items.data[0]?.price.id
+
+  const priceId = session.metadata?.priceId || subscription.items.data[0]?.price.id
 
   if (!priceId) {
-    throw new Error(`Missing price ID in subscription ${subscriptionId}`)
+    throw new Error(`Missing price ID in session metadata and subscription ${subscriptionId}`)
   }
 
   console.log(`[v0] 📋 Processing checkout for user ${userId}`)
   console.log(`[v0] 💳 Subscription ID: ${subscriptionId}`)
   console.log(`[v0] 💰 Price ID: ${priceId}`)
+  console.log(`[v0] 📦 Price ID source: ${session.metadata?.priceId ? "session.metadata" : "subscription.items"}`)
 
   const planConfig = getPlanConfig(priceId)
   const isActive = subscription.status === "active" || subscription.status === "trialing"

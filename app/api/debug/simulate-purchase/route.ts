@@ -79,7 +79,7 @@ export async function POST(request: Request) {
       stripeCustomerId: `debug_customer_${Date.now()}`,
       stripeSubscriptionId: `debug_sub_${Date.now()}`,
       currentPeriodEnd,
-      priceId,
+      priceId, // Include priceId in the membership document
       downloadsUsed: 0,
       bundlesCreated: 0,
       features: {
