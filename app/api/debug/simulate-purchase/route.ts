@@ -64,7 +64,7 @@ export async function POST(request: Request) {
     const config = plan === "facelessprenuer" ? FACELESSPRENUER_CONFIG : FACELESS_PRO_CONFIG
 
     // Get the appropriate price ID from environment variables
-    const priceId = plan === "facelessprenuer" ? process.env.FACELESSPRENUER_FIRST : "price_1SQBMvDheyb0pkWFPGz7vke7"
+    const priceId = plan === "facelessprenuer" ? process.env.FACELESSPRENUER_FIRST : "price_1SQ8yADheyb0pkWFK5LCP3Nd"
 
     // Create a simulated subscription
     const currentPeriodEnd = new Date()

@@ -60,7 +60,7 @@ export async function POST(request: Request) {
     const facelessProPriceIds = [
       process.env.FACELESS_PRO_FIRST,
       process.env.FACELESS_PRO_REGULAR,
-      "price_1SQBMvDheyb0pkWFPGz7vke7",
+      "price_1SQ8yADheyb0pkWFK5LCP3Nd",
     ].filter(Boolean) as string[]
 
     const facelessprenuerPriceIds = [process.env.FACELESSPRENUER_FIRST, process.env.FACELESSPRENUER_REGULAR].filter(
