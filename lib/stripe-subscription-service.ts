@@ -71,7 +71,7 @@ export async function getStripeSubscriptionStatus(userId: string): Promise<Strip
       subscription.cancel_at_period_end || ["canceled", "incomplete_expired"].includes(subscription.status)
 
     const priceId = subscription.items.data[0]?.price.id
-    const facelessProPriceIds = [process.env.FACELESS_PRO_FIRST, "price_1S4ZlnDheyb0pkWFVxbaxaNV"].filter(Boolean)
+    const facelessProPriceIds = [process.env.FACELESS_PRO_FIRST, "price_1SQ8yADheyb0pkWFK5LCP3Nd"].filter(Boolean)
     const facelessprenuerPriceIds = [process.env.FACELESSPRENUER_FIRST, process.env.FACELESSPRENUER_REGULAR].filter(
       Boolean,
     )

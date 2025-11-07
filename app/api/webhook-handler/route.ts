@@ -48,7 +48,7 @@ const FACELESSPRENUER_CONFIG = {
 const FACELESS_PRO_PRICE_IDS = [
   process.env.FACELESS_PRO_FIRST,
   process.env.FACELESS_PRO_REGULAR,
-  "price_1S4ZlnDheyb0pkWFVxbaxaNV",
+  "price_1SQ8yADheyb0pkWFK5LCP3Nd",
 ].filter(Boolean)
 
 const FACELESS_PRO_CONFIG = {

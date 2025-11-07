@@ -91,7 +91,7 @@ const PRICE_ID_TO_PLAN: Record<string, keyof typeof PLAN_CONFIGS> = {
 
   [process.env.FACELESS_PRO_FIRST || ""]: "faceless_pro",
   [process.env.FACELESS_PRO_REGULAR || ""]: "faceless_pro",
-  ["price_1S4ZlnDheyb0pkWFVxbaxaNV"]: "faceless_pro",
+  ["price_1SQ8yADheyb0pkWFK5LCP3Nd"]: "faceless_pro",
 
   // Facelessprenuer
   [process.env.FACELESSPRENUER_FIRST || ""]: "facelessprenuer",
