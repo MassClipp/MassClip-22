@@ -32,8 +32,8 @@ const STARTER_DEFAULTS = {
 }
 
 const FACELESS_PRO_FEATURES = {
-  platformFeePercentage: 20,
-  maxVideosPerBundle: 15,
+  platformFeePercentage: 15,
+  maxVideosPerBundle: 25,
   maxBundles: 5,
   maxFolders: 3,
   canCreateSubfolders: true,
@@ -178,7 +178,7 @@ export function getSubscriptionFeatures(plan: string) {
 }
 
 export function getPlatformFeePercentage(plan: string): number {
-  if (plan === "faceless_pro") return 20
+  if (plan === "faceless_pro") return 15
   if (plan === "facelessprenuer") return 10
   return plan === "pro" || plan === "creator_pro" ? 10 : 20
 }
@@ -194,7 +194,7 @@ export function calculateCreatorEarnings(amount: number, plan: string): number {
 }
 
 export function getMaxVideosPerBundle(plan: string): number | null {
-  if (plan === "faceless_pro") return 15
+  if (plan === "faceless_pro") return 25
   if (plan === "facelessprenuer") return null
   return plan === "pro" || plan === "creator_pro" ? null : STARTER_DEFAULTS.maxVideosPerBundle
 }

@@ -68,9 +68,9 @@ const FACELESS_PRO_FEATURES: MembershipFeatures = {
   premiumContent: false,
   noWatermark: false,
   prioritySupport: false,
-  platformFeePercentage: 20,
-  maxVideosPerBundle: 15, // limited to 15
-  maxBundles: 5, // limited to 5
+  platformFeePercentage: 15,
+  maxVideosPerBundle: 25,
+  maxBundles: 5,
   maxFolders: 3,
 }
 

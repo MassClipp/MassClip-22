@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
 
     // Facelessprenuer and Creator Pro get 10% fee and unlimited
     const hasUnlimited = isFacelessprenuer || isCreatorPro
-    const platformFee = hasUnlimited ? 10 : 20
+    const platformFee = isFacelessPro ? 15 : hasUnlimited ? 10 : 20
 
     let maxVideosPerBundle: number | null = null
     let maxBundles: number | null = null
@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
       maxVideosPerBundle = null
       maxBundles = null
     } else if (isFacelessPro) {
-      // Faceless Pro has specific limits: 15 videos, 5 bundles, 20% fee
+      // Faceless Pro has specific limits: 15 videos, 5 bundles, 15% fee
       maxVideosPerBundle = 15
       maxBundles = 5
     } else {
@@ -130,7 +130,7 @@ export async function POST(request: Request) {
           const isFacelessPro = membership.plan === "faceless_pro"
 
           const hasUnlimited = isFacelessprenuer || isCreatorPro
-          const platformFee = hasUnlimited ? 10 : 20
+          const platformFee = isFacelessPro ? 15 : hasUnlimited ? 10 : 20
 
           let maxVideosPerBundle: number | null = null
           let maxBundles: number | null = null
