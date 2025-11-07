@@ -32,7 +32,6 @@ import { doc, updateDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import BundleCard from "@/components/bundle-card"
 import { useOnboarding } from "@/hooks/use-onboarding"
-import { OnboardingIndicator } from "@/components/onboarding-indicator"
 import { UnlockButton } from "@/components/unlock-button"
 
 interface ContentItem {
@@ -421,7 +420,6 @@ export default function ViewStorefrontPage() {
 
   return (
     <div className="min-h-screen bg-black fixed inset-0 overflow-y-auto">
-      <OnboardingIndicator />
       <div className="fixed inset-0 bg-gradient-to-br from-zinc-900/40 via-black to-zinc-800/30 pointer-events-none" />
       <div className="fixed inset-0 bg-gradient-to-t from-zinc-900/20 via-transparent to-zinc-800/10 pointer-events-none" />
 

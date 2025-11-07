@@ -121,9 +121,13 @@ export default function PremiumVideoCard({
           <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
             <button
               onClick={togglePlay}
-              className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center"
+              className="w-12 h-12 sm:w-10 sm:h-10 rounded-full bg-black/70 backdrop-blur-sm hover:bg-black/80 flex items-center justify-center transition-colors shadow-lg"
             >
-              {isPlaying ? <Pause className="h-4 w-4 text-white" /> : <Play className="h-4 w-4 text-white" />}
+              {isPlaying ? (
+                <Pause className="h-5 w-5 sm:h-4 sm:w-4 text-white" />
+              ) : (
+                <Play className="h-5 w-5 sm:h-4 sm:w-4 text-white ml-0.5" />
+              )}
             </button>
           </div>
         )}

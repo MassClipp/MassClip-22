@@ -445,7 +445,7 @@ export function LandingVexInterface() {
                     size="lg"
                     className="bg-white text-black hover:bg-white/90 font-medium rounded-full px-8 py-6 text-base shadow-xl hover:shadow-2xl transition-all"
                   >
-                    Join Now
+                    Commit
                   </Button>
                 </div>
 
