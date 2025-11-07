@@ -111,12 +111,10 @@ export default function BundlesPage() {
   const { planData, isProUser, isFacelessPro } = useUserPlan()
 
   const bundleLimit =
-    isProUser || planData?.plan === "facelessprenuer" || planData?.plan === "faceless_pro"
-      ? Number.POSITIVE_INFINITY
-      : freeTierLimits?.bundlesLimit || 5
+    isProUser || planData?.plan === "facelessprenuer" ? Number.POSITIVE_INFINITY : freeTierLimits?.bundlesLimit || 5
 
   const videosPerBundleLimit =
-    isProUser || planData?.plan === "facelessprenuer" || planData?.plan === "faceless_pro"
+    isProUser || planData?.plan === "facelessprenuer"
       ? Number.POSITIVE_INFINITY
       : freeTierLimits?.maxVideosPerBundle || 15
 
@@ -152,11 +150,7 @@ export default function BundlesPage() {
     productBoxes.length,
   ])
 
-  const isAtBundleLimit =
-    !isProUser &&
-    planData?.plan !== "facelessprenuer" &&
-    planData?.plan !== "faceless_pro" &&
-    productBoxes.length >= bundleLimit
+  const isAtBundleLimit = !isProUser && planData?.plan !== "facelessprenuer" && productBoxes.length >= bundleLimit
 
   const [availableUploads, setAvailableUploads] = useState<ContentItem[]>([])
   const [showAddContentModal, setShowAddContentModal] = useState<string | null>(null)
@@ -1142,7 +1136,7 @@ export default function BundlesPage() {
               <h1 className="text-2xl sm:text-3xl font-light text-white mb-2">
                 Bundles{" "}
                 <span className="text-zinc-500 text-lg font-normal">
-                  {productBoxes.length}/{isProUser ? "∞" : bundleLimit}
+                  {productBoxes.length}/{isProUser || planData?.plan === "facelessprenuer" ? "∞" : bundleLimit}
                 </span>
               </h1>
               <p className="text-zinc-400 text-sm">Create and manage premium content packages for your audience</p>
@@ -1153,7 +1147,7 @@ export default function BundlesPage() {
                 {/* Make the Create Bundle button clickable and redirect to upgrade when at limit */}
                 <Button
                   onClick={() => {
-                    if (!isProUser && !isFacelessPro && productBoxes.length >= bundleLimit) {
+                    if (isAtBundleLimit) {
                       router.push("/dashboard/upgrade")
                     } else {
                       setShowCreateModal(true)
@@ -1162,9 +1156,7 @@ export default function BundlesPage() {
                   className="bg-white text-black hover:bg-zinc-200"
                 >
                   <Plus className="h-4 w-4 mr-2" />
-                  {!isProUser && !isFacelessPro && productBoxes.length >= bundleLimit
-                    ? "Want more bundles?"
-                    : "Create Bundle"}
+                  {isAtBundleLimit ? "Want more bundles?" : "Create Bundle"}
                 </Button>
               </DialogTrigger>
               <DialogContent className="bg-zinc-900 border-zinc-800 text-white">
@@ -1347,7 +1339,7 @@ export default function BundlesPage() {
               {/* Update the empty state button to redirect to upgrade when at limit */}
               <Button
                 onClick={() => {
-                  if (!isProUser && !isFacelessPro && productBoxes.length >= bundleLimit) {
+                  if (isAtBundleLimit) {
                     router.push("/dashboard/upgrade")
                   } else {
                     setShowCreateModal(true)
@@ -1356,9 +1348,7 @@ export default function BundlesPage() {
                 className="bg-white text-black hover:bg-zinc-200"
               >
                 <Plus className="h-4 w-4 mr-2" />
-                {!isProUser && !isFacelessPro && productBoxes.length >= bundleLimit
-                  ? "Want more bundles?"
-                  : "Create Your First Bundle"}
+                {isAtBundleLimit ? "Want more bundles?" : "Create Your First Bundle"}
               </Button>
             </div>
           ) : (

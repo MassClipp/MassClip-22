@@ -22,7 +22,7 @@ interface BundleCreationFormProps {
 
 export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormProps) {
   const { user } = useAuth()
-  const { isProUser, loading: planLoading } = useUserPlan()
+  const { isProUser, loading: planLoading, planData } = useUserPlan()
   const { toast: customToast } = useToast()
   const [loading, setLoading] = useState(false)
   const [canCreateBundle, setCanCreateBundle] = useState(true)
@@ -109,7 +109,7 @@ export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormPr
       return
     }
 
-    if (!canCreateBundle) {
+    if (!canCreateBundle && !(isProUser || planData?.plan === "facelessprenuer")) {
       customToast({
         variant: "gradient",
         title: "Bundle Limit Reached",
@@ -403,7 +403,7 @@ export function BundleCreationForm({ onSuccess, onCancel }: BundleCreationFormPr
           </div>
         </form>
 
-        {!isProUser && canCreateBundle && (
+        {!isProUser && planData?.plan !== "facelessprenuer" && canCreateBundle && (
           <div className="mt-6 p-4 bg-gradient-to-r from-yellow-500/10 to-red-500/10 border border-yellow-500/20 rounded-lg">
             <div className="flex items-center gap-2 mb-2">
               <Crown className="w-5 h-5 text-yellow-500" />
