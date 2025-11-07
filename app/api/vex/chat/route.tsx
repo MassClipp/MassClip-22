@@ -5,7 +5,7 @@ import { FieldValue } from "firebase-admin/firestore"
 import Stripe from "stripe"
 import { ConnectedStripeAccountsService } from "@/lib/connected-stripe-accounts-service"
 import { getUserTierInfo, incrementUserBundles } from "@/lib/user-tier-service"
-import { canUserCreateBundles, checkSubscription } from "@/lib/subscription"
+import { checkSubscription } from "@/lib/subscription"
 
 // Initialize Firebase Admin
 initializeFirebaseAdmin()
@@ -1179,8 +1179,8 @@ You: "What's the outcome you want with this bundle? Views? Conversions? Vibe che
         const userPlan = tierInfo.tier || "starter"
         const subscriptionData = await checkSubscription(userId)
 
-        if (!canUserCreateBundles(userPlan) || !subscriptionData.features.canCreateBundles) {
-          const errorMessage = `❌ Bundle creation via Vex is a Faceless Pro ($29/month) or Facelessprenuer ($39/month) feature with Full Vex AI. You can upgrade to unlock this, or create bundles manually in your dashboard.`
+        if (!subscriptionData.features.canCreateBundles) {
+          const errorMessage = `❌ Bundle creation via Vex is only available with Full Vex AI on the Facelessprenuer plan ($39/month). You're currently on the ${userPlan === "faceless_pro" ? "Faceless Pro plan with Basic Vex AI (file organization only)" : userPlan === "starter" ? "Starter Plan ($3/month)" : "Free plan"}. Upgrade to Facelessprenuer to unlock Vex bundle creation and transcript analysis.`
           assistantMessage = assistantMessage.replace(/CREATE_BUNDLE:\s*{.*?}/s, errorMessage)
 
           return NextResponse.json({

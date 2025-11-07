@@ -38,10 +38,6 @@ export async function GET(request: NextRequest) {
         isActive: false,
         status: "inactive",
         features: {
-          unlimitedDownloads: false,
-          premiumContent: false,
-          noWatermark: false,
-          prioritySupport: false,
           platformFeePercentage: 20,
           maxVideosPerBundle: starterLimits.maxVideosPerBundle, // 15 for Starter
           maxBundles: starterLimits.bundlesLimit, // 5 for Starter
@@ -96,10 +92,6 @@ export async function GET(request: NextRequest) {
       currentPeriodEnd: membership.currentPeriodEnd,
       cancelAtPeriodEnd: membership.cancelAtPeriodEnd,
       features: {
-        unlimitedDownloads: hasUnlimited,
-        premiumContent: hasUnlimited,
-        noWatermark: hasUnlimited,
-        prioritySupport: hasUnlimited,
         platformFeePercentage: platformFee,
         maxVideosPerBundle,
         maxBundles,
@@ -162,10 +154,6 @@ export async function POST(request: Request) {
             currentPeriodEnd: membership.currentPeriodEnd,
             cancelAtPeriodEnd: true,
             features: {
-              unlimitedDownloads: hasUnlimited,
-              premiumContent: hasUnlimited,
-              noWatermark: hasUnlimited,
-              prioritySupport: hasUnlimited,
               platformFeePercentage: platformFee,
               maxVideosPerBundle,
               maxBundles,
@@ -180,10 +168,6 @@ export async function POST(request: Request) {
         isActive: false,
         status: "inactive",
         features: {
-          unlimitedDownloads: false,
-          premiumContent: false,
-          noWatermark: false,
-          prioritySupport: false,
           platformFeePercentage: 20,
           maxVideosPerBundle: 10,
           maxBundles: 2,
@@ -198,10 +182,6 @@ export async function POST(request: Request) {
       currentPeriodEnd: stripeStatus.currentPeriodEnd,
       cancelAtPeriodEnd: stripeStatus.cancelAtPeriodEnd,
       features: {
-        unlimitedDownloads: true,
-        premiumContent: true,
-        noWatermark: true,
-        prioritySupport: true,
         platformFeePercentage: 10,
         maxVideosPerBundle: null,
         maxBundles: null,
