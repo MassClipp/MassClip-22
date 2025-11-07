@@ -110,6 +110,57 @@ export async function POST(request: Request) {
     const stripeStatus = await getStripeSubscriptionStatus(userId)
 
     if (!stripeStatus.isActive) {
+      // Check if user has a canceled subscription with grace period access
+      const membership = await getMembership(userId)
+
+      if (membership && membership.currentPeriodEnd) {
+        const currentPeriodEndDate = new Date(membership.currentPeriodEnd)
+        const now = new Date()
+
+        // If still within grace period, return the actual plan with canceled status
+        if (currentPeriodEndDate > now) {
+          const isFacelessprenuer = membership.plan === "facelessprenuer"
+          const isCreatorPro = membership.plan === "creator_pro"
+          const isFacelessPro = membership.plan === "faceless_pro"
+
+          const hasUnlimited = isFacelessprenuer || isCreatorPro
+          const platformFee = hasUnlimited ? 10 : 20
+
+          let maxVideosPerBundle: number | null = null
+          let maxBundles: number | null = null
+
+          if (hasUnlimited) {
+            maxVideosPerBundle = null
+            maxBundles = null
+          } else if (isFacelessPro) {
+            maxVideosPerBundle = 15
+            maxBundles = 5
+          } else {
+            const starterLimits = await getFreeUserLimits(userId)
+            maxVideosPerBundle = starterLimits.maxVideosPerBundle
+            maxBundles = starterLimits.bundlesLimit
+          }
+
+          return NextResponse.json({
+            plan: membership.plan,
+            isActive: true, // Still active during grace period
+            status: "canceled",
+            currentPeriodEnd: membership.currentPeriodEnd,
+            cancelAtPeriodEnd: true,
+            features: {
+              unlimitedDownloads: hasUnlimited,
+              premiumContent: hasUnlimited,
+              noWatermark: hasUnlimited,
+              prioritySupport: hasUnlimited,
+              platformFeePercentage: platformFee,
+              maxVideosPerBundle,
+              maxBundles,
+            },
+          })
+        }
+      }
+
+      // No active subscription and no grace period
       return NextResponse.json({
         plan: "free",
         isActive: false,
