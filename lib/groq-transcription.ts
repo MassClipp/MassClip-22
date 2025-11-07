@@ -16,6 +16,16 @@ export async function transcribeVideo(videoUrl: string): Promise<TranscriptionRe
   console.log("🎤 [Transcription] Starting transcription for:", videoUrl)
 
   try {
+    const headResponse = await fetch(videoUrl, { method: "HEAD" })
+    const contentLength = headResponse.headers.get("content-length")
+    const MAX_SIZE = 25 * 1024 * 1024 // 25MB limit for Groq Whisper API
+
+    if (contentLength && Number.parseInt(contentLength) > MAX_SIZE) {
+      throw new Error(
+        `File too large for transcription (${(Number.parseInt(contentLength) / 1024 / 1024).toFixed(2)}MB). Maximum size is 25MB.`,
+      )
+    }
+
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 120000) // 2 minute timeout
 
@@ -31,7 +41,6 @@ export async function transcribeVideo(videoUrl: string): Promise<TranscriptionRe
     const buffer = Buffer.from(arrayBuffer)
     console.log(`✅ [Transcription] Downloaded ${(buffer.length / 1024 / 1024).toFixed(2)}MB`)
 
-    const MAX_SIZE = 25 * 1024 * 1024 // 25MB limit for Groq Whisper API
     if (buffer.length > MAX_SIZE) {
       throw new Error(
         `File too large for transcription (${(buffer.length / 1024 / 1024).toFixed(2)}MB). Maximum size is 25MB.`,

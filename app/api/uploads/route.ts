@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { initializeFirebaseAdmin, db } from "@/lib/firebase/firebaseAdmin"
-import { transcribeVideo } from "@/lib/groq-transcription"
 
 // Initialize Firebase Admin
 initializeFirebaseAdmin()
@@ -47,6 +46,45 @@ function generatePublicURL(filename: string, r2Key?: string): string {
 
   // Last resort fallback
   return `https://pub-f0fde4a9c6fb4bc7a1f5f9677ef9a304.r2.dev/${filename}`
+}
+
+async function triggerBackgroundTranscription(uploadId: string, fileUrl: string, contentType: string) {
+  try {
+    console.log(`🔄 [Background] Queueing transcription for ${uploadId}`)
+
+    // Trigger transcription endpoint without awaiting
+    fetch(
+      `${process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/api/uploads/auto-transcribe`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ uploadId, fileUrl, contentType }),
+      },
+    ).catch((error) => {
+      console.error(`❌ [Background] Failed to trigger transcription:`, error)
+    })
+  } catch (error) {
+    console.error(`❌ [Background] Error triggering transcription:`, error)
+  }
+}
+
+async function triggerBackgroundImageAnalysis(uploadId: string, fileUrl: string) {
+  try {
+    console.log(`🔄 [Background] Queueing image analysis for ${uploadId}`)
+
+    fetch(
+      `${process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/api/uploads/analyze-image`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ uploadId, imageUrl: fileUrl }),
+      },
+    ).catch((error) => {
+      console.error(`❌ [Background] Failed to trigger image analysis:`, error)
+    })
+  } catch (error) {
+    console.error(`❌ [Background] Error triggering image analysis:`, error)
+  }
 }
 
 // GET /api/uploads - Fetch user's uploads
@@ -222,6 +260,10 @@ export async function POST(request: NextRequest) {
       thumbnailUrl: thumbnailUrl || null,
       r2Key: r2Key || filename,
 
+      processingStatus: "pending",
+      transcriptionStatus: contentType === "video" || contentType === "audio" ? "pending" : null,
+      imageAnalysisStatus: contentType === "image" ? "pending" : null,
+
       // Legacy compatibility
       type: contentType,
       category: contentType,
@@ -240,29 +282,22 @@ export async function POST(request: NextRequest) {
       console.log(`✅ [Uploads API] Upload record created with ID: ${docRef.id}`)
 
       if (contentType === "video" || contentType === "audio") {
-        console.log(`🎤 [Uploads API] Triggering transcription for ${contentType}: ${docRef.id}`)
+        console.log(`🎤 [Uploads API] Queueing background transcription for: ${docRef.id}`)
+        triggerBackgroundTranscription(docRef.id, publicURL, contentType)
+      }
 
-        // Trigger transcription asynchronously (don't wait for it)
-        transcribeVideo(publicURL)
-          .then(async (result) => {
-            console.log(`✅ [Auto-Transcribe] Completed for ${docRef.id}`)
-            await docRef.update({
-              transcript: result.text,
-              transcriptDuration: result.duration,
-              transcriptLanguage: result.language,
-              transcribedAt: new Date(),
-            })
-            console.log(`💾 [Auto-Transcribe] Saved transcript to Firestore`)
-          })
-          .catch((error) => {
-            console.error(`❌ [Auto-Transcribe] Failed for ${docRef.id}:`, error)
-            // Don't fail the upload if transcription fails
-          })
+      if (contentType === "image") {
+        console.log(`🖼️ [Uploads API] Queueing background image analysis for: ${docRef.id}`)
+        triggerBackgroundImageAnalysis(docRef.id, publicURL)
       }
 
       return NextResponse.json({
         id: docRef.id,
         ...metadata,
+        message:
+          contentType === "video" || contentType === "audio" || contentType === "image"
+            ? "Upload successful! AI processing in background..."
+            : "Upload successful!",
       })
     } catch (firestoreError) {
       console.error("❌ [Uploads API] Firestore error:", firestoreError)

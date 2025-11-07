@@ -82,6 +82,10 @@ export default function UploadFormEnhanced() {
   const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false)
   const [thumbnailError, setThumbnailError] = useState<string | null>(null)
 
+  // Network quality and device detection state
+  const [networkQuality, setNetworkQuality] = useState<"slow" | "fast" | "unknown">("unknown")
+  const [isMobile, setIsMobile] = useState(false)
+
   // Fetch user profile data
   useEffect(() => {
     const fetchUserProfile = async () => {
@@ -109,6 +113,27 @@ export default function UploadFormEnhanced() {
 
     fetchUserProfile()
   }, [user])
+
+  // Detect mobile device and network quality
+  useEffect(() => {
+    const checkMobile = () => {
+      const mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+      setIsMobile(mobile)
+    }
+
+    const checkNetwork = () => {
+      if ("connection" in navigator) {
+        const conn = (navigator as any).connection
+        if (conn) {
+          const effectiveType = conn.effectiveType // '4g', '3g', '2g', 'slow-2g'
+          setNetworkQuality(effectiveType === "4g" || effectiveType === "3g" ? "fast" : "slow")
+        }
+      }
+    }
+
+    checkMobile()
+    checkNetwork()
+  }, [])
 
   // Auto-classify when title, description, or transcript changes
   useEffect(() => {
@@ -167,10 +192,30 @@ export default function UploadFormEnhanced() {
     const file = e.target.files?.[0]
     if (!file) return
 
-    // Check file size (500MB limit)
+    // Check file size (500MB limit, but warn on mobile)
     if (file.size > 500 * 1024 * 1024) {
       setUploadError("File size exceeds 500MB limit")
       return
+    }
+
+    // Warn mobile users about large files
+    if (isMobile && file.size > 100 * 1024 * 1024) {
+      const proceed = window.confirm(
+        `This file is ${(file.size / 1024 / 1024).toFixed(0)}MB. Large uploads on mobile may take a while or fail on slow connections. Continue?`,
+      )
+      if (!proceed) {
+        e.target.value = ""
+        return
+      }
+    }
+
+    // Warn on slow networks
+    if (networkQuality === "slow" && file.size > 50 * 1024 * 1024) {
+      toast({
+        title: "Slow connection detected",
+        description: "Upload may take longer than usual. Consider using WiFi for large files.",
+        variant: "default",
+      })
     }
 
     setSelectedFile(file)
@@ -399,6 +444,42 @@ export default function UploadFormEnhanced() {
   // Go to dashboard
   const goToDashboard = () => {
     router.push("/dashboard")
+  }
+
+  const uploadFileToR2 = async (file: File, uploadUrl: string): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest()
+
+      // Track upload progress
+      xhr.upload.addEventListener("progress", (event) => {
+        if (event.lengthComputable) {
+          const percentComplete = (event.loaded / event.total) * 100
+          setUploadProgress(Math.round(percentComplete))
+          console.log(`[v0] Upload progress: ${percentComplete.toFixed(1)}%`)
+        }
+      })
+
+      xhr.addEventListener("load", () => {
+        if (xhr.status === 200 || xhr.status === 204) {
+          setUploadProgress(100)
+          resolve()
+        } else {
+          reject(new Error(`Upload failed with status ${xhr.status}`))
+        }
+      })
+
+      xhr.addEventListener("error", () => {
+        reject(new Error("Network error during upload"))
+      })
+
+      xhr.addEventListener("abort", () => {
+        reject(new Error("Upload cancelled"))
+      })
+
+      xhr.open("PUT", uploadUrl)
+      xhr.setRequestHeader("Content-Type", file.type)
+      xhr.send(file)
+    })
   }
 
   return (

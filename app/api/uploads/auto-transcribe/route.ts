@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { initializeFirebaseAdmin, db } from "@/lib/firebase/firebaseAdmin"
-import { getAuth } from "firebase-admin/auth"
 import { transcribeVideo } from "@/lib/groq-transcription"
 
 initializeFirebaseAdmin()
@@ -9,63 +8,73 @@ export async function POST(request: NextRequest) {
   console.log("🤖 [Auto-Transcribe] Request received")
 
   try {
-    const authHeader = request.headers.get("authorization")
-    console.log(`🔑 [Auto-Transcribe] Auth header present: ${!!authHeader}`)
+    const { uploadId, videoUrl, mimeType, fileUrl, contentType } = await request.json()
 
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      console.log("❌ [Auto-Transcribe] No auth token or invalid format")
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    // Support both parameter formats
+    const finalUploadId = uploadId
+    const finalVideoUrl = videoUrl || fileUrl
+    const finalMimeType = mimeType || contentType
 
-    const token = authHeader.split("Bearer ")[1]
-    const decodedToken = await getAuth().verifyIdToken(token)
-    const userId = decodedToken.uid
-    console.log(`✅ [Auto-Transcribe] Authenticated user: ${userId}`)
+    console.log(`📦 [Auto-Transcribe] Data:`, {
+      uploadId: finalUploadId,
+      videoUrl: finalVideoUrl,
+      mimeType: finalMimeType,
+    })
 
-    // Vex will check permissions separately when trying to access them
-    // const { checkSubscription } = await import("@/lib/subscription")
-    // const subscription = await checkSubscription(userId)
-
-    // if (!subscription.features.canAnalyzeTranscripts) {
-    //   console.log("⏭️ [Auto-Transcribe] User does not have transcript analysis permission (Free plan)")
-    //   return NextResponse.json({
-    //     success: true,
-    //     skipped: true,
-    //     reason: "Transcript analysis not available on Free plan",
-    //   })
-    // }
-
-    const { uploadId, videoUrl, mimeType } = await request.json()
-    console.log(`📦 [Auto-Transcribe] Data:`, { uploadId, videoUrl, mimeType })
-
-    if (!uploadId || !videoUrl) {
+    if (!finalUploadId || !finalVideoUrl) {
       return NextResponse.json({ error: "Upload ID and video URL required" }, { status: 400 })
     }
 
-    if (!mimeType?.startsWith("video/") && !mimeType?.startsWith("audio/")) {
+    if (!finalMimeType?.startsWith("video/") && !finalMimeType?.startsWith("audio/")) {
       console.log("⏭️ [Auto-Transcribe] Skipping non-video/audio file")
       return NextResponse.json({ success: true, skipped: true })
     }
 
-    console.log(`🎤 [Auto-Transcribe] Starting transcription for ${uploadId}`)
+    console.log(`🎤 [Auto-Transcribe] Starting transcription for ${finalUploadId}`)
 
-    const result = await transcribeVideo(videoUrl)
-
-    await db.collection("uploads").doc(uploadId).update({
-      transcript: result.text,
-      transcriptDuration: result.duration,
-      transcriptLanguage: result.language,
-      transcribedAt: new Date(),
+    await db.collection("uploads").doc(finalUploadId).update({
+      transcriptionStatus: "processing",
+      transcriptionStartedAt: new Date(),
     })
 
-    console.log(`✅ [Auto-Transcribe] Saved transcript (${result.text.length} chars)`)
+    try {
+      const result = await transcribeVideo(finalVideoUrl)
 
-    return NextResponse.json({
-      success: true,
-      transcript: result.text,
-      duration: result.duration,
-      language: result.language,
-    })
+      await db.collection("uploads").doc(finalUploadId).update({
+        transcript: result.text,
+        transcriptDuration: result.duration,
+        transcriptLanguage: result.language,
+        transcriptionStatus: "completed",
+        transcribedAt: new Date(),
+      })
+
+      console.log(`✅ [Auto-Transcribe] Saved transcript (${result.text.length} chars)`)
+
+      return NextResponse.json({
+        success: true,
+        transcript: result.text,
+        duration: result.duration,
+        language: result.language,
+      })
+    } catch (transcribeError) {
+      console.error(`❌ [Auto-Transcribe] Failed for ${finalUploadId}:`, transcribeError)
+
+      await db
+        .collection("uploads")
+        .doc(finalUploadId)
+        .update({
+          transcriptionStatus: "failed",
+          transcriptionError: transcribeError instanceof Error ? transcribeError.message : "Unknown error",
+        })
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: transcribeError instanceof Error ? transcribeError.message : "Transcription failed",
+        },
+        { status: 500 },
+      )
+    }
   } catch (error) {
     console.error("❌ [Auto-Transcribe] Error:", error)
     return NextResponse.json(
@@ -73,7 +82,7 @@ export async function POST(request: NextRequest) {
         success: false,
         error: error instanceof Error ? error.message : "Transcription failed",
       },
-      { status: 200 },
+      { status: 500 },
     )
   }
 }
