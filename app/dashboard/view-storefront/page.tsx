@@ -26,7 +26,6 @@ import {
   Pause,
   ExternalLink,
   Lock,
-  Zap,
 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
@@ -1317,7 +1316,6 @@ export default function ViewStorefrontPage() {
                   size="sm"
                   className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white border-0 font-medium"
                 >
-                  <Zap className="w-4 h-4 mr-2" />
                   Go Live Now
                 </Button>
               )}

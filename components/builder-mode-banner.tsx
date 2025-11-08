@@ -1,6 +1,6 @@
 "use client"
 
-import { X, Lock, Zap } from "lucide-react"
+import { X, Lock } from "lucide-react"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
@@ -34,7 +34,7 @@ export function BuilderModeBanner({ onUpgrade }: BuilderModeBannerProps) {
           <div>
             <h3 className="font-semibold text-white mb-1">Builder Mode Active</h3>
             <p className="text-sm text-zinc-300 leading-relaxed">
-              Your storefront is in preview mode. Build your content library and customize everything—when you're ready
+              Your storefront is in preview mode. Build your content library and customize everything, when you're ready
               to start earning, upgrade to go live and accept payments.
             </p>
           </div>
@@ -44,7 +44,6 @@ export function BuilderModeBanner({ onUpgrade }: BuilderModeBannerProps) {
             size="sm"
             className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white border-0"
           >
-            <Zap className="h-4 w-4 mr-2" />
             Upgrade to Go Live
           </Button>
         </div>

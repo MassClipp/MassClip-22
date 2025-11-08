@@ -16,9 +16,6 @@ import {
   Pause,
   Lock,
   ChevronDown,
-  Instagram,
-  Twitter,
-  Globe,
   BookOpen,
 } from "lucide-react"
 import { useAuthState } from "react-firebase-hooks/auth"
@@ -41,6 +38,18 @@ interface CreatorData {
     instagram?: string
     twitter?: string
     website?: string
+    youtube?: string
+    tiktok?: string
+    discord?: string
+    twitch?: string
+    shopify?: string
+    skool?: string
+    facebook?: string
+    linkedin?: string
+    github?: string
+    spotify?: string
+    appleMusic?: string
+    email?: string
   }
 }
 
@@ -292,35 +301,155 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
 
               {/* Social Links */}
               {creator.socialLinks && Object.keys(creator.socialLinks).length > 0 && (
-                <div className="flex gap-2 justify-center">
+                <div className="flex gap-2 justify-center flex-wrap">
                   {creator.socialLinks.instagram && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
                       onClick={() => window.open(`https://instagram.com/${creator.socialLinks!.instagram}`, "_blank")}
                     >
-                      <Instagram className="w-4 h-4" />
+                      Instagram
                     </Button>
                   )}
                   {creator.socialLinks.twitter && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
                       onClick={() => window.open(`https://twitter.com/${creator.socialLinks!.twitter}`, "_blank")}
                     >
-                      <Twitter className="w-4 h-4" />
+                      Twitter
+                    </Button>
+                  )}
+                  {creator.socialLinks.tiktok && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      onClick={() => window.open(`https://tiktok.com/@${creator.socialLinks!.tiktok}`, "_blank")}
+                    >
+                      TikTok
+                    </Button>
+                  )}
+                  {creator.socialLinks.youtube && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      onClick={() => window.open(creator.socialLinks!.youtube, "_blank")}
+                    >
+                      YouTube
+                    </Button>
+                  )}
+                  {creator.socialLinks.twitch && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      onClick={() => window.open(`https://twitch.tv/${creator.socialLinks!.twitch}`, "_blank")}
+                    >
+                      Twitch
+                    </Button>
+                  )}
+                  {creator.socialLinks.discord && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      onClick={() => window.open(creator.socialLinks!.discord, "_blank")}
+                    >
+                      Discord
+                    </Button>
+                  )}
+                  {creator.socialLinks.skool && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      onClick={() => window.open(creator.socialLinks!.skool, "_blank")}
+                    >
+                      Skool
+                    </Button>
+                  )}
+                  {creator.socialLinks.shopify && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      onClick={() => window.open(creator.socialLinks!.shopify, "_blank")}
+                    >
+                      Shopify
+                    </Button>
+                  )}
+                  {creator.socialLinks.facebook && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      onClick={() => window.open(creator.socialLinks!.facebook, "_blank")}
+                    >
+                      Facebook
+                    </Button>
+                  )}
+                  {creator.socialLinks.linkedin && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      onClick={() => window.open(creator.socialLinks!.linkedin, "_blank")}
+                    >
+                      LinkedIn
+                    </Button>
+                  )}
+                  {creator.socialLinks.github && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      onClick={() => window.open(`https://github.com/${creator.socialLinks!.github}`, "_blank")}
+                    >
+                      GitHub
+                    </Button>
+                  )}
+                  {creator.socialLinks.spotify && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      onClick={() => window.open(creator.socialLinks!.spotify, "_blank")}
+                    >
+                      Spotify
+                    </Button>
+                  )}
+                  {creator.socialLinks.appleMusic && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      onClick={() => window.open(creator.socialLinks!.appleMusic, "_blank")}
+                    >
+                      Apple Music
+                    </Button>
+                  )}
+                  {creator.socialLinks.email && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      onClick={() => window.open(`mailto:${creator.socialLinks!.email}`, "_blank")}
+                    >
+                      Email
                     </Button>
                   )}
                   {creator.socialLinks.website && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
                       onClick={() => window.open(creator.socialLinks!.website, "_blank")}
                     >
-                      <Globe className="w-4 h-4" />
+                      Website
                     </Button>
                   )}
                 </div>
@@ -369,30 +498,150 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
                         onClick={() => window.open(`https://instagram.com/${creator.socialLinks!.instagram}`, "_blank")}
                       >
-                        <Instagram className="w-4 h-4" />
+                        Instagram
                       </Button>
                     )}
                     {creator.socialLinks.twitter && (
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
                         onClick={() => window.open(`https://twitter.com/${creator.socialLinks!.twitter}`, "_blank")}
                       >
-                        <Twitter className="w-4 h-4" />
+                        Twitter
+                      </Button>
+                    )}
+                    {creator.socialLinks.tiktok && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                        onClick={() => window.open(`https://tiktok.com/@${creator.socialLinks!.tiktok}`, "_blank")}
+                      >
+                        TikTok
+                      </Button>
+                    )}
+                    {creator.socialLinks.youtube && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                        onClick={() => window.open(creator.socialLinks!.youtube, "_blank")}
+                      >
+                        YouTube
+                      </Button>
+                    )}
+                    {creator.socialLinks.twitch && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                        onClick={() => window.open(`https://twitch.tv/${creator.socialLinks!.twitch}`, "_blank")}
+                      >
+                        Twitch
+                      </Button>
+                    )}
+                    {creator.socialLinks.discord && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                        onClick={() => window.open(creator.socialLinks!.discord, "_blank")}
+                      >
+                        Discord
+                      </Button>
+                    )}
+                    {creator.socialLinks.skool && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                        onClick={() => window.open(creator.socialLinks!.skool, "_blank")}
+                      >
+                        Skool
+                      </Button>
+                    )}
+                    {creator.socialLinks.shopify && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                        onClick={() => window.open(creator.socialLinks!.shopify, "_blank")}
+                      >
+                        Shopify
+                      </Button>
+                    )}
+                    {creator.socialLinks.facebook && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                        onClick={() => window.open(creator.socialLinks!.facebook, "_blank")}
+                      >
+                        Facebook
+                      </Button>
+                    )}
+                    {creator.socialLinks.linkedin && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                        onClick={() => window.open(creator.socialLinks!.linkedin, "_blank")}
+                      >
+                        LinkedIn
+                      </Button>
+                    )}
+                    {creator.socialLinks.github && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                        onClick={() => window.open(`https://github.com/${creator.socialLinks!.github}`, "_blank")}
+                      >
+                        GitHub
+                      </Button>
+                    )}
+                    {creator.socialLinks.spotify && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                        onClick={() => window.open(creator.socialLinks!.spotify, "_blank")}
+                      >
+                        Spotify
+                      </Button>
+                    )}
+                    {creator.socialLinks.appleMusic && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                        onClick={() => window.open(creator.socialLinks!.appleMusic, "_blank")}
+                      >
+                        Apple Music
+                      </Button>
+                    )}
+                    {creator.socialLinks.email && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                        onClick={() => window.open(`mailto:${creator.socialLinks!.email}`, "_blank")}
+                      >
+                        Email
                       </Button>
                     )}
                     {creator.socialLinks.website && (
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 rounded-full p-0"
+                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
                         onClick={() => window.open(creator.socialLinks!.website, "_blank")}
                       >
-                        <Globe className="w-4 h-4" />
+                        Website
                       </Button>
                     )}
                   </div>
@@ -401,6 +650,161 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
             </div>
 
             <div className="flex items-center gap-3">
+              {creator.socialLinks && Object.keys(creator.socialLinks).length > 0 && (
+                <div className="flex gap-2 flex-wrap">
+                  {creator.socialLinks.instagram && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      onClick={() => window.open(`https://instagram.com/${creator.socialLinks!.instagram}`, "_blank")}
+                    >
+                      Instagram
+                    </Button>
+                  )}
+                  {creator.socialLinks.twitter && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      onClick={() => window.open(`https://twitter.com/${creator.socialLinks!.twitter}`, "_blank")}
+                    >
+                      Twitter
+                    </Button>
+                  )}
+                  {creator.socialLinks.tiktok && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      onClick={() => window.open(`https://tiktok.com/@${creator.socialLinks!.tiktok}`, "_blank")}
+                    >
+                      TikTok
+                    </Button>
+                  )}
+                  {creator.socialLinks.youtube && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      onClick={() => window.open(creator.socialLinks!.youtube, "_blank")}
+                    >
+                      YouTube
+                    </Button>
+                  )}
+                  {creator.socialLinks.twitch && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      onClick={() => window.open(`https://twitch.tv/${creator.socialLinks!.twitch}`, "_blank")}
+                    >
+                      Twitch
+                    </Button>
+                  )}
+                  {creator.socialLinks.discord && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      onClick={() => window.open(creator.socialLinks!.discord, "_blank")}
+                    >
+                      Discord
+                    </Button>
+                  )}
+                  {creator.socialLinks.skool && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      onClick={() => window.open(creator.socialLinks!.skool, "_blank")}
+                    >
+                      Skool
+                    </Button>
+                  )}
+                  {creator.socialLinks.shopify && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      onClick={() => window.open(creator.socialLinks!.shopify, "_blank")}
+                    >
+                      Shopify
+                    </Button>
+                  )}
+                  {creator.socialLinks.facebook && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      onClick={() => window.open(creator.socialLinks!.facebook, "_blank")}
+                    >
+                      Facebook
+                    </Button>
+                  )}
+                  {creator.socialLinks.linkedin && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      onClick={() => window.open(creator.socialLinks!.linkedin, "_blank")}
+                    >
+                      LinkedIn
+                    </Button>
+                  )}
+                  {creator.socialLinks.github && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      onClick={() => window.open(`https://github.com/${creator.socialLinks!.github}`, "_blank")}
+                    >
+                      GitHub
+                    </Button>
+                  )}
+                  {creator.socialLinks.spotify && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      onClick={() => window.open(creator.socialLinks!.spotify, "_blank")}
+                    >
+                      Spotify
+                    </Button>
+                  )}
+                  {creator.socialLinks.appleMusic && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      onClick={() => window.open(creator.socialLinks!.appleMusic, "_blank")}
+                    >
+                      Apple Music
+                    </Button>
+                  )}
+                  {creator.socialLinks.email && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      onClick={() => window.open(`mailto:${creator.socialLinks!.email}`, "_blank")}
+                    >
+                      Email
+                    </Button>
+                  )}
+                  {creator.socialLinks.website && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      onClick={() => window.open(creator.socialLinks!.website, "_blank")}
+                    >
+                      Website
+                    </Button>
+                  )}
+                </div>
+              )}
+
               <Button
                 variant="ghost"
                 size="sm"
