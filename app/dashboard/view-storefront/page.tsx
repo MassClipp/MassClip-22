@@ -25,6 +25,8 @@ import {
   Download,
   Pause,
   ExternalLink,
+  Lock,
+  Zap,
 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
@@ -33,6 +35,7 @@ import { db } from "@/lib/firebase"
 import BundleCard from "@/components/bundle-card"
 import { useOnboarding } from "@/hooks/use-onboarding"
 import { UnlockButton } from "@/components/unlock-button"
+import { BuilderModeBanner } from "@/components/builder-mode-banner"
 
 interface ContentItem {
   id: string
@@ -112,6 +115,29 @@ export default function ViewStorefrontPage() {
   const [storefrontActive, setStorefrontActive] = useState(false)
   const [updating, setUpdating] = useState(false)
   const [trialEligible, setTrialEligible] = useState(false)
+
+  const getMemberSince = () => {
+    if (createdAt) {
+      let date: Date
+      if (typeof createdAt === "string") {
+        if (createdAt.includes("T") || createdAt.includes("-")) {
+          date = new Date(createdAt)
+        } else {
+          const timestamp = Number.parseInt(createdAt)
+          date = new Date(timestamp)
+        }
+      } else {
+        date = new Date(createdAt)
+      }
+
+      if (!isNaN(date.getTime())) {
+        return date.toLocaleDateString("en-US", { month: "long", year: "numeric" })
+      }
+    }
+    return "Recently"
+  }
+
+  const joinedDate = getMemberSince() // Calculate this once
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -370,27 +396,6 @@ export default function ViewStorefrontPage() {
     }
   }
 
-  const getMemberSince = () => {
-    if (createdAt) {
-      let date: Date
-      if (typeof createdAt === "string") {
-        if (createdAt.includes("T") || createdAt.includes("-")) {
-          date = new Date(createdAt)
-        } else {
-          const timestamp = Number.parseInt(createdAt)
-          date = new Date(timestamp)
-        }
-      } else {
-        date = new Date(createdAt)
-      }
-
-      if (!isNaN(date.getTime())) {
-        return date.toLocaleDateString("en-US", { month: "long", year: "numeric" })
-      }
-    }
-    return "Recently"
-  }
-
   if (authLoading || loading || planLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-black">
@@ -419,456 +424,55 @@ export default function ViewStorefrontPage() {
   const currentContent = activeTab === "free" ? freeContent : activeTab === "premium" ? premiumContent : ebooksContent
 
   return (
-    <div className="min-h-screen bg-black fixed inset-0 overflow-y-auto">
-      <div className="fixed inset-0 bg-gradient-to-br from-zinc-900/40 via-black to-zinc-800/30 pointer-events-none" />
-      <div className="fixed inset-0 bg-gradient-to-t from-zinc-900/20 via-transparent to-zinc-800/10 pointer-events-none" />
+    <div className="min-h-screen pb-24">
+      {loading ? (
+        <div className="flex items-center justify-center min-h-screen bg-black">
+          <Loader2 className="h-8 w-8 text-zinc-500 animate-spin" />
+        </div>
+      ) : (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+          {!isProUser && <BuilderModeBanner onUpgrade={handleGoLiveClick} />}
 
-      <div className="relative max-w-6xl mx-auto px-4 sm:px-8 py-8 sm:py-16">
-        <div className="mb-8 sm:mb-16">
-          {/* Mobile Layout - Centered Tree */}
-          <div className="block sm:hidden">
-            <div className="flex flex-col items-center text-center space-y-4 mb-6">
-              {/* Profile Picture */}
-              <div className="relative group">
-                <Avatar
-                  className="w-24 h-24 border-2 border-white/20 cursor-pointer"
-                  onClick={() => router.push("/dashboard/profile")}
-                >
-                  <AvatarImage src={profilePic || "/placeholder.svg"} alt={displayName} className="object-cover" />
-                  <AvatarFallback className="bg-zinc-900 text-white text-2xl font-medium border-2 border-white/20">
-                    {displayName?.charAt(0)?.toUpperCase() || username?.charAt(0)?.toUpperCase() || "?"}
-                  </AvatarFallback>
-                </Avatar>
-                <div
-                  className="absolute inset-0 bg-black/60 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
-                  onClick={() => router.push("/dashboard/profile")}
-                >
-                  <Edit2 className="w-5 h-5 text-white" />
-                </div>
-              </div>
-
-              {/* Name and Username */}
-              <div className="space-y-1">
-                <h1 className="text-2xl font-light text-white tracking-tight">{displayName || username}</h1>
-                {isEditingUsername ? (
-                  <div className="flex items-center gap-2 justify-center">
-                    <span className="text-zinc-500 text-sm">@</span>
-                    <Input
-                      value={tempUsername}
-                      onChange={(e) => setTempUsername(e.target.value)}
-                      placeholder="username"
-                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm h-7 w-32"
-                    />
-                    <Button
-                      size="sm"
-                      onClick={handleSaveUsername}
-                      className="bg-white text-black hover:bg-zinc-100 font-medium"
-                    >
-                      <Check className="w-3 h-3" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => {
-                        setIsEditingUsername(false)
-                        setTempUsername(username || "")
-                      }}
-                      className="text-zinc-400 hover:text-white h-7 px-2"
-                    >
-                      <X className="w-3 h-3" />
-                    </Button>
-                  </div>
-                ) : (
-                  <div
-                    className="group/username cursor-pointer flex items-center gap-1 justify-center"
-                    onClick={() => {
-                      setTempUsername(username || "")
-                      setIsEditingUsername(true)
-                    }}
+          {/* Hero Section */}
+          <div className="relative">
+            {/* Mobile Layout - Centered Tree */}
+            <div className="block sm:hidden">
+              <div className="flex flex-col items-center text-center space-y-4 mb-6">
+                {/* Profile Picture */}
+                <div className="relative group">
+                  <Avatar
+                    className="w-24 h-24 border-2 border-white/20 cursor-pointer"
+                    onClick={() => router.push("/dashboard/profile")}
                   >
-                    <p className="text-zinc-500 text-sm font-mono group-hover/username:text-zinc-400 transition-colors">
-                      @{username}
-                    </p>
-                    <Edit2 className="w-3 h-3 text-zinc-600 opacity-0 group-hover/username:opacity-100 transition-opacity" />
-                  </div>
-                )}
-              </div>
-
-              {/* Bio */}
-              {isEditingBio ? (
-                <div className="space-y-2 w-full max-w-sm">
-                  <Textarea
-                    value={tempBio}
-                    onChange={(e) => setTempBio(e.target.value)}
-                    placeholder="Write your bio..."
-                    className="bg-zinc-900/50 border-zinc-700 text-white text-sm resize-none"
-                    rows={3}
-                  />
-                  <div className="flex gap-2 justify-center">
-                    <Button
-                      size="sm"
-                      onClick={handleSaveBio}
-                      className="bg-white text-black hover:bg-zinc-100 h-7 px-2"
-                    >
-                      <Check className="w-4 h-4 mr-1" />
-                      Save
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => {
-                        setIsEditingBio(false)
-                        setTempBio(bio)
-                      }}
-                      className="text-zinc-400 hover:text-white h-7 px-2"
-                    >
-                      <X className="w-4 h-4 mr-1" />
-                      Cancel
-                    </Button>
+                    <AvatarImage src={profilePic || "/placeholder.svg"} alt={displayName} className="object-cover" />
+                    <AvatarFallback className="bg-zinc-900 text-white text-2xl font-medium border-2 border-white/20">
+                      {displayName?.charAt(0)?.toUpperCase() || username?.charAt(0)?.toUpperCase() || "?"}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div
+                    className="absolute inset-0 bg-black/60 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
+                    onClick={() => router.push("/dashboard/profile")}
+                  >
+                    <Edit2 className="w-5 h-5 text-white" />
                   </div>
                 </div>
-              ) : (
-                <div
-                  className="group cursor-pointer w-full max-w-sm"
-                  onClick={() => {
-                    setTempBio(bio)
-                    setIsEditingBio(true)
-                  }}
-                >
-                  {bio ? (
-                    <p className="text-zinc-400 text-sm leading-relaxed group-hover:text-zinc-300 transition-colors">
-                      {bio}
-                    </p>
-                  ) : (
-                    <p className="text-zinc-600 text-sm leading-relaxed group-hover:text-zinc-500 transition-colors italic">
-                      Click to add a bio
-                    </p>
-                  )}
-                  <Edit2 className="w-3 h-3 text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity mt-1 mx-auto" />
-                </div>
-              )}
 
-              {/* Links Section */}
-              <div className="w-full max-w-sm space-y-3">
-                <h3 className="text-zinc-400 text-xs font-medium uppercase tracking-wider text-center">Links</h3>
-
-                {isEditingSocials ? (
-                  <div className="space-y-2">
-                    <Input
-                      value={tempSocials.instagram || ""}
-                      onChange={(e) => setTempSocials({ ...tempSocials, instagram: e.target.value })}
-                      placeholder="Instagram username"
-                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
-                    />
-                    <Input
-                      value={tempSocials.twitter || ""}
-                      onChange={(e) => setTempSocials({ ...tempSocials, twitter: e.target.value })}
-                      placeholder="Twitter/X username"
-                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
-                    />
-                    <Input
-                      value={tempSocials.tiktok || ""}
-                      onChange={(e) => setTempSocials({ ...tempSocials, tiktok: e.target.value })}
-                      placeholder="TikTok username"
-                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
-                    />
-                    <Input
-                      value={tempSocials.youtube || ""}
-                      onChange={(e) => setTempSocials({ ...tempSocials, youtube: e.target.value })}
-                      placeholder="YouTube channel URL"
-                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
-                    />
-                    <Input
-                      value={tempSocials.twitch || ""}
-                      onChange={(e) => setTempSocials({ ...tempSocials, twitch: e.target.value })}
-                      placeholder="Twitch username"
-                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
-                    />
-                    <Input
-                      value={tempSocials.discord || ""}
-                      onChange={(e) => setTempSocials({ ...tempSocials, discord: e.target.value })}
-                      placeholder="Discord invite link"
-                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
-                    />
-                    <Input
-                      value={tempSocials.skool || ""}
-                      onChange={(e) => setTempSocials({ ...tempSocials, skool: e.target.value })}
-                      placeholder="Skool community URL"
-                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
-                    />
-                    <Input
-                      value={tempSocials.shopify || ""}
-                      onChange={(e) => setTempSocials({ ...tempSocials, shopify: e.target.value })}
-                      placeholder="Shopify store URL"
-                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
-                    />
-                    <Input
-                      value={tempSocials.facebook || ""}
-                      onChange={(e) => setTempSocials({ ...tempSocials, facebook: e.target.value })}
-                      placeholder="Facebook profile/page"
-                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
-                    />
-                    <Input
-                      value={tempSocials.linkedin || ""}
-                      onChange={(e) => setTempSocials({ ...tempSocials, linkedin: e.target.value })}
-                      placeholder="LinkedIn profile URL"
-                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
-                    />
-                    <Input
-                      value={tempSocials.github || ""}
-                      onChange={(e) => setTempSocials({ ...tempSocials, github: e.target.value })}
-                      placeholder="GitHub username"
-                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
-                    />
-                    <Input
-                      value={tempSocials.spotify || ""}
-                      onChange={(e) => setTempSocials({ ...tempSocials, spotify: e.target.value })}
-                      placeholder="Spotify artist URL"
-                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
-                    />
-                    <Input
-                      value={tempSocials.appleMusic || ""}
-                      onChange={(e) => setTempSocials({ ...tempSocials, appleMusic: e.target.value })}
-                      placeholder="Apple Music URL"
-                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
-                    />
-                    <Input
-                      value={tempSocials.email || ""}
-                      onChange={(e) => setTempSocials({ ...tempSocials, email: e.target.value })}
-                      placeholder="Contact email"
-                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
-                    />
-                    <Input
-                      value={tempSocials.website || ""}
-                      onChange={(e) => setTempSocials({ ...tempSocials, website: e.target.value })}
-                      placeholder="Website URL"
-                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
-                    />
-                    <div className="flex gap-2 justify-center">
-                      <Button size="sm" onClick={handleSaveSocials} className="bg-white text-black hover:bg-zinc-100">
-                        <Check className="w-4 h-4 mr-1" />
-                        Save
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          setIsEditingSocials(false)
-                          setTempSocials(socialLinks)
-                        }}
-                        className="text-zinc-400 hover:text-white"
-                      >
-                        <X className="w-4 h-4 mr-1" />
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex gap-2 justify-center flex-wrap">
-                    {socialLinks.instagram && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
-                        onClick={() => window.open(`https://instagram.com/${socialLinks.instagram}`, "_blank")}
-                      >
-                        Instagram
-                      </Button>
-                    )}
-                    {socialLinks.twitter && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
-                        onClick={() => window.open(`https://twitter.com/${socialLinks.twitter}`, "_blank")}
-                      >
-                        Twitter
-                      </Button>
-                    )}
-                    {socialLinks.tiktok && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
-                        onClick={() => window.open(`https://tiktok.com/@${socialLinks.tiktok}`, "_blank")}
-                      >
-                        TikTok
-                      </Button>
-                    )}
-                    {socialLinks.youtube && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
-                        onClick={() => window.open(socialLinks.youtube, "_blank")}
-                      >
-                        YouTube
-                      </Button>
-                    )}
-                    {socialLinks.twitch && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
-                        onClick={() => window.open(`https://twitch.tv/${socialLinks.twitch}`, "_blank")}
-                      >
-                        Twitch
-                      </Button>
-                    )}
-                    {socialLinks.discord && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
-                        onClick={() => window.open(socialLinks.discord, "_blank")}
-                      >
-                        Discord
-                      </Button>
-                    )}
-                    {socialLinks.skool && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
-                        onClick={() => window.open(socialLinks.skool, "_blank")}
-                      >
-                        Skool
-                      </Button>
-                    )}
-                    {socialLinks.shopify && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
-                        onClick={() => window.open(socialLinks.shopify, "_blank")}
-                      >
-                        Shopify
-                      </Button>
-                    )}
-                    {socialLinks.facebook && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
-                        onClick={() => window.open(socialLinks.facebook, "_blank")}
-                      >
-                        Facebook
-                      </Button>
-                    )}
-                    {socialLinks.linkedin && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
-                        onClick={() => window.open(socialLinks.linkedin, "_blank")}
-                      >
-                        LinkedIn
-                      </Button>
-                    )}
-                    {socialLinks.github && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
-                        onClick={() => window.open(`https://github.com/${socialLinks.github}`, "_blank")}
-                      >
-                        GitHub
-                      </Button>
-                    )}
-                    {socialLinks.spotify && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
-                        onClick={() => window.open(socialLinks.spotify, "_blank")}
-                      >
-                        Spotify
-                      </Button>
-                    )}
-                    {socialLinks.appleMusic && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
-                        onClick={() => window.open(socialLinks.appleMusic, "_blank")}
-                      >
-                        Apple Music
-                      </Button>
-                    )}
-                    {socialLinks.email && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
-                        onClick={() => window.open(`mailto:${socialLinks.email}`, "_blank")}
-                      >
-                        Email
-                      </Button>
-                    )}
-                    {socialLinks.website && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
-                        onClick={() => window.open(socialLinks.website, "_blank")}
-                      >
-                        Website
-                      </Button>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
-                      onClick={() => {
-                        setTempSocials(socialLinks)
-                        setIsEditingSocials(true)
-                      }}
-                    >
-                      <Plus className="w-4 h-4" />
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Desktop Layout - Horizontal */}
-          <div className="hidden sm:flex items-start justify-between">
-            <div className="flex items-center gap-8">
-              <div className="relative group">
-                <Avatar
-                  className="w-32 h-32 border-2 border-white/20 cursor-pointer"
-                  onClick={() => router.push("/dashboard/profile")}
-                >
-                  <AvatarImage src={profilePic || "/placeholder.svg"} alt={displayName} className="object-cover" />
-                  <AvatarFallback className="bg-zinc-900 text-white text-2xl font-medium border-2 border-white/20">
-                    {displayName?.charAt(0)?.toUpperCase() || username?.charAt(0)?.toUpperCase() || "?"}
-                  </AvatarFallback>
-                </Avatar>
-                <div
-                  className="absolute inset-0 bg-black/60 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
-                  onClick={() => router.push("/dashboard/profile")}
-                >
-                  <Edit2 className="w-6 h-6 text-white" />
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <div>
-                  <h1 className="text-3xl font-light text-white tracking-tight">{displayName || username}</h1>
+                {/* Name and Username */}
+                <div className="space-y-1">
+                  <h1 className="text-2xl font-light text-white tracking-tight">{displayName || username}</h1>
                   {isEditingUsername ? (
-                    <div className="flex items-center gap-2 mt-1">
+                    <div className="flex items-center gap-2 justify-center">
                       <span className="text-zinc-500 text-sm">@</span>
                       <Input
                         value={tempUsername}
                         onChange={(e) => setTempUsername(e.target.value)}
                         placeholder="username"
-                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm h-7 w-48"
+                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm h-7 w-32"
                       />
                       <Button
                         size="sm"
                         onClick={handleSaveUsername}
-                        className="bg-white text-black hover:bg-zinc-100 h-7 px-2"
+                        className="bg-white text-black hover:bg-zinc-100 font-medium"
                       >
                         <Check className="w-3 h-3" />
                       </Button>
@@ -886,7 +490,7 @@ export default function ViewStorefrontPage() {
                     </div>
                   ) : (
                     <div
-                      className="group/username cursor-pointer flex items-center gap-1"
+                      className="group/username cursor-pointer flex items-center gap-1 justify-center"
                       onClick={() => {
                         setTempUsername(username || "")
                         setIsEditingUsername(true)
@@ -900,17 +504,22 @@ export default function ViewStorefrontPage() {
                   )}
                 </div>
 
+                {/* Bio */}
                 {isEditingBio ? (
-                  <div className="space-y-2">
+                  <div className="space-y-2 w-full max-w-sm">
                     <Textarea
                       value={tempBio}
                       onChange={(e) => setTempBio(e.target.value)}
                       placeholder="Write your bio..."
-                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-md resize-none"
+                      className="bg-zinc-900/50 border-zinc-700 text-white text-sm resize-none"
                       rows={3}
                     />
-                    <div className="flex gap-2">
-                      <Button size="sm" onClick={handleSaveBio} className="bg-white text-black hover:bg-zinc-100">
+                    <div className="flex gap-2 justify-center">
+                      <Button
+                        size="sm"
+                        onClick={handleSaveBio}
+                        className="bg-white text-black hover:bg-zinc-100 h-7 px-2"
+                      >
                         <Check className="w-4 h-4 mr-1" />
                         Save
                       </Button>
@@ -921,7 +530,7 @@ export default function ViewStorefrontPage() {
                           setIsEditingBio(false)
                           setTempBio(bio)
                         }}
-                        className="text-zinc-400 hover:text-white"
+                        className="text-zinc-400 hover:text-white h-7 px-2"
                       >
                         <X className="w-4 h-4 mr-1" />
                         Cancel
@@ -930,28 +539,28 @@ export default function ViewStorefrontPage() {
                   </div>
                 ) : (
                   <div
-                    className="group cursor-pointer"
+                    className="group cursor-pointer w-full max-w-sm"
                     onClick={() => {
                       setTempBio(bio)
                       setIsEditingBio(true)
                     }}
                   >
                     {bio ? (
-                      <p className="text-zinc-400 text-sm max-w-md leading-relaxed group-hover:text-zinc-300 transition-colors">
+                      <p className="text-zinc-400 text-sm leading-relaxed group-hover:text-zinc-300 transition-colors">
                         {bio}
                       </p>
                     ) : (
-                      <p className="text-zinc-600 text-sm max-w-md leading-relaxed group-hover:text-zinc-500 transition-colors italic">
+                      <p className="text-zinc-600 text-sm leading-relaxed group-hover:text-zinc-500 transition-colors italic">
                         Click to add a bio
                       </p>
                     )}
-                    <Edit2 className="w-3 h-3 text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity mt-1" />
+                    <Edit2 className="w-3 h-3 text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity mt-1 mx-auto" />
                   </div>
                 )}
 
                 {/* Links Section */}
-                <div className="space-y-2">
-                  <h3 className="text-zinc-400 text-xs font-medium uppercase tracking-wider">Links</h3>
+                <div className="w-full max-w-sm space-y-3">
+                  <h3 className="text-zinc-400 text-xs font-medium uppercase tracking-wider text-center">Links</h3>
 
                   {isEditingSocials ? (
                     <div className="space-y-2">
@@ -959,93 +568,93 @@ export default function ViewStorefrontPage() {
                         value={tempSocials.instagram || ""}
                         onChange={(e) => setTempSocials({ ...tempSocials, instagram: e.target.value })}
                         placeholder="Instagram username"
-                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
                       />
                       <Input
                         value={tempSocials.twitter || ""}
                         onChange={(e) => setTempSocials({ ...tempSocials, twitter: e.target.value })}
                         placeholder="Twitter/X username"
-                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
                       />
                       <Input
                         value={tempSocials.tiktok || ""}
                         onChange={(e) => setTempSocials({ ...tempSocials, tiktok: e.target.value })}
                         placeholder="TikTok username"
-                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
                       />
                       <Input
                         value={tempSocials.youtube || ""}
                         onChange={(e) => setTempSocials({ ...tempSocials, youtube: e.target.value })}
                         placeholder="YouTube channel URL"
-                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
                       />
                       <Input
                         value={tempSocials.twitch || ""}
                         onChange={(e) => setTempSocials({ ...tempSocials, twitch: e.target.value })}
                         placeholder="Twitch username"
-                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
                       />
                       <Input
                         value={tempSocials.discord || ""}
                         onChange={(e) => setTempSocials({ ...tempSocials, discord: e.target.value })}
                         placeholder="Discord invite link"
-                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
                       />
                       <Input
                         value={tempSocials.skool || ""}
                         onChange={(e) => setTempSocials({ ...tempSocials, skool: e.target.value })}
                         placeholder="Skool community URL"
-                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
                       />
                       <Input
                         value={tempSocials.shopify || ""}
                         onChange={(e) => setTempSocials({ ...tempSocials, shopify: e.target.value })}
                         placeholder="Shopify store URL"
-                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
                       />
                       <Input
                         value={tempSocials.facebook || ""}
                         onChange={(e) => setTempSocials({ ...tempSocials, facebook: e.target.value })}
                         placeholder="Facebook profile/page"
-                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
                       />
                       <Input
                         value={tempSocials.linkedin || ""}
                         onChange={(e) => setTempSocials({ ...tempSocials, linkedin: e.target.value })}
                         placeholder="LinkedIn profile URL"
-                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
                       />
                       <Input
                         value={tempSocials.github || ""}
                         onChange={(e) => setTempSocials({ ...tempSocials, github: e.target.value })}
                         placeholder="GitHub username"
-                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
                       />
                       <Input
                         value={tempSocials.spotify || ""}
                         onChange={(e) => setTempSocials({ ...tempSocials, spotify: e.target.value })}
                         placeholder="Spotify artist URL"
-                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
                       />
                       <Input
                         value={tempSocials.appleMusic || ""}
                         onChange={(e) => setTempSocials({ ...tempSocials, appleMusic: e.target.value })}
                         placeholder="Apple Music URL"
-                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
                       />
                       <Input
                         value={tempSocials.email || ""}
                         onChange={(e) => setTempSocials({ ...tempSocials, email: e.target.value })}
                         placeholder="Contact email"
-                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
                       />
                       <Input
                         value={tempSocials.website || ""}
                         onChange={(e) => setTempSocials({ ...tempSocials, website: e.target.value })}
                         placeholder="Website URL"
-                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm"
                       />
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 justify-center">
                         <Button size="sm" onClick={handleSaveSocials} className="bg-white text-black hover:bg-zinc-100">
                           <Check className="w-4 h-4 mr-1" />
                           Save
@@ -1065,7 +674,7 @@ export default function ViewStorefrontPage() {
                       </div>
                     </div>
                   ) : (
-                    <div className="flex gap-2 flex-wrap">
+                    <div className="flex gap-2 justify-center flex-wrap">
                       {socialLinks.instagram && (
                         <Button
                           variant="ghost"
@@ -1232,230 +841,637 @@ export default function ViewStorefrontPage() {
                 </div>
               </div>
             </div>
-          </div>
-        </div>
 
-        <div className="mb-8 sm:mb-12">
-          {/* Stats Row */}
-          <div className="flex items-center justify-center sm:justify-start gap-4 sm:gap-8 mb-6 text-xs sm:text-sm">
-            <div className="flex items-center gap-2 text-zinc-500">
-              <Calendar className="w-3 h-3 sm:w-4 sm:h-4" />
-              <span>Member since {getMemberSince()}</span>
-            </div>
-            <div className="flex items-center gap-2 text-zinc-500">
-              <Users className="w-3 h-3 sm:w-4 sm:h-4" />
-              <span>{freeContent.length} free</span>
-            </div>
-            <div className="flex items-center gap-2 text-zinc-500">
-              <Heart className="w-3 h-3 sm:w-4 sm:h-4" />
-              <span>{premiumContent.length} premium</span>
-            </div>
-            <div className="flex items-center gap-2 text-zinc-500">
-              <Package className="w-3 h-3 sm:w-4 sm:h-4" />
-              <span>{ebooksContent.length} eBooks</span>
-            </div>
-          </div>
+            {/* Desktop Layout - Horizontal */}
+            <div className="hidden sm:flex items-start justify-between">
+              <div className="flex items-center gap-8">
+                <div className="relative group">
+                  <Avatar
+                    className="w-32 h-32 border-2 border-white/20 cursor-pointer"
+                    onClick={() => router.push("/dashboard/profile")}
+                  >
+                    <AvatarImage src={profilePic || "/placeholder.svg"} alt={displayName} className="object-cover" />
+                    <AvatarFallback className="bg-zinc-900 text-white text-2xl font-medium border-2 border-white/20">
+                      {displayName?.charAt(0)?.toUpperCase() || username?.charAt(0)?.toUpperCase() || "?"}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div
+                    className="absolute inset-0 bg-black/60 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
+                    onClick={() => router.push("/dashboard/profile")}
+                  >
+                    <Edit2 className="w-6 h-6 text-white" />
+                  </div>
+                </div>
 
-          {/* Go Live Controls - Centered on mobile, right-aligned on desktop */}
-          <div className="flex flex-col items-center sm:items-end gap-3">
-            {username && (
-              <Button
-                onClick={() => window.open(`/creator/${username}`, "_blank")}
-                variant="outline"
-                size="sm"
-                className="border-zinc-700 hover:bg-zinc-800 text-zinc-300 hover:text-white mb-2"
-              >
-                <ExternalLink className="w-4 h-4 mr-2" />
-                View Storefront
-              </Button>
-            )}
-            <div className="flex items-center gap-3 bg-zinc-900/80 backdrop-blur-sm border border-zinc-800 rounded-lg px-4 py-2.5">
-              <div className="flex flex-col items-end">
-                <span className="text-xs font-medium text-white">Go Live</span>
-                {!isProUser && trialEligible && <span className="text-[10px] text-zinc-500 mt-0.5">Free trial</span>}
+                <div className="space-y-3">
+                  <div>
+                    <h1 className="text-3xl font-light text-white tracking-tight">{displayName || username}</h1>
+                    {isEditingUsername ? (
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-zinc-500 text-sm">@</span>
+                        <Input
+                          value={tempUsername}
+                          onChange={(e) => setTempUsername(e.target.value)}
+                          placeholder="username"
+                          className="bg-zinc-900/50 border-zinc-700 text-white text-sm h-7 w-48"
+                        />
+                        <Button
+                          size="sm"
+                          onClick={handleSaveUsername}
+                          className="bg-white text-black hover:bg-zinc-100 h-7 px-2"
+                        >
+                          <Check className="w-3 h-3" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setIsEditingUsername(false)
+                            setTempUsername(username || "")
+                          }}
+                          className="text-zinc-400 hover:text-white h-7 px-2"
+                        >
+                          <X className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div
+                        className="group/username cursor-pointer flex items-center gap-1"
+                        onClick={() => {
+                          setTempUsername(username || "")
+                          setIsEditingUsername(true)
+                        }}
+                      >
+                        <p className="text-zinc-500 text-sm font-mono group-hover/username:text-zinc-400 transition-colors">
+                          @{username}
+                        </p>
+                        <Edit2 className="w-3 h-3 text-zinc-600 opacity-0 group-hover/username:opacity-100 transition-opacity" />
+                      </div>
+                    )}
+                  </div>
+
+                  {isEditingBio ? (
+                    <div className="space-y-2">
+                      <Textarea
+                        value={tempBio}
+                        onChange={(e) => setTempBio(e.target.value)}
+                        placeholder="Write your bio..."
+                        className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-md resize-none"
+                        rows={3}
+                      />
+                      <div className="flex gap-2">
+                        <Button size="sm" onClick={handleSaveBio} className="bg-white text-black hover:bg-zinc-100">
+                          <Check className="w-4 h-4 mr-1" />
+                          Save
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setIsEditingBio(false)
+                            setTempBio(bio)
+                          }}
+                          className="text-zinc-400 hover:text-white"
+                        >
+                          <X className="w-4 h-4 mr-1" />
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      className="group cursor-pointer"
+                      onClick={() => {
+                        setTempBio(bio)
+                        setIsEditingBio(true)
+                      }}
+                    >
+                      {bio ? (
+                        <p className="text-zinc-400 text-sm max-w-md leading-relaxed group-hover:text-zinc-300 transition-colors">
+                          {bio}
+                        </p>
+                      ) : (
+                        <p className="text-zinc-600 text-sm max-w-md leading-relaxed group-hover:text-zinc-500 transition-colors italic">
+                          Click to add a bio
+                        </p>
+                      )}
+                      <Edit2 className="w-3 h-3 text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity mt-1" />
+                    </div>
+                  )}
+
+                  {/* Links Section */}
+                  <div className="space-y-2">
+                    <h3 className="text-zinc-400 text-xs font-medium uppercase tracking-wider">Links</h3>
+
+                    {isEditingSocials ? (
+                      <div className="space-y-2">
+                        <Input
+                          value={tempSocials.instagram || ""}
+                          onChange={(e) => setTempSocials({ ...tempSocials, instagram: e.target.value })}
+                          placeholder="Instagram username"
+                          className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                        />
+                        <Input
+                          value={tempSocials.twitter || ""}
+                          onChange={(e) => setTempSocials({ ...tempSocials, twitter: e.target.value })}
+                          placeholder="Twitter/X username"
+                          className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                        />
+                        <Input
+                          value={tempSocials.tiktok || ""}
+                          onChange={(e) => setTempSocials({ ...tempSocials, tiktok: e.target.value })}
+                          placeholder="TikTok username"
+                          className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                        />
+                        <Input
+                          value={tempSocials.youtube || ""}
+                          onChange={(e) => setTempSocials({ ...tempSocials, youtube: e.target.value })}
+                          placeholder="YouTube channel URL"
+                          className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                        />
+                        <Input
+                          value={tempSocials.twitch || ""}
+                          onChange={(e) => setTempSocials({ ...tempSocials, twitch: e.target.value })}
+                          placeholder="Twitch username"
+                          className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                        />
+                        <Input
+                          value={tempSocials.discord || ""}
+                          onChange={(e) => setTempSocials({ ...tempSocials, discord: e.target.value })}
+                          placeholder="Discord invite link"
+                          className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                        />
+                        <Input
+                          value={tempSocials.skool || ""}
+                          onChange={(e) => setTempSocials({ ...tempSocials, skool: e.target.value })}
+                          placeholder="Skool community URL"
+                          className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                        />
+                        <Input
+                          value={tempSocials.shopify || ""}
+                          onChange={(e) => setTempSocials({ ...tempSocials, shopify: e.target.value })}
+                          placeholder="Shopify store URL"
+                          className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                        />
+                        <Input
+                          value={tempSocials.facebook || ""}
+                          onChange={(e) => setTempSocials({ ...tempSocials, facebook: e.target.value })}
+                          placeholder="Facebook profile/page"
+                          className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                        />
+                        <Input
+                          value={tempSocials.linkedin || ""}
+                          onChange={(e) => setTempSocials({ ...tempSocials, linkedin: e.target.value })}
+                          placeholder="LinkedIn profile URL"
+                          className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                        />
+                        <Input
+                          value={tempSocials.github || ""}
+                          onChange={(e) => setTempSocials({ ...tempSocials, github: e.target.value })}
+                          placeholder="GitHub username"
+                          className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                        />
+                        <Input
+                          value={tempSocials.spotify || ""}
+                          onChange={(e) => setTempSocials({ ...tempSocials, spotify: e.target.value })}
+                          placeholder="Spotify artist URL"
+                          className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                        />
+                        <Input
+                          value={tempSocials.appleMusic || ""}
+                          onChange={(e) => setTempSocials({ ...tempSocials, appleMusic: e.target.value })}
+                          placeholder="Apple Music URL"
+                          className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                        />
+                        <Input
+                          value={tempSocials.email || ""}
+                          onChange={(e) => setTempSocials({ ...tempSocials, email: e.target.value })}
+                          placeholder="Contact email"
+                          className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                        />
+                        <Input
+                          value={tempSocials.website || ""}
+                          onChange={(e) => setTempSocials({ ...tempSocials, website: e.target.value })}
+                          placeholder="Website URL"
+                          className="bg-zinc-900/50 border-zinc-700 text-white text-sm max-w-xs"
+                        />
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            onClick={handleSaveSocials}
+                            className="bg-white text-black hover:bg-zinc-100"
+                          >
+                            <Check className="w-4 h-4 mr-1" />
+                            Save
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setIsEditingSocials(false)
+                              setTempSocials(socialLinks)
+                            }}
+                            className="text-zinc-400 hover:text-white"
+                          >
+                            <X className="w-4 h-4 mr-1" />
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2 flex-wrap">
+                        {socialLinks.instagram && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                            onClick={() => window.open(`https://instagram.com/${socialLinks.instagram}`, "_blank")}
+                          >
+                            Instagram
+                          </Button>
+                        )}
+                        {socialLinks.twitter && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                            onClick={() => window.open(`https://twitter.com/${socialLinks.twitter}`, "_blank")}
+                          >
+                            Twitter
+                          </Button>
+                        )}
+                        {socialLinks.tiktok && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                            onClick={() => window.open(`https://tiktok.com/@${socialLinks.tiktok}`, "_blank")}
+                          >
+                            TikTok
+                          </Button>
+                        )}
+                        {socialLinks.youtube && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                            onClick={() => window.open(socialLinks.youtube, "_blank")}
+                          >
+                            YouTube
+                          </Button>
+                        )}
+                        {socialLinks.twitch && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                            onClick={() => window.open(`https://twitch.tv/${socialLinks.twitch}`, "_blank")}
+                          >
+                            Twitch
+                          </Button>
+                        )}
+                        {socialLinks.discord && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                            onClick={() => window.open(socialLinks.discord, "_blank")}
+                          >
+                            Discord
+                          </Button>
+                        )}
+                        {socialLinks.skool && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                            onClick={() => window.open(socialLinks.skool, "_blank")}
+                          >
+                            Skool
+                          </Button>
+                        )}
+                        {socialLinks.shopify && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                            onClick={() => window.open(socialLinks.shopify, "_blank")}
+                          >
+                            Shopify
+                          </Button>
+                        )}
+                        {socialLinks.facebook && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                            onClick={() => window.open(socialLinks.facebook, "_blank")}
+                          >
+                            Facebook
+                          </Button>
+                        )}
+                        {socialLinks.linkedin && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                            onClick={() => window.open(socialLinks.linkedin, "_blank")}
+                          >
+                            LinkedIn
+                          </Button>
+                        )}
+                        {socialLinks.github && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                            onClick={() => window.open(`https://github.com/${socialLinks.github}`, "_blank")}
+                          >
+                            GitHub
+                          </Button>
+                        )}
+                        {socialLinks.spotify && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                            onClick={() => window.open(socialLinks.spotify, "_blank")}
+                          >
+                            Spotify
+                          </Button>
+                        )}
+                        {socialLinks.appleMusic && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                            onClick={() => window.open(socialLinks.appleMusic, "_blank")}
+                          >
+                            Apple Music
+                          </Button>
+                        )}
+                        {socialLinks.email && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                            onClick={() => window.open(`mailto:${socialLinks.email}`, "_blank")}
+                          >
+                            Email
+                          </Button>
+                        )}
+                        {socialLinks.website && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                            onClick={() => window.open(socialLinks.website, "_blank")}
+                          >
+                            Website
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                          onClick={() => {
+                            setTempSocials(socialLinks)
+                            setIsEditingSocials(true)
+                          }}
+                        >
+                          <Plus className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
-              <Switch
-                checked={storefrontActive}
-                onCheckedChange={handleToggleStorefront}
-                disabled={
-                  updating ||
-                  (!isProUser &&
-                    !storefrontActive &&
-                    !planData?.plan?.includes("starter") &&
-                    !planData?.plan?.includes("facelessprenuer") &&
-                    !planData?.plan?.includes("faceless_pro"))
-                }
-                className="data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-zinc-700"
-              />
-              {storefrontActive ? (
-                <Badge className="bg-green-500/10 text-green-400 border-green-500/20">Live</Badge>
-              ) : (
-                <Badge variant="secondary" className="bg-zinc-700 text-zinc-300">
-                  Offline
-                </Badge>
-              )}
             </div>
-            {!isProUser &&
-              !planData?.plan?.includes("starter") &&
-              !planData?.plan?.includes("facelessprenuer") &&
-              !planData?.plan?.includes("faceless_pro") && (
+          </div>
+          {/* Stats Bar with Go Live Toggle */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 py-4 border-y border-zinc-800/50">
+            <div className="flex flex-wrap items-center gap-4 text-sm">
+              <div className="flex items-center gap-2 text-zinc-500">
+                <Calendar className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span>Joined {joinedDate || "Recently"}</span>
+              </div>
+              <div className="flex items-center gap-2 text-zinc-500">
+                <Users className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span>{freeContent.length} free</span>
+              </div>
+              <div className="flex items-center gap-2 text-zinc-500">
+                <Heart className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span>{premiumContent.length} premium</span>
+              </div>
+              <div className="flex items-center gap-2 text-zinc-500">
+                <Package className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span>{ebooksContent.length} eBooks</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col items-center sm:items-end gap-3">
+              {username && (
                 <Button
-                  onClick={handleGoLiveClick}
-                  className="bg-white text-black hover:bg-zinc-100 font-medium text-sm px-6"
+                  onClick={() => window.open(`/creator/${username}`, "_blank")}
+                  variant="outline"
+                  size="sm"
+                  className="border-zinc-700 hover:bg-zinc-800 text-zinc-300 hover:text-white"
                 >
-                  Go Live
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  {storefrontActive ? "View Live Storefront" : "Preview Storefront"}
                 </Button>
               )}
-          </div>
-        </div>
 
-        {/* Tabs */}
-        <div className="mb-6 sm:mb-8">
-          <div className="flex items-center justify-center sm:justify-start gap-6 sm:gap-8 border-b border-zinc-800/50">
-            <button
-              onClick={() => setActiveTab("free")}
-              className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
-                activeTab === "free" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
-              }`}
-            >
-              Free Content
-              {activeTab === "free" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
-            </button>
-            <button
-              onClick={() => setActiveTab("premium")}
-              className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
-                activeTab === "premium" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
-              }`}
-            >
-              Premium Content
-              {activeTab === "premium" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
-            </button>
-            <button
-              onClick={() => setActiveTab("ebooks")}
-              className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
-                activeTab === "ebooks" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
-              }`}
-            >
-              eBooks
-              {activeTab === "ebooks" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
-            </button>
-          </div>
-        </div>
+              <div className="flex items-center gap-3 bg-zinc-900/80 backdrop-blur-sm border border-zinc-800 rounded-lg px-4 py-2.5">
+                <div className="flex flex-col items-end">
+                  <span className="text-xs font-medium text-white">
+                    {!isProUser ? "Builder Mode" : "Storefront Status"}
+                  </span>
+                  {!isProUser && (
+                    <span className="text-[10px] text-cyan-400 mt-0.5 flex items-center gap-1">
+                      <Lock className="w-2.5 h-2.5" />
+                      Upgrade to go live
+                    </span>
+                  )}
+                </div>
 
-        {/* Content with action buttons */}
-        <div className="pt-4 sm:pt-8">
-          {currentContent.length > 0 ? (
-            <div
-              className={
-                activeTab === "premium" || activeTab === "ebooks"
-                  ? "flex flex-col items-center gap-6 sm:grid sm:grid-cols-3 sm:gap-8 sm:justify-items-center"
-                  : "grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 sm:gap-6 justify-items-center"
-              }
-            >
+                <Switch
+                  checked={storefrontActive}
+                  onCheckedChange={handleToggleStorefront}
+                  disabled={!isProUser || updating}
+                  className="data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-zinc-700"
+                />
+
+                {storefrontActive ? (
+                  <Badge className="bg-green-500/10 text-green-400 border-green-500/20">Live</Badge>
+                ) : (
+                  <Badge variant="secondary" className="bg-zinc-700 text-zinc-300">
+                    {!isProUser ? "Preview" : "Offline"}
+                  </Badge>
+                )}
+              </div>
+
+              {!isProUser && (
+                <Button
+                  onClick={handleGoLiveClick}
+                  size="sm"
+                  className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white border-0 font-medium"
+                >
+                  <Zap className="w-4 h-4 mr-2" />
+                  Go Live Now
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Tabs */}
+          <div className="mb-6 sm:mb-8">
+            <div className="flex items-center justify-center sm:justify-start gap-6 sm:gap-8 border-b border-zinc-800/50">
+              <button
+                onClick={() => setActiveTab("free")}
+                className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
+                  activeTab === "free" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
+                }`}
+              >
+                Free Content
+                {activeTab === "free" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
+              </button>
+              <button
+                onClick={() => setActiveTab("premium")}
+                className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
+                  activeTab === "premium" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
+                }`}
+              >
+                Premium Content
+                {activeTab === "premium" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
+              </button>
+              <button
+                onClick={() => setActiveTab("ebooks")}
+                className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
+                  activeTab === "ebooks" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
+                }`}
+              >
+                eBooks
+                {activeTab === "ebooks" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
+              </button>
+            </div>
+          </div>
+
+          {/* Content with action buttons */}
+          <div className="pt-4 sm:pt-8">
+            {currentContent.length > 0 ? (
               <div
                 className={
                   activeTab === "premium" || activeTab === "ebooks"
-                    ? "w-full max-w-sm aspect-[3/4] rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer flex flex-col items-center justify-center gap-3 group"
-                    : "w-full aspect-[9/16] rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer flex flex-col items-center justify-center gap-3 group"
-                }
-                onClick={() =>
-                  router.push(
-                    activeTab === "free"
-                      ? "/dashboard/free-content"
-                      : activeTab === "ebooks"
-                        ? "/dashboard/ebooks/create"
-                        : "/dashboard/bundles",
-                  )
+                    ? "flex flex-col items-center gap-6 sm:grid sm:grid-cols-3 sm:gap-8 sm:justify-items-center"
+                    : "grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 sm:gap-6 justify-items-center"
                 }
               >
-                <div className="w-12 h-12 rounded-full bg-zinc-800 group-hover:bg-zinc-700 transition-colors flex items-center justify-center">
-                  {activeTab === "free" ? (
-                    <UploadIcon className="w-6 h-6 text-zinc-400 group-hover:text-white transition-colors" />
+                <div
+                  className={
+                    activeTab === "premium" || activeTab === "ebooks"
+                      ? "w-full max-w-sm aspect-[3/4] rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer flex flex-col items-center justify-center gap-3 group"
+                      : "w-full aspect-[9/16] rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer flex flex-col items-center justify-center gap-3 group"
+                  }
+                  onClick={() =>
+                    router.push(
+                      activeTab === "free"
+                        ? "/dashboard/free-content"
+                        : activeTab === "ebooks"
+                          ? "/dashboard/ebooks/create"
+                          : "/dashboard/bundles",
+                    )
+                  }
+                >
+                  <div className="w-12 h-12 rounded-full bg-zinc-800 group-hover:bg-zinc-700 transition-colors flex items-center justify-center">
+                    {activeTab === "free" ? (
+                      <UploadIcon className="w-6 h-6 text-zinc-400 group-hover:text-white transition-colors" />
+                    ) : (
+                      <Package className="w-6 h-6 text-zinc-400 group-hover:text-white transition-colors" />
+                    )}
+                  </div>
+                  <p className="text-sm text-zinc-400 group-hover:text-zinc-300 transition-colors font-medium">
+                    {activeTab === "free" ? "Add Content" : activeTab === "ebooks" ? "Create eBook" : "Create Bundle"}
+                  </p>
+                </div>
+
+                {activeTab === "premium"
+                  ? premiumContent.map((item) => (
+                      <BundleCard
+                        key={item.id}
+                        item={item}
+                        user={user}
+                        creatorId={user.uid}
+                        creatorUsername={username}
+                        isPreview={true}
+                      />
+                    ))
+                  : activeTab === "ebooks"
+                    ? ebooksContent.map((item) => <EBookCard key={item.id} item={item} username={username} />)
+                    : freeContent.map((item) => <VideoContentCard key={item.id} item={item} />)}
+              </div>
+            ) : (
+              <div className="text-center py-16 sm:py-24">
+                <div
+                  className="w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-6 bg-zinc-900 rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer flex items-center justify-center group"
+                  onClick={() =>
+                    router.push(
+                      activeTab === "free"
+                        ? "/dashboard/free-content"
+                        : activeTab === "ebooks"
+                          ? "/dashboard/ebooks/create"
+                          : "/dashboard/bundles",
+                    )
+                  }
+                >
+                  {activeTab === "premium" || activeTab === "ebooks" ? (
+                    <Package className="w-8 h-8 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
                   ) : (
-                    <Package className="w-6 h-6 text-zinc-400 group-hover:text-white transition-colors" />
+                    <Play className="w-8 h-8 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
                   )}
                 </div>
-                <p className="text-sm text-zinc-400 group-hover:text-zinc-300 transition-colors font-medium">
-                  {activeTab === "free" ? "Add Content" : activeTab === "ebooks" ? "Create eBook" : "Create Bundle"}
+                <h3 className="text-base sm:text-lg font-medium text-white mb-2">No {activeTab} content yet</h3>
+                <p className="text-zinc-500 text-xs sm:text-sm mb-6">
+                  {activeTab === "free"
+                    ? "Upload your first piece of content"
+                    : activeTab === "ebooks"
+                      ? "Create your first eBook"
+                      : "Create your first bundle"}
                 </p>
+                <Button
+                  onClick={() =>
+                    router.push(
+                      activeTab === "free"
+                        ? "/dashboard/free-content"
+                        : activeTab === "ebooks"
+                          ? "/dashboard/ebooks/create"
+                          : "/dashboard/bundles",
+                    )
+                  }
+                  className="bg-white text-black hover:bg-zinc-100 font-medium"
+                >
+                  {activeTab === "free" ? (
+                    <>
+                      <UploadIcon className="w-4 h-4 mr-2" />
+                      Upload Content
+                    </>
+                  ) : activeTab === "ebooks" ? (
+                    <>
+                      <Package className="w-4 h-4 mr-2" />
+                      Create eBook
+                    </>
+                  ) : (
+                    <>
+                      <Package className="w-4 h-4 mr-2" />
+                      Create Bundle
+                    </>
+                  )}
+                </Button>
               </div>
-
-              {activeTab === "premium"
-                ? premiumContent.map((item) => (
-                    <BundleCard
-                      key={item.id}
-                      item={item}
-                      user={user}
-                      creatorId={user.uid}
-                      creatorUsername={username}
-                      isPreview={true}
-                    />
-                  ))
-                : activeTab === "ebooks"
-                  ? ebooksContent.map((item) => <EBookCard key={item.id} item={item} username={username} />)
-                  : freeContent.map((item) => <VideoContentCard key={item.id} item={item} />)}
-            </div>
-          ) : (
-            <div className="text-center py-16 sm:py-24">
-              <div
-                className="w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-6 bg-zinc-900 rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer flex items-center justify-center group"
-                onClick={() =>
-                  router.push(
-                    activeTab === "free"
-                      ? "/dashboard/free-content"
-                      : activeTab === "ebooks"
-                        ? "/dashboard/ebooks/create"
-                        : "/dashboard/bundles",
-                  )
-                }
-              >
-                {activeTab === "premium" || activeTab === "ebooks" ? (
-                  <Package className="w-8 h-8 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
-                ) : (
-                  <Play className="w-8 h-8 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
-                )}
-              </div>
-              <h3 className="text-base sm:text-lg font-medium text-white mb-2">No {activeTab} content yet</h3>
-              <p className="text-zinc-500 text-xs sm:text-sm mb-6">
-                {activeTab === "free"
-                  ? "Upload your first piece of content"
-                  : activeTab === "ebooks"
-                    ? "Create your first eBook"
-                    : "Create your first bundle"}
-              </p>
-              <Button
-                onClick={() =>
-                  router.push(
-                    activeTab === "free"
-                      ? "/dashboard/free-content"
-                      : activeTab === "ebooks"
-                        ? "/dashboard/ebooks/create"
-                        : "/dashboard/bundles",
-                  )
-                }
-                className="bg-white text-black hover:bg-zinc-100 font-medium"
-              >
-                {activeTab === "free" ? (
-                  <>
-                    <UploadIcon className="w-4 h-4 mr-2" />
-                    Upload Content
-                  </>
-                ) : activeTab === "ebooks" ? (
-                  <>
-                    <Package className="w-4 h-4 mr-2" />
-                    Create eBook
-                  </>
-                ) : (
-                  <>
-                    <Package className="w-4 h-4 mr-2" />
-                    Create Bundle
-                  </>
-                )}
-              </Button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
