@@ -428,3 +428,33 @@ export interface Profile {
   totalEarnings?: number
   isVerified?: boolean
 }
+
+export interface StorefrontTab {
+  id: string
+  type: "free_content" | "premium_content" | "ebooks" | "community" | "merch" | "affiliates" | "custom"
+  name: string
+  enabled: boolean
+  order: number
+  icon?: string
+}
+
+export interface ExternalProduct {
+  id: string
+  tabId: string
+  title: string
+  description: string
+  thumbnailUrl: string
+  externalUrl: string
+  ctaText: string
+  price?: string
+  featured: boolean
+  order: number
+  createdAt: string
+}
+
+export interface StorefrontTabsConfig {
+  userId: string
+  lastUpdated: string
+  tabs: StorefrontTab[]
+  externalProducts: ExternalProduct[]
+}
