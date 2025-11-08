@@ -1,10 +1,8 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect } from "react"
 import { useAuth } from "@/contexts/auth-context"
-import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Input } from "@/components/ui/input"
@@ -15,15 +13,14 @@ import type { StorefrontTab, ExternalProduct } from "@/lib/types"
 
 export default function StorefrontTabsPage() {
   const { user } = useAuth()
-  const router = useRouter()
   const [tabs, setTabs] = useState<StorefrontTab[]>([])
+  const [externalProducts, setExternalProducts] = useState<ExternalProduct[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [membershipPlan, setMembershipPlan] = useState<string>("free")
   const [expandedTabs, setExpandedTabs] = useState<Set<string>>(new Set())
   const [draggedTab, setDraggedTab] = useState<string | null>(null)
 
-  // Product form states
   const [productForms, setProductForms] = useState<Record<string, Partial<ExternalProduct>>>({})
   const [uploadingThumbnails, setUploadingThumbnails] = useState<Set<string>>(new Set())
 
@@ -58,7 +55,8 @@ export default function StorefrontTabsPage() {
 
       if (response.ok) {
         const data = await response.json()
-        setTabs(data.tabs)
+        setTabs(data.tabs || [])
+        setExternalProducts(data.externalProducts || [])
       }
     } catch (error) {
       console.error("Error fetching tabs:", error)
@@ -78,17 +76,18 @@ export default function StorefrontTabsPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ tabs }),
+        body: JSON.stringify({ tabs, externalProducts }),
       })
 
       if (response.ok) {
-        toast.success("Tabs updated successfully")
+        toast.success("Changes saved successfully")
       } else {
-        toast.error("Failed to update tabs")
+        const error = await response.json()
+        toast.error(error.error || "Failed to save changes")
       }
     } catch (error) {
       console.error("Error saving tabs:", error)
-      toast.error("Failed to save tabs")
+      toast.error("Failed to save changes")
     } finally {
       setSaving(false)
     }
@@ -112,11 +111,6 @@ export default function StorefrontTabsPage() {
   }
 
   const toggleExpanded = (tabId: string) => {
-    const tab = tabs.find((t) => t.id === tabId)
-    if (!tab?.enabled || ["free_content", "premium_content", "ebooks"].includes(tab.type)) {
-      return
-    }
-
     setExpandedTabs((prev) => {
       const newSet = new Set(prev)
       if (newSet.has(tabId)) {
@@ -151,7 +145,6 @@ export default function StorefrontTabsPage() {
     const [removed] = newTabs.splice(draggedIndex, 1)
     newTabs.splice(targetIndex, 0, removed)
 
-    // Update order numbers
     const reorderedTabs = newTabs.map((tab, index) => ({ ...tab, order: index }))
     setTabs(reorderedTabs)
     setDraggedTab(null)
@@ -165,11 +158,15 @@ export default function StorefrontTabsPage() {
     setUploadingThumbnails((prev) => new Set(prev).add(tabId))
 
     try {
+      const token = await user?.getIdToken()
       const formData = new FormData()
       formData.append("file", file)
 
-      const response = await fetch("/api/upload", {
+      const response = await fetch("/api/storefront-tabs/upload-thumbnail", {
         method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
         body: formData,
       })
 
@@ -202,36 +199,38 @@ export default function StorefrontTabsPage() {
       return
     }
 
-    try {
-      const token = await user?.getIdToken()
-      const response = await fetch("/api/storefront-tabs/products", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ tabId, ...product }),
-      })
-
-      if (response.ok) {
-        toast.success("Product added successfully")
-        setProductForms((prev) => {
-          const newForms = { ...prev }
-          delete newForms[tabId]
-          return newForms
-        })
-        setExpandedTabs((prev) => {
-          const newSet = new Set(prev)
-          newSet.delete(tabId)
-          return newSet
-        })
-      } else {
-        toast.error("Failed to add product")
-      }
-    } catch (error) {
-      console.error("Error saving product:", error)
-      toast.error("Failed to save product")
+    const newProduct: ExternalProduct = {
+      id: `product_${Date.now()}`,
+      tabId,
+      title: product.title,
+      description: product.description,
+      thumbnailUrl: product.thumbnailUrl || "",
+      externalUrl: product.externalUrl,
+      ctaText: product.ctaText,
+      price: product.price,
+      featured: false,
+      order: externalProducts.filter((p) => p.tabId === tabId).length,
+      createdAt: new Date(),
     }
+
+    setExternalProducts((prev) => [...prev, newProduct])
+    setProductForms((prev) => {
+      const newForms = { ...prev }
+      delete newForms[tabId]
+      return newForms
+    })
+    setExpandedTabs((prev) => {
+      const newSet = new Set(prev)
+      newSet.delete(tabId)
+      return newSet
+    })
+
+    toast.success("Product added! Click Save Changes to persist.")
+  }
+
+  const deleteProduct = (productId: string) => {
+    setExternalProducts((prev) => prev.filter((p) => p.id !== productId))
+    toast.success("Product removed! Click Save Changes to persist.")
   }
 
   const updateProductForm = (tabId: string, field: keyof ExternalProduct, value: any) => {
@@ -261,7 +260,7 @@ export default function StorefrontTabsPage() {
 
   return (
     <div className="min-h-screen p-6 pb-24">
-      <div className="space-y-8">
+      <div className="max-w-5xl mx-auto space-y-8">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-light mb-2">Storefront Tabs</h1>
@@ -278,14 +277,15 @@ export default function StorefrontTabsPage() {
             <div className="space-y-2">
               {standardTabs.map((tab) => {
                 const isDefaultTab = ["free_content", "premium_content", "ebooks"].includes(tab.type)
-                const canManageProducts = tab.enabled && !isDefaultTab
+                const canManageProducts = !isDefaultTab
                 const isExpanded = expandedTabs.has(tab.id)
                 const productForm = productForms[tab.id] || {}
+                const tabProducts = externalProducts.filter((p) => p.tabId === tab.id)
 
                 return (
                   <div
                     key={tab.id}
-                    draggable
+                    draggable={!isDefaultTab}
                     onDragStart={(e) => handleDragStart(e, tab.id)}
                     onDragOver={handleDragOver}
                     onDrop={(e) => handleDrop(e, tab.id)}
@@ -294,11 +294,15 @@ export default function StorefrontTabsPage() {
                   >
                     <div className="py-4 flex items-center justify-between group">
                       <div className="flex items-center gap-4 flex-1">
-                        <GripVertical className="w-5 h-5 text-zinc-600 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity" />
+                        {!isDefaultTab && (
+                          <GripVertical className="w-5 h-5 text-zinc-600 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity" />
+                        )}
                         <div className="flex-1">
                           <h3 className="font-medium">{tab.name}</h3>
                           <p className="text-sm text-zinc-500">
                             {isDefaultTab ? "Always visible" : "Toggle to show on storefront"}
+                            {tabProducts.length > 0 &&
+                              ` • ${tabProducts.length} product${tabProducts.length > 1 ? "s" : ""}`}
                           </p>
                         </div>
                       </div>
@@ -313,12 +317,12 @@ export default function StorefrontTabsPage() {
                             {isExpanded ? (
                               <>
                                 <ChevronUp className="w-4 h-4 mr-2" />
-                                Hide Products
+                                Hide
                               </>
                             ) : (
                               <>
                                 <ChevronDown className="w-4 h-4 mr-2" />
-                                Add Products
+                                {tabProducts.length > 0 ? "Manage" : "Add"} Products
                               </>
                             )}
                           </Button>
@@ -333,9 +337,43 @@ export default function StorefrontTabsPage() {
 
                     {canManageProducts && isExpanded && (
                       <div className="pb-6 pl-9 space-y-4 border-l-2 border-zinc-800 ml-2">
-                        <div className="space-y-4">
+                        {tabProducts.length > 0 && (
+                          <div className="space-y-3 mb-6">
+                            <h4 className="text-sm font-medium text-zinc-400">Existing Products</h4>
+                            {tabProducts.map((product) => (
+                              <div
+                                key={product.id}
+                                className="flex items-center gap-3 p-3 border border-zinc-800 rounded-lg"
+                              >
+                                {product.thumbnailUrl && (
+                                  <img
+                                    src={product.thumbnailUrl || "/placeholder.svg"}
+                                    alt={product.title}
+                                    className="w-16 h-16 object-cover rounded"
+                                  />
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <h5 className="font-medium truncate">{product.title}</h5>
+                                  <p className="text-sm text-zinc-500 truncate">{product.externalUrl}</p>
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => deleteProduct(product.id)}
+                                  className="text-red-400 hover:text-red-300"
+                                >
+                                  <X className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="space-y-4 pt-4 border-t border-zinc-800">
+                          <h4 className="text-sm font-medium">Add New Product</h4>
+
                           <div>
-                            <label className="block text-sm font-medium mb-2">Thumbnail Image *</label>
+                            <label className="block text-sm font-medium mb-2">Thumbnail Image (1:1 ratio) *</label>
                             <div className="flex items-center gap-4">
                               {productForm.thumbnailUrl ? (
                                 <div className="relative w-32 h-32 rounded-lg overflow-hidden border border-zinc-700">
@@ -403,26 +441,38 @@ export default function StorefrontTabsPage() {
                           </div>
 
                           <div>
-                            <label className="block text-sm font-medium mb-2">Call-to-Action Button Text *</label>
-                            <Input
-                              placeholder="e.g., Join Now"
-                              value={productForm.ctaText || ""}
-                              onChange={(e) => updateProductForm(tab.id, "ctaText", e.target.value)}
-                              className="bg-transparent border-zinc-700"
-                            />
-                            <div className="flex flex-wrap gap-2 mt-2">
+                            <label className="block text-sm font-medium mb-2">
+                              Call-to-Action Button Text *{" "}
+                              {!isFacelessprenuer && (
+                                <span className="text-xs text-zinc-500">(Choose from presets)</span>
+                              )}
+                            </label>
+                            <div className="flex flex-wrap gap-2 mb-2">
                               {ctaPresets.map((preset) => (
                                 <Button
                                   key={preset}
                                   variant="outline"
                                   size="sm"
                                   onClick={() => updateProductForm(tab.id, "ctaText", preset)}
-                                  className="text-xs border-zinc-700 hover:bg-zinc-800"
+                                  className={`text-xs border-zinc-700 hover:bg-zinc-800 ${
+                                    productForm.ctaText === preset ? "bg-zinc-800 border-white" : ""
+                                  }`}
                                 >
                                   {preset}
                                 </Button>
                               ))}
                             </div>
+                            {isFacelessprenuer && (
+                              <Input
+                                placeholder="Or enter custom CTA text"
+                                value={productForm.ctaText || ""}
+                                onChange={(e) => updateProductForm(tab.id, "ctaText", e.target.value)}
+                                className="bg-transparent border-zinc-700"
+                              />
+                            )}
+                            {!isFacelessprenuer && productForm.ctaText && (
+                              <p className="text-sm text-zinc-400 mt-1">Selected: {productForm.ctaText}</p>
+                            )}
                           </div>
 
                           <div>
@@ -440,7 +490,7 @@ export default function StorefrontTabsPage() {
                               onClick={() => saveProduct(tab.id)}
                               className="bg-white text-black hover:bg-zinc-200"
                             >
-                              Save Product
+                              Add Product
                             </Button>
                             <Button
                               variant="ghost"
@@ -486,7 +536,7 @@ export default function StorefrontTabsPage() {
                 >
                   <Lock className="w-4 h-4 mr-2" />
                   Add Custom Tab
-                  <div className="absolute -top-12 right-0 bg-zinc-800 text-white text-xs px-3 py-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                  <div className="absolute -top-12 right-0 bg-zinc-800 text-white text-xs px-3 py-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
                     Upgrade to Facelessprenuer
                   </div>
                 </Button>
