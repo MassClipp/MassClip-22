@@ -1324,34 +1324,46 @@ export default function ViewStorefrontPage() {
 
           {/* Tabs */}
           <div className="mb-6 sm:mb-8">
-            <div className="flex items-center justify-center sm:justify-start gap-6 sm:gap-8 border-b border-zinc-800/50">
-              <button
-                onClick={() => setActiveTab("free")}
-                className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
-                  activeTab === "free" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
-                }`}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-center sm:justify-start gap-6 sm:gap-8 border-b border-zinc-800/50 flex-1">
+                <button
+                  onClick={() => setActiveTab("free")}
+                  className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
+                    activeTab === "free" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
+                  }`}
+                >
+                  Free Content
+                  {activeTab === "free" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
+                </button>
+                <button
+                  onClick={() => setActiveTab("premium")}
+                  className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
+                    activeTab === "premium" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
+                  }`}
+                >
+                  Premium Content
+                  {activeTab === "premium" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
+                </button>
+                <button
+                  onClick={() => setActiveTab("ebooks")}
+                  className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
+                    activeTab === "ebooks" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
+                  }`}
+                >
+                  eBooks
+                  {activeTab === "ebooks" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
+                </button>
+              </div>
+
+              <Button
+                onClick={() => router.push("/dashboard/storefront-tabs")}
+                variant="outline"
+                size="sm"
+                className="border-zinc-700 hover:bg-zinc-800 text-zinc-300 hover:text-white whitespace-nowrap"
               >
-                Free Content
-                {activeTab === "free" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
-              </button>
-              <button
-                onClick={() => setActiveTab("premium")}
-                className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
-                  activeTab === "premium" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
-                }`}
-              >
-                Premium Content
-                {activeTab === "premium" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
-              </button>
-              <button
-                onClick={() => setActiveTab("ebooks")}
-                className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
-                  activeTab === "ebooks" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
-                }`}
-              >
-                eBooks
-                {activeTab === "ebooks" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
-              </button>
+                <Edit2 className="w-4 h-4 mr-2" />
+                Manage Tabs
+              </Button>
             </div>
           </div>
 

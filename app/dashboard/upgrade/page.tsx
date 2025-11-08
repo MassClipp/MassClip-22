@@ -293,9 +293,9 @@ export default function UpgradePage() {
               {[
                 { text: "3 folders with subfolders", highlight: true },
                 { text: "5 bundles max on storefront", highlight: false },
-                { text: "15 videos per bundle limit", highlight: false },
+                { text: "25 videos per bundle limit", highlight: false },
                 { text: "Basic Vex AI - file metadata & folder organization", highlight: false },
-                { text: "20% platform fee on sales", highlight: false },
+                { text: "15% platform fee on sales", highlight: false },
               ].map((feature, index) => (
                 <div key={index} className="flex items-center gap-2">
                   <CheckCircle2 className={`h-4 w-4 ${feature.highlight ? "text-cyan-400" : "text-zinc-500"}`} />
