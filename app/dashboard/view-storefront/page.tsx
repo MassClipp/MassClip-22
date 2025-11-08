@@ -1324,8 +1324,8 @@ export default function ViewStorefrontPage() {
 
           {/* Tabs */}
           <div className="mb-6 sm:mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center justify-center sm:justify-start gap-6 sm:gap-8 border-b border-zinc-800/50 flex-1">
+            <div className="flex items-center justify-between border-b border-zinc-800/50">
+              <div className="flex items-center gap-6 sm:gap-8">
                 <button
                   onClick={() => setActiveTab("free")}
                   className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
@@ -1357,9 +1357,9 @@ export default function ViewStorefrontPage() {
 
               <Button
                 onClick={() => router.push("/dashboard/storefront-tabs")}
-                variant="outline"
+                variant="ghost"
                 size="sm"
-                className="border-zinc-700 hover:bg-zinc-800 text-zinc-300 hover:text-white whitespace-nowrap"
+                className="text-zinc-400 hover:text-white hover:bg-zinc-800"
               >
                 <Edit2 className="w-4 h-4 mr-2" />
                 Manage Tabs
