@@ -1,13 +1,17 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useEffect } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
-import { Plus, GripVertical, Settings, Lock } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Plus, GripVertical, Lock, ChevronDown, ChevronUp, X, Upload } from "lucide-react"
 import { toast } from "sonner"
-import type { StorefrontTab } from "@/lib/types"
+import type { StorefrontTab, ExternalProduct } from "@/lib/types"
 
 export default function StorefrontTabsPage() {
   const { user } = useAuth()
@@ -16,6 +20,12 @@ export default function StorefrontTabsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [membershipPlan, setMembershipPlan] = useState<string>("free")
+  const [expandedTabs, setExpandedTabs] = useState<Set<string>>(new Set())
+  const [draggedTab, setDraggedTab] = useState<string | null>(null)
+
+  // Product form states
+  const [productForms, setProductForms] = useState<Record<string, Partial<ExternalProduct>>>({})
+  const [uploadingThumbnails, setUploadingThumbnails] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     if (user) {
@@ -101,6 +111,138 @@ export default function StorefrontTabsPage() {
     setTabs((prev) => prev.map((t) => (t.id === tabId ? { ...t, enabled: !t.enabled } : t)))
   }
 
+  const toggleExpanded = (tabId: string) => {
+    const tab = tabs.find((t) => t.id === tabId)
+    if (!tab?.enabled || ["free_content", "premium_content", "ebooks"].includes(tab.type)) {
+      return
+    }
+
+    setExpandedTabs((prev) => {
+      const newSet = new Set(prev)
+      if (newSet.has(tabId)) {
+        newSet.delete(tabId)
+      } else {
+        newSet.add(tabId)
+      }
+      return newSet
+    })
+  }
+
+  const handleDragStart = (e: React.DragEvent, tabId: string) => {
+    setDraggedTab(tabId)
+    e.dataTransfer.effectAllowed = "move"
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = "move"
+  }
+
+  const handleDrop = (e: React.DragEvent, targetTabId: string) => {
+    e.preventDefault()
+    if (!draggedTab || draggedTab === targetTabId) return
+
+    const draggedIndex = tabs.findIndex((t) => t.id === draggedTab)
+    const targetIndex = tabs.findIndex((t) => t.id === targetTabId)
+
+    if (draggedIndex === -1 || targetIndex === -1) return
+
+    const newTabs = [...tabs]
+    const [removed] = newTabs.splice(draggedIndex, 1)
+    newTabs.splice(targetIndex, 0, removed)
+
+    // Update order numbers
+    const reorderedTabs = newTabs.map((tab, index) => ({ ...tab, order: index }))
+    setTabs(reorderedTabs)
+    setDraggedTab(null)
+  }
+
+  const handleDragEnd = () => {
+    setDraggedTab(null)
+  }
+
+  const handleThumbnailUpload = async (tabId: string, file: File) => {
+    setUploadingThumbnails((prev) => new Set(prev).add(tabId))
+
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+
+      const response = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      })
+
+      if (response.ok) {
+        const { url } = await response.json()
+        setProductForms((prev) => ({
+          ...prev,
+          [tabId]: { ...prev[tabId], thumbnailUrl: url },
+        }))
+        toast.success("Thumbnail uploaded")
+      } else {
+        toast.error("Failed to upload thumbnail")
+      }
+    } catch (error) {
+      console.error("Error uploading thumbnail:", error)
+      toast.error("Upload failed")
+    } finally {
+      setUploadingThumbnails((prev) => {
+        const newSet = new Set(prev)
+        newSet.delete(tabId)
+        return newSet
+      })
+    }
+  }
+
+  const saveProduct = async (tabId: string) => {
+    const product = productForms[tabId]
+    if (!product?.title || !product?.description || !product?.externalUrl || !product?.ctaText) {
+      toast.error("Please fill in all required fields")
+      return
+    }
+
+    try {
+      const token = await user?.getIdToken()
+      const response = await fetch("/api/storefront-tabs/products", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ tabId, ...product }),
+      })
+
+      if (response.ok) {
+        toast.success("Product added successfully")
+        setProductForms((prev) => {
+          const newForms = { ...prev }
+          delete newForms[tabId]
+          return newForms
+        })
+        setExpandedTabs((prev) => {
+          const newSet = new Set(prev)
+          newSet.delete(tabId)
+          return newSet
+        })
+      } else {
+        toast.error("Failed to add product")
+      }
+    } catch (error) {
+      console.error("Error saving product:", error)
+      toast.error("Failed to save product")
+    }
+  }
+
+  const updateProductForm = (tabId: string, field: keyof ExternalProduct, value: any) => {
+    setProductForms((prev) => ({
+      ...prev,
+      [tabId]: { ...prev[tabId], [field]: value },
+    }))
+  }
+
+  const ctaPresets = ["Join Now", "Shop Now", "Get Access", "Visit", "Learn More", "Buy Now"]
+
   const isProUser = membershipPlan === "faceless_pro" || membershipPlan === "facelessprenuer"
   const isFacelessprenuer = membershipPlan === "facelessprenuer"
 
@@ -111,15 +253,15 @@ export default function StorefrontTabsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-black text-white p-6">
-      <div className="max-w-5xl mx-auto space-y-8">
+    <div className="min-h-screen p-6 pb-24">
+      <div className="space-y-8">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-light mb-2">Storefront Tabs</h1>
@@ -130,42 +272,198 @@ export default function StorefrontTabsPage() {
           </Button>
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-8">
           <div>
             <h2 className="text-xl font-medium mb-4">Standard Tabs</h2>
-            <div className="grid gap-4">
+            <div className="space-y-2">
               {standardTabs.map((tab) => {
                 const isDefaultTab = ["free_content", "premium_content", "ebooks"].includes(tab.type)
                 const canManageProducts = tab.enabled && !isDefaultTab
+                const isExpanded = expandedTabs.has(tab.id)
+                const productForm = productForms[tab.id] || {}
 
                 return (
                   <div
                     key={tab.id}
-                    className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 flex items-center justify-between"
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, tab.id)}
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleDrop(e, tab.id)}
+                    onDragEnd={handleDragEnd}
+                    className={`border-b border-zinc-800 transition-all ${draggedTab === tab.id ? "opacity-50" : ""}`}
                   >
-                    <div className="flex items-center gap-4 flex-1">
-                      <GripVertical className="w-5 h-5 text-zinc-600" />
-                      <div className="flex-1">
-                        <h3 className="font-medium">{tab.name}</h3>
-                        <p className="text-sm text-zinc-400">
-                          {isDefaultTab ? "Always visible" : "Toggle to show on storefront"}
-                        </p>
+                    <div className="py-4 flex items-center justify-between group">
+                      <div className="flex items-center gap-4 flex-1">
+                        <GripVertical className="w-5 h-5 text-zinc-600 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <div className="flex-1">
+                          <h3 className="font-medium">{tab.name}</h3>
+                          <p className="text-sm text-zinc-500">
+                            {isDefaultTab ? "Always visible" : "Toggle to show on storefront"}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {canManageProducts && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => toggleExpanded(tab.id)}
+                            className="text-zinc-400 hover:text-white"
+                          >
+                            {isExpanded ? (
+                              <>
+                                <ChevronUp className="w-4 h-4 mr-2" />
+                                Hide Products
+                              </>
+                            ) : (
+                              <>
+                                <ChevronDown className="w-4 h-4 mr-2" />
+                                Add Products
+                              </>
+                            )}
+                          </Button>
+                        )}
+                        <Switch
+                          checked={tab.enabled}
+                          onCheckedChange={() => toggleTab(tab.id)}
+                          disabled={isDefaultTab}
+                        />
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      {canManageProducts && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => router.push(`/dashboard/storefront-tabs/${tab.id}/products`)}
-                          className="border-zinc-700 text-white hover:bg-zinc-800"
-                        >
-                          <Settings className="w-4 h-4 mr-2" />
-                          Manage Products
-                        </Button>
-                      )}
-                      <Switch checked={tab.enabled} onCheckedChange={() => toggleTab(tab.id)} disabled={isDefaultTab} />
-                    </div>
+
+                    {canManageProducts && isExpanded && (
+                      <div className="pb-6 pl-9 space-y-4 border-l-2 border-zinc-800 ml-2">
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-sm font-medium mb-2">Thumbnail Image *</label>
+                            <div className="flex items-center gap-4">
+                              {productForm.thumbnailUrl ? (
+                                <div className="relative w-32 h-32 rounded-lg overflow-hidden border border-zinc-700">
+                                  <img
+                                    src={productForm.thumbnailUrl || "/placeholder.svg"}
+                                    alt="Thumbnail"
+                                    className="w-full h-full object-cover"
+                                  />
+                                  <button
+                                    onClick={() => updateProductForm(tab.id, "thumbnailUrl", "")}
+                                    className="absolute top-1 right-1 bg-black/70 rounded-full p-1 hover:bg-black"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <label className="w-32 h-32 border-2 border-dashed border-zinc-700 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-zinc-600 transition-colors">
+                                  <Upload className="w-6 h-6 text-zinc-500 mb-1" />
+                                  <span className="text-xs text-zinc-500">Upload</span>
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0]
+                                      if (file) handleThumbnailUpload(tab.id, file)
+                                    }}
+                                  />
+                                </label>
+                              )}
+                              {uploadingThumbnails.has(tab.id) && (
+                                <span className="text-sm text-zinc-400">Uploading...</span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium mb-2">Title *</label>
+                            <Input
+                              placeholder="e.g., Join My Discord"
+                              value={productForm.title || ""}
+                              onChange={(e) => updateProductForm(tab.id, "title", e.target.value)}
+                              className="bg-transparent border-zinc-700"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium mb-2">Description *</label>
+                            <Textarea
+                              placeholder="Describe what this product offers..."
+                              value={productForm.description || ""}
+                              onChange={(e) => updateProductForm(tab.id, "description", e.target.value)}
+                              className="bg-transparent border-zinc-700 min-h-[100px]"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium mb-2">External URL *</label>
+                            <Input
+                              placeholder="https://..."
+                              value={productForm.externalUrl || ""}
+                              onChange={(e) => updateProductForm(tab.id, "externalUrl", e.target.value)}
+                              className="bg-transparent border-zinc-700"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium mb-2">Call-to-Action Button Text *</label>
+                            <Input
+                              placeholder="e.g., Join Now"
+                              value={productForm.ctaText || ""}
+                              onChange={(e) => updateProductForm(tab.id, "ctaText", e.target.value)}
+                              className="bg-transparent border-zinc-700"
+                            />
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {ctaPresets.map((preset) => (
+                                <Button
+                                  key={preset}
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => updateProductForm(tab.id, "ctaText", preset)}
+                                  className="text-xs border-zinc-700 hover:bg-zinc-800"
+                                >
+                                  {preset}
+                                </Button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium mb-2">Display Price (Optional)</label>
+                            <Input
+                              placeholder='e.g., "$49" or "Free"'
+                              value={productForm.price || ""}
+                              onChange={(e) => updateProductForm(tab.id, "price", e.target.value)}
+                              className="bg-transparent border-zinc-700"
+                            />
+                          </div>
+
+                          <div className="flex items-center gap-3 pt-2">
+                            <Button
+                              onClick={() => saveProduct(tab.id)}
+                              className="bg-white text-black hover:bg-zinc-200"
+                            >
+                              Save Product
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              onClick={() => {
+                                setExpandedTabs((prev) => {
+                                  const newSet = new Set(prev)
+                                  newSet.delete(tab.id)
+                                  return newSet
+                                })
+                                setProductForms((prev) => {
+                                  const newForms = { ...prev }
+                                  delete newForms[tab.id]
+                                  return newForms
+                                })
+                              }}
+                              className="text-zinc-400 hover:text-white"
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )
               })}
@@ -196,35 +494,33 @@ export default function StorefrontTabsPage() {
             </div>
 
             {customTabs.length === 0 ? (
-              <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-8 text-center">
+              <div className="border border-zinc-800 rounded-lg p-8 text-center">
                 <p className="text-zinc-400">No custom tabs yet</p>
                 {!isFacelessprenuer && (
                   <p className="text-zinc-500 text-sm mt-2">Upgrade to Facelessprenuer to add custom tabs</p>
                 )}
               </div>
             ) : (
-              <div className="grid gap-4">
+              <div className="space-y-2">
                 {customTabs.map((tab) => (
                   <div
                     key={tab.id}
-                    className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 flex items-center justify-between"
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, tab.id)}
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleDrop(e, tab.id)}
+                    onDragEnd={handleDragEnd}
+                    className={`border-b border-zinc-800 py-4 flex items-center justify-between group ${
+                      draggedTab === tab.id ? "opacity-50" : ""
+                    }`}
                   >
                     <div className="flex items-center gap-4 flex-1">
-                      <GripVertical className="w-5 h-5 text-zinc-600" />
+                      <GripVertical className="w-5 h-5 text-zinc-600 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity" />
                       <div className="flex-1">
                         <h3 className="font-medium">{tab.name}</h3>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => router.push(`/dashboard/storefront-tabs/${tab.id}/products`)}
-                        className="border-zinc-700 text-white hover:bg-zinc-800"
-                      >
-                        <Settings className="w-4 h-4 mr-2" />
-                        Manage Products
-                      </Button>
                       <Switch checked={tab.enabled} onCheckedChange={() => toggleTab(tab.id)} />
                     </div>
                   </div>
