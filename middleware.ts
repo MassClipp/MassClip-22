@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
-import { getCustomDomainByHostname } from "@/lib/custom-domain-cache"
-import { db } from "@/lib/firebase-admin"
+
+// Custom domain routing is now handled differently to support Vercel Edge deployment
 
 export async function middleware(request: NextRequest) {
   const hostname = request.headers.get("host") || ""
   const pathname = request.nextUrl.pathname
 
+  // Skip middleware for API routes, static files, and Next.js internals
   if (
     pathname.startsWith("/api") ||
     pathname.startsWith("/_next") ||
@@ -16,6 +17,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // Allow default domains to pass through
   const isDefaultDomain =
     hostname.includes("massclip.com") ||
     hostname.includes("massclip.pro") ||
@@ -23,46 +25,28 @@ export async function middleware(request: NextRequest) {
     hostname.includes("vercel.app")
 
   if (!isDefaultDomain) {
-    console.log(`[Middleware] Custom domain detected: ${hostname}`)
+    // This avoids Firebase Admin calls in Edge middleware
+    console.log(`[Middleware] Custom domain detected: ${hostname}, redirecting to handler`)
 
+    const url = request.nextUrl.clone()
+    url.searchParams.set("customDomain", hostname)
+    url.searchParams.set("originalPath", pathname)
+    url.pathname = "/api/custom-domain/resolve"
+
+    // Use fetch to call the API route and get redirect info
     try {
-      // Look up custom domain in database
-      const customDomain = await getCustomDomainByHostname(hostname)
-
-      if (customDomain && customDomain.verified && customDomain.status === "active") {
-        // Get the user's username
-        const userDoc = await db.collection("users").doc(customDomain.userId).get()
-
-        if (userDoc.exists) {
-          const userData = userDoc.data()
-          const username = userData?.username
-
-          if (username) {
-            console.log(`[Middleware] Routing ${hostname} to /creator/${username}`)
-
-            // Rewrite to the creator's storefront
-            const url = request.nextUrl.clone()
-            url.pathname = `/creator/${username}${pathname === "/" ? "" : pathname}`
-
-            return NextResponse.rewrite(url)
-          }
+      const response = await fetch(url.toString())
+      if (response.ok) {
+        const data = await response.json()
+        if (data.rewriteTo) {
+          return NextResponse.rewrite(new URL(data.rewriteTo, request.url))
         }
       }
-
-      // Domain not verified or doesn't exist
-      console.log(`[Middleware] Domain not verified: ${hostname}`)
-      return NextResponse.rewrite(new URL("/domain-not-found", request.url))
     } catch (error) {
-      console.error("[Middleware] Error processing custom domain:", error)
-      return NextResponse.rewrite(new URL("/domain-not-found", request.url))
+      console.error("[Middleware] Error resolving custom domain:", error)
     }
-  }
 
-  if (
-    request.nextUrl.pathname === "/api/webhooks/stripe" ||
-    request.nextUrl.pathname.startsWith("/api/webhook-handler")
-  ) {
-    return NextResponse.next()
+    return NextResponse.rewrite(new URL("/domain-not-found", request.url))
   }
 
   return NextResponse.next()
