@@ -50,9 +50,23 @@ export async function POST(request: NextRequest) {
     let planName: string
 
     if (plan === "faceless_pro") {
+      let hasUsedTrial = false
+      try {
+        const freeUserDoc = await adminDb.collection("freeUsers").doc(uid).get()
+        if (freeUserDoc.exists) {
+          const freeUserData = freeUserDoc.data()
+          hasUsedTrial = freeUserData?.hasUsedFreeTrial || false
+        }
+      } catch (error) {
+        console.error("⚠️ [Membership Checkout] Error checking trial status:", error)
+      }
+
       priceId = FACELESS_PRO_PRICE_ID
+      trialPeriodDays = hasUsedTrial ? undefined : 14 // No trial if already used
       planName = "faceless_pro"
-      console.log(`💲 [Membership Checkout] Faceless Pro - $29/month (no trial)`)
+      console.log(
+        `💲 [Membership Checkout] Faceless Pro - ${hasUsedTrial ? "$29/month (no trial)" : "14-day trial then $29/month"}`,
+      )
     } else if (plan === "facelessprenuer") {
       if (!FACELESSPRENUER_FIRST_TIME_PRICE_ID || !FACELESSPRENUER_REGULAR_PRICE_ID) {
         console.error("❌ [Membership Checkout] Missing Facelessprenuer price IDs")

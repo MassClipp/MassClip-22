@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { CheckCircle, ArrowRight, Sparkles, Crown, Zap, Shield, Folder, Package } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { getSiteUrl } from "@/lib/url-utils"
+import { useUserPlan } from "@/hooks/use-user-plan"
 
 type PlanType = "starter" | "creator_vip" | "facelessprenuer" | "faceless_pro" | "unknown"
 
@@ -19,20 +20,17 @@ export default function SubscriptionSuccess() {
   const [message, setMessage] = useState("Verifying your subscription...")
   const [planType, setPlanType] = useState<PlanType>("unknown")
 
-  // Get the site URL safely
+  const { refetchPlan } = useUserPlan()
+
   const siteUrl = getSiteUrl()
 
-  // Get the session ID from the URL
   const sessionId = searchParams?.get("session_id")
 
-  // Verify the subscription when the component mounts
   useEffect(() => {
-    // If no user, wait for auth to initialize
     if (!user) {
       return
     }
 
-    // If no session ID, show error
     if (!sessionId) {
       setStatus("error")
       setMessage("No session ID found. Please contact support.")
@@ -40,12 +38,10 @@ export default function SubscriptionSuccess() {
       return
     }
 
-    // Verify the subscription
     const verifySubscription = async () => {
       try {
         const token = await user.getIdToken()
 
-        // Call an API to verify the subscription
         const response = await fetch(`/api/verify-subscription?sessionId=${sessionId}&userId=${user.uid}`, {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -60,6 +56,9 @@ export default function SubscriptionSuccess() {
 
           setStatus("success")
           setMessage("Your subscription has been activated successfully!")
+
+          console.log("[v0] Subscription success - refetching membership data")
+          await refetchPlan()
 
           if (typeof window !== "undefined" && (window as any).fbq) {
             ;(window as any).fbq("track", "Purchase", {
@@ -90,9 +89,8 @@ export default function SubscriptionSuccess() {
     }
 
     verifySubscription()
-  }, [user, sessionId])
+  }, [user, sessionId, refetchPlan])
 
-  // If no user, redirect to login
   useEffect(() => {
     if (!user && !isVerifying) {
       router.push(`/login?redirect=/subscription/success${sessionId ? `?session_id=${sessionId}` : ""}`)
