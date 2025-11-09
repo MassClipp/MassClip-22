@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { CheckCircle2, XCircle, Clock, AlertCircle, RotateCcw, Sparkles } from "lucide-react"
+import { CheckCircle2, XCircle, Clock, AlertCircle, RotateCcw, Sparkles, Trash2 } from "lucide-react"
 import { auth } from "@/lib/firebase"
 import { useAuthState } from "react-firebase-hooks/auth"
 
@@ -199,6 +199,51 @@ export default function TestCustomDomainPage() {
     }
   }
 
+  const handleDeleteDomain = async () => {
+    if (!domainId) {
+      setMessage("No domain to delete")
+      return
+    }
+
+    if (!confirm(`Are you sure you want to delete the domain: ${testDomain}?`)) {
+      return
+    }
+
+    setStatus("deleting")
+    addLog(`Deleting domain ID: ${domainId}`)
+
+    try {
+      const token = await getAuthToken()
+
+      const response = await fetch("/api/custom-domain/remove", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ domainId }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setMessage("Domain deleted successfully!")
+        addLog(`✓ Domain deleted: ${testDomain}`)
+        addLog(`🔄 Resetting test...`)
+        // Reset after 1 second to show success message
+        setTimeout(() => resetTest(), 1000)
+      } else {
+        setStatus("error")
+        setMessage(data.error || "Failed to delete domain")
+        addLog(`✗ Delete error: ${data.error}`)
+      }
+    } catch (error: any) {
+      setStatus("error")
+      setMessage(error.message)
+      addLog(`✗ Exception: ${error.message}`)
+    }
+  }
+
   const getStatusIcon = () => {
     switch (status) {
       case "verified":
@@ -213,6 +258,8 @@ export default function TestCustomDomainPage() {
         return <Clock className="h-5 w-5 text-blue-500 animate-spin" />
       case "pending":
         return <AlertCircle className="h-5 w-5 text-yellow-500" />
+      case "deleting":
+        return <Trash2 className="h-5 w-5 text-red-500 animate-spin" />
       default:
         return null
     }
@@ -315,6 +362,12 @@ export default function TestCustomDomainPage() {
             <Button onClick={handleCheckSSL} variant="outline" disabled={status !== "verified"}>
               3. Check SSL (manual override)
             </Button>
+            {domainId && (
+              <Button onClick={handleDeleteDomain} disabled={status === "deleting"} variant="destructive" size="sm">
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete Domain
+              </Button>
+            )}
             <Button onClick={resetTest} variant="ghost" className="ml-auto" disabled={status === "loading"}>
               <RotateCcw className="h-4 w-4 mr-2" />
               Reset Test
