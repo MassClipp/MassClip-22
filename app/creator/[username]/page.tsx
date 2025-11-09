@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation"
+import { notFound, redirect } from "next/navigation"
 import type { Metadata } from "next"
 import { initializeFirebaseAdmin, db } from "@/lib/firebase-admin"
 import CreatorProfileMinimal from "@/components/creator-profile-minimal"
@@ -162,6 +162,25 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
     if (!userData || !uid) {
       console.log(`[Page] Creator profile not found for username: ${username}`)
       notFound()
+    }
+
+    const customDomainDoc = await db
+      .collection("customDomains")
+      .where("userId", "==", uid)
+      .where("verified", "==", true)
+      .where("status", "==", "active")
+      .limit(1)
+      .get()
+
+    if (!customDomainDoc.empty) {
+      const customDomain = customDomainDoc.docs[0].data()
+      const currentHost = typeof window !== "undefined" ? window.location.host : ""
+
+      // Only redirect if we're on the default domain, not already on custom domain
+      if (currentHost.includes("massclip.com") || currentHost.includes("massclip.pro")) {
+        console.log(`[Page] Redirecting to custom domain: ${customDomain.domain}`)
+        redirect(`https://${customDomain.domain}`)
+      }
     }
 
     const storefrontActive = userData.storefrontActive ?? true
