@@ -2,7 +2,6 @@ import { type NextRequest, NextResponse } from "next/server"
 import { initializeFirebaseAdmin, db } from "@/lib/firebase-admin"
 import { getAuth } from "firebase-admin/auth"
 import { isApexDomain, getDNSInstructions } from "@/lib/dns-utils"
-import crypto from "crypto"
 
 export async function POST(request: NextRequest) {
   try {
@@ -72,8 +71,12 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Generate verification token
-    const verificationToken = `vc-domain-verify=${crypto.randomBytes(32).toString("hex")}`
+    const tokenBytes = new Uint8Array(32)
+    crypto.getRandomValues(tokenBytes)
+    const hexToken = Array.from(tokenBytes)
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("")
+    const verificationToken = `vc-domain-verify=${hexToken}`
 
     const isApex = isApexDomain(domain)
     const dnsInstructions = getDNSInstructions(domain, verificationToken, isApex)
