@@ -1,17 +1,33 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/firebase-admin"
 
-// This runs in Node.js runtime so Firebase Admin works properly
+// In-memory cache for domain lookups
+const domainCache = new Map<string, { username: string; timestamp: number }>()
+const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+
+export const runtime = "nodejs" // Ensure Node.js runtime for Firebase Admin
 
 export async function GET(request: NextRequest) {
   const customDomain = request.nextUrl.searchParams.get("customDomain")
   const originalPath = request.nextUrl.searchParams.get("originalPath") || "/"
+
+  console.log(`[v0] [Resolve API] Called with domain: ${customDomain}, path: ${originalPath}`)
 
   if (!customDomain) {
     return NextResponse.json({ error: "No domain provided" }, { status: 400 })
   }
 
   try {
+    // Check cache first
+    const cached = domainCache.get(customDomain)
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      console.log(`[v0] [Resolve API] Cache hit for ${customDomain} -> ${cached.username}`)
+      const rewritePath = `/creator/${cached.username}${originalPath === "/" ? "" : originalPath}`
+      return NextResponse.json({ rewriteTo: rewritePath, cached: true })
+    }
+
+    console.log(`[v0] [Resolve API] Cache miss, querying Firestore`)
+
     // Query Firestore for the custom domain
     const snapshot = await db
       .collection("customDomains")
@@ -22,28 +38,50 @@ export async function GET(request: NextRequest) {
       .get()
 
     if (snapshot.empty) {
-      return NextResponse.json({ error: "Domain not found" }, { status: 404 })
+      console.log(`[v0] [Resolve API] Domain not found: ${customDomain}`)
+      return NextResponse.json({ error: "Domain not found or not verified" }, { status: 404 })
     }
 
     const doc = snapshot.docs[0]
     const data = doc.data()
+    console.log(`[v0] [Resolve API] Found domain doc for userId: ${data.userId}`)
 
     // Get the user's username
     const userDoc = await db.collection("users").doc(data.userId).get()
 
-    if (userDoc.exists) {
-      const userData = userDoc.data()
-      const username = userData?.username
-
-      if (username) {
-        const rewritePath = `/creator/${username}${originalPath === "/" ? "" : originalPath}`
-        return NextResponse.json({ rewriteTo: rewritePath })
-      }
+    if (!userDoc.exists) {
+      console.log(`[v0] [Resolve API] User not found: ${data.userId}`)
+      return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
-    return NextResponse.json({ error: "User not found" }, { status: 404 })
+    const userData = userDoc.data()
+    const username = userData?.username
+
+    if (!username) {
+      console.log(`[v0] [Resolve API] Username not found for user: ${data.userId}`)
+      return NextResponse.json({ error: "Username not found" }, { status: 404 })
+    }
+
+    // Cache the successful lookup
+    domainCache.set(customDomain, { username, timestamp: Date.now() })
+    console.log(`[v0] [Resolve API] Cached mapping: ${customDomain} -> ${username}`)
+
+    const rewritePath = `/creator/${username}${originalPath === "/" ? "" : originalPath}`
+    console.log(`[v0] [Resolve API] Returning rewrite path: ${rewritePath}`)
+
+    return NextResponse.json({
+      rewriteTo: rewritePath,
+      username,
+      cached: false,
+    })
   } catch (error) {
-    console.error("[Custom Domain Resolve] Error:", error)
-    return NextResponse.json({ error: "Internal error" }, { status: 500 })
+    console.error("[v0] [Custom Domain Resolve] Error:", error)
+    return NextResponse.json(
+      {
+        error: "Internal error",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }

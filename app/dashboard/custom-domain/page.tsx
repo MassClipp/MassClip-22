@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react"
 import { useAuth } from "@/contexts/auth-context"
+import { doc, getDoc } from "firebase/firestore"
+import { db } from "@/lib/firebase"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -22,24 +24,42 @@ export default function CustomDomainPage() {
   const [verifying, setVerifying] = useState(false)
   const [removing, setRemoving] = useState(false)
 
-  const [hasPermission, setHasPermission] = useState(false)
-  const [userPlan, setUserPlan] = useState<string>("free")
+  const [isFacelessprenuer, setIsFacelessprenuer] = useState(false)
   const [domainInput, setDomainInput] = useState("")
   const [currentDomain, setCurrentDomain] = useState<any>(null)
   const [dnsInstructions, setDnsInstructions] = useState<any>(null)
 
   useEffect(() => {
     if (user) {
-      checkPermissionsAndFetchDomain()
+      checkMembership()
+      fetchCurrentDomain()
     }
   }, [user])
 
-  const checkPermissionsAndFetchDomain = async () => {
+  const checkMembership = async () => {
+    if (!user) return
+
+    try {
+      const userDoc = await getDoc(doc(db, "users", user.uid))
+      if (userDoc.exists()) {
+        const userData = userDoc.data()
+        const membershipTier = userData.membershipTier || userData.membership || "free"
+        const membershipStatus = userData.membershipStatus || userData.subscriptionStatus || "inactive"
+        const isPro = membershipTier === "facelessprenuer" && membershipStatus === "active"
+        setIsFacelessprenuer(isPro)
+      }
+    } catch (error) {
+      console.error("Error checking membership:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchCurrentDomain = async () => {
     if (!user) return
 
     try {
       const token = await user.getIdToken()
-
       const response = await fetch("/api/custom-domain/status", {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -48,25 +68,15 @@ export default function CustomDomainPage() {
 
       if (response.ok) {
         const data = await response.json()
-        setHasPermission(data.hasPermission !== false)
-        setUserPlan(data.plan || "free")
-
         if (data.domain) {
           setCurrentDomain({
             ...data.domain,
             domainId: data.domain.id || data.domainId,
           })
         }
-      } else if (response.status === 403) {
-        setHasPermission(false)
-        const data = await response.json()
-        setUserPlan(data.plan || "free")
       }
     } catch (error) {
-      console.error("Error checking permissions:", error)
-      setHasPermission(false)
-    } finally {
-      setLoading(false)
+      console.error("Error fetching domain:", error)
     }
   }
 
@@ -104,7 +114,7 @@ export default function CustomDomainPage() {
         status: "pending",
         verificationToken: data.verificationToken,
         isApex: data.isApex,
-        domainId: data.domainId,
+        domainId: data.domainId, // Store the document ID
       })
       setDnsInstructions(data.dnsInstructions)
       setDomainInput("")
@@ -261,7 +271,7 @@ export default function CustomDomainPage() {
     )
   }
 
-  if (!hasPermission) {
+  if (!isFacelessprenuer) {
     return (
       <div className="space-y-8">
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 pb-6 border-b border-zinc-800/50">
@@ -279,8 +289,7 @@ export default function CustomDomainPage() {
             <div className="text-center space-y-2 max-w-md">
               <h3 className="text-xl font-semibold text-white">Facelessprenuer Required</h3>
               <p className="text-zinc-400">
-                Custom domains are available exclusively for Facelessprenuer members.
-                {userPlan !== "free" && ` You are currently on the ${userPlan} plan.`} Upgrade to use your own branded
+                Custom domains are available exclusively for Facelessprenuer members. Upgrade to use your own branded
                 domain.
               </p>
             </div>
@@ -437,6 +446,7 @@ export default function CustomDomainPage() {
                     </p>
 
                     <div className="space-y-3">
+                      {/* TXT Record */}
                       <div className="p-4 rounded-lg bg-zinc-800/30 border border-zinc-700/50 space-y-3">
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-medium text-zinc-400">TXT Record (Verification)</span>
@@ -466,6 +476,7 @@ export default function CustomDomainPage() {
                         </div>
                       </div>
 
+                      {/* CNAME or A Record */}
                       <div className="p-4 rounded-lg bg-zinc-800/30 border border-zinc-700/50 space-y-3">
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-medium text-zinc-400">

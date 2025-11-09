@@ -4,7 +4,6 @@ import { getAuth } from "firebase-admin/auth"
 import { verifyDNSRecords } from "@/lib/dns-utils"
 import { addDomainToVercel } from "@/lib/vercel-api"
 import { Resend } from "resend"
-import { requireCustomDomainPermissions } from "@/lib/custom-domain-permissions"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -20,12 +19,6 @@ export async function POST(request: NextRequest) {
     const token = authHeader.split("Bearer ")[1]
     const decodedToken = await getAuth().verifyIdToken(token)
     const userId = decodedToken.uid
-
-    try {
-      await requireCustomDomainPermissions(userId)
-    } catch (error: any) {
-      return NextResponse.json({ error: error.message }, { status: 403 })
-    }
 
     const { domainId } = await request.json()
 
@@ -97,6 +90,21 @@ export async function POST(request: NextRequest) {
         customDomain: domainData.domain,
         customDomainId: domainId,
       })
+
+      console.log(`[v0] Domain verified successfully: ${domainData.domain} (ID: ${domainId})`)
+
+      // Invalidate cache for this domain by making a request to the resolve endpoint
+      try {
+        // This will populate the cache with the new verified domain
+        await fetch(
+          `${process.env.NEXT_PUBLIC_SITE_URL}/api/custom-domain/resolve?customDomain=${domainData.domain}&originalPath=/`,
+          {
+            method: "GET",
+          },
+        )
+      } catch (cacheError) {
+        console.error("[v0] Cache warm-up failed:", cacheError)
+      }
 
       // Send verification email
       const userDoc = await db.collection("users").doc(userId).get()

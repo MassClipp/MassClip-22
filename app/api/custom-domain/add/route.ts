@@ -2,7 +2,6 @@ import { type NextRequest, NextResponse } from "next/server"
 import { initializeFirebaseAdmin, db } from "@/lib/firebase-admin"
 import { getAuth } from "firebase-admin/auth"
 import { isApexDomain, getDNSInstructions } from "@/lib/dns-utils"
-import { requireCustomDomainPermissions } from "@/lib/custom-domain-permissions"
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,10 +16,17 @@ export async function POST(request: NextRequest) {
     const decodedToken = await getAuth().verifyIdToken(token)
     const userId = decodedToken.uid
 
-    try {
-      await requireCustomDomainPermissions(userId)
-    } catch (error: any) {
-      return NextResponse.json({ error: error.message }, { status: 403 })
+    // Check user is Facelessprenuer
+    const userDoc = await db.collection("users").doc(userId).get()
+    const userData = userDoc.data()
+
+    if (!userData) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 })
+    }
+
+    const membershipTier = userData.membershipTier || "free"
+    if (membershipTier !== "facelessprenuer") {
+      return NextResponse.json({ error: "Custom domains require Facelessprenuer membership" }, { status: 403 })
     }
 
     const { domain } = await request.json()
@@ -91,6 +97,8 @@ export async function POST(request: NextRequest) {
     }
 
     const docRef = await db.collection("customDomains").add(domainDoc)
+
+    console.log(`[v0] Custom domain added successfully: ${domain} (ID: ${docRef.id})`)
 
     return NextResponse.json({
       success: true,
