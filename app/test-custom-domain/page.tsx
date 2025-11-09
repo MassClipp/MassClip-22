@@ -5,19 +5,39 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { CheckCircle2, XCircle, Clock, AlertCircle } from "lucide-react"
+import { CheckCircle2, XCircle, Clock, AlertCircle, RotateCcw, Sparkles } from "lucide-react"
 import { auth } from "@/lib/firebase"
 import { useAuthState } from "react-firebase-hooks/auth"
 
 export default function TestCustomDomainPage() {
   const [user, loading] = useAuthState(auth)
-  const [testDomain, setTestDomain] = useState("test-shop.example.com")
+  const [testDomain, setTestDomain] = useState("")
   const [domainId, setDomainId] = useState<string | null>(null)
   const [status, setStatus] = useState<string>("idle")
   const [message, setMessage] = useState<string>("")
   const [logs, setLogs] = useState<string[]>([])
   const [domainAddedAt, setDomainAddedAt] = useState<number | null>(null)
   const [verifiedAt, setVerifiedAt] = useState<number | null>(null)
+
+  useEffect(() => {
+    generateRandomTestDomain()
+  }, [])
+
+  const generateRandomTestDomain = () => {
+    const randomId = Math.random().toString(36).substring(2, 8)
+    setTestDomain(`test-${randomId}.example.com`)
+  }
+
+  const resetTest = () => {
+    setDomainId(null)
+    setStatus("idle")
+    setMessage("")
+    setLogs([])
+    setDomainAddedAt(null)
+    setVerifiedAt(null)
+    generateRandomTestDomain()
+    addLog("🔄 Test reset - ready for new test")
+  }
 
   const addLog = (log: string) => {
     setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${log}`])
@@ -262,18 +282,30 @@ export default function TestCustomDomainPage() {
         <div className="space-y-4">
           <div>
             <label className="text-sm font-medium mb-2 block">Test Domain</label>
-            <Input
-              value={testDomain}
-              onChange={(e) => setTestDomain(e.target.value)}
-              placeholder="test-shop.example.com"
-              disabled={status !== "idle"}
-            />
+            <div className="flex gap-2">
+              <Input
+                value={testDomain}
+                onChange={(e) => setTestDomain(e.target.value)}
+                placeholder="test-shop.example.com"
+                disabled={status !== "idle"}
+                className="flex-1"
+              />
+              <Button
+                onClick={generateRandomTestDomain}
+                disabled={status !== "idle"}
+                variant="outline"
+                size="icon"
+                title="Generate random test domain"
+              >
+                <Sparkles className="h-4 w-4" />
+              </Button>
+            </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Use patterns: test-*.example.com, *.test, or localhost-*
+              Use patterns: test-*.example.com, *.test, or localhost-* (auto-generated)
             </p>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button onClick={handleAddDomain} disabled={status !== "idle" && status !== "error"}>
               1. Add Domain
             </Button>
@@ -282,6 +314,10 @@ export default function TestCustomDomainPage() {
             </Button>
             <Button onClick={handleCheckSSL} variant="outline" disabled={status !== "verified"}>
               3. Check SSL (manual override)
+            </Button>
+            <Button onClick={resetTest} variant="ghost" className="ml-auto" disabled={status === "loading"}>
+              <RotateCcw className="h-4 w-4 mr-2" />
+              Reset Test
             </Button>
           </div>
 

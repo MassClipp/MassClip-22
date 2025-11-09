@@ -8,8 +8,14 @@ export const isTestMode = () => {
 }
 
 export const isTestDomain = (domain: string) => {
-  // Test domains follow pattern: test-*.example.com or localhost-*.test
-  return domain.startsWith("test-") || domain.endsWith(".test") || domain.includes("localhost")
+  // Test domains follow pattern: test-*.example.com, *.test, localhost-*, or contains localhost
+  const lowerDomain = domain.toLowerCase()
+  return (
+    lowerDomain.startsWith("test-") ||
+    lowerDomain.startsWith("localhost") ||
+    lowerDomain.endsWith(".test") ||
+    lowerDomain.includes("localhost")
+  )
 }
 
 // Mock DNS verification - auto-passes after 30 seconds
