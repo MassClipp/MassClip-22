@@ -458,3 +458,17 @@ export interface StorefrontTabsConfig {
   tabs: StorefrontTab[]
   externalProducts: ExternalProduct[]
 }
+
+export interface CustomDomain {
+  id: string
+  userId: string
+  domain: string
+  verified: boolean
+  verificationToken: string
+  createdAt: string
+  verifiedAt: string | null
+  lastChecked: string
+  status: "pending" | "verifying" | "active" | "failed" | "removed"
+  sslStatus: "pending" | "active" | "error"
+  isApex: boolean
+}
