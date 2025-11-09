@@ -33,8 +33,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       domain: {
         id: domainDoc.id,
-        domainId: domainDoc.id, // Include both for compatibility
+        domainId: domainDoc.id,
         ...domainData,
+        // Ensure SSL status fields are included
+        sslStatus: domainData.sslStatus || "pending",
+        sslError: domainData.sslError || null,
       },
     })
   } catch (error: any) {

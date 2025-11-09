@@ -9,10 +9,22 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/components/ui/use-toast"
-import { Loader2, Globe, CheckCircle, AlertCircle, Lock, ExternalLink, Copy, RefreshCw, Trash2 } from "lucide-react"
+import {
+  Loader2,
+  Globe,
+  CheckCircle,
+  AlertCircle,
+  Lock,
+  ExternalLink,
+  Copy,
+  RefreshCw,
+  Trash2,
+  Shield,
+} from "lucide-react"
 import { useRouter } from "next/navigation"
 
 type DomainStatus = "pending" | "verifying" | "active" | "failed" | "removed"
+type SSLStatus = "pending" | "active" | "error"
 
 export default function CustomDomainPage() {
   const { user } = useAuth()
@@ -112,9 +124,10 @@ export default function CustomDomainPage() {
       setCurrentDomain({
         domain: data.domain,
         status: "pending",
+        sslStatus: "pending",
         verificationToken: data.verificationToken,
         isApex: data.isApex,
-        domainId: data.domainId, // Store the document ID
+        domainId: data.domainId,
       })
       setDnsInstructions(data.dnsInstructions)
       setDomainInput("")
@@ -163,6 +176,7 @@ export default function CustomDomainPage() {
           ...currentDomain,
           status: "active",
           verified: true,
+          sslStatus: "active",
         })
         toast({
           title: "Domain verified!",
@@ -256,6 +270,34 @@ export default function CustomDomainPage() {
           <div className="flex items-center gap-2 text-red-400">
             <AlertCircle className="h-4 w-4" />
             <span className="text-sm font-medium">Verification Failed</span>
+          </div>
+        )
+      default:
+        return null
+    }
+  }
+
+  const getSSLStatusBadge = (sslStatus: SSLStatus, sslError?: string | null) => {
+    switch (sslStatus) {
+      case "active":
+        return (
+          <div className="flex items-center gap-2 text-emerald-400">
+            <Shield className="h-4 w-4" />
+            <span className="text-sm font-medium">SSL Active</span>
+          </div>
+        )
+      case "pending":
+        return (
+          <div className="flex items-center gap-2 text-amber-400">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span className="text-sm font-medium">SSL Provisioning...</span>
+          </div>
+        )
+      case "error":
+        return (
+          <div className="flex items-center gap-2 text-red-400">
+            <AlertCircle className="h-4 w-4" />
+            <span className="text-sm font-medium">SSL Error</span>
           </div>
         )
       default:
@@ -375,7 +417,11 @@ export default function CustomDomainPage() {
                   <CardTitle>Current Domain</CardTitle>
                   <CardDescription>Your custom domain configuration</CardDescription>
                 </div>
-                {getStatusBadge(currentDomain.status)}
+                <div className="flex items-center gap-4">
+                  {getStatusBadge(currentDomain.status)}
+                  {currentDomain.status === "active" &&
+                    getSSLStatusBadge(currentDomain.sslStatus, currentDomain.sslError)}
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -414,6 +460,18 @@ export default function CustomDomainPage() {
                   </Button>
                 </div>
               </div>
+
+              {currentDomain.sslStatus === "error" && currentDomain.sslError && (
+                <div className="p-4 rounded-lg bg-red-900/20 border border-red-500/30">
+                  <div className="flex gap-3">
+                    <AlertCircle className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <p className="text-red-200 text-sm font-medium">SSL Certificate Error</p>
+                      <p className="text-red-300/80 text-xs leading-relaxed">{currentDomain.sslError}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {currentDomain.status !== "active" && (
                 <>
@@ -542,8 +600,13 @@ export default function CustomDomainPage() {
                     <div className="space-y-1">
                       <p className="text-emerald-200 text-sm font-medium">Domain Active</p>
                       <p className="text-emerald-300/80 text-xs leading-relaxed">
-                        Your custom domain is now live! Visitors can access your storefront at {currentDomain.domain}.
-                        Your original creator link still works and will redirect to your custom domain.
+                        Your custom domain is now live!
+                        {currentDomain.sslStatus === "active" &&
+                          " SSL certificate is active and your site is fully secured."}
+                        {currentDomain.sslStatus === "pending" &&
+                          " SSL certificate is being provisioned and may take up to 24 hours."}
+                        {currentDomain.sslStatus === "error" &&
+                          " There is an issue with your SSL certificate - please see error above."}
                       </p>
                     </div>
                   </div>

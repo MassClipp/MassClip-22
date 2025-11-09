@@ -470,5 +470,7 @@ export interface CustomDomain {
   lastChecked: string
   status: "pending" | "verifying" | "active" | "failed" | "removed"
   sslStatus: "pending" | "active" | "error"
+  sslError?: string | null
   isApex: boolean
+  updatedAt?: string
 }
