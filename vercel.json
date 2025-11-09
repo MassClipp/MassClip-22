@@ -29,6 +29,10 @@
     {
       "path": "/api/custom-domain/auto-verify-pending",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/custom-domain/health-check",
+      "schedule": "*/30 * * * *"
     }
   ]
 }

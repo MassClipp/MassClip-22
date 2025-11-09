@@ -4,6 +4,8 @@ import { getAuth } from "firebase-admin/auth"
 import { verifyDNSRecords } from "@/lib/dns-utils"
 import { addDomainToVercel } from "@/lib/vercel-api"
 import { Resend } from "resend"
+import { checkDomainRateLimit } from "@/lib/custom-domain-rate-limiter"
+import { sendDomainVerificationFailedEmail } from "@/lib/custom-domain-email-service"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -19,6 +21,17 @@ export async function POST(request: NextRequest) {
     const token = authHeader.split("Bearer ")[1]
     const decodedToken = await getAuth().verifyIdToken(token)
     const userId = decodedToken.uid
+
+    const rateLimitCheck = await checkDomainRateLimit(userId, "verify")
+    if (!rateLimitCheck.allowed) {
+      return NextResponse.json(
+        {
+          error: rateLimitCheck.message,
+          resetIn: rateLimitCheck.resetIn,
+        },
+        { status: 429 },
+      )
+    }
 
     const { domainId } = await request.json()
 
@@ -145,10 +158,25 @@ export async function POST(request: NextRequest) {
         lastChecked: now,
       })
 
+      if (rateLimitCheck.remaining <= 5) {
+        const userDoc = await db.collection("users").doc(userId).get()
+        const userData = userDoc.data()
+
+        if (userData?.email) {
+          await sendDomainVerificationFailedEmail(
+            userData.email,
+            domainData.domain,
+            "DNS records not found. Please ensure you've added the correct DNS records and wait for propagation (10-15 minutes).",
+            userData.displayName || userData.username,
+          )
+        }
+      }
+
       return NextResponse.json({
         success: false,
         verified: false,
         verificationResult,
+        remaining: rateLimitCheck.remaining,
         message: "DNS records not found yet. Please wait a few minutes and try again.",
       })
     }

@@ -473,4 +473,8 @@ export interface CustomDomain {
   sslError?: string | null
   isApex: boolean
   updatedAt?: string
+  healthStatus?: "healthy" | "degraded" | "down"
+  lastHealthCheck?: string
+  healthCheckFailures?: number
+  emailNotificationSent?: boolean
 }

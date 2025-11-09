@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { initializeFirebaseAdmin, db } from "@/lib/firebase-admin"
 import { getAuth } from "firebase-admin/auth"
 import { isApexDomain, getDNSInstructions } from "@/lib/dns-utils"
+import { checkDomainRateLimit, checkDomainSecurity } from "@/lib/custom-domain-rate-limiter"
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,6 +16,17 @@ export async function POST(request: NextRequest) {
     const token = authHeader.split("Bearer ")[1]
     const decodedToken = await getAuth().verifyIdToken(token)
     const userId = decodedToken.uid
+
+    const rateLimitCheck = await checkDomainRateLimit(userId, "add")
+    if (!rateLimitCheck.allowed) {
+      return NextResponse.json(
+        {
+          error: rateLimitCheck.message,
+          resetIn: rateLimitCheck.resetIn,
+        },
+        { status: 429 },
+      )
+    }
 
     // Check user is Facelessprenuer
     const userDoc = await db.collection("users").doc(userId).get()
@@ -33,6 +45,11 @@ export async function POST(request: NextRequest) {
 
     if (!domain) {
       return NextResponse.json({ error: "Domain is required" }, { status: 400 })
+    }
+
+    const securityCheck = await checkDomainSecurity(userId, domain)
+    if (!securityCheck.safe) {
+      return NextResponse.json({ error: securityCheck.reason }, { status: 403 })
     }
 
     // Validate domain format
