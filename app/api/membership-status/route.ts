@@ -27,20 +27,30 @@ export async function GET(request: NextRequest) {
 
     const userId = decodedToken.uid
 
+    console.log("[v0] Membership status check for user:", userId.substring(0, 8))
+
     // Get membership from the memberships service
     const membership = await getMembership(userId)
+
+    console.log("[v0] Membership data from service:", {
+      exists: !!membership,
+      plan: membership?.plan,
+      status: membership?.status,
+    })
 
     if (!membership) {
       const starterLimits = await getFreeUserLimits(userId)
 
       return NextResponse.json({
         plan: "starter",
+        membershipTier: "starter",
         isActive: false,
         status: "inactive",
+        membershipStatus: "inactive",
         features: {
           platformFeePercentage: 20,
-          maxVideosPerBundle: starterLimits.maxVideosPerBundle, // 15 for Starter
-          maxBundles: starterLimits.bundlesLimit, // 5 for Starter
+          maxVideosPerBundle: starterLimits.maxVideosPerBundle,
+          maxBundles: starterLimits.bundlesLimit,
         },
       })
     }
@@ -49,7 +59,6 @@ export async function GET(request: NextRequest) {
     const isCreatorPro = membership.plan === "creator_pro" || membership.status === "trialing"
     const isFacelessPro = membership.plan === "faceless_pro"
 
-    // Facelessprenuer and Creator Pro get 10% fee and unlimited
     const hasUnlimited = isFacelessprenuer || isCreatorPro
     const platformFee = isFacelessPro ? 15 : hasUnlimited ? 10 : 20
 
@@ -57,15 +66,12 @@ export async function GET(request: NextRequest) {
     let maxBundles: number | null = null
 
     if (hasUnlimited) {
-      // Facelessprenuer and Creator Pro have unlimited
       maxVideosPerBundle = null
       maxBundles = null
     } else if (isFacelessPro) {
-      // Updated Faceless Pro limits to match subscription.ts: 25 videos per bundle
       maxVideosPerBundle = 25
       maxBundles = 5
     } else {
-      // Starter plan - get actual limits (5 bundles, 15 videos per bundle)
       const starterLimits = await getFreeUserLimits(userId)
       maxVideosPerBundle = starterLimits.maxVideosPerBundle
       maxBundles = starterLimits.bundlesLimit
@@ -81,14 +87,22 @@ export async function GET(request: NextRequest) {
       : null
 
     const isInGracePeriod = membership.cancelAtPeriodEnd && currentPeriodEnd && currentPeriodEnd > now
-
-    // User is active if status is active/trialing OR if in grace period after cancellation
     const isActive = membership.status === "active" || membership.status === "trialing" || isInGracePeriod
+
+    console.log("[v0] Final membership status:", {
+      plan: membership.plan,
+      membershipTier: membership.plan,
+      isActive,
+      status: membership.status,
+      membershipStatus: membership.status,
+    })
 
     return NextResponse.json({
       plan: membership.plan,
-      isActive, // Include grace period in isActive check
+      membershipTier: membership.plan, // Add this for compatibility
+      isActive,
       status: membership.status,
+      membershipStatus: membership.status, // Add this for compatibility
       currentPeriodEnd: membership.currentPeriodEnd,
       cancelAtPeriodEnd: membership.cancelAtPeriodEnd,
       features: {
@@ -139,7 +153,6 @@ export async function POST(request: Request) {
             maxVideosPerBundle = null
             maxBundles = null
           } else if (isFacelessPro) {
-            // Updated Faceless Pro limits to match subscription.ts: 25 videos per bundle
             maxVideosPerBundle = 25
             maxBundles = 5
           } else {
@@ -150,8 +163,10 @@ export async function POST(request: Request) {
 
           return NextResponse.json({
             plan: membership.plan,
+            membershipTier: membership.plan, // Add this for compatibility
             isActive: true, // Still active during grace period
             status: "canceled",
+            membershipStatus: "canceled", // Add this for compatibility
             currentPeriodEnd: membership.currentPeriodEnd,
             cancelAtPeriodEnd: true,
             features: {
@@ -166,8 +181,10 @@ export async function POST(request: Request) {
       // No active subscription and no grace period
       return NextResponse.json({
         plan: "free",
+        membershipTier: "free", // Add this for compatibility
         isActive: false,
         status: "inactive",
+        membershipStatus: "inactive", // Add this for compatibility
         features: {
           platformFeePercentage: 20,
           maxVideosPerBundle: 10,
@@ -178,8 +195,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       plan: stripeStatus.plan,
+      membershipTier: stripeStatus.plan, // Add this for compatibility
       isActive: stripeStatus.isActive,
       status: stripeStatus.status,
+      membershipStatus: stripeStatus.status, // Add this for compatibility
       currentPeriodEnd: stripeStatus.currentPeriodEnd,
       cancelAtPeriodEnd: stripeStatus.cancelAtPeriodEnd,
       features: {

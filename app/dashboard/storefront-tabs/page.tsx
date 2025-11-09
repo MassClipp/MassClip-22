@@ -39,7 +39,11 @@ export default function StorefrontTabsPage() {
       })
       if (response.ok) {
         const data = await response.json()
-        setMembershipPlan(data.membership?.plan || "free")
+        console.log("[v0] Tabs page - Membership data:", data)
+
+        const plan = data.membershipTier || data.plan || "free"
+        console.log("[v0] Tabs page - Detected plan:", plan)
+        setMembershipPlan(plan)
       }
     } catch (error) {
       console.error("Error fetching membership:", error)

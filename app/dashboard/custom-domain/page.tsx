@@ -52,6 +52,8 @@ export default function CustomDomainPage() {
     if (!user) return
 
     try {
+      console.log("[v0] Checking membership for custom domain access")
+
       const token = await user.getIdToken()
       const response = await fetch("/api/membership-status", {
         headers: {
@@ -61,11 +63,16 @@ export default function CustomDomainPage() {
 
       if (response.ok) {
         const data = await response.json()
-        console.log("[v0] Membership status:", data)
-        const isPro = data.membershipTier === "facelessprenuer" && data.membershipStatus === "active"
+        console.log("[v0] Membership API response:", data)
+
+        const tier = data.membershipTier || data.plan
+        const status = data.membershipStatus || data.status
+        const isPro = tier === "facelessprenuer" && (status === "active" || data.isActive === true)
+
+        console.log("[v0] Facelessprenuer check:", { tier, status, isPro })
         setIsFacelessprenuer(isPro)
       } else {
-        // Fallback to direct Firebase check
+        console.log("[v0] Membership API failed, falling back to Firebase")
         const userDoc = await getDoc(doc(db, "users", user.uid))
         if (userDoc.exists()) {
           const userData = userDoc.data()
