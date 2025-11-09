@@ -395,6 +395,7 @@ export default function ProfilePage() {
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="membership">Membership</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
+          <TabsTrigger value="domain">Custom Domain</TabsTrigger>
         </TabsList>
 
         <TabsContent value="profile">
@@ -970,6 +971,34 @@ export default function ProfilePage() {
                   className="bg-white hover:bg-gray-100 text-black font-medium px-6"
                 >
                   Go to Security Settings
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="domain">
+          <Card className="bg-zinc-900/60 border-zinc-800/50 backdrop-blur-sm">
+            <CardHeader>
+              <CardTitle className="text-xl font-semibold">Custom Domain</CardTitle>
+              <CardDescription>Use your own domain for your storefront</CardDescription>
+            </CardHeader>
+
+            <CardContent className="space-y-6">
+              <div className="text-center py-8">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-zinc-800/50 flex items-center justify-center">
+                  <Globe className="h-8 w-8 text-zinc-400" />
+                </div>
+                <h3 className="text-lg font-medium text-white mb-2">Custom Domain Management</h3>
+                <p className="text-zinc-400 mb-6">
+                  Manage your custom domain settings, DNS configuration, and domain verification all in one place.
+                </p>
+
+                <Button
+                  onClick={() => router.push("/dashboard/custom-domain")}
+                  className="bg-white hover:bg-gray-100 text-black font-medium px-6"
+                >
+                  Manage Custom Domain
                 </Button>
               </div>
             </CardContent>
