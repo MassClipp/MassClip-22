@@ -5,7 +5,7 @@ import { verifyDNSRecords } from "@/lib/dns-utils"
 import { addDomainToVercel } from "@/lib/vercel-api"
 import { Resend } from "resend"
 import { checkDomainRateLimit } from "@/lib/custom-domain-rate-limiter"
-import { sendDomainVerificationFailedEmail } from "@/lib/custom-domain-email-service"
+import { isTestMode, isTestDomain } from "@/lib/custom-domain-test-mode"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -22,15 +22,17 @@ export async function POST(request: NextRequest) {
     const decodedToken = await getAuth().verifyIdToken(token)
     const userId = decodedToken.uid
 
-    const rateLimitCheck = await checkDomainRateLimit(userId, "verify")
-    if (!rateLimitCheck.allowed) {
-      return NextResponse.json(
-        {
-          error: rateLimitCheck.message,
-          resetIn: rateLimitCheck.resetIn,
-        },
-        { status: 429 },
-      )
+    if (!isTestMode()) {
+      const rateLimitCheck = await checkDomainRateLimit(userId, "verify")
+      if (!rateLimitCheck.allowed) {
+        return NextResponse.json(
+          {
+            error: rateLimitCheck.message,
+            resetIn: rateLimitCheck.resetIn,
+          },
+          { status: 429 },
+        )
+      }
     }
 
     const { domainId } = await request.json()
@@ -39,7 +41,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Domain ID is required" }, { status: 400 })
     }
 
-    // Get domain document
     const domainDoc = await db.collection("customDomains").doc(domainId).get()
 
     if (!domainDoc.exists) {
@@ -60,7 +61,10 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Verify DNS records
+    if (isTestMode() && isTestDomain(domainData.domain)) {
+      console.log(`[Custom Domain Verify] [TEST MODE] Verifying test domain: ${domainData.domain}`)
+    }
+
     const verificationResult = await verifyDNSRecords(
       domainData.domain,
       domainData.verificationToken,
@@ -71,13 +75,11 @@ export async function POST(request: NextRequest) {
     const now = new Date().toISOString()
 
     if (verificationResult.verified) {
-      // Add domain to Vercel
       try {
         await addDomainToVercel(domainData.domain)
       } catch (error: any) {
         console.error("[Custom Domain Verify] Vercel API error:", error)
 
-        // Update status to failed
         await db.collection("customDomains").doc(domainId).update({
           status: "failed",
           lastChecked: now,
@@ -90,16 +92,14 @@ export async function POST(request: NextRequest) {
         })
       }
 
-      // Update domain document
       await db.collection("customDomains").doc(domainId).update({
         verified: true,
         verifiedAt: now,
         lastChecked: now,
         status: "active",
-        sslStatus: "active",
+        sslStatus: "pending",
       })
 
-      // Update user document
       await db.collection("users").doc(userId).update({
         customDomain: domainData.domain,
         customDomainId: domainId,
@@ -107,20 +107,19 @@ export async function POST(request: NextRequest) {
 
       console.log(`[v0] Domain verified successfully: ${domainData.domain} (ID: ${domainId})`)
 
-      // Invalidate cache for this domain by making a request to the resolve endpoint
-      try {
-        // This will populate the cache with the new verified domain
-        await fetch(
-          `${process.env.NEXT_PUBLIC_SITE_URL}/api/custom-domain/resolve?customDomain=${domainData.domain}&originalPath=/`,
-          {
-            method: "GET",
-          },
-        )
-      } catch (cacheError) {
-        console.error("[v0] Cache warm-up failed:", cacheError)
+      if (!isTestMode() || !isTestDomain(domainData.domain)) {
+        try {
+          await fetch(
+            `${process.env.NEXT_PUBLIC_SITE_URL}/api/custom-domain/resolve?customDomain=${domainData.domain}&originalPath=/`,
+            {
+              method: "GET",
+            },
+          )
+        } catch (cacheError) {
+          console.error("[v0] Cache warm-up failed:", cacheError)
+        }
       }
 
-      // Send verification email
       const userDoc = await db.collection("users").doc(userId).get()
       const userData = userDoc.data()
 
@@ -142,7 +141,6 @@ export async function POST(request: NextRequest) {
           })
         } catch (emailError) {
           console.error("[Custom Domain Verify] Email send error:", emailError)
-          // Don't fail the verification if email fails
         }
       }
 
@@ -151,33 +149,18 @@ export async function POST(request: NextRequest) {
         verified: true,
         domain: domainData.domain,
         message: "Domain verified successfully!",
+        testMode: isTestMode() && isTestDomain(domainData.domain),
       })
     } else {
-      // Update last checked time
       await db.collection("customDomains").doc(domainId).update({
         status: "verifying",
         lastChecked: now,
       })
 
-      if (rateLimitCheck.remaining <= 5) {
-        const userDoc = await db.collection("users").doc(userId).get()
-        const userData = userDoc.data()
-
-        if (userData?.email) {
-          await sendDomainVerificationFailedEmail(
-            userData.email,
-            domainData.domain,
-            "DNS records not found. Please ensure you've added the correct DNS records and wait for propagation (10-15 minutes).",
-            userData.displayName || userData.username,
-          )
-        }
-      }
-
       return NextResponse.json({
         success: false,
         verified: false,
         verificationResult,
-        remaining: rateLimitCheck.remaining,
         message: "DNS records not found yet. Please wait a few minutes and try again.",
       })
     }
