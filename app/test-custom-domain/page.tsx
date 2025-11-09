@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -16,6 +16,8 @@ export default function TestCustomDomainPage() {
   const [status, setStatus] = useState<string>("idle")
   const [message, setMessage] = useState<string>("")
   const [logs, setLogs] = useState<string[]>([])
+  const [domainAddedAt, setDomainAddedAt] = useState<number | null>(null)
+  const [verifiedAt, setVerifiedAt] = useState<number | null>(null)
 
   const addLog = (log: string) => {
     setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${log}`])
@@ -29,6 +31,44 @@ export default function TestCustomDomainPage() {
     }
     return await user.getIdToken()
   }
+
+  useEffect(() => {
+    if (!domainAddedAt || status === "verified" || status === "error") return
+
+    const elapsed = Date.now() - domainAddedAt
+    const timeToVerify = 30000 - elapsed
+
+    if (timeToVerify <= 0) {
+      handleVerifyDomain()
+      return
+    }
+
+    const timer = setTimeout(() => {
+      addLog("⏰ 30 seconds elapsed - auto-verifying domain...")
+      handleVerifyDomain()
+    }, timeToVerify)
+
+    return () => clearTimeout(timer)
+  }, [domainAddedAt, status])
+
+  useEffect(() => {
+    if (!verifiedAt || status === "error") return
+
+    const elapsed = Date.now() - verifiedAt
+    const timeToSSLCheck = 60000 - elapsed
+
+    if (timeToSSLCheck <= 0) {
+      handleCheckSSL()
+      return
+    }
+
+    const timer = setTimeout(() => {
+      addLog("⏰ 1 minute elapsed - auto-checking SSL...")
+      handleCheckSSL()
+    }, timeToSSLCheck)
+
+    return () => clearTimeout(timer)
+  }, [verifiedAt, status])
 
   const handleAddDomain = async () => {
     setStatus("loading")
@@ -51,9 +91,12 @@ export default function TestCustomDomainPage() {
       if (data.success) {
         setDomainId(data.domainId)
         setStatus("pending")
-        setMessage("Domain added successfully! Waiting 30 seconds for DNS verification...")
+        const now = Date.now()
+        setDomainAddedAt(now)
+        setMessage("Domain added successfully! Auto-verifying in 30 seconds...")
         addLog(`✓ Domain added with ID: ${data.domainId}`)
         addLog(`Verification token: ${data.verificationToken}`)
+        addLog(`⏱️ Auto-verification scheduled for 30 seconds from now...`)
       } else {
         setStatus("error")
         setMessage(data.error || "Failed to add domain")
@@ -91,8 +134,11 @@ export default function TestCustomDomainPage() {
 
       if (data.verified) {
         setStatus("verified")
-        setMessage("Domain verified successfully!")
+        const now = Date.now()
+        setVerifiedAt(now)
+        setMessage("Domain verified successfully! Auto-checking SSL in 1 minute...")
         addLog(`✓ Domain verified: ${data.domain}`)
+        addLog(`⏱️ Auto SSL check scheduled for 1 minute from now...`)
       } else {
         setStatus("pending")
         setMessage(data.message || "DNS records not found yet. Wait 30 seconds from domain creation.")
@@ -117,13 +163,17 @@ export default function TestCustomDomainPage() {
       const data = await response.json()
 
       if (data.success) {
+        setStatus("complete")
         setMessage(`SSL check complete: ${data.updatedCount} domains updated`)
         addLog(`✓ SSL check: ${JSON.stringify(data)}`)
+        addLog(`🎉 Test complete! Custom domain flow verified successfully.`)
       } else {
+        setStatus("ssl-failed")
         setMessage("SSL check failed")
         addLog(`✗ SSL check failed: ${data.error}`)
       }
     } catch (error: any) {
+      setStatus("error")
       setMessage(error.message)
       addLog(`✗ Exception: ${error.message}`)
     }
@@ -132,8 +182,10 @@ export default function TestCustomDomainPage() {
   const getStatusIcon = () => {
     switch (status) {
       case "verified":
+      case "complete":
         return <CheckCircle2 className="h-5 w-5 text-green-500" />
       case "error":
+      case "ssl-failed":
         return <XCircle className="h-5 w-5 text-red-500" />
       case "loading":
       case "verifying":
@@ -226,10 +278,10 @@ export default function TestCustomDomainPage() {
               1. Add Domain
             </Button>
             <Button onClick={handleVerifyDomain} disabled={!domainId || status === "verified"} variant="secondary">
-              2. Verify Domain (after 30s)
+              2. Verify Domain (manual override)
             </Button>
             <Button onClick={handleCheckSSL} variant="outline" disabled={status !== "verified"}>
-              3. Check SSL (after 1min)
+              3. Check SSL (manual override)
             </Button>
           </div>
 
@@ -256,14 +308,18 @@ export default function TestCustomDomainPage() {
             <Badge variant="outline">30s</Badge>
             <div>
               <p className="font-medium">DNS Verification</p>
-              <p className="text-muted-foreground">Click "Verify Domain" - auto-passes after 30 seconds</p>
+              <p className="text-muted-foreground">
+                Auto-verifies after 30 seconds (or click button to verify manually)
+              </p>
             </div>
           </div>
           <div className="flex items-start gap-3">
             <Badge variant="outline">1min</Badge>
             <div>
               <p className="font-medium">SSL Provisioning</p>
-              <p className="text-muted-foreground">Click "Check SSL" - auto-provisions after 1 minute</p>
+              <p className="text-muted-foreground">
+                Auto-checks after 1 minute from verification (or click button manually)
+              </p>
             </div>
           </div>
         </div>
