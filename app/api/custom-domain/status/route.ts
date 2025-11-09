@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { initializeFirebaseAdmin, db } from "@/lib/firebase-admin"
 import { getAuth } from "firebase-admin/auth"
+import { checkCustomDomainPermissions } from "@/lib/custom-domain-permissions"
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,6 +16,19 @@ export async function GET(request: NextRequest) {
     const decodedToken = await getAuth().verifyIdToken(token)
     const userId = decodedToken.uid
 
+    const permissions = await checkCustomDomainPermissions(userId)
+
+    if (!permissions.canUseCustomDomain) {
+      return NextResponse.json(
+        {
+          hasPermission: false,
+          plan: permissions.plan,
+          error: permissions.reason,
+        },
+        { status: 403 },
+      )
+    }
+
     // Get user's custom domain
     const domainQuery = await db
       .collection("customDomains")
@@ -24,13 +38,19 @@ export async function GET(request: NextRequest) {
       .get()
 
     if (domainQuery.empty) {
-      return NextResponse.json({ domain: null })
+      return NextResponse.json({
+        hasPermission: true,
+        plan: permissions.plan,
+        domain: null,
+      })
     }
 
     const domainDoc = domainQuery.docs[0]
     const domainData = domainDoc.data()
 
     return NextResponse.json({
+      hasPermission: true,
+      plan: permissions.plan,
       domain: {
         id: domainDoc.id,
         domainId: domainDoc.id, // Include both for compatibility

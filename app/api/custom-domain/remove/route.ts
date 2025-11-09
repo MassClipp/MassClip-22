@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { initializeFirebaseAdmin, db } from "@/lib/firebase-admin"
 import { getAuth } from "firebase-admin/auth"
 import { removeDomainFromVercel } from "@/lib/vercel-api"
+import { requireCustomDomainPermissions } from "@/lib/custom-domain-permissions"
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,6 +16,12 @@ export async function POST(request: NextRequest) {
     const token = authHeader.split("Bearer ")[1]
     const decodedToken = await getAuth().verifyIdToken(token)
     const userId = decodedToken.uid
+
+    try {
+      await requireCustomDomainPermissions(userId)
+    } catch (error: any) {
+      return NextResponse.json({ error: error.message }, { status: 403 })
+    }
 
     const { domainId } = await request.json()
 

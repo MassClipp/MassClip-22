@@ -4,6 +4,7 @@ import { getAuth } from "firebase-admin/auth"
 import { verifyDNSRecords } from "@/lib/dns-utils"
 import { addDomainToVercel } from "@/lib/vercel-api"
 import { Resend } from "resend"
+import { requireCustomDomainPermissions } from "@/lib/custom-domain-permissions"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -19,6 +20,12 @@ export async function POST(request: NextRequest) {
     const token = authHeader.split("Bearer ")[1]
     const decodedToken = await getAuth().verifyIdToken(token)
     const userId = decodedToken.uid
+
+    try {
+      await requireCustomDomainPermissions(userId)
+    } catch (error: any) {
+      return NextResponse.json({ error: error.message }, { status: 403 })
+    }
 
     const { domainId } = await request.json()
 
