@@ -6,8 +6,11 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { CheckCircle2, XCircle, Clock, AlertCircle } from "lucide-react"
+import { auth } from "@/lib/firebase"
+import { useAuthState } from "react-firebase-hooks/auth"
 
 export default function TestCustomDomainPage() {
+  const [user, loading] = useAuthState(auth)
   const [testDomain, setTestDomain] = useState("test-shop.example.com")
   const [domainId, setDomainId] = useState<string | null>(null)
   const [status, setStatus] = useState<string>("idle")
@@ -20,15 +23,25 @@ export default function TestCustomDomainPage() {
 
   const testModeEnabled = process.env.NEXT_PUBLIC_CUSTOM_DOMAIN_TEST_MODE === "true"
 
+  const getAuthToken = async () => {
+    if (!user) {
+      throw new Error("User not authenticated")
+    }
+    return await user.getIdToken()
+  }
+
   const handleAddDomain = async () => {
     setStatus("loading")
     addLog(`Adding domain: ${testDomain}`)
 
     try {
+      const token = await getAuthToken()
+
       const response = await fetch("/api/custom-domain/add", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ domain: testDomain }),
       })
@@ -63,10 +76,13 @@ export default function TestCustomDomainPage() {
     addLog(`Verifying domain ID: ${domainId}`)
 
     try {
+      const token = await getAuthToken()
+
       const response = await fetch("/api/custom-domain/verify", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ domainId }),
       })
@@ -130,12 +146,46 @@ export default function TestCustomDomainPage() {
     }
   }
 
+  if (loading) {
+    return (
+      <div className="container mx-auto max-w-4xl p-8">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Clock className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return (
+      <div className="container mx-auto max-w-4xl p-8">
+        <Card className="p-8 text-center">
+          <AlertCircle className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold mb-2">Authentication Required</h2>
+          <p className="text-muted-foreground mb-4">
+            You must be logged in to test custom domains. Please sign in to continue.
+          </p>
+          <Button onClick={() => (window.location.href = "/login")}>Go to Login</Button>
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <div className="container mx-auto max-w-4xl p-8">
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-2">Custom Domain Test Mode</h1>
         <p className="text-muted-foreground">Test the complete custom domain flow without a real domain</p>
       </div>
+
+      <Card className="p-4 mb-6 bg-blue-50 border-blue-200">
+        <div className="flex items-center gap-2">
+          <CheckCircle2 className="h-5 w-5 text-blue-600" />
+          <p className="text-sm text-blue-900">
+            Authenticated as: <strong>{user.email}</strong>
+          </p>
+        </div>
+      </Card>
 
       <Card className="p-6 mb-6">
         <div className="flex items-center gap-2 mb-4">
