@@ -76,7 +76,8 @@ interface ContentItem {
 
 export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimalProps) {
   const [user] = useAuthState(auth)
-  const [activeTab, setActiveTab] = useState<"free" | "premium" | "ebooks">("free")
+  const [activeTab, setActiveTab] = useState<string>("free") // Changed to string to accommodate dynamic tabs
+  const [activeContentTab, setActiveContentTab] = useState<"free" | "premium" | "ebooks" | string>("free") // Renamed for clarity
   const [contentTypeFilter, setContentTypeFilter] = useState<"all" | "video" | "audio" | "image">("all")
   const [freeContent, setFreeContent] = useState<ContentItem[]>([])
   const [premiumContent, setPremiumContent] = useState<ContentItem[]>([])
@@ -86,6 +87,8 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
   const [premiumContentCount, setPremiumContentCount] = useState(0)
   const [ebooksContentCount, setEbooksContentCount] = useState(0)
   const [showToast, setShowToast] = useState(false)
+  const [storefrontTabs, setStorefrontTabs] = useState<any[]>([])
+  const [externalProducts, setExternalProducts] = useState<any[]>([])
 
   const getMemberSince = () => {
     if (creator.createdAt) {
@@ -145,6 +148,14 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
     const fetchContent = async () => {
       try {
         setLoading(true)
+
+        const tabsResponse = await fetch(`/api/storefront-tabs/${creator.uid}`)
+        if (tabsResponse.ok) {
+          const tabsData = await tabsResponse.json()
+          console.log("[v0] Storefront tabs data:", tabsData)
+          setStorefrontTabs(tabsData.tabs || [])
+          setExternalProducts(tabsData.externalProducts || [])
+        }
 
         // Fetch free content from free_content collection
         const freeResponse = await fetch(`/api/creator/${creator.uid}/free-content`)
@@ -226,7 +237,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
   }
 
   const getFilteredContent = () => {
-    if (activeTab !== "free" || contentTypeFilter === "all") {
+    if (activeContentTab !== "free" || contentTypeFilter === "all") {
       return currentContent
     }
 
@@ -236,14 +247,15 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
     })
   }
 
-  const currentContent = activeTab === "free" ? freeContent : activeTab === "premium" ? premiumContent : ebooksContent
+  const currentContent =
+    activeContentTab === "free" ? freeContent : activeContentTab === "premium" ? premiumContent : ebooksContent
   const filteredContent = getFilteredContent()
-  const availableTypes = activeTab === "free" ? getAvailableContentTypes(freeContent) : []
-  const showContentTypeFilter = activeTab === "free" && availableTypes.length > 1
+  const availableTypes = activeContentTab === "free" ? getAvailableContentTypes(freeContent) : []
+  const showContentTypeFilter = activeContentTab === "free" && availableTypes.length > 1
 
   console.log("[v0] Content filter state:", {
     // Added debug logging for filter state
-    activeTab,
+    activeContentTab,
     availableTypes,
     showContentTypeFilter,
     freeContentLength: freeContent.length,
@@ -251,10 +263,10 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
   })
 
   useEffect(() => {
-    if (activeTab === "premium" || activeTab === "ebooks") {
+    if (activeContentTab === "premium" || activeContentTab === "ebooks") {
       setContentTypeFilter("all")
     }
-  }, [activeTab])
+  }, [activeContentTab])
 
   return (
     <div className="min-h-screen bg-black relative">
@@ -859,6 +871,41 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
             )}
 
             <div className="flex items-center gap-3">
+              {storefrontTabs
+                .filter((tab) => tab.enabled)
+                .sort((a, b) => a.order - b.order)
+                .map((tab) => {
+                  // Map tab types to our local tab keys
+                  const tabKey = tab.type // Use the actual type from storefrontTabs
+
+                  // Only show tabs that have content or are standard content tabs
+                  const shouldShow =
+                    (tab.type === "free_content" && freeContentCount > 0) ||
+                    (tab.type === "premium_content" && premiumContentCount > 0) ||
+                    (tab.type === "ebooks" && ebooksContentCount > 0) ||
+                    tab.type === "community" ||
+                    tab.type === "merch" ||
+                    tab.type === "affiliates"
+
+                  if (!shouldShow) return null
+
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tabKey)}
+                      className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
+                        activeTab === tabKey ? "text-white" : "text-zinc-400 hover:text-zinc-300"
+                      }`}
+                    >
+                      {tab.name}
+                      {activeTab === tabKey && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
+                    </button>
+                  )
+                })}
+            </div>
+
+            {/* Standard Content Tabs (rendered if they exist and have content) */}
+            {freeContentCount > 0 && (
               <button
                 onClick={() => setActiveTab("free")}
                 className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
@@ -868,17 +915,19 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
                 Free Content
                 {activeTab === "free" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
               </button>
-            </div>
+            )}
 
-            <button
-              onClick={() => setActiveTab("premium")}
-              className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
-                activeTab === "premium" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
-              }`}
-            >
-              Premium Content
-              {activeTab === "premium" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
-            </button>
+            {premiumContentCount > 0 && (
+              <button
+                onClick={() => setActiveTab("premium")}
+                className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
+                  activeTab === "premium" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
+                }`}
+              >
+                Premium Content
+                {activeTab === "premium" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
+              </button>
+            )}
 
             {ebooksContentCount > 0 && (
               <button
@@ -903,21 +952,15 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
           ) : filteredContent.length > 0 ? (
             <div
               className={
-                activeTab === "premium" || activeTab === "ebooks"
+                activeTab === "premium" ||
+                activeTab === "ebooks" ||
+                storefrontTabs.some((tab) => tab.enabled && tab.id === activeTab)
                   ? "flex flex-col items-center gap-6 sm:grid sm:grid-cols-3 sm:gap-8 sm:justify-items-center"
                   : "grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 sm:gap-6 justify-items-center"
               }
             >
               {filteredContent.map((item) =>
-                activeTab === "ebooks" ? (
-                  <BundleCard
-                    key={item.id}
-                    item={item}
-                    user={user}
-                    creatorId={creator.uid}
-                    creatorUsername={creator.username}
-                  />
-                ) : activeTab === "premium" ? (
+                activeTab === "ebooks" || activeTab === "premium" ? ( // Condition for BundleCard
                   <BundleCard
                     key={item.id}
                     item={item}
@@ -933,10 +976,10 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
           ) : (
             <div className="text-center py-16 sm:py-24">
               <div className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-4 sm:mb-6 bg-zinc-900 rounded-full flex items-center justify-center">
-                {activeTab === "premium" ? (
+                {activeTab === "premium" || storefrontTabs.some((tab) => tab.enabled && tab.id === activeTab) ? ( // Check for premium/dynamic tabs
                   <Package className="w-4 h-4 sm:w-5 sm:h-5 text-zinc-600" />
                 ) : (
-                  <Play className="w-4 h-4 sm:w-5 sm:h-5 text-zinc-600" />
+                  <Play className="w-4 h-4 sm:w-5 sm:w-5 text-zinc-600" />
                 )}
               </div>
               <h3 className="text-base sm:text-lg font-medium text-white mb-2">
