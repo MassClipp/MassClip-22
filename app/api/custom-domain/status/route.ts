@@ -24,15 +24,16 @@ export async function GET(request: NextRequest) {
       .get()
 
     if (domainQuery.empty) {
-      return NextResponse.json({ customDomain: null })
+      return NextResponse.json({ domain: null })
     }
 
     const domainDoc = domainQuery.docs[0]
     const domainData = domainDoc.data()
 
     return NextResponse.json({
-      customDomain: {
+      domain: {
         id: domainDoc.id,
+        domainId: domainDoc.id, // Include both for compatibility
         ...domainData,
       },
     })

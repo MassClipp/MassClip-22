@@ -101,7 +101,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       domainId: docRef.id,
-      domain: domain.toLowerCase(),
+      domain: {
+        id: docRef.id,
+        domain: domain.toLowerCase(),
+        status: "pending",
+        verificationToken,
+        isApex,
+      },
       verificationToken,
       dnsInstructions,
       isApex,

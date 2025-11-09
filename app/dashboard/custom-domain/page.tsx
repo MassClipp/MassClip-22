@@ -43,7 +43,9 @@ export default function CustomDomainPage() {
       const userDoc = await getDoc(doc(db, "users", user.uid))
       if (userDoc.exists()) {
         const userData = userDoc.data()
-        const isPro = userData.membership === "facelessprenuer" && userData.subscriptionStatus === "active"
+        const membershipTier = userData.membershipTier || userData.membership || "free"
+        const membershipStatus = userData.membershipStatus || userData.subscriptionStatus || "inactive"
+        const isPro = membershipTier === "facelessprenuer" && membershipStatus === "active"
         setIsFacelessprenuer(isPro)
       }
     } catch (error) {
@@ -66,7 +68,12 @@ export default function CustomDomainPage() {
 
       if (response.ok) {
         const data = await response.json()
-        setCurrentDomain(data.domain)
+        if (data.domain) {
+          setCurrentDomain({
+            ...data.domain,
+            domainId: data.domain.id || data.domainId,
+          })
+        }
       }
     } catch (error) {
       console.error("Error fetching domain:", error)
@@ -102,7 +109,13 @@ export default function CustomDomainPage() {
         throw new Error(data.error || "Failed to add domain")
       }
 
-      setCurrentDomain(data.domain)
+      setCurrentDomain({
+        domain: data.domain,
+        status: "pending",
+        verificationToken: data.verificationToken,
+        isApex: data.isApex,
+        domainId: data.domainId, // Store the document ID
+      })
       setDnsInstructions(data.dnsInstructions)
       setDomainInput("")
 
@@ -134,6 +147,9 @@ export default function CustomDomainPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
+        body: JSON.stringify({
+          domainId: currentDomain.domainId || currentDomain.id,
+        }),
       })
 
       const data = await response.json()
@@ -143,7 +159,11 @@ export default function CustomDomainPage() {
       }
 
       if (data.verified) {
-        setCurrentDomain(data.domain)
+        setCurrentDomain({
+          ...currentDomain,
+          status: "active",
+          verified: true,
+        })
         toast({
           title: "Domain verified!",
           description: "Your custom domain is now active",

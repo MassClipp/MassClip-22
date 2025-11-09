@@ -96,7 +96,7 @@ export async function generateMetadata({ params }: { params: { username: string 
   }
 }
 
-export default async function CreatorProfilePage({ params }: { params: { username: string } }) {
+export default async function CreatorProfilePage({ params, request }: { params: { username: string }; request?: any }) {
   const { username } = params
 
   try {
@@ -174,25 +174,31 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
 
     if (!customDomainDoc.empty) {
       const customDomain = customDomainDoc.docs[0].data()
-      const currentHost = typeof window !== "undefined" ? window.location.host : ""
+
+      // Get current host from request headers
+      const host = request?.headers?.get("host") || ""
 
       // Only redirect if we're on the default domain, not already on custom domain
-      if (currentHost.includes("massclip.com") || currentHost.includes("massclip.pro")) {
+      if (host && (host.includes("massclip.com") || host.includes("massclip.pro"))) {
         console.log(`[Page] Redirecting to custom domain: ${customDomain.domain}`)
         redirect(`https://${customDomain.domain}`)
       }
     }
 
     const storefrontActive = userData.storefrontActive ?? true
-    const membershipStatus = userData.membershipStatus || "free"
+    const membershipTier = userData.membershipTier || userData.membership || "free"
+    const membershipStatus = userData.membershipStatus || userData.subscriptionStatus || "inactive"
     const hasActiveMembership =
       membershipStatus === "trialing" ||
       membershipStatus === "active" ||
+      membershipTier === "facelesspro" ||
+      membershipTier === "facelessprenuer" ||
       userData.plan === "vip" ||
       userData.plan === "creator_pro"
 
     console.log(`[Page] Access check for ${username}:`, {
       storefrontActive,
+      membershipTier,
       membershipStatus,
       plan: userData.plan,
       hasActiveMembership,
