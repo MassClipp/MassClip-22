@@ -369,6 +369,23 @@ export async function POST(request: Request) {
           console.log("[WEBHOOK] Could not retrieve customer email")
         }
 
+        if (sub.status === "trialing" || (sub.status === "active" && sub.trial_end)) {
+          console.log(`[v0] User started trial - marking hasUsedFreeTrial as true for UID: ${uid}`)
+          try {
+            const freeUserRef = adminDb.collection("freeUsers").doc(uid)
+            await freeUserRef.set(
+              {
+                hasUsedFreeTrial: true,
+                updatedAt: FieldValue.serverTimestamp(),
+              },
+              { merge: true },
+            )
+            console.log(`[v0] ✅ Trial usage flag set successfully`)
+          } catch (error: any) {
+            console.error(`[v0] ❌ Failed to set trial usage flag:`, error.message)
+          }
+        }
+
         if (FACELESSPRENUER_PRICE_IDS.includes(priceId)) {
           await updateFacelessprenuerMembership({
             uid,

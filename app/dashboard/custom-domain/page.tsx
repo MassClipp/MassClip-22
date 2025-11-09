@@ -52,13 +52,28 @@ export default function CustomDomainPage() {
     if (!user) return
 
     try {
-      const userDoc = await getDoc(doc(db, "users", user.uid))
-      if (userDoc.exists()) {
-        const userData = userDoc.data()
-        const membershipTier = userData.membershipTier || userData.membership || "free"
-        const membershipStatus = userData.membershipStatus || userData.subscriptionStatus || "inactive"
-        const isPro = membershipTier === "facelessprenuer" && membershipStatus === "active"
+      const token = await user.getIdToken()
+      const response = await fetch("/api/membership-status", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log("[v0] Membership status:", data)
+        const isPro = data.membershipTier === "facelessprenuer" && data.membershipStatus === "active"
         setIsFacelessprenuer(isPro)
+      } else {
+        // Fallback to direct Firebase check
+        const userDoc = await getDoc(doc(db, "users", user.uid))
+        if (userDoc.exists()) {
+          const userData = userDoc.data()
+          const membershipTier = userData.membershipTier || userData.membership || "free"
+          const membershipStatus = userData.membershipStatus || userData.subscriptionStatus || "inactive"
+          const isPro = membershipTier === "facelessprenuer" && membershipStatus === "active"
+          setIsFacelessprenuer(isPro)
+        }
       }
     } catch (error) {
       console.error("Error checking membership:", error)
