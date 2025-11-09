@@ -37,18 +37,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
-    const membershipTier = userData.membershipTier || "free"
-    if (membershipTier !== "facelessprenuer") {
-      return NextResponse.json({ error: "Custom domains require Facelessprenuer membership" }, { status: 403 })
-    }
-
     const { domain } = await request.json()
 
     if (!domain) {
       return NextResponse.json({ error: "Domain is required" }, { status: 400 })
     }
 
-    if (isTestMode() && isTestDomain(domain)) {
+    const testModeActive = isTestMode() && isTestDomain(domain)
+
+    if (!testModeActive) {
+      const membershipTier = userData.membershipTier || "free"
+      if (membershipTier !== "facelessprenuer") {
+        return NextResponse.json({ error: "Custom domains require Facelessprenuer membership" }, { status: 403 })
+      }
+    }
+
+    if (testModeActive) {
       console.log(`[Custom Domain Add] [TEST MODE] Adding test domain: ${domain}`)
     } else {
       // Existing validation
