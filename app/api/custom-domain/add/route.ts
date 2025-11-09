@@ -73,25 +73,22 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Check if domain already exists
-    const existingDomainQuery = await db
-      .collection("customDomains")
-      .where("domain", "==", domain.toLowerCase())
-      .where("status", "!=", "removed")
-      .get()
+    // Check if domain already exists (active domains)
+    const existingDomainQuery = await db.collection("customDomains").where("domain", "==", domain.toLowerCase()).get()
 
-    if (!existingDomainQuery.empty) {
+    // Filter out removed domains in memory to avoid complex composite index
+    const activeDomains = existingDomainQuery.docs.filter((doc) => doc.data().status !== "removed")
+
+    if (activeDomains.length > 0) {
       return NextResponse.json({ error: "Domain already in use" }, { status: 409 })
     }
 
-    // Check if user already has a custom domain
-    const userDomainQuery = await db
-      .collection("customDomains")
-      .where("userId", "==", userId)
-      .where("status", "!=", "removed")
-      .get()
+    const userDomainQuery = await db.collection("customDomains").where("userId", "==", userId).get()
 
-    if (!userDomainQuery.empty) {
+    // Filter out removed domains in memory
+    const activeUserDomains = userDomainQuery.docs.filter((doc) => doc.data().status !== "removed")
+
+    if (activeUserDomains.length > 0) {
       return NextResponse.json(
         { error: "You already have a custom domain. Remove it first to add a new one." },
         { status: 409 },
