@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { initializeFirebaseAdmin, db } from "@/lib/firebase-admin"
 import { checkDomainStatus } from "@/lib/vercel-api"
+import { isTestMode, isTestDomain, getMockSSLStatus } from "@/lib/custom-domain-test-mode"
 
 initializeFirebaseAdmin()
 
@@ -68,37 +69,44 @@ export async function GET(request: NextRequest) {
       }
 
       try {
-        const vercelStatus = await checkDomainStatus(domainName)
-
-        // Extract SSL/certificate verification status
         let sslStatus: "pending" | "active" | "error" = "pending"
         let sslError: string | null = null
 
-        if (vercelStatus.verified) {
-          // Domain is verified at Vercel level
-          // Check if there's any SSL certificate verification info
-          const sslVerification = vercelStatus.verification?.find((v) => v.type === "ssl" || v.type === "cert")
+        if (isTestMode() && isTestDomain(domainName)) {
+          const mockSSL = getMockSSLStatus(domainData.verifiedAt)
+          sslStatus = mockSSL.sslStatus as "pending" | "active" | "error"
+          sslError = mockSSL.sslError
+          console.log(`[SSL Check] [TEST MODE] Mock SSL check for ${domainName}: ${sslStatus}`)
+        } else {
+          const vercelStatus = await checkDomainStatus(domainName)
 
-          if (sslVerification) {
-            // SSL verification entry exists
-            if (sslVerification.reason) {
-              // There's an error or pending reason
-              sslStatus = "error"
-              sslError = sslVerification.reason
+          // Extract SSL/certificate verification status
+          if (vercelStatus.verified) {
+            // Domain is verified at Vercel level
+            // Check if there's any SSL certificate verification info
+            const sslVerification = vercelStatus.verification?.find((v) => v.type === "ssl" || v.type === "cert")
+
+            if (sslVerification) {
+              // SSL verification entry exists
+              if (sslVerification.reason) {
+                // There's an error or pending reason
+                sslStatus = "error"
+                sslError = sslVerification.reason
+              } else {
+                // No error reason means it's likely active
+                sslStatus = "active"
+              }
             } else {
-              // No error reason means it's likely active
+              // No SSL verification entry usually means it's active
+              // (Vercel removes verification entries once successful)
               sslStatus = "active"
             }
           } else {
-            // No SSL verification entry usually means it's active
-            // (Vercel removes verification entries once successful)
-            sslStatus = "active"
+            // Domain not verified at Vercel level - this shouldn't happen
+            // for domains in our "active" status, but handle it
+            sslStatus = "error"
+            sslError = "Domain verification lost at Vercel"
           }
-        } else {
-          // Domain not verified at Vercel level - this shouldn't happen
-          // for domains in our "active" status, but handle it
-          sslStatus = "error"
-          sslError = "Domain verification lost at Vercel"
         }
 
         const updates: any = {

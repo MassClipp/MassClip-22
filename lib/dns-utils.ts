@@ -32,14 +32,23 @@ async function dnsLookup(name: string, type: string): Promise<any> {
   }
 }
 
+import { isTestMode, isTestDomain, getMockDNSVerification } from "./custom-domain-test-mode"
+
 export async function verifyDNSRecords(
   domain: string,
   verificationToken: string,
   isApex: boolean,
+  createdAt?: string,
 ): Promise<DNSVerificationResult> {
   const result: DNSVerificationResult = {
     txtRecordFound: false,
     verified: false,
+  }
+
+  if (isTestMode() && isTestDomain(domain)) {
+    console.log(`[DNS] [TEST MODE] Mock verifying DNS for: ${domain}`)
+    const mockResult = getMockDNSVerification(domain, createdAt || new Date().toISOString())
+    return mockResult as DNSVerificationResult
   }
 
   try {

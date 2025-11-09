@@ -3,6 +3,7 @@ import { initializeFirebaseAdmin, db } from "@/lib/firebase-admin"
 import { getAuth } from "firebase-admin/auth"
 import { isApexDomain, getDNSInstructions } from "@/lib/dns-utils"
 import { checkDomainRateLimit, checkDomainSecurity } from "@/lib/custom-domain-rate-limiter"
+import { isTestMode, isTestDomain } from "@/lib/custom-domain-test-mode"
 
 export async function POST(request: NextRequest) {
   try {
@@ -47,20 +48,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Domain is required" }, { status: 400 })
     }
 
-    const securityCheck = await checkDomainSecurity(userId, domain)
-    if (!securityCheck.safe) {
-      return NextResponse.json({ error: securityCheck.reason }, { status: 403 })
-    }
+    if (isTestMode() && isTestDomain(domain)) {
+      console.log(`[Custom Domain Add] [TEST MODE] Adding test domain: ${domain}`)
+    } else {
+      // Existing validation
+      const securityCheck = await checkDomainSecurity(userId, domain)
+      if (!securityCheck.safe) {
+        return NextResponse.json({ error: securityCheck.reason }, { status: 403 })
+      }
 
-    // Validate domain format
-    const domainRegex = /^([a-z0-9]+(-[a-z0-9]+)*\.)+[a-z]{2,}$/i
-    if (!domainRegex.test(domain)) {
-      return NextResponse.json({ error: "Invalid domain format" }, { status: 400 })
-    }
+      // Validate domain format
+      const domainRegex = /^([a-z0-9]+(-[a-z0-9]+)*\.)+[a-z]{2,}$/i
+      if (!domainRegex.test(domain)) {
+        return NextResponse.json({ error: "Invalid domain format" }, { status: 400 })
+      }
 
-    // Prevent using massclip.com subdomains
-    if (domain.includes("massclip.com") || domain.includes("massclip.pro")) {
-      return NextResponse.json({ error: "Cannot use MassClip domains" }, { status: 400 })
+      // Prevent using massclip.com subdomains
+      if (domain.includes("massclip.com") || domain.includes("massclip.pro")) {
+        return NextResponse.json({ error: "Cannot use MassClip domains" }, { status: 400 })
+      }
     }
 
     // Check if domain already exists

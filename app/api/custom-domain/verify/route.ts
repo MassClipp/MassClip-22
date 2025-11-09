@@ -65,6 +65,7 @@ export async function POST(request: NextRequest) {
       domainData.domain,
       domainData.verificationToken,
       domainData.isApex,
+      domainData.createdAt,
     )
 
     const now = new Date().toISOString()
