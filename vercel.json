@@ -21,6 +21,14 @@
     {
       "path": "/api/onboarding-emails/check-and-send",
       "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/custom-domain/check-ssl-status",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/custom-domain/auto-verify-pending",
+      "schedule": "*/15 * * * *"
     }
   ]
 }
