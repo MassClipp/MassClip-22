@@ -82,3 +82,19 @@ export async function removeDomainFromVercel(domain: string): Promise<void> {
     throw new Error(`Vercel API error: ${error.error?.message || response.statusText}`)
   }
 }
+
+export const addVercelDomain = async (domain: string) => {
+  try {
+    await addDomainToVercel(domain)
+    return { success: true }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to add domain",
+    }
+  }
+}
+
+export const removeVercelDomain = removeDomainFromVercel
+
+export const getDomainStatus = checkDomainStatus

@@ -50,3 +50,5 @@ export function clearDomainCache(hostname?: string) {
     cache.clear()
   }
 }
+
+export const invalidateDomainCache = clearDomainCache
