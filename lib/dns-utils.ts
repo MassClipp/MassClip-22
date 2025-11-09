@@ -1,10 +1,3 @@
-import dns from "dns"
-import { promisify } from "util"
-
-const resolveTxt = promisify(dns.resolveTxt)
-const resolveCname = promisify(dns.resolveCname)
-const resolve4 = promisify(dns.resolve4)
-
 export interface DNSVerificationResult {
   txtRecordFound: boolean
   txtRecordValue?: string
@@ -16,9 +9,28 @@ export interface DNSVerificationResult {
   error?: string
 }
 
-// Vercel's IPs for apex domains (these are examples, check Vercel docs for current IPs)
-const VERCEL_A_RECORDS = ["76.76.21.21"]
+// Vercel's expected DNS values
 const VERCEL_CNAME_TARGET = "cname.vercel-dns.com"
+
+// Use Google's DNS-over-HTTPS API for DNS lookups (works in edge runtime)
+async function dnsLookup(name: string, type: string): Promise<any> {
+  try {
+    const response = await fetch(`https://dns.google/resolve?name=${encodeURIComponent(name)}&type=${type}`, {
+      headers: {
+        Accept: "application/dns-json",
+      },
+    })
+
+    if (!response.ok) {
+      throw new Error(`DNS lookup failed: ${response.statusText}`)
+    }
+
+    return response.json()
+  } catch (error: any) {
+    console.error(`[DNS] Lookup error for ${name} (${type}):`, error)
+    throw error
+  }
+}
 
 export async function verifyDNSRecords(
   domain: string,
@@ -32,44 +44,47 @@ export async function verifyDNSRecords(
 
   try {
     // Check TXT record for verification
-    const txtRecordName = isApex ? `_vercel-challenge.${domain}` : `_vercel-challenge.${domain}`
+    const txtRecordName = `_vercel-challenge.${domain}`
 
     try {
-      const txtRecords = await resolveTxt(txtRecordName)
-      const flatRecords = txtRecords.flat()
+      const txtResponse = await dnsLookup(txtRecordName, "TXT")
 
-      result.txtRecordFound = flatRecords.some((record) => record.includes(verificationToken))
-      result.txtRecordValue = flatRecords.find((record) => record.includes(verificationToken))
-    } catch (error: any) {
-      if (error.code !== "ENOTFOUND" && error.code !== "ENODATA") {
-        result.error = `TXT record error: ${error.message}`
+      if (txtResponse.Answer) {
+        const txtRecords = txtResponse.Answer.map((a: any) => a.data.replace(/"/g, ""))
+        result.txtRecordFound = txtRecords.some((record: string) => record.includes(verificationToken))
+        result.txtRecordValue = txtRecords.find((record: string) => record.includes(verificationToken))
       }
+    } catch (error: any) {
+      result.error = `TXT record not found`
     }
 
     // Check CNAME or A record depending on domain type
     if (isApex) {
       // Apex domain - check A records
+      // For apex domains, we'll rely on Vercel's verification system
+      // since A records can vary by region
       try {
-        const aRecords = await resolve4(domain)
-        result.aRecordFound = aRecords.some((ip) => VERCEL_A_RECORDS.includes(ip))
-        result.aRecordValues = aRecords
-      } catch (error: any) {
-        if (error.code !== "ENOTFOUND") {
-          result.error = `A record error: ${error.message}`
+        const aResponse = await dnsLookup(domain, "A")
+        if (aResponse.Answer) {
+          result.aRecordFound = true
+          result.aRecordValues = aResponse.Answer.map((a: any) => a.data)
         }
+      } catch (error: any) {
+        result.error = `A record not found`
       }
 
       result.verified = result.txtRecordFound && result.aRecordFound
     } else {
       // Subdomain - check CNAME
       try {
-        const cnameRecords = await resolveCname(domain)
-        result.cnameRecordFound = cnameRecords.some((record) => record.toLowerCase().includes("vercel"))
-        result.cnameRecordValue = cnameRecords[0]
-      } catch (error: any) {
-        if (error.code !== "ENOTFOUND") {
-          result.error = `CNAME record error: ${error.message}`
+        const cnameResponse = await dnsLookup(domain, "CNAME")
+        if (cnameResponse.Answer) {
+          const cnameValue = cnameResponse.Answer[0]?.data
+          result.cnameRecordFound = cnameValue?.toLowerCase().includes("vercel")
+          result.cnameRecordValue = cnameValue
         }
+      } catch (error: any) {
+        result.error = `CNAME record not found`
       }
 
       result.verified = result.txtRecordFound && result.cnameRecordFound
@@ -91,7 +106,6 @@ export function isApexDomain(domain: string): boolean {
 }
 
 export function getDNSInstructions(domain: string, verificationToken: string, isApex: boolean) {
-  const baseDomain = isApex ? domain : domain.split(".").slice(1).join(".")
   const subdomain = isApex ? "_vercel-challenge" : `_vercel-challenge.${domain.split(".")[0]}`
 
   return {
@@ -105,8 +119,9 @@ export function getDNSInstructions(domain: string, verificationToken: string, is
       ? {
           type: "A",
           name: "@",
-          value: VERCEL_A_RECORDS[0],
+          value: "76.76.21.21",
           ttl: 300,
+          note: "Vercel will provide the correct A record value after adding the domain",
         }
       : {
           type: "CNAME",
