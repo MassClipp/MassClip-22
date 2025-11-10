@@ -52,38 +52,29 @@ export default function CustomDomainPage() {
     if (!user) return
 
     try {
-      console.log("[v0] Checking membership for custom domain access")
+      console.log("[v0] Checking membership from memberships collection")
+      const membershipDoc = await getDoc(doc(db, "memberships", user.uid))
 
-      const token = await user.getIdToken()
-      const response = await fetch("/api/membership-status", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
+      if (membershipDoc.exists()) {
+        const membershipData = membershipDoc.data()
+        const plan = membershipData.plan
+        const isActive = membershipData.isActive === true
+        const status = membershipData.status
 
-      if (response.ok) {
-        const data = await response.json()
-        console.log("[v0] Membership API response:", data)
+        console.log("[v0] Membership data:", { plan, isActive, status })
 
-        const tier = data.membershipTier || data.plan
-        const status = data.membershipStatus || data.status
-        const isPro = tier === "facelessprenuer" && (status === "active" || data.isActive === true)
+        // Check if user is facelessprenuer with active subscription
+        const isPro = plan === "facelessprenuer" && (isActive || status === "trialing")
 
-        console.log("[v0] Facelessprenuer check:", { tier, status, isPro })
+        console.log("[v0] Facelessprenuer check result:", isPro)
         setIsFacelessprenuer(isPro)
       } else {
-        console.log("[v0] Membership API failed, falling back to Firebase")
-        const userDoc = await getDoc(doc(db, "users", user.uid))
-        if (userDoc.exists()) {
-          const userData = userDoc.data()
-          const membershipTier = userData.membershipTier || userData.membership || "free"
-          const membershipStatus = userData.membershipStatus || userData.subscriptionStatus || "inactive"
-          const isPro = membershipTier === "facelessprenuer" && membershipStatus === "active"
-          setIsFacelessprenuer(isPro)
-        }
+        console.log("[v0] No membership document found")
+        setIsFacelessprenuer(false)
       }
     } catch (error) {
-      console.error("Error checking membership:", error)
+      console.error("[v0] Error checking membership:", error)
+      setIsFacelessprenuer(false)
     } finally {
       setLoading(false)
     }
