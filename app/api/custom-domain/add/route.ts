@@ -176,6 +176,42 @@ export async function POST(request: NextRequest) {
 
     console.log(`[v0] Custom domain added successfully: ${domain} (ID: ${docRef.id})`)
 
+    if (testModeActive) {
+      console.log(`[v0] TEST MODE - Auto-verifying test domain: ${domain}`)
+      await docRef.update({
+        verified: true,
+        verifiedAt: now,
+        status: "active",
+        sslStatus: "active",
+      })
+
+      // Update user document with custom domain
+      await db.collection("users").doc(userId).update({
+        customDomain: domain.toLowerCase(),
+        customDomainId: docRef.id,
+      })
+
+      console.log(`[v0] TEST MODE - Test domain auto-verified: ${domain}`)
+
+      return NextResponse.json({
+        success: true,
+        domainId: docRef.id,
+        domain: {
+          id: docRef.id,
+          domain: domain.toLowerCase(),
+          status: "active",
+          verified: true,
+          verificationToken,
+          isApex,
+        },
+        verificationToken,
+        dnsInstructions,
+        isApex,
+        testMode: true,
+        message: "Test domain auto-verified successfully",
+      })
+    }
+
     return NextResponse.json({
       success: true,
       domainId: docRef.id,

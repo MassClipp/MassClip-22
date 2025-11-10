@@ -28,11 +28,10 @@ export async function GET(request: NextRequest) {
 
     console.log(`[v0] [Resolve API] Cache miss, querying Firestore`)
 
-    // Query Firestore for the custom domain
+    // Query Firestore for the custom domain (verified OR test domains in pending state)
     const snapshot = await db
       .collection("customDomains")
       .where("domain", "==", customDomain)
-      .where("verified", "==", true)
       .where("status", "==", "active")
       .limit(1)
       .get()
