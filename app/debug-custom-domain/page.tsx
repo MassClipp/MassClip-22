@@ -6,6 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { AlertCircle, CheckCircle2, XCircle, RefreshCw } from "lucide-react"
+import { doc, getDoc } from "firebase/firestore"
+import { db } from "@/lib/firebase"
 
 interface DebugData {
   auth: {
@@ -55,6 +57,18 @@ export default function DebugCustomDomainPage() {
       const token = await user.getIdToken()
       console.log("[v0] Got auth token")
 
+      console.log("[v0] Fetching user data from Firestore...")
+      const userDocRef = doc(db, "users", user.uid)
+      const userDocSnap = await getDoc(userDocRef)
+
+      let userData: any = {}
+      if (userDocSnap.exists()) {
+        userData = userDocSnap.data()
+        console.log("[v0] User data from Firestore:", userData)
+      } else {
+        console.log("[v0] User document does not exist")
+      }
+
       // Test status endpoint
       console.log("[v0] Testing status endpoint...")
       const statusRes = await fetch("/api/custom-domain/status", {
@@ -62,17 +76,6 @@ export default function DebugCustomDomainPage() {
       })
       const statusData = statusRes.ok ? await statusRes.json() : { error: await statusRes.text() }
       console.log("[v0] Status response:", statusData)
-
-      console.log("[v0] Fetching user data...")
-      const userDataRes = await fetch("/api/verify-subscription", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      })
-      const userData = userDataRes.ok ? await userDataRes.json() : {}
-      console.log("[v0] User data:", userData)
 
       const allowedPlans = ["facelessprenuer"]
       const userPlan = userData.plan || userData.membershipTier || "free"
