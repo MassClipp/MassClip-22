@@ -51,6 +51,7 @@
     "@react-email/render": "latest",
     "@tanstack/react-query": "latest",
     "@vercel/blob": "2.0.0",
+    "abort-controller": "latest",
     "ai": "latest",
     "autoprefixer": "^10.4.20",
     "buffer": "latest",

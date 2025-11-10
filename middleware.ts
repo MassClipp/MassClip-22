@@ -1,9 +1,16 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
+import { AbortSignal } from "abort-controller"
 
 export async function middleware(request: NextRequest) {
   const hostname = request.headers.get("host") || ""
+  const forwardedHost = request.headers.get("x-forwarded-host") || ""
+  const actualHostname = forwardedHost || hostname
   const pathname = request.nextUrl.pathname
+
+  console.log(
+    `[v0] [Middleware] Headers - host: ${hostname}, x-forwarded-host: ${forwardedHost}, actual: ${actualHostname}`,
+  )
 
   // Skip middleware for API routes, static files, and Next.js internals
   if (
@@ -17,22 +24,25 @@ export async function middleware(request: NextRequest) {
 
   // Allow default domains to pass through
   const isDefaultDomain =
-    hostname.includes("massclip.com") ||
-    hostname.includes("massclip.pro") ||
-    hostname.includes("localhost") ||
-    hostname.includes("vercel.app")
+    actualHostname.includes("massclip.com") ||
+    actualHostname.includes("massclip.pro") ||
+    actualHostname.includes("localhost") ||
+    actualHostname.includes("vercel.app") ||
+    actualHostname.includes("vusercontent.net")
 
   if (isDefaultDomain) {
+    console.log(`[v0] [Middleware] Default domain detected, passing through: ${actualHostname}`)
     return NextResponse.next()
   }
 
-  console.log(`[v0] [Middleware] Custom domain detected: ${hostname}, path: ${pathname}`)
+  console.log(`[v0] [Middleware] Custom domain detected: ${actualHostname}, path: ${pathname}`)
 
   try {
     // Build the absolute URL for the API route
     const protocol = request.nextUrl.protocol
-    const apiUrl = new URL("/api/custom-domain/resolve", `${protocol}//${hostname}`)
-    apiUrl.searchParams.set("customDomain", hostname)
+    const mainDomain = process.env.NEXT_PUBLIC_SITE_URL || `${protocol}//${hostname}`
+    const apiUrl = new URL("/api/custom-domain/resolve", mainDomain)
+    apiUrl.searchParams.set("customDomain", actualHostname)
     apiUrl.searchParams.set("originalPath", pathname)
 
     console.log(`[v0] [Middleware] Fetching resolution from: ${apiUrl.toString()}`)
@@ -41,7 +51,7 @@ export async function middleware(request: NextRequest) {
     const response = await fetch(apiUrl.toString(), {
       headers: {
         "Content-Type": "application/json",
-        "x-forwarded-host": hostname,
+        "x-forwarded-host": actualHostname,
         "x-forwarded-proto": protocol.replace(":", ""),
       },
       signal: AbortSignal.timeout(5000), // 5 second timeout
@@ -60,7 +70,7 @@ export async function middleware(request: NextRequest) {
 
         // Add custom domain info to headers for the destination page
         const response = NextResponse.rewrite(rewriteUrl)
-        response.headers.set("x-custom-domain", hostname)
+        response.headers.set("x-custom-domain", actualHostname)
         response.headers.set("x-original-path", pathname)
 
         return response
