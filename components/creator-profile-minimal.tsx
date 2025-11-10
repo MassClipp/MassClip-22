@@ -152,7 +152,15 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
         const tabsResponse = await fetch(`/api/storefront-tabs/${creator.uid}`)
         if (tabsResponse.ok) {
           const tabsData = await tabsResponse.json()
-          console.log("[v0] Storefront tabs data:", tabsData)
+          console.log("[v0] Storefront tabs raw data:", tabsData)
+          console.log("[v0] Storefront tabs array:", tabsData.tabs)
+          console.log("[v0] External products:", tabsData.externalProducts)
+
+          // Log each tab's details
+          tabsData.tabs?.forEach((tab: any) => {
+            console.log(`[v0] Tab: ${tab.name} (${tab.type}) - Enabled: ${tab.enabled}, Order: ${tab.order}`)
+          })
+
           setStorefrontTabs(tabsData.tabs || [])
           setExternalProducts(tabsData.externalProducts || [])
         }
@@ -925,6 +933,8 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
                 .map((tab) => {
                   // Get products for this tab
                   const tabProducts = externalProducts.filter((p) => p.category === tab.type)
+
+                  console.log(`[v0] Rendering tab: ${tab.name} (${tab.type}) with ${tabProducts.length} products`)
 
                   return (
                     <button
