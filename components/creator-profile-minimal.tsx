@@ -76,7 +76,7 @@ interface ContentItem {
 
 export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimalProps) {
   const [user] = useAuthState(auth)
-  const [activeTab, setActiveTab] = useState<string>("free") // Changed to string to accommodate dynamic tabs
+  const [activeTab, setActiveTab] = useState<string>("free_content") // Changed to string to accommodate dynamic tabs
   const [activeContentTab, setActiveContentTab] = useState<"free" | "premium" | "ebooks" | string>("free") // Renamed for clarity
   const [contentTypeFilter, setContentTypeFilter] = useState<"all" | "video" | "audio" | "image">("all")
   const [freeContent, setFreeContent] = useState<ContentItem[]>([])
@@ -153,8 +153,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
         if (tabsResponse.ok) {
           const tabsData = await tabsResponse.json()
           console.log("[v0] Storefront tabs data:", tabsData)
-          const enabledTabs = (tabsData.tabs || []).filter((tab: any) => tab.enabled)
-          setStorefrontTabs(enabledTabs)
+          setStorefrontTabs(tabsData.tabs || [])
           setExternalProducts(tabsData.externalProducts || [])
         }
 
@@ -238,7 +237,8 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
   }
 
   const getFilteredContent = () => {
-    if (activeContentTab !== "free" || contentTypeFilter === "all") {
+    // Update to use activeTab for filtering
+    if (activeTab !== "free_content" || contentTypeFilter === "all") {
       return currentContent
     }
 
@@ -248,15 +248,22 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
     })
   }
 
+  // Updated to use activeTab for determining currentContent
   const currentContent =
-    activeContentTab === "free" ? freeContent : activeContentTab === "premium" ? premiumContent : ebooksContent
+    activeTab === "free_content"
+      ? freeContent
+      : activeTab === "premium_content"
+        ? premiumContent
+        : activeTab === "ebooks"
+          ? ebooksContent
+          : []
   const filteredContent = getFilteredContent()
-  const availableTypes = activeContentTab === "free" ? getAvailableContentTypes(freeContent) : []
-  const showContentTypeFilter = activeContentTab === "free" && availableTypes.length > 1
+  const availableTypes = activeTab === "free_content" ? getAvailableContentTypes(freeContent) : [] // Filter available types only for free content tab
+  const showContentTypeFilter = activeTab === "free_content" && availableTypes.length > 1
 
   console.log("[v0] Content filter state:", {
     // Added debug logging for filter state
-    activeContentTab,
+    activeTab,
     availableTypes,
     showContentTypeFilter,
     freeContentLength: freeContent.length,
@@ -264,10 +271,11 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
   })
 
   useEffect(() => {
-    if (activeContentTab === "premium" || activeContentTab === "ebooks") {
+    // Reset contentTypeFilter when switching to non-free tabs
+    if (activeTab !== "free_content") {
       setContentTypeFilter("all")
     }
-  }, [activeContentTab])
+  }, [activeTab])
 
   return (
     <div className="min-h-screen bg-black relative">
@@ -872,75 +880,66 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
             )}
 
             <div className="flex items-center gap-3">
+              {freeContentCount > 0 && (
+                <button
+                  onClick={() => setActiveTab("free_content")}
+                  className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
+                    activeTab === "free_content" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
+                  }`}
+                >
+                  Free Content
+                  {activeTab === "free_content" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
+                </button>
+              )}
+
+              {premiumContentCount > 0 && (
+                <button
+                  onClick={() => setActiveTab("premium_content")}
+                  className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
+                    activeTab === "premium_content" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
+                  }`}
+                >
+                  Premium Content
+                  {activeTab === "premium_content" && (
+                    <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />
+                  )}
+                </button>
+              )}
+
+              {ebooksContentCount > 0 && (
+                <button
+                  onClick={() => setActiveTab("ebooks")}
+                  className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
+                    activeTab === "ebooks" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
+                  }`}
+                >
+                  eBooks
+                  {activeTab === "ebooks" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
+                </button>
+              )}
+
               {storefrontTabs
-                .filter((tab) => tab.enabled)
-                .sort((a, b) => a.order - b.order)
+                .filter((tab) => tab.enabled) // Only show enabled tabs
+                .filter((tab) => !["free_content", "premium_content", "ebooks"].includes(tab.type)) // Exclude standard tabs
+                .sort((a, b) => a.order - b.order) // Sort by order
                 .map((tab) => {
-                  // Map tab types to our local tab keys
-                  const tabKey = tab.type // Use the actual type from storefrontTabs
-
-                  // Only show tabs that have content or are standard content tabs
-                  const shouldShow =
-                    (tab.type === "free_content" && freeContentCount > 0) ||
-                    (tab.type === "premium_content" && premiumContentCount > 0) ||
-                    (tab.type === "ebooks" && ebooksContentCount > 0) ||
-                    tab.type === "community" ||
-                    tab.type === "merch" ||
-                    tab.type === "affiliates"
-
-                  if (!shouldShow) return null
+                  // Get products for this tab
+                  const tabProducts = externalProducts.filter((p) => p.category === tab.type)
 
                   return (
                     <button
                       key={tab.id}
-                      onClick={() => setActiveTab(tabKey)}
+                      onClick={() => setActiveTab(tab.type)}
                       className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
-                        activeTab === tabKey ? "text-white" : "text-zinc-400 hover:text-zinc-300"
+                        activeTab === tab.type ? "text-white" : "text-zinc-400 hover:text-zinc-300"
                       }`}
                     >
                       {tab.name}
-                      {activeTab === tabKey && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
+                      {activeTab === tab.type && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
                     </button>
                   )
                 })}
             </div>
-
-            {/* Standard Content Tabs (rendered if they exist and have content) */}
-            {freeContentCount > 0 && (
-              <button
-                onClick={() => setActiveTab("free")}
-                className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
-                  activeTab === "free" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
-                }`}
-              >
-                Free Content
-                {activeTab === "free" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
-              </button>
-            )}
-
-            {premiumContentCount > 0 && (
-              <button
-                onClick={() => setActiveTab("premium")}
-                className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
-                  activeTab === "premium" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
-                }`}
-              >
-                Premium Content
-                {activeTab === "premium" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
-              </button>
-            )}
-
-            {ebooksContentCount > 0 && (
-              <button
-                onClick={() => setActiveTab("ebooks")}
-                className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
-                  activeTab === "ebooks" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
-                }`}
-              >
-                eBooks
-                {activeTab === "ebooks" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
-              </button>
-            )}
           </div>
         </div>
 
@@ -950,48 +949,108 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
             <div className="flex items-center justify-center py-16 sm:py-24">
               <div className="w-6 h-6 border border-zinc-800 border-t-white rounded-full animate-spin"></div>
             </div>
-          ) : filteredContent.length > 0 ? (
-            <div
-              className={
-                activeTab === "premium" ||
-                activeTab === "ebooks" ||
-                storefrontTabs.some((tab) => tab.enabled && tab.id === activeTab)
-                  ? "flex flex-col items-center gap-6 sm:grid sm:grid-cols-3 sm:gap-8 sm:justify-items-center"
-                  : "grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 sm:gap-6 justify-items-center"
-              }
-            >
-              {filteredContent.map((item) =>
-                activeTab === "ebooks" || activeTab === "premium" ? ( // Condition for BundleCard
-                  <BundleCard
-                    key={item.id}
-                    item={item}
-                    user={user}
-                    creatorId={creator.uid}
-                    creatorUsername={creator.username}
-                  />
-                ) : (
-                  <ContentCard key={item.id} item={item} />
-                ),
-              )}
-            </div>
           ) : (
-            <div className="text-center py-16 sm:py-24">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-4 sm:mb-6 bg-zinc-900 rounded-full flex items-center justify-center">
-                {activeTab === "premium" || storefrontTabs.some((tab) => tab.enabled && tab.id === activeTab) ? ( // Check for premium/dynamic tabs
-                  <Package className="w-4 h-4 sm:w-5 sm:h-5 text-zinc-600" />
-                ) : (
-                  <Play className="w-4 h-4 sm:w-5 sm:w-5 text-zinc-600" />
-                )}
-              </div>
-              <h3 className="text-base sm:text-lg font-medium text-white mb-2">
-                No {contentTypeFilter !== "all" ? contentTypeFilter : activeTab} content available
-              </h3>
-              <p className="text-zinc-500 text-xs sm:text-sm">
-                {contentTypeFilter !== "all"
-                  ? `This creator hasn't uploaded any ${contentTypeFilter} content yet.`
-                  : `This creator hasn't uploaded any ${activeTab} content yet.`}
-              </p>
-            </div>
+            <>
+              {(activeTab === "free_content" || activeTab === "premium_content" || activeTab === "ebooks") && (
+                <>
+                  {filteredContent.length > 0 ? (
+                    <div
+                      className={
+                        activeTab === "premium_content" || activeTab === "ebooks"
+                          ? "flex flex-col items-center gap-6 sm:grid sm:grid-cols-3 sm:gap-8 sm:justify-items-center"
+                          : "grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 sm:gap-6 justify-items-center"
+                      }
+                    >
+                      {filteredContent.map((item) =>
+                        activeTab === "ebooks" || activeTab === "premium_content" ? (
+                          <BundleCard
+                            key={item.id}
+                            item={item}
+                            user={user}
+                            creatorId={creator.uid}
+                            creatorUsername={creator.username}
+                          />
+                        ) : (
+                          <ContentCard key={item.id} item={item} />
+                        ),
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-center py-16 sm:py-24">
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-4 sm:mb-6 bg-zinc-900 rounded-full flex items-center justify-center">
+                        <Package className="w-4 h-4 sm:w-5 sm:h-5 text-zinc-600" />
+                      </div>
+                      <h3 className="text-base sm:text-lg font-medium text-white mb-2">
+                        No{" "}
+                        {activeTab === "free_content" ? "free" : activeTab === "premium_content" ? "premium" : "ebook"}{" "}
+                        content available
+                      </h3>
+                      <p className="text-zinc-500 text-xs sm:text-sm">
+                        This creator hasn't uploaded any{" "}
+                        {activeTab === "free_content" ? "free" : activeTab === "premium_content" ? "premium" : "ebook"}{" "}
+                        content yet.
+                      </p>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {!["free_content", "premium_content", "ebooks"].includes(activeTab) && (
+                <>
+                  {(() => {
+                    const tabProducts = externalProducts.filter((p) => p.category === activeTab)
+                    const currentTab = storefrontTabs.find((tab) => tab.type === activeTab)
+
+                    return tabProducts.length > 0 ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                        {tabProducts.map((product) => (
+                          <a
+                            key={product.id}
+                            href={product.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="group relative bg-zinc-900 rounded-lg overflow-hidden hover:bg-zinc-800 transition-colors"
+                          >
+                            {product.thumbnailUrl && (
+                              <div className="aspect-video w-full overflow-hidden">
+                                <img
+                                  src={product.thumbnailUrl || "/placeholder.svg"}
+                                  alt={product.name}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                />
+                              </div>
+                            )}
+                            <div className="p-4">
+                              <h3 className="text-white font-medium mb-1">{product.name}</h3>
+                              {product.description && (
+                                <p className="text-zinc-400 text-sm line-clamp-2">{product.description}</p>
+                              )}
+                              {product.price && (
+                                <p className="text-white font-medium mt-2">
+                                  ${typeof product.price === "number" ? product.price.toFixed(2) : product.price}
+                                </p>
+                              )}
+                            </div>
+                          </a>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-16 sm:py-24">
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-4 sm:mb-6 bg-zinc-900 rounded-full flex items-center justify-center">
+                          <Package className="w-4 h-4 sm:w-5 sm:h-5 text-zinc-600" />
+                        </div>
+                        <h3 className="text-base sm:text-lg font-medium text-white mb-2">
+                          No {currentTab?.name || activeTab} products yet
+                        </h3>
+                        <p className="text-zinc-500 text-xs sm:text-sm">
+                          This creator hasn't added any {currentTab?.name?.toLowerCase() || activeTab} products yet.
+                        </p>
+                      </div>
+                    )
+                  })()}
+                </>
+              )}
+            </>
           )}
         </div>
       </div>
