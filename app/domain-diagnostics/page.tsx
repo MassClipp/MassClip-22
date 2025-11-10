@@ -27,11 +27,11 @@ export default function DomainDiagnosticsPage() {
 
       try {
         console.log("[v0] Fetching raw Firebase data for user:", user.uid)
-        const userDocRef = doc(db, "users", user.uid)
-        const userDocSnap = await getDoc(userDocRef)
+        const membershipDocRef = doc(db, "memberships", user.uid)
+        const membershipDocSnap = await getDoc(membershipDocRef)
 
-        if (userDocSnap.exists()) {
-          const data = userDocSnap.data()
+        if (membershipDocSnap.exists()) {
+          const data = membershipDocSnap.data()
           console.log("[v0] Raw Firebase data:", data)
           setRawFirebaseData(data)
         } else {

@@ -50,18 +50,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check user is Facelessprenuer
-    const userDoc = await db.collection("users").doc(userId).get()
-    const userData = userDoc.data()
-    console.log("[v0] User data fetched:", {
-      exists: userDoc.exists,
-      plan: userData?.plan,
-      membershipTier: userData?.membershipTier,
+    const membershipDoc = await db.collection("memberships").doc(userId).get()
+    const membershipData = membershipDoc.data()
+    console.log("[v0] Membership data fetched:", {
+      exists: membershipDoc.exists,
+      plan: membershipData?.plan,
+      membershipTier: membershipData?.membershipTier,
     })
 
-    if (!userData) {
-      console.log("[v0] User not found - returning 404")
-      return NextResponse.json({ error: "User not found" }, { status: 404 })
+    if (!membershipData) {
+      console.log("[v0] Membership not found - returning 404")
+      return NextResponse.json({ error: "Membership not found" }, { status: 404 })
     }
 
     const testModeActive = isTestMode() && isTestDomain(domain)
@@ -72,12 +71,12 @@ export async function POST(request: NextRequest) {
     })
 
     if (!testModeActive) {
-      const membershipTier = userData.plan || userData.membershipTier || "free"
+      const membershipTier = membershipData.plan || membershipData.membershipTier || "free"
       const allowedPlans = ["facelessprenuer"]
       console.log("[v0] Membership check:", {
         membershipTier,
-        plan: userData.plan,
-        membershipTierField: userData.membershipTier,
+        plan: membershipData.plan,
+        membershipTierField: membershipData.membershipTier,
         allowedPlans,
         isAllowed: allowedPlans.includes(membershipTier),
       })
