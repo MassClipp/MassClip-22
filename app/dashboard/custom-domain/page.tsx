@@ -145,12 +145,13 @@ export default function CustomDomainPage() {
       }
 
       setCurrentDomain({
-        domain: data.domain,
-        status: "pending",
-        sslStatus: "pending",
-        verificationToken: data.verificationToken,
-        isApex: data.isApex,
-        domainId: data.domainId,
+        domain: typeof data.domain === "string" ? data.domain : data.domain?.domain || domainInput.trim().toLowerCase(),
+        status: data.domain?.status || "pending",
+        sslStatus: data.domain?.sslStatus || "pending",
+        verified: data.domain?.verified || false,
+        verificationToken: data.verificationToken || data.domain?.verificationToken,
+        isApex: data.isApex !== undefined ? data.isApex : data.domain?.isApex,
+        domainId: data.domainId || data.domain?.id,
       })
       setDnsInstructions(data.dnsInstructions)
       setDomainInput("")
