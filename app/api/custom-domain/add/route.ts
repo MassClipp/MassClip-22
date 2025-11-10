@@ -46,7 +46,12 @@ export async function POST(request: NextRequest) {
     const testModeActive = isTestMode() && isTestDomain(domain)
 
     if (!testModeActive) {
-      const membershipTier = userData.membershipTier || "free"
+      const membershipTier = userData.plan || userData.membershipTier || "free"
+      console.log("[v0] Custom domain add - membership check:", {
+        membershipTier,
+        userData: { plan: userData.plan, membershipTier: userData.membershipTier },
+      })
+
       if (membershipTier !== "facelessprenuer") {
         return NextResponse.json({ error: "Custom domains require Facelessprenuer membership" }, { status: 403 })
       }
