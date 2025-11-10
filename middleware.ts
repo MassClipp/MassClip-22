@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
-import { AbortSignal } from "abort-controller"
 
 export async function middleware(request: NextRequest) {
   const hostname = request.headers.get("host") || ""
@@ -38,24 +37,26 @@ export async function middleware(request: NextRequest) {
   console.log(`[v0] [Middleware] Custom domain detected: ${actualHostname}, path: ${pathname}`)
 
   try {
-    // Build the absolute URL for the API route
     const protocol = request.nextUrl.protocol
-    const mainDomain = process.env.NEXT_PUBLIC_SITE_URL || `${protocol}//${hostname}`
-    const apiUrl = new URL("/api/custom-domain/resolve", mainDomain)
+    // Use the custom domain's own host for API calls
+    const apiUrl = new URL("/api/custom-domain/resolve", `${protocol}//${actualHostname}`)
     apiUrl.searchParams.set("customDomain", actualHostname)
     apiUrl.searchParams.set("originalPath", pathname)
 
     console.log(`[v0] [Middleware] Fetching resolution from: ${apiUrl.toString()}`)
 
     // Fetch with proper headers and timeout
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 5000)
+
     const response = await fetch(apiUrl.toString(), {
       headers: {
         "Content-Type": "application/json",
         "x-forwarded-host": actualHostname,
         "x-forwarded-proto": protocol.replace(":", ""),
       },
-      signal: AbortSignal.timeout(5000), // 5 second timeout
-    })
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timeoutId))
 
     console.log(`[v0] [Middleware] Resolution response status: ${response.status}`)
 
