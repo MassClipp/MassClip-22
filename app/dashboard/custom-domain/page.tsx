@@ -97,24 +97,21 @@ export default function CustomDomainPage() {
         console.log("[v0] Domain status response:", data)
 
         if (data.domain) {
-          const domain = data.domain.domain || data.domain
-          const isTestDomain =
-            domain.includes(".example.com") || domain.includes("test-") || domain.includes("localhost")
-
-          if (isTestDomain) {
-            console.log("[v0] Ignoring test domain on production page:", domain)
-            setCurrentDomain(null)
-            return
-          }
-
           setCurrentDomain({
             ...data.domain,
             domainId: data.domain.id || data.domainId,
           })
+        } else {
+          console.log("[v0] No active domain found")
+          setCurrentDomain(null)
         }
+      } else {
+        console.log("[v0] No domain configured (status endpoint returned non-OK)")
+        setCurrentDomain(null)
       }
     } catch (error) {
       console.error("[v0] Error fetching domain:", error)
+      setCurrentDomain(null)
     }
   }
 
