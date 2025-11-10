@@ -888,6 +888,33 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
             )}
 
             <div className="flex items-center gap-3">
+              {console.log("[v0] === TAB RENDERING DEBUG ===")}
+              {console.log("[v0] Total storefront tabs:", storefrontTabs.length)}
+              {console.log("[v0] All storefront tabs:", storefrontTabs)}
+
+              {console.log("[v0] Filtering tabs - excluding standard tabs...")}
+              {console.log(
+                "[v0] Tabs after excluding standard tabs:",
+                storefrontTabs.filter((tab) => !["free_content", "premium_content", "ebooks"].includes(tab.type)),
+              )}
+
+              {console.log("[v0] Filtering tabs - only enabled...")}
+              {console.log(
+                "[v0] Enabled custom tabs:",
+                storefrontTabs
+                  .filter((tab) => !["free_content", "premium_content", "ebooks"].includes(tab.type))
+                  .filter((tab) => tab.enabled),
+              )}
+
+              {console.log(
+                "[v0] Final tabs to render:",
+                storefrontTabs
+                  .filter((tab) => tab.enabled)
+                  .filter((tab) => !["free_content", "premium_content", "ebooks"].includes(tab.type))
+                  .sort((a, b) => a.order - b.order),
+              )}
+              {console.log("[v0] === END TAB RENDERING DEBUG ===\n\n")}
+
               {freeContentCount > 0 && (
                 <button
                   onClick={() => setActiveTab("free_content")}
@@ -934,7 +961,9 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
                   // Get products for this tab
                   const tabProducts = externalProducts.filter((p) => p.category === tab.type)
 
-                  console.log(`[v0] Rendering tab: ${tab.name} (${tab.type}) with ${tabProducts.length} products`)
+                  console.log(
+                    `[v0] Rendering tab button: ${tab.name} (${tab.type}) with ${tabProducts.length} products`,
+                  )
 
                   return (
                     <button
