@@ -106,7 +106,7 @@ const navItems = [
       },
       {
         title: "View Storefront",
-        href: "/dashboard/view-storefront",
+        href: "/dashboard/view-storefront", // This page will handle custom domain logic
         icon: Store,
       },
     ],

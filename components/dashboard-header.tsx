@@ -13,6 +13,7 @@ import { useUserPlan } from "@/hooks/use-user-plan"
 import { doc, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import TrialBadge from "@/components/trial-badge"
+import { fetchPublicUrl } from "@/lib/get-public-url"
 
 interface DashboardHeaderProps {
   initialSearchQuery?: string
@@ -25,6 +26,7 @@ export default function DashboardHeader({ initialSearchQuery = "" }: DashboardHe
   const { user } = useAuth()
   const { isProUser } = useUserPlan()
   const [username, setUsername] = useState<string | null>(null)
+  const [publicUrl, setPublicUrl] = useState<string>("")
 
   // Only show search on explore page
   const showSearch = pathname === "/dashboard/explore"
@@ -53,6 +55,19 @@ export default function DashboardHeader({ initialSearchQuery = "" }: DashboardHe
     fetchUserData()
   }, [user])
 
+  useEffect(() => {
+    const loadPublicUrl = async () => {
+      if (user && username) {
+        const url = await fetchPublicUrl(user.uid, username)
+        setPublicUrl(url)
+      }
+    }
+
+    if (username) {
+      loadPublicUrl()
+    }
+  }, [user, username])
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
     if (searchQuery.trim()) {
@@ -67,6 +82,16 @@ export default function DashboardHeader({ initialSearchQuery = "" }: DashboardHe
     setSearchQuery("")
     localStorage.removeItem("lastSearchQuery")
     router.push("/dashboard/explore")
+  }
+
+  const openPublicProfile = () => {
+    if (publicUrl) {
+      if (publicUrl.startsWith("https://")) {
+        window.open(publicUrl, "_blank")
+      } else {
+        window.open(publicUrl, "_blank")
+      }
+    }
   }
 
   return (
@@ -145,9 +170,9 @@ export default function DashboardHeader({ initialSearchQuery = "" }: DashboardHe
                 <Upload className="h-4 w-4" />
               </Button>
 
-              {username && (
+              {username && publicUrl && (
                 <Button
-                  onClick={() => window.open(`/creator/${username}`, "_blank")}
+                  onClick={openPublicProfile}
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-900/50"
@@ -169,11 +194,11 @@ export default function DashboardHeader({ initialSearchQuery = "" }: DashboardHe
                 Upload
               </Button>
 
-              {username && (
+              {username && publicUrl && (
                 <Button
                   variant="outline"
-                  onClick={() => window.open(`/creator/${username}`, "_blank")}
-                  className="border-zinc-700 hover:bg-zinc-800"
+                  onClick={openPublicProfile}
+                  className="border-zinc-700 hover:bg-zinc-800 bg-transparent"
                   size="sm"
                 >
                   <ExternalLink className="h-4 w-4 mr-2" />
@@ -223,7 +248,10 @@ export default function DashboardHeader({ initialSearchQuery = "" }: DashboardHe
         {showSearch && (
           <div className="md:hidden pb-2">
             <Button
-              onClick={() => router.push("/dashboard/favorites")}
+              onClick={() => {
+                router.push("/dashboard/favorites")
+                setIsMobileMenuOpen(false)
+              }}
               variant="ghost"
               className="w-full text-zinc-400 hover:text-white hover:bg-zinc-900/50 rounded-lg px-4 py-2 transition-all duration-300 flex items-center justify-center gap-2"
             >
@@ -253,10 +281,10 @@ export default function DashboardHeader({ initialSearchQuery = "" }: DashboardHe
               )}
 
               {/* View Profile Button */}
-              {username && (
+              {username && publicUrl && (
                 <Button
                   onClick={() => {
-                    window.open(`/creator/${username}`, "_blank")
+                    openPublicProfile()
                     setIsMobileMenuOpen(false)
                   }}
                   variant="outline"

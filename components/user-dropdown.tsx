@@ -17,6 +17,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { doc, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { User, Globe, Settings, LogOut, Heart } from "lucide-react"
+import { fetchPublicUrl } from "@/lib/get-public-url"
 
 export default function UserDropdown() {
   const { user, signOut } = useAuth()
@@ -24,6 +25,7 @@ export default function UserDropdown() {
   const [username, setUsername] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [publicUrl, setPublicUrl] = useState<string>("")
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -44,6 +46,19 @@ export default function UserDropdown() {
 
     fetchUserData()
   }, [user])
+
+  useEffect(() => {
+    const loadPublicUrl = async () => {
+      if (user && username) {
+        const url = await fetchPublicUrl(user.uid, username)
+        setPublicUrl(url)
+      }
+    }
+
+    if (username) {
+      loadPublicUrl()
+    }
+  }, [user, username])
 
   const handleLogout = async () => {
     if (isLoggingOut) return
@@ -82,12 +97,19 @@ export default function UserDropdown() {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
 
-        {username && (
-          <DropdownMenuItem asChild>
-            <Link href={`/creator/${username}`} className="cursor-pointer flex items-center">
-              <Globe className="mr-2 h-4 w-4" />
-              <span>Public Profile</span>
-            </Link>
+        {username && publicUrl && (
+          <DropdownMenuItem
+            onClick={() => {
+              if (publicUrl.startsWith("https://")) {
+                window.open(publicUrl, "_blank")
+              } else {
+                window.location.href = publicUrl
+              }
+            }}
+            className="cursor-pointer flex items-center"
+          >
+            <Globe className="mr-2 h-4 w-4" />
+            <span>Public Profile</span>
           </DropdownMenuItem>
         )}
 

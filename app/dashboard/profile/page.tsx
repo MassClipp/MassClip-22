@@ -33,6 +33,7 @@ import CancelSubscriptionButton from "@/components/cancel-subscription-button"
 import { Badge } from "@/components/ui/badge"
 import { safelyFormatDate } from "@/lib/date-utils"
 import { fetchSubscriptionData } from "@/lib/subscription-utils"
+import { fetchPublicUrl } from "@/lib/get-public-url"
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -103,6 +104,8 @@ export default function ProfilePage() {
     (subscriptionData?.plan === "facelessprenuer" || subscriptionData?.plan === "faceless_pro") &&
     subscriptionData?.isActive
 
+  const [publicUrl, setPublicUrl] = useState<string>("")
+
   useEffect(() => {
     const handleOnline = () => setIsOnline(true)
     const handleOffline = () => setIsOnline(false)
@@ -115,6 +118,19 @@ export default function ProfilePage() {
       window.removeEventListener("offline", handleOffline)
     }
   }, [])
+
+  useEffect(() => {
+    const loadPublicUrl = async () => {
+      if (user && profileData.username) {
+        const url = await fetchPublicUrl(user.uid, profileData.username)
+        setPublicUrl(url)
+      }
+    }
+
+    if (!loading && profileData.username) {
+      loadPublicUrl()
+    }
+  }, [user, profileData.username, loading])
 
   const fetchProfile = async () => {
     if (!user) return
@@ -647,11 +663,23 @@ export default function ProfilePage() {
                   <Button
                     variant="outline"
                     className="w-full mt-6 border-zinc-700 hover:bg-zinc-800 bg-transparent"
-                    onClick={() => router.push(`/creator/${profileData.username}`)}
+                    onClick={() => {
+                      if (publicUrl && publicUrl.startsWith("https://")) {
+                        window.open(publicUrl, "_blank")
+                      } else {
+                        router.push(publicUrl || `/creator/${profileData.username}`)
+                      }
+                    }}
                   >
                     <ExternalLink className="h-4 w-4 mr-2" />
                     View Public Profile
                   </Button>
+                )}
+
+                {publicUrl && (
+                  <p className="text-xs text-zinc-500 mt-2 text-center break-all">
+                    {publicUrl.startsWith("https://") ? publicUrl.replace("https://", "") : `massclip.pro${publicUrl}`}
+                  </p>
                 )}
               </CardContent>
             </Card>

@@ -65,6 +65,7 @@ export default function ViewStorefrontPage() {
   const [displayName, setDisplayName] = useState("")
   const [bio, setBio] = useState("")
   const [profilePic, setProfilePic] = useState("")
+  const [customDomain, setCustomDomain] = useState("")
   const [socialLinks, setSocialLinks] = useState<{
     instagram?: string
     twitter?: string
@@ -161,6 +162,7 @@ export default function ViewStorefrontPage() {
           setTempSocials(userData.socialLinks || {})
           setProfilePic(userData.profilePic || userData.photoURL || "")
           setStorefrontActive(userData.storefrontActive ?? false)
+          setCustomDomain(userData.customDomain || "")
 
           // Handle createdAt timestamp
           if (userData.createdAt) {
@@ -421,6 +423,17 @@ export default function ViewStorefrontPage() {
   }
 
   const currentContent = activeTab === "free" ? freeContent : activeTab === "premium" ? premiumContent : ebooksContent
+
+  const getStorefrontUrl = (): string => {
+    if (customDomain) {
+      // If custom domain exists, use it
+      return `https://${customDomain}`
+    }
+    // Otherwise fall back to username subdomain
+    return username ? `/creator/${username}` : ""
+  }
+
+  const storefrontUrl = getStorefrontUrl()
 
   return (
     <div className="min-h-screen pb-24">
@@ -1269,9 +1282,9 @@ export default function ViewStorefrontPage() {
             </div>
 
             <div className="flex flex-col items-center sm:items-end gap-3">
-              {username && (
+              {storefrontUrl && (
                 <Button
-                  onClick={() => window.open(`/creator/${username}`, "_blank")}
+                  onClick={() => window.open(storefrontUrl, "_blank")}
                   variant="outline"
                   size="sm"
                   className="border-zinc-700 hover:bg-zinc-800 text-zinc-300 hover:text-white"
