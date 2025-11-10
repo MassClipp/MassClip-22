@@ -31,8 +31,8 @@ interface DebugData {
     status: string | null
   }
   apiTests: {
-    status: { success: boolean; error: string | null }
-    add: { success: boolean; error: string | null }
+    status: { success: boolean; error: string | null; response?: any }
+    add: { success: boolean; error: string | null; response?: any }
   }
 }
 
@@ -40,24 +40,39 @@ export default function DebugCustomDomainPage() {
   const { user, loading: authLoading } = useAuth()
   const [debugData, setDebugData] = useState<DebugData | null>(null)
   const [loading, setLoading] = useState(false)
-  const [testDomain, setTestDomain] = useState("test-debug.example.com")
+  const [testDomain, setTestDomain] = useState("testmassclip.duckdns.org")
 
   const runDiagnostics = async () => {
     setLoading(true)
+    console.log("[v0] Running diagnostics...")
+
     try {
-      const token = await user?.getIdToken()
+      if (!user) {
+        console.log("[v0] No user found")
+        return
+      }
+
+      const token = await user.getIdToken()
+      console.log("[v0] Got auth token")
 
       // Test status endpoint
+      console.log("[v0] Testing status endpoint...")
       const statusRes = await fetch("/api/custom-domain/status", {
         headers: { Authorization: `Bearer ${token}` },
       })
-      const statusData = await statusRes.json()
+      const statusData = statusRes.ok ? await statusRes.json() : { error: await statusRes.text() }
+      console.log("[v0] Status response:", statusData)
 
-      // Fetch user data directly
-      const userDataRes = await fetch("/api/user/data", {
-        headers: { Authorization: `Bearer ${token}` },
+      console.log("[v0] Fetching user data...")
+      const userDataRes = await fetch("/api/verify-subscription", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
       })
-      const userData = await userDataRes.json()
+      const userData = userDataRes.ok ? await userDataRes.json() : {}
+      console.log("[v0] User data:", userData)
 
       const allowedPlans = ["facelessprenuer", "faceless_pro", "creator_pro"]
       const userPlan = userData.plan || userData.membershipTier || "free"
@@ -69,7 +84,7 @@ export default function DebugCustomDomainPage() {
           email: user?.email || null,
         },
         userData: {
-          exists: !!userData,
+          exists: !!userData && Object.keys(userData).length > 0,
           plan: userData.plan || null,
           membershipTier: userData.membershipTier || null,
           status: userData.status || null,
@@ -89,12 +104,13 @@ export default function DebugCustomDomainPage() {
           status: {
             success: statusRes.ok,
             error: statusRes.ok ? null : statusData.error || `HTTP ${statusRes.status}`,
+            response: statusData,
           },
           add: { success: false, error: "Not tested yet" },
         },
       })
     } catch (error: any) {
-      console.error("Diagnostics error:", error)
+      console.error("[v0] Diagnostics error:", error)
     } finally {
       setLoading(false)
     }
@@ -104,6 +120,7 @@ export default function DebugCustomDomainPage() {
     if (!user) return
 
     try {
+      console.log(`[v0] Testing add domain: ${testDomain}`)
       const token = await user.getIdToken()
       const res = await fetch("/api/custom-domain/add", {
         method: "POST",
@@ -114,7 +131,8 @@ export default function DebugCustomDomainPage() {
         body: JSON.stringify({ domain: testDomain }),
       })
 
-      const data = await res.json()
+      const data = res.ok ? await res.json() : { error: await res.text() }
+      console.log("[v0] Add domain response:", data)
 
       setDebugData((prev) => {
         if (!prev) return prev
@@ -125,11 +143,13 @@ export default function DebugCustomDomainPage() {
             add: {
               success: res.ok,
               error: res.ok ? null : data.error || `HTTP ${res.status}`,
+              response: data,
             },
           },
         }
       })
     } catch (error: any) {
+      console.error("[v0] Test add domain error:", error)
       setDebugData((prev) => {
         if (!prev) return prev
         return {
@@ -358,12 +378,20 @@ export default function DebugCustomDomainPage() {
                 {debugData.apiTests.add.error && debugData.apiTests.add.error !== "Not tested yet" && (
                   <p className="text-sm text-red-600 mt-2">{debugData.apiTests.add.error}</p>
                 )}
+                {debugData.apiTests.add.response && (
+                  <details className="mt-2">
+                    <summary className="text-sm cursor-pointer text-muted-foreground">View Response</summary>
+                    <pre className="mt-2 p-2 bg-gray-100 rounded text-xs overflow-auto max-h-40">
+                      {JSON.stringify(debugData.apiTests.add.response, null, 2)}
+                    </pre>
+                  </details>
+                )}
                 <div className="flex gap-2 mt-3">
                   <input
                     type="text"
                     value={testDomain}
                     onChange={(e) => setTestDomain(e.target.value)}
-                    placeholder="test-domain.example.com"
+                    placeholder="testmassclip.duckdns.org"
                     className="flex-1 px-3 py-1 text-sm border rounded-md"
                   />
                   <Button size="sm" onClick={testAddDomain}>

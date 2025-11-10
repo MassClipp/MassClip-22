@@ -22,6 +22,21 @@ export async function POST(request: NextRequest) {
     const userId = decodedToken.uid
     console.log("[v0] User authenticated:", userId)
 
+    let domain: string
+    try {
+      const body = await request.json()
+      domain = body.domain
+      console.log("[v0] Domain received:", domain)
+    } catch (error) {
+      console.log("[v0] Failed to parse request body:", error)
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
+    }
+
+    if (!domain) {
+      console.log("[v0] Domain missing - returning 400")
+      return NextResponse.json({ error: "Domain is required" }, { status: 400 })
+    }
+
     const rateLimitCheck = await checkDomainRateLimit(userId, "add")
     console.log("[v0] Rate limit check:", rateLimitCheck)
     if (!rateLimitCheck.allowed) {
@@ -47,14 +62,6 @@ export async function POST(request: NextRequest) {
     if (!userData) {
       console.log("[v0] User not found - returning 404")
       return NextResponse.json({ error: "User not found" }, { status: 404 })
-    }
-
-    const { domain } = await request.json()
-    console.log("[v0] Domain received:", domain)
-
-    if (!domain) {
-      console.log("[v0] Domain missing - returning 400")
-      return NextResponse.json({ error: "Domain is required" }, { status: 400 })
     }
 
     const testModeActive = isTestMode() && isTestDomain(domain)
