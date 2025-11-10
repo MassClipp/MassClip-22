@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -19,6 +19,9 @@ export default function TestCustomDomainPage() {
   const [domainAddedAt, setDomainAddedAt] = useState<number | null>(null)
   const [verifiedAt, setVerifiedAt] = useState<number | null>(null)
 
+  const autoVerifyTriggered = useRef(false)
+  const autoSSLCheckTriggered = useRef(false)
+
   useEffect(() => {
     generateRandomTestDomain()
   }, [])
@@ -35,6 +38,8 @@ export default function TestCustomDomainPage() {
     setLogs([])
     setDomainAddedAt(null)
     setVerifiedAt(null)
+    autoVerifyTriggered.current = false
+    autoSSLCheckTriggered.current = false
     generateRandomTestDomain()
     addLog("🔄 Test reset - ready for new test")
   }
@@ -53,18 +58,20 @@ export default function TestCustomDomainPage() {
   }
 
   useEffect(() => {
-    if (!domainAddedAt || status === "verified" || status === "error") return
+    if (!domainAddedAt || status === "verified" || status === "error" || autoVerifyTriggered.current) return
 
     const elapsed = Date.now() - domainAddedAt
     const timeToVerify = 30000 - elapsed
 
     if (timeToVerify <= 0) {
+      autoVerifyTriggered.current = true
       handleVerifyDomain()
       return
     }
 
     const timer = setTimeout(() => {
       addLog("⏰ 30 seconds elapsed - auto-verifying domain...")
+      autoVerifyTriggered.current = true
       handleVerifyDomain()
     }, timeToVerify)
 
@@ -72,18 +79,20 @@ export default function TestCustomDomainPage() {
   }, [domainAddedAt, status])
 
   useEffect(() => {
-    if (!verifiedAt || status === "error") return
+    if (!verifiedAt || status === "error" || status === "complete" || autoSSLCheckTriggered.current) return
 
     const elapsed = Date.now() - verifiedAt
     const timeToSSLCheck = 60000 - elapsed
 
     if (timeToSSLCheck <= 0) {
+      autoSSLCheckTriggered.current = true
       handleCheckSSL()
       return
     }
 
     const timer = setTimeout(() => {
       addLog("⏰ 1 minute elapsed - auto-checking SSL...")
+      autoSSLCheckTriggered.current = true
       handleCheckSSL()
     }, timeToSSLCheck)
 
@@ -176,8 +185,14 @@ export default function TestCustomDomainPage() {
     addLog("Checking SSL status via cron job")
 
     try {
+      const token = await getAuthToken()
+
       const response = await fetch("/api/custom-domain/check-ssl-status", {
         method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
       })
 
       const data = await response.json()
