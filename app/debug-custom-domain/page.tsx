@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from "react"
 import { useAuth } from "@/hooks/use-firebase-auth"
+import { doc, getDoc } from "firebase/firestore"
+import { db } from "@/lib/firebase"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { AlertCircle, CheckCircle2, XCircle, RefreshCw } from "lucide-react"
-import { doc, getDoc } from "firebase/firestore"
-import { db } from "@/lib/firebase"
 
 interface DebugData {
   auth: {
@@ -57,17 +57,10 @@ export default function DebugCustomDomainPage() {
       const token = await user.getIdToken()
       console.log("[v0] Got auth token")
 
-      console.log("[v0] Fetching user data from Firestore...")
-      const userDocRef = doc(db, "users", user.uid)
-      const userDocSnap = await getDoc(userDocRef)
-
-      let userData: any = {}
-      if (userDocSnap.exists()) {
-        userData = userDocSnap.data()
-        console.log("[v0] User data from Firestore:", userData)
-      } else {
-        console.log("[v0] User document does not exist")
-      }
+      console.log("[v0] Fetching user data from Firebase...")
+      const userDoc = await getDoc(doc(db, "users", user.uid))
+      const userData = userDoc.exists() ? userDoc.data() : {}
+      console.log("[v0] User data from Firebase:", userData)
 
       // Test status endpoint
       console.log("[v0] Testing status endpoint...")
@@ -87,7 +80,7 @@ export default function DebugCustomDomainPage() {
           email: user?.email || null,
         },
         userData: {
-          exists: !!userData && Object.keys(userData).length > 0,
+          exists: userDoc.exists(),
           plan: userData.plan || null,
           membershipTier: userData.membershipTier || null,
           status: userData.status || null,
