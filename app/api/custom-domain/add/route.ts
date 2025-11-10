@@ -91,6 +91,8 @@ export async function POST(request: NextRequest) {
     if (testModeActive) {
       console.log(`[v0] TEST MODE - Adding test domain: ${domain}`)
     } else {
+      console.log("[v0] Validating domain format...")
+
       // Existing validation
       const securityCheck = await checkDomainSecurity(userId, domain)
       console.log("[v0] Security check:", securityCheck)
@@ -99,10 +101,14 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: securityCheck.reason }, { status: 403 })
       }
 
-      // Validate domain format
-      const domainRegex = /^([a-z0-9]+(-[a-z0-9]+)*\.)+[a-z]{2,}$/i
+      // Validate domain format - more permissive regex that allows valid subdomains
+      const domainRegex = /^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i
       const isValidFormat = domainRegex.test(domain)
-      console.log("[v0] Domain format validation:", { domain, isValid: isValidFormat })
+      console.log("[v0] Domain format validation:", {
+        domain,
+        isValid: isValidFormat,
+        regex: domainRegex.toString(),
+      })
       if (!isValidFormat) {
         console.log("[v0] Invalid domain format - returning 400")
         return NextResponse.json({ error: "Invalid domain format" }, { status: 400 })

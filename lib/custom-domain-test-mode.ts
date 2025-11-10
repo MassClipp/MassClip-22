@@ -8,13 +8,28 @@ export const isTestMode = () => {
 }
 
 export const isTestDomain = (domain: string) => {
-  // Test domains follow pattern: test-*.example.com, *.test, localhost-*, or contains localhost
+  // Test domains follow pattern: test-*.example.com, *.test, localhost-*, contains localhost, or uses free DNS services
   const lowerDomain = domain.toLowerCase()
+
+  // Free DNS services that are safe for testing
+  const freeDnsServices = [
+    "duckdns.org",
+    "ddns.net",
+    "noip.com",
+    "dynu.com",
+    "freedns.afraid.org",
+    "example.com",
+    "example.org",
+  ]
+
+  const isFreeDns = freeDnsServices.some((service) => lowerDomain.endsWith(service))
+
   return (
     lowerDomain.startsWith("test-") ||
     lowerDomain.startsWith("localhost") ||
     lowerDomain.endsWith(".test") ||
-    lowerDomain.includes("localhost")
+    lowerDomain.includes("localhost") ||
+    isFreeDns
   )
 }
 
