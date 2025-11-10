@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from "react"
 import { useAuth } from "@/hooks/use-firebase-auth"
-import { doc, getDoc } from "firebase/firestore"
+import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { AlertCircle, CheckCircle2, XCircle, RefreshCw } from "lucide-react"
+import { AlertCircle, CheckCircle2, XCircle, RefreshCw, Loader2, Trash2 } from "lucide-react"
 
 interface DebugData {
   auth: {
@@ -43,6 +43,8 @@ export default function DebugCustomDomainPage() {
   const [debugData, setDebugData] = useState<DebugData | null>(null)
   const [loading, setLoading] = useState(false)
   const [testDomain, setTestDomain] = useState("testmassclip.duckdns.org")
+  const [existingDomains, setExistingDomains] = useState<any[]>([])
+  const [deleting, setDeleting] = useState<string | null>(null)
 
   const runDiagnostics = async () => {
     setLoading(true)
@@ -57,12 +59,22 @@ export default function DebugCustomDomainPage() {
       const token = await user.getIdToken()
       console.log("[v0] Got auth token")
 
-      console.log("[v0] Fetching user data from Firebase...")
-      const userDoc = await getDoc(doc(db, "users", user.uid))
-      const userData = userDoc.exists() ? userDoc.data() : {}
-      console.log("[v0] User data from Firebase:", userData)
+      console.log("[v0] Fetching membership data from Firebase...")
+      const membershipDoc = await getDoc(doc(db, "memberships", user.uid))
+      const userData = membershipDoc.exists() ? membershipDoc.data() : {}
+      console.log("[v0] Membership data from Firebase:", userData)
 
-      // Test status endpoint
+      console.log("[v0] Fetching existing domains...")
+      const domainsRef = collection(db, "customDomains")
+      const domainsQuery = query(domainsRef, where("userId", "==", user.uid))
+      const domainsSnap = await getDocs(domainsQuery)
+      const domains = domainsSnap.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }))
+      console.log("[v0] Found domains:", domains)
+      setExistingDomains(domains)
+
       console.log("[v0] Testing status endpoint...")
       const statusRes = await fetch("/api/custom-domain/status", {
         headers: { Authorization: `Bearer ${token}` },
@@ -80,7 +92,7 @@ export default function DebugCustomDomainPage() {
           email: user?.email || null,
         },
         userData: {
-          exists: userDoc.exists(),
+          exists: membershipDoc.exists(),
           plan: userData.plan || null,
           membershipTier: userData.membershipTier || null,
           status: userData.status || null,
@@ -144,6 +156,17 @@ export default function DebugCustomDomainPage() {
           },
         }
       })
+
+      if (res.ok) {
+        const domainsRef = collection(db, "customDomains")
+        const domainsQuery = query(domainsRef, where("userId", "==", user.uid))
+        const domainsSnap = await getDocs(domainsQuery)
+        const domains = domainsSnap.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }))
+        setExistingDomains(domains)
+      }
     } catch (error: any) {
       console.error("[v0] Test add domain error:", error)
       setDebugData((prev) => {
@@ -156,6 +179,48 @@ export default function DebugCustomDomainPage() {
           },
         }
       })
+    }
+  }
+
+  const deleteDomain = async (domainId: string) => {
+    if (!user) return
+
+    setDeleting(domainId)
+    try {
+      const token = await user.getIdToken()
+      console.log("[v0] Deleting domain:", domainId)
+
+      const response = await fetch("/api/custom-domain/remove", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ domainId }),
+      })
+
+      const data = await response.json()
+      console.log("[v0] Delete response:", { status: response.status, data })
+
+      if (response.ok) {
+        const domainsRef = collection(db, "customDomains")
+        const domainsQuery = query(domainsRef, where("userId", "==", user.uid))
+        const domainsSnap = await getDocs(domainsQuery)
+        const domains = domainsSnap.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }))
+        setExistingDomains(domains)
+
+        await runDiagnostics()
+      } else {
+        alert(`Failed to delete: ${data.error}`)
+      }
+    } catch (error: any) {
+      console.error("[v0] Delete error:", error)
+      alert(`Error: ${error.message}`)
+    } finally {
+      setDeleting(null)
     }
   }
 
@@ -173,6 +238,8 @@ export default function DebugCustomDomainPage() {
     )
   }
 
+  const activeDomains = existingDomains.filter((d) => d.status !== "removed")
+
   return (
     <div className="container mx-auto p-6 max-w-4xl">
       <div className="mb-6">
@@ -189,7 +256,65 @@ export default function DebugCustomDomainPage() {
 
       {debugData && (
         <div className="space-y-6">
-          {/* Authentication */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                {activeDomains.length > 0 ? (
+                  <CheckCircle2 className="h-5 w-5 text-green-500" />
+                ) : (
+                  <XCircle className="h-5 w-5 text-gray-400" />
+                )}
+                Your Existing Domains
+              </CardTitle>
+              <CardDescription>Custom domains currently in the database</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {activeDomains.length === 0 ? (
+                <p className="text-muted-foreground text-sm">No active custom domains found</p>
+              ) : (
+                <div className="space-y-3">
+                  {activeDomains.map((domain) => (
+                    <div key={domain.id} className="flex items-center justify-between p-3 border rounded-md">
+                      <div className="flex-1">
+                        <p className="font-medium">{domain.domain}</p>
+                        <div className="flex gap-2 mt-1">
+                          <Badge variant={domain.verified ? "default" : "secondary"}>
+                            {domain.verified ? "Verified" : "Pending"}
+                          </Badge>
+                          <Badge variant="outline">{domain.status}</Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Created: {new Date(domain.createdAt).toLocaleString()}
+                        </p>
+                      </div>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => deleteDomain(domain.id)}
+                        disabled={deleting === domain.id}
+                      >
+                        {deleting === domain.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <>
+                            <Trash2 className="h-4 w-4 mr-1" />
+                            Remove
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {existingDomains.length > activeDomains.length && (
+                <p className="text-xs text-muted-foreground mt-3">
+                  {existingDomains.length - activeDomains.length} removed domain(s) hidden
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -219,7 +344,6 @@ export default function DebugCustomDomainPage() {
             </CardContent>
           </Card>
 
-          {/* User Data */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -247,7 +371,6 @@ export default function DebugCustomDomainPage() {
             </CardContent>
           </Card>
 
-          {/* Membership Check */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -293,7 +416,6 @@ export default function DebugCustomDomainPage() {
             </CardContent>
           </Card>
 
-          {/* Existing Domain */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -331,14 +453,12 @@ export default function DebugCustomDomainPage() {
             </CardContent>
           </Card>
 
-          {/* API Tests */}
           <Card>
             <CardHeader>
               <CardTitle>API Endpoint Tests</CardTitle>
               <CardDescription>Test API responses</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Status API */}
               <div className="border rounded-md p-3">
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-medium">GET /api/custom-domain/status</span>
@@ -351,7 +471,6 @@ export default function DebugCustomDomainPage() {
                 )}
               </div>
 
-              {/* Add API */}
               <div className="border rounded-md p-3">
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-medium">POST /api/custom-domain/add</span>
