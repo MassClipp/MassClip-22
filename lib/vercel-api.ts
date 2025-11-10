@@ -2,8 +2,6 @@ const VERCEL_API_BASE = "https://api.vercel.com"
 const VERCEL_TOKEN = process.env.VERCEL_API_TOKEN
 const VERCEL_PROJECT_ID = process.env.VERCEL_PROJECT_ID
 
-import { isTestMode, isTestDomain, getMockVercelResponse } from "./custom-domain-test-mode"
-
 if (!VERCEL_TOKEN) {
   console.warn("[Vercel API] VERCEL_API_TOKEN not configured")
 }
@@ -27,14 +25,11 @@ export interface VercelDomainResponse {
 }
 
 export async function addDomainToVercel(domain: string): Promise<VercelDomainResponse> {
-  if (isTestMode() && isTestDomain(domain)) {
-    console.log(`[Vercel API] [TEST MODE] Mock adding domain: ${domain}`)
-    return getMockVercelResponse(domain) as VercelDomainResponse
-  }
-
   if (!VERCEL_TOKEN || !VERCEL_PROJECT_ID) {
     throw new Error("Vercel API credentials not configured")
   }
+
+  console.log(`[Vercel API] Adding domain to Vercel: ${domain}`)
 
   const response = await fetch(`${VERCEL_API_BASE}/v10/projects/${VERCEL_PROJECT_ID}/domains`, {
     method: "POST",
@@ -47,21 +42,21 @@ export async function addDomainToVercel(domain: string): Promise<VercelDomainRes
 
   if (!response.ok) {
     const error = await response.json()
+    console.error(`[Vercel API] Failed to add domain:`, error)
     throw new Error(`Vercel API error: ${error.error?.message || response.statusText}`)
   }
 
-  return response.json()
+  const result = await response.json()
+  console.log(`[Vercel API] Domain added successfully:`, result)
+  return result
 }
 
 export async function checkDomainStatus(domain: string): Promise<VercelDomainResponse> {
-  if (isTestMode() && isTestDomain(domain)) {
-    console.log(`[Vercel API] [TEST MODE] Mock checking domain: ${domain}`)
-    return getMockVercelResponse(domain) as VercelDomainResponse
-  }
-
   if (!VERCEL_TOKEN || !VERCEL_PROJECT_ID) {
     throw new Error("Vercel API credentials not configured")
   }
+
+  console.log(`[Vercel API] Checking domain status: ${domain}`)
 
   const response = await fetch(`${VERCEL_API_BASE}/v9/projects/${VERCEL_PROJECT_ID}/domains/${domain}`, {
     headers: {
@@ -71,21 +66,21 @@ export async function checkDomainStatus(domain: string): Promise<VercelDomainRes
 
   if (!response.ok) {
     const error = await response.json()
+    console.error(`[Vercel API] Failed to check domain:`, error)
     throw new Error(`Vercel API error: ${error.error?.message || response.statusText}`)
   }
 
-  return response.json()
+  const result = await response.json()
+  console.log(`[Vercel API] Domain status:`, result)
+  return result
 }
 
 export async function removeDomainFromVercel(domain: string): Promise<void> {
-  if (isTestMode() && isTestDomain(domain)) {
-    console.log(`[Vercel API] [TEST MODE] Mock removing domain: ${domain}`)
-    return
-  }
-
   if (!VERCEL_TOKEN || !VERCEL_PROJECT_ID) {
     throw new Error("Vercel API credentials not configured")
   }
+
+  console.log(`[Vercel API] Removing domain from Vercel: ${domain}`)
 
   const response = await fetch(`${VERCEL_API_BASE}/v9/projects/${VERCEL_PROJECT_ID}/domains/${domain}`, {
     method: "DELETE",
@@ -96,8 +91,11 @@ export async function removeDomainFromVercel(domain: string): Promise<void> {
 
   if (!response.ok) {
     const error = await response.json()
+    console.error(`[Vercel API] Failed to remove domain:`, error)
     throw new Error(`Vercel API error: ${error.error?.message || response.statusText}`)
   }
+
+  console.log(`[Vercel API] Domain removed successfully: ${domain}`)
 }
 
 export const addVercelDomain = async (domain: string) => {
