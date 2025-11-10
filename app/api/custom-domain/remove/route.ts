@@ -19,7 +19,16 @@ export async function POST(request: NextRequest) {
 
     console.log("[v0] [Remove Domain] User ID:", userId)
 
-    const body = await request.json().catch(() => ({}))
+    let body: any = {}
+    try {
+      const rawBody = await request.text()
+      if (rawBody) {
+        body = JSON.parse(rawBody)
+      }
+    } catch (error) {
+      console.log("[v0] [Remove Domain] No JSON body or parse error, will look up domain")
+    }
+
     let domainId = body.domainId
 
     // If no domainId provided, find user's current domain

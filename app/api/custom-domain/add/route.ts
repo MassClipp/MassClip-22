@@ -66,14 +66,15 @@ export async function POST(request: NextRequest) {
 
     if (!testModeActive) {
       const membershipTier = userData.plan || userData.membershipTier || "free"
+      const allowedPlans = ["facelessprenuer", "faceless_pro", "creator_pro"]
       console.log("[v0] Membership check:", {
         membershipTier,
         plan: userData.plan,
         membershipTierField: userData.membershipTier,
-        isAllowed: membershipTier === "facelessprenuer",
+        isAllowed: allowedPlans.includes(membershipTier),
       })
 
-      if (membershipTier !== "facelessprenuer") {
+      if (!allowedPlans.includes(membershipTier)) {
         console.log("[v0] Membership check FAILED - returning 403")
         return NextResponse.json({ error: "Custom domains require Facelessprenuer membership" }, { status: 403 })
       }
