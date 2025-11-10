@@ -158,14 +158,36 @@ export async function POST(request: NextRequest) {
     const isApex = isApexDomain(domain)
     const dnsInstructions = getDNSInstructions(domain, verificationToken, isApex)
 
-    console.log(`[v0] Adding domain to Vercel: ${domain}`)
+    console.log(`[v0] === VERCEL API INTEGRATION START ===`)
+    console.log(`[v0] Domain to add: ${domain}`)
+    console.log(`[v0] Environment variables check:`, {
+      hasApiToken: !!process.env.VERCEL_API_TOKEN,
+      hasProjectId: !!process.env.VERCEL_PROJECT_ID,
+      apiTokenLength: process.env.VERCEL_API_TOKEN?.length || 0,
+      projectId: process.env.VERCEL_PROJECT_ID || "not set",
+    })
+
+    let vercelDomainAdded = false
+    let vercelDomainId = null
+
+    console.log(`[v0] Attempting to add domain to Vercel: ${domain}`)
     try {
       const vercelResponse = await addDomainToVercel(domain)
-      console.log(`[v0] Vercel API response:`, vercelResponse)
+      console.log(`[v0] Vercel API SUCCESS - Response:`, JSON.stringify(vercelResponse, null, 2))
+      vercelDomainAdded = true
+      vercelDomainId = vercelResponse?.name || domain
+      console.log(`[v0] Vercel domain ID/name:`, vercelDomainId)
     } catch (vercelError: any) {
-      console.error(`[v0] Vercel API error:`, vercelError)
-      // For test domains, continue even if Vercel API fails (mock will handle it)
+      console.error(`[v0] Vercel API FAILED - Error:`, {
+        message: vercelError.message,
+        status: vercelError.status,
+        code: vercelError.code,
+        stack: vercelError.stack,
+      })
+      console.error(`[v0] Full Vercel error object:`, JSON.stringify(vercelError, null, 2))
+
       if (!testModeActive) {
+        console.log(`[v0] Production mode - returning error to user`)
         return NextResponse.json(
           {
             error: "Failed to add domain to Vercel",
@@ -174,10 +196,12 @@ export async function POST(request: NextRequest) {
           { status: 500 },
         )
       }
-      console.log(`[v0] Test mode - continuing despite Vercel error`)
+      console.log(`[v0] Test mode - continuing despite Vercel API error`)
     }
 
-    // Create custom domain document
+    console.log(`[v0] === VERCEL API INTEGRATION END ===`)
+    console.log(`[v0] Vercel domain added: ${vercelDomainAdded}`)
+
     const now = new Date().toISOString()
     const domainDoc = {
       userId,
@@ -190,6 +214,8 @@ export async function POST(request: NextRequest) {
       status: "pending",
       sslStatus: "pending",
       isApex,
+      vercelDomainAdded, // Track if Vercel API succeeded
+      vercelDomainId, // Store Vercel's domain identifier
     }
 
     const docRef = await db.collection("customDomains").add(domainDoc)
