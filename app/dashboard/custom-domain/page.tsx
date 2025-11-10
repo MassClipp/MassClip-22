@@ -568,48 +568,45 @@ export default function CustomDomainPage() {
                       </div>
 
                       {/* CNAME or A Record */}
-                      <div className="p-4 rounded-lg bg-zinc-800/30 border border-zinc-700/50 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-medium text-zinc-400">
-                            {currentDomain?.domain?.split(".").length === 2 ? "A Record" : "CNAME Record"} (Routing)
-                          </span>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() =>
-                              copyToClipboard(
-                                currentDomain?.domain?.split(".").length === 2 ? "76.76.21.21" : "cname.vercel-dns.com",
-                              )
-                            }
-                            className="h-7 text-xs"
-                          >
-                            <Copy className="h-3 w-3 mr-1" />
-                            Copy Value
-                          </Button>
-                        </div>
-                        <div className="grid grid-cols-3 gap-4 text-sm">
-                          <div>
-                            <span className="text-zinc-500 text-xs">Type</span>
-                            <p className="text-white font-mono">
-                              {currentDomain?.domain?.split(".").length === 2 ? "A" : "CNAME"}
-                            </p>
+                      {(() => {
+                        // Safely parse domain parts
+                        const domainParts = currentDomain?.domain?.split?.(".") || []
+                        const isApexDomain = domainParts.length === 2
+                        const recordType = isApexDomain ? "A" : "CNAME"
+                        const recordName = isApexDomain ? "@" : domainParts[0] || ""
+                        const recordValue = isApexDomain ? "76.76.21.21" : "cname.vercel-dns.com"
+
+                        return (
+                          <div className="p-4 rounded-lg bg-zinc-800/30 border border-zinc-700/50 space-y-3">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-medium text-zinc-400">{recordType} Record (Routing)</span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => copyToClipboard(recordValue)}
+                                className="h-7 text-xs"
+                              >
+                                <Copy className="h-3 w-3 mr-1" />
+                                Copy Value
+                              </Button>
+                            </div>
+                            <div className="grid grid-cols-3 gap-4 text-sm">
+                              <div>
+                                <span className="text-zinc-500 text-xs">Type</span>
+                                <p className="text-white font-mono">{recordType}</p>
+                              </div>
+                              <div>
+                                <span className="text-zinc-500 text-xs">Name</span>
+                                <p className="text-white font-mono">{recordName}</p>
+                              </div>
+                              <div>
+                                <span className="text-zinc-500 text-xs">Value</span>
+                                <p className="text-white font-mono">{recordValue}</p>
+                              </div>
+                            </div>
                           </div>
-                          <div>
-                            <span className="text-zinc-500 text-xs">Name</span>
-                            <p className="text-white font-mono">
-                              {currentDomain?.domain?.split(".").length === 2
-                                ? "@"
-                                : currentDomain?.domain?.split(".")[0]}
-                            </p>
-                          </div>
-                          <div>
-                            <span className="text-zinc-500 text-xs">Value</span>
-                            <p className="text-white font-mono">
-                              {currentDomain?.domain?.split(".").length === 2 ? "76.76.21.21" : "cname.vercel-dns.com"}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
+                        )
+                      })()}
                     </div>
                   </div>
 
