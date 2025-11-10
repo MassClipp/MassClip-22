@@ -35,6 +35,7 @@ export default function CustomDomainPage() {
   const [adding, setAdding] = useState(false)
   const [verifying, setVerifying] = useState(false)
   const [removing, setRemoving] = useState(false)
+  const [reactivating, setReactivating] = useState(false)
 
   const [isFacelessprenuer, setIsFacelessprenuer] = useState(false)
   const [domainInput, setDomainInput] = useState("")
@@ -275,6 +276,56 @@ export default function CustomDomainPage() {
     }
   }
 
+  const handleReactivateDomain = async () => {
+    if (!currentDomain) return
+
+    setReactivating(true)
+
+    try {
+      console.log("[v0] Reactivating domain:", currentDomain.domain)
+      const token = await user?.getIdToken()
+
+      const response = await fetch("/api/custom-domain/reactivate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          domain: currentDomain.domain,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to reactivate domain")
+      }
+
+      console.log("[v0] Domain reactivated successfully")
+
+      // Update current domain state
+      setCurrentDomain({
+        ...currentDomain,
+        status: "active",
+      })
+
+      toast({
+        title: "Domain reactivated",
+        description: "Your custom domain has been reactivated",
+      })
+    } catch (error: any) {
+      console.error("[v0] Error reactivating domain:", error)
+      toast({
+        title: "Error",
+        description: error.message || "Failed to reactivate domain",
+        variant: "destructive",
+      })
+    } finally {
+      setReactivating(false)
+    }
+  }
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
     toast({
@@ -305,6 +356,13 @@ export default function CustomDomainPage() {
           <div className="flex items-center gap-2 text-red-400">
             <AlertCircle className="h-4 w-4" />
             <span className="text-sm font-medium">Verification Failed</span>
+          </div>
+        )
+      case "removed":
+        return (
+          <div className="flex items-center gap-2 text-zinc-400">
+            <AlertCircle className="h-4 w-4" />
+            <span className="text-sm font-medium">Removed</span>
           </div>
         )
       default:
@@ -477,6 +535,24 @@ export default function CustomDomainPage() {
                       Visit
                     </Button>
                   )}
+                  {currentDomain.status === "removed" && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleReactivateDomain}
+                      disabled={reactivating}
+                      className="border-emerald-700 hover:bg-emerald-900/20 bg-transparent text-emerald-400"
+                    >
+                      {reactivating ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-2" />
+                          Reactivate
+                        </>
+                      )}
+                    </Button>
+                  )}
                   <Button
                     variant="outline"
                     size="sm"
@@ -495,6 +571,21 @@ export default function CustomDomainPage() {
                   </Button>
                 </div>
               </div>
+
+              {currentDomain.status === "removed" && (
+                <div className="p-4 rounded-lg bg-amber-900/20 border border-amber-500/30">
+                  <div className="flex gap-3">
+                    <AlertCircle className="h-5 w-5 text-amber-400 flex-shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <p className="text-amber-200 text-sm font-medium">Domain Removed</p>
+                      <p className="text-amber-300/80 text-xs leading-relaxed">
+                        This domain has been removed and is not currently routing to your storefront. Click "Reactivate"
+                        to restore it.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {currentDomain.sslStatus === "error" && currentDomain.sslError && (
                 <div className="p-4 rounded-lg bg-red-900/20 border border-red-500/30">
