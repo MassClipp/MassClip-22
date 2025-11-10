@@ -205,8 +205,8 @@ export default async function CreatorProfilePage({ params, request }: { params: 
     })
 
     // Block access only if storefront is explicitly set to offline
-    if (!storefrontActive) {
-      console.log(`[Page] Storefront access denied for username: ${username}`)
+    if (storefrontActive === false) {
+      console.log(`[Page] Storefront offline for username: ${username}`)
       return (
         <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
           <div className="text-center max-w-md">

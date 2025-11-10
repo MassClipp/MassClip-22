@@ -153,7 +153,8 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
         if (tabsResponse.ok) {
           const tabsData = await tabsResponse.json()
           console.log("[v0] Storefront tabs data:", tabsData)
-          setStorefrontTabs(tabsData.tabs || [])
+          const enabledTabs = (tabsData.tabs || []).filter((tab: any) => tab.enabled)
+          setStorefrontTabs(enabledTabs)
           setExternalProducts(tabsData.externalProducts || [])
         }
 

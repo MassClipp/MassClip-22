@@ -60,6 +60,11 @@ export async function middleware(request: NextRequest) {
 
     console.log(`[v0] [Middleware] Resolution response status: ${response.status}`)
 
+    if (response.status === 503) {
+      console.log(`[v0] [Middleware] Storefront is offline`)
+      return NextResponse.rewrite(new URL("/store-offline", request.url))
+    }
+
     if (response.ok) {
       const data = await response.json()
       console.log(`[v0] [Middleware] Resolution data:`, data)

@@ -69,6 +69,17 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Username not found" }, { status: 404 })
     }
 
+    if (userData?.storefrontActive === false) {
+      console.log(`[v0] [Resolve API] Storefront is offline for user: ${data.userId}`)
+      return NextResponse.json(
+        {
+          error: "Storefront offline",
+          message: "This creator's storefront is currently offline",
+        },
+        { status: 503 },
+      )
+    }
+
     // Cache the successful lookup
     domainCache.set(customDomain, { username, timestamp: Date.now() })
     console.log(`[v0] [Resolve API] Successfully cached mapping: ${customDomain} -> ${username}`)
