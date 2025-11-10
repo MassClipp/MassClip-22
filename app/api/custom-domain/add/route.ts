@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
 
     if (!testModeActive) {
       const membershipTier = userData.plan || userData.membershipTier || "free"
-      const allowedPlans = ["facelessprenuer", "faceless_pro", "creator_pro"]
+      const allowedPlans = ["facelessprenuer"]
       console.log("[v0] Membership check:", {
         membershipTier,
         plan: userData.plan,
@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
 
       if (!allowedPlans.includes(membershipTier)) {
         console.log("[v0] Membership check FAILED - returning 403")
-        return NextResponse.json({ error: "Custom domains require premium membership" }, { status: 403 })
+        return NextResponse.json({ error: "Custom domains require Facelessprenuer membership" }, { status: 403 })
       }
       console.log("[v0] Membership check PASSED")
     }

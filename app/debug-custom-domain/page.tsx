@@ -74,7 +74,7 @@ export default function DebugCustomDomainPage() {
       const userData = userDataRes.ok ? await userDataRes.json() : {}
       console.log("[v0] User data:", userData)
 
-      const allowedPlans = ["facelessprenuer", "faceless_pro", "creator_pro"]
+      const allowedPlans = ["facelessprenuer"]
       const userPlan = userData.plan || userData.membershipTier || "free"
 
       setDebugData({

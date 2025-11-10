@@ -75,6 +75,11 @@ export async function checkDomainRateLimit(
 
 // Security check for suspicious patterns
 export async function checkDomainSecurity(userId: string, domain: string): Promise<{ safe: boolean; reason?: string }> {
+  const whitelistedProviders = [/\.duckdns\.org$/i, /\.mooo\.com$/i, /\.freedns\.afraid\.org$/i]
+
+  const isWhitelisted = whitelistedProviders.some((pattern) => pattern.test(domain))
+  console.log(`[v0] Domain whitelist check: ${domain}, whitelisted: ${isWhitelisted}`)
+
   // Check for suspicious patterns
   const suspiciousPatterns = [
     /phishing/i,
