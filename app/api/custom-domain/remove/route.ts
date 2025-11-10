@@ -9,6 +9,7 @@ export async function POST(request: NextRequest) {
 
     const authHeader = request.headers.get("Authorization")
     if (!authHeader?.startsWith("Bearer ")) {
+      console.log("[v0] [Remove Domain] No auth header")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -16,31 +17,53 @@ export async function POST(request: NextRequest) {
     const decodedToken = await getAuth().verifyIdToken(token)
     const userId = decodedToken.uid
 
-    const { domainId } = await request.json()
+    console.log("[v0] [Remove Domain] User ID:", userId)
 
+    const body = await request.json().catch(() => ({}))
+    let domainId = body.domainId
+
+    // If no domainId provided, find user's current domain
     if (!domainId) {
-      return NextResponse.json({ error: "Domain ID is required" }, { status: 400 })
+      console.log("[v0] [Remove Domain] No domainId provided, looking up user's domain")
+      const domainsSnapshot = await db
+        .collection("customDomains")
+        .where("userId", "==", userId)
+        .where("status", "!=", "removed")
+        .limit(1)
+        .get()
+
+      if (domainsSnapshot.empty) {
+        return NextResponse.json({ error: "No active domain found" }, { status: 404 })
+      }
+
+      domainId = domainsSnapshot.docs[0].id
+      console.log("[v0] [Remove Domain] Found domain ID:", domainId)
     }
 
     // Get domain document
     const domainDoc = await db.collection("customDomains").doc(domainId).get()
 
     if (!domainDoc.exists) {
+      console.log("[v0] [Remove Domain] Domain not found:", domainId)
       return NextResponse.json({ error: "Domain not found" }, { status: 404 })
     }
 
     const domainData = domainDoc.data()
 
     if (domainData?.userId !== userId) {
+      console.log("[v0] [Remove Domain] Unauthorized access attempt")
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
     }
+
+    console.log("[v0] [Remove Domain] Removing domain:", domainData.domain)
 
     // Remove from Vercel if verified
     if (domainData.verified) {
       try {
         await removeDomainFromVercel(domainData.domain)
+        console.log("[v0] [Remove Domain] Removed from Vercel successfully")
       } catch (error) {
-        console.error("[Custom Domain Remove] Vercel API error:", error)
+        console.error("[v0] [Remove Domain] Vercel API error:", error)
         // Continue anyway to clean up local records
       }
     }
@@ -49,6 +72,7 @@ export async function POST(request: NextRequest) {
     await db.collection("customDomains").doc(domainId).update({
       status: "removed",
       verified: false,
+      removedAt: new Date().toISOString(),
     })
 
     // Clear user's custom domain
@@ -57,14 +81,14 @@ export async function POST(request: NextRequest) {
       customDomainId: null,
     })
 
-    console.log(`[v0] Domain removed successfully: ${domainData.domain} (ID: ${domainId})`)
+    console.log("[v0] [Remove Domain] Domain removed successfully:", domainData.domain)
 
     return NextResponse.json({
       success: true,
       message: "Custom domain removed successfully",
     })
   } catch (error: any) {
-    console.error("[Custom Domain Remove] Error:", error)
+    console.error("[v0] [Remove Domain] Error:", error)
     return NextResponse.json({ error: error.message || "Failed to remove custom domain" }, { status: 500 })
   }
 }

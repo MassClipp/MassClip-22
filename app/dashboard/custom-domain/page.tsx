@@ -93,6 +93,7 @@ export default function CustomDomainPage() {
     if (!user) return
 
     try {
+      console.log("[v0] Fetching current domain status")
       const token = await user.getIdToken()
       const response = await fetch("/api/custom-domain/status", {
         headers: {
@@ -102,7 +103,19 @@ export default function CustomDomainPage() {
 
       if (response.ok) {
         const data = await response.json()
+        console.log("[v0] Domain status response:", data)
+
         if (data.domain) {
+          const domain = data.domain.domain || data.domain
+          const isTestDomain =
+            domain.includes(".example.com") || domain.includes("test-") || domain.includes("localhost")
+
+          if (isTestDomain) {
+            console.log("[v0] Ignoring test domain on production page:", domain)
+            setCurrentDomain(null)
+            return
+          }
+
           setCurrentDomain({
             ...data.domain,
             domainId: data.domain.id || data.domainId,
@@ -110,7 +123,7 @@ export default function CustomDomainPage() {
         }
       }
     } catch (error) {
-      console.error("Error fetching domain:", error)
+      console.error("[v0] Error fetching domain:", error)
     }
   }
 
@@ -232,18 +245,27 @@ export default function CustomDomainPage() {
     setRemoving(true)
 
     try {
+      console.log("[v0] Removing domain:", currentDomain)
       const token = await user?.getIdToken()
+
       const response = await fetch("/api/custom-domain/remove", {
         method: "POST",
         headers: {
+          "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
+        body: JSON.stringify({
+          domainId: currentDomain.domainId || currentDomain.id,
+        }),
       })
 
+      const data = await response.json()
+
       if (!response.ok) {
-        throw new Error("Failed to remove domain")
+        throw new Error(data.error || "Failed to remove domain")
       }
 
+      console.log("[v0] Domain removed successfully")
       setCurrentDomain(null)
       setDnsInstructions(null)
 
@@ -252,6 +274,7 @@ export default function CustomDomainPage() {
         description: "Your custom domain has been removed",
       })
     } catch (error: any) {
+      console.error("[v0] Error removing domain:", error)
       toast({
         title: "Error",
         description: error.message || "Failed to remove domain",
