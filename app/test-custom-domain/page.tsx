@@ -362,23 +362,36 @@ export default function TestCustomDomainPage() {
             <Button onClick={handleCheckSSL} variant="outline" disabled={status !== "verified"}>
               3. Check SSL (manual override)
             </Button>
-            {domainId && (
-              <Button onClick={handleDeleteDomain} disabled={status === "deleting"} variant="destructive" size="sm">
+          </div>
+
+          {domainId && (
+            <div className="flex gap-2 pt-2 border-t">
+              <Button
+                onClick={handleDeleteDomain}
+                disabled={status === "deleting"}
+                variant="destructive"
+                className="flex-1"
+              >
                 <Trash2 className="h-4 w-4 mr-2" />
-                Delete Domain
+                {status === "deleting" ? "Deleting..." : "Delete Current Domain"}
               </Button>
-            )}
-            <Button onClick={resetTest} variant="ghost" className="ml-auto" disabled={status === "loading"}>
+              <Button
+                onClick={resetTest}
+                variant="outline"
+                className="flex-1 bg-transparent"
+                disabled={status === "loading"}
+              >
+                <RotateCcw className="h-4 w-4 mr-2" />
+                Reset Test
+              </Button>
+            </div>
+          )}
+
+          {!domainId && (
+            <Button onClick={resetTest} variant="ghost" disabled={status === "loading"}>
               <RotateCcw className="h-4 w-4 mr-2" />
               Reset Test
             </Button>
-          </div>
-
-          {message && (
-            <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
-              {getStatusIcon()}
-              <p className="text-sm">{message}</p>
-            </div>
           )}
         </div>
       </Card>
