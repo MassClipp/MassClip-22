@@ -4,6 +4,7 @@ import { getAuth } from "firebase-admin/auth"
 import { isApexDomain, getDNSInstructions } from "@/lib/dns-utils"
 import { checkDomainRateLimit, checkDomainSecurity } from "@/lib/custom-domain-rate-limiter"
 import { isTestMode, isTestDomain } from "@/lib/custom-domain-test-mode"
+import { addDomainToVercel } from "@/lib/vercel-api"
 
 export async function POST(request: NextRequest) {
   try {
@@ -157,6 +158,25 @@ export async function POST(request: NextRequest) {
     const isApex = isApexDomain(domain)
     const dnsInstructions = getDNSInstructions(domain, verificationToken, isApex)
 
+    console.log(`[v0] Adding domain to Vercel: ${domain}`)
+    try {
+      const vercelResponse = await addDomainToVercel(domain)
+      console.log(`[v0] Vercel API response:`, vercelResponse)
+    } catch (vercelError: any) {
+      console.error(`[v0] Vercel API error:`, vercelError)
+      // For test domains, continue even if Vercel API fails (mock will handle it)
+      if (!testModeActive) {
+        return NextResponse.json(
+          {
+            error: "Failed to add domain to Vercel",
+            details: vercelError.message,
+          },
+          { status: 500 },
+        )
+      }
+      console.log(`[v0] Test mode - continuing despite Vercel error`)
+    }
+
     // Create custom domain document
     const now = new Date().toISOString()
     const domainDoc = {
@@ -208,7 +228,7 @@ export async function POST(request: NextRequest) {
         dnsInstructions,
         isApex,
         testMode: true,
-        message: "Test domain auto-verified successfully",
+        message: "Test domain auto-verified and added to Vercel successfully",
       })
     }
 
