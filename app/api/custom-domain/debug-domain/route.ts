@@ -3,24 +3,29 @@ import { initializeFirebaseAdmin, db } from "@/lib/firebase-admin"
 
 export async function GET(request: NextRequest) {
   const domain = request.nextUrl.searchParams.get("domain")
+  const userId = request.nextUrl.searchParams.get("userId")
 
-  if (!domain) {
-    return NextResponse.json({ error: "Domain parameter required" }, { status: 400 })
+  if (!domain && !userId) {
+    return NextResponse.json({ error: "Either domain or userId parameter required" }, { status: 400 })
   }
 
   try {
     initializeFirebaseAdmin()
 
-    console.log(`[v0] [Debug] Looking up domain: ${domain}`)
+    let domainQuery
 
-    // Find the domain document
-    const domainQuery = await db.collection("customDomains").where("domain", "==", domain.toLowerCase()).limit(1).get()
+    if (domain) {
+      console.log(`[v0] [Debug] Looking up domain: ${domain}`)
+      domainQuery = await db.collection("customDomains").where("domain", "==", domain.toLowerCase()).limit(1).get()
+    } else if (userId) {
+      console.log(`[v0] [Debug] Looking up domains for userId: ${userId}`)
+      domainQuery = await db.collection("customDomains").where("userId", "==", userId).limit(1).get()
+    }
 
     if (domainQuery.empty) {
       return NextResponse.json({
         found: false,
-        domain,
-        message: "Domain not found in customDomains collection",
+        message: domain ? `Domain ${domain} not found` : `No domain found for user ${userId}`,
       })
     }
 
@@ -35,7 +40,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       found: true,
-      domain: domain,
+      domain: domainData.domain,
       domainData: {
         id: domainDoc.id,
         userId: domainData.userId,
@@ -51,6 +56,7 @@ export async function GET(request: NextRequest) {
             username: userData.username,
             displayName: userData.displayName,
             email: userData.email,
+            storefrontActive: userData.storefrontActive ?? true,
           }
         : null,
       expectedRewritePath: userData?.username ? `/creator/${userData.username}` : null,
