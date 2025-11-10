@@ -71,12 +71,13 @@ export async function POST(request: NextRequest) {
         membershipTier,
         plan: userData.plan,
         membershipTierField: userData.membershipTier,
+        allowedPlans,
         isAllowed: allowedPlans.includes(membershipTier),
       })
 
       if (!allowedPlans.includes(membershipTier)) {
         console.log("[v0] Membership check FAILED - returning 403")
-        return NextResponse.json({ error: "Custom domains require Facelessprenuer membership" }, { status: 403 })
+        return NextResponse.json({ error: "Custom domains require premium membership" }, { status: 403 })
       }
       console.log("[v0] Membership check PASSED")
     }
