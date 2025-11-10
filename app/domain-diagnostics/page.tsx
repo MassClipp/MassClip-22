@@ -53,10 +53,24 @@ export default function DomainDiagnosticsPage() {
     setApiTestResult(null)
 
     try {
-      console.log("[v0] Testing domain add with:", testDomain)
+      if (!user) {
+        setApiTestResult({
+          success: false,
+          error: "User not authenticated",
+        })
+        setTesting(false)
+        return
+      }
+
+      const token = await user.getIdToken()
+      console.log("[v0] Testing domain add with:", testDomain, "Token present:", !!token)
+
       const response = await fetch("/api/custom-domain/add", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`, // Add auth token to headers
+        },
         body: JSON.stringify({ domain: testDomain }),
       })
 
