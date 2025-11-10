@@ -571,14 +571,14 @@ export default function CustomDomainPage() {
                       <div className="p-4 rounded-lg bg-zinc-800/30 border border-zinc-700/50 space-y-3">
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-medium text-zinc-400">
-                            {currentDomain.domain.split(".").length === 2 ? "A Record" : "CNAME Record"} (Routing)
+                            {currentDomain?.domain?.split(".").length === 2 ? "A Record" : "CNAME Record"} (Routing)
                           </span>
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() =>
                               copyToClipboard(
-                                currentDomain.domain.split(".").length === 2 ? "76.76.21.21" : "cname.vercel-dns.com",
+                                currentDomain?.domain?.split(".").length === 2 ? "76.76.21.21" : "cname.vercel-dns.com",
                               )
                             }
                             className="h-7 text-xs"
@@ -591,19 +591,21 @@ export default function CustomDomainPage() {
                           <div>
                             <span className="text-zinc-500 text-xs">Type</span>
                             <p className="text-white font-mono">
-                              {currentDomain.domain.split(".").length === 2 ? "A" : "CNAME"}
+                              {currentDomain?.domain?.split(".").length === 2 ? "A" : "CNAME"}
                             </p>
                           </div>
                           <div>
                             <span className="text-zinc-500 text-xs">Name</span>
                             <p className="text-white font-mono">
-                              {currentDomain.domain.split(".").length === 2 ? "@" : currentDomain.domain.split(".")[0]}
+                              {currentDomain?.domain?.split(".").length === 2
+                                ? "@"
+                                : currentDomain?.domain?.split(".")[0]}
                             </p>
                           </div>
                           <div>
                             <span className="text-zinc-500 text-xs">Value</span>
                             <p className="text-white font-mono">
-                              {currentDomain.domain.split(".").length === 2 ? "76.76.21.21" : "cname.vercel-dns.com"}
+                              {currentDomain?.domain?.split(".").length === 2 ? "76.76.21.21" : "cname.vercel-dns.com"}
                             </p>
                           </div>
                         </div>
