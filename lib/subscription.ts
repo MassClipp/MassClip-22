@@ -6,7 +6,7 @@ export type SubscriptionStatus = "active" | "inactive" | "canceled" | "past_due"
 
 export interface SubscriptionData {
   isActive: boolean
-  plan: "starter" | "pro" | "creator_pro" | "faceless_pro" | "facelessprenuer"
+  plan: "starter" | "faceless_pro" | "facelessprenuer"
   stripeCustomerId?: string
   stripeSubscriptionId?: string
   currentPeriodEnd?: Date
@@ -63,7 +63,7 @@ export async function checkSubscription(userId?: string): Promise<SubscriptionDa
 
     const membership = await getMembership(userId)
     if (membership && membership.isActive) {
-      const plan = membership.plan as "starter" | "pro" | "creator_pro" | "faceless_pro" | "facelessprenuer"
+      const plan = membership.plan as "starter" | "faceless_pro" | "facelessprenuer"
 
       let features
       if (plan === "faceless_pro") {
@@ -73,7 +73,6 @@ export async function checkSubscription(userId?: string): Promise<SubscriptionDa
       } else if (plan === "starter") {
         features = { ...STARTER_DEFAULTS }
       } else {
-        // creator_pro or pro
         features = {
           platformFeePercentage: 10,
           maxVideosPerBundle: null,
@@ -160,27 +159,13 @@ export function getSubscriptionFeatures(plan: string) {
     return { ...FACELESSPRENUER_FEATURES }
   }
 
-  switch (plan) {
-    case "pro":
-    case "creator_pro":
-      return {
-        platformFeePercentage: 10,
-        maxVideosPerBundle: null,
-        maxBundles: null,
-        maxFolders: null,
-        canCreateSubfolders: true,
-        canAnalyzeTranscripts: true,
-        canCreateBundles: true,
-      }
-    default:
-      return { ...STARTER_DEFAULTS }
-  }
+  return { ...STARTER_DEFAULTS }
 }
 
 export function getPlatformFeePercentage(plan: string): number {
   if (plan === "faceless_pro") return 15
   if (plan === "facelessprenuer") return 10
-  return plan === "pro" || plan === "creator_pro" ? 10 : 20
+  return 20
 }
 
 export function calculatePlatformFee(amount: number, plan: string): number {
@@ -196,31 +181,31 @@ export function calculateCreatorEarnings(amount: number, plan: string): number {
 export function getMaxVideosPerBundle(plan: string): number | null {
   if (plan === "faceless_pro") return 25
   if (plan === "facelessprenuer") return null
-  return plan === "pro" || plan === "creator_pro" ? null : STARTER_DEFAULTS.maxVideosPerBundle
+  return STARTER_DEFAULTS.maxVideosPerBundle
 }
 
 export function getMaxBundles(plan: string): number | null {
   if (plan === "faceless_pro") return 5
   if (plan === "facelessprenuer") return null
-  return plan === "pro" || plan === "creator_pro" ? null : STARTER_DEFAULTS.maxBundles
+  return STARTER_DEFAULTS.maxBundles
 }
 
 export function getMaxFolders(plan: string): number | null {
   if (plan === "faceless_pro") return 3
   if (plan === "facelessprenuer") return null
-  return plan === "pro" || plan === "creator_pro" ? null : STARTER_DEFAULTS.maxFolders
+  return STARTER_DEFAULTS.maxFolders
 }
 
 export function canCreateSubfolders(plan: string): boolean {
-  return plan === "pro" || plan === "creator_pro" || plan === "faceless_pro" || plan === "facelessprenuer"
+  return plan === "faceless_pro" || plan === "facelessprenuer"
 }
 
 export function canAnalyzeTranscripts(plan: string): boolean {
-  return plan === "facelessprenuer" || plan === "creator_pro" || plan === "pro"
+  return plan === "facelessprenuer"
 }
 
 export function canUserCreateBundlesManually(plan: string): boolean {
-  return plan === "faceless_pro" || plan === "facelessprenuer" || plan === "creator_pro" || plan === "pro"
+  return plan === "faceless_pro" || plan === "facelessprenuer"
 }
 
 export { canUserCreateBundlesManually as canUserCreateBundles }

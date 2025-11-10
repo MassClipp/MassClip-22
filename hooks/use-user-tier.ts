@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useFirebaseAuth } from "./use-firebase-auth"
 
-export type UserTier = "free" | "creator_pro"
+export type UserTier = "free" | "faceless_pro" | "facelessprenuer" // Removed creator_pro
 
 export interface TierInfo {
   tier: UserTier
@@ -110,7 +110,7 @@ export function useUserTier() {
     error,
     incrementDownload,
     incrementBundle,
-    isProUser: tierInfo?.tier === "creator_pro",
+    isProUser: tierInfo?.tier === "facelessprenuer", // Only facelessprenuer is pro now
     isFreeUser: tierInfo?.tier === "free",
   }
 }
