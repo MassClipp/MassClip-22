@@ -148,6 +148,7 @@ export default function CustomDomainPage() {
         domain: typeof data.domain === "string" ? data.domain : data.domain?.domain || domainInput.trim().toLowerCase(),
         status: data.domain?.status || "pending",
         sslStatus: data.domain?.sslStatus || "pending",
+        sslError: data.domain?.sslError || null,
         verified: data.domain?.verified || false,
         verificationToken: data.verificationToken || data.domain?.verificationToken,
         isApex: data.isApex !== undefined ? data.isApex : data.domain?.isApex,

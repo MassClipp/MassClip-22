@@ -4,7 +4,7 @@ import { getAuth } from "firebase-admin/auth"
 import { isApexDomain, getDNSInstructions } from "@/lib/dns-utils"
 import { checkDomainRateLimit, checkDomainSecurity } from "@/lib/custom-domain-rate-limiter"
 import { isTestMode, isTestDomain } from "@/lib/custom-domain-test-mode"
-import { addDomainToVercel } from "@/lib/vercel-api"
+import { addDomainToVercel, checkDomainStatus } from "@/lib/vercel-api"
 
 export async function POST(request: NextRequest) {
   try {
@@ -169,6 +169,8 @@ export async function POST(request: NextRequest) {
 
     let vercelDomainAdded = false
     let vercelDomainId = null
+    let sslStatus: "pending" | "active" | "error" = "pending"
+    let sslError: string | null = null
 
     console.log(`[v0] Attempting to add domain to Vercel: ${domain}`)
     try {
@@ -177,6 +179,32 @@ export async function POST(request: NextRequest) {
       vercelDomainAdded = true
       vercelDomainId = vercelResponse?.name || domain
       console.log(`[v0] Vercel domain ID/name:`, vercelDomainId)
+
+      console.log(`[v0] Checking SSL status from Vercel response`)
+      try {
+        const domainStatus = await checkDomainStatus(domain)
+        console.log(`[v0] Domain status from Vercel:`, JSON.stringify(domainStatus, null, 2))
+
+        if (domainStatus.verified) {
+          const sslVerification = domainStatus.verification?.find((v) => v.type === "ssl" || v.type === "cert")
+          if (sslVerification?.reason) {
+            sslStatus = "error"
+            sslError = sslVerification.reason
+            console.log(`[v0] SSL Error detected: ${sslError}`)
+          } else if (!sslVerification) {
+            sslStatus = "active"
+            console.log(`[v0] SSL is active (no verification entry)`)
+          } else {
+            sslStatus = "pending"
+            console.log(`[v0] SSL is pending`)
+          }
+        } else {
+          console.log(`[v0] Domain not yet verified at Vercel, SSL pending`)
+        }
+      } catch (statusError) {
+        console.error(`[v0] Failed to check domain status:`, statusError)
+        // Keep default pending status
+      }
     } catch (vercelError: any) {
       console.error(`[v0] Vercel API FAILED - Error:`, {
         message: vercelError.message,
@@ -201,6 +229,7 @@ export async function POST(request: NextRequest) {
 
     console.log(`[v0] === VERCEL API INTEGRATION END ===`)
     console.log(`[v0] Vercel domain added: ${vercelDomainAdded}`)
+    console.log(`[v0] SSL Status: ${sslStatus}${sslError ? ` (Error: ${sslError})` : ""}`)
 
     const now = new Date().toISOString()
     const domainDoc = {
@@ -212,7 +241,8 @@ export async function POST(request: NextRequest) {
       verifiedAt: null,
       lastChecked: now,
       status: "pending",
-      sslStatus: "pending",
+      sslStatus, // Use real SSL status from Vercel
+      sslError, // Store SSL error if present
       isApex,
       vercelDomainAdded, // Track if Vercel API succeeded
       vercelDomainId, // Store Vercel's domain identifier
@@ -249,6 +279,7 @@ export async function POST(request: NextRequest) {
           verified: true,
           verificationToken,
           isApex,
+          sslStatus: "active",
         },
         verificationToken,
         dnsInstructions,
@@ -267,6 +298,8 @@ export async function POST(request: NextRequest) {
         status: "pending",
         verificationToken,
         isApex,
+        sslStatus, // Return real SSL status
+        sslError, // Return SSL error if present
       },
       verificationToken,
       dnsInstructions,
