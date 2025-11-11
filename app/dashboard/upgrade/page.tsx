@@ -363,6 +363,9 @@ export default function UpgradePage() {
 
             <div className="space-y-2 mb-4">
               {[
+                "Custom domains",
+                "Create custom storefront tabs & products",
+                "Fully customizable storefront",
                 "Unlimited folders with subfolders",
                 "Unlimited bundles on storefront",
                 "Unlimited videos per bundle",

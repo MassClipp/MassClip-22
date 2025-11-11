@@ -74,6 +74,7 @@ interface ExternalProduct {
   title?: string // Added title field
   externalUrl?: string // Added externalUrl field
   thumbnailUrl?: string // Added thumbnailUrl field
+  price?: string // Assuming price is a string from API, adjust if number
 }
 
 export default function ViewStorefrontPage() {
@@ -1485,6 +1486,14 @@ export default function ViewStorefrontPage() {
                         </div>
 
                         <div className="space-y-3 pt-2">
+                          {product.price && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-white text-2xl sm:text-3xl font-light tracking-tight">
+                                ${product.price}
+                              </span>
+                            </div>
+                          )}
+
                           <Button
                             onClick={() => window.open(product.ctaUrl || product.externalUrl, "_blank")}
                             className="w-full bg-white text-black hover:bg-zinc-100 rounded-md font-medium text-sm px-4 py-2.5"
@@ -1497,55 +1506,45 @@ export default function ViewStorefrontPage() {
                   ))}
               </div>
             ) : currentContent.length > 0 ? (
-              <div
-                className={
-                  activeTab === "premium" || activeTab === "ebooks"
-                    ? "w-full max-w-sm aspect-[3/4] rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer flex flex-col items-center justify-center gap-3 group"
-                    : "grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 sm:gap-6 justify-items-center"
-                }
-              >
+              <div className="space-y-6">
                 <div
                   className={
                     activeTab === "premium" || activeTab === "ebooks"
-                      ? "w-full max-w-sm aspect-[3/4] rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer flex flex-col items-center justify-center gap-3 group"
-                      : "w-full aspect-[9/16] rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer flex flex-col items-center justify-center gap-3 group"
-                  }
-                  onClick={() =>
-                    router.push(
-                      activeTab === "free"
-                        ? "/dashboard/free-content"
-                        : activeTab === "ebooks"
-                          ? "/dashboard/ebooks/create"
-                          : "/dashboard/bundles",
-                    )
+                      ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
+                      : "grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 sm:gap-6 justify-items-center"
                   }
                 >
-                  <div className="w-12 h-12 rounded-full bg-zinc-800 group-hover:bg-zinc-700 transition-colors flex items-center justify-center">
-                    {activeTab === "free" ? (
-                      <UploadIcon className="w-6 h-6 text-zinc-400 group-hover:text-white transition-colors" />
-                    ) : (
-                      <Package className="w-6 h-6 text-zinc-400 group-hover:text-white transition-colors" />
-                    )}
-                  </div>
-                  <p className="text-sm text-zinc-400 group-hover:text-zinc-300 transition-colors font-medium">
-                    {activeTab === "free" ? "Add Content" : activeTab === "ebooks" ? "Create eBook" : "Create Bundle"}
-                  </p>
-                </div>
+                  {(activeTab === "premium" || activeTab === "ebooks") && (
+                    <div
+                      className="w-full aspect-[3/4] rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer flex flex-col items-center justify-center gap-3 group"
+                      onClick={() =>
+                        router.push(activeTab === "ebooks" ? "/dashboard/ebooks/create" : "/dashboard/bundles")
+                      }
+                    >
+                      <div className="w-12 h-12 rounded-full bg-zinc-800 group-hover:bg-zinc-700 transition-colors flex items-center justify-center">
+                        <Package className="w-6 h-6 text-zinc-400 group-hover:text-white transition-colors" />
+                      </div>
+                      <p className="text-sm text-zinc-400 group-hover:text-zinc-300 transition-colors font-medium">
+                        {activeTab === "ebooks" ? "Create eBook" : "Create Bundle"}
+                      </p>
+                    </div>
+                  )}
 
-                {activeTab === "premium"
-                  ? premiumContent.map((item) => (
-                      <BundleCard
-                        key={item.id}
-                        item={item}
-                        user={user}
-                        creatorId={user.uid}
-                        creatorUsername={username}
-                        isPreview={true}
-                      />
-                    ))
-                  : activeTab === "ebooks"
-                    ? ebooksContent.map((item) => <EBookCard key={item.id} item={item} username={username} />)
-                    : freeContent.map((item) => <VideoContentCard key={item.id} item={item} />)}
+                  {activeTab === "premium"
+                    ? premiumContent.map((item) => (
+                        <BundleCard
+                          key={item.id}
+                          item={item}
+                          user={user}
+                          creatorId={user.uid}
+                          creatorUsername={username}
+                          isPreview={true}
+                        />
+                      ))
+                    : activeTab === "ebooks"
+                      ? ebooksContent.map((item) => <EBookCard key={item.id} item={item} username={username} />)
+                      : freeContent.map((item) => <VideoContentCard key={item.id} item={item} />)}
+                </div>
               </div>
             ) : (
               <div className="text-center py-16 sm:py-24">
@@ -1719,7 +1718,7 @@ function VideoContentCard({ item }: { item: ContentItem }) {
       onMouseLeave={() => setIsHovered(false)}
     >
       <div
-        className={`relative aspect-[9/16] rounded-lg overflow-hidden mb-2 transition-all duration-300 ${
+        className={`relative aspect-square rounded-lg overflow-hidden mb-2 transition-all duration-300 ${
           isHovered ? "border border-white/50" : "border border-transparent"
         }`}
       >

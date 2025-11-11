@@ -894,7 +894,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
 
         {/* Tabs with underline style and content type filter */}
         <div className="mb-6 sm:mb-8">
-          <div className="flex items-center justify-center sm:justify-start gap-12 sm:gap-20 border-b border-zinc-800/50">
+          <div className="flex items-center justify-center sm:justify-start gap-16 sm:gap-24 border-b border-zinc-800/50">
             {showContentTypeFilter && (
               <div className="relative">
                 <select
