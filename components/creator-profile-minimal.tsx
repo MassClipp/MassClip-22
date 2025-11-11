@@ -546,7 +546,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
 
                 {/* Social Links */}
                 {creator.socialLinks && Object.keys(creator.socialLinks).length > 0 && (
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap max-w-3xl">
                     {creator.socialLinks.instagram && (
                       <Button
                         variant="ghost"

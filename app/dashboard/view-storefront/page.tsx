@@ -1378,13 +1378,26 @@ export default function ViewStorefrontPage() {
           </div>
 
           {/* Tabs */}
-          <div className="mb-6 sm:mb-8">
+          <div className="space-y-3 sm:space-y-0">
+            {/* Manage Tabs button - above tabs on mobile, inline on desktop */}
+            <div className="flex justify-end sm:hidden">
+              <Button
+                onClick={() => router.push("/dashboard/storefront-tabs")}
+                variant="ghost"
+                size="sm"
+                className="text-zinc-400 hover:text-white hover:bg-zinc-800 text-xs"
+              >
+                <Edit2 className="w-3.5 h-3.5 mr-1.5" />
+                Manage Tabs
+              </Button>
+            </div>
+
             <div className="flex items-center justify-between border-b border-zinc-800/50">
-              <div className="flex items-center gap-6 sm:gap-8">
+              <div className="flex items-center gap-4 sm:gap-6 overflow-x-auto scrollbar-hide pb-3 sm:pb-0">
                 {freeContent.length > 0 && (
                   <button
                     onClick={() => setActiveTab("free")}
-                    className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
+                    className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative whitespace-nowrap ${
                       activeTab === "free" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
                     }`}
                   >
@@ -1396,7 +1409,7 @@ export default function ViewStorefrontPage() {
                 {premiumContent.length > 0 && (
                   <button
                     onClick={() => setActiveTab("premium")}
-                    className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
+                    className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative whitespace-nowrap ${
                       activeTab === "premium" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
                     }`}
                   >
@@ -1408,7 +1421,7 @@ export default function ViewStorefrontPage() {
                 {ebooksContent.length > 0 && (
                   <button
                     onClick={() => setActiveTab("ebooks")}
-                    className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
+                    className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative whitespace-nowrap ${
                       activeTab === "ebooks" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
                     }`}
                   >
@@ -1427,7 +1440,7 @@ export default function ViewStorefrontPage() {
                       <button
                         key={tab.id}
                         onClick={() => setActiveTab(tabType)}
-                        className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
+                        className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative whitespace-nowrap ${
                           activeTab === tabType ? "text-white" : "text-zinc-400 hover:text-zinc-300"
                         }`}
                       >
@@ -1442,7 +1455,7 @@ export default function ViewStorefrontPage() {
                 onClick={() => router.push("/dashboard/storefront-tabs")}
                 variant="ghost"
                 size="sm"
-                className="text-zinc-400 hover:text-white hover:bg-zinc-800"
+                className="text-zinc-400 hover:text-white hover:bg-zinc-800 hidden sm:flex"
               >
                 <Edit2 className="w-4 h-4 mr-2" />
                 Manage Tabs
@@ -1745,20 +1758,20 @@ function VideoContentCard({ item }: { item: ContentItem }) {
           <button
             onClick={handlePlayPause}
             disabled={!item.fileUrl}
-            className="bg-white/20 backdrop-blur-sm rounded-full p-3 sm:p-4 transition-transform duration-300 hover:scale-110 disabled:opacity-50"
+            className="bg-white/20 backdrop-blur-sm rounded-full p-2 sm:p-3 transition-transform duration-300 hover:scale-110 disabled:opacity-50"
             aria-label={isPlaying ? "Pause video" : "Play video"}
           >
             {isPlaying ? (
-              <Pause className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+              <Pause className="h-4 w-4 sm:h-6 sm:w-6 text-white" />
             ) : (
-              <Play className="h-5 w-5 sm:h-6 sm:w-6 text-white ml-0.5" />
+              <Play className="h-4 w-4 sm:h-6 sm:w-6 text-white ml-0.5" />
             )}
           </button>
         </div>
 
         {item.fileUrl && (
           <button
-            className={`absolute bottom-2 right-2 backdrop-blur-sm p-1.5 sm:p-2 rounded-full transition-all duration-200 hover:scale-110 bg-black/60 hover:bg-black/80 ${
+            className={`absolute bottom-2 right-2 backdrop-blur-sm p-1 sm:p-1.5 rounded-full transition-all duration-200 hover:scale-110 bg-black/60 hover:bg-black/80 ${
               isHovered ? "opacity-100" : "opacity-70"
             } ${isDownloading ? "opacity-50 cursor-not-allowed" : ""}`}
             aria-label="Download video"

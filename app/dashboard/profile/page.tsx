@@ -407,17 +407,17 @@ export default function ProfilePage() {
       </div>
 
       <Tabs defaultValue="profile" className="space-y-4 sm:space-y-6">
-        <TabsList className="bg-zinc-800/50 border border-zinc-700/50 w-full sm:w-auto grid grid-cols-4 sm:flex">
-          <TabsTrigger value="profile" className="text-xs sm:text-sm">
+        <TabsList className="bg-zinc-800/50 border border-zinc-700/50 w-full sm:w-auto grid grid-cols-4 sm:flex gap-0.5 p-0.5">
+          <TabsTrigger value="profile" className="text-xs sm:text-sm px-2 sm:px-3 data-[state=active]:bg-zinc-700">
             Profile
           </TabsTrigger>
-          <TabsTrigger value="membership" className="text-xs sm:text-sm">
+          <TabsTrigger value="membership" className="text-xs sm:text-sm px-2 sm:px-3 data-[state=active]:bg-zinc-700">
             Membership
           </TabsTrigger>
-          <TabsTrigger value="security" className="text-xs sm:text-sm">
+          <TabsTrigger value="security" className="text-xs sm:text-sm px-2 sm:px-3 data-[state=active]:bg-zinc-700">
             Security
           </TabsTrigger>
-          <TabsTrigger value="domain" className="text-xs sm:text-sm">
+          <TabsTrigger value="domain" className="text-xs sm:text-sm px-2 sm:px-3 data-[state=active]:bg-zinc-700">
             Domain
           </TabsTrigger>
         </TabsList>

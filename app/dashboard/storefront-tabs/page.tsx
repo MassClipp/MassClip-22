@@ -310,21 +310,25 @@ export default function StorefrontTabsPage() {
   }
 
   return (
-    <div className="min-h-screen p-6 pb-24">
-      <div className="max-w-5xl mx-auto space-y-8">
-        <div className="flex items-center justify-between">
+    <div className="min-h-screen p-4 sm:p-6 pb-24">
+      <div className="max-w-5xl mx-auto space-y-6 sm:space-y-8">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-light mb-2">Storefront Tabs</h1>
-            <p className="text-zinc-400">Customize what appears on your storefront</p>
+            <h1 className="text-2xl sm:text-3xl font-light mb-1 sm:mb-2">Storefront Tabs</h1>
+            <p className="text-sm sm:text-base text-zinc-400">Customize what appears on your storefront</p>
           </div>
-          <Button onClick={saveTabs} disabled={saving} className="bg-white text-black hover:bg-zinc-200">
+          <Button
+            onClick={saveTabs}
+            disabled={saving}
+            className="bg-white text-black hover:bg-zinc-200 text-sm sm:text-base w-full sm:w-auto"
+          >
             {saving ? "Saving..." : "Save Changes"}
           </Button>
         </div>
 
-        <div className="space-y-8">
+        <div className="space-y-6 sm:space-y-8">
           <div>
-            <h2 className="text-xl font-medium mb-4">Standard Tabs</h2>
+            <h2 className="text-lg sm:text-xl font-medium mb-3 sm:mb-4">Standard Tabs</h2>
             <div className="space-y-2">
               {standardTabs.map((tab) => {
                 const isDefaultTab = ["free_content", "premium_content", "ebooks"].includes(tab.type)
@@ -343,46 +347,49 @@ export default function StorefrontTabsPage() {
                     onDragEnd={handleDragEnd}
                     className={`border-b border-zinc-800 transition-all ${draggedTab === tab.id ? "opacity-50" : ""}`}
                   >
-                    <div className="py-4 flex items-center justify-between group">
-                      <div className="flex items-center gap-4 flex-1">
+                    <div className="py-3 sm:py-4 flex items-center justify-between group">
+                      <div className="flex items-center gap-2 sm:gap-4 flex-1 min-w-0">
                         {!isDefaultTab && (
-                          <GripVertical className="w-5 h-5 text-zinc-600 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity" />
+                          <GripVertical className="w-4 h-4 sm:w-5 sm:h-5 text-zinc-600 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity hidden sm:block" />
                         )}
-                        <div className="flex-1">
-                          <h3 className="font-medium">{tab.name}</h3>
-                          <p className="text-sm text-zinc-500">
-                            {isDefaultTab ? "Always visible" : "Toggle to show on storefront"}
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-medium text-sm sm:text-base truncate">{tab.name}</h3>
+                          <p className="text-xs sm:text-sm text-zinc-500 truncate">
+                            {isDefaultTab ? "Always visible" : "Toggle to show"}
                             {tabProducts.length > 0 &&
                               ` • ${tabProducts.length} product${tabProducts.length > 1 ? "s" : ""}`}
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
                         {canManageProducts && (
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => toggleExpanded(tab.id)}
-                            className="text-zinc-400 hover:text-white"
+                            className="text-zinc-400 hover:text-white text-xs sm:text-sm px-2 sm:px-3"
                           >
                             {isExpanded ? (
                               <>
-                                <ChevronUp className="w-4 h-4 mr-2" />
-                                Hide
+                                <ChevronUp className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" />
+                                <span className="hidden sm:inline">Hide</span>
                               </>
                             ) : (
                               <>
-                                <ChevronDown className="w-4 h-4 mr-2" />
-                                {tabProducts.length > 0 ? "Manage" : "Add"} Products
+                                <ChevronDown className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" />
+                                <span className="hidden sm:inline">{tabProducts.length > 0 ? "Manage" : "Add"}</span>
                               </>
                             )}
                           </Button>
                         )}
-                        <Switch
-                          checked={tab.enabled}
-                          onCheckedChange={() => toggleTab(tab.id)}
-                          disabled={isDefaultTab}
-                        />
+                        <div className="scale-90 sm:scale-100">
+                          <Switch
+                            checked={tab.enabled}
+                            onCheckedChange={() => toggleTab(tab.id)}
+                            disabled={isDefaultTab}
+                            className="data-[state=checked]:bg-green-500"
+                          />
+                        </div>
                       </div>
                     </div>
 
@@ -573,12 +580,12 @@ export default function StorefrontTabsPage() {
           </div>
 
           <div>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-medium">Custom Tabs</h2>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0 mb-3 sm:mb-4">
+              <h2 className="text-lg sm:text-xl font-medium">Custom Tabs</h2>
               {isFacelessprenuer ? (
                 <Button
                   variant="outline"
-                  className="border-zinc-700 text-white hover:bg-zinc-800 bg-transparent"
+                  className="border-zinc-700 text-white hover:bg-zinc-800 bg-transparent text-sm sm:text-base w-full sm:w-auto"
                   onClick={() => setIsCustomTabDialogOpen(true)}
                 >
                   <Plus className="w-4 h-4 mr-2" />
@@ -588,11 +595,11 @@ export default function StorefrontTabsPage() {
                 <Button
                   variant="outline"
                   disabled
-                  className="border-zinc-700 text-zinc-500 cursor-not-allowed relative group bg-transparent"
+                  className="border-zinc-700 text-zinc-500 cursor-not-allowed relative group bg-transparent text-sm sm:text-base w-full sm:w-auto"
                 >
                   <Lock className="w-4 h-4 mr-2" />
                   Add Custom Tab
-                  <div className="absolute -top-12 right-0 bg-zinc-800 text-white text-xs px-3 py-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                  <div className="absolute -top-12 right-0 bg-zinc-800 text-white text-xs px-3 py-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none hidden sm:block">
                     Upgrade to Facelessprenuer
                   </div>
                 </Button>
@@ -600,10 +607,10 @@ export default function StorefrontTabsPage() {
             </div>
 
             {customTabs.length === 0 ? (
-              <div className="border border-zinc-800 rounded-lg p-8 text-center">
-                <p className="text-zinc-400">No custom tabs yet</p>
+              <div className="border border-zinc-800 rounded-lg p-6 sm:p-8 text-center">
+                <p className="text-zinc-400 text-sm sm:text-base">No custom tabs yet</p>
                 {!isFacelessprenuer && (
-                  <p className="text-zinc-500 text-sm mt-2">Upgrade to Facelessprenuer to add custom tabs</p>
+                  <p className="text-zinc-500 text-xs sm:text-sm mt-2">Upgrade to Facelessprenuer to add custom tabs</p>
                 )}
               </div>
             ) : (
