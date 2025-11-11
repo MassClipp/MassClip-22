@@ -913,10 +913,6 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
             <div className="flex items-center gap-3">
               {console.log("[v0] === RENDERING TABS ===")}
               {console.log("[v0] Total tabs in state:", storefrontTabs.length)}
-              {console.log(
-                "[v0] All tabs:",
-                storefrontTabs.map((t) => `${t.name} (enabled: ${t.enabled}, type: ${t.type})`),
-              )}
 
               {freeContentCount > 0 && (
                 <button
@@ -958,26 +954,13 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
 
               {storefrontTabs
                 .filter((tab) => {
-                  // First filter: exclude the three standard content tabs
                   const isStandardTab = ["free_content", "premium_content", "ebooks"].includes(tab.type)
-                  if (isStandardTab) {
-                    console.log(`[v0] Filtering OUT standard tab: ${tab.name}`)
-                    return false
-                  }
-
-                  // Second filter: only include if enabled
-                  if (!tab.enabled) {
-                    console.log(`[v0] Filtering OUT disabled tab: ${tab.name}`)
-                    return false
-                  }
-
-                  console.log(`[v0] ✅ Including tab: ${tab.name}`)
-                  return true
+                  return !isStandardTab && tab.enabled
                 })
                 .sort((a, b) => a.order - b.order)
                 .map((tab) => {
                   const tabProducts = externalProducts.filter((p) => p.tabId === tab.id)
-                  console.log(`[v0] Rendering tab button: ${tab.name} with ${tabProducts.length} products`)
+                  console.log(`[v0] Rendering custom tab: ${tab.name} with ${tabProducts.length} products`)
 
                   return (
                     <button
@@ -1059,43 +1042,47 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
                     const currentTab = storefrontTabs.find((tab) => tab.type === activeTab)
                     const tabProducts = externalProducts.filter((p) => p.tabId === currentTab?.id)
 
-                    console.log(`[v0] Custom tab content for: ${activeTab}`)
+                    console.log(`[v0] === RENDERING CUSTOM TAB CONTENT: ${activeTab} ===`)
                     console.log(`[v0] Current tab:`, currentTab)
-                    console.log(`[v0] Tab products:`, tabProducts)
+                    console.log(`[v0] Matching products:`, tabProducts)
+                    console.log(`[v0] === END CUSTOM TAB CONTENT ===`)
 
                     return tabProducts.length > 0 ? (
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-                        {tabProducts.map((product) => (
-                          <a
-                            key={product.id}
-                            href={product.externalUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="group relative bg-zinc-900 rounded-lg overflow-hidden hover:bg-zinc-800 transition-colors"
-                          >
-                            {product.thumbnailUrl && (
-                              <div className="aspect-video w-full overflow-hidden">
-                                <img
-                                  src={product.thumbnailUrl || "/placeholder.svg"}
-                                  alt={product.title}
-                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                />
-                              </div>
-                            )}
-                            <div className="p-4">
-                              <h3 className="text-white font-medium mb-1">{product.title}</h3>
-                              {product.description && (
-                                <p className="text-zinc-400 text-sm line-clamp-2">{product.description}</p>
+                        {tabProducts.map((product) => {
+                          console.log(`[v0] Rendering product:`, product)
+                          return (
+                            <a
+                              key={product.id}
+                              href={product.externalUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="group relative bg-zinc-900 rounded-lg overflow-hidden hover:bg-zinc-800 transition-colors"
+                            >
+                              {product.thumbnailUrl && (
+                                <div className="aspect-video w-full overflow-hidden">
+                                  <img
+                                    src={product.thumbnailUrl || "/placeholder.svg"}
+                                    alt={product.name || product.title}
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                  />
+                                </div>
                               )}
-                              {product.price && <p className="text-white font-medium mt-2">{product.price}</p>}
-                              <div className="mt-3">
-                                <span className="inline-block bg-white text-black px-3 py-1.5 rounded text-sm font-medium hover:bg-zinc-100 transition-colors">
-                                  {product.ctaText || "Learn More"}
-                                </span>
+                              <div className="p-4">
+                                <h3 className="text-white font-medium mb-1">{product.name || product.title}</h3>
+                                {product.description && (
+                                  <p className="text-zinc-400 text-sm line-clamp-2 mb-2">{product.description}</p>
+                                )}
+                                {product.price && <p className="text-white font-medium mt-2">{product.price}</p>}
+                                <div className="mt-3">
+                                  <span className="inline-block bg-white text-black px-4 py-2 rounded text-sm font-medium group-hover:bg-zinc-100 transition-colors">
+                                    {product.ctaText || "Shop Now"}
+                                  </span>
+                                </div>
                               </div>
-                            </div>
-                          </a>
-                        ))}
+                            </a>
+                          )
+                        })}
                       </div>
                     ) : (
                       <div className="text-center py-16 sm:py-24">
