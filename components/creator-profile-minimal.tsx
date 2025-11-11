@@ -354,12 +354,12 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
 
               {/* Social Links */}
               {creator.socialLinks && Object.keys(creator.socialLinks).length > 0 && (
-                <div className="flex gap-2 justify-center flex-wrap">
+                <div className="flex gap-2 justify-center flex-wrap max-w-[90vw] sm:max-w-none">
                   {creator.socialLinks.instagram && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-2.5 py-1.5 h-auto text-xs sm:text-sm sm:px-3"
                       onClick={() => window.open(`https://instagram.com/${creator.socialLinks!.instagram}`, "_blank")}
                     >
                       Instagram
@@ -369,7 +369,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-2.5 py-1.5 h-auto text-xs sm:text-sm sm:px-3"
                       onClick={() => window.open(`https://twitter.com/${creator.socialLinks!.twitter}`, "_blank")}
                     >
                       Twitter
@@ -379,7 +379,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-2.5 py-1.5 h-auto text-xs sm:text-sm sm:px-3"
                       onClick={() => window.open(`https://tiktok.com/@${creator.socialLinks!.tiktok}`, "_blank")}
                     >
                       TikTok
@@ -389,7 +389,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-2.5 py-1.5 h-auto text-xs sm:text-sm sm:px-3"
                       onClick={() => window.open(creator.socialLinks!.youtube, "_blank")}
                     >
                       YouTube
@@ -399,7 +399,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-2.5 py-1.5 h-auto text-xs sm:text-sm sm:px-3"
                       onClick={() => window.open(`https://twitch.tv/${creator.socialLinks!.twitch}`, "_blank")}
                     >
                       Twitch
@@ -409,7 +409,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-2.5 py-1.5 h-auto text-xs sm:text-sm sm:px-3"
                       onClick={() => window.open(creator.socialLinks!.discord, "_blank")}
                     >
                       Discord
@@ -419,7 +419,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-2.5 py-1.5 h-auto text-xs sm:text-sm sm:px-3"
                       onClick={() => window.open(creator.socialLinks!.skool, "_blank")}
                     >
                       Skool
@@ -429,7 +429,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-2.5 py-1.5 h-auto text-xs sm:text-sm sm:px-3"
                       onClick={() => window.open(creator.socialLinks!.shopify, "_blank")}
                     >
                       Shopify
@@ -439,7 +439,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-2.5 py-1.5 h-auto text-xs sm:text-sm sm:px-3"
                       onClick={() => window.open(creator.socialLinks!.facebook, "_blank")}
                     >
                       Facebook
@@ -449,7 +449,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-2.5 py-1.5 h-auto text-xs sm:text-sm sm:px-3"
                       onClick={() => window.open(creator.socialLinks!.linkedin, "_blank")}
                     >
                       LinkedIn
@@ -459,7 +459,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-2.5 py-1.5 h-auto text-xs sm:text-sm sm:px-3"
                       onClick={() => window.open(`https://github.com/${creator.socialLinks!.github}`, "_blank")}
                     >
                       GitHub
@@ -469,7 +469,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-2.5 py-1.5 h-auto text-xs sm:text-sm sm:px-3"
                       onClick={() => window.open(creator.socialLinks!.spotify, "_blank")}
                     >
                       Spotify
@@ -479,7 +479,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-2.5 py-1.5 h-auto text-xs sm:text-sm sm:px-3"
                       onClick={() => window.open(creator.socialLinks!.appleMusic, "_blank")}
                     >
                       Apple Music
@@ -489,7 +489,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-2.5 py-1.5 h-auto text-xs sm:text-sm sm:px-3"
                       onClick={() => window.open(`mailto:${creator.socialLinks!.email}`, "_blank")}
                     >
                       Email
@@ -499,7 +499,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-3 py-1.5 h-auto"
+                      className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full px-2.5 py-1.5 h-auto text-xs sm:text-sm sm:px-3"
                       onClick={() => window.open(creator.socialLinks!.website, "_blank")}
                     >
                       Website
@@ -1042,7 +1042,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
                     console.log(`[v0] === END CUSTOM TAB CONTENT ===`)
 
                     return tabProducts.length > 0 ? (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                      <div className="flex flex-col items-center gap-6 sm:grid sm:grid-cols-2 md:grid-cols-3 sm:gap-6 sm:items-start">
                         {tabProducts.map((product) => (
                           <a
                             key={product.id}
@@ -1422,13 +1422,13 @@ function VideoContentCard({ item }: { item: ContentItem }) {
           <button
             onClick={handlePlayPause}
             disabled={!videoUrl}
-            className="bg-white/20 backdrop-blur-sm rounded-full p-2 transition-transform duration-300 hover:scale-110 disabled:opacity-50"
+            className="bg-white/20 backdrop-blur-sm rounded-full p-3 sm:p-4 transition-transform duration-300 hover:scale-110 disabled:opacity-50"
             aria-label={isPlaying ? "Pause video" : "Play video"}
           >
             {isPlaying ? (
-              <Pause className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+              <Pause className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
             ) : (
-              <Play className="h-4 w-4 sm:h-5 sm:w-5 text-white ml-0.5" />
+              <Play className="h-5 w-5 sm:h-6 sm:w-6 text-white ml-0.5" />
             )}
           </button>
         </div>

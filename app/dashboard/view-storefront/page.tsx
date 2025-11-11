@@ -1335,7 +1335,8 @@ export default function ViewStorefrontPage() {
                 </Button>
               )}
 
-              <div className="flex items-center gap-3 bg-zinc-900/80 backdrop-blur-sm border border-zinc-800 rounded-lg px-4 py-2.5">
+              {/* Optimized toggle button for mobile */}
+              <div className="flex items-center gap-3 bg-zinc-900/80 backdrop-blur-sm border border-zinc-800 rounded-lg px-3 sm:px-4 py-2.5">
                 <div className="flex flex-col items-end">
                   <span className="text-xs font-medium text-white">
                     {!isProUser ? "Builder Mode" : "Storefront Status"}
@@ -1352,13 +1353,13 @@ export default function ViewStorefrontPage() {
                   checked={storefrontActive}
                   onCheckedChange={handleToggleStorefront}
                   disabled={!isProUser || updating}
-                  className="data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-zinc-700"
+                  className="data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-zinc-700 scale-90 sm:scale-100"
                 />
 
                 {storefrontActive ? (
-                  <Badge className="bg-green-500/10 text-green-400 border-green-500/20">Live</Badge>
+                  <Badge className="bg-green-500/10 text-green-400 border-green-500/20 text-xs">Live</Badge>
                 ) : (
-                  <Badge variant="secondary" className="bg-zinc-700 text-zinc-300">
+                  <Badge variant="secondary" className="bg-zinc-700 text-zinc-300 text-xs">
                     {!isProUser ? "Preview" : "Offline"}
                   </Badge>
                 )}
@@ -1744,20 +1745,20 @@ function VideoContentCard({ item }: { item: ContentItem }) {
           <button
             onClick={handlePlayPause}
             disabled={!item.fileUrl}
-            className="bg-white/20 backdrop-blur-sm rounded-full p-2 transition-transform duration-300 hover:scale-110 disabled:opacity-50"
+            className="bg-white/20 backdrop-blur-sm rounded-full p-3 sm:p-4 transition-transform duration-300 hover:scale-110 disabled:opacity-50"
             aria-label={isPlaying ? "Pause video" : "Play video"}
           >
             {isPlaying ? (
-              <Pause className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+              <Pause className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
             ) : (
-              <Play className="h-4 w-4 sm:h-5 sm:w-5 text-white ml-0.5" />
+              <Play className="h-5 w-5 sm:h-6 sm:w-6 text-white ml-0.5" />
             )}
           </button>
         </div>
 
         {item.fileUrl && (
           <button
-            className={`absolute bottom-2 right-2 backdrop-blur-sm p-1.5 rounded-full transition-all duration-200 hover:scale-110 bg-black/60 hover:bg-black/80 ${
+            className={`absolute bottom-2 right-2 backdrop-blur-sm p-1.5 sm:p-2 rounded-full transition-all duration-200 hover:scale-110 bg-black/60 hover:bg-black/80 ${
               isHovered ? "opacity-100" : "opacity-70"
             } ${isDownloading ? "opacity-50 cursor-not-allowed" : ""}`}
             aria-label="Download video"

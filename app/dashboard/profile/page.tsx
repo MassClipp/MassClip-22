@@ -398,20 +398,28 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 pb-6 border-b border-zinc-800/50">
-        <div className="space-y-2">
-          <h1 className="text-2xl font-semibold text-white tracking-tight">Profile Settings</h1>
-          <p className="text-zinc-400">Manage your creator profile and settings</p>
+    <div className="space-y-8 px-3 sm:px-0">
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 sm:gap-6 pb-4 sm:pb-6 border-b border-zinc-800/50">
+        <div className="space-y-2 w-full sm:w-auto">
+          <h1 className="text-xl sm:text-2xl font-semibold text-white tracking-tight">Profile Settings</h1>
+          <p className="text-sm sm:text-base text-zinc-400">Manage your creator profile and settings</p>
         </div>
       </div>
 
-      <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList className="bg-zinc-800/50 border border-zinc-700/50">
-          <TabsTrigger value="profile">Profile</TabsTrigger>
-          <TabsTrigger value="membership">Membership</TabsTrigger>
-          <TabsTrigger value="security">Security</TabsTrigger>
-          <TabsTrigger value="domain">Custom Domain</TabsTrigger>
+      <Tabs defaultValue="profile" className="space-y-4 sm:space-y-6">
+        <TabsList className="bg-zinc-800/50 border border-zinc-700/50 w-full sm:w-auto grid grid-cols-4 sm:flex">
+          <TabsTrigger value="profile" className="text-xs sm:text-sm">
+            Profile
+          </TabsTrigger>
+          <TabsTrigger value="membership" className="text-xs sm:text-sm">
+            Membership
+          </TabsTrigger>
+          <TabsTrigger value="security" className="text-xs sm:text-sm">
+            Security
+          </TabsTrigger>
+          <TabsTrigger value="domain" className="text-xs sm:text-sm">
+            Domain
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="profile">
