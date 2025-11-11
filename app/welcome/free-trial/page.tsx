@@ -211,6 +211,27 @@ export default function FreeTrialPage() {
               <li className="flex items-start gap-3">
                 <Check className="w-5 h-5 text-cyan-400 mt-0.5 flex-shrink-0" />
                 <div>
+                  <span className="text-white font-medium">Custom domains</span>
+                  <p className="text-sm text-gray-400 mt-1">Use your own branded domain</p>
+                </div>
+              </li>
+              <li className="flex items-start gap-3">
+                <Check className="w-5 h-5 text-cyan-400 mt-0.5 flex-shrink-0" />
+                <div>
+                  <span className="text-white font-medium">Create custom storefront tabs & products</span>
+                  <p className="text-sm text-gray-400 mt-1">Add Community, Merch, Affiliates, and custom tabs</p>
+                </div>
+              </li>
+              <li className="flex items-start gap-3">
+                <Check className="w-5 h-5 text-cyan-400 mt-0.5 flex-shrink-0" />
+                <div>
+                  <span className="text-white font-medium">Fully customizable storefront</span>
+                  <p className="text-sm text-gray-400 mt-1">Complete control over your storefront design</p>
+                </div>
+              </li>
+              <li className="flex items-start gap-3">
+                <Check className="w-5 h-5 text-cyan-400 mt-0.5 flex-shrink-0" />
+                <div>
                   <span className="text-white font-medium">Unlimited folders with subfolders</span>
                   <p className="text-sm text-gray-400 mt-1">Organize your content your way</p>
                 </div>

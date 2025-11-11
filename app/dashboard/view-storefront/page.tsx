@@ -1718,7 +1718,7 @@ function VideoContentCard({ item }: { item: ContentItem }) {
       onMouseLeave={() => setIsHovered(false)}
     >
       <div
-        className={`relative aspect-square rounded-lg overflow-hidden mb-2 transition-all duration-300 ${
+        className={`relative aspect-[9/16] rounded-lg overflow-hidden mb-2 transition-all duration-300 ${
           isHovered ? "border border-white/50" : "border border-transparent"
         }`}
       >
