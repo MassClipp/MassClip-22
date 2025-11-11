@@ -911,9 +911,9 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
             )}
 
             <div className="flex items-center gap-3">
-              {console.log("[v0] === RENDERING TABS ===")}
-              {console.log("[v0] Total tabs in state:", storefrontTabs.length)}
+              {console.log("[v0] === UNIFIED TAB RENDERING ===")}
 
+              {/* Standard content tabs - show only if they have content */}
               {freeContentCount > 0 && (
                 <button
                   onClick={() => setActiveTab("free_content")}
@@ -952,15 +952,21 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
                 </button>
               )}
 
+              {/* Custom tabs - only enabled ones, excluding standard types */}
               {storefrontTabs
                 .filter((tab) => {
                   const isStandardTab = ["free_content", "premium_content", "ebooks"].includes(tab.type)
+                  console.log(
+                    `[v0] Tab: ${tab.name}, type: ${tab.type}, enabled: ${tab.enabled}, isStandard: ${isStandardTab}`,
+                  )
                   return !isStandardTab && tab.enabled
                 })
                 .sort((a, b) => a.order - b.order)
                 .map((tab) => {
                   const tabProducts = externalProducts.filter((p) => p.tabId === tab.id)
-                  console.log(`[v0] Rendering custom tab: ${tab.name} with ${tabProducts.length} products`)
+                  console.log(
+                    `[v0] Rendering custom tab: ${tab.name} (${tab.type}) with ${tabProducts.length} products`,
+                  )
 
                   return (
                     <button
@@ -979,7 +985,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
                   )
                 })}
 
-              {console.log("[v0] === END RENDERING TABS ===\n")}
+              {console.log("[v0] === END UNIFIED TAB RENDERING ===\n")}
             </div>
           </div>
         </div>
