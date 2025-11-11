@@ -161,21 +161,33 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
       try {
         setLoading(true)
 
+        console.log("[v0] === FETCHING STOREFRONT TABS ===")
+        console.log("[v0] Creator UID:", creator.uid)
+
         const tabsResponse = await fetch(`/api/storefront-tabs/${creator.uid}`)
+        console.log("[v0] Tabs API response status:", tabsResponse.status)
+
         if (tabsResponse.ok) {
           const tabsData = await tabsResponse.json()
-          console.log("[v0] Storefront tabs raw data:", tabsData)
-          console.log("[v0] Storefront tabs array:", tabsData.tabs)
-          console.log("[v0] External products:", tabsData.externalProducts)
+          console.log("[v0] ✅ Tabs data received:", tabsData)
+          console.log("[v0] Tabs array length:", tabsData.tabs?.length)
+          console.log("[v0] External products length:", tabsData.externalProducts?.length)
 
-          // Log each tab's details
-          tabsData.tabs?.forEach((tab: any) => {
-            console.log(`[v0] Tab: ${tab.name} (${tab.type}) - Enabled: ${tab.enabled}, Order: ${tab.order}`)
+          tabsData.tabs?.forEach((tab: any, index: number) => {
+            console.log(`[v0] Tab ${index}: ${tab.name} (${tab.type})`)
+            console.log(`    - Enabled: ${tab.enabled}`)
+            console.log(`    - Order: ${tab.order}`)
+            console.log(`    - ID: ${tab.id}`)
           })
 
           setStorefrontTabs(tabsData.tabs || [])
           setExternalProducts(tabsData.externalProducts || [])
+
+          console.log("[v0] State updated with tabs")
+        } else {
+          console.error("[v0] ❌ Failed to fetch tabs, status:", tabsResponse.status)
         }
+        console.log("[v0] === END FETCHING STOREFRONT TABS ===")
 
         // Fetch free content from free_content collection
         const freeResponse = await fetch(`/api/creator/${creator.uid}/free-content`)
@@ -900,32 +912,12 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
             )}
 
             <div className="flex items-center gap-3">
-              {console.log("[v0] === TAB RENDERING DEBUG ===")}
-              {console.log("[v0] Total storefront tabs:", storefrontTabs.length)}
-              {console.log("[v0] All storefront tabs:", storefrontTabs)}
-
-              {console.log("[v0] Filtering tabs - excluding standard tabs...")}
+              {console.log("[v0] === RENDERING TABS ===")}
+              {console.log("[v0] Total tabs in state:", storefrontTabs.length)}
               {console.log(
-                "[v0] Tabs after excluding standard tabs:",
-                storefrontTabs.filter((tab) => !["free_content", "premium_content", "ebooks"].includes(tab.type)),
+                "[v0] All tabs:",
+                storefrontTabs.map((t) => `${t.name} (enabled: ${t.enabled})`),
               )}
-
-              {console.log("[v0] Filtering tabs - only enabled...")}
-              {console.log(
-                "[v0] Enabled custom tabs:",
-                storefrontTabs
-                  .filter((tab) => !["free_content", "premium_content", "ebooks"].includes(tab.type))
-                  .filter((tab) => tab.enabled),
-              )}
-
-              {console.log(
-                "[v0] Final tabs to render:",
-                storefrontTabs
-                  .filter((tab) => tab.enabled)
-                  .filter((tab) => !["free_content", "premium_content", "ebooks"].includes(tab.type))
-                  .sort((a, b) => a.order - b.order),
-              )}
-              {console.log("[v0] === END TAB RENDERING DEBUG ===\n\n")}
 
               {freeContentCount > 0 && (
                 <button
@@ -966,22 +958,35 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
               )}
 
               {storefrontTabs
-                .filter((tab) => tab.enabled) // Only show enabled tabs
-                // Now all enabled tabs (community, merch, affiliates, custom) will be shown
-                .filter((tab) => !["free_content", "premium_content", "ebooks"].includes(tab.type)) // Exclude standard tabs
-                .sort((a, b) => a.order - b.order) // Sort by order
-                .map((tab) => {
-                  // ExternalProduct has tabId (the tab's ID), not category field
-                  const tabProducts = externalProducts.filter((p) => p.tabId === tab.id)
+                .filter((tab) => {
+                  // First filter: exclude the three standard content tabs
+                  const isStandardTab = ["free_content", "premium_content", "ebooks"].includes(tab.type)
+                  if (isStandardTab) {
+                    console.log(`[v0] Filtering OUT standard tab: ${tab.name}`)
+                    return false
+                  }
 
-                  console.log(
-                    `[v0] Rendering tab button: ${tab.name} (${tab.type}) with ${tabProducts.length} products`,
-                  )
+                  // Second filter: only include if enabled
+                  if (!tab.enabled) {
+                    console.log(`[v0] Filtering OUT disabled tab: ${tab.name}`)
+                    return false
+                  }
+
+                  console.log(`[v0] ✅ Including tab: ${tab.name}`)
+                  return true
+                })
+                .sort((a, b) => a.order - b.order)
+                .map((tab) => {
+                  const tabProducts = externalProducts.filter((p) => p.tabId === tab.id)
+                  console.log(`[v0] Rendering tab button: ${tab.name} with ${tabProducts.length} products`)
 
                   return (
                     <button
                       key={tab.id}
-                      onClick={() => setActiveTab(tab.type)}
+                      onClick={() => {
+                        console.log(`[v0] Clicked tab: ${tab.name} (${tab.type})`)
+                        setActiveTab(tab.type)
+                      }}
                       className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
                         activeTab === tab.type ? "text-white" : "text-zinc-400 hover:text-zinc-300"
                       }`}
@@ -991,6 +996,8 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
                     </button>
                   )
                 })}
+
+              {console.log("[v0] === END RENDERING TABS ===\n")}
             </div>
           </div>
         </div>
@@ -1053,6 +1060,10 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
                     const currentTab = storefrontTabs.find((tab) => tab.type === activeTab)
                     const tabProducts = externalProducts.filter((p) => p.tabId === currentTab?.id)
 
+                    console.log(`[v0] Custom tab content for: ${activeTab}`)
+                    console.log(`[v0] Current tab:`, currentTab)
+                    console.log(`[v0] Tab products:`, tabProducts)
+
                     return tabProducts.length > 0 ? (
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
                         {tabProducts.map((product) => (
@@ -1079,7 +1090,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
                               )}
                               {product.price && <p className="text-white font-medium mt-2">{product.price}</p>}
                               <div className="mt-3">
-                                <span className="inline-block bg-white text-black px-3 py-1.5 rounded text-sm font-medium">
+                                <span className="inline-block bg-white text-black px-3 py-1.5 rounded text-sm font-medium hover:bg-zinc-100 transition-colors">
                                   {product.ctaText || "Learn More"}
                                 </span>
                               </div>

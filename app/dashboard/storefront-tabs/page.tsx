@@ -71,9 +71,15 @@ export default function StorefrontTabsPage() {
   }
 
   const saveTabs = async () => {
+    console.log("[v0] === SAVE TABS DEBUG ===")
+    console.log("[v0] Saving tabs:", tabs)
+    console.log("[v0] Saving external products:", externalProducts)
+
     setSaving(true)
     try {
       const token = await user?.getIdToken()
+      console.log("[v0] Got auth token, sending request...")
+
       const response = await fetch("/api/storefront-tabs", {
         method: "POST",
         headers: {
@@ -83,17 +89,24 @@ export default function StorefrontTabsPage() {
         body: JSON.stringify({ tabs, externalProducts }),
       })
 
+      console.log("[v0] API Response status:", response.status)
+      const data = await response.json()
+      console.log("[v0] API Response data:", data)
+
       if (response.ok) {
-        toast.success("Changes saved successfully")
+        console.log("[v0] ✅ Save successful!")
+        toast.success("Changes saved successfully!")
+        await fetchTabs()
       } else {
-        const error = await response.json()
-        toast.error(error.error || "Failed to save changes")
+        console.error("[v0] ❌ Save failed:", data)
+        toast.error(data.error || "Failed to save changes")
       }
     } catch (error) {
-      console.error("Error saving tabs:", error)
+      console.error("[v0] ❌ Error saving tabs:", error)
       toast.error("Failed to save changes")
     } finally {
       setSaving(false)
+      console.log("[v0] === END SAVE TABS DEBUG ===")
     }
   }
 
