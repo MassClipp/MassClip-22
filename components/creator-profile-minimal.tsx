@@ -545,7 +545,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
                 {creator.bio && <p className="text-zinc-400 text-sm max-w-md leading-relaxed">{creator.bio}</p>}
 
                 {creator.socialLinks && Object.keys(creator.socialLinks).length > 0 && (
-                  <div className="flex gap-2 flex-wrap max-w-3xl">
+                  <div className="flex gap-2 flex-wrap max-w-xl">
                     {creator.socialLinks.instagram && (
                       <Button
                         variant="ghost"
@@ -701,7 +701,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-shrink-0">
               <Button
                 variant="ghost"
                 size="sm"

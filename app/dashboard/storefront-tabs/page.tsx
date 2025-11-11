@@ -350,7 +350,7 @@ export default function StorefrontTabsPage() {
                     <div className="py-3 sm:py-4 flex items-center justify-between group">
                       <div className="flex items-center gap-2 sm:gap-4 flex-1 min-w-0">
                         {!isDefaultTab && (
-                          <GripVertical className="w-4 h-4 sm:w-5 sm:h-5 text-zinc-600 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity hidden sm:block flex-shrink-0" />
+                          <GripVertical className="w-4 h-4 sm:w-5 sm:h-5 text-zinc-600 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity hidden sm:block" />
                         )}
                         <div className="flex-1 min-w-0">
                           <h3 className="font-medium text-sm sm:text-base truncate">{tab.name}</h3>
@@ -382,6 +382,7 @@ export default function StorefrontTabsPage() {
                             )}
                           </Button>
                         )}
+                        {/* CHANGE: Updated Switch to use white checked color */}
                         <Switch
                           checked={tab.enabled}
                           onCheckedChange={() => toggleTab(tab.id)}
@@ -391,8 +392,9 @@ export default function StorefrontTabsPage() {
                       </div>
                     </div>
 
+                    {/* CHANGE: Mobile-responsive product form with proper text wrapping */}
                     {canManageProducts && isExpanded && (
-                      <div className="pb-6 pl-0 sm:pl-9 space-y-4 border-l-0 sm:border-l-2 border-zinc-800 sm:ml-2">
+                      <div className="pb-6 pl-4 sm:pl-9 space-y-4 border-l-2 border-zinc-800 ml-2">
                         {tabProducts.length > 0 && (
                           <div className="space-y-3 mb-6">
                             <h4 className="text-sm font-medium text-zinc-400">Existing Products</h4>
@@ -405,18 +407,18 @@ export default function StorefrontTabsPage() {
                                   <img
                                     src={product.thumbnailUrl || "/placeholder.svg"}
                                     alt={product.title}
-                                    className="w-full sm:w-16 h-auto sm:h-16 object-cover rounded"
+                                    className="w-16 h-16 object-cover rounded flex-shrink-0"
                                   />
                                 )}
-                                <div className="flex-1 min-w-0 w-full">
-                                  <h5 className="font-medium truncate">{product.title}</h5>
-                                  <p className="text-sm text-zinc-500 break-words">{product.externalUrl}</p>
+                                <div className="flex-1 min-w-0 break-words">
+                                  <h5 className="font-medium text-sm sm:text-base break-words">{product.title}</h5>
+                                  <p className="text-xs sm:text-sm text-zinc-500 break-all">{product.externalUrl}</p>
                                 </div>
                                 <Button
                                   variant="ghost"
                                   size="sm"
                                   onClick={() => deleteProduct(product.id)}
-                                  className="text-red-400 hover:text-red-300 self-end sm:self-center"
+                                  className="text-red-400 hover:text-red-300 self-start sm:self-center"
                                 >
                                   <X className="w-4 h-4" />
                                 </Button>
@@ -430,9 +432,9 @@ export default function StorefrontTabsPage() {
 
                           <div>
                             <label className="block text-sm font-medium mb-2">Thumbnail Image (1:1 ratio) *</label>
-                            <div className="flex items-center gap-4">
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
                               {productForm.thumbnailUrl ? (
-                                <div className="relative w-32 h-32 rounded-lg overflow-hidden border border-zinc-700">
+                                <div className="relative w-32 h-32 rounded-lg overflow-hidden border border-zinc-700 flex-shrink-0">
                                   <img
                                     src={productForm.thumbnailUrl || "/placeholder.svg"}
                                     alt="Thumbnail"
@@ -446,7 +448,7 @@ export default function StorefrontTabsPage() {
                                   </button>
                                 </div>
                               ) : (
-                                <label className="w-32 h-32 border-2 border-dashed border-zinc-700 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-zinc-600 transition-colors">
+                                <label className="w-32 h-32 border-2 border-dashed border-zinc-700 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-zinc-600 transition-colors flex-shrink-0">
                                   <Upload className="w-6 h-6 text-zinc-500 mb-1" />
                                   <span className="text-xs text-zinc-500">Upload</span>
                                   <input
@@ -527,7 +529,7 @@ export default function StorefrontTabsPage() {
                               />
                             ) : (
                               productForm.ctaText && (
-                                <p className="text-sm text-zinc-400">Selected: {productForm.ctaText}</p>
+                                <p className="text-sm text-zinc-400 break-words">Selected: {productForm.ctaText}</p>
                               )
                             )}
                           </div>
@@ -663,32 +665,33 @@ export default function StorefrontTabsPage() {
                         </div>
                       </div>
 
+                      {/* CHANGE: Mobile-responsive product form with proper text wrapping */}
                       {isExpanded && (
-                        <div className="pb-6 pl-9 space-y-4 border-l-2 border-zinc-800 ml-2">
+                        <div className="pb-6 pl-4 sm:pl-9 space-y-4 border-l-2 border-zinc-800 ml-2">
                           {tabProducts.length > 0 && (
                             <div className="space-y-3 mb-6">
                               <h4 className="text-sm font-medium text-zinc-400">Existing Products</h4>
                               {tabProducts.map((product) => (
                                 <div
                                   key={product.id}
-                                  className="flex items-center gap-3 p-3 border border-zinc-800 rounded-lg"
+                                  className="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-3 border border-zinc-800 rounded-lg"
                                 >
                                   {product.thumbnailUrl && (
                                     <img
                                       src={product.thumbnailUrl || "/placeholder.svg"}
                                       alt={product.title}
-                                      className="w-16 h-16 object-cover rounded"
+                                      className="w-16 h-16 object-cover rounded flex-shrink-0"
                                     />
                                   )}
-                                  <div className="flex-1 min-w-0">
-                                    <h5 className="font-medium truncate">{product.title}</h5>
-                                    <p className="text-sm text-zinc-500 truncate">{product.externalUrl}</p>
+                                  <div className="flex-1 min-w-0 break-words">
+                                    <h5 className="font-medium text-sm sm:text-base break-words">{product.title}</h5>
+                                    <p className="text-xs sm:text-sm text-zinc-500 break-all">{product.externalUrl}</p>
                                   </div>
                                   <Button
                                     variant="ghost"
                                     size="sm"
                                     onClick={() => deleteProduct(product.id)}
-                                    className="text-red-400 hover:text-red-300"
+                                    className="text-red-400 hover:text-red-300 self-start sm:self-center"
                                   >
                                     <X className="w-4 h-4" />
                                   </Button>
@@ -702,9 +705,9 @@ export default function StorefrontTabsPage() {
 
                             <div>
                               <label className="block text-sm font-medium mb-2">Thumbnail Image (1:1 ratio) *</label>
-                              <div className="flex items-center gap-4">
+                              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
                                 {productForm.thumbnailUrl ? (
-                                  <div className="relative w-32 h-32 rounded-lg overflow-hidden border border-zinc-700">
+                                  <div className="relative w-32 h-32 rounded-lg overflow-hidden border border-zinc-700 flex-shrink-0">
                                     <img
                                       src={productForm.thumbnailUrl || "/placeholder.svg"}
                                       alt="Thumbnail"
@@ -718,7 +721,7 @@ export default function StorefrontTabsPage() {
                                     </button>
                                   </div>
                                 ) : (
-                                  <label className="w-32 h-32 border-2 border-dashed border-zinc-700 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-zinc-600 transition-colors">
+                                  <label className="w-32 h-32 border-2 border-dashed border-zinc-700 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-zinc-600 transition-colors flex-shrink-0">
                                     <Upload className="w-6 h-6 text-zinc-500 mb-1" />
                                     <span className="text-xs text-zinc-500">Upload</span>
                                     <input
@@ -744,7 +747,7 @@ export default function StorefrontTabsPage() {
                                 placeholder="e.g., 1-on-1 Coaching Session"
                                 value={productForm.title || ""}
                                 onChange={(e) => updateProductForm(tab.id, "title", e.target.value)}
-                                className="bg-transparent border-zinc-700"
+                                className="bg-transparent border-zinc-700 w-full"
                               />
                             </div>
 
@@ -754,7 +757,7 @@ export default function StorefrontTabsPage() {
                                 placeholder="Describe what this product offers..."
                                 value={productForm.description || ""}
                                 onChange={(e) => updateProductForm(tab.id, "description", e.target.value)}
-                                className="bg-transparent border-zinc-700 min-h-[100px]"
+                                className="bg-transparent border-zinc-700 min-h-[100px] w-full resize-y"
                               />
                             </div>
 
@@ -764,7 +767,7 @@ export default function StorefrontTabsPage() {
                                 placeholder="https://..."
                                 value={productForm.externalUrl || ""}
                                 onChange={(e) => updateProductForm(tab.id, "externalUrl", e.target.value)}
-                                className="bg-transparent border-zinc-700"
+                                className="bg-transparent border-zinc-700 w-full break-all"
                               />
                             </div>
 
@@ -795,11 +798,11 @@ export default function StorefrontTabsPage() {
                                   placeholder="Or enter custom CTA text"
                                   value={productForm.ctaText || ""}
                                   onChange={(e) => updateProductForm(tab.id, "ctaText", e.target.value)}
-                                  className="bg-transparent border-zinc-700"
+                                  className="bg-transparent border-zinc-700 w-full"
                                 />
                               ) : (
                                 productForm.ctaText && (
-                                  <p className="text-sm text-zinc-400">Selected: {productForm.ctaText}</p>
+                                  <p className="text-sm text-zinc-400 break-words">Selected: {productForm.ctaText}</p>
                                 )
                               )}
                             </div>
@@ -810,14 +813,14 @@ export default function StorefrontTabsPage() {
                                 placeholder='e.g., "$49" or "Free"'
                                 value={productForm.price || ""}
                                 onChange={(e) => updateProductForm(tab.id, "price", e.target.value)}
-                                className="bg-transparent border-zinc-700"
+                                className="bg-transparent border-zinc-700 w-full"
                               />
                             </div>
 
-                            <div className="flex items-center gap-3 pt-2">
+                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-2">
                               <Button
                                 onClick={() => saveProduct(tab.id)}
-                                className="bg-white text-black hover:bg-zinc-200"
+                                className="bg-white text-black hover:bg-zinc-200 w-full sm:w-auto"
                               >
                                 Add Product
                               </Button>
@@ -835,7 +838,7 @@ export default function StorefrontTabsPage() {
                                     return newForms
                                   })
                                 }}
-                                className="text-zinc-400 hover:text-white"
+                                className="text-zinc-400 hover:text-white w-full sm:w-auto"
                               >
                                 Cancel
                               </Button>

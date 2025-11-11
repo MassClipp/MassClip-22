@@ -1322,7 +1322,7 @@ export default function ViewStorefrontPage() {
               </div>
             </div>
 
-            <div className="flex flex-col items-center gap-3 w-full sm:w-auto">
+            <div className="flex flex-col items-center sm:items-end gap-3 w-full sm:w-auto">
               {storefrontUrl && (
                 <Button
                   onClick={() => window.open(storefrontUrl, "_blank")}
@@ -1376,9 +1376,9 @@ export default function ViewStorefrontPage() {
             </div>
           </div>
 
+          {/* Tabs */}
           <div className="space-y-3 sm:space-y-0">
-            {/* Manage Tabs button - above tabs on mobile, inline on desktop */}
-            <div className="flex justify-center sm:hidden">
+            <div className="flex justify-end sm:hidden">
               <Button
                 onClick={() => router.push("/dashboard/storefront-tabs")}
                 variant="ghost"

@@ -34,30 +34,6 @@ import { Badge } from "@/components/ui/badge"
 import { safelyFormatDate } from "@/lib/date-utils"
 import { fetchSubscriptionData } from "@/lib/subscription-utils"
 import { fetchPublicUrl } from "@/lib/get-public-url"
-import { uploadToR2 } from "@/lib/upload-to-r2"
-
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      delayChildren: 0.3,
-      staggerChildren: 0.2,
-    },
-  },
-}
-
-const itemVariants = {
-  hidden: { opacity: 0, y: 20 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: {
-      duration: 0.5,
-      ease: "easeInOut",
-    },
-  },
-}
 
 export default function ProfilePage() {
   const { user } = useAuth()
@@ -106,6 +82,8 @@ export default function ProfilePage() {
     subscriptionData?.isActive
 
   const [publicUrl, setPublicUrl] = useState<string>("")
+
+  const [uploadingProfilePic, setUploadingProfilePic] = useState(false)
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true)
@@ -230,6 +208,48 @@ export default function ProfilePage() {
     }
   }
 
+  const uploadProfilePicToR2 = async (blob: Blob): Promise<string> => {
+    try {
+      if (!user) throw new Error("User not authenticated")
+
+      setUploadingProfilePic(true)
+
+      // Create a file from the blob
+      const file = new File([blob], `profile-${user.uid}-${Date.now()}.jpg`, { type: "image/jpeg" })
+
+      // Create FormData for the upload
+      const formData = new FormData()
+      formData.append("file", file)
+      formData.append("userId", user.uid)
+      formData.append("type", "profile-pic")
+
+      // Get the auth token
+      const token = await user.getIdToken()
+
+      // Upload to the API
+      const response = await fetch("/api/upload-profile-pic", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to upload profile picture")
+      }
+
+      const data = await response.json()
+      return data.url
+    } catch (error) {
+      console.error("[v0] Error uploading profile picture:", error)
+      throw error
+    } finally {
+      setUploadingProfilePic(false)
+    }
+  }
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!user) return
@@ -240,10 +260,20 @@ export default function ProfilePage() {
     try {
       console.log("[v0] Saving profile data:", profileData)
 
+      let profilePicUrl = profileData.profilePic
+
+      // Upload new profile picture if one was selected
+      if (croppedImageBlob) {
+        console.log("[v0] Uploading new profile picture")
+        profilePicUrl = await uploadProfilePicToR2(croppedImageBlob)
+        console.log("[v0] Profile picture uploaded:", profilePicUrl)
+      }
+
       const updateData = {
         displayName: profileData.displayName.trim(),
         username: profileData.username.toLowerCase().trim(),
         bio: profileData.bio.trim(),
+        profilePic: profilePicUrl,
         socialLinks: {
           instagram: profileData.socialLinks.instagram.trim(),
           twitter: profileData.socialLinks.twitter.trim(),
@@ -254,6 +284,10 @@ export default function ProfilePage() {
 
       await setDoc(doc(db, "users", user.uid), updateData, { merge: true })
       console.log("[v0] Profile saved successfully")
+
+      // Clear the cropped image blob and preview after successful save
+      setCroppedImageBlob(null)
+      setProfilePicPreview(null)
 
       // Refresh data from database
       await fetchProfile()
@@ -269,7 +303,7 @@ export default function ProfilePage() {
       console.error("[v0] Error saving profile:", error)
       toast({
         title: "Error",
-        description: "Failed to save profile. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to save profile. Please try again.",
         variant: "destructive",
       })
     } finally {
@@ -347,91 +381,39 @@ export default function ProfilePage() {
     setCrop(crop)
   }
 
-  const handleCropComplete = async (
-    crop: Crop | undefined,
-    setImageToCrop: any,
-    setShowCropModal: any,
-    setProfilePicPreview: any,
-    setNewProfilePic: any,
-  ) => {
-    if (!crop || !imgRef.current) return
+  const handleCropComplete = async () => {
+    if (!completedCrop || !imgRef.current) return
 
     const canvas = document.createElement("canvas")
     const scaleX = imgRef.current.naturalWidth / imgRef.current.width
     const scaleY = imgRef.current.naturalHeight / imgRef.current.height
     const ctx = canvas.getContext("2d")
 
-    canvas.width = crop.width * scaleX
-    canvas.height = crop.height * scaleY
+    canvas.width = completedCrop.width * scaleX
+    canvas.height = completedCrop.height * scaleY
 
     if (ctx) {
       ctx.drawImage(
         imgRef.current,
-        crop.x * scaleX,
-        crop.y * scaleY,
-        crop.width * scaleX,
-        crop.height * scaleY,
+        completedCrop.x * scaleX,
+        completedCrop.y * scaleY,
+        completedCrop.width * scaleX,
+        completedCrop.height * scaleY,
         0,
         0,
-        crop.width * scaleX,
-        crop.height * scaleY,
+        completedCrop.width * scaleX,
+        completedCrop.height * scaleY,
       )
     }
 
-    const croppedImageBlob = await new Promise<Blob | null>((resolve) => {
+    const blob = await new Promise<Blob | null>((resolve) => {
       canvas.toBlob(resolve, "image/jpeg", 0.95)
     })
 
-    if (croppedImageBlob) {
-      try {
-        setSaving(true)
-
-        // Convert blob to file
-        const file = new File([croppedImageBlob], `profile-${user?.uid}-${Date.now()}.jpg`, {
-          type: "image/jpeg",
-        })
-
-        // Upload to R2
-        console.log("[v0] Uploading profile picture to R2...")
-        const uploadResult = await uploadToR2(file, `profile-pictures/${user?.uid}`)
-
-        if (uploadResult.success && uploadResult.url) {
-          console.log("[v0] Profile picture uploaded successfully:", uploadResult.url)
-
-          // Update Firestore with new profile picture URL
-          await setDoc(
-            doc(db, "users", user!.uid),
-            {
-              profilePic: uploadResult.url,
-              updatedAt: serverTimestamp(),
-            },
-            { merge: true },
-          )
-
-          // Update local state
-          setProfileData((prev) => ({
-            ...prev,
-            profilePic: uploadResult.url,
-          }))
-          setProfilePicPreview(uploadResult.url)
-
-          toast({
-            title: "Success",
-            description: "Profile picture updated successfully!",
-          })
-        } else {
-          throw new Error(uploadResult.error || "Upload failed")
-        }
-      } catch (error) {
-        console.error("[v0] Error uploading profile picture:", error)
-        toast({
-          title: "Error",
-          description: "Failed to upload profile picture. Please try again.",
-          variant: "destructive",
-        })
-      } finally {
-        setSaving(false)
-      }
+    if (blob) {
+      const previewUrl = URL.createObjectURL(blob)
+      setProfilePicPreview(previewUrl)
+      setCroppedImageBlob(blob)
     }
 
     setShowCropModal(false)
@@ -635,13 +617,15 @@ export default function ProfilePage() {
                 <CardFooter className="border-t border-zinc-800/50 pt-6">
                   <Button
                     type="submit"
-                    disabled={saving || !profileData.displayName.trim() || !profileData.username.trim()}
+                    disabled={
+                      saving || uploadingProfilePic || !profileData.displayName.trim() || !profileData.username.trim()
+                    }
                     className="ml-auto bg-white hover:bg-gray-100 text-black"
                   >
-                    {saving ? (
+                    {saving || uploadingProfilePic ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Saving...
+                        {uploadingProfilePic ? "Uploading..." : "Saving..."}
                       </>
                     ) : saveSuccess ? (
                       <>
@@ -1126,19 +1110,7 @@ export default function ProfilePage() {
               >
                 Cancel
               </Button>
-              <Button
-                onClick={() =>
-                  handleCropComplete(
-                    completedCrop,
-                    setImageToCrop,
-                    setShowCropModal,
-                    setProfilePicPreview,
-                    setNewProfilePic,
-                  )
-                }
-                className="bg-red-600 hover:bg-red-700"
-                disabled={!completedCrop}
-              >
+              <Button onClick={handleCropComplete} className="bg-red-600 hover:bg-red-700" disabled={!completedCrop}>
                 Apply Crop
               </Button>
             </div>
