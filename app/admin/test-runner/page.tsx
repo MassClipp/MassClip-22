@@ -4,151 +4,156 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Loader2, CheckCircle2, XCircle, Play, PlayCircle, Package, Shield, Smartphone } from "lucide-react"
-
-interface TestSuite {
-  id: string
-  name: string
-  description: string
-  file: string
-  category: string
-}
+import { Loader2, CheckCircle2, XCircle, Play, Shield, Lock, Upload } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
 
 interface TestResult {
-  id: string
-  status: "running" | "passed" | "failed" | "idle"
-  message?: string
+  name: string
+  passed: boolean
+  message: string
   details?: any
 }
 
+interface TestSummary {
+  total: number
+  passed: number
+  failed: number
+  passRate: number
+}
+
+type TestCategory = "all" | "permissions" | "auth" | "uploads"
+
 export default function TestRunnerPage() {
-  const [testSuites, setTestSuites] = useState<TestSuite[]>([])
-  const [results, setResults] = useState<Map<string, TestResult>>(new Map())
-  const [loading, setLoading] = useState(false)
-  const [runningAll, setRunningAll] = useState(false)
+  const [running, setRunning] = useState(false)
+  const [results, setResults] = useState<TestResult[]>([])
+  const [summary, setSummary] = useState<TestSummary | null>(null)
+  const [expandedResults, setExpandedResults] = useState<Set<number>>(new Set())
 
-  // Load test suites on mount
-  useState(() => {
-    fetch("/api/playwright/list-tests")
-      .then((res) => res.json())
-      .then((data) => setTestSuites(data.testSuites))
-  })
-
-  const runTest = async (testFile: string, testId: string) => {
-    setResults((prev) => new Map(prev).set(testId, { id: testId, status: "running" }))
-    setLoading(true)
+  const runTests = async (testType: TestCategory) => {
+    setRunning(true)
+    setResults([])
+    setSummary(null)
+    setExpandedResults(new Set())
 
     try {
-      const response = await fetch("/api/playwright/run-tests", {
+      const response = await fetch("/api/test-system/run-permission-tests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ testFile }),
+        body: JSON.stringify({ testType }),
       })
 
       const data = await response.json()
 
       if (data.success) {
-        setResults((prev) =>
-          new Map(prev).set(testId, {
-            id: testId,
-            status: "passed",
-            message: "All tests passed",
-            details: data.results,
-          }),
-        )
+        setResults(data.results)
+        setSummary(data.summary)
       } else {
-        setResults((prev) =>
-          new Map(prev).set(testId, {
-            id: testId,
-            status: "failed",
-            message: data.error || "Tests failed",
-            details: data,
-          }),
-        )
+        setResults([
+          {
+            name: "Test System Error",
+            passed: false,
+            message: data.error || "Failed to run tests",
+          },
+        ])
       }
-    } catch (error) {
-      setResults((prev) =>
-        new Map(prev).set(testId, {
-          id: testId,
-          status: "failed",
-          message: error instanceof Error ? error.message : "Unknown error",
-        }),
-      )
+    } catch (error: any) {
+      setResults([
+        {
+          name: "Test System Error",
+          passed: false,
+          message: error.message,
+        },
+      ])
     } finally {
-      setLoading(false)
+      setRunning(false)
     }
   }
 
-  const runAllTests = async () => {
-    setRunningAll(true)
-    for (const suite of testSuites) {
-      await runTest(suite.file, suite.id)
-    }
-    setRunningAll(false)
+  const toggleDetails = (index: number) => {
+    setExpandedResults((prev) => {
+      const newSet = new Set(prev)
+      if (newSet.has(index)) {
+        newSet.delete(index)
+      } else {
+        newSet.add(index)
+      }
+      return newSet
+    })
   }
 
-  const getStatusIcon = (status: "running" | "passed" | "failed" | "idle") => {
-    switch (status) {
-      case "running":
-        return <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />
-      case "passed":
-        return <CheckCircle2 className="h-5 w-5 text-green-500" />
-      case "failed":
-        return <XCircle className="h-5 w-5 text-red-500" />
-      default:
-        return <PlayCircle className="h-5 w-5 text-zinc-500" />
-    }
-  }
-
-  const getCategoryIcon = (category: string) => {
-    switch (category) {
-      case "flows":
-        return <Package className="h-5 w-5" />
-      case "permissions":
-        return <Shield className="h-5 w-5" />
-      case "mobile":
-        return <Smartphone className="h-5 w-5" />
-      default:
-        return <PlayCircle className="h-5 w-5" />
-    }
-  }
-
-  const flowTests = testSuites.filter((t) => t.category === "flows")
-  const permissionTests = testSuites.filter((t) => t.category === "permissions")
-  const mobileTests = testSuites.filter((t) => t.category === "mobile")
+  const permissionResults = results.filter(
+    (r) =>
+      r.name.includes("Bundle") ||
+      r.name.includes("Video") ||
+      r.name.includes("Platform") ||
+      r.name.includes("Download"),
+  )
+  const authResults = results.filter((r) => r.name.includes("Auth"))
+  const uploadResults = results.filter((r) => r.name.includes("Upload"))
 
   return (
     <div className="min-h-screen bg-black p-4 md:p-6">
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Automated Test Runner</h1>
+          <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Test Runner</h1>
           <p className="text-sm md:text-base text-zinc-400">
-            Run end-to-end tests and verify permissions without using the terminal
+            Automated testing system for permissions, authentication, and core functionality
           </p>
         </div>
 
-        {/* Run All Button */}
+        {/* Summary Card */}
+        {summary && (
+          <Card className="bg-zinc-900 border-zinc-800">
+            <CardHeader>
+              <CardTitle className="text-white">Test Results Summary</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="text-center">
+                  <div className="text-3xl font-bold text-white">{summary.total}</div>
+                  <div className="text-sm text-zinc-400">Total Tests</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-3xl font-bold text-green-500">{summary.passed}</div>
+                  <div className="text-sm text-zinc-400">Passed</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-3xl font-bold text-red-500">{summary.failed}</div>
+                  <div className="text-sm text-zinc-400">Failed</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-3xl font-bold text-white">{summary.passRate.toFixed(1)}%</div>
+                  <div className="text-sm text-zinc-400">Pass Rate</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Run All Tests Button */}
         <Card className="bg-zinc-900 border-zinc-800">
           <CardHeader>
             <CardTitle className="text-white">Quick Actions</CardTitle>
-            <CardDescription className="text-zinc-400">Run all tests or select individual suites below</CardDescription>
+            <CardDescription className="text-zinc-400">
+              Run all tests or select individual categories below
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <Button
-              onClick={runAllTests}
-              disabled={runningAll || loading}
-              className="w-full bg-white text-black hover:bg-zinc-200"
+              onClick={() => runTests("all")}
+              disabled={running}
               size="lg"
+              className="w-full bg-white text-black hover:bg-zinc-200"
             >
-              {runningAll ? (
+              {running ? (
                 <>
-                  <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                  Running All Tests...
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  Running Tests...
                 </>
               ) : (
                 <>
-                  <Play className="h-5 w-5 mr-2" />
+                  <Play className="mr-2 h-5 w-5" />
                   Run All Tests
                 </>
               )}
@@ -156,238 +161,198 @@ export default function TestRunnerPage() {
           </CardContent>
         </Card>
 
-        {/* Test Suites by Category */}
-        <Tabs defaultValue="flows" className="w-full">
+        {/* Test Categories */}
+        <Tabs defaultValue="permissions" className="w-full">
           <TabsList className="grid w-full grid-cols-3 bg-zinc-900">
-            <TabsTrigger value="flows" className="data-[state=active]:bg-zinc-800">
-              <Package className="h-4 w-4 mr-2" />
-              User Flows
-            </TabsTrigger>
             <TabsTrigger value="permissions" className="data-[state=active]:bg-zinc-800">
-              <Shield className="h-4 w-4 mr-2" />
+              <Shield className="mr-2 h-4 w-4" />
               Permissions
             </TabsTrigger>
-            <TabsTrigger value="mobile" className="data-[state=active]:bg-zinc-800">
-              <Smartphone className="h-4 w-4 mr-2" />
-              Mobile
+            <TabsTrigger value="auth" className="data-[state=active]:bg-zinc-800">
+              <Lock className="mr-2 h-4 w-4" />
+              Authentication
+            </TabsTrigger>
+            <TabsTrigger value="uploads" className="data-[state=active]:bg-zinc-800">
+              <Upload className="mr-2 h-4 w-4" />
+              Uploads
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="flows" className="space-y-4 mt-4">
-            {flowTests.map((suite) => {
-              const result = results.get(suite.id)
-              return (
-                <Card key={suite.id} className="bg-zinc-900 border-zinc-800">
-                  <CardHeader>
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          {result && getStatusIcon(result.status)}
-                          <CardTitle className="text-white text-lg">{suite.name}</CardTitle>
-                        </div>
-                        <CardDescription className="text-zinc-400">{suite.description}</CardDescription>
-                      </div>
-                      <Button
-                        onClick={() => runTest(suite.file, suite.id)}
-                        disabled={loading || result?.status === "running"}
-                        variant="outline"
-                        className="shrink-0"
-                      >
-                        {result?.status === "running" ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <>
-                            <Play className="h-4 w-4 mr-2" />
-                            Run
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  {result && result.status !== "idle" && result.status !== "running" && (
-                    <CardContent>
-                      <div
-                        className={`p-3 rounded-lg ${
-                          result.status === "passed"
-                            ? "bg-green-500/10 border border-green-500/20"
-                            : "bg-red-500/10 border border-red-500/20"
-                        }`}
-                      >
-                        <p className={`text-sm ${result.status === "passed" ? "text-green-500" : "text-red-500"}`}>
-                          {result.message}
-                        </p>
-                        {result.details && (
-                          <details className="mt-2">
-                            <summary className="cursor-pointer text-xs text-zinc-400 hover:text-zinc-300">
-                              View Details
-                            </summary>
-                            <pre className="mt-2 p-2 bg-black rounded text-xs overflow-x-auto text-zinc-400">
-                              {JSON.stringify(result.details, null, 2)}
-                            </pre>
-                          </details>
-                        )}
-                      </div>
-                    </CardContent>
-                  )}
-                </Card>
-              )
-            })}
-          </TabsContent>
-
+          {/* Permissions Tab */}
           <TabsContent value="permissions" className="space-y-4 mt-4">
-            {permissionTests.map((suite) => {
-              const result = results.get(suite.id)
-              return (
-                <Card key={suite.id} className="bg-zinc-900 border-zinc-800">
-                  <CardHeader>
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          {result && getStatusIcon(result.status)}
-                          <CardTitle className="text-white text-lg">{suite.name}</CardTitle>
-                        </div>
-                        <CardDescription className="text-zinc-400">{suite.description}</CardDescription>
-                      </div>
-                      <Button
-                        onClick={() => runTest(suite.file, suite.id)}
-                        disabled={loading || result?.status === "running"}
-                        variant="outline"
-                        className="shrink-0"
-                      >
-                        {result?.status === "running" ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <>
-                            <Play className="h-4 w-4 mr-2" />
-                            Run
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  {result && result.status !== "idle" && result.status !== "running" && (
-                    <CardContent>
-                      <div
-                        className={`p-3 rounded-lg ${
-                          result.status === "passed"
-                            ? "bg-green-500/10 border border-green-500/20"
-                            : "bg-red-500/10 border border-red-500/20"
-                        }`}
-                      >
-                        <p className={`text-sm ${result.status === "passed" ? "text-green-500" : "text-red-500"}`}>
-                          {result.message}
-                        </p>
-                        {result.details && (
-                          <details className="mt-2">
-                            <summary className="cursor-pointer text-xs text-zinc-400 hover:text-zinc-300">
-                              View Details
-                            </summary>
-                            <pre className="mt-2 p-2 bg-black rounded text-xs overflow-x-auto text-zinc-400">
-                              {JSON.stringify(result.details, null, 2)}
-                            </pre>
-                          </details>
-                        )}
-                      </div>
-                    </CardContent>
+            <Card className="bg-zinc-900 border-zinc-800">
+              <CardHeader>
+                <CardTitle className="text-white">Plan Permission Tests</CardTitle>
+                <CardDescription className="text-zinc-400">
+                  Validates that each plan (Free, Starter, Faceless Pro, Facelessprenuer) has the correct permissions
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button
+                  onClick={() => runTests("permissions")}
+                  disabled={running}
+                  className="mb-4 bg-white text-black hover:bg-zinc-200"
+                >
+                  {running ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Running...
+                    </>
+                  ) : (
+                    <>
+                      <Play className="mr-2 h-4 w-4" />
+                      Run Permission Tests
+                    </>
                   )}
-                </Card>
-              )
-            })}
+                </Button>
+
+                <div className="space-y-3">
+                  {permissionResults.map((result, idx) => (
+                    <TestResultCard
+                      key={idx}
+                      result={result}
+                      isExpanded={expandedResults.has(idx)}
+                      onToggle={() => toggleDetails(idx)}
+                    />
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
 
-          <TabsContent value="mobile" className="space-y-4 mt-4">
-            {mobileTests.map((suite) => {
-              const result = results.get(suite.id)
-              return (
-                <Card key={suite.id} className="bg-zinc-900 border-zinc-800">
-                  <CardHeader>
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          {result && getStatusIcon(result.status)}
-                          <CardTitle className="text-white text-lg">{suite.name}</CardTitle>
-                        </div>
-                        <CardDescription className="text-zinc-400">{suite.description}</CardDescription>
-                      </div>
-                      <Button
-                        onClick={() => runTest(suite.file, suite.id)}
-                        disabled={loading || result?.status === "running"}
-                        variant="outline"
-                        className="shrink-0"
-                      >
-                        {result?.status === "running" ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <>
-                            <Play className="h-4 w-4 mr-2" />
-                            Run
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  {result && result.status !== "idle" && result.status !== "running" && (
-                    <CardContent>
-                      <div
-                        className={`p-3 rounded-lg ${
-                          result.status === "passed"
-                            ? "bg-green-500/10 border border-green-500/20"
-                            : "bg-red-500/10 border border-red-500/20"
-                        }`}
-                      >
-                        <p className={`text-sm ${result.status === "passed" ? "text-green-500" : "text-red-500"}`}>
-                          {result.message}
-                        </p>
-                        {result.details && (
-                          <details className="mt-2">
-                            <summary className="cursor-pointer text-xs text-zinc-400 hover:text-zinc-300">
-                              View Details
-                            </summary>
-                            <pre className="mt-2 p-2 bg-black rounded text-xs overflow-x-auto text-zinc-400">
-                              {JSON.stringify(result.details, null, 2)}
-                            </pre>
-                          </details>
-                        )}
-                      </div>
-                    </CardContent>
+          {/* Auth Tab */}
+          <TabsContent value="auth" className="space-y-4 mt-4">
+            <Card className="bg-zinc-900 border-zinc-800">
+              <CardHeader>
+                <CardTitle className="text-white">Authentication Tests</CardTitle>
+                <CardDescription className="text-zinc-400">
+                  Tests authentication endpoints and user management
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button
+                  onClick={() => runTests("auth")}
+                  disabled={running}
+                  className="mb-4 bg-white text-black hover:bg-zinc-200"
+                >
+                  {running ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Running...
+                    </>
+                  ) : (
+                    <>
+                      <Play className="mr-2 h-4 w-4" />
+                      Run Auth Tests
+                    </>
                   )}
-                </Card>
-              )
-            })}
+                </Button>
+
+                <div className="space-y-3">
+                  {authResults.map((result, idx) => (
+                    <TestResultCard
+                      key={idx}
+                      result={result}
+                      isExpanded={expandedResults.has(idx + 1000)}
+                      onToggle={() => toggleDetails(idx + 1000)}
+                    />
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Uploads Tab */}
+          <TabsContent value="uploads" className="space-y-4 mt-4">
+            <Card className="bg-zinc-900 border-zinc-800">
+              <CardHeader>
+                <CardTitle className="text-white">Upload Tests</CardTitle>
+                <CardDescription className="text-zinc-400">
+                  Tests file upload functionality and API endpoints
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button
+                  onClick={() => runTests("uploads")}
+                  disabled={running}
+                  className="mb-4 bg-white text-black hover:bg-zinc-200"
+                >
+                  {running ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Running...
+                    </>
+                  ) : (
+                    <>
+                      <Play className="mr-2 h-4 w-4" />
+                      Run Upload Tests
+                    </>
+                  )}
+                </Button>
+
+                <div className="space-y-3">
+                  {uploadResults.map((result, idx) => (
+                    <TestResultCard
+                      key={idx}
+                      result={result}
+                      isExpanded={expandedResults.has(idx + 2000)}
+                      onToggle={() => toggleDetails(idx + 2000)}
+                    />
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
-
-        {/* Summary */}
-        {results.size > 0 && (
-          <Card className="bg-zinc-900 border-zinc-800">
-            <CardHeader>
-              <CardTitle className="text-white">Test Summary</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-3 gap-4 text-center">
-                <div>
-                  <div className="text-3xl font-bold text-green-500">
-                    {Array.from(results.values()).filter((r) => r.status === "passed").length}
-                  </div>
-                  <div className="text-sm text-zinc-400">Passed</div>
-                </div>
-                <div>
-                  <div className="text-3xl font-bold text-red-500">
-                    {Array.from(results.values()).filter((r) => r.status === "failed").length}
-                  </div>
-                  <div className="text-sm text-zinc-400">Failed</div>
-                </div>
-                <div>
-                  <div className="text-3xl font-bold text-blue-500">
-                    {Array.from(results.values()).filter((r) => r.status === "running").length}
-                  </div>
-                  <div className="text-sm text-zinc-400">Running</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
       </div>
     </div>
+  )
+}
+
+function TestResultCard({
+  result,
+  isExpanded,
+  onToggle,
+}: {
+  result: TestResult
+  isExpanded: boolean
+  onToggle: () => void
+}) {
+  return (
+    <Card className={`${result.passed ? "bg-green-500/10 border-green-500/20" : "bg-red-500/10 border-red-500/20"}`}>
+      <CardContent className="pt-6">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start gap-3 flex-1">
+            {result.passed ? (
+              <CheckCircle2 className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
+            ) : (
+              <XCircle className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
+            )}
+            <div className="flex-1 min-w-0">
+              <div className="font-medium mb-1 text-white">{result.name}</div>
+              <div className="text-sm text-zinc-400">{result.message}</div>
+              {result.details && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onToggle}
+                  className="mt-2 h-auto py-1 px-2 text-xs text-zinc-400 hover:text-white"
+                >
+                  {isExpanded ? "Hide" : "Show"} Details
+                </Button>
+              )}
+              {isExpanded && result.details && (
+                <pre className="mt-2 p-3 bg-black rounded text-xs overflow-auto text-zinc-400">
+                  {JSON.stringify(result.details, null, 2)}
+                </pre>
+              )}
+            </div>
+          </div>
+          <Badge variant={result.passed ? "default" : "destructive"} className="flex-shrink-0">
+            {result.passed ? "PASS" : "FAIL"}
+          </Badge>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
