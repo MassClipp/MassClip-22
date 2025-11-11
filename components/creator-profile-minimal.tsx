@@ -88,8 +88,8 @@ interface ExternalProduct {
 
 export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimalProps) {
   const [user] = useAuthState(auth)
-  const [activeTab, setActiveTab] = useState<string>("free_content") // Changed to string to accommodate dynamic tabs
-  const [activeContentTab, setActiveContentTab] = useState<"free" | "premium" | "ebooks" | string>("free") // Renamed for clarity
+  const [activeTab, setActiveTab] = useState<string>("free_content")
+  const [activeContentTab, setActiveContentTab] = useState<"free" | "premium" | "ebooks" | string>("free")
   const [contentTypeFilter, setContentTypeFilter] = useState<"all" | "video" | "audio" | "image">("all")
   const [freeContent, setFreeContent] = useState<ContentItem[]>([])
   const [premiumContent, setPremiumContent] = useState<ContentItem[]>([])
@@ -280,7 +280,6 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
     })
   }
 
-  // Updated to use activeTab for determining currentContent
   const currentContent =
     activeTab === "free_content"
       ? freeContent
@@ -288,9 +287,10 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
         ? premiumContent
         : activeTab === "ebooks"
           ? ebooksContent
-          : []
+          : [] // External product tabs have no content here
+
   const filteredContent = getFilteredContent()
-  const availableTypes = activeTab === "free_content" ? getAvailableContentTypes(freeContent) : [] // Filter available types only for free content tab
+  const availableTypes = activeTab === "free_content" ? getAvailableContentTypes(freeContent) : []
   const showContentTypeFilter = activeTab === "free_content" && availableTypes.length > 1
 
   console.log("[v0] Content filter state:", {
@@ -911,9 +911,9 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
             )}
 
             <div className="flex items-center gap-3">
-              {console.log("[v0] === UNIFIED TAB RENDERING ===")}
+              {console.log("[v0] === RENDERING TABS ===")}
+              {console.log("[v0] Total tabs in state:", storefrontTabs.length)}
 
-              {/* Standard content tabs - show only if they have content */}
               {freeContentCount > 0 && (
                 <button
                   onClick={() => setActiveTab("free_content")}
@@ -952,40 +952,27 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
                 </button>
               )}
 
-              {/* Custom tabs - only enabled ones, excluding standard types */}
               {storefrontTabs
                 .filter((tab) => {
+                  // Exclude standard content tabs, only show enabled custom tabs
                   const isStandardTab = ["free_content", "premium_content", "ebooks"].includes(tab.type)
-                  console.log(
-                    `[v0] Tab: ${tab.name}, type: ${tab.type}, enabled: ${tab.enabled}, isStandard: ${isStandardTab}`,
-                  )
                   return !isStandardTab && tab.enabled
                 })
                 .sort((a, b) => a.order - b.order)
-                .map((tab) => {
-                  const tabProducts = externalProducts.filter((p) => p.tabId === tab.id)
-                  console.log(
-                    `[v0] Rendering custom tab: ${tab.name} (${tab.type}) with ${tabProducts.length} products`,
-                  )
+                .map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.type)}
+                    className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
+                      activeTab === tab.type ? "text-white" : "text-zinc-400 hover:text-zinc-300"
+                    }`}
+                  >
+                    {tab.name}
+                    {activeTab === tab.type && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
+                  </button>
+                ))}
 
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => {
-                        console.log(`[v0] Clicked tab: ${tab.name} (${tab.type})`)
-                        setActiveTab(tab.type)
-                      }}
-                      className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
-                        activeTab === tab.type ? "text-white" : "text-zinc-400 hover:text-zinc-300"
-                      }`}
-                    >
-                      {tab.name}
-                      {activeTab === tab.type && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
-                    </button>
-                  )
-                })}
-
-              {console.log("[v0] === END UNIFIED TAB RENDERING ===\n")}
+              {console.log("[v0] === END RENDERING TABS ===\n")}
             </div>
           </div>
         </div>
