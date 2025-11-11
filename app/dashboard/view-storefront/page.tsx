@@ -1460,7 +1460,7 @@ export default function ViewStorefrontPage() {
                   .map((product) => (
                     <div
                       key={product.id}
-                      className="bg-zinc-900 rounded-lg overflow-hidden border border-zinc-700/30 hover:border-zinc-600/40 transition-all duration-300 w-full max-w-[340px] sm:max-w-none relative group"
+                      className="bg-zinc-900 rounded-lg overflow-hidden border border-zinc-700/30 hover:border-zinc-600/40 transition-all duration-300 w-full relative group"
                     >
                       {(product.imageUrl || product.thumbnailUrl) && (
                         <div className="relative aspect-square bg-zinc-800 overflow-hidden">
@@ -1858,7 +1858,6 @@ function EBookCard({ item, username }: { item: ContentItem; username: string | n
             >
               See Details
             </button>
-            {/* CHANGE: Fixed creatorId to use user.uid instead of item.id */}
             <UnlockButton
               ebookId={item.id}
               price={item.price || 0}

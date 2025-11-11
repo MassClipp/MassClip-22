@@ -608,29 +608,239 @@ export default function StorefrontTabsPage() {
               </div>
             ) : (
               <div className="space-y-2">
-                {customTabs.map((tab) => (
-                  <div
-                    key={tab.id}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, tab.id)}
-                    onDragOver={handleDragOver}
-                    onDrop={(e) => handleDrop(e, tab.id)}
-                    onDragEnd={handleDragEnd}
-                    className={`border-b border-zinc-800 py-4 flex items-center justify-between group ${
-                      draggedTab === tab.id ? "opacity-50" : ""
-                    }`}
-                  >
-                    <div className="flex items-center gap-4 flex-1">
-                      <GripVertical className="w-5 h-5 text-zinc-600 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity" />
-                      <div className="flex-1">
-                        <h3 className="font-medium">{tab.name}</h3>
+                {customTabs.map((tab) => {
+                  const isExpanded = expandedTabs.has(tab.id)
+                  const productForm = productForms[tab.id] || {}
+                  const tabProducts = externalProducts.filter((p) => p.tabId === tab.id)
+
+                  return (
+                    <div
+                      key={tab.id}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, tab.id)}
+                      onDragOver={handleDragOver}
+                      onDrop={(e) => handleDrop(e, tab.id)}
+                      onDragEnd={handleDragEnd}
+                      className={`border-b border-zinc-800 transition-all ${draggedTab === tab.id ? "opacity-50" : ""}`}
+                    >
+                      <div className="py-4 flex items-center justify-between group">
+                        <div className="flex items-center gap-4 flex-1">
+                          <GripVertical className="w-5 h-5 text-zinc-600 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity" />
+                          <div className="flex-1">
+                            <h3 className="font-medium">{tab.name}</h3>
+                            <p className="text-sm text-zinc-500">
+                              Toggle to show on storefront
+                              {tabProducts.length > 0 &&
+                                ` • ${tabProducts.length} product${tabProducts.length > 1 ? "s" : ""}`}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => toggleExpanded(tab.id)}
+                            className="text-zinc-400 hover:text-white"
+                          >
+                            {isExpanded ? (
+                              <>
+                                <ChevronUp className="w-4 h-4 mr-2" />
+                                Hide
+                              </>
+                            ) : (
+                              <>
+                                <ChevronDown className="w-4 h-4 mr-2" />
+                                {tabProducts.length > 0 ? "Manage" : "Add"} Products
+                              </>
+                            )}
+                          </Button>
+                          <Switch checked={tab.enabled} onCheckedChange={() => toggleTab(tab.id)} />
+                        </div>
                       </div>
+
+                      {isExpanded && (
+                        <div className="pb-6 pl-9 space-y-4 border-l-2 border-zinc-800 ml-2">
+                          {tabProducts.length > 0 && (
+                            <div className="space-y-3 mb-6">
+                              <h4 className="text-sm font-medium text-zinc-400">Existing Products</h4>
+                              {tabProducts.map((product) => (
+                                <div
+                                  key={product.id}
+                                  className="flex items-center gap-3 p-3 border border-zinc-800 rounded-lg"
+                                >
+                                  {product.thumbnailUrl && (
+                                    <img
+                                      src={product.thumbnailUrl || "/placeholder.svg"}
+                                      alt={product.title}
+                                      className="w-16 h-16 object-cover rounded"
+                                    />
+                                  )}
+                                  <div className="flex-1 min-w-0">
+                                    <h5 className="font-medium truncate">{product.title}</h5>
+                                    <p className="text-sm text-zinc-500 truncate">{product.externalUrl}</p>
+                                  </div>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => deleteProduct(product.id)}
+                                    className="text-red-400 hover:text-red-300"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          <div className="space-y-4 pt-4 border-t border-zinc-800">
+                            <h4 className="text-sm font-medium">Add New Product</h4>
+
+                            <div>
+                              <label className="block text-sm font-medium mb-2">Thumbnail Image (1:1 ratio) *</label>
+                              <div className="flex items-center gap-4">
+                                {productForm.thumbnailUrl ? (
+                                  <div className="relative w-32 h-32 rounded-lg overflow-hidden border border-zinc-700">
+                                    <img
+                                      src={productForm.thumbnailUrl || "/placeholder.svg"}
+                                      alt="Thumbnail"
+                                      className="w-full h-full object-cover"
+                                    />
+                                    <button
+                                      onClick={() => updateProductForm(tab.id, "thumbnailUrl", "")}
+                                      className="absolute top-1 right-1 bg-black/70 rounded-full p-1 hover:bg-black"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <label className="w-32 h-32 border-2 border-dashed border-zinc-700 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-zinc-600 transition-colors">
+                                    <Upload className="w-6 h-6 text-zinc-500 mb-1" />
+                                    <span className="text-xs text-zinc-500">Upload</span>
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      className="hidden"
+                                      onChange={(e) => {
+                                        const file = e.target.files?.[0]
+                                        if (file) handleThumbnailUpload(tab.id, file)
+                                      }}
+                                    />
+                                  </label>
+                                )}
+                                {uploadingThumbnails.has(tab.id) && (
+                                  <span className="text-sm text-zinc-400">Uploading...</span>
+                                )}
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium mb-2">Title *</label>
+                              <Input
+                                placeholder="e.g., 1-on-1 Coaching Session"
+                                value={productForm.title || ""}
+                                onChange={(e) => updateProductForm(tab.id, "title", e.target.value)}
+                                className="bg-transparent border-zinc-700"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium mb-2">Description *</label>
+                              <Textarea
+                                placeholder="Describe what this product offers..."
+                                value={productForm.description || ""}
+                                onChange={(e) => updateProductForm(tab.id, "description", e.target.value)}
+                                className="bg-transparent border-zinc-700 min-h-[100px]"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium mb-2">External URL *</label>
+                              <Input
+                                placeholder="https://..."
+                                value={productForm.externalUrl || ""}
+                                onChange={(e) => updateProductForm(tab.id, "externalUrl", e.target.value)}
+                                className="bg-transparent border-zinc-700"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium mb-2">
+                                Call-to-Action Button Text *{" "}
+                                {!isFacelessprenuer && (
+                                  <span className="text-xs text-zinc-500">(Choose from presets)</span>
+                                )}
+                              </label>
+                              <div className="flex flex-wrap gap-2 mb-2">
+                                {ctaPresets.map((preset) => (
+                                  <Button
+                                    key={preset}
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => updateProductForm(tab.id, "ctaText", preset)}
+                                    className={`text-xs border-zinc-700 hover:bg-zinc-800 ${
+                                      productForm.ctaText === preset ? "bg-zinc-800 border-white" : ""
+                                    }`}
+                                  >
+                                    {preset}
+                                  </Button>
+                                ))}
+                              </div>
+                              {isFacelessprenuer ? (
+                                <Input
+                                  placeholder="Or enter custom CTA text"
+                                  value={productForm.ctaText || ""}
+                                  onChange={(e) => updateProductForm(tab.id, "ctaText", e.target.value)}
+                                  className="bg-transparent border-zinc-700"
+                                />
+                              ) : (
+                                productForm.ctaText && (
+                                  <p className="text-sm text-zinc-400">Selected: {productForm.ctaText}</p>
+                                )
+                              )}
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium mb-2">Display Price (Optional)</label>
+                              <Input
+                                placeholder='e.g., "$49" or "Free"'
+                                value={productForm.price || ""}
+                                onChange={(e) => updateProductForm(tab.id, "price", e.target.value)}
+                                className="bg-transparent border-zinc-700"
+                              />
+                            </div>
+
+                            <div className="flex items-center gap-3 pt-2">
+                              <Button
+                                onClick={() => saveProduct(tab.id)}
+                                className="bg-white text-black hover:bg-zinc-200"
+                              >
+                                Add Product
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                onClick={() => {
+                                  setExpandedTabs((prev) => {
+                                    const newSet = new Set(prev)
+                                    newSet.delete(tab.id)
+                                    return newSet
+                                  })
+                                  setProductForms((prev) => {
+                                    const newForms = { ...prev }
+                                    delete newForms[tab.id]
+                                    return newForms
+                                  })
+                                }}
+                                className="text-zinc-400 hover:text-white"
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <div className="flex items-center gap-3">
-                      <Switch checked={tab.enabled} onCheckedChange={() => toggleTab(tab.id)} />
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>
