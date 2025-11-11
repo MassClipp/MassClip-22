@@ -303,7 +303,6 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
   })
 
   useEffect(() => {
-    // Reset contentTypeFilter when switching to non-free tabs
     if (activeTab !== "free_content") {
       setContentTypeFilter("all")
     }
@@ -916,7 +915,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
               {console.log("[v0] Total tabs in state:", storefrontTabs.length)}
               {console.log(
                 "[v0] All tabs:",
-                storefrontTabs.map((t) => `${t.name} (enabled: ${t.enabled})`),
+                storefrontTabs.map((t) => `${t.name} (enabled: ${t.enabled}, type: ${t.type})`),
               )}
 
               {freeContentCount > 0 && (

@@ -105,7 +105,7 @@ export default function ViewStorefrontPage() {
   const [freeContent, setFreeContent] = useState<ContentItem[]>([])
   const [premiumContent, setPremiumContent] = useState<ContentItem[]>([])
   const [ebooksContent, setEbooksContent] = useState<ContentItem[]>([])
-  const [activeTab, setActiveTab] = useState<"free" | "premium" | "ebooks">("free")
+  const [activeTab, setActiveTab] = useState<"free" | "premium" | "ebooks" | string>("free")
   const [createdAt, setCreatedAt] = useState<string>("")
 
   const [storefrontTabs, setStorefrontTabs] = useState<StorefrontTab[]>([])
@@ -200,8 +200,8 @@ export default function ViewStorefrontPage() {
           if (tabsResponse.ok) {
             const tabsData = await tabsResponse.json()
             console.log("[v0] Storefront tabs data:", tabsData)
-            setStorefrontTabs(tabsData.data?.tabs || [])
-            setExternalProducts(tabsData.data?.externalProducts || [])
+            setStorefrontTabs(tabsData.tabs || [])
+            setExternalProducts(tabsData.externalProducts || [])
           } else {
             console.error("[v0] Failed to fetch storefront tabs:", await tabsResponse.text())
           }
@@ -1376,34 +1376,58 @@ export default function ViewStorefrontPage() {
           <div className="mb-6 sm:mb-8">
             <div className="flex items-center justify-between border-b border-zinc-800/50">
               <div className="flex items-center gap-6 sm:gap-8">
-                {visibleTabs.map((tab) => (
+                {freeContent.length > 0 && (
                   <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.type as "free" | "premium" | "ebooks")}
+                    onClick={() => setActiveTab("free")}
                     className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
-                      activeTab === tab.type ? "text-white" : "text-zinc-400 hover:text-zinc-300"
+                      activeTab === "free" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
                     }`}
                   >
-                    {tab.name}
-                    {activeTab === tab.type && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
+                    Free Content
+                    {activeTab === "free" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
                   </button>
-                ))}
+                )}
 
-                {/* Show custom tabs */}
+                {premiumContent.length > 0 && (
+                  <button
+                    onClick={() => setActiveTab("premium")}
+                    className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
+                      activeTab === "premium" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
+                    }`}
+                  >
+                    Premium Content
+                    {activeTab === "premium" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
+                  </button>
+                )}
+
+                {ebooksContent.length > 0 && (
+                  <button
+                    onClick={() => setActiveTab("ebooks")}
+                    className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
+                      activeTab === "ebooks" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
+                    }`}
+                  >
+                    eBooks
+                    {activeTab === "ebooks" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
+                  </button>
+                )}
+
                 {visibleTabs
                   .filter((tab) => !["free_content", "premium_content", "ebooks"].includes(tab.type))
                   .map((tab) => {
                     const tabProducts = externalProducts.filter((p) => p.tabId === tab.id)
+                    const tabType = tab.type as "free" | "premium" | "ebooks" | string
+
                     return (
                       <button
                         key={tab.id}
-                        onClick={() => setActiveTab(tab.type as any)}
+                        onClick={() => setActiveTab(tabType)}
                         className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
-                          activeTab === tab.type ? "text-white" : "text-zinc-400 hover:text-zinc-300"
+                          activeTab === tabType ? "text-white" : "text-zinc-400 hover:text-zinc-300"
                         }`}
                       >
                         {tab.name}
-                        {activeTab === tab.type && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
+                        {activeTab === tabType && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
                       </button>
                     )
                   })}
