@@ -1,5 +1,7 @@
 "use client"
-import { useState, useEffect } from "react"
+
+import type React from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
@@ -15,10 +17,12 @@ import {
   Lock,
   ChevronDown,
   BookOpen,
-  Bug,
 } from "lucide-react"
 import { useAuthState } from "react-firebase-hooks/auth"
-import { auth } from "@/lib/firebase"
+import { auth, db } from "@/lib/firebase"
+import { doc, updateDoc, increment } from "firebase/firestore"
+import { useToast } from "@/hooks/use-toast"
+import { useDownloadLimit } from "@/contexts/download-limit-context"
 import ImageCard from "@/components/image-card"
 import AudioCard from "@/components/audio-card"
 import BundleCard from "@/components/bundle-card" // Assuming BundleCard is defined elsewhere
@@ -70,6 +74,18 @@ interface ContentItem {
   content?: any[]
 }
 
+interface ExternalProduct {
+  id: string
+  name: string
+  description?: string
+  thumbnailUrl?: string
+  externalUrl: string
+  price: string
+  ctaText?: string
+  tabId: string
+  title: string
+}
+
 export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimalProps) {
   const [user] = useAuthState(auth)
   const [activeTab, setActiveTab] = useState<string>("free_content") // Changed to string to accommodate dynamic tabs
@@ -84,8 +100,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
   const [ebooksContentCount, setEbooksContentCount] = useState(0)
   const [showToast, setShowToast] = useState(false)
   const [storefrontTabs, setStorefrontTabs] = useState<any[]>([])
-  const [externalProducts, setExternalProducts] = useState<any[]>([])
-  const [showDebugPanel, setShowDebugPanel] = useState(false)
+  const [externalProducts, setExternalProducts] = useState<ExternalProduct[]>([])
 
   const getMemberSince = () => {
     if (creator.createdAt) {
@@ -212,7 +227,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
 
         const ebooksResponse = await fetch(`/api/creator/${creator.uid}/published-ebooks`)
         if (ebooksResponse.ok) {
-          const ebooksData = await<bos> json()
+          const ebooksData = await ebooksResponse.json()
           console.log("📚 eBooks response:", ebooksData)
           setEbooksContent(ebooksData.content || [])
           setEbooksContentCount(ebooksData.content?.length || 0)
@@ -231,9 +246,9 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
     }
   }, [creator.uid])
 
-  const getAvailableContentTypes = (content: ContentItem[]) => {\
+  const getAvailableContentTypes = (content: ContentItem[]) => {
     const types = new Set<string>()
-    content.forEach((item) => {\
+    content.forEach((item) => {
       const contentType = detectContentType(item.fileUrl, item.type as string)
       types.add(contentType)
     })
@@ -242,12 +257,12 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
   }
 
   const getFilteredContent = () => {
-    // Update to use activeTab for filtering\
-    if (activeTab !== "free_content" || contentTypeFilter === "all") {\
+    // Update to use activeTab for filtering
+    if (activeTab !== "free_content" || contentTypeFilter === "all") {
       return currentContent
     }
 
-    return freeContent.filter((item) => {\
+    return freeContent.filter((item) => {
       const contentType = detectContentType(item.fileUrl, item.type as string)
       return contentType === contentTypeFilter
     })
@@ -270,37 +285,17 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
     // Added debug logging for filter state
     activeTab,
     availableTypes,
-    showContentTypeFilter,\
+    showContentTypeFilter,
     freeContentLength: freeContent.length,
     contentTypeFilter,
   })
 
   useEffect(() => {
-    // Reset contentTypeFilter when switching to non-free tabs\
+    // Reset contentTypeFilter when switching to non-free tabs
     if (activeTab !== "free_content") {
       setContentTypeFilter("all")
     }
   }, [activeTab])
-
-  const debugInfo = {\
-    totalTabs: storefrontTabs.length,
-    allTabs: storefrontTabs,
-    customTabs: storefrontTabs.filter((tab) => !["free_content", "premium_content", "ebooks"].includes(tab.type)),
-    enabledCustomTabs: storefrontTabs
-      .filter((tab) => !["free_content", "premium_content", "ebooks"].includes(tab.type))
-      .filter((tab) => tab.enabled),
-    externalProductsCount: externalProducts.length,
-    externalProductsByCategory: storefrontTabs.reduce(
-      (acc, tab) => {
-        if (![\"free_content", "premium_content", "ebooks"].includes(tab.type)) {\
-          const products = externalProducts.filter((p) => p.category === tab.type)
-          acc[tab.type] = products.length
-        }
-        return acc
-      },
-      {} as Record<string, number>,\
-    ),
-  }
 
   return (
     <div className="min-h-screen bg-black relative">
@@ -313,97 +308,6 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
         <div className="fixed top-6 right-6 z-50 bg-white text-black px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 animate-in fade-in slide-in-from-top-2 duration-200">
           <Check className="w-4 h-4" />
           <span className="text-sm font-medium">Link copied to clipboard</span>
-        </div>
-      )}
-
-      <button
-        onClick={() => setShowDebugPanel(!showDebugPanel)}
-        className="fixed bottom-4 right-4 z-50 bg-yellow-500 text-black p-3 rounded-full shadow-lg hover:bg-yellow-400 transition-colors"
-        title="Toggle Debug Panel"
-      >
-        <Bug className="w-5 h-5" />
-      </button>
-
-      {showDebugPanel && (
-        <div className="fixed bottom-20 right-4 z-50 bg-zinc-900 border border-zinc-700 rounded-lg p-4 max-w-md w-full max-h-[80vh] overflow-y-auto shadow-2xl">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-white font-bold flex items-center gap-2">
-              <Bug className="w-5 h-5 text-yellow-500" />
-              Tab Debug Panel
-            </h3>
-            <button onClick={() => setShowDebugPanel(false)} className="text-zinc-400 hover:text-white">
-              ✕
-            </button>
-          </div>
-
-          <div className="space-y-4 text-sm">
-            <div>
-              <h4 className="text-yellow-500 font-semibold mb-2">Summary</h4>
-              <ul className="text-zinc-300 space-y-1">
-                <li>Total Tabs: {debugInfo.totalTabs}</li>
-                <li>Custom Tabs: {debugInfo.customTabs.length}</li>
-                <li>Enabled Custom Tabs: {debugInfo.enabledCustomTabs.length}</li>
-                <li>Total External Products: {debugInfo.externalProductsCount}</li>
-              </ul>
-            </div>
-
-            <div>
-              <h4 className="text-yellow-500 font-semibold mb-2">All Tabs</h4>
-              <div className="space-y-2">
-                {debugInfo.allTabs.map((tab) => (
-                  <div
-                    key={tab.id}
-                    className={`p-2 rounded ${tab.enabled ? "bg-green-900/30 border border-green-700" : "bg-red-900/30 border border-red-700"}`}
-                  >
-                    <div className="text-white font-medium">{tab.name}</div>
-                    <div className="text-xs text-zinc-400">Type: {tab.type}</div>
-                    <div className="text-xs text-zinc-400">Order: {tab.order}</div>
-                    <div className={`text-xs font-semibold ${tab.enabled ? "text-green-400" : "text-red-400"}`}>
-                      {tab.enabled ? "✓ ENABLED" : "✗ DISABLED"}
-                    </div>
-                    {debugInfo.externalProductsByCategory[tab.type] !== undefined && (
-                      <div className="text-xs text-blue-400">
-                        Products: {debugInfo.externalProductsByCategory[tab.type]}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <h4 className="text-yellow-500 font-semibold mb-2">What Should Render?</h4>
-              <div className="text-zinc-300">
-                <p className="mb-2">Standard tabs (always show if content exists):</p>
-                <ul className="list-disc list-inside space-y-1">
-                  <li>Free Content: {freeContentCount > 0 ? "✓" : "✗"}</li>
-                  <li>Premium Content: {premiumContentCount > 0 ? "✓" : "✗"}</li>
-                  <li>eBooks: {ebooksContentCount > 0 ? "✓" : "✗"}</li>
-                </ul>
-                <p className="mt-3 mb-2">Custom tabs (only if enabled):</p>
-                <ul className="list-disc list-inside space-y-1">
-                  {debugInfo.enabledCustomTabs.length === 0 ? (
-                    <li className="text-red-400">No enabled custom tabs</li>
-                  ) : (
-                    debugInfo.enabledCustomTabs.map((tab) => (
-                      <li key={tab.id} className="text-green-400">
-                        {tab.name} ({debugInfo.externalProductsByCategory[tab.type] || 0} products)
-                      </li>
-                    ))
-                  )}
-                </ul>
-              </div>
-            </div>
-
-            <div>
-              <h4 className="text-yellow-500 font-semibold mb-2">Component Info</h4>
-              <ul className="text-zinc-300 space-y-1 text-xs">
-                <li>Component: CreatorProfileMinimal</li>
-                <li>Creator UID: {creator.uid}</li>
-                <li>Active Tab: {activeTab}</li>
-              </ul>
-            </div>
-          </div>
         </div>
       )}
 
@@ -996,7 +900,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
             )}
 
             <div className="flex items-center gap-3">
-              {console.log("[v0] ===TAB RENDERING DEBUG ===")}
+              {console.log("[v0] === TAB RENDERING DEBUG ===")}
               {console.log("[v0] Total storefront tabs:", storefrontTabs.length)}
               {console.log("[v0] All storefront tabs:", storefrontTabs)}
 
@@ -1063,11 +967,12 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
 
               {storefrontTabs
                 .filter((tab) => tab.enabled) // Only show enabled tabs
+                // Now all enabled tabs (community, merch, affiliates, custom) will be shown
                 .filter((tab) => !["free_content", "premium_content", "ebooks"].includes(tab.type)) // Exclude standard tabs
                 .sort((a, b) => a.order - b.order) // Sort by order
                 .map((tab) => {
-                  // Get products for this tab
-                  const tabProducts = externalProducts.filter((p) => p.category === tab.type)
+                  // ExternalProduct has tabId (the tab's ID), not category field
+                  const tabProducts = externalProducts.filter((p) => p.tabId === tab.id)
 
                   console.log(
                     `[v0] Rendering tab button: ${tab.name} (${tab.type}) with ${tabProducts.length} products`,
@@ -1145,15 +1050,15 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
               {!["free_content", "premium_content", "ebooks"].includes(activeTab) && (
                 <>
                   {(() => {
-                    const tabProducts = externalProducts.filter((p) => p.category === activeTab)
                     const currentTab = storefrontTabs.find((tab) => tab.type === activeTab)
+                    const tabProducts = externalProducts.filter((p) => p.tabId === currentTab?.id)
 
                     return tabProducts.length > 0 ? (
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
                         {tabProducts.map((product) => (
                           <a
                             key={product.id}
-                            href={product.url}
+                            href={product.externalUrl}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="group relative bg-zinc-900 rounded-lg overflow-hidden hover:bg-zinc-800 transition-colors"
@@ -1162,21 +1067,22 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
                               <div className="aspect-video w-full overflow-hidden">
                                 <img
                                   src={product.thumbnailUrl || "/placeholder.svg"}
-                                  alt={product.name}
+                                  alt={product.title}
                                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                                 />
                               </div>
                             )}
                             <div className="p-4">
-                              <h3 className="text-white font-medium mb-1">{product.name}</h3>
+                              <h3 className="text-white font-medium mb-1">{product.title}</h3>
                               {product.description && (
                                 <p className="text-zinc-400 text-sm line-clamp-2">{product.description}</p>
                               )}
-                              {product.price && (
-                                <p className="text-white font-medium mt-2">
-                                  ${typeof product.price === "number" ? product.price.toFixed(2) : product.price}
-                                </p>
-                              )}
+                              {product.price && <p className="text-white font-medium mt-2">{product.price}</p>}
+                              <div className="mt-3">
+                                <span className="inline-block bg-white text-black px-3 py-1.5 rounded text-sm font-medium">
+                                  {product.ctaText || "Learn More"}
+                                </span>
+                              </div>
                             </div>
                           </a>
                         ))}
@@ -1207,8 +1113,8 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
 
 const detectContentType = (fileUrl: string, mimeType?: string): "video" | "audio" | "image" => {
   // First check MIME type if available
-  if (mimeType) {\
-    if (mimeType.startsWith(\"video/")) return "video"
+  if (mimeType) {
+    if (mimeType.startsWith("video/")) return "video"
     if (mimeType.startsWith("audio/")) return "audio"
     if (mimeType.startsWith("image/")) return "image"
   }
@@ -1220,26 +1126,26 @@ const detectContentType = (fileUrl: string, mimeType?: string): "video" | "audio
   if (["mp4", "mov", "avi", "mkv", "webm", "m4v"].includes(extension || "")) {
     return "video"
   }
-\
+
   // Audio extensions
   if (["mp3", "wav", "flac", "aac", "m4a", "ogg", "wma"].includes(extension || "")) {
     return "audio"
   }
-\
+
   // Image extensions
   if (["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp"].includes(extension || "")) {
     return "image"
   }
-\
+
   // Default to video for unknown types
   return "video"
 }
 
-function ContentCard({ item }: { item: ContentItem }) {\
+function ContentCard({ item }: { item: ContentItem }) {
   const contentType = detectContentType(item.fileUrl, item.type as string)
 
   const transformedItem = {
-    id: item.id,\
+    id: item.id,
     title: item.title,
     fileUrl: item.fileUrl,
     thumbnailUrl: item.thumbnailUrl,
@@ -1261,7 +1167,7 @@ function ContentCard({ item }: { item: ContentItem }) {\
 
   switch (contentType) {
     case "image":
-      return (\
+      return (
         <div className="w-full max-w-[180px] sm:max-w-[200px]">
           <ImageCard image={transformedItem} className="w-full" />
         </div>
@@ -1280,7 +1186,7 @@ function ContentCard({ item }: { item: ContentItem }) {\
   }
 }
 
-function VideoContentCard({ item }: { item: ContentItem }) {\
+function VideoContentCard({ item }: { item: ContentItem }) {
   const [user] = useAuthState(auth)
   const [isHovered, setIsHovered] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -1292,34 +1198,34 @@ function VideoContentCard({ item }: { item: ContentItem }) {\
   const videoUrl = item.fileUrl
 
   console.log("🎥 ContentCard rendering with:", {
-    id: item.id,\
+    id: item.id,
     title: item.title,
     fileUrl: item.fileUrl,
     thumbnailUrl: item.thumbnailUrl,
   })
 
-  const recordDownload = async () => {\
-    if (!user) return { success: true }\
+  const recordDownload = async () => {
+    if (!user) return { success: true }
     if (isProUser) return { success: true }
 
-    try {\
-      const userDocRef = doc(db, \"users", user.uid)
+    try {
+      const userDocRef = doc(db, "users", user.uid)
       await updateDoc(userDocRef, {
         downloads: increment(1),
-      })\
+      })
       forceRefresh()
       return { success: true }
-    } catch (err) {\
-      console.error(\"Error recording download:", err)
+    } catch (err) {
+      console.error("Error recording download:", err)
       return {
         success: false,
-        message: \"Failed to record download. Please try again.",
+        message: "Failed to record download. Please try again.",
       }
     }
   }
 
   const startDirectDownload = async (url: string, filename: string) => {
-    try {\
+    try {
       const response = await fetch(url)
       if (!response.ok) throw new Error("Network response was not ok")
 
