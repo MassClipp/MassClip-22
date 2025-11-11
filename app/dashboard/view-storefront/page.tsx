@@ -71,6 +71,9 @@ interface ExternalProduct {
   ctaText: string
   ctaUrl: string
   order: number
+  title?: string // Added title field
+  externalUrl?: string // Added externalUrl field
+  thumbnailUrl?: string // Added thumbnailUrl field
 }
 
 export default function ViewStorefrontPage() {
@@ -1459,11 +1462,11 @@ export default function ViewStorefrontPage() {
                       key={product.id}
                       className="bg-zinc-900 rounded-lg overflow-hidden border border-zinc-700/30 hover:border-zinc-600/40 transition-all duration-300 w-full max-w-[340px] sm:max-w-none relative group"
                     >
-                      {product.imageUrl && (
+                      {(product.imageUrl || product.thumbnailUrl) && (
                         <div className="relative aspect-square bg-zinc-800 overflow-hidden">
                           <img
-                            src={product.imageUrl || "/placeholder.svg"}
-                            alt={product.name}
+                            src={product.imageUrl || product.thumbnailUrl || "/placeholder.svg"}
+                            alt={product.name || product.title}
                             className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                           />
                         </div>
@@ -1472,7 +1475,7 @@ export default function ViewStorefrontPage() {
                       <div className="p-4 sm:p-5 space-y-3 bg-gradient-to-br from-black via-black to-zinc-800/30 relative">
                         <div className="space-y-2">
                           <h3 className="text-white text-lg sm:text-xl font-semibold line-clamp-2 leading-tight">
-                            {product.name}
+                            {product.title || product.name}
                           </h3>
                           {product.description && (
                             <p className="text-zinc-400 text-sm sm:text-base line-clamp-3 leading-relaxed">
@@ -1483,10 +1486,10 @@ export default function ViewStorefrontPage() {
 
                         <div className="space-y-3 pt-2">
                           <Button
-                            onClick={() => window.open(product.ctaUrl, "_blank")}
+                            onClick={() => window.open(product.ctaUrl || product.externalUrl, "_blank")}
                             className="w-full bg-white text-black hover:bg-zinc-100 rounded-md font-medium text-sm px-4 py-2.5"
                           >
-                            {product.ctaText}
+                            {product.ctaText || "Shop Now"}
                           </Button>
                         </div>
                       </div>
@@ -1497,7 +1500,7 @@ export default function ViewStorefrontPage() {
               <div
                 className={
                   activeTab === "premium" || activeTab === "ebooks"
-                    ? "flex flex-col items-center gap-6 sm:grid sm:grid-cols-3 sm:gap-8 sm:justify-items-center"
+                    ? "w-full max-w-sm aspect-[3/4] rounded-lg border-2 border-dashed border-zinc-700 hover:border-zinc-500 transition-colors cursor-pointer flex flex-col items-center justify-center gap-3 group"
                     : "grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 sm:gap-6 justify-items-center"
                 }
               >

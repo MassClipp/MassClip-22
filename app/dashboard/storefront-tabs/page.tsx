@@ -251,11 +251,14 @@ export default function StorefrontTabsPage() {
       id: `product_${Date.now()}`,
       tabId,
       title: product.title,
+      name: product.title, // Also save as name for backwards compatibility
       description: product.description,
       thumbnailUrl: product.thumbnailUrl || "",
+      imageUrl: product.thumbnailUrl || "", // Save as imageUrl too
       externalUrl: product.externalUrl,
       ctaText: product.ctaText,
-      price: product.price,
+      ctaUrl: product.externalUrl, // Save URL as ctaUrl too
+      price: product.price || "",
       featured: false,
       order: externalProducts.filter((p) => p.tabId === tabId).length,
       createdAt: new Date(),
@@ -510,16 +513,17 @@ export default function StorefrontTabsPage() {
                                 </Button>
                               ))}
                             </div>
-                            {isFacelessprenuer && (
+                            {isFacelessprenuer ? (
                               <Input
                                 placeholder="Or enter custom CTA text"
                                 value={productForm.ctaText || ""}
                                 onChange={(e) => updateProductForm(tab.id, "ctaText", e.target.value)}
                                 className="bg-transparent border-zinc-700"
                               />
-                            )}
-                            {!isFacelessprenuer && productForm.ctaText && (
-                              <p className="text-sm text-zinc-400 mt-1">Selected: {productForm.ctaText}</p>
+                            ) : (
+                              productForm.ctaText && (
+                                <p className="text-sm text-zinc-400">Selected: {productForm.ctaText}</p>
+                              )
                             )}
                           </div>
 
