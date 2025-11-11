@@ -1457,24 +1457,38 @@ export default function ViewStorefrontPage() {
                   .map((product) => (
                     <div
                       key={product.id}
-                      className="bg-zinc-900 rounded-lg overflow-hidden border border-zinc-700/30 hover:border-zinc-600/40 transition-all duration-300"
+                      className="bg-zinc-900 rounded-lg overflow-hidden border border-zinc-700/30 hover:border-zinc-600/40 transition-all duration-300 w-full max-w-[340px] sm:max-w-none relative group"
                     >
-                      <div className="relative aspect-video bg-zinc-800 overflow-hidden">
-                        <img
-                          src={product.imageUrl || "/placeholder.svg"}
-                          alt={product.name}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                      <div className="p-5 space-y-3">
-                        <h3 className="text-white text-lg font-semibold line-clamp-2">{product.name}</h3>
-                        <p className="text-zinc-400 text-sm line-clamp-2">{product.description}</p>
-                        <Button
-                          onClick={() => window.open(product.ctaUrl, "_blank")}
-                          className="w-full bg-white text-black hover:bg-zinc-100"
-                        >
-                          {product.ctaText}
-                        </Button>
+                      {product.imageUrl && (
+                        <div className="relative aspect-square bg-zinc-800 overflow-hidden">
+                          <img
+                            src={product.imageUrl || "/placeholder.svg"}
+                            alt={product.name}
+                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                          />
+                        </div>
+                      )}
+
+                      <div className="p-4 sm:p-5 space-y-3 bg-gradient-to-br from-black via-black to-zinc-800/30 relative">
+                        <div className="space-y-2">
+                          <h3 className="text-white text-lg sm:text-xl font-semibold line-clamp-2 leading-tight">
+                            {product.name}
+                          </h3>
+                          {product.description && (
+                            <p className="text-zinc-400 text-sm sm:text-base line-clamp-3 leading-relaxed">
+                              {product.description}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="space-y-3 pt-2">
+                          <Button
+                            onClick={() => window.open(product.ctaUrl, "_blank")}
+                            className="w-full bg-white text-black hover:bg-zinc-100 rounded-md font-medium text-sm px-4 py-2.5"
+                          >
+                            {product.ctaText}
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   ))}

@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Plus, GripVertical, Lock, ChevronDown, ChevronUp, X, Upload } from "lucide-react"
 import { toast } from "sonner"
 import type { StorefrontTab, ExternalProduct } from "@/lib/types"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 export default function StorefrontTabsPage() {
   const { user } = useAuth()
@@ -23,6 +24,36 @@ export default function StorefrontTabsPage() {
 
   const [productForms, setProductForms] = useState<Record<string, Partial<ExternalProduct>>>({})
   const [uploadingThumbnails, setUploadingThumbnails] = useState<Set<string>>(new Set())
+
+  const [isCustomTabDialogOpen, setIsCustomTabDialogOpen] = useState(false)
+  const [newTabName, setNewTabName] = useState("")
+
+  const handleCreateCustomTab = () => {
+    if (!newTabName.trim()) {
+      toast({
+        title: "Invalid Tab Name",
+        description: "Please enter a tab name",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const newTab: StorefrontTab = {
+      id: `custom_${Date.now()}`,
+      type: "custom",
+      name: newTabName.trim(),
+      enabled: true,
+      order: tabs.length,
+    }
+
+    setTabs((prev) => [...prev, newTab])
+    setNewTabName("")
+    setIsCustomTabDialogOpen(false)
+    toast({
+      title: "Custom Tab Created",
+      description: `"${newTabName.trim()}" has been added. Click Save Changes to persist.`,
+    })
+  }
 
   useEffect(() => {
     if (user) {
@@ -541,7 +572,11 @@ export default function StorefrontTabsPage() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-medium">Custom Tabs</h2>
               {isFacelessprenuer ? (
-                <Button variant="outline" className="border-zinc-700 text-white hover:bg-zinc-800 bg-transparent">
+                <Button
+                  variant="outline"
+                  className="border-zinc-700 text-white hover:bg-zinc-800 bg-transparent"
+                  onClick={() => setIsCustomTabDialogOpen(true)}
+                >
                   <Plus className="w-4 h-4 mr-2" />
                   Add Custom Tab
                 </Button>
@@ -597,6 +632,48 @@ export default function StorefrontTabsPage() {
           </div>
         </div>
       </div>
+      {/* Custom Tab Dialog */}
+      <Dialog open={isCustomTabDialogOpen} onOpenChange={setIsCustomTabDialogOpen}>
+        <DialogContent className="bg-zinc-900 border-zinc-800">
+          <DialogHeader>
+            <DialogTitle className="text-white">Create Custom Tab</DialogTitle>
+            <DialogDescription className="text-zinc-400">
+              Add a new custom tab to your storefront. You can add products to it after creation.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            <div>
+              <label className="block text-sm font-medium text-white mb-2">Tab Name *</label>
+              <Input
+                placeholder="e.g., Resources, Services, Downloads"
+                value={newTabName}
+                onChange={(e) => setNewTabName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    handleCreateCustomTab()
+                  }
+                }}
+                className="bg-transparent border-zinc-700 text-white"
+              />
+            </div>
+            <div className="flex gap-2 justify-end pt-2">
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setIsCustomTabDialogOpen(false)
+                  setNewTabName("")
+                }}
+                className="text-zinc-400 hover:text-white"
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleCreateCustomTab} className="bg-white text-black hover:bg-zinc-100">
+                Create Tab
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

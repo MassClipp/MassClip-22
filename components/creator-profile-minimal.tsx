@@ -893,7 +893,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
 
         {/* Tabs with underline style and content type filter */}
         <div className="mb-6 sm:mb-8">
-          <div className="flex items-center justify-center sm:justify-start gap-6 sm:gap-8 border-b border-zinc-800/50">
+          <div className="flex items-center justify-center sm:justify-start gap-8 sm:gap-12 border-b border-zinc-800/50">
             {showContentTypeFilter && (
               <div className="relative">
                 <select
@@ -1042,40 +1042,54 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
 
                     return tabProducts.length > 0 ? (
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-                        {tabProducts.map((product) => {
-                          console.log(`[v0] Rendering product:`, product)
-                          return (
-                            <a
-                              key={product.id}
-                              href={product.externalUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="group relative bg-zinc-900 rounded-lg overflow-hidden hover:bg-zinc-800 transition-colors"
-                            >
-                              {product.thumbnailUrl && (
-                                <div className="aspect-video w-full overflow-hidden">
-                                  <img
-                                    src={product.thumbnailUrl || "/placeholder.svg"}
-                                    alt={product.name || product.title}
-                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                  />
-                                </div>
-                              )}
-                              <div className="p-4">
-                                <h3 className="text-white font-medium mb-1">{product.name || product.title}</h3>
+                        {tabProducts.map((product) => (
+                          <a
+                            key={product.id}
+                            href={product.externalUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="bg-zinc-900 rounded-lg overflow-hidden border border-zinc-700/30 hover:border-zinc-600/40 transition-all duration-300 w-full max-w-[340px] sm:max-w-none relative group"
+                          >
+                            {product.thumbnailUrl && (
+                              <div className="relative aspect-square bg-zinc-800 overflow-hidden">
+                                <img
+                                  src={product.thumbnailUrl || "/placeholder.svg"}
+                                  alt={product.name || product.title}
+                                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                                />
+                              </div>
+                            )}
+
+                            <div className="p-4 sm:p-5 space-y-3 bg-gradient-to-br from-black via-black to-zinc-800/30 relative">
+                              <div className="space-y-2">
+                                <h3 className="text-white text-lg sm:text-xl font-semibold line-clamp-2 leading-tight">
+                                  {product.name || product.title}
+                                </h3>
                                 {product.description && (
-                                  <p className="text-zinc-400 text-sm line-clamp-2 mb-2">{product.description}</p>
+                                  <p className="text-zinc-400 text-sm sm:text-base line-clamp-3 leading-relaxed">
+                                    {product.description}
+                                  </p>
                                 )}
-                                {product.price && <p className="text-white font-medium mt-2">{product.price}</p>}
+                              </div>
+
+                              <div className="space-y-3 pt-2">
+                                {product.price && (
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-white text-2xl sm:text-3xl font-light tracking-tight">
+                                      {product.price}
+                                    </span>
+                                  </div>
+                                )}
+
                                 <div className="mt-3">
-                                  <span className="inline-block bg-white text-black px-4 py-2 rounded text-sm font-medium group-hover:bg-zinc-100 transition-colors">
+                                  <span className="inline-flex items-center justify-center w-full bg-white text-black hover:bg-zinc-100 rounded-md font-medium text-sm px-4 py-2.5 transition-colors">
                                     {product.ctaText || "Shop Now"}
                                   </span>
                                 </div>
                               </div>
-                            </a>
-                          )
-                        })}
+                            </div>
+                          </a>
+                        ))}
                       </div>
                     ) : (
                       <div className="text-center py-16 sm:py-24">
