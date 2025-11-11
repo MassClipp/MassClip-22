@@ -54,6 +54,25 @@ interface ContentItem {
   pageCount?: number
 }
 
+interface StorefrontTab {
+  id: string
+  type: string
+  name: string
+  enabled: boolean
+  order: number
+}
+
+interface ExternalProduct {
+  id: string
+  tabId: string
+  name: string
+  description: string
+  imageUrl: string
+  ctaText: string
+  ctaUrl: string
+  order: number
+}
+
 export default function ViewStorefrontPage() {
   const { user, loading: authLoading } = useFirebaseAuth()
   const { isProUser, planData, loading: planLoading } = useUserPlan()
@@ -88,6 +107,9 @@ export default function ViewStorefrontPage() {
   const [ebooksContent, setEbooksContent] = useState<ContentItem[]>([])
   const [activeTab, setActiveTab] = useState<"free" | "premium" | "ebooks">("free")
   const [createdAt, setCreatedAt] = useState<string>("")
+
+  const [storefrontTabs, setStorefrontTabs] = useState<StorefrontTab[]>([])
+  const [externalProducts, setExternalProducts] = useState<ExternalProduct[]>([])
 
   // Editing states
   const [isEditingBio, setIsEditingBio] = useState(false)
@@ -171,6 +193,17 @@ export default function ViewStorefrontPage() {
             } else {
               setCreatedAt(userData.createdAt)
             }
+          }
+
+          console.log("[v0] Fetching storefront tabs for user:", user.uid)
+          const tabsResponse = await fetch(`/api/storefront-tabs/${user.uid}`)
+          if (tabsResponse.ok) {
+            const tabsData = await tabsResponse.json()
+            console.log("[v0] Storefront tabs data:", tabsData)
+            setStorefrontTabs(tabsData.data?.tabs || [])
+            setExternalProducts(tabsData.data?.externalProducts || [])
+          } else {
+            console.error("[v0] Failed to fetch storefront tabs:", await tabsResponse.text())
           }
 
           // Fetch content data
@@ -434,6 +467,10 @@ export default function ViewStorefrontPage() {
   }
 
   const storefrontUrl = getStorefrontUrl()
+
+  const visibleTabs = storefrontTabs.filter((tab) => tab.enabled).sort((a, b) => a.order - b.order)
+
+  console.log("[v0] Visible tabs:", visibleTabs)
 
   return (
     <div className="min-h-screen pb-24">
@@ -1339,33 +1376,37 @@ export default function ViewStorefrontPage() {
           <div className="mb-6 sm:mb-8">
             <div className="flex items-center justify-between border-b border-zinc-800/50">
               <div className="flex items-center gap-6 sm:gap-8">
-                <button
-                  onClick={() => setActiveTab("free")}
-                  className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
-                    activeTab === "free" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
-                  }`}
-                >
-                  Free Content
-                  {activeTab === "free" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
-                </button>
-                <button
-                  onClick={() => setActiveTab("premium")}
-                  className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
-                    activeTab === "premium" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
-                  }`}
-                >
-                  Premium Content
-                  {activeTab === "premium" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
-                </button>
-                <button
-                  onClick={() => setActiveTab("ebooks")}
-                  className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
-                    activeTab === "ebooks" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
-                  }`}
-                >
-                  eBooks
-                  {activeTab === "ebooks" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
-                </button>
+                {visibleTabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.type as "free" | "premium" | "ebooks")}
+                    className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
+                      activeTab === tab.type ? "text-white" : "text-zinc-400 hover:text-zinc-300"
+                    }`}
+                  >
+                    {tab.name}
+                    {activeTab === tab.type && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
+                  </button>
+                ))}
+
+                {/* Show custom tabs */}
+                {visibleTabs
+                  .filter((tab) => !["free_content", "premium_content", "ebooks"].includes(tab.type))
+                  .map((tab) => {
+                    const tabProducts = externalProducts.filter((p) => p.tabId === tab.id)
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.type as any)}
+                        className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
+                          activeTab === tab.type ? "text-white" : "text-zinc-400 hover:text-zinc-300"
+                        }`}
+                      >
+                        {tab.name}
+                        {activeTab === tab.type && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
+                      </button>
+                    )
+                  })}
               </div>
 
               <Button
@@ -1382,7 +1423,39 @@ export default function ViewStorefrontPage() {
 
           {/* Content with action buttons */}
           <div className="pt-4 sm:pt-8">
-            {currentContent.length > 0 ? (
+            {storefrontTabs.find(
+              (t) => t.type === activeTab && !["free_content", "premium_content", "ebooks"].includes(t.type),
+            ) ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {externalProducts
+                  .filter((p) => p.tabId === storefrontTabs.find((t) => t.type === activeTab)?.id)
+                  .sort((a, b) => a.order - b.order)
+                  .map((product) => (
+                    <div
+                      key={product.id}
+                      className="bg-zinc-900 rounded-lg overflow-hidden border border-zinc-700/30 hover:border-zinc-600/40 transition-all duration-300"
+                    >
+                      <div className="relative aspect-video bg-zinc-800 overflow-hidden">
+                        <img
+                          src={product.imageUrl || "/placeholder.svg"}
+                          alt={product.name}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <div className="p-5 space-y-3">
+                        <h3 className="text-white text-lg font-semibold line-clamp-2">{product.name}</h3>
+                        <p className="text-zinc-400 text-sm line-clamp-2">{product.description}</p>
+                        <Button
+                          onClick={() => window.open(product.ctaUrl, "_blank")}
+                          className="w-full bg-white text-black hover:bg-zinc-100"
+                        >
+                          {product.ctaText}
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            ) : currentContent.length > 0 ? (
               <div
                 className={
                   activeTab === "premium" || activeTab === "ebooks"
