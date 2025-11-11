@@ -34,6 +34,7 @@ import { Badge } from "@/components/ui/badge"
 import { safelyFormatDate } from "@/lib/date-utils"
 import { fetchSubscriptionData } from "@/lib/subscription-utils"
 import { fetchPublicUrl } from "@/lib/get-public-url"
+import { uploadToR2 } from "@/lib/upload-to-r2"
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -378,15 +379,63 @@ export default function ProfilePage() {
     }
 
     const croppedImageBlob = await new Promise<Blob | null>((resolve) => {
-      canvas.toBlob(resolve)
+      canvas.toBlob(resolve, "image/jpeg", 0.95)
     })
 
     if (croppedImageBlob) {
-      setProfilePicPreview(URL.createObjectURL(croppedImageBlob))
-      setNewProfilePic(croppedImageBlob)
+      try {
+        setSaving(true)
+
+        // Convert blob to file
+        const file = new File([croppedImageBlob], `profile-${user?.uid}-${Date.now()}.jpg`, {
+          type: "image/jpeg",
+        })
+
+        // Upload to R2
+        console.log("[v0] Uploading profile picture to R2...")
+        const uploadResult = await uploadToR2(file, `profile-pictures/${user?.uid}`)
+
+        if (uploadResult.success && uploadResult.url) {
+          console.log("[v0] Profile picture uploaded successfully:", uploadResult.url)
+
+          // Update Firestore with new profile picture URL
+          await setDoc(
+            doc(db, "users", user!.uid),
+            {
+              profilePic: uploadResult.url,
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true },
+          )
+
+          // Update local state
+          setProfileData((prev) => ({
+            ...prev,
+            profilePic: uploadResult.url,
+          }))
+          setProfilePicPreview(uploadResult.url)
+
+          toast({
+            title: "Success",
+            description: "Profile picture updated successfully!",
+          })
+        } else {
+          throw new Error(uploadResult.error || "Upload failed")
+        }
+      } catch (error) {
+        console.error("[v0] Error uploading profile picture:", error)
+        toast({
+          title: "Error",
+          description: "Failed to upload profile picture. Please try again.",
+          variant: "destructive",
+        })
+      } finally {
+        setSaving(false)
+      }
     }
 
     setShowCropModal(false)
+    setImageToCrop(null)
   }
 
   if (loading) {

@@ -1302,8 +1302,8 @@ export default function ViewStorefrontPage() {
             </div>
           </div>
           {/* Stats Bar with Go Live Toggle */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 py-4 border-y border-zinc-800/50">
-            <div className="flex flex-wrap items-center gap-4 text-sm">
+          <div className="flex flex-col items-center sm:items-start sm:flex-row sm:justify-between gap-4 py-4 border-y border-zinc-800/50">
+            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-4 text-sm">
               <div className="flex items-center gap-2 text-zinc-500">
                 <Calendar className="w-3 h-3 sm:w-4 sm:h-4" />
                 <span>Joined {joinedDate || "Recently"}</span>
@@ -1322,21 +1322,20 @@ export default function ViewStorefrontPage() {
               </div>
             </div>
 
-            <div className="flex flex-col items-center sm:items-end gap-3">
+            <div className="flex flex-col items-center gap-3 w-full sm:w-auto">
               {storefrontUrl && (
                 <Button
                   onClick={() => window.open(storefrontUrl, "_blank")}
                   variant="outline"
                   size="sm"
-                  className="border-zinc-700 hover:bg-zinc-800 text-zinc-300 hover:text-white"
+                  className="border-zinc-700 hover:bg-zinc-800 text-zinc-300 hover:text-white w-full sm:w-auto"
                 >
                   <ExternalLink className="w-4 h-4 mr-2" />
                   {storefrontActive ? "View Live Storefront" : "Preview Storefront"}
                 </Button>
               )}
 
-              {/* Optimized toggle button for mobile */}
-              <div className="flex items-center gap-3 bg-zinc-900/80 backdrop-blur-sm border border-zinc-800 rounded-lg px-3 sm:px-4 py-2.5">
+              <div className="flex items-center gap-3 bg-zinc-900/80 backdrop-blur-sm border border-zinc-800 rounded-lg px-4 py-2.5 w-full sm:w-auto justify-center sm:justify-start">
                 <div className="flex flex-col items-end">
                   <span className="text-xs font-medium text-white">
                     {!isProUser ? "Builder Mode" : "Storefront Status"}
@@ -1353,7 +1352,7 @@ export default function ViewStorefrontPage() {
                   checked={storefrontActive}
                   onCheckedChange={handleToggleStorefront}
                   disabled={!isProUser || updating}
-                  className="data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-zinc-700 scale-90 sm:scale-100"
+                  className="data-[state=checked]:bg-white data-[state=unchecked]:bg-zinc-700"
                 />
 
                 {storefrontActive ? (
@@ -1369,7 +1368,7 @@ export default function ViewStorefrontPage() {
                 <Button
                   onClick={handleGoLiveClick}
                   size="sm"
-                  className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white border-0 font-medium"
+                  className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white border-0 font-medium w-full sm:w-auto"
                 >
                   Go Live Now
                 </Button>
@@ -1377,10 +1376,9 @@ export default function ViewStorefrontPage() {
             </div>
           </div>
 
-          {/* Tabs */}
           <div className="space-y-3 sm:space-y-0">
             {/* Manage Tabs button - above tabs on mobile, inline on desktop */}
-            <div className="flex justify-end sm:hidden">
+            <div className="flex justify-center sm:hidden">
               <Button
                 onClick={() => router.push("/dashboard/storefront-tabs")}
                 variant="ghost"
