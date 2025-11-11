@@ -6,7 +6,13 @@
     "build": "rm -rf .next && next build || true",
     "dev": "next dev",
     "lint": "next lint",
-    "start": "next start"
+    "start": "next start",
+    "test": "playwright test",
+    "test:debug": "playwright test --debug",
+    "test:flows": "playwright test tests/flows",
+    "test:headed": "playwright test --headed",
+    "test:permissions": "playwright test tests/permissions",
+    "test:ui": "playwright test --ui"
   },
   "dependencies": {
     "@ai-sdk/groq": "latest",
@@ -99,6 +105,7 @@
     "zod": "^4.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.48.0",
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
