@@ -64,13 +64,16 @@ export async function POST(request: NextRequest) {
     await db
       .collection("users")
       .doc(userId)
-      .update({
-        storefrontDesign: {
-          preset: preset || "default",
-          customColors: customColors || null,
-          updatedAt: new Date().toISOString(),
+      .set(
+        {
+          storefrontDesign: {
+            preset: preset || "default",
+            customColors: customColors || null,
+            updatedAt: new Date().toISOString(),
+          },
         },
-      })
+        { merge: true },
+      )
 
     return NextResponse.json({ success: true })
   } catch (error) {

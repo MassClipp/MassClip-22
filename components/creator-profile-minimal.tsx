@@ -329,9 +329,8 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
     const primary = preset?.primary || storefrontDesign.customColors?.primary || "#000000"
     const accent = preset?.accent || storefrontDesign.customColors?.accent || "#3b82f6" // Default accent to blue
 
-    // Create a linear gradient background
     return {
-      background: `linear-gradient(135deg, ${primary} 0%, ${primary} 60%, ${accent}1a 100%)`,
+      background: `linear-gradient(135deg, ${primary} 0%, ${primary} 70%, ${accent}15 100%)`,
     }
   }
 
