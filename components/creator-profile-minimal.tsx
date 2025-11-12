@@ -1,18 +1,31 @@
 "use client"
-import { useState, useEffect, useRef } from "react"
-import type React from "react"
 
+import type React from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Share2, Calendar, Users, Heart, Check, ChevronDown, BookOpen, Pause, Play, Download, Lock } from "lucide-react"
+import {
+  Share2,
+  Play,
+  Calendar,
+  Users,
+  Heart,
+  Check,
+  Package,
+  Download,
+  Pause,
+  Lock,
+  ChevronDown,
+  BookOpen,
+} from "lucide-react"
 import { useAuthState } from "react-firebase-hooks/auth"
 import { auth, db } from "@/lib/firebase"
-import { doc, getDoc, updateDoc, increment } from "firebase/firestore"
-import { applyThemeToStyles, type StorefrontTheme } from "@/lib/storefront-themes"
+import { doc, updateDoc, increment, getDoc } from "firebase/firestore"
+import { useToast } from "@/hooks/use-toast"
+import { useDownloadLimit } from "@/contexts/download-limit-context"
 import ImageCard from "@/components/image-card"
 import AudioCard from "@/components/audio-card"
-import { useToast } from "@/components/ui/use-toast"
-import { useDownloadLimit } from "@/contexts/download-limit-context"
+import BundleCard from "@/components/bundle-card" // Assuming BundleCard is defined elsewhere
 
 interface CreatorData {
   uid: string
@@ -74,30 +87,6 @@ interface ExternalProduct {
   title: string
 }
 
-const detectContentType = (fileUrl: string, mimeType?: string): "video" | "audio" | "image" => {
-  if (mimeType) {
-    if (mimeType.startsWith("video/")) return "video"
-    if (mimeType.startsWith("audio/")) return "audio"
-    if (mimeType.startsWith("image/")) return "image"
-  }
-
-  const extension = fileUrl.split(".").pop()?.toLowerCase()
-
-  if (["mp4", "mov", "avi", "mkv", "webm", "m4v"].includes(extension || "")) {
-    return "video"
-  }
-
-  if (["mp3", "wav", "flac", "aac", "m4a", "ogg", "wma"].includes(extension || "")) {
-    return "audio"
-  }
-
-  if (["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp"].includes(extension || "")) {
-    return "image"
-  }
-
-  return "video"
-}
-
 export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimalProps) {
   const [user] = useAuthState(auth)
   const [activeTab, setActiveTab] = useState<string>("free_content")
@@ -113,14 +102,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
   const [showToast, setShowToast] = useState(false)
   const [storefrontTabs, setStorefrontTabs] = useState<any[]>([])
   const [externalProducts, setExternalProducts] = useState<ExternalProduct[]>([])
-  const { toast } = useToast()
-  const { hasReachedLimit, isProUser, forceRefresh } = useDownloadLimit()
-
-  const [storefrontTheme, setStorefrontTheme] = useState<StorefrontTheme>({
-    primaryColor: "#000000",
-    accentGradient: ["#000000", "#0a0a0a"],
-    preset: "default",
-  })
+  const [storefrontDesign, setStorefrontDesign] = useState<any>(null)
 
   const getMemberSince = () => {
     if (creator.createdAt) {
@@ -180,16 +162,6 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
     const fetchContent = async () => {
       try {
         setLoading(true)
-
-        const creatorDocRef = doc(db, "users", creator.uid)
-        const creatorDoc = await getDoc(creatorDocRef)
-
-        if (creatorDoc.exists()) {
-          const creatorData = creatorDoc.data()
-          if (creatorData.storefrontTheme) {
-            setStorefrontTheme(creatorData.storefrontTheme)
-          }
-        }
 
         console.log("[v0] === FETCHING STOREFRONT TABS ===")
         console.log("[v0] Creator UID:", creator.uid)
@@ -276,6 +248,13 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
         } else {
           console.error("Failed to fetch eBooks:", ebooksResponse.status)
         }
+
+        const userDocRef = doc(db, "users", creator.uid)
+        const userDocSnap = await getDoc(userDocRef)
+        if (userDocSnap.exists()) {
+          const userData = userDocSnap.data()
+          setStorefrontDesign(userData.storefrontDesign || null)
+        }
       } catch (error) {
         console.error("Error fetching content:", error)
       } finally {
@@ -338,8 +317,28 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
     }
   }, [activeTab])
 
+  const getStorefrontBackground = () => {
+    if (!storefrontDesign) {
+      return { background: "#000000" } // Default to black if no design is set
+    }
+
+    const preset =
+      storefrontDesign.preset !== "custom" ? PRESET_THEMES.find((p: any) => p.id === storefrontDesign.preset) : null
+
+    // Use preset colors or custom colors from design, default to black if not found
+    const primary = preset?.primary || storefrontDesign.customColors?.primary || "#000000"
+    const accent = preset?.accent || storefrontDesign.customColors?.accent || "#3b82f6" // Default accent to blue
+
+    // Create a linear gradient background
+    return {
+      background: `linear-gradient(135deg, ${primary} 0%, ${primary} 60%, ${accent}1a 100%)`,
+    }
+  }
+
   return (
-    <div className="min-h-screen bg-black" style={applyThemeToStyles(storefrontTheme)}>
+    <div className="min-h-screen relative" style={getStorefrontBackground()}>
+      {/* Remove the old gradient backgrounds, design is now controlled by settings */}
+
       {/* Toast Notification */}
       {showToast && (
         <div className="fixed top-6 right-6 z-50 bg-white text-black px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 animate-in fade-in slide-in-from-top-2 duration-200">
@@ -824,6 +823,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
 
               {storefrontTabs
                 .filter((tab) => {
+                  // Exclude standard content tabs, only show enabled custom tabs
                   const isStandardTab = ["free_content", "premium_content", "ebooks"].includes(tab.type)
                   return !isStandardTab && tab.enabled
                 })
@@ -840,19 +840,178 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
                     {activeTab === tab.type && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
                   </button>
                 ))}
+
+              {console.log("[v0] === END RENDERING TABS ===\n")}
             </div>
           </div>
         </div>
 
-        {/* Content Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-          {filteredContent.map((item) => (
-            <ContentCard key={item.id} item={item} />
-          ))}
+        {/* Content */}
+        <div className="pt-4 sm:pt-8">
+          {loading ? (
+            <div className="flex items-center justify-center py-16 sm:py-24">
+              <div className="w-6 h-6 border border-zinc-800 border-t-white rounded-full animate-spin"></div>
+            </div>
+          ) : (
+            <>
+              {(activeTab === "free_content" || activeTab === "premium_content" || activeTab === "ebooks") && (
+                <>
+                  {filteredContent.length > 0 ? (
+                    <div
+                      className={
+                        activeTab === "premium_content" || activeTab === "ebooks"
+                          ? "flex flex-col items-center gap-6 sm:grid sm:grid-cols-3 sm:gap-8 sm:justify-items-center"
+                          : "grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 sm:gap-6 justify-items-center"
+                      }
+                    >
+                      {filteredContent.map((item) =>
+                        activeTab === "ebooks" || activeTab === "premium_content" ? (
+                          <BundleCard
+                            key={item.id}
+                            item={item}
+                            user={user}
+                            creatorId={creator.uid}
+                            creatorUsername={creator.username}
+                          />
+                        ) : (
+                          <ContentCard key={item.id} item={item} />
+                        ),
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-center py-16 sm:py-24">
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-4 sm:mb-6 bg-zinc-900 rounded-full flex items-center justify-center">
+                        <Package className="w-4 h-4 sm:w-5 sm:h-5 text-zinc-600" />
+                      </div>
+                      <h3 className="text-base sm:text-lg font-medium text-white mb-2">
+                        No{" "}
+                        {activeTab === "free_content" ? "free" : activeTab === "premium_content" ? "premium" : "ebook"}{" "}
+                        content available
+                      </h3>
+                      <p className="text-zinc-500 text-xs sm:text-sm">
+                        This creator hasn't uploaded any{" "}
+                        {activeTab === "free_content" ? "free" : activeTab === "premium_content" ? "premium" : "ebook"}{" "}
+                        content yet.
+                      </p>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {!["free_content", "premium_content", "ebooks"].includes(activeTab) && (
+                <>
+                  {(() => {
+                    const currentTab = storefrontTabs.find((tab) => tab.type === activeTab)
+                    const tabProducts = externalProducts.filter((p) => p.tabId === currentTab?.id)
+
+                    console.log(`[v0] === RENDERING CUSTOM TAB CONTENT: ${activeTab} ===`)
+                    console.log(`[v0] Current tab:`, currentTab)
+                    console.log(`[v0] Matching products:`, tabProducts)
+                    console.log(`[v0] === END CUSTOM TAB CONTENT ===`)
+
+                    return tabProducts.length > 0 ? (
+                      <div className="flex flex-col items-center gap-6 sm:grid sm:grid-cols-2 md:grid-cols-3 sm:gap-6 sm:items-start">
+                        {tabProducts.map((product) => (
+                          <a
+                            key={product.id}
+                            href={product.externalUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="bg-zinc-900 rounded-lg overflow-hidden border border-zinc-700/30 hover:border-zinc-600/40 transition-all duration-300 w-full max-w-[340px] sm:max-w-none relative group"
+                          >
+                            {(product.thumbnailUrl || product.imageUrl) && (
+                              <div className="relative aspect-square bg-zinc-800 overflow-hidden">
+                                <img
+                                  src={product.thumbnailUrl || product.imageUrl || "/placeholder.svg"}
+                                  alt={product.name || product.title}
+                                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                                />
+                              </div>
+                            )}
+
+                            <div className="p-4 sm:p-5 space-y-3 bg-gradient-to-br from-black via-black to-zinc-800/30 relative">
+                              <div className="space-y-2">
+                                <h3 className="text-white text-lg sm:text-xl font-semibold line-clamp-2 leading-tight">
+                                  {product.title || product.name}
+                                </h3>
+                                {product.description && (
+                                  <p className="text-zinc-400 text-sm sm:text-base line-clamp-3 leading-relaxed">
+                                    {product.description}
+                                  </p>
+                                )}
+                              </div>
+
+                              <div className="space-y-3 pt-2">
+                                {product.price && (
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-white text-2xl sm:text-3xl font-light tracking-tight">
+                                      {product.price}
+                                    </span>
+                                  </div>
+                                )}
+
+                                <div className="mt-3">
+                                  <span className="inline-flex items-center justify-center w-full bg-white text-black hover:bg-zinc-100 rounded-md font-medium text-sm px-4 py-2.5 transition-colors">
+                                    {product.ctaText || "Shop Now"}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </a>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-16 sm:py-24">
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-4 sm:mb-6 bg-zinc-900 rounded-full flex items-center justify-center">
+                          <Package className="w-4 h-4 sm:w-5 sm:h-5 text-zinc-600" />
+                        </div>
+                        <h3 className="text-base sm:text-lg font-medium text-white mb-2">
+                          No {currentTab?.name || activeTab} products yet
+                        </h3>
+                        <p className="text-zinc-500 text-xs sm:text-sm">
+                          This creator hasn't added any {currentTab?.name?.toLowerCase() || activeTab} products yet.
+                        </p>
+                      </div>
+                    )
+                  })()}
+                </>
+              )}
+            </>
+          )}
         </div>
       </div>
     </div>
   )
+}
+
+const detectContentType = (fileUrl: string, mimeType?: string): "video" | "audio" | "image" => {
+  // First check MIME type if available
+  if (mimeType) {
+    if (mimeType.startsWith("video/")) return "video"
+    if (mimeType.startsWith("audio/")) return "audio"
+    if (mimeType.startsWith("image/")) return "image"
+  }
+
+  // Fallback to file extension detection
+  const extension = fileUrl.split(".").pop()?.toLowerCase()
+
+  // Video extensions
+  if (["mp4", "mov", "avi", "mkv", "webm", "m4v"].includes(extension || "")) {
+    return "video"
+  }
+
+  // Audio extensions
+  if (["mp3", "wav", "flac", "aac", "m4a", "ogg", "wma"].includes(extension || "")) {
+    return "audio"
+  }
+
+  // Image extensions
+  if (["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp"].includes(extension || "")) {
+    return "image"
+  }
+
+  // Default to video for unknown types
+  return "video"
 }
 
 function ContentCard({ item }: { item: ContentItem }) {
@@ -863,10 +1022,20 @@ function ContentCard({ item }: { item: ContentItem }) {
     title: item.title,
     fileUrl: item.fileUrl,
     thumbnailUrl: item.thumbnailUrl,
-    creatorName: "",
-    uid: "",
+    creatorName: "", // Not available in current data structure
+    uid: "", // Not available in current data structure
     duration: item.duration ? Number.parseInt(item.duration) : undefined,
-    size: 0,
+    size: 0, // Not available in current data structure
+  }
+
+  if (contentType === "image") {
+    console.log("[v0] ImageCard data:", {
+      id: transformedItem.id,
+      title: transformedItem.title,
+      fileUrl: transformedItem.fileUrl,
+      thumbnailUrl: transformedItem.thumbnailUrl,
+      contentType,
+    })
   }
 
   switch (contentType) {
@@ -900,6 +1069,13 @@ function VideoContentCard({ item }: { item: ContentItem }) {
   const { hasReachedLimit, isProUser, forceRefresh } = useDownloadLimit()
 
   const videoUrl = item.fileUrl
+
+  console.log("🎥 ContentCard rendering with:", {
+    id: item.id,
+    title: item.title,
+    fileUrl: item.fileUrl,
+    thumbnailUrl: item.thumbnailUrl,
+  })
 
   const recordDownload = async () => {
     if (!user) return { success: true }
@@ -958,11 +1134,14 @@ function VideoContentCard({ item }: { item: ContentItem }) {
       return
     }
 
+    console.log("🎬 Attempting to play video:", videoUrl)
+
     if (isPlaying) {
       videoRef.current.pause()
       videoRef.current.currentTime = 0
       setIsPlaying(false)
     } else {
+      // Pause all other videos
       document.querySelectorAll("video").forEach((v) => {
         if (v !== videoRef.current) {
           v.pause()
@@ -974,6 +1153,7 @@ function VideoContentCard({ item }: { item: ContentItem }) {
       videoRef.current
         .play()
         .then(() => {
+          console.log("✅ Video started playing")
           setIsPlaying(true)
         })
         .catch((error) => {
@@ -1114,9 +1294,9 @@ function VideoContentCard({ item }: { item: ContentItem }) {
             aria-label={isPlaying ? "Pause video" : "Play video"}
           >
             {isPlaying ? (
-              <Pause className="h-6 w-6 text-white drop-shadow-lg" />
+              <Pause className="h-8 w-8 md:h-6 md:w-6 text-white drop-shadow-lg" />
             ) : (
-              <Play className="h-6 w-6 text-white drop-shadow-lg" />
+              <Play className="h-8 w-8 md:h-6 md:w-6 text-white drop-shadow-lg" />
             )}
           </button>
         </div>
@@ -1158,3 +1338,16 @@ function VideoContentCard({ item }: { item: ContentItem }) {
     </div>
   )
 }
+
+const PRESET_THEMES = [
+  { id: "default", name: "Default", primary: "#000000", accent: "#3b82f6" },
+  { id: "crimson", name: "Crimson", primary: "#000000", accent: "#dc2626" },
+  { id: "azure", name: "Azure", primary: "#000000", accent: "#0ea5e9" },
+  { id: "emerald", name: "Emerald", primary: "#000000", accent: "#10b981" },
+  { id: "violet", name: "Violet", primary: "#000000", accent: "#8b5cf6" },
+  { id: "amber", name: "Amber", primary: "#000000", accent: "#f59e0b" },
+  { id: "rose", name: "Rose", primary: "#000000", accent: "#f43f5e" },
+  { id: "teal", name: "Teal", primary: "#000000", accent: "#14b8a6" },
+  { id: "indigo", name: "Indigo", primary: "#000000", accent: "#6366f1" },
+  { id: "lime", name: "Lime", primary: "#000000", accent: "#84cc16" },
+]
