@@ -15,6 +15,8 @@ const FACELESS_PRO_PRICE_ID = "price_1SQ8yADheyb0pkWFK5LCP3Nd"
 const FACELESSPRENUER_FIRST_TIME_PRICE_ID = process.env.FACELESSPRENUER_FIRST
 const FACELESSPRENUER_REGULAR_PRICE_ID = process.env.FACELESSPRENUER_REGULAR
 
+const FACELESS_PRO_PROMO_CODE = "promo_1SShryDheyb0pkWF4iiAvi7o"
+
 export async function POST(request: NextRequest) {
   console.log("🚀 [Membership Checkout] Starting session creation...")
 
@@ -152,6 +154,13 @@ export async function POST(request: NextRequest) {
         metadata: metadata,
         ...(trialPeriodDays && { trial_period_days: trialPeriodDays }),
       },
+      ...(plan === "faceless_pro" && {
+        discounts: [
+          {
+            promotion_code: FACELESS_PRO_PROMO_CODE,
+          },
+        ],
+      }),
     }
 
     const session = await stripe.checkout.sessions.create(sessionParams)
