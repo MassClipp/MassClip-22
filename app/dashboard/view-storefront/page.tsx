@@ -1850,9 +1850,9 @@ function VideoContentCard({ item }: { item: ContentItem }) {
             aria-label={isPlaying ? "Pause video" : "Play video"}
           >
             {isPlaying ? (
-              <Pause className="h-8 w-8 md:h-6 md:w-6 text-white drop-shadow-lg" strokeWidth={1} />
+              <Pause className="h-8 w-8 md:h-6 md:w-6 text-white drop-shadow-lg" strokeWidth={1.5} />
             ) : (
-              <Play className="h-8 w-8 md:h-6 md:w-6 text-white drop-shadow-lg" strokeWidth={1} />
+              <Play className="h-8 w-8 md:h-6 md:w-6 text-white drop-shadow-lg" strokeWidth={1.5} />
             )}
           </button>
         </div>

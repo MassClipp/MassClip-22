@@ -124,9 +124,9 @@ export default function PremiumVideoCard({
               className="w-12 h-12 sm:w-10 sm:h-10 rounded-full bg-black/70 backdrop-blur-sm hover:bg-black/80 flex items-center justify-center transition-colors shadow-lg"
             >
               {isPlaying ? (
-                <Pause className="h-5 w-5 sm:h-4 sm:w-4 text-white" />
+                <Pause className="h-5 w-5 sm:h-4 sm:w-4 text-white" strokeWidth={1.5} />
               ) : (
-                <Play className="h-5 w-5 sm:h-4 sm:w-4 text-white ml-0.5" />
+                <Play className="h-5 w-5 sm:h-4 sm:w-4 text-white ml-0.5" strokeWidth={1.5} />
               )}
             </button>
           </div>
