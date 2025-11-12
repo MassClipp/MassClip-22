@@ -132,7 +132,7 @@ export default function SubscriptionSuccess() {
       features: [
         {
           icon: Package,
-          title: "15 Videos Per Bundle",
+          title: "25 Videos Per Bundle",
           description: "Create video bundles",
           color: "emerald",
         },
@@ -144,7 +144,7 @@ export default function SubscriptionSuccess() {
         },
         {
           icon: Shield,
-          title: "20% Platform Fee",
+          title: "15% Platform Fee",
           description: "Standard creator rate",
           color: "purple",
         },

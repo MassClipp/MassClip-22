@@ -1266,13 +1266,13 @@ function VideoContentCard({ item }: { item: ContentItem }) {
           <button
             onClick={handlePlayPause}
             disabled={!videoUrl}
-            className="bg-white/20 backdrop-blur-sm rounded-full p-3 sm:p-4 transition-transform duration-300 hover:scale-110 disabled:opacity-50"
+            className="transition-transform duration-300 hover:scale-110 disabled:opacity-50"
             aria-label={isPlaying ? "Pause video" : "Play video"}
           >
             {isPlaying ? (
-              <Pause className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+              <Pause className="h-8 w-8 md:h-6 md:w-6 text-white drop-shadow-lg" />
             ) : (
-              <Play className="h-5 w-5 sm:h-6 sm:w-6 text-white ml-0.5" />
+              <Play className="h-8 w-8 md:h-6 md:w-6 text-white drop-shadow-lg" />
             )}
           </button>
         </div>
