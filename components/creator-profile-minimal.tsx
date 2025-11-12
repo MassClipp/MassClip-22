@@ -12,7 +12,7 @@ import { applyThemeToStyles, type StorefrontTheme } from "@/lib/storefront-theme
 import ImageCard from "@/components/image-card"
 import AudioCard from "@/components/audio-card"
 import { useToast } from "@/components/ui/use-toast"
-import { useDownloadLimit } from "@/lib/download-limit"
+import { useDownloadLimit } from "@/contexts/download-limit-context"
 
 interface CreatorData {
   uid: string
