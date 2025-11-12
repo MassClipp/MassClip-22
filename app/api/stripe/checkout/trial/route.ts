@@ -8,8 +8,6 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-12-18.acacia",
 })
 
-const FACELESS_PRO_PROMO_CODE = "promo_1SShryDheyb0pkWF4iiAvi7o"
-
 export async function POST(req: NextRequest) {
   try {
     const { idToken } = await req.json()
@@ -67,11 +65,6 @@ export async function POST(req: NextRequest) {
         isTrial: "true",
         buyerUid: userId,
       },
-      discounts: [
-        {
-          promotion_code: FACELESS_PRO_PROMO_CODE,
-        },
-      ],
     })
 
     // Mark onboarding as complete

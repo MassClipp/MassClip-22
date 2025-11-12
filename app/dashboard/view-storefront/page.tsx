@@ -358,9 +358,18 @@ export default function ViewStorefrontPage() {
 
     const hasValidPlan =
       isProUser ||
+      planData?.plan === "faceless_pro" ||
+      planData?.plan === "facelessprenuer" ||
       planData?.plan?.includes("starter") ||
-      planData?.plan?.includes("facelessprenuer") ||
-      planData?.plan?.includes("faceless_pro")
+      planData?.status === "active"
+
+    console.log("[v0] Toggle storefront check:", {
+      isProUser,
+      plan: planData?.plan,
+      status: planData?.status,
+      hasValidPlan,
+      storefrontActive,
+    })
 
     if (!hasValidPlan && !storefrontActive) {
       toast({
@@ -476,6 +485,17 @@ export default function ViewStorefrontPage() {
 
   console.log("[v0] Visible tabs:", visibleTabs)
 
+  const isFacelessProActive =
+    planData?.plan === "faceless_pro" ||
+    planData?.plan === "facelessprenuer" ||
+    (planData?.status === "active" && isProUser)
+
+  console.log("[v0] Faceless Pro status:", {
+    isFacelessProActive,
+    planData,
+    isProUser,
+  })
+
   return (
     <div className="min-h-screen pb-24">
       {loading ? (
@@ -484,7 +504,7 @@ export default function ViewStorefrontPage() {
         </div>
       ) : (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-          {!isProUser && <BuilderModeBanner onUpgrade={handleGoLiveClick} />}
+          {!isFacelessProActive && <BuilderModeBanner onUpgrade={handleGoLiveClick} />}
 
           {/* Hero Section */}
           <div className="relative">
@@ -1338,9 +1358,9 @@ export default function ViewStorefrontPage() {
               <div className="flex items-center gap-3 bg-zinc-900/80 backdrop-blur-sm border border-zinc-800 rounded-lg px-4 py-2.5 w-full sm:w-auto justify-center sm:justify-start">
                 <div className="flex flex-col items-end">
                   <span className="text-xs font-medium text-white">
-                    {!isProUser ? "Builder Mode" : "Storefront Status"}
+                    {!isFacelessProActive ? "Builder Mode" : "Storefront Status"}
                   </span>
-                  {!isProUser && (
+                  {!isFacelessProActive && (
                     <span className="text-[10px] text-cyan-400 mt-0.5 flex items-center gap-1">
                       <Lock className="w-2.5 h-2.5" />
                       Upgrade to go live
@@ -1351,7 +1371,7 @@ export default function ViewStorefrontPage() {
                 <Switch
                   checked={storefrontActive}
                   onCheckedChange={handleToggleStorefront}
-                  disabled={!isProUser || updating}
+                  disabled={!isFacelessProActive || updating}
                   className="data-[state=checked]:bg-white data-[state=unchecked]:bg-zinc-700"
                 />
 
@@ -1359,12 +1379,12 @@ export default function ViewStorefrontPage() {
                   <Badge className="bg-green-500/10 text-green-400 border-green-500/20 text-xs">Live</Badge>
                 ) : (
                   <Badge variant="secondary" className="bg-zinc-700 text-zinc-300 text-xs">
-                    {!isProUser ? "Preview" : "Offline"}
+                    {!isFacelessProActive ? "Preview" : "Offline"}
                   </Badge>
                 )}
               </div>
 
-              {!isProUser && (
+              {!isFacelessProActive && (
                 <Button
                   onClick={handleGoLiveClick}
                   size="sm"
