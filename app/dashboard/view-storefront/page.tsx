@@ -527,7 +527,7 @@ export default function ViewStorefrontPage() {
   })
 
   return (
-    <div className="min-h-screen pb-24" style={applyThemeToStyles(storefrontTheme)}>
+    <div className="min-h-screen bg-black pb-24" style={applyThemeToStyles(storefrontTheme)}>
       {!isFacelessProActive && <BuilderModeBanner onUpgrade={handleGoLiveClick} />}
 
       {/* Hero Section */}

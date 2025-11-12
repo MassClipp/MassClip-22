@@ -59,11 +59,12 @@ export function StorefrontThemeSelector({ currentTheme, onThemeChange, canCustom
                   : "border-zinc-700 hover:border-zinc-600 bg-zinc-900"
               }`}
             >
-              {/* Preview gradient */}
               <div
-                className="h-12 rounded-md mb-2"
+                className="h-12 rounded-md mb-2 bg-black border"
                 style={{
+                  borderColor: preset.accentGradient[1],
                   background: `linear-gradient(135deg, ${preset.accentGradient[0]}, ${preset.accentGradient[1]})`,
+                  opacity: 0.3,
                 }}
               />
 

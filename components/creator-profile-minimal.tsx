@@ -339,11 +339,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
   }, [activeTab])
 
   return (
-    <div className="min-h-screen relative" style={applyThemeToStyles(storefrontTheme)}>
-      {/* Enhanced subtle gradient background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-black to-zinc-800/20 pointer-events-none" />
-      <div className="absolute inset-0 bg-gradient-to-t from-zinc-900/30 via-transparent to-zinc-800/10 pointer-events-none" />
-
+    <div className="min-h-screen bg-black" style={applyThemeToStyles(storefrontTheme)}>
       {/* Toast Notification */}
       {showToast && (
         <div className="fixed top-6 right-6 z-50 bg-white text-black px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 animate-in fade-in slide-in-from-top-2 duration-200">
