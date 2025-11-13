@@ -192,10 +192,21 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
 
   if (planConfig.plan === "facelessprenuer") {
     try {
+      console.log(`[v0] 🎯 ATTEMPTING TO SET FACELESSPRENUER FLAG FOR USER: ${userId}`)
+      console.log(`[v0] 🎯 Writing to users collection...`)
+
       await db.collection("users").doc(userId).set({ hasEverPurchasedFacelessprenuer: true }, { merge: true })
-      console.log(`[v0] ✅ Marked user ${userId} as having purchased Facelessprenuer`)
+
+      console.log(`[v0] ✅ SUCCESS! Marked user ${userId} as having purchased Facelessprenuer`)
+
+      // Verify the write
+      const userDoc = await db.collection("users").doc(userId).get()
+      const userData = userDoc.data()
+      console.log(
+        `[v0] 🔍 Verification: hasEverPurchasedFacelessprenuer = ${userData?.hasEverPurchasedFacelessprenuer}`,
+      )
     } catch (error) {
-      console.error("[v0] Failed to set hasEverPurchasedFacelessprenuer flag:", error)
+      console.error("[v0] ❌ CRITICAL ERROR: Failed to set hasEverPurchasedFacelessprenuer flag:", error)
     }
   }
 
@@ -305,10 +316,21 @@ export async function processSubscriptionUpdated(subscription: Stripe.Subscripti
 
   if (planConfig.plan === "facelessprenuer") {
     try {
+      console.log(`[v0] 🎯 ATTEMPTING TO SET FACELESSPRENUER FLAG FOR USER: ${userId}`)
+      console.log(`[v0] 🎯 Writing to users collection...`)
+
       await db.collection("users").doc(userId).set({ hasEverPurchasedFacelessprenuer: true }, { merge: true })
-      console.log(`[v0] ✅ Marked user ${userId} as having purchased Facelessprenuer`)
+
+      console.log(`[v0] ✅ SUCCESS! Marked user ${userId} as having purchased Facelessprenuer`)
+
+      // Verify the write
+      const userDoc = await db.collection("users").doc(userId).get()
+      const userData = userDoc.data()
+      console.log(
+        `[v0] 🔍 Verification: hasEverPurchasedFacelessprenuer = ${userData?.hasEverPurchasedFacelessprenuer}`,
+      )
     } catch (error) {
-      console.error("[v0] Failed to set hasEverPurchasedFacelessprenuer flag:", error)
+      console.error("[v0] ❌ CRITICAL ERROR: Failed to set hasEverPurchasedFacelessprenuer flag:", error)
     }
   }
 
