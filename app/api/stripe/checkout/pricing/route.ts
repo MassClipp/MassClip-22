@@ -12,8 +12,7 @@ const stripe = new Stripe(stripeKey, {
 })
 
 const FACELESS_PRO_PRICE_ID = "price_1SQ8yADheyb0pkWFK5LCP3Nd"
-const FACELESSPRENUER_FIRST_TIME_PRICE_ID = "price_1SPShFDheyb0pkWF6K9XzlpE" // With 3-day trial
-const FACELESSPRENUER_REGULAR_PRICE_ID = "price_1SPRLKDheyb0pkWFnRvP15AO" // No trial
+const FACELESSPRENUER_PRICE_ID = "price_1SPShFDheyb0pkWF6K9XzlpE" // $39/month
 
 async function hasEverPurchasedFacelessprenuer(userId: string): Promise<boolean> {
   try {
@@ -68,14 +67,15 @@ export async function POST(request: NextRequest) {
 
     let priceId: string
     let planName: string
+    let shouldApplyTrial = false
 
     if (plan === "faceless_pro") {
       priceId = FACELESS_PRO_PRICE_ID
       planName = "faceless_pro"
       console.log(`💲 [Membership Checkout] Faceless Pro - $29/month (no trial)`)
     } else if (plan === "facelessprenuer") {
-      if (!FACELESSPRENUER_FIRST_TIME_PRICE_ID || !FACELESSPRENUER_REGULAR_PRICE_ID) {
-        console.error("❌ [Membership Checkout] Missing Facelessprenuer price IDs")
+      if (!FACELESSPRENUER_PRICE_ID) {
+        console.error("❌ [Membership Checkout] Missing Facelessprenuer price ID")
         return NextResponse.json(
           { error: "Facelessprenuer plan is not configured. Please contact support." },
           { status: 500 },
@@ -87,15 +87,15 @@ export async function POST(request: NextRequest) {
       console.log("[v0] Membership Checkout - Facelessprenuer trial eligibility:", {
         userId: uid.substring(0, 8) + "...",
         hasEverPurchasedFacelessprenuer: hasEverPurchased,
-        willUseTrialPrice: !hasEverPurchased,
-        priceIdToUse: hasEverPurchased ? "REGULAR (no trial)" : "FIRST (with trial)",
+        willApplyTrial: !hasEverPurchased,
       })
 
-      priceId = hasEverPurchased ? FACELESSPRENUER_REGULAR_PRICE_ID : FACELESSPRENUER_FIRST_TIME_PRICE_ID
+      priceId = FACELESSPRENUER_PRICE_ID
       planName = "facelessprenuer"
+      shouldApplyTrial = !hasEverPurchased
 
       console.log(
-        `💲 [Membership Checkout] Facelessprenuer - ${hasEverPurchased ? "$39/month (returning buyer, no trial)" : "3-day FREE trial then $39/month (first-time buyer)"}`,
+        `💲 [Membership Checkout] Facelessprenuer - ${!hasEverPurchased ? "3-day FREE trial then $39/month (first-time buyer)" : "$39/month (returning buyer, no trial)"}`,
       )
     } else {
       console.error("❌ [Membership Checkout] Invalid plan:", plan)
@@ -137,6 +137,7 @@ export async function POST(request: NextRequest) {
       metadata: metadata,
       subscription_data: {
         metadata: metadata,
+        ...(shouldApplyTrial && { trial_period_days: 3 }),
       },
     }
 
@@ -182,7 +183,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       shouldShowTrial: !hasEverPurchased,
       hasUsedFreeTrial: hasEverPurchased,
-      priceId: hasEverPurchased ? FACELESSPRENUER_REGULAR_PRICE_ID : FACELESSPRENUER_FIRST_TIME_PRICE_ID,
+      priceId: FACELESSPRENUER_PRICE_ID,
     })
   } catch (error: any) {
     console.error("[v0] Error checking trial eligibility:", error)
