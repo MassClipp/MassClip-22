@@ -41,6 +41,38 @@ async function hasEverSubscribedToFacelessprenuer(userId: string): Promise<boole
     }
 
     if (!stripeCustomerId) {
+      console.log("[v0] No customer ID in Firestore, trying email search...")
+      const userDoc = await adminDb.collection("users").doc(userId).get()
+      const userEmail = userDoc.data()?.email
+
+      if (userEmail) {
+        try {
+          const customers = await stripe.customers.list({
+            email: userEmail,
+            limit: 1,
+          })
+
+          if (customers.data.length > 0 && customers.data[0]) {
+            stripeCustomerId = customers.data[0].id
+            console.log("[v0] Found customer by email:", stripeCustomerId)
+
+            // Backfill to both collections
+            await adminDb.collection("users").doc(userId).set(
+              {
+                stripeCustomerId,
+                updatedAt: new Date(),
+              },
+              { merge: true },
+            )
+            console.log("[v0] Backfilled customer ID to users collection")
+          }
+        } catch (emailError) {
+          console.error("[v0] Error searching by email:", emailError)
+        }
+      }
+    }
+
+    if (!stripeCustomerId) {
       console.log("[v0] No Stripe customer ID found for user, first-time buyer")
       return false
     }
