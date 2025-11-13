@@ -48,6 +48,11 @@ export async function POST(request: NextRequest) {
 
     const token = authHeader.split("Bearer ")[1]
 
+    if (!token || token.trim() === "") {
+      console.log("❌ [Vex Analyze v3] Empty token")
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 })
+    }
+
     try {
       const decodedToken = await getAuth().verifyIdToken(token)
       const userId = decodedToken.uid

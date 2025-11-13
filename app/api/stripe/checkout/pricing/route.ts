@@ -38,7 +38,10 @@ async function hasEverSubscribedToFacelessprenuer(userId: string): Promise<boole
     const hasEverHadFacelessprenuer = subscriptions.data.some((sub) =>
       sub.items.data.some(
         (item) =>
-          item.price.id === FACELESSPRENUER_FIRST_TIME_PRICE_ID || item.price.id === FACELESSPRENUER_REGULAR_PRICE_ID,
+          item.price.id === FACELESSPRENUER_FIRST_TIME_PRICE_ID ||
+          item.price.id === FACELESSPRENUER_REGULAR_PRICE_ID ||
+          item.price.id === "price_1SPRLKDheyb0pkWFnRvP15AO" || // Legacy first-time price
+          item.price.id === "price_1SPShFDheyb0pkWF6K9Xz1pE", // Legacy regular price
       ),
     )
 
