@@ -538,14 +538,18 @@ export async function POST(request: Request) {
         })
 
         await adminDb.collection("memberships").doc(uid).delete()
-        await adminDb.collection("freeUsers").doc(uid).set({
-          uid,
-          plan: "free",
-          downloadsUsed: 0,
-          bundlesCreated: 0,
-          createdAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp(),
-        })
+        
+        // Only update plan and reset usage counters, but keep hasUsedFreeTrial and hasEverPurchasedFacelessprenuer
+        await adminDb.collection("freeUsers").doc(uid).set(
+          {
+            uid,
+            plan: "free",
+            downloadsUsed: 0,
+            bundlesCreated: 0,
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        )
         console.log(`[WEBHOOK] User ${uid} moved to free tier and storefront deactivated`)
         break
       }
