@@ -235,10 +235,7 @@ export default function UpgradePage() {
   const isPayingOrOnTrial = subscriptionStatus?.hasActiveSubscription || subscriptionStatus?.isOnTrial
   const showFirstWeekPromo = false
 
-  const showTrialButtonForFacelessprenuer =
-    trialEligibility?.shouldShowTrial &&
-    !subscriptionStatus?.isOnTrial &&
-    subscriptionStatus?.currentPlan !== "facelessprenuer"
+  const showTrialButtonForFacelessprenuer = trialEligibility?.shouldShowTrial === true
 
   if (statusLoading) {
     return (
@@ -362,18 +359,13 @@ export default function UpgradePage() {
                 </div>
               </div>
               <div className="text-left md:text-right flex-shrink-0">
+                {showTrialButtonForFacelessprenuer && !statusLoading && (
+                  <p className="text-sm font-medium text-cyan-300 mb-1">3 days free</p>
+                )}
                 <p className="text-3xl md:text-4xl font-light text-white">$39</p>
                 <span className="text-sm text-zinc-400">/month</span>
               </div>
             </div>
-
-            {showTrialButtonForFacelessprenuer && !statusLoading && (
-              <div className="mb-4 p-3 rounded-lg bg-gradient-to-r from-cyan-500/10 to-blue-500/10 border border-cyan-400/30">
-                <p className="text-sm font-medium text-cyan-300 text-center">
-                  🎁 3-Day Free Trial Available - First Time Offer
-                </p>
-              </div>
-            )}
 
             <div className="space-y-2 mb-4">
               {[
