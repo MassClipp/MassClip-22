@@ -79,6 +79,14 @@ const LandingPage = () => {
           {/* VEX Interface Hero Section */}
           <LandingVexInterface />
 
+          <section className="py-16 px-6">
+            <div className="max-w-4xl mx-auto text-center">
+              <p className="text-white font-semibold text-lg md:text-xl leading-relaxed">
+                Scaling your faceless brand revenue deserves serious energy. That's why we're here.
+              </p>
+            </div>
+          </section>
+
           <section className="py-12 px-6">
             <div className="max-w-7xl mx-auto text-center">
               <h2 className="text-3xl md:text-4xl font-bold text-white mb-3">
@@ -113,7 +121,7 @@ const LandingPage = () => {
                 <div className="relative">
                   <div className="bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 shadow-2xl hover:shadow-teal-500/10 transition-all">
                     <img
-                      src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/7D123C64-C36B-4ACB-83ED-085BB60E2747.PNG-V4RkOLOzcrUKvamM8cZGlw9BRS9b5W.png"
+                      src="/images/7d123c64-c36b-4acb-83ed.png"
                       alt="HD Organized Folders Interface"
                       className="w-full rounded-lg shadow-lg"
                     />
@@ -176,7 +184,7 @@ const LandingPage = () => {
               <div className="mb-16 max-w-4xl mx-auto">
                 <div className="bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 shadow-2xl">
                   <img
-                    src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/copy_ACAD5C9D-0800-434F-BC27-E3DE625779B1.JPEG-6TlHbPShOaerHSsdCOqseRiuPKglfX.jpeg"
+                    src="/images/copy-acad5c9d-0800-434f-bc27.jpeg"
                     alt="VEX Chat Interface Example"
                     className="w-full rounded-lg shadow-lg"
                   />
