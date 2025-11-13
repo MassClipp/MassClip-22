@@ -100,6 +100,9 @@ function VexChat({ children }: VexChatProps) {
   } | null>(null)
   const [isLoadingTrialStatus, setIsLoadingTrialStatus] = useState(true)
   const [isLoadingMembershipStatus, setIsLoadingMembershipStatus] = useState(true)
+  const [trialEligibility, setTrialEligibility] = useState<{
+    shouldShowTrial: boolean
+  } | null>(null)
 
   // State for suggestions
   const [currentSuggestions, setCurrentSuggestions] = useState<string[]>([])
@@ -745,6 +748,17 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
       setIsLoadingTrialStatus(true)
       try {
         const token = await user.getIdToken()
+
+        const eligibilityRes = await fetch("/api/stripe/checkout/pricing", {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+
+        if (eligibilityRes.ok) {
+          const eligibilityData = await eligibilityRes.json()
+          console.log("[v0] Trial eligibility from pricing API:", eligibilityData)
+          setTrialEligibility({ shouldShowTrial: eligibilityData.shouldShowTrial })
+        }
+
         const response = await fetch("/api/user/trial-status", {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -839,11 +853,9 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
   const shouldShowTrialButton =
     !isLoadingTrialStatus &&
     !isLoadingMembershipStatus &&
-    trialStatus !== null &&
-    membershipStatus !== null &&
-    !trialStatus.hasUsedFreeTrial &&
-    !trialStatus.isOnTrial &&
-    (membershipStatus.plan === "free" || (membershipStatus.plan === "faceless_pro" && !membershipStatus.isActive)) // Show if Faceless Pro subscription ended
+    trialEligibility?.shouldShowTrial &&
+    !trialStatus?.isOnTrial &&
+    (membershipStatus?.plan === "free" || (membershipStatus?.plan === "faceless_pro" && !membershipStatus?.isActive)) // Show if Faceless Pro subscription ended
 
   useEffect(() => {
     if (!isLoadingTrialStatus && !isLoadingMembershipStatus) {
@@ -853,9 +865,17 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
         membershipStatus,
         isLoadingTrialStatus,
         isLoadingMembershipStatus,
+        trialEligibility, // Log trialEligibility as well
       })
     }
-  }, [shouldShowTrialButton, trialStatus, membershipStatus, isLoadingTrialStatus, isLoadingMembershipStatus])
+  }, [
+    shouldShowTrialButton,
+    trialStatus,
+    membershipStatus,
+    isLoadingTrialStatus,
+    isLoadingMembershipStatus,
+    trialEligibility,
+  ])
 
   return (
     <div className="flex min-h-screen relative bg-gradient-to-br from-black via-zinc-900 to-black">

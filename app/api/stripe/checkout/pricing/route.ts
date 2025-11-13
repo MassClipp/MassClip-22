@@ -227,3 +227,40 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Failed to create checkout session." }, { status: 500 })
   }
 }
+
+export async function GET(request: NextRequest) {
+  console.log("[v0] Trial Eligibility Check - GET request received")
+
+  if (!isFirebaseAdminInitialized()) {
+    return NextResponse.json({ error: "Server configuration error." }, { status: 500 })
+  }
+
+  try {
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "Missing authentication token" }, { status: 401 })
+    }
+
+    const idToken = authHeader.substring(7)
+    const decodedToken = await auth.verifyIdToken(idToken)
+    const { uid } = decodedToken
+
+    // Check if user has ever subscribed to Facelessprenuer
+    const hasEverHadFacelessprenuer = await hasEverSubscribedToFacelessprenuer(uid)
+
+    console.log("[v0] Trial Eligibility Result:", {
+      userId: uid.substring(0, 8) + "...",
+      hasEverHadFacelessprenuer,
+      shouldShowTrial: !hasEverHadFacelessprenuer,
+    })
+
+    return NextResponse.json({
+      shouldShowTrial: !hasEverHadFacelessprenuer,
+      hasUsedFreeTrial: hasEverHadFacelessprenuer,
+      priceId: hasEverHadFacelessprenuer ? FACELESSPRENUER_REGULAR_PRICE_ID : FACELESSPRENUER_FIRST_TIME_PRICE_ID,
+    })
+  } catch (error: any) {
+    console.error("[v0] Error checking trial eligibility:", error)
+    return NextResponse.json({ error: "Failed to check trial eligibility" }, { status: 500 })
+  }
+}

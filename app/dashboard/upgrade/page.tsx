@@ -54,6 +54,11 @@ export default function UpgradePage() {
   } | null>(null)
   const [statusLoading, setStatusLoading] = useState(true)
   const [checkingOut, setCheckingOut] = useState(false)
+  const [trialEligibility, setTrialEligibility] = useState<{
+    shouldShowTrial: boolean
+    hasUsedFreeTrial: boolean
+    priceId: string
+  } | null>(null)
 
   useEffect(() => {
     const success = searchParams.get("success")
@@ -94,6 +99,16 @@ export default function UpgradePage() {
 
       try {
         const idToken = await user.getIdToken()
+
+        const trialEligibilityRes = await fetch("/api/stripe/checkout/pricing", {
+          headers: { Authorization: `Bearer ${idToken}` },
+        })
+
+        if (trialEligibilityRes.ok) {
+          const trialData = await trialEligibilityRes.json()
+          console.log("[v0] Trial eligibility from pricing API:", trialData)
+          setTrialEligibility(trialData)
+        }
 
         const trialRes = await fetch("/api/user/trial-status", {
           headers: { Authorization: `Bearer ${idToken}` },
@@ -219,6 +234,11 @@ export default function UpgradePage() {
 
   const isPayingOrOnTrial = subscriptionStatus?.hasActiveSubscription || subscriptionStatus?.isOnTrial
   const showFirstWeekPromo = false
+
+  const showTrialButtonForFacelessprenuer =
+    trialEligibility?.shouldShowTrial &&
+    !subscriptionStatus?.isOnTrial &&
+    subscriptionStatus?.currentPlan !== "facelessprenuer"
 
   if (statusLoading) {
     return (
@@ -346,6 +366,14 @@ export default function UpgradePage() {
                 <span className="text-sm text-zinc-400">/month</span>
               </div>
             </div>
+
+            {showTrialButtonForFacelessprenuer && !statusLoading && (
+              <div className="mb-4 p-3 rounded-lg bg-gradient-to-r from-cyan-500/10 to-blue-500/10 border border-cyan-400/30">
+                <p className="text-sm font-medium text-cyan-300 text-center">
+                  🎁 3-Day Free Trial Available - First Time Offer
+                </p>
+              </div>
+            )}
 
             <div className="space-y-2 mb-4">
               {[
