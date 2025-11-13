@@ -12,8 +12,8 @@ const stripe = new Stripe(stripeKey, {
 })
 
 const FACELESS_PRO_PRICE_ID = "price_1SQ8yADheyb0pkWFK5LCP3Nd"
-const FACELESSPRENUER_FIRST_TIME_PRICE_ID = "price_1SPRLKDheyb0pkWFnRvP15A0" // With 3-day trial
-const FACELESSPRENUER_REGULAR_PRICE_ID = "price_1SPShFDheyb0pkWF6K9Xz1pE" // No trial
+const FACELESSPRENUER_FIRST_TIME_PRICE_ID = "price_1SPRLKDheyb0pkWFnRvP15AO" // With 3-day trial
+const FACELESSPRENUER_REGULAR_PRICE_ID = "price_1SPShFDheyb0pkWF6K9XzlpE" // No trial
 
 async function hasEverSubscribedToFacelessprenuer(userId: string): Promise<boolean> {
   try {
