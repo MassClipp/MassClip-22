@@ -192,10 +192,17 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
 
   if (planConfig.plan === "facelessprenuer") {
     try {
-      await db.collection("users").doc(userId).set({ hasEverPurchasedFacelessprenuer: true }, { merge: true })
-      console.log(`[v0] ✅ Marked user ${userId} as having purchased Facelessprenuer`)
+      // Mark in freeUsers that they've used their trial
+      await db.collection("freeUsers").doc(userId).set(
+        {
+          hasUsedFacelessprenuerTrial: true,
+          trialUsedAt: new Date().toISOString(),
+        },
+        { merge: true },
+      )
+      console.log(`[v0] ✅ Marked user ${userId} as having used Facelessprenuer trial`)
     } catch (error) {
-      console.error("[v0] Failed to set hasEverPurchasedFacelessprenuer flag:", error)
+      console.error("[v0] Failed to set hasUsedFacelessprenuerTrial flag:", error)
     }
   }
 
@@ -305,10 +312,16 @@ export async function processSubscriptionUpdated(subscription: Stripe.Subscripti
 
   if (planConfig.plan === "facelessprenuer") {
     try {
-      await db.collection("users").doc(userId).set({ hasEverPurchasedFacelessprenuer: true }, { merge: true })
-      console.log(`[v0] ✅ Marked user ${userId} as having purchased Facelessprenuer`)
+      await db.collection("freeUsers").doc(userId).set(
+        {
+          hasUsedFacelessprenuerTrial: true,
+          trialUsedAt: new Date().toISOString(),
+        },
+        { merge: true },
+      )
+      console.log(`[v0] ✅ Marked user ${userId} as having used Facelessprenuer trial`)
     } catch (error) {
-      console.error("[v0] Failed to set hasEverPurchasedFacelessprenuer flag:", error)
+      console.error("[v0] Failed to set hasUsedFacelessprenuerTrial flag:", error)
     }
   }
 

@@ -17,110 +17,18 @@ const FACELESSPRENUER_REGULAR_PRICE_ID = "price_1SPShFDheyb0pkWF6K9XzlpE" // No 
 
 async function hasEverSubscribedToFacelessprenuer(userId: string): Promise<boolean> {
   try {
-    const userDoc = await adminDb.collection("users").doc(userId).get()
-    let stripeCustomerId = userDoc.data()?.stripeCustomerId
+    console.log("[v0] Checking Firebase flag for user:", userId.substring(0, 8) + "...")
 
-    console.log("[v0] DEBUG - Starting trial check for user:", userId.substring(0, 8) + "...")
-    console.log("[v0] DEBUG - stripeCustomerId from users collection:", stripeCustomerId || "NOT FOUND")
+    // Check freeUsers collection for trial flag
+    const freeUserDoc = await adminDb.collection("freeUsers").doc(userId).get()
+    const hasUsedTrial = freeUserDoc.data()?.hasUsedFacelessprenuerTrial === true
 
-    // Fallback: check memberships collection if not in users
-    if (!stripeCustomerId) {
-      console.log("[v0] No stripeCustomerId in users collection, checking memberships...")
-      const membershipDoc = await adminDb.collection("memberships").doc(userId).get()
-      stripeCustomerId = membershipDoc.data()?.stripeCustomerId
+    console.log("[v0] Firebase hasUsedFacelessprenuerTrial:", hasUsedTrial)
+    console.log("[v0] Trial eligibility result:", !hasUsedTrial)
 
-      if (stripeCustomerId) {
-        console.log("[v0] Found stripeCustomerId in memberships:", stripeCustomerId)
-        // Backfill it to users collection for future lookups
-        await adminDb.collection("users").doc(userId).set(
-          {
-            stripeCustomerId,
-            updatedAt: new Date(),
-          },
-          { merge: true },
-        )
-        console.log("[v0] Backfilled stripeCustomerId to users collection")
-      }
-    }
-
-    if (!stripeCustomerId) {
-      console.log("[v0] No customer ID in Firestore, trying email search...")
-      const userDoc = await adminDb.collection("users").doc(userId).get()
-      const userEmail = userDoc.data()?.email
-
-      console.log("[v0] DEBUG - User email:", userEmail || "NOT FOUND")
-
-      if (userEmail) {
-        try {
-          const customers = await stripe.customers.list({
-            email: userEmail,
-            limit: 1,
-          })
-
-          console.log("[v0] DEBUG - Stripe customer search result:", customers.data.length, "customers found")
-
-          if (customers.data.length > 0 && customers.data[0]) {
-            stripeCustomerId = customers.data[0].id
-            console.log("[v0] Found customer by email:", stripeCustomerId)
-
-            // Backfill to both collections
-            await adminDb.collection("users").doc(userId).set(
-              {
-                stripeCustomerId,
-                updatedAt: new Date(),
-              },
-              { merge: true },
-            )
-            console.log("[v0] Backfilled customer ID to users collection")
-          }
-        } catch (emailError) {
-          console.error("[v0] Error searching by email:", emailError)
-        }
-      }
-    }
-
-    if (!stripeCustomerId) {
-      console.log("[v0] No Stripe customer ID found for user, first-time buyer")
-      return false
-    }
-
-    console.log("[v0] DEBUG - Querying Stripe subscriptions for customer:", stripeCustomerId)
-
-    // Query Stripe for all subscriptions ever created for this customer
-    const subscriptions = await stripe.subscriptions.list({
-      customer: stripeCustomerId,
-      limit: 100, // Get all historical subscriptions
-    })
-
-    console.log("[v0] DEBUG - Found", subscriptions.data.length, "total subscriptions")
-
-    subscriptions.data.forEach((sub, index) => {
-      const priceIds = sub.items.data.map((item) => item.price.id)
-      console.log(`[v0] DEBUG - Subscription ${index + 1}:`, {
-        id: sub.id,
-        status: sub.status,
-        priceIds: priceIds,
-      })
-    })
-
-    console.log("[v0] DEBUG - Looking for price IDs:", {
-      first: FACELESSPRENUER_FIRST_TIME_PRICE_ID,
-      regular: FACELESSPRENUER_REGULAR_PRICE_ID,
-    })
-
-    // Check if any subscription (active, canceled, or expired) had Facelessprenuer price ID
-    const hasEverHadFacelessprenuer = subscriptions.data.some((sub) =>
-      sub.items.data.some(
-        (item) =>
-          item.price.id === FACELESSPRENUER_FIRST_TIME_PRICE_ID || item.price.id === FACELESSPRENUER_REGULAR_PRICE_ID,
-      ),
-    )
-
-    console.log("[v0] DEBUG - Final result - hasEverHadFacelessprenuer:", hasEverHadFacelessprenuer)
-    console.log("[v0] User has ever subscribed to Facelessprenuer:", hasEverHadFacelessprenuer)
-    return hasEverHadFacelessprenuer
+    return hasUsedTrial
   } catch (error) {
-    console.error("[v0] Error checking Stripe subscription history:", error)
+    console.error("[v0] Error checking Firebase trial flag:", error)
     // On error, default to false (allow trial) to not block purchases
     return false
   }
