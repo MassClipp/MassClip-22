@@ -419,7 +419,16 @@ export async function POST(request: Request) {
               },
               { merge: true },
             )
-            console.log(`[v0] ✅ Facelessprenuer purchase flag set successfully`)
+            
+            const userRef = adminDb.collection("users").doc(uid)
+            await userRef.set(
+              {
+                hasEverPurchasedFacelessprenuer: true,
+                updatedAt: FieldValue.serverTimestamp(),
+              },
+              { merge: true },
+            )
+            console.log(`[v0] ✅ Facelessprenuer purchase flag set successfully in both collections`)
           } catch (error: any) {
             console.error(`[v0] ❌ Failed to set Facelessprenuer purchase flag:`, error.message)
           }
