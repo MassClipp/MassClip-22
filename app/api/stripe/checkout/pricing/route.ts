@@ -20,6 +20,9 @@ async function hasEverSubscribedToFacelessprenuer(userId: string): Promise<boole
     const userDoc = await adminDb.collection("users").doc(userId).get()
     let stripeCustomerId = userDoc.data()?.stripeCustomerId
 
+    console.log("[v0] DEBUG - Starting trial check for user:", userId.substring(0, 8) + "...")
+    console.log("[v0] DEBUG - stripeCustomerId from users collection:", stripeCustomerId || "NOT FOUND")
+
     // Fallback: check memberships collection if not in users
     if (!stripeCustomerId) {
       console.log("[v0] No stripeCustomerId in users collection, checking memberships...")
@@ -45,12 +48,16 @@ async function hasEverSubscribedToFacelessprenuer(userId: string): Promise<boole
       const userDoc = await adminDb.collection("users").doc(userId).get()
       const userEmail = userDoc.data()?.email
 
+      console.log("[v0] DEBUG - User email:", userEmail || "NOT FOUND")
+
       if (userEmail) {
         try {
           const customers = await stripe.customers.list({
             email: userEmail,
             limit: 1,
           })
+
+          console.log("[v0] DEBUG - Stripe customer search result:", customers.data.length, "customers found")
 
           if (customers.data.length > 0 && customers.data[0]) {
             stripeCustomerId = customers.data[0].id
@@ -77,13 +84,29 @@ async function hasEverSubscribedToFacelessprenuer(userId: string): Promise<boole
       return false
     }
 
+    console.log("[v0] DEBUG - Querying Stripe subscriptions for customer:", stripeCustomerId)
+
     // Query Stripe for all subscriptions ever created for this customer
     const subscriptions = await stripe.subscriptions.list({
       customer: stripeCustomerId,
       limit: 100, // Get all historical subscriptions
     })
 
-    console.log("[v0] Found", subscriptions.data.length, "total subscriptions for customer")
+    console.log("[v0] DEBUG - Found", subscriptions.data.length, "total subscriptions")
+
+    subscriptions.data.forEach((sub, index) => {
+      const priceIds = sub.items.data.map((item) => item.price.id)
+      console.log(`[v0] DEBUG - Subscription ${index + 1}:`, {
+        id: sub.id,
+        status: sub.status,
+        priceIds: priceIds,
+      })
+    })
+
+    console.log("[v0] DEBUG - Looking for price IDs:", {
+      first: FACELESSPRENUER_FIRST_TIME_PRICE_ID,
+      regular: FACELESSPRENUER_REGULAR_PRICE_ID,
+    })
 
     // Check if any subscription (active, canceled, or expired) had Facelessprenuer price ID
     const hasEverHadFacelessprenuer = subscriptions.data.some((sub) =>
@@ -93,6 +116,7 @@ async function hasEverSubscribedToFacelessprenuer(userId: string): Promise<boole
       ),
     )
 
+    console.log("[v0] DEBUG - Final result - hasEverHadFacelessprenuer:", hasEverHadFacelessprenuer)
     console.log("[v0] User has ever subscribed to Facelessprenuer:", hasEverHadFacelessprenuer)
     return hasEverHadFacelessprenuer
   } catch (error) {
