@@ -24,8 +24,6 @@ export interface FreeUserDoc {
   // Permanent trial tracking field
   hasUsedFreeTrial?: boolean // Permanent flag - once true, never resets
   hasEverPurchasedFacelessprenuer?: boolean // Track if user ever purchased Facelessprenuer (for trial eligibility)
-  hasUsedFacelessprenuerTrial?: boolean // New flag for Facelessprenuer trial (set by webhook)
-  trialUsedAt?: string // Timestamp when Facelessprenuer trial was used
   trialActive?: boolean // Indicates if the user is currently in a trial period
   hasUsedFirstWeekDiscount?: boolean // Track if user has used $3 first week promo on ANY plan
   firstWeekDiscountUsedDate?: any // When they used the discount
@@ -257,8 +255,6 @@ export async function getFreeUserLimits(uid: string): Promise<{
   daysUntilReset: number
   hasUsedFreeTrial?: boolean
   hasEverPurchasedFacelessprenuer?: boolean
-  hasUsedFacelessprenuerTrial?: boolean
-  trialUsedAt?: string
   trialActive?: boolean
   hasUsedFirstWeekDiscount?: boolean
 }> {
@@ -285,8 +281,6 @@ export async function getFreeUserLimits(uid: string): Promise<{
       daysUntilReset: 0,
       hasUsedFreeTrial: false,
       hasEverPurchasedFacelessprenuer: false,
-      hasUsedFacelessprenuerTrial: false,
-      trialUsedAt: "",
       trialActive: false,
       hasUsedFirstWeekDiscount: false,
     }
@@ -345,8 +339,6 @@ export async function getFreeUserLimits(uid: string): Promise<{
       daysUntilReset,
       hasUsedFreeTrial: updatedFreeUser.hasUsedFreeTrial ?? false,
       hasEverPurchasedFacelessprenuer: updatedFreeUser.hasEverPurchasedFacelessprenuer ?? false,
-      hasUsedFacelessprenuerTrial: updatedFreeUser.hasUsedFacelessprenuerTrial ?? false,
-      trialUsedAt: updatedFreeUser.trialUsedAt ?? "",
       trialActive: updatedFreeUser.trialActive ?? false,
       hasUsedFirstWeekDiscount: updatedFreeUser.hasUsedFirstWeekDiscount ?? false,
     }
@@ -379,8 +371,6 @@ export async function getFreeUserLimits(uid: string): Promise<{
     daysUntilReset,
     hasUsedFreeTrial: freeUser.hasUsedFreeTrial ?? false,
     hasEverPurchasedFacelessprenuer: freeUser.hasEverPurchasedFacelessprenuer ?? false,
-    hasUsedFacelessprenuerTrial: freeUser.hasUsedFacelessprenuerTrial ?? false,
-    trialUsedAt: freeUser.trialUsedAt ?? "",
     trialActive: freeUser.trialActive ?? false,
     hasUsedFirstWeekDiscount: freeUser.hasUsedFirstWeekDiscount ?? false,
   }

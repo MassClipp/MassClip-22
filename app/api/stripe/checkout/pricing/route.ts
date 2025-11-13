@@ -15,20 +15,22 @@ const FACELESS_PRO_PRICE_ID = "price_1SQ8yADheyb0pkWFK5LCP3Nd"
 const FACELESSPRENUER_FIRST_TIME_PRICE_ID = "price_1SPRLKDheyb0pkWFnRvP15AO" // With 3-day trial
 const FACELESSPRENUER_REGULAR_PRICE_ID = "price_1SPShFDheyb0pkWF6K9XzlpE" // No trial
 
-async function hasEverSubscribedToFacelessprenuer(userId: string): Promise<boolean> {
+async function hasEverPurchasedFacelessprenuer(userId: string): Promise<boolean> {
   try {
-    console.log("[v0] Checking Firebase flag for user:", userId.substring(0, 8) + "...")
+    const userDoc = await adminDb.collection("users").doc(userId).get()
+    const userData = userDoc.data()
 
-    // Check freeUsers collection for trial flag
-    const freeUserDoc = await adminDb.collection("freeUsers").doc(userId).get()
-    const hasUsedTrial = freeUserDoc.data()?.hasUsedFacelessprenuerTrial === true
+    const hasPurchased = userData?.hasEverPurchasedFacelessprenuer === true
 
-    console.log("[v0] Firebase hasUsedFacelessprenuerTrial:", hasUsedTrial)
-    console.log("[v0] Trial eligibility result:", !hasUsedTrial)
+    console.log("[v0] Trial check from Firebase:", {
+      userId: userId.substring(0, 8) + "...",
+      hasEverPurchasedFacelessprenuer: hasPurchased,
+      shouldShowTrial: !hasPurchased,
+    })
 
-    return hasUsedTrial
+    return hasPurchased
   } catch (error) {
-    console.error("[v0] Error checking Firebase trial flag:", error)
+    console.error("[v0] Error checking Firebase flag:", error)
     // On error, default to false (allow trial) to not block purchases
     return false
   }
@@ -65,12 +67,10 @@ export async function POST(request: NextRequest) {
     console.log("✅ [Membership Checkout] User authenticated:", { uid, email, plan })
 
     let priceId: string
-    let trialPeriodDays: number | undefined = undefined
     let planName: string
 
     if (plan === "faceless_pro") {
       priceId = FACELESS_PRO_PRICE_ID
-      trialPeriodDays = undefined // No trial
       planName = "faceless_pro"
       console.log(`💲 [Membership Checkout] Faceless Pro - $29/month (no trial)`)
     } else if (plan === "facelessprenuer") {
@@ -82,21 +82,20 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      const hasEverHadFacelessprenuer = await hasEverSubscribedToFacelessprenuer(uid)
+      const hasEverPurchased = await hasEverPurchasedFacelessprenuer(uid)
 
       console.log("[v0] Membership Checkout - Facelessprenuer trial eligibility:", {
         userId: uid.substring(0, 8) + "...",
-        hasEverHadFacelessprenuer,
-        willUseTrialPrice: !hasEverHadFacelessprenuer,
-        priceIdToUse: hasEverHadFacelessprenuer ? "REGULAR (no trial)" : "FIRST (with trial)",
+        hasEverPurchasedFacelessprenuer: hasEverPurchased,
+        willUseTrialPrice: !hasEverPurchased,
+        priceIdToUse: hasEverPurchased ? "REGULAR (no trial)" : "FIRST (with trial)",
       })
 
-      priceId = hasEverHadFacelessprenuer ? FACELESSPRENUER_REGULAR_PRICE_ID : FACELESSPRENUER_FIRST_TIME_PRICE_ID
-      trialPeriodDays = undefined // Trial is built into the FIRST price ID in Stripe
+      priceId = hasEverPurchased ? FACELESSPRENUER_REGULAR_PRICE_ID : FACELESSPRENUER_FIRST_TIME_PRICE_ID
       planName = "facelessprenuer"
 
       console.log(
-        `💲 [Membership Checkout] Facelessprenuer - ${hasEverHadFacelessprenuer ? "$39/month (returning buyer, no trial)" : "3-day FREE trial then $39/month (first-time buyer)"}`,
+        `💲 [Membership Checkout] Facelessprenuer - ${hasEverPurchased ? "$39/month (returning buyer, no trial)" : "3-day FREE trial then $39/month (first-time buyer)"}`,
       )
     } else {
       console.error("❌ [Membership Checkout] Invalid plan:", plan)
@@ -111,7 +110,7 @@ export async function POST(request: NextRequest) {
       buyerEmail: email || "",
       buyerName: name || email?.split("@")[0] || "",
       plan: planName,
-      priceId: priceId, // CRITICAL: Include priceId in metadata for webhooks
+      priceId: priceId,
       contentType: "membership",
       source: "dashboard_membership_upgrade",
     }
@@ -172,19 +171,18 @@ export async function GET(request: NextRequest) {
     const decodedToken = await auth.verifyIdToken(idToken)
     const { uid } = decodedToken
 
-    // Check if user has ever subscribed to Facelessprenuer
-    const hasEverHadFacelessprenuer = await hasEverSubscribedToFacelessprenuer(uid)
+    const hasEverPurchased = await hasEverPurchasedFacelessprenuer(uid)
 
     console.log("[v0] Trial Eligibility Result:", {
       userId: uid.substring(0, 8) + "...",
-      hasEverHadFacelessprenuer,
-      shouldShowTrial: !hasEverHadFacelessprenuer,
+      hasEverPurchasedFacelessprenuer: hasEverPurchased,
+      shouldShowTrial: !hasEverPurchased,
     })
 
     return NextResponse.json({
-      shouldShowTrial: !hasEverHadFacelessprenuer,
-      hasUsedFreeTrial: hasEverHadFacelessprenuer,
-      priceId: hasEverHadFacelessprenuer ? FACELESSPRENUER_REGULAR_PRICE_ID : FACELESSPRENUER_FIRST_TIME_PRICE_ID,
+      shouldShowTrial: !hasEverPurchased,
+      hasUsedFreeTrial: hasEverPurchased,
+      priceId: hasEverPurchased ? FACELESSPRENUER_REGULAR_PRICE_ID : FACELESSPRENUER_FIRST_TIME_PRICE_ID,
     })
   } catch (error: any) {
     console.error("[v0] Error checking trial eligibility:", error)

@@ -1,96 +1,89 @@
-// Backfill script to update Firebase with trial usage flags from Stripe history
-// Run this once to migrate existing users to the new Firebase-based trial detection system
-
 import Stripe from "stripe"
-import { adminDb } from "../lib/firebase-admin"
+import { adminDb } from "@/lib/firebase-admin"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2023-10-16",
+  apiVersion: "2024-06-20",
 })
 
-// The two Facelessprenuer price IDs
-const FACELESSPRENUER_FIRST_PRICE = "price_1SPRLKDheyb0pkWFnRvP15AO" // First-time trial
-const FACELESSPRENUER_REGULAR_PRICE = "price_1SPShFDheyb0pkWF6K9XzlpE" // Regular
+const FACELESSPRENUER_FIRST_PRICE_ID = "price_1SPRLKDheyb0pkWFnRvP15AO"
+const FACELESSPRENUER_REGULAR_PRICE_ID = "price_1SPShFDheyb0pkWF6K9XzlpE"
 
 async function backfillTrialFlags() {
-  console.log("🔄 Starting trial flags backfill...")
-  console.log(`Checking for subscriptions with price IDs:`)
-  console.log(`  - Trial: ${FACELESSPRENUER_FIRST_PRICE}`)
-  console.log(`  - Regular: ${FACELESSPRENUER_REGULAR_PRICE}`)
+  console.log("[v0] Starting backfill of hasEverPurchasedFacelessprenuer flags...")
 
-  try {
-    // Get all subscriptions (paginated)
-    let hasMore = true
-    let startingAfter: string | undefined = undefined
-    let totalProcessed = 0
-    let totalUpdated = 0
+  const usersSnapshot = await adminDb.collection("users").get()
+  let processedCount = 0
+  let flagsSetCount = 0
 
-    while (hasMore) {
-      const subscriptions = await stripe.subscriptions.list({
-        limit: 100,
-        starting_after: startingAfter,
-      })
+  for (const userDoc of usersSnapshot.docs) {
+    const userId = userDoc.id
+    const userData = userDoc.data()
+    const stripeCustomerId = userData.stripeCustomerId
+    const email = userData.email
 
-      for (const subscription of subscriptions.data) {
-        const priceId = subscription.items.data[0]?.price.id
+    processedCount++
 
-        // Check if this is a Facelessprenuer subscription
-        if (priceId === FACELESSPRENUER_FIRST_PRICE || priceId === FACELESSPRENUER_REGULAR_PRICE) {
-          const customerId =
-            typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id
+    if (processedCount % 10 === 0) {
+      console.log(`[v0] Processed ${processedCount}/${usersSnapshot.docs.length} users...`)
+    }
 
-          // Find user by Stripe customer ID
-          const membershipsSnapshot = await adminDb
-            .collection("memberships")
-            .where("stripeCustomerId", "==", customerId)
-            .limit(1)
-            .get()
+    let customerId = stripeCustomerId
 
-          if (!membershipsSnapshot.empty) {
-            const userId = membershipsSnapshot.docs[0].id
-
-            // Update freeUsers collection with trial flag
-            await adminDb.collection("freeUsers").doc(userId).set(
-              {
-                hasUsedFacelessprenuerTrial: true,
-                trialBackfilledAt: new Date().toISOString(),
-                trialBackfilledFromSubscription: subscription.id,
-              },
-              { merge: true },
-            )
-
-            console.log(`✅ Updated user ${userId} (subscription: ${subscription.id})`)
-            totalUpdated++
-          } else {
-            console.log(`⚠️ No user found for customer ${customerId}`)
-          }
-
-          totalProcessed++
+    if (!customerId && email) {
+      try {
+        const customers = await stripe.customers.list({ email, limit: 1 })
+        if (customers.data.length > 0) {
+          customerId = customers.data[0].id
+          await adminDb.collection("users").doc(userId).update({ stripeCustomerId: customerId })
+          console.log(`[v0] Found and saved customer ID for user ${userId.substring(0, 8)}...`)
         }
-      }
-
-      hasMore = subscriptions.has_more
-      if (hasMore && subscriptions.data.length > 0) {
-        startingAfter = subscriptions.data[subscriptions.data.length - 1].id
+      } catch (error) {
+        console.error(`[v0] Error searching Stripe for user ${userId.substring(0, 8)}:`, error)
       }
     }
 
-    console.log(`\n✅ Backfill complete!`)
-    console.log(`   Total Facelessprenuer subscriptions processed: ${totalProcessed}`)
-    console.log(`   Users updated with trial flag: ${totalUpdated}`)
-  } catch (error) {
-    console.error("❌ Backfill failed:", error)
-    throw error
+    if (!customerId) {
+      continue
+    }
+
+    try {
+      const subscriptions = await stripe.subscriptions.list({
+        customer: customerId,
+        limit: 100,
+      })
+
+      const hasEverHadFacelessprenuer = subscriptions.data.some((sub) =>
+        sub.items.data.some(
+          (item) =>
+            item.price.id === FACELESSPRENUER_FIRST_PRICE_ID || item.price.id === FACELESSPRENUER_REGULAR_PRICE_ID,
+        ),
+      )
+
+      if (hasEverHadFacelessprenuer) {
+        await adminDb.collection("users").doc(userId).update({
+          hasEverPurchasedFacelessprenuer: true,
+        })
+        flagsSetCount++
+        console.log(`[v0] ✅ Set flag for user ${userId.substring(0, 8)}... (total: ${flagsSetCount})`)
+      }
+    } catch (error) {
+      console.error(`[v0] Error checking subscriptions for user ${userId.substring(0, 8)}:`, error)
+    }
   }
+
+  console.log(`[v0] ========================================`)
+  console.log(`[v0] Backfill complete!`)
+  console.log(`[v0] Total users processed: ${processedCount}`)
+  console.log(`[v0] Flags set: ${flagsSetCount}`)
+  console.log(`[v0] ========================================`)
 }
 
-// Run the backfill
 backfillTrialFlags()
   .then(() => {
-    console.log("🎉 Backfill script completed successfully")
+    console.log("[v0] Script finished successfully")
     process.exit(0)
   })
   .catch((error) => {
-    console.error("💥 Backfill script failed:", error)
+    console.error("[v0] Script failed:", error)
     process.exit(1)
   })
