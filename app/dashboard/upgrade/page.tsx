@@ -218,11 +218,7 @@ export default function UpgradePage() {
   }
 
   const isPayingOrOnTrial = subscriptionStatus?.hasActiveSubscription || subscriptionStatus?.isOnTrial
-  const showFirstWeekPromo =
-    subscriptionStatus &&
-    !subscriptionStatus.hasUsedFreeTrial &&
-    !subscriptionStatus.isOnTrial &&
-    subscriptionStatus.currentPlan !== "facelessprenuer"
+  const showFirstWeekPromo = false
 
   if (statusLoading) {
     return (
@@ -346,18 +342,8 @@ export default function UpgradePage() {
                 </div>
               </div>
               <div className="text-left md:text-right flex-shrink-0">
-                {showFirstWeekPromo ? (
-                  <>
-                    <p className="text-3xl md:text-4xl font-light text-white">3 days</p>
-                    <span className="text-sm text-zinc-400">free trial</span>
-                    <p className="text-base md:text-lg text-zinc-500 mt-1">then $39/month</p>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-3xl md:text-4xl font-light text-white">$39</p>
-                    <span className="text-sm text-zinc-400">/month</span>
-                  </>
-                )}
+                <p className="text-3xl md:text-4xl font-light text-white">$39</p>
+                <span className="text-sm text-zinc-400">/month</span>
               </div>
             </div>
 

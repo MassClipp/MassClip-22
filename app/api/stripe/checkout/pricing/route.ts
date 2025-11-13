@@ -76,40 +76,10 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      let hasUsedTrial = false
-      try {
-        const freeUserDoc = await adminDb.collection("freeUsers").doc(uid).get()
-        const membershipDoc = await adminDb.collection("memberships").doc(uid).get()
-
-        if (freeUserDoc.exists) {
-          const freeUserData = freeUserDoc.data()
-          hasUsedTrial = freeUserData?.hasUsedFreeTrial || false
-        }
-
-        // Also check if they already have or had Facelessprenuer membership
-        if (membershipDoc.exists) {
-          const membershipData = membershipDoc.data()
-          if (membershipData?.plan === "facelessprenuer") {
-            hasUsedTrial = true
-            console.log("[v0] User already has/had Facelessprenuer - no trial")
-          }
-        }
-
-        console.log("[v0] Trial check result:", {
-          hasUsedTrial,
-          checkedFreeUsers: freeUserDoc.exists,
-          checkedMemberships: membershipDoc.exists,
-        })
-      } catch (error) {
-        console.error("⚠️ [Membership Checkout] Error checking trial status:", error)
-      }
-
-      priceId = hasUsedTrial ? FACELESSPRENUER_REGULAR_PRICE_ID : FACELESSPRENUER_FIRST_TIME_PRICE_ID
-      trialPeriodDays = hasUsedTrial ? undefined : 3
+      priceId = FACELESSPRENUER_REGULAR_PRICE_ID
+      trialPeriodDays = undefined
       planName = "facelessprenuer"
-      console.log(
-        `💲 [Membership Checkout] Facelessprenuer - ${hasUsedTrial ? "$39/month (no trial)" : "3-day trial then $39/month"}`,
-      )
+      console.log(`💲 [Membership Checkout] Facelessprenuer - $39/month (no trial)`)
     } else {
       console.error("❌ [Membership Checkout] Invalid plan:", plan)
       return NextResponse.json({ error: "Invalid plan selected." }, { status: 400 })
