@@ -162,13 +162,12 @@ export async function POST(request: NextRequest) {
         priceIdToUse: hasEverHadFacelessprenuer ? "REGULAR (no trial)" : "FIRST (with trial)",
       })
 
-      // First-time buyers get the trial price, returning buyers get regular price
-      priceId = hasEverHadFacelessprenuer ? FACELESSPRENUER_REGULAR_PRICE_ID : FACELESSPRENUER_FIRST_TIME_PRICE_ID
-      trialPeriodDays = undefined // Trial is built into the price ID itself for Facelessprenuer
+      priceId = FACELESSPRENUER_REGULAR_PRICE_ID // Always use regular price ID
+      trialPeriodDays = hasEverHadFacelessprenuer ? undefined : 3 // Only give trial to first-time buyers
       planName = "facelessprenuer"
 
       console.log(
-        `💲 [Membership Checkout] Facelessprenuer - ${hasEverHadFacelessprenuer ? "$39/month (returning buyer, no trial)" : "3-day trial then $39/month (first-time buyer)"}`,
+        `💲 [Membership Checkout] Facelessprenuer - ${hasEverHadFacelessprenuer ? "$39/month (returning buyer, no trial)" : "3-day FREE trial then $39/month (first-time buyer)"}`,
       )
     } else {
       console.error("❌ [Membership Checkout] Invalid plan:", plan)
