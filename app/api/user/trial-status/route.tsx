@@ -17,7 +17,13 @@ export async function GET(req: NextRequest) {
     console.log("[v0] Trial Status - Checking for user:", userId.substring(0, 8) + "...")
 
     const freeUser = await getFreeUser(userId)
-    let hasUsedFreeTrial = freeUser?.hasUsedFreeTrial === true
+    const hasUsedFreeTrial = freeUser?.hasUsedFreeTrial === true
+
+    console.log("[v0] Trial Status - FreeUser data:", {
+      exists: !!freeUser,
+      hasUsedFreeTrial: freeUser?.hasUsedFreeTrial,
+      hasEverPurchasedFacelessprenuer: freeUser?.hasEverPurchasedFacelessprenuer,
+    })
 
     // Get membership status (this will return null if trial has expired)
     const membership = await getMembership(userId)
@@ -45,10 +51,7 @@ export async function GET(req: NextRequest) {
         membership?.plan === "creator_pro" ||
         membership?.plan === "creator_vip")
 
-    // Only users who purchased Facelessprenuer have used the trial
-    if (hasPurchasedFacelessprenuer) {
-      hasUsedFreeTrial = true
-    }
+    // The flag is now permanently stored in freeUsers collection and set by the webhook
 
     console.log("[v0] Trial Status - Membership data:", {
       exists: !!membership,

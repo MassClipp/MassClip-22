@@ -23,6 +23,7 @@ export interface FreeUserDoc {
   hasLimitedOrganization: boolean
   // Permanent trial tracking field
   hasUsedFreeTrial?: boolean // Permanent flag - once true, never resets
+  hasEverPurchasedFacelessprenuer?: boolean // Track if user ever purchased Facelessprenuer (for trial eligibility)
   trialActive?: boolean // Indicates if the user is currently in a trial period
   hasUsedFirstWeekDiscount?: boolean // Track if user has used $3 first week promo on ANY plan
   firstWeekDiscountUsedDate?: any // When they used the discount
@@ -253,6 +254,7 @@ export async function getFreeUserLimits(uid: string): Promise<{
   hasLimitedOrganization: boolean
   daysUntilReset: number
   hasUsedFreeTrial?: boolean
+  hasEverPurchasedFacelessprenuer?: boolean
   trialActive?: boolean
   hasUsedFirstWeekDiscount?: boolean
 }> {
@@ -278,6 +280,7 @@ export async function getFreeUserLimits(uid: string): Promise<{
       ...STARTER_TIER_DEFAULTS,
       daysUntilReset: 0,
       hasUsedFreeTrial: false,
+      hasEverPurchasedFacelessprenuer: false,
       trialActive: false,
       hasUsedFirstWeekDiscount: false,
     }
@@ -335,6 +338,7 @@ export async function getFreeUserLimits(uid: string): Promise<{
       hasLimitedOrganization: updatedFreeUser.hasLimitedOrganization,
       daysUntilReset,
       hasUsedFreeTrial: updatedFreeUser.hasUsedFreeTrial ?? false,
+      hasEverPurchasedFacelessprenuer: updatedFreeUser.hasEverPurchasedFacelessprenuer ?? false,
       trialActive: updatedFreeUser.trialActive ?? false,
       hasUsedFirstWeekDiscount: updatedFreeUser.hasUsedFirstWeekDiscount ?? false,
     }
@@ -366,6 +370,7 @@ export async function getFreeUserLimits(uid: string): Promise<{
     hasLimitedOrganization: freeUser.hasLimitedOrganization,
     daysUntilReset,
     hasUsedFreeTrial: freeUser.hasUsedFreeTrial ?? false,
+    hasEverPurchasedFacelessprenuer: freeUser.hasEverPurchasedFacelessprenuer ?? false,
     trialActive: freeUser.trialActive ?? false,
     hasUsedFirstWeekDiscount: freeUser.hasUsedFirstWeekDiscount ?? false,
   }

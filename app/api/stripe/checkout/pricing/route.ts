@@ -78,12 +78,19 @@ export async function POST(request: NextRequest) {
 
       let hasEverPurchasedFacelessprenuer = false
       try {
-        const userDoc = await adminDb.collection("users").doc(uid).get()
-        if (userDoc.exists) {
-          const userData = userDoc.data()
-          // Check if they've ever had Facelessprenuer subscription before
-          hasEverPurchasedFacelessprenuer = userData?.hasEverPurchasedFacelessprenuer || false
+        const freeUserDoc = await adminDb.collection("freeUsers").doc(uid).get()
+        if (freeUserDoc.exists) {
+          const freeUserData = freeUserDoc.data()
+          // Check if they've ever had Facelessprenuer subscription before (permanent flag set by webhook)
+          hasEverPurchasedFacelessprenuer = freeUserData?.hasUsedFreeTrial || false
         }
+
+        console.log("[v0] Membership Checkout - Facelessprenuer trial eligibility check:", {
+          userId: uid.substring(0, 8) + "...",
+          hasUsedFreeTrial: freeUserDoc.exists ? freeUserDoc.data()?.hasUsedFreeTrial : "no freeUser doc",
+          hasEverPurchasedFacelessprenuer,
+          willUseTrialPrice: !hasEverPurchasedFacelessprenuer,
+        })
       } catch (error) {
         console.error("⚠️ [Membership Checkout] Error checking Facelessprenuer history:", error)
       }

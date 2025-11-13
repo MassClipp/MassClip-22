@@ -386,6 +386,24 @@ export async function POST(request: Request) {
           }
         }
 
+        if (FACELESSPRENUER_PRICE_IDS.includes(priceId) && sub.status === "active") {
+          console.log(`[v0] Facelessprenuer subscription active - marking hasUsedFreeTrial as true for UID: ${uid}`)
+          try {
+            const freeUserRef = adminDb.collection("freeUsers").doc(uid)
+            await freeUserRef.set(
+              {
+                hasUsedFreeTrial: true,
+                hasEverPurchasedFacelessprenuer: true,
+                updatedAt: FieldValue.serverTimestamp(),
+              },
+              { merge: true },
+            )
+            console.log(`[v0] ✅ Facelessprenuer purchase flag set successfully`)
+          } catch (error: any) {
+            console.error(`[v0] ❌ Failed to set Facelessprenuer purchase flag:`, error.message)
+          }
+        }
+
         if (FACELESSPRENUER_PRICE_IDS.includes(priceId)) {
           await updateFacelessprenuerMembership({
             uid,
