@@ -12,8 +12,8 @@ const stripe = new Stripe(stripeKey, {
 })
 
 const FACELESS_PRO_PRICE_ID = "price_1SQ8yADheyb0pkWFK5LCP3Nd"
-const FACELESSPRENUER_FIRST_TIME_PRICE_ID = process.env.FACELESSPRENUER_FIRST
-const FACELESSPRENUER_REGULAR_PRICE_ID = process.env.FACELESSPRENUER_REGULAR
+const FACELESSPRENUER_FIRST_TIME_PRICE_ID = "price_1SPRLKDheyb0pkWFnRvP15A0" // With 3-day trial
+const FACELESSPRENUER_REGULAR_PRICE_ID = "price_1SPShFDheyb0pkWF6K9Xz1pE" // No trial
 
 async function hasEverSubscribedToFacelessprenuer(userId: string): Promise<boolean> {
   try {
@@ -89,10 +89,7 @@ async function hasEverSubscribedToFacelessprenuer(userId: string): Promise<boole
     const hasEverHadFacelessprenuer = subscriptions.data.some((sub) =>
       sub.items.data.some(
         (item) =>
-          item.price.id === FACELESSPRENUER_FIRST_TIME_PRICE_ID ||
-          item.price.id === FACELESSPRENUER_REGULAR_PRICE_ID ||
-          item.price.id === "price_1SPRLKDheyb0pkWFnRvP15AO" || // Legacy first-time price
-          item.price.id === "price_1SPShFDheyb0pkWF6K9Xz1pE", // Legacy regular price
+          item.price.id === FACELESSPRENUER_FIRST_TIME_PRICE_ID || item.price.id === FACELESSPRENUER_REGULAR_PRICE_ID,
       ),
     )
 
@@ -162,8 +159,8 @@ export async function POST(request: NextRequest) {
         priceIdToUse: hasEverHadFacelessprenuer ? "REGULAR (no trial)" : "FIRST (with trial)",
       })
 
-      priceId = FACELESSPRENUER_REGULAR_PRICE_ID // Always use regular price ID
-      trialPeriodDays = hasEverHadFacelessprenuer ? undefined : 3 // Only give trial to first-time buyers
+      priceId = hasEverHadFacelessprenuer ? FACELESSPRENUER_REGULAR_PRICE_ID : FACELESSPRENUER_FIRST_TIME_PRICE_ID
+      trialPeriodDays = undefined // Trial is built into the FIRST price ID in Stripe
       planName = "facelessprenuer"
 
       console.log(
@@ -209,7 +206,6 @@ export async function POST(request: NextRequest) {
       metadata: metadata,
       subscription_data: {
         metadata: metadata,
-        ...(trialPeriodDays && { trial_period_days: trialPeriodDays }),
       },
     }
 
