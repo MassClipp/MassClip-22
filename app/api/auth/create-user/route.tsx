@@ -58,11 +58,15 @@ export async function POST(request: NextRequest) {
     try {
       console.log("[v0] Creating membership record...")
       const membership = await ensureMembership(uid, email)
-      console.log("[v0] Membership record created/ensured:", {
-        uid: membership.uid,
-        plan: membership.plan,
-        status: membership.status,
-      })
+      if (membership) {
+        console.log("[v0] Membership record created/ensured:", {
+          uid: membership.uid,
+          plan: membership.plan,
+          status: membership.status,
+        })
+      } else {
+        console.warn("[v0] ensureMembership returned null - membership may not have been created")
+      }
     } catch (error) {
       console.error("[v0] Failed to create membership record:", error)
       // Don't fail the entire request if membership fails, since freeUsers is the primary tracker

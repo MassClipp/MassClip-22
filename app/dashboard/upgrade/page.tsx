@@ -235,7 +235,10 @@ export default function UpgradePage() {
   const isPayingOrOnTrial = subscriptionStatus?.hasActiveSubscription || subscriptionStatus?.isOnTrial
   const showFirstWeekPromo = false
 
-  const showTrialButtonForFacelessprenuer = trialEligibility?.shouldShowTrial === true
+  const showTrialButtonForFacelessprenuer =
+    trialEligibility?.shouldShowTrial === true &&
+    !trialEligibility?.hasUsedFreeTrial &&
+    subscriptionStatus?.currentPlan !== "facelessprenuer"
 
   if (statusLoading) {
     return (
