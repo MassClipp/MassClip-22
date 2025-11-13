@@ -150,6 +150,11 @@ export default function StorefrontTabsPage() {
       return
     }
 
+    if (tab.type === "custom" && !tab.enabled && membershipPlan !== "facelessprenuer") {
+      toast.error("Upgrade to Facelessprenuer to enable custom tabs")
+      return
+    }
+
     if (membershipPlan === "free" && !tab.enabled) {
       toast.error("Upgrade to Faceless Pro to enable additional tabs")
       return
@@ -157,6 +162,29 @@ export default function StorefrontTabsPage() {
 
     setTabs((prev) => prev.map((t) => (t.id === tabId ? { ...t, enabled: !t.enabled } : t)))
   }
+
+  useEffect(() => {
+    if (!isFacelessprenuer && tabs.length > 0) {
+      const customTabsNeedDisabling = tabs.some((t) => t.type === "custom" && t.enabled)
+
+      if (customTabsNeedDisabling) {
+        console.log("[v0] Auto-disabling custom tabs - user no longer has Facelessprenuer")
+        setTabs((prev) =>
+          prev.map((t) => {
+            if (t.type === "custom" && t.enabled) {
+              return { ...t, enabled: false }
+            }
+            return t
+          }),
+        )
+
+        // Auto-save the disabled state
+        setTimeout(() => {
+          saveTabs()
+        }, 500)
+      }
+    }
+  }, [membershipPlan])
 
   const toggleExpanded = (tabId: string) => {
     setExpandedTabs((prev) => {

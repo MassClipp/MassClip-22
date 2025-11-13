@@ -76,10 +76,26 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      priceId = FACELESSPRENUER_REGULAR_PRICE_ID
-      trialPeriodDays = undefined
+      let hasEverPurchasedFacelessprenuer = false
+      try {
+        const userDoc = await adminDb.collection("users").doc(uid).get()
+        if (userDoc.exists) {
+          const userData = userDoc.data()
+          // Check if they've ever had Facelessprenuer subscription before
+          hasEverPurchasedFacelessprenuer = userData?.hasEverPurchasedFacelessprenuer || false
+        }
+      } catch (error) {
+        console.error("⚠️ [Membership Checkout] Error checking Facelessprenuer history:", error)
+      }
+
+      // First-time buyers get the trial price, returning buyers get regular price
+      priceId = hasEverPurchasedFacelessprenuer ? FACELESSPRENUER_REGULAR_PRICE_ID : FACELESSPRENUER_FIRST_TIME_PRICE_ID
+      trialPeriodDays = undefined // Trial is built into the price ID itself for Facelessprenuer
       planName = "facelessprenuer"
-      console.log(`💲 [Membership Checkout] Facelessprenuer - $39/month (no trial)`)
+
+      console.log(
+        `💲 [Membership Checkout] Facelessprenuer - ${hasEverPurchasedFacelessprenuer ? "$39/month (returning buyer, no trial)" : "3-day trial then $39/month (first-time buyer)"}`,
+      )
     } else {
       console.error("❌ [Membership Checkout] Invalid plan:", plan)
       return NextResponse.json({ error: "Invalid plan selected." }, { status: 400 })

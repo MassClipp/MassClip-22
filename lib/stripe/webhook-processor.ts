@@ -190,6 +190,15 @@ export async function processCheckoutSessionCompleted(session: Stripe.Checkout.S
 
   await setMembership(userId, membershipData)
 
+  if (planConfig.plan === "facelessprenuer") {
+    try {
+      await db.collection("users").doc(userId).set({ hasEverPurchasedFacelessprenuer: true }, { merge: true })
+      console.log(`[v0] ✅ Marked user ${userId} as having purchased Facelessprenuer`)
+    } catch (error) {
+      console.error("[v0] Failed to set hasEverPurchasedFacelessprenuer flag:", error)
+    }
+  }
+
   console.log(`[v0] ✅ Successfully set membership for ${userId} to ${planConfig.plan}`)
 }
 
@@ -219,6 +228,9 @@ export async function processSubscriptionUpdated(subscription: Stripe.Subscripti
   if (subscription.status === "canceled" || (subscription.cancel_at_period_end && !hasAccessUntilPeriodEnd)) {
     console.log(`[v0] 🗑️ Subscription ended or canceled for user ${userId}, moving to free plan`)
 
+    const membershipDoc = await db.collection("memberships").doc(userId).get()
+    const previousPlan = membershipDoc.exists ? membershipDoc.data()?.plan : null
+
     await db.collection("memberships").doc(userId).delete()
     await db.collection("freeUsers").doc(userId).set({
       uid: userId,
@@ -228,6 +240,34 @@ export async function processSubscriptionUpdated(subscription: Stripe.Subscripti
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     })
+
+    if (previousPlan === "facelessprenuer") {
+      try {
+        const tabsDoc = await db.collection("storefrontTabs").doc(userId).get()
+        if (tabsDoc.exists) {
+          const tabsData = tabsDoc.data()
+          const tabs = tabsData?.tabs || []
+
+          // Disable all custom tabs
+          const updatedTabs = tabs.map((tab: any) => {
+            if (tab.type === "custom" && tab.enabled) {
+              console.log(`[v0] Auto-disabling custom tab: ${tab.name} for user ${userId}`)
+              return { ...tab, enabled: false }
+            }
+            return tab
+          })
+
+          await db.collection("storefrontTabs").doc(userId).update({
+            tabs: updatedTabs,
+            lastUpdated: new Date(),
+          })
+
+          console.log(`[v0] ✅ Auto-disabled custom tabs for user ${userId} after Facelessprenuer cancellation`)
+        }
+      } catch (error) {
+        console.error("[v0] Failed to auto-disable custom tabs:", error)
+      }
+    }
 
     console.log(`[v0] ✅ User ${userId} moved to freeUsers`)
     return
@@ -263,6 +303,15 @@ export async function processSubscriptionUpdated(subscription: Stripe.Subscripti
 
   await setMembership(userId, membershipData)
 
+  if (planConfig.plan === "facelessprenuer") {
+    try {
+      await db.collection("users").doc(userId).set({ hasEverPurchasedFacelessprenuer: true }, { merge: true })
+      console.log(`[v0] ✅ Marked user ${userId} as having purchased Facelessprenuer`)
+    } catch (error) {
+      console.error("[v0] Failed to set hasEverPurchasedFacelessprenuer flag:", error)
+    }
+  }
+
   console.log(`[v0] ✅ Successfully updated membership for ${userId} to ${planConfig.plan}`)
 }
 
@@ -279,6 +328,9 @@ export async function processSubscriptionDeleted(subscription: Stripe.Subscripti
 
   console.log(`[v0] 🗑️ Moving user ${userId} to freeUsers collection`)
 
+  const membershipDoc = await db.collection("memberships").doc(userId).get()
+  const previousPlan = membershipDoc.exists ? membershipDoc.data()?.plan : null
+
   await db.collection("memberships").doc(userId).delete()
   await db.collection("freeUsers").doc(userId).set({
     uid: userId,
@@ -288,6 +340,34 @@ export async function processSubscriptionDeleted(subscription: Stripe.Subscripti
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   })
+
+  if (previousPlan === "facelessprenuer") {
+    try {
+      const tabsDoc = await db.collection("storefrontTabs").doc(userId).get()
+      if (tabsDoc.exists) {
+        const tabsData = tabsDoc.data()
+        const tabs = tabsData?.tabs || []
+
+        // Disable all custom tabs
+        const updatedTabs = tabs.map((tab: any) => {
+          if (tab.type === "custom" && tab.enabled) {
+            console.log(`[v0] Auto-disabling custom tab: ${tab.name} for user ${userId}`)
+            return { ...tab, enabled: false }
+          }
+          return tab
+        })
+
+        await db.collection("storefrontTabs").doc(userId).update({
+          tabs: updatedTabs,
+          lastUpdated: new Date(),
+        })
+
+        console.log(`[v0] ✅ Auto-disabled custom tabs for user ${userId} after Facelessprenuer cancellation`)
+      }
+    } catch (error) {
+      console.error("[v0] Failed to auto-disable custom tabs:", error)
+    }
+  }
 
   console.log(`[v0] ✅ User ${userId} moved to freeUsers`)
 }
