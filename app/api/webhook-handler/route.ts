@@ -163,6 +163,17 @@ async function updateFacelessprenuerMembership(opts: {
   try {
     await adminDb.collection("memberships").doc(uid).set(membershipData, { merge: true })
     console.log(`[v0] ✅ Firestore write successful!`)
+
+    console.log(`[v0] Saving stripeCustomerId to users/${uid}...`)
+    await adminDb.collection("users").doc(uid).set(
+      {
+        stripeCustomerId,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    )
+    console.log(`[v0] ✅ stripeCustomerId saved to users collection!`)
+
     console.log(`[v0] ========================================`)
   } catch (error: any) {
     console.error(`[v0] ❌ Firestore write FAILED:`, error.message)
@@ -210,6 +221,16 @@ async function updateFacelessProMembership(opts: {
   }
 
   await adminDb.collection("memberships").doc(uid).set(membershipData, { merge: true })
+
+  console.log(`[FACELESS PRO WEBHOOK] Saving stripeCustomerId to users/${uid}...`)
+  await adminDb.collection("users").doc(uid).set(
+    {
+      stripeCustomerId,
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  )
+
   console.log(`[FACELESS PRO WEBHOOK] ✅ Membership updated successfully`)
 }
 

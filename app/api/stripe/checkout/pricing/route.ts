@@ -17,9 +17,28 @@ const FACELESSPRENUER_REGULAR_PRICE_ID = process.env.FACELESSPRENUER_REGULAR
 
 async function hasEverSubscribedToFacelessprenuer(userId: string): Promise<boolean> {
   try {
-    // Get user's Stripe customer ID from Firestore
     const userDoc = await adminDb.collection("users").doc(userId).get()
-    const stripeCustomerId = userDoc.data()?.stripeCustomerId
+    let stripeCustomerId = userDoc.data()?.stripeCustomerId
+
+    // Fallback: check memberships collection if not in users
+    if (!stripeCustomerId) {
+      console.log("[v0] No stripeCustomerId in users collection, checking memberships...")
+      const membershipDoc = await adminDb.collection("memberships").doc(userId).get()
+      stripeCustomerId = membershipDoc.data()?.stripeCustomerId
+
+      if (stripeCustomerId) {
+        console.log("[v0] Found stripeCustomerId in memberships:", stripeCustomerId)
+        // Backfill it to users collection for future lookups
+        await adminDb.collection("users").doc(userId).set(
+          {
+            stripeCustomerId,
+            updatedAt: new Date(),
+          },
+          { merge: true },
+        )
+        console.log("[v0] Backfilled stripeCustomerId to users collection")
+      }
+    }
 
     if (!stripeCustomerId) {
       console.log("[v0] No Stripe customer ID found for user, first-time buyer")
