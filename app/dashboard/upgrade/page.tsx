@@ -360,7 +360,7 @@ export default function UpgradePage() {
               </div>
               <div className="text-left md:text-right flex-shrink-0">
                 {showTrialButtonForFacelessprenuer && !statusLoading && (
-                  <p className="text-sm font-medium text-cyan-300 mb-1">3 days free</p>
+                  <p className="text-5xl font-medium text-cyan-300 mb-1">3 days free</p>
                 )}
                 <p className="text-3xl md:text-4xl font-light text-white">$39</p>
                 <span className="text-sm text-zinc-400">/month</span>
