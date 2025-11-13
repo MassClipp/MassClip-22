@@ -15,6 +15,42 @@ const FACELESS_PRO_PRICE_ID = "price_1SQ8yADheyb0pkWFK5LCP3Nd"
 const FACELESSPRENUER_FIRST_TIME_PRICE_ID = process.env.FACELESSPRENUER_FIRST
 const FACELESSPRENUER_REGULAR_PRICE_ID = process.env.FACELESSPRENUER_REGULAR
 
+async function hasEverSubscribedToFacelessprenuer(userId: string): Promise<boolean> {
+  try {
+    // Get user's Stripe customer ID from Firestore
+    const userDoc = await adminDb.collection("users").doc(userId).get()
+    const stripeCustomerId = userDoc.data()?.stripeCustomerId
+
+    if (!stripeCustomerId) {
+      console.log("[v0] No Stripe customer ID found for user, first-time buyer")
+      return false
+    }
+
+    // Query Stripe for all subscriptions ever created for this customer
+    const subscriptions = await stripe.subscriptions.list({
+      customer: stripeCustomerId,
+      limit: 100, // Get all historical subscriptions
+    })
+
+    console.log("[v0] Found", subscriptions.data.length, "total subscriptions for customer")
+
+    // Check if any subscription (active, canceled, or expired) had Facelessprenuer price ID
+    const hasEverHadFacelessprenuer = subscriptions.data.some((sub) =>
+      sub.items.data.some(
+        (item) =>
+          item.price.id === FACELESSPRENUER_FIRST_TIME_PRICE_ID || item.price.id === FACELESSPRENUER_REGULAR_PRICE_ID,
+      ),
+    )
+
+    console.log("[v0] User has ever subscribed to Facelessprenuer:", hasEverHadFacelessprenuer)
+    return hasEverHadFacelessprenuer
+  } catch (error) {
+    console.error("[v0] Error checking Stripe subscription history:", error)
+    // On error, default to false (allow trial) to not block purchases
+    return false
+  }
+}
+
 export async function POST(request: NextRequest) {
   console.log("🚀 [Membership Checkout] Starting session creation...")
 
@@ -50,23 +86,10 @@ export async function POST(request: NextRequest) {
     let planName: string
 
     if (plan === "faceless_pro") {
-      let hasUsedTrial = false
-      try {
-        const freeUserDoc = await adminDb.collection("freeUsers").doc(uid).get()
-        if (freeUserDoc.exists) {
-          const freeUserData = freeUserDoc.data()
-          hasUsedTrial = freeUserData?.hasUsedFreeTrial || false
-        }
-      } catch (error) {
-        console.error("⚠️ [Membership Checkout] Error checking trial status:", error)
-      }
-
       priceId = FACELESS_PRO_PRICE_ID
-      trialPeriodDays = hasUsedTrial ? undefined : 14 // No trial if already used
+      trialPeriodDays = undefined // No trial
       planName = "faceless_pro"
-      console.log(
-        `💲 [Membership Checkout] Faceless Pro - ${hasUsedTrial ? "$29/month (no trial)" : "14-day trial then $29/month"}`,
-      )
+      console.log(`💲 [Membership Checkout] Faceless Pro - $29/month (no trial)`)
     } else if (plan === "facelessprenuer") {
       if (!FACELESSPRENUER_FIRST_TIME_PRICE_ID || !FACELESSPRENUER_REGULAR_PRICE_ID) {
         console.error("❌ [Membership Checkout] Missing Facelessprenuer price IDs")
@@ -76,32 +99,22 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      let hasEverPurchasedFacelessprenuer = false
-      try {
-        const freeUserDoc = await adminDb.collection("freeUsers").doc(uid).get()
-        if (freeUserDoc.exists) {
-          const freeUserData = freeUserDoc.data()
-          // Check if they've ever had Facelessprenuer subscription before (permanent flag set by webhook)
-          hasEverPurchasedFacelessprenuer = freeUserData?.hasUsedFreeTrial || false
-        }
+      const hasEverHadFacelessprenuer = await hasEverSubscribedToFacelessprenuer(uid)
 
-        console.log("[v0] Membership Checkout - Facelessprenuer trial eligibility check:", {
-          userId: uid.substring(0, 8) + "...",
-          hasUsedFreeTrial: freeUserDoc.exists ? freeUserDoc.data()?.hasUsedFreeTrial : "no freeUser doc",
-          hasEverPurchasedFacelessprenuer,
-          willUseTrialPrice: !hasEverPurchasedFacelessprenuer,
-        })
-      } catch (error) {
-        console.error("⚠️ [Membership Checkout] Error checking Facelessprenuer history:", error)
-      }
+      console.log("[v0] Membership Checkout - Facelessprenuer trial eligibility:", {
+        userId: uid.substring(0, 8) + "...",
+        hasEverHadFacelessprenuer,
+        willUseTrialPrice: !hasEverHadFacelessprenuer,
+        priceIdToUse: hasEverHadFacelessprenuer ? "REGULAR (no trial)" : "FIRST (with trial)",
+      })
 
       // First-time buyers get the trial price, returning buyers get regular price
-      priceId = hasEverPurchasedFacelessprenuer ? FACELESSPRENUER_REGULAR_PRICE_ID : FACELESSPRENUER_FIRST_TIME_PRICE_ID
+      priceId = hasEverHadFacelessprenuer ? FACELESSPRENUER_REGULAR_PRICE_ID : FACELESSPRENUER_FIRST_TIME_PRICE_ID
       trialPeriodDays = undefined // Trial is built into the price ID itself for Facelessprenuer
       planName = "facelessprenuer"
 
       console.log(
-        `💲 [Membership Checkout] Facelessprenuer - ${hasEverPurchasedFacelessprenuer ? "$39/month (returning buyer, no trial)" : "3-day trial then $39/month (first-time buyer)"}`,
+        `💲 [Membership Checkout] Facelessprenuer - ${hasEverHadFacelessprenuer ? "$39/month (returning buyer, no trial)" : "3-day trial then $39/month (first-time buyer)"}`,
       )
     } else {
       console.error("❌ [Membership Checkout] Invalid plan:", plan)
