@@ -212,14 +212,29 @@ export async function processSubscriptionUpdated(subscription: Stripe.Subscripti
   console.log(`[v0] 📊 Status: ${subscription.status}`)
   console.log(`[v0] 🔄 Cancel at period end: ${subscription.cancel_at_period_end}`)
 
-  const planConfig = getPlanConfig(priceId)
-
-  // If subscription is canceled but user still has access until period end, keep them active
   const now = Date.now() / 1000
   const hasAccessUntilPeriodEnd = subscription.current_period_end > now
   const isCanceledButActive = subscription.cancel_at_period_end && hasAccessUntilPeriodEnd
 
-  // User is active if status is active/trialing OR if they're in grace period after cancellation
+  if (subscription.status === "canceled" || (subscription.cancel_at_period_end && !hasAccessUntilPeriodEnd)) {
+    console.log(`[v0] 🗑️ Subscription ended or canceled for user ${userId}, moving to free plan`)
+
+    await db.collection("memberships").doc(userId).delete()
+    await db.collection("freeUsers").doc(userId).set({
+      uid: userId,
+      plan: "free",
+      downloadsUsed: 0,
+      bundlesCreated: 0,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    })
+
+    console.log(`[v0] ✅ User ${userId} moved to freeUsers`)
+    return
+  }
+
+  const planConfig = getPlanConfig(priceId)
+
   const isActive = subscription.status === "active" || subscription.status === "trialing" || isCanceledButActive
 
   console.log(`[v0] 📅 Current period end: ${new Date(subscription.current_period_end * 1000).toISOString()}`)
@@ -229,9 +244,9 @@ export async function processSubscriptionUpdated(subscription: Stripe.Subscripti
 
   const membershipData = {
     uid: userId,
-    plan: planConfig.plan, // Keep the actual plan name during grace period
+    plan: planConfig.plan,
     status: subscription.status,
-    isActive, // True during grace period
+    isActive,
     canceledAt: subscription.cancel_at_period_end ? new Date() : null,
     cancelAtPeriodEnd: subscription.cancel_at_period_end,
     stripeCustomerId: customerId,
@@ -242,7 +257,7 @@ export async function processSubscriptionUpdated(subscription: Stripe.Subscripti
     bundlesCreated: 0,
     features: {
       ...planConfig.features,
-      isActive, // Keep features active during grace period
+      isActive,
     },
   }
 
@@ -264,10 +279,7 @@ export async function processSubscriptionDeleted(subscription: Stripe.Subscripti
 
   console.log(`[v0] 🗑️ Moving user ${userId} to freeUsers collection`)
 
-  // Remove from memberships
   await db.collection("memberships").doc(userId).delete()
-
-  // Add to freeUsers
   await db.collection("freeUsers").doc(userId).set({
     uid: userId,
     plan: "free",

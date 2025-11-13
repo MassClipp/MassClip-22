@@ -103,6 +103,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
   const [storefrontTabs, setStorefrontTabs] = useState<any[]>([])
   const [externalProducts, setExternalProducts] = useState<ExternalProduct[]>([])
   const [storefrontDesign, setStorefrontDesign] = useState<any>(null)
+  const [creatorPlan, setCreatorPlan] = useState<string | null>(null)
 
   const getMemberSince = () => {
     if (creator.createdAt) {
@@ -254,6 +255,13 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
         if (userDocSnap.exists()) {
           const userData = userDocSnap.data()
           setStorefrontDesign(userData.storefrontDesign || null)
+        }
+
+        const membershipResponse = await fetch(`/api/membership-status?userId=${creator.uid}`)
+        if (membershipResponse.ok) {
+          const membershipData = await membershipResponse.json()
+          setCreatorPlan(membershipData.plan || "free")
+          console.log("[v0] Creator plan:", membershipData.plan)
         }
       } catch (error) {
         console.error("Error fetching content:", error)
@@ -781,6 +789,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
             <div className="flex items-center gap-3">
               {console.log("[v0] === RENDERING TABS ===")}
               {console.log("[v0] Total tabs in state:", storefrontTabs.length)}
+              {console.log("[v0] Creator plan:", creatorPlan)}
 
               {freeContentCount > 0 && (
                 <button
@@ -822,8 +831,16 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
 
               {storefrontTabs
                 .filter((tab) => {
-                  // Exclude standard content tabs, only show enabled custom tabs
                   const isStandardTab = ["free_content", "premium_content", "ebooks"].includes(tab.type)
+                  const isCustomTab = !isStandardTab
+                  const hasAccess = creatorPlan === "facelessprenuer"
+
+                  // Only show custom tabs if creator has Facelessprenuer access
+                  if (isCustomTab && !hasAccess) {
+                    console.log(`[v0] Hiding custom tab ${tab.name} - creator does not have Facelessprenuer plan`)
+                    return false
+                  }
+
                   return !isStandardTab && tab.enabled
                 })
                 .sort((a, b) => a.order - b.order)
