@@ -5,29 +5,10 @@ import { useState, useEffect, useRef, type FormEvent } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import {
-  Send,
-  MessageSquare,
-  Trash2,
-  Loader2,
-  Upload,
-  Package,
-  DollarSign,
-  Heart,
-  User,
-  Settings,
-  Gift,
-  CreditCard,
-  LogOut,
-  ChevronRight,
-  ChevronLeft,
-  ArrowDown,
-  Target,
-  BookOpen,
-} from "lucide-react"
+import { Send, MessageSquare, Trash2, Loader2, Upload, Package, DollarSign, Heart, User, Settings, Gift, CreditCard, LogOut, ChevronRight, ChevronLeft, ArrowDown, Target, BookOpen } from 'lucide-react'
 import { useAuth } from "@/contexts/auth-context"
 import { useIsMobile } from "@/hooks/use-mobile"
-import { useRouter, usePathname } from "next/navigation"
+import { useRouter, usePathname } from 'next/navigation'
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   DropdownMenu,
@@ -40,7 +21,7 @@ import { doc, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { TopHeader } from "@/components/top-header"
 import { Badge } from "@/components/ui/badge"
-import { Clock } from "lucide-react"
+import { Clock } from 'lucide-react'
 
 interface Message {
   id: string
@@ -1048,8 +1029,8 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                       }}
                       className="flex items-center gap-3 mb-3 w-full text-left hover:bg-white/5 px-3 py-2.5 rounded-lg transition-all duration-200 group"
                     >
-                      <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500/20 to-cyan-500/20 border border-blue-500/20 group-hover:from-blue-500/30 group-hover:to-cyan-500/30 transition-all duration-200">
-                        <MessageSquare className="h-4 w-4 text-blue-400" />
+                      <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-white border border-white/20 group-hover:bg-white/90 transition-all duration-200">
+                        <MessageSquare className="h-4 w-4 text-black" />
                       </div>
                       <span className="text-sm font-medium text-white">Vex AI</span>
                     </button>
@@ -1330,8 +1311,8 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                     }}
                     className="flex items-center gap-3 mb-3 w-full text-left hover:bg-white/5 px-3 py-2.5 rounded-lg transition-all duration-200 group"
                   >
-                    <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500/20 to-cyan-500/20 border border-blue-500/20 group-hover:from-blue-500/30 group-hover:to-cyan-500/30 transition-all duration-200">
-                      <MessageSquare className="h-4 w-4 text-blue-400" />
+                    <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-white border border-white/20 group-hover:bg-white/90 transition-all duration-200">
+                      <MessageSquare className="h-4 w-4 text-black" />
                     </div>
                     <span className="text-sm font-medium text-white">Vex AI</span>
                   </button>

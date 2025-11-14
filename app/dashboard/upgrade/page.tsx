@@ -343,7 +343,7 @@ export default function UpgradePage() {
         {/* Facelessprenuer Plan */}
         <Card className="relative overflow-hidden border border-zinc-700/50 bg-gradient-to-br from-zinc-900/90 to-black/90">
           {!statusLoading && (
-            <div className="absolute right-0 top-0 bg-white px-3 py-1 text-xs font-bold text-black">
+            <div className="absolute right-0 top-0 bg-gradient-to-r from-amber-400 via-yellow-500 to-amber-400 px-3 py-1 text-xs font-bold text-black shadow-lg shadow-yellow-500/20">
               {subscriptionStatus?.currentPlan === "facelessprenuer" ? "CURRENT PLAN" : "RECOMMENDED"}
             </div>
           )}
@@ -351,8 +351,9 @@ export default function UpgradePage() {
           <div className="p-6">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
               <div className="flex items-start md:items-center gap-3">
-                <div className="p-2 rounded-lg bg-white/20 border border-white/30 flex-shrink-0">
-                  <Crown className="h-6 w-6 text-white" />
+                <div className="p-2 rounded-lg bg-white border-2 border-transparent bg-gradient-to-br from-amber-400 via-yellow-500 to-amber-400 bg-clip-padding flex-shrink-0 relative shadow-lg shadow-yellow-500/30">
+                  <div className="absolute inset-0.5 bg-white rounded-lg"></div>
+                  <Crown className="h-6 w-6 text-transparent bg-gradient-to-br from-amber-500 via-yellow-500 to-amber-600 bg-clip-text relative z-10" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <h2 className="text-2xl font-light text-white">Facelessprenuer</h2>
@@ -363,7 +364,7 @@ export default function UpgradePage() {
               </div>
               <div className="text-left md:text-right flex-shrink-0">
                 {showTrialButtonForFacelessprenuer && !statusLoading && (
-                  <p className="text-5xl font-medium text-white mb-1">3 days free</p>
+                  <p className="text-5xl font-light text-white mb-1">3 days free</p>
                 )}
                 <p className="text-3xl md:text-4xl font-light text-white">$39</p>
                 <span className="text-sm text-zinc-400">/month</span>
@@ -382,10 +383,20 @@ export default function UpgradePage() {
                 "Only 10% platform fee on sales",
               ].map((feature, index) => (
                 <div key={index} className="flex items-start gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-white flex-shrink-0 mt-0.5" />
+                  <CheckCircle2 className="h-4 w-4 flex-shrink-0 mt-0.5 text-transparent bg-gradient-to-br from-amber-400 via-yellow-500 to-amber-600 bg-clip-text fill-current" style={{ fill: 'url(#gold-gradient)' }} />
                   <span className="text-white text-sm leading-relaxed">{feature}</span>
                 </div>
               ))}
+              {/* Add SVG gradient definition */}
+              <svg width="0" height="0">
+                <defs>
+                  <linearGradient id="gold-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#fbbf24" />
+                    <stop offset="50%" stopColor="#eab308" />
+                    <stop offset="100%" stopColor="#d97706" />
+                  </linearGradient>
+                </defs>
+              </svg>
             </div>
 
             {subscriptionStatus?.currentPlan === "facelessprenuer" ? (
