@@ -10,25 +10,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
-import {
-  Loader2,
-  Plus,
-  Edit2,
-  Check,
-  X,
-  Calendar,
-  Users,
-  Heart,
-  Package,
-  Play,
-  UploadIcon,
-  Download,
-  Pause,
-  ExternalLink,
-  Lock,
-} from "lucide-react"
+import { Loader2, Plus, Edit2, Check, X, Calendar, Users, Heart, Package, Play, UploadIcon, Download, Pause, ExternalLink, Lock } from 'lucide-react'
 import { useToast } from "@/components/ui/use-toast"
-import { useRouter } from "next/navigation"
+import { useRouter } from 'next/navigation'
 import { doc, updateDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import BundleCard from "@/components/bundle-card"
@@ -1424,11 +1408,11 @@ export default function ViewStorefrontPage() {
                 {/* Status toggle - More compact on mobile */}
                 <div className="flex items-center gap-2 sm:gap-3 bg-zinc-900/80 backdrop-blur-sm border border-zinc-800 rounded-lg px-3 sm:px-4 py-2 w-full sm:w-auto justify-center sm:justify-start">
                   <div className="flex flex-col items-end">
-                    <span className="text-[10px] sm:text-xs font-medium text-white">
+                    <span className="text-[10px] sm:text-xs font-medium text-white whitespace-nowrap">
                       {!isFacelessProActive ? "Builder Mode" : "Storefront Status"}
                     </span>
                     {!isFacelessProActive && (
-                      <span className="text-[9px] sm:text-[10px] text-cyan-400 mt-0.5 flex items-center gap-1">
+                      <span className="text-[9px] sm:text-[10px] text-cyan-400 mt-0.5 flex items-center gap-1 whitespace-nowrap">
                         <Lock className="w-2 h-2 sm:w-2.5 sm:h-2.5" />
                         Upgrade to go live
                       </span>
@@ -1439,15 +1423,15 @@ export default function ViewStorefrontPage() {
                     checked={storefrontActive}
                     onCheckedChange={handleToggleStorefront}
                     disabled={!isFacelessProActive || updating}
-                    className="data-[state=checked]:bg-white data-[state=unchecked]:bg-zinc-700 scale-90 sm:scale-100"
+                    className="data-[state=checked]:bg-white data-[state=unchecked]:bg-zinc-700 flex-shrink-0"
                   />
 
                   {storefrontActive ? (
-                    <Badge className="bg-green-500/10 text-green-400 border-green-500/20 text-[10px] sm:text-xs">
+                    <Badge className="bg-green-500/10 text-green-400 border-green-500/20 text-[10px] sm:text-xs whitespace-nowrap">
                       Live
                     </Badge>
                   ) : (
-                    <Badge variant="secondary" className="bg-zinc-700 text-zinc-300 text-[10px] sm:text-xs">
+                    <Badge variant="secondary" className="bg-zinc-700 text-zinc-300 text-[10px] sm:text-xs whitespace-nowrap">
                       {!isFacelessProActive ? "Preview" : "Offline"}
                     </Badge>
                   )}

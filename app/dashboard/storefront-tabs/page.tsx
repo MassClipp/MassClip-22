@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Plus, GripVertical, Lock, ChevronDown, ChevronUp, X, Upload } from "lucide-react"
+import { Plus, GripVertical, Lock, ChevronDown, ChevronUp, X, Upload } from 'lucide-react'
 import { toast } from "sonner"
 import type { StorefrontTab, ExternalProduct } from "@/lib/types"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -415,7 +415,7 @@ export default function StorefrontTabsPage() {
                           checked={tab.enabled}
                           onCheckedChange={() => toggleTab(tab.id)}
                           disabled={isDefaultTab}
-                          className="data-[state=checked]:bg-white data-[state=unchecked]:bg-zinc-700"
+                          className="data-[state=checked]:bg-white data-[state=unchecked]:bg-zinc-700 flex-shrink-0"
                         />
                       </div>
                     </div>
@@ -689,7 +689,7 @@ export default function StorefrontTabsPage() {
                               </>
                             )}
                           </Button>
-                          <Switch checked={tab.enabled} onCheckedChange={() => toggleTab(tab.id)} />
+                          <Switch checked={tab.enabled} onCheckedChange={() => toggleTab(tab.id)} className="flex-shrink-0" />
                         </div>
                       </div>
 
