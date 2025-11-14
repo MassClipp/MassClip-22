@@ -1014,7 +1014,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                   <div className="px-3 py-4 border-b border-white/5">
                     <button
                       onClick={() => handleNavigation("/dashboard/upgrade")}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-all duration-200 bg-gradient-to-br from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 font-medium"
+                      className="w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-all duration-200 bg-white hover:bg-gray-100 text-black shadow-lg hover:shadow-xl font-medium"
                     >
                       <CreditCard className="h-4 w-4" />
                       <span className="font-medium">Upgrade</span>
@@ -1298,7 +1298,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                 <div className="px-3 py-4 border-b border-white/5">
                   <button
                     onClick={() => handleNavigation("/dashboard/upgrade")}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-all duration-200 bg-gradient-to-br from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 font-medium mb-3"
+                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-all duration-200 bg-white hover:bg-gray-100 text-black shadow-lg hover:shadow-xl font-medium mb-3"
                   >
                     <CreditCard className="h-4 w-4" />
                     <span className="font-medium">Upgrade</span>

@@ -351,9 +351,8 @@ export default function UpgradePage() {
           <div className="p-6">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
               <div className="flex items-start md:items-center gap-3">
-                <div className="p-2 rounded-lg bg-white border-2 border-transparent bg-gradient-to-br from-blue-400 via-cyan-400 to-blue-500 bg-clip-padding flex-shrink-0 relative shadow-lg shadow-blue-500/30">
-                  <div className="absolute inset-0.5 bg-white rounded-lg"></div>
-                  <Crown className="h-6 w-6 text-transparent bg-gradient-to-br from-blue-500 via-cyan-500 to-blue-600 bg-clip-text relative z-10" style={{ WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }} />
+                <div className="p-2.5 rounded-lg bg-gradient-to-br from-blue-400 via-cyan-400 to-blue-500 flex-shrink-0 shadow-lg shadow-blue-500/30">
+                  <Crown className="h-6 w-6 text-white" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <h2 className="text-2xl font-light text-white">Facelessprenuer</h2>
