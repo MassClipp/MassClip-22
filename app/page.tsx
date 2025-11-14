@@ -1,12 +1,12 @@
 "use client"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter } from 'next/navigation'
 import { Button } from "@/components/ui/button"
 import { useEffect, useState } from "react"
 import { LandingVexInterface } from "@/components/landing-vex-interface"
 import { LandingReview } from "@/components/landing-review"
 import { LandingVideoCarousel } from "@/components/landing-video-carousel"
-import { Sparkles, Package, TrendingUp } from "lucide-react"
+import { Sparkles, Package, TrendingUp } from 'lucide-react'
 
 const LandingPage = () => {
   const router = useRouter()
@@ -35,9 +35,9 @@ const LandingPage = () => {
       <div className="fixed inset-0 z-0">
         <div className="absolute inset-0 bg-black" />
 
-        <div className="absolute top-1/4 right-1/4 w-[600px] h-[600px] bg-teal-500/10 rounded-full blur-[120px]" />
-        <div className="absolute bottom-1/3 left-1/4 w-[500px] h-[500px] bg-cyan-500/8 rounded-full blur-[100px]" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] bg-teal-400/6 rounded-full blur-[80px]" />
+        <div className="absolute top-1/4 right-1/4 w-[600px] h-[600px] bg-white/10 rounded-full blur-[120px]" />
+        <div className="absolute bottom-1/3 left-1/4 w-[500px] h-[500px] bg-white/8 rounded-full blur-[100px]" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] bg-white/6 rounded-full blur-[80px]" />
       </div>
 
       <div className="relative z-10 flex flex-col min-h-screen">
@@ -67,7 +67,7 @@ const LandingPage = () => {
               </Link>
               <Button
                 onClick={() => router.push("/signup")}
-                className="bg-gradient-to-r from-teal-500 to-cyan-400 text-white hover:from-teal-600 hover:to-cyan-500 font-light rounded-full px-6 py-2 text-sm shadow-lg shadow-teal-500/20"
+                className="bg-white text-black hover:bg-gray-200 font-light rounded-full px-6 py-2 text-sm shadow-lg shadow-white/20"
               >
                 Sign Up Free
               </Button>
@@ -119,7 +119,7 @@ const LandingPage = () => {
                   </p>
                 </div>
                 <div className="relative">
-                  <div className="bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 shadow-2xl hover:shadow-teal-500/10 transition-all">
+                  <div className="bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 shadow-2xl hover:shadow-white/10 transition-all">
                     <img
                       src="/images/7d123c64-c36b-4acb-83ed.png"
                       alt="HD Organized Folders Interface"
@@ -141,9 +141,9 @@ const LandingPage = () => {
               </div>
 
               <div className="grid md:grid-cols-3 gap-8">
-                <div className="bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 hover:bg-white/10 hover:border-white/30 transition-all shadow-xl hover:shadow-2xl hover:shadow-teal-500/10">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-r from-teal-500 to-cyan-400 flex items-center justify-center mb-6 shadow-lg shadow-teal-500/30">
-                    <Sparkles className="w-6 h-6 text-white" />
+                <div className="bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 hover:bg-white/10 hover:border-white/30 transition-all shadow-xl hover:shadow-2xl hover:shadow-white/10">
+                  <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center mb-6 shadow-lg shadow-white/30">
+                    <Sparkles className="w-6 h-6 text-black" />
                   </div>
                   <h3 className="text-xl font-semibold text-white mb-3">AI-Powered Organization</h3>
                   <p className="text-white/60">
@@ -151,9 +151,9 @@ const LandingPage = () => {
                   </p>
                 </div>
 
-                <div className="bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 hover:bg-white/10 hover:border-white/30 transition-all shadow-xl hover:shadow-2xl hover:shadow-cyan-500/10">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-r from-teal-500 to-cyan-400 flex items-center justify-center mb-6 shadow-lg shadow-cyan-500/30">
-                    <Package className="w-6 h-6 text-white" />
+                <div className="bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 hover:bg-white/10 hover:border-white/30 transition-all shadow-xl hover:shadow-2xl hover:shadow-white/10">
+                  <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center mb-6 shadow-lg shadow-white/30">
+                    <Package className="w-6 h-6 text-black" />
                   </div>
                   <h3 className="text-xl font-semibold text-white mb-3">Smart Bundling</h3>
                   <p className="text-white/60">
@@ -161,9 +161,9 @@ const LandingPage = () => {
                   </p>
                 </div>
 
-                <div className="bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 hover:bg-white/10 hover:border-white/30 transition-all shadow-xl hover:shadow-2xl hover:shadow-teal-500/10">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-r from-teal-500 to-cyan-400 flex items-center justify-center mb-6 shadow-lg shadow-teal-500/30">
-                    <TrendingUp className="w-6 h-6 text-white" />
+                <div className="bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 hover:bg-white/10 hover:border-white/30 transition-all shadow-xl hover:shadow-2xl hover:shadow-white/10">
+                  <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center mb-6 shadow-lg shadow-white/30">
+                    <TrendingUp className="w-6 h-6 text-black" />
                   </div>
                   <h3 className="text-xl font-semibold text-white mb-3">Instant Storefront</h3>
                   <p className="text-white/60">
@@ -193,7 +193,7 @@ const LandingPage = () => {
 
               <div className="grid md:grid-cols-3 gap-12">
                 <div className="text-center bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 hover:bg-white/10 hover:border-white/30 transition-all shadow-xl">
-                  <div className="w-16 h-16 rounded-full bg-gradient-to-r from-teal-500 to-cyan-400 flex items-center justify-center mx-auto mb-6 text-2xl font-bold text-white shadow-lg shadow-teal-500/30">
+                  <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center mx-auto mb-6 text-2xl font-bold text-black shadow-lg shadow-white/30">
                     1
                   </div>
                   <h3 className="text-xl font-semibold text-white mb-3">Upload Your Content</h3>
@@ -203,7 +203,7 @@ const LandingPage = () => {
                 </div>
 
                 <div className="text-center bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 hover:bg-white/10 hover:border-white/30 transition-all shadow-xl">
-                  <div className="w-16 h-16 rounded-full bg-gradient-to-r from-teal-500 to-cyan-400 flex items-center justify-center mx-auto mb-6 text-2xl font-bold text-white shadow-lg shadow-cyan-500/30">
+                  <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center mx-auto mb-6 text-2xl font-bold text-black shadow-lg shadow-white/30">
                     2
                   </div>
                   <h3 className="text-xl font-semibold text-white mb-3">Let VEX Analyze</h3>
@@ -213,7 +213,7 @@ const LandingPage = () => {
                 </div>
 
                 <div className="text-center bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 hover:bg-white/10 hover:border-white/30 transition-all shadow-xl">
-                  <div className="w-16 h-16 rounded-full bg-gradient-to-r from-teal-500 to-cyan-400 flex items-center justify-center mx-auto mb-6 text-2xl font-bold text-white shadow-lg shadow-teal-500/30">
+                  <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center mx-auto mb-6 text-2xl font-bold text-black shadow-lg shadow-white/30">
                     3
                   </div>
                   <h3 className="text-xl font-semibold text-white mb-3">Start Selling</h3>
@@ -227,7 +227,7 @@ const LandingPage = () => {
           </section>
 
           <section className="py-24 px-6 border-t border-white/10">
-            <div className="max-w-4xl mx-auto text-center bg-gradient-to-r from-teal-500/10 to-cyan-400/10 backdrop-blur-xl border border-white/20 rounded-3xl p-12 shadow-2xl">
+            <div className="max-w-4xl mx-auto text-center bg-white/5 backdrop-blur-xl border border-white/20 rounded-3xl p-12 shadow-2xl">
               <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">Ready to start selling?</h2>
               <p className="text-white/60 text-lg mb-8">
                 Try VEX for free. Upload your content and see what VEX can do for you.
@@ -235,7 +235,7 @@ const LandingPage = () => {
               <Button
                 onClick={() => router.push("/signup")}
                 size="lg"
-                className="bg-gradient-to-r from-teal-500 to-cyan-400 text-white hover:from-teal-600 hover:to-cyan-500 font-light rounded-full px-8 py-6 text-lg shadow-xl shadow-teal-500/30 hover:shadow-2xl hover:shadow-teal-500/40 transition-all"
+                className="bg-white text-black hover:bg-gray-200 font-light rounded-full px-8 py-6 text-lg shadow-xl shadow-white/30 hover:shadow-2xl hover:shadow-white/40 transition-all"
               >
                 Get Started For Free
               </Button>

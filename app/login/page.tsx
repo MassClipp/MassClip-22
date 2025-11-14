@@ -1,10 +1,10 @@
 "use client"
 
 import { useEffect } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from "@/contexts/auth-context"
 import { LoginForm } from "@/components/login-form"
-import { Loader2 } from "lucide-react"
+import { Loader2 } from 'lucide-react'
 
 export default function LoginPage() {
   const { user } = useAuth()
@@ -35,17 +35,17 @@ export default function LoginPage() {
         {/* Background gradients matching platform theme */}
         <div className="absolute inset-0 bg-gradient-to-tl from-white/3 via-white/1 to-transparent" />
         <div className="absolute inset-0 bg-gradient-to-br from-transparent via-white/1 to-white/2" />
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-teal-500/5 rounded-full blur-3xl" />
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-white/5 rounded-full blur-3xl" />
+        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-white/5 rounded-full blur-3xl" />
 
         <div className="text-center space-y-6 relative z-10">
-          {/* Animated spinner with teal gradient */}
+          {/* Animated spinner with white gradient */}
           <div className="relative">
-            <div className="absolute inset-0 bg-gradient-to-r from-cyan-400 to-teal-400 rounded-full blur-xl opacity-20 animate-pulse" />
-            <Loader2 className="h-12 w-12 animate-spin text-cyan-400 mx-auto relative z-10" />
+            <div className="absolute inset-0 bg-white rounded-full blur-xl opacity-20 animate-pulse" />
+            <Loader2 className="h-12 w-12 animate-spin text-white mx-auto relative z-10" />
           </div>
 
-          <p className="text-lg bg-gradient-to-br from-slate-300 via-cyan-200 to-white bg-clip-text text-transparent font-medium">
+          <p className="text-lg bg-gradient-to-br from-slate-300 via-white to-gray-200 bg-clip-text text-transparent font-medium">
             Redirecting to your dashboard...
           </p>
         </div>

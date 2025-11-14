@@ -2,12 +2,12 @@
 
 import type React from "react"
 import { useState } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter, useSearchParams } from 'next/navigation'
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, Eye, EyeOff } from "lucide-react"
+import { Loader2, Eye, EyeOff } from 'lucide-react'
 import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from "firebase/auth"
 import { auth } from "@/lib/firebase"
 import Link from "next/link"
@@ -88,9 +88,9 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
       {...props}
     >
       <div className="fixed inset-0 z-0">
-        <div className="absolute top-1/4 right-1/4 w-[700px] h-[700px] bg-teal-400/[0.15] rounded-full blur-[140px]" />
-        <div className="absolute bottom-1/3 left-1/4 w-[600px] h-[600px] bg-cyan-400/[0.12] rounded-full blur-[120px]" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-teal-400/[0.1] rounded-full blur-[100px]" />
+        <div className="absolute top-1/4 right-1/4 w-[700px] h-[700px] bg-white/[0.15] rounded-full blur-[140px]" />
+        <div className="absolute bottom-1/3 left-1/4 w-[600px] h-[600px] bg-white/[0.12] rounded-full blur-[120px]" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-white/[0.1] rounded-full blur-[100px]" />
       </div>
 
       <div className="absolute top-6 left-6 z-20">
@@ -188,7 +188,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                         placeholder="Enter your email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        className="h-11 bg-white/10 border-white/20 text-white placeholder-white/40 focus:border-teal-400 focus:ring-1 focus:ring-teal-400"
+                        className="h-11 bg-white/10 border-white/20 text-white placeholder-white/40 focus:border-white focus:ring-1 focus:ring-white"
                         required
                       />
                     </div>
@@ -201,7 +201,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                           placeholder="Enter your password"
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
-                          className="h-11 pr-10 bg-white/10 border-white/20 text-white placeholder-white/40 focus:border-teal-400 focus:ring-1 focus:ring-teal-400"
+                          className="h-11 pr-10 bg-white/10 border-white/20 text-white placeholder-white/40 focus:border-white focus:ring-1 focus:ring-white"
                           required
                         />
                         <Button
@@ -240,7 +240,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
 
                     <Button
                       type="submit"
-                      className="w-full h-11 bg-gradient-to-r from-teal-500 to-cyan-400 text-white font-medium rounded-lg transition-all duration-200 hover:from-teal-600 hover:to-cyan-500"
+                      className="w-full h-11 bg-white text-black font-medium rounded-lg transition-all duration-200 hover:bg-gray-200"
                       disabled={loading || googleLoading}
                     >
                       {loading ? (
@@ -261,7 +261,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                 <Button
                   variant="link"
                   size="sm"
-                  className="h-auto p-0 text-sm text-teal-400 hover:text-teal-300 font-medium"
+                  className="h-auto p-0 text-sm text-white hover:text-gray-300 font-medium"
                   onClick={() => router.push(`/signup${redirect ? `?redirect=${redirect}` : ""}`)}
                   type="button"
                 >

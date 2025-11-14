@@ -6,9 +6,9 @@ import { auth, db } from "@/lib/firebase"
 import { doc, getDoc, setDoc } from "firebase/firestore"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Calendar, Users, Heart, Loader2, Check } from "lucide-react"
+import { Calendar, Users, Heart, Loader2, Check } from 'lucide-react'
 import { useToast } from "@/hooks/use-toast"
-import { useRouter } from "next/navigation"
+import { useRouter } from 'next/navigation'
 
 interface StorefrontTheme {
   mainColor: string

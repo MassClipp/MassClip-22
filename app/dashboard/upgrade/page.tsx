@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
-import { CheckCircle2, Crown, Shield, Package, Loader2 } from "lucide-react"
+import { useRouter, useSearchParams } from 'next/navigation'
+import { CheckCircle2, Crown, Shield, Package, Loader2 } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { useAuth } from "@/contexts/auth-context"
@@ -281,7 +281,7 @@ export default function UpgradePage() {
         {/* Faceless Pro Plan */}
         <Card className="relative overflow-hidden border border-zinc-700/50 bg-gradient-to-br from-zinc-900/90 to-black/90">
           {subscriptionStatus?.currentPlan === "faceless_pro" && (
-            <div className="absolute right-0 top-0 bg-gradient-to-r from-slate-400 to-cyan-400 px-3 py-1 text-xs font-medium text-black">
+            <div className="absolute right-0 top-0 bg-white px-3 py-1 text-xs font-medium text-black">
               CURRENT PLAN
             </div>
           )}
@@ -314,7 +314,7 @@ export default function UpgradePage() {
                 { text: "15% platform fee on sales", highlight: false },
               ].map((feature, index) => (
                 <div key={index} className="flex items-center gap-2">
-                  <CheckCircle2 className={`h-4 w-4 ${feature.highlight ? "text-cyan-400" : "text-zinc-500"}`} />
+                  <CheckCircle2 className={`h-4 w-4 ${feature.highlight ? "text-white" : "text-zinc-500"}`} />
                   <span className="text-white text-sm">{feature.text}</span>
                 </div>
               ))}
@@ -324,7 +324,7 @@ export default function UpgradePage() {
               <Button
                 onClick={() => router.push("/dashboard/profile?tab=membership")}
                 variant="outline"
-                className="w-full border-cyan-400/50 bg-cyan-500/10 text-cyan-300"
+                className="w-full border-white/50 bg-white/10 text-white"
               >
                 Manage Membership
               </Button>
@@ -332,7 +332,7 @@ export default function UpgradePage() {
               <Button
                 onClick={() => handleUpgradeClick("faceless_pro")}
                 disabled={checkingOut}
-                className="w-full bg-gradient-to-r from-slate-500 to-cyan-500 hover:from-slate-400 hover:to-cyan-400 text-white disabled:opacity-50"
+                className="w-full bg-white hover:bg-gray-200 text-black disabled:opacity-50"
               >
                 {checkingOut ? "Processing..." : "Get Started"}
               </Button>
@@ -343,7 +343,7 @@ export default function UpgradePage() {
         {/* Facelessprenuer Plan */}
         <Card className="relative overflow-hidden border border-zinc-700/50 bg-gradient-to-br from-zinc-900/90 to-black/90">
           {!statusLoading && (
-            <div className="absolute right-0 top-0 bg-gradient-to-r from-cyan-400 to-blue-400 px-3 py-1 text-xs font-bold text-black">
+            <div className="absolute right-0 top-0 bg-white px-3 py-1 text-xs font-bold text-black">
               {subscriptionStatus?.currentPlan === "facelessprenuer" ? "CURRENT PLAN" : "RECOMMENDED"}
             </div>
           )}
@@ -351,8 +351,8 @@ export default function UpgradePage() {
           <div className="p-6">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
               <div className="flex items-start md:items-center gap-3">
-                <div className="p-2 rounded-lg bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-400/30 flex-shrink-0">
-                  <Crown className="h-6 w-6 text-cyan-300" />
+                <div className="p-2 rounded-lg bg-white/20 border border-white/30 flex-shrink-0">
+                  <Crown className="h-6 w-6 text-white" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <h2 className="text-2xl font-light text-white">Facelessprenuer</h2>
@@ -382,7 +382,7 @@ export default function UpgradePage() {
                 "Only 10% platform fee on sales",
               ].map((feature, index) => (
                 <div key={index} className="flex items-start gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-cyan-400 flex-shrink-0 mt-0.5" />
+                  <CheckCircle2 className="h-4 w-4 text-white flex-shrink-0 mt-0.5" />
                   <span className="text-white text-sm leading-relaxed">{feature}</span>
                 </div>
               ))}
@@ -392,7 +392,7 @@ export default function UpgradePage() {
               <Button
                 onClick={() => router.push("/dashboard/profile?tab=membership")}
                 variant="outline"
-                className="w-full border-cyan-400/50 bg-cyan-500/10 text-cyan-300"
+                className="w-full border-white/50 bg-white/10 text-white"
               >
                 Manage Membership
               </Button>
@@ -400,7 +400,7 @@ export default function UpgradePage() {
               <Button
                 onClick={() => handleUpgradeClick("facelessprenuer")}
                 disabled={checkingOut}
-                className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white disabled:opacity-50"
+                className="w-full bg-white hover:bg-gray-200 text-black disabled:opacity-50"
               >
                 {checkingOut ? "Processing..." : "Upgrade to Facelessprenuer"}
               </Button>
@@ -422,12 +422,12 @@ export default function UpgradePage() {
                 key={option.id}
                 className={`relative overflow-hidden border ${
                   option.popular
-                    ? "border-cyan-400/50 bg-gradient-to-br from-cyan-500/10 to-blue-500/10"
+                    ? "border-white/50 bg-white/5"
                     : "border-zinc-700/50 bg-gradient-to-br from-zinc-900/90 to-black/90"
                 }`}
               >
                 {option.popular && (
-                  <div className="absolute right-0 top-0 bg-gradient-to-r from-cyan-400 to-blue-400 px-3 py-1 text-xs font-bold text-black">
+                  <div className="absolute right-0 top-0 bg-white px-3 py-1 text-xs font-bold text-black">
                     POPULAR
                   </div>
                 )}
@@ -437,11 +437,11 @@ export default function UpgradePage() {
                     <div
                       className={`p-2 rounded-lg ${
                         option.popular
-                          ? "bg-cyan-500/20 border border-cyan-400/30"
+                          ? "bg-white/20 border border-white/30"
                           : "bg-zinc-800/50 border border-zinc-700/50"
                       }`}
                     >
-                      <option.icon className={`h-5 w-5 ${option.popular ? "text-cyan-300" : "text-zinc-300"}`} />
+                      <option.icon className={`h-5 w-5 ${option.popular ? "text-white" : "text-zinc-300"}`} />
                     </div>
                     <div>
                       <h3 className="text-lg font-medium text-white">{option.name}</h3>
@@ -459,9 +459,9 @@ export default function UpgradePage() {
                     disabled={purchasingBundle === option.id}
                     className={`w-full ${
                       option.popular
-                        ? "bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400"
-                        : "bg-zinc-700 hover:bg-zinc-600"
-                    } text-white`}
+                        ? "bg-white hover:bg-gray-200 text-black"
+                        : "bg-zinc-700 hover:bg-zinc-600 text-white"
+                    }`}
                   >
                     {purchasingBundle === option.id ? "Processing..." : "Purchase"}
                   </Button>
