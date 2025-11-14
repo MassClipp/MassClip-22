@@ -237,12 +237,20 @@ export async function processSubscriptionUpdated(subscription: Stripe.Subscripti
   const isCanceledButActive = subscription.cancel_at_period_end && hasAccessUntilPeriodEnd
 
   if (subscription.status === "canceled" || (subscription.cancel_at_period_end && !hasAccessUntilPeriodEnd)) {
-    console.log(`[v0] 🗑️ Subscription ended or canceled for user ${userId}, moving to free plan`)
+    console.log(`[v0] 🗑️ Subscription ended or canceled for user ${userId}, marking as inactive`)
 
     const membershipDoc = await db.collection("memberships").doc(userId).get()
     const previousPlan = membershipDoc.exists ? membershipDoc.data()?.plan : null
 
-    await db.collection("memberships").doc(userId).delete()
+    // Preserve the membership document with priceId history, just mark as inactive
+    await db.collection("memberships").doc(userId).update({
+      status: "canceled",
+      isActive: false,
+      canceledAt: new Date(),
+      updatedAt: FieldValue.serverTimestamp(),
+    })
+    
+    // Move to free tier
     await db.collection("freeUsers").doc(userId).set({
       uid: userId,
       plan: "free",
@@ -250,7 +258,7 @@ export async function processSubscriptionUpdated(subscription: Stripe.Subscripti
       bundlesCreated: 0,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
-    })
+    }, { merge: true })
 
     if (previousPlan === "facelessprenuer") {
       try {
@@ -280,7 +288,7 @@ export async function processSubscriptionUpdated(subscription: Stripe.Subscripti
       }
     }
 
-    console.log(`[v0] ✅ User ${userId} moved to freeUsers`)
+    console.log(`[v0] ✅ User ${userId} moved to free tier, membership preserved`)
     return
   }
 
@@ -348,12 +356,19 @@ export async function processSubscriptionDeleted(subscription: Stripe.Subscripti
     return
   }
 
-  console.log(`[v0] 🗑️ Moving user ${userId} to freeUsers collection`)
+  console.log(`[v0] 🗑️ Subscription deleted for user ${userId}, marking as inactive`)
 
   const membershipDoc = await db.collection("memberships").doc(userId).get()
   const previousPlan = membershipDoc.exists ? membershipDoc.data()?.plan : null
 
-  await db.collection("memberships").doc(userId).delete()
+  await db.collection("memberships").doc(userId).update({
+    status: "canceled",
+    isActive: false,
+    canceledAt: new Date(),
+    updatedAt: FieldValue.serverTimestamp(),
+  })
+  
+  // Move to free tier
   await db.collection("freeUsers").doc(userId).set({
     uid: userId,
     plan: "free",
@@ -361,7 +376,7 @@ export async function processSubscriptionDeleted(subscription: Stripe.Subscripti
     bundlesCreated: 0,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
-  })
+  }, { merge: true })
 
   if (previousPlan === "facelessprenuer") {
     try {
@@ -391,7 +406,7 @@ export async function processSubscriptionDeleted(subscription: Stripe.Subscripti
     }
   }
 
-  console.log(`[v0] ✅ User ${userId} moved to freeUsers`)
+  console.log(`[v0] ✅ User ${userId} moved to free tier, membership preserved`)
 }
 
 export async function processPaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent) {

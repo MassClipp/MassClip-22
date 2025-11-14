@@ -411,12 +411,5 @@ export async function cancelMembership(uid: string): Promise<void> {
     isActive: false,
     updatedAt: FieldValue.serverTimestamp(),
   })
-  console.log(`✅ Canceled membership for user: ${uid}`)
+  console.log(`✅ Marked membership as canceled for user: ${uid} (document preserved)`)
 }
-
-export async function deleteMembership(uid: string): Promise<void> {
-  await adminDb.collection("memberships").doc(uid).delete()
-  console.log(`✅ Deleted membership record for user: ${uid}`)
-}
-
-// Additional updates can be added here if necessary
