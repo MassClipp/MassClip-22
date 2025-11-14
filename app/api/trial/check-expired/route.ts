@@ -74,7 +74,13 @@ export async function GET(request: NextRequest) {
         })
 
         const membershipRef = db.collection("memberships").doc(uid)
-        batch.delete(membershipRef)
+        batch.update(membershipRef, {
+          status: "inactive",
+          isActive: false,
+          trialActive: false,
+          trialEndDate: trialEndDate,
+          updatedAt: new Date(),
+        })
       }
     })
 
@@ -176,7 +182,13 @@ export async function POST(request: NextRequest) {
         })
 
         const membershipRef = db.collection("memberships").doc(uid)
-        batch.delete(membershipRef)
+        batch.update(membershipRef, {
+          status: "inactive",
+          isActive: false,
+          trialActive: false,
+          trialEndDate: trialEndDate,
+          updatedAt: new Date(),
+        })
       }
     })
 

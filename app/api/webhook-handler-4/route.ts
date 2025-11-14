@@ -254,7 +254,15 @@ export async function POST(request: Request) {
           updatedAt: FieldValue.serverTimestamp(),
         })
 
-        await adminDb.collection("memberships").doc(uid).delete()
+        // Update membership to inactive status instead of deleting
+        await adminDb.collection("memberships").doc(uid).update({
+          status: "canceled",
+          isActive: false,
+          canceledAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        })
+
+        // Add to freeUsers if not exists
         await adminDb.collection("freeUsers").doc(uid).set({
           uid,
           plan: "free",
@@ -262,8 +270,8 @@ export async function POST(request: Request) {
           bundlesCreated: 0,
           createdAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
-        })
-        console.log(`[FACELESS PRO WEBHOOK] User ${uid} moved to free tier and storefront deactivated`)
+        }, { merge: true })
+        console.log(`[FACELESS PRO WEBHOOK] User ${uid} membership canceled and preserved, moved to free tier`)
         break
       }
 

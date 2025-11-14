@@ -37,6 +37,8 @@ export interface MembershipDoc {
   features: MembershipFeatures
 
   hasUsedFreeTrial?: boolean // Track if user has ever used free trial for facelessprenuer
+  trialActive?: boolean
+  trialExpiredAt?: Date
 
   // Metadata
   createdAt: any
@@ -119,10 +121,15 @@ export async function getMembership(uid: string): Promise<MembershipDoc | null> 
           const { downgradeFreeUserFromTrial } = await import("./free-users-service")
           await downgradeFreeUserFromTrial(uid)
 
-          // Delete the membership record since they're now free
-          await docRef.delete()
+          await docRef.update({
+            status: "inactive",
+            isActive: false,
+            trialActive: false,
+            trialExpiredAt: now,
+            updatedAt: FieldValue.serverTimestamp(),
+          })
 
-          console.log("✅ User downgraded to free plan due to expired trial")
+          console.log("✅ User downgraded to free plan due to expired trial (membership preserved)")
           return null
         }
 
@@ -130,7 +137,7 @@ export async function getMembership(uid: string): Promise<MembershipDoc | null> 
           plan: data.plan,
           status: data.status,
           isActive: data.isActive,
-          trialEndDate: trialEndDate?.toISOString(),
+          trialEndDate: data.trialExpiredAt?.toISOString(),
         })
         return data
       }
