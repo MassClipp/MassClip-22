@@ -532,9 +532,14 @@ export async function POST(request: Request) {
           return NextResponse.json({ received: true })
         }
 
+        console.log(`[v0] Subscription deleted for ${uid} - preserving purchase history flags`)
+        
+        // Update users collection without deleting the hasEverPurchasedFacelessprenuer flag
         await adminDb.collection("users").doc(uid).update({
           storefrontActive: false,
           updatedAt: FieldValue.serverTimestamp(),
+          // NOTE: We intentionally do NOT reset hasEverPurchasedFacelessprenuer here
+          // This flag should persist forever to prevent users from getting free trials again
         })
 
         await adminDb.collection("memberships").doc(uid).delete()
@@ -547,10 +552,12 @@ export async function POST(request: Request) {
             downloadsUsed: 0,
             bundlesCreated: 0,
             updatedAt: FieldValue.serverTimestamp(),
+            // NOTE: hasUsedFreeTrial and hasEverPurchasedFacelessprenuer are preserved via merge: true
           },
           { merge: true }
         )
-        console.log(`[WEBHOOK] User ${uid} moved to free tier and storefront deactivated`)
+        
+        console.log(`[v0] User ${uid} moved to free tier. Purchase history flags preserved in both collections.`)
         break
       }
 
