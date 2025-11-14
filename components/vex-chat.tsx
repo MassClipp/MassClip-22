@@ -572,7 +572,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
           })
 
           if (titleResponse.ok) {
-            const titleData = await titleResponse.json()
+            const titleData = await response.json()
             chatTitle = titleData.title || chatTitle
           }
         } catch (titleError) {
@@ -1233,7 +1233,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                           >
                             <Settings className="h-4 w-4 mr-2" />
                             Security
-                          </DropdownMenuitem>
+                          </DropdownMenuItem>
                           <DropdownMenuSeparator className="bg-white/10" />
                           <DropdownMenuItem
                             onClick={handleLogout}
