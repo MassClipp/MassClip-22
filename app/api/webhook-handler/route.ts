@@ -137,6 +137,17 @@ async function updateFacelessprenuerMembership(opts: {
 
   const isActive = status === "active" || status === "trialing"
 
+  const existingMembership = await adminDb.collection("memberships").doc(uid).get()
+  const existingPriceId = existingMembership.exists ? existingMembership.data()?.priceId : null
+  
+  // If they had the trial price before, always preserve it
+  const finalPriceId = existingPriceId === process.env.FACELESSPRENUER_FIRST 
+    ? existingPriceId 
+    : priceId
+
+  console.log(`[v0] Existing Price ID: ${existingPriceId}`)
+  console.log(`[v0] Final Price ID to save: ${finalPriceId}`)
+
   const membershipData = {
     uid,
     email: email || null,
@@ -146,7 +157,7 @@ async function updateFacelessprenuerMembership(opts: {
     stripeCustomerId,
     stripeSubscriptionId,
     currentPeriodEnd: currentPeriodEnd || null,
-    priceId,
+    priceId: finalPriceId, // Use preserved priceId if they had trial before
     downloadsUsed: 0,
     bundlesCreated: 0,
     features: {
@@ -403,22 +414,6 @@ export async function POST(request: Request) {
             console.log(`[v0] ✅ Trial usage flag set in memberships collection`)
           } catch (error: any) {
             console.error(`[v0] ❌ Failed to set trial usage flag:`, error.message)
-          }
-        }
-
-        if (FACELESSPRENUER_PRICE_IDS.includes(priceId) && sub.status === "active") {
-          console.log(`[v0] Facelessprenuer subscription active - marking hasUsedFreeTrial for UID: ${uid}`)
-          try {
-            await adminDb.collection("memberships").doc(uid).set(
-              {
-                hasUsedFreeTrial: true,
-                updatedAt: FieldValue.serverTimestamp(),
-              },
-              { merge: true },
-            )
-            console.log(`[v0] ✅ Facelessprenuer purchase flag set in memberships collection`)
-          } catch (error: any) {
-            console.error(`[v0] ❌ Failed to set Facelessprenuer purchase flag:`, error.message)
           }
         }
 
