@@ -16,30 +16,26 @@ const FACELESSPRENUER_TRIAL_PRICE_ID = "price_1SPShFDheyb0pkWF6K9XzlpE" // $39/m
 
 async function hasEverPurchasedFacelessprenuer(userId: string): Promise<boolean> {
   try {
-    console.log("[v0] Checking memberships collection for trial history via priceId")
-    const membershipDoc = await adminDb.collection("memberships").doc(userId).get()
+    console.log("[v0] Checking users collection for hasUsedFacelessprenuerTrial flag")
+    const userDoc = await adminDb.collection("users").doc(userId).get()
     
-    if (!membershipDoc.exists) {
-      console.log("[v0] No membership found - user has never purchased")
+    if (!userDoc.exists) {
+      console.log("[v0] No user doc found - user has never used trial")
       return false
     }
     
-    const membershipData = membershipDoc.data()
-    const priceId = membershipData?.priceId
+    const userData = userDoc.data()
+    const hasUsedTrial = userData?.hasUsedFacelessprenuerTrial === true
 
-    const hasUsedTrial = priceId === FACELESSPRENUER_TRIAL_PRICE_ID
-
-    console.log("[v0] Trial check from memberships priceId:", {
+    console.log("[v0] Trial check from users collection:", {
       userId: userId.substring(0, 8) + "...",
-      priceId: priceId,
-      trialPriceId: FACELESSPRENUER_TRIAL_PRICE_ID,
-      hasUsedTrial: hasUsedTrial,
+      hasUsedFacelessprenuerTrial: hasUsedTrial,
       shouldShowTrial: !hasUsedTrial,
     })
 
     return hasUsedTrial
   } catch (error) {
-    console.error("[v0] Error checking memberships priceId:", error)
+    console.error("[v0] Error checking users collection:", error)
     // On error, default to false (allow trial) to not block purchases
     return false
   }

@@ -402,16 +402,16 @@ export async function POST(request: Request) {
         }
 
         if (sub.status === "trialing" || (sub.status === "active" && sub.trial_end)) {
-          console.log(`[v0] User started trial - marking hasUsedFreeTrial in memberships collection for UID: ${uid}`)
+          console.log(`[v0] User started Facelessprenuer trial - setting permanent flag in users collection for UID: ${uid}`)
           try {
-            await adminDb.collection("memberships").doc(uid).set(
+            await adminDb.collection("users").doc(uid).set(
               {
-                hasUsedFreeTrial: true,
+                hasUsedFacelessprenuerTrial: true,
                 updatedAt: FieldValue.serverTimestamp(),
               },
               { merge: true },
             )
-            console.log(`[v0] ✅ Trial usage flag set in memberships collection`)
+            console.log(`[v0] ✅ Permanent trial usage flag set in users collection (will never be deleted)`)
           } catch (error: any) {
             console.error(`[v0] ❌ Failed to set trial usage flag:`, error.message)
           }
