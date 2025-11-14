@@ -36,6 +36,8 @@ export interface MembershipDoc {
   // Features (pro features only)
   features: MembershipFeatures
 
+  hasUsedFreeTrial?: boolean // Track if user has ever used free trial for facelessprenuer
+
   // Metadata
   createdAt: any
   updatedAt: any
@@ -314,6 +316,9 @@ export async function setFacelessprenuer(
 ) {
   console.log("🔄 Creating Facelessprenuer membership for:", uid.substring(0, 8) + "...")
 
+  const freeUserDoc = await adminDb.collection("freeUsers").doc(uid).get()
+  const preservedTrialFlag = freeUserDoc.data()?.preservedTrialFlag === true
+
   const membershipData: Partial<MembershipDoc> = {
     uid,
     email: params.email || null,
@@ -328,12 +333,13 @@ export async function setFacelessprenuer(
     downloadsUsed: 0,
     bundlesCreated: 0,
     features: { ...FACELESSPRENUER_FEATURES },
+    hasUsedFreeTrial: preservedTrialFlag || false,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   }
 
   await adminDb.collection("memberships").doc(uid).set(membershipData)
-  console.log("✅ Facelessprenuer membership created successfully")
+  console.log("✅ Facelessprenuer membership created successfully with trial flag:", preservedTrialFlag)
 }
 
 export async function setCreatorProStatus(uid: string, status: MembershipStatus, updates?: Partial<MembershipDoc>) {

@@ -391,44 +391,32 @@ export async function POST(request: Request) {
         }
 
         if (sub.status === "trialing" || (sub.status === "active" && sub.trial_end)) {
-          console.log(`[v0] User started trial - marking hasUsedFreeTrial as true for UID: ${uid}`)
+          console.log(`[v0] User started trial - marking hasUsedFreeTrial in memberships collection for UID: ${uid}`)
           try {
-            const freeUserRef = adminDb.collection("freeUsers").doc(uid)
-            await freeUserRef.set(
+            await adminDb.collection("memberships").doc(uid).set(
               {
                 hasUsedFreeTrial: true,
                 updatedAt: FieldValue.serverTimestamp(),
               },
               { merge: true },
             )
-            console.log(`[v0] ✅ Trial usage flag set successfully`)
+            console.log(`[v0] ✅ Trial usage flag set in memberships collection`)
           } catch (error: any) {
             console.error(`[v0] ❌ Failed to set trial usage flag:`, error.message)
           }
         }
 
         if (FACELESSPRENUER_PRICE_IDS.includes(priceId) && sub.status === "active") {
-          console.log(`[v0] Facelessprenuer subscription active - marking hasUsedFreeTrial as true for UID: ${uid}`)
+          console.log(`[v0] Facelessprenuer subscription active - marking hasUsedFreeTrial for UID: ${uid}`)
           try {
-            const freeUserRef = adminDb.collection("freeUsers").doc(uid)
-            await freeUserRef.set(
+            await adminDb.collection("memberships").doc(uid).set(
               {
                 hasUsedFreeTrial: true,
-                hasEverPurchasedFacelessprenuer: true,
                 updatedAt: FieldValue.serverTimestamp(),
               },
               { merge: true },
             )
-            
-            const userRef = adminDb.collection("users").doc(uid)
-            await userRef.set(
-              {
-                hasEverPurchasedFacelessprenuer: true,
-                updatedAt: FieldValue.serverTimestamp(),
-              },
-              { merge: true },
-            )
-            console.log(`[v0] ✅ Facelessprenuer purchase flag set successfully in both collections`)
+            console.log(`[v0] ✅ Facelessprenuer purchase flag set in memberships collection`)
           } catch (error: any) {
             console.error(`[v0] ❌ Failed to set Facelessprenuer purchase flag:`, error.message)
           }
@@ -532,32 +520,33 @@ export async function POST(request: Request) {
           return NextResponse.json({ received: true })
         }
 
-        console.log(`[v0] Subscription deleted for ${uid} - preserving purchase history flags`)
+        console.log(`[v0] Subscription deleted for ${uid} - preserving hasUsedFreeTrial flag`)
         
-        // Update users collection without deleting the hasEverPurchasedFacelessprenuer flag
+        const membershipRef = adminDb.collection("memberships").doc(uid)
+        const membershipDoc = await membershipRef.get()
+        const hasUsedTrial = membershipDoc.data()?.hasUsedFreeTrial === true
+        
         await adminDb.collection("users").doc(uid).update({
           storefrontActive: false,
           updatedAt: FieldValue.serverTimestamp(),
-          // NOTE: We intentionally do NOT reset hasEverPurchasedFacelessprenuer here
-          // This flag should persist forever to prevent users from getting free trials again
         })
 
-        await adminDb.collection("memberships").doc(uid).delete()
+        await membershipRef.delete()
         
-        // Only update plan and reset usage counters, but keep hasUsedFreeTrial and hasEverPurchasedFacelessprenuer
         await adminDb.collection("freeUsers").doc(uid).set(
           {
             uid,
             plan: "free",
             downloadsUsed: 0,
             bundlesCreated: 0,
+            // Preserve the trial flag so when they upgrade again, memberships will be created with this flag
+            preservedTrialFlag: hasUsedTrial,
             updatedAt: FieldValue.serverTimestamp(),
-            // NOTE: hasUsedFreeTrial and hasEverPurchasedFacelessprenuer are preserved via merge: true
           },
           { merge: true }
         )
         
-        console.log(`[v0] User ${uid} moved to free tier. Purchase history flags preserved in both collections.`)
+        console.log(`[v0] User ${uid} moved to free tier. Trial flag preserved: ${hasUsedTrial}`)
         break
       }
 

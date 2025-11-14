@@ -16,20 +16,21 @@ const FACELESSPRENUER_PRICE_ID = "price_1SPShFDheyb0pkWF6K9XzlpE" // $39/month
 
 async function hasEverPurchasedFacelessprenuer(userId: string): Promise<boolean> {
   try {
-    const userDoc = await adminDb.collection("users").doc(userId).get()
-    const userData = userDoc.data()
+    console.log("[v0] Checking memberships collection for trial history")
+    const membershipDoc = await adminDb.collection("memberships").doc(userId).get()
+    const membershipData = membershipDoc.data()
 
-    const hasPurchased = userData?.hasEverPurchasedFacelessprenuer === true
+    const hasUsedTrial = membershipData?.hasUsedFreeTrial === true
 
-    console.log("[v0] Trial check from Firebase:", {
+    console.log("[v0] Trial check from memberships collection:", {
       userId: userId.substring(0, 8) + "...",
-      hasEverPurchasedFacelessprenuer: hasPurchased,
-      shouldShowTrial: !hasPurchased,
+      hasUsedFreeTrial: hasUsedTrial,
+      shouldShowTrial: !hasUsedTrial,
     })
 
-    return hasPurchased
+    return hasUsedTrial
   } catch (error) {
-    console.error("[v0] Error checking Firebase flag:", error)
+    console.error("[v0] Error checking memberships flag:", error)
     // On error, default to false (allow trial) to not block purchases
     return false
   }
@@ -176,7 +177,7 @@ export async function GET(request: NextRequest) {
 
     console.log("[v0] Trial Eligibility Result:", {
       userId: uid.substring(0, 8) + "...",
-      hasEverPurchasedFacelessprenuer: hasEverPurchased,
+      hasUsedFreeTrial: hasEverPurchased,
       shouldShowTrial: !hasEverPurchased,
     })
 
