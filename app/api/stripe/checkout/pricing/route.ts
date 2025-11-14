@@ -12,25 +12,34 @@ const stripe = new Stripe(stripeKey, {
 })
 
 const FACELESS_PRO_PRICE_ID = "price_1SQ8yADheyb0pkWFK5LCP3Nd"
-const FACELESSPRENUER_PRICE_ID = "price_1SPShFDheyb0pkWF6K9XzlpE" // $39/month
+const FACELESSPRENUER_TRIAL_PRICE_ID = "price_1SPShFDheyb0pkWF6K9XzlpE" // $39/month with 3-day trial
 
 async function hasEverPurchasedFacelessprenuer(userId: string): Promise<boolean> {
   try {
-    console.log("[v0] Checking memberships collection for trial history")
+    console.log("[v0] Checking memberships collection for trial history via priceId")
     const membershipDoc = await adminDb.collection("memberships").doc(userId).get()
+    
+    if (!membershipDoc.exists) {
+      console.log("[v0] No membership found - user has never purchased")
+      return false
+    }
+    
     const membershipData = membershipDoc.data()
+    const priceId = membershipData?.priceId
 
-    const hasUsedTrial = membershipData?.hasUsedFreeTrial === true
+    const hasUsedTrial = priceId === FACELESSPRENUER_TRIAL_PRICE_ID
 
-    console.log("[v0] Trial check from memberships collection:", {
+    console.log("[v0] Trial check from memberships priceId:", {
       userId: userId.substring(0, 8) + "...",
-      hasUsedFreeTrial: hasUsedTrial,
+      priceId: priceId,
+      trialPriceId: FACELESSPRENUER_TRIAL_PRICE_ID,
+      hasUsedTrial: hasUsedTrial,
       shouldShowTrial: !hasUsedTrial,
     })
 
     return hasUsedTrial
   } catch (error) {
-    console.error("[v0] Error checking memberships flag:", error)
+    console.error("[v0] Error checking memberships priceId:", error)
     // On error, default to false (allow trial) to not block purchases
     return false
   }
@@ -75,7 +84,7 @@ export async function POST(request: NextRequest) {
       planName = "faceless_pro"
       console.log(`💲 [Membership Checkout] Faceless Pro - $29/month (no trial)`)
     } else if (plan === "facelessprenuer") {
-      if (!FACELESSPRENUER_PRICE_ID) {
+      if (!FACELESSPRENUER_TRIAL_PRICE_ID) {
         console.error("❌ [Membership Checkout] Missing Facelessprenuer price ID")
         return NextResponse.json(
           { error: "Facelessprenuer plan is not configured. Please contact support." },
@@ -91,7 +100,7 @@ export async function POST(request: NextRequest) {
         willApplyTrial: !hasEverPurchased,
       })
 
-      priceId = FACELESSPRENUER_PRICE_ID
+      priceId = FACELESSPRENUER_TRIAL_PRICE_ID
       planName = "facelessprenuer"
       shouldApplyTrial = !hasEverPurchased
 
@@ -184,7 +193,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       shouldShowTrial: !hasEverPurchased,
       hasUsedFreeTrial: hasEverPurchased,
-      priceId: FACELESSPRENUER_PRICE_ID,
+      priceId: FACELESSPRENUER_TRIAL_PRICE_ID,
     })
   } catch (error: any) {
     console.error("[v0] Error checking trial eligibility:", error)

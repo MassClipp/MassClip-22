@@ -520,33 +520,35 @@ export async function POST(request: Request) {
           return NextResponse.json({ received: true })
         }
 
-        console.log(`[v0] Subscription deleted for ${uid} - preserving hasUsedFreeTrial flag`)
+        console.log(`[v0] Subscription deleted for ${uid}`)
         
+        // This preserves the priceId history so we know they've used the trial
         const membershipRef = adminDb.collection("memberships").doc(uid)
-        const membershipDoc = await membershipRef.get()
-        const hasUsedTrial = membershipDoc.data()?.hasUsedFreeTrial === true
+        await membershipRef.update({
+          status: "canceled",
+          isActive: false,
+          updatedAt: FieldValue.serverTimestamp(),
+        })
         
+        // Update user status
         await adminDb.collection("users").doc(uid).update({
           storefrontActive: false,
           updatedAt: FieldValue.serverTimestamp(),
         })
 
-        await membershipRef.delete()
-        
+        // Set them back to free tier
         await adminDb.collection("freeUsers").doc(uid).set(
           {
             uid,
             plan: "free",
             downloadsUsed: 0,
             bundlesCreated: 0,
-            // Preserve the trial flag so when they upgrade again, memberships will be created with this flag
-            preservedTrialFlag: hasUsedTrial,
             updatedAt: FieldValue.serverTimestamp(),
           },
           { merge: true }
         )
         
-        console.log(`[v0] User ${uid} moved to free tier. Trial flag preserved: ${hasUsedTrial}`)
+        console.log(`[v0] User ${uid} moved to free tier. Membership document preserved with priceId history.`)
         break
       }
 
