@@ -920,7 +920,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                   onClick={() => handleNavigation("/dashboard/upgrade")}
                   variant="ghost"
                   size="sm"
-                  className="w-full h-10 p-0 rounded-lg transition-all duration-200 bg-gradient-to-br from-blue-500/20 to-cyan-500/20 text-blue-400 hover:from-blue-500/30 hover:to-cyan-500/30 border border-blue-500/20"
+                  className="w-full h-10 p-0 rounded-lg transition-all duration-200 bg-gradient-to-br from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600 border border-blue-500/20 shadow-lg shadow-blue-500/20"
                   title="Upgrade"
                 >
                   <CreditCard className="h-4 w-4" />
@@ -952,7 +952,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                     size="sm"
                     className={`w-full h-10 p-0 rounded-lg transition-all duration-200 ${
                       item.gradient
-                        ? "bg-gradient-to-r from-purple-500/30 via-blue-500/30 to-pink-500/30 text-white hover:from-purple-500/40 hover:via-blue-500/40 hover:to-pink-500/40"
+                        ? "bg-gradient-to-r from-purple-500 via-blue-500/30 to-pink-500/30 text-white hover:from-purple-500/40 hover:via-blue-500/40 hover:to-pink-500/40"
                         : "text-zinc-400 hover:text-white hover:bg-white/5"
                     }`}
                     title={item.label}
@@ -1029,7 +1029,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                       }}
                       className="flex items-center gap-3 mb-3 w-full text-left hover:bg-white/5 px-3 py-2.5 rounded-lg transition-all duration-200 group"
                     >
-                      <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-white border border-white/20 group-hover:bg-white/90 transition-all duration-200">
+                      <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 border border-blue-400/20 group-hover:from-blue-600 group-hover:to-cyan-600 transition-all duration-200 shadow-md shadow-blue-500/20">
                         <MessageSquare className="h-4 w-4 text-black" />
                       </div>
                       <span className="text-sm font-medium text-white">Vex AI</span>
@@ -1233,7 +1233,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                           >
                             <Settings className="h-4 w-4 mr-2" />
                             Security
-                          </DropdownMenuItem>
+                          </DropdownMenuitem>
                           <DropdownMenuSeparator className="bg-white/10" />
                           <DropdownMenuItem
                             onClick={handleLogout}
@@ -1311,7 +1311,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                     }}
                     className="flex items-center gap-3 mb-3 w-full text-left hover:bg-white/5 px-3 py-2.5 rounded-lg transition-all duration-200 group"
                   >
-                    <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-white border border-white/20 group-hover:bg-white/90 transition-all duration-200">
+                    <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 border border-blue-400/20 group-hover:from-blue-600 group-hover:to-cyan-600 transition-all duration-200 shadow-md shadow-blue-500/20">
                       <MessageSquare className="h-4 w-4 text-black" />
                     </div>
                     <span className="text-sm font-medium text-white">Vex AI</span>
@@ -1431,8 +1431,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                             } text-white border-0 px-3 py-2 shadow-lg`}
                           >
                             <Clock className="h-3 w-3 mr-1.5" />
-                            Free Trial: {trialStatus.daysRemaining} {trialStatus.daysRemaining === 1 ? "day" : "days"}{" "}
-                            {/* Added space */} left
+                            Free Trial: {trialStatus.daysRemaining} {trialStatus.daysRemaining === 1 ? "day" : "days"} {/* Added space */} left
                           </Badge>
                         </div>
                       ) : shouldShowTrialButton ? (

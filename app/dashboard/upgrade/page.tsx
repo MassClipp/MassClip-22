@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from 'next/navigation'
-import { CheckCircle2, Crown, Shield, Package, Loader2 } from 'lucide-react'
+import { CheckCircle2, Crown, Shield, Package, Loader2, Check } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { useAuth } from "@/contexts/auth-context"
@@ -343,7 +343,7 @@ export default function UpgradePage() {
         {/* Facelessprenuer Plan */}
         <Card className="relative overflow-hidden border border-zinc-700/50 bg-gradient-to-br from-zinc-900/90 to-black/90">
           {!statusLoading && (
-            <div className="absolute right-0 top-0 bg-gradient-to-r from-amber-400 via-yellow-500 to-amber-400 px-3 py-1 text-xs font-bold text-black shadow-lg shadow-yellow-500/20">
+            <div className="absolute right-0 top-0 bg-gradient-to-r from-blue-400 via-cyan-400 to-blue-500 px-3 py-1 text-xs font-bold text-black shadow-lg shadow-blue-500/30">
               {subscriptionStatus?.currentPlan === "facelessprenuer" ? "CURRENT PLAN" : "RECOMMENDED"}
             </div>
           )}
@@ -351,9 +351,9 @@ export default function UpgradePage() {
           <div className="p-6">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
               <div className="flex items-start md:items-center gap-3">
-                <div className="p-2 rounded-lg bg-white border-2 border-transparent bg-gradient-to-br from-amber-400 via-yellow-500 to-amber-400 bg-clip-padding flex-shrink-0 relative shadow-lg shadow-yellow-500/30">
+                <div className="p-2 rounded-lg bg-white border-2 border-transparent bg-gradient-to-br from-blue-400 via-cyan-400 to-blue-500 bg-clip-padding flex-shrink-0 relative shadow-lg shadow-blue-500/30">
                   <div className="absolute inset-0.5 bg-white rounded-lg"></div>
-                  <Crown className="h-6 w-6 text-transparent bg-gradient-to-br from-amber-500 via-yellow-500 to-amber-600 bg-clip-text relative z-10" />
+                  <Crown className="h-6 w-6 text-transparent bg-gradient-to-br from-blue-500 via-cyan-500 to-blue-600 bg-clip-text relative z-10" style={{ WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <h2 className="text-2xl font-light text-white">Facelessprenuer</h2>
@@ -383,20 +383,10 @@ export default function UpgradePage() {
                 "Only 10% platform fee on sales",
               ].map((feature, index) => (
                 <div key={index} className="flex items-start gap-2">
-                  <CheckCircle2 className="h-4 w-4 flex-shrink-0 mt-0.5 text-transparent bg-gradient-to-br from-amber-400 via-yellow-500 to-amber-600 bg-clip-text fill-current" style={{ fill: 'url(#gold-gradient)' }} />
+                  <Check className="h-4 w-4 flex-shrink-0 mt-0.5 text-transparent bg-gradient-to-br from-blue-400 via-cyan-400 to-blue-500 rounded-full p-0.5" style={{ fill: 'currentColor', stroke: 'white', strokeWidth: 3 }} />
                   <span className="text-white text-sm leading-relaxed">{feature}</span>
                 </div>
               ))}
-              {/* Add SVG gradient definition */}
-              <svg width="0" height="0">
-                <defs>
-                  <linearGradient id="gold-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#fbbf24" />
-                    <stop offset="50%" stopColor="#eab308" />
-                    <stop offset="100%" stopColor="#d97706" />
-                  </linearGradient>
-                </defs>
-              </svg>
             </div>
 
             {subscriptionStatus?.currentPlan === "facelessprenuer" ? (
