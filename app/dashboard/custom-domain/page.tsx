@@ -9,19 +9,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/components/ui/use-toast"
-import {
-  Loader2,
-  Globe,
-  CheckCircle,
-  AlertCircle,
-  Lock,
-  ExternalLink,
-  Copy,
-  RefreshCw,
-  Trash2,
-  Shield,
-} from "lucide-react"
-import { useRouter } from "next/navigation"
+import { Loader2, Globe, CheckCircle, AlertCircle, Lock, ExternalLink, Copy, RefreshCw, Trash2, Shield } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 
 type DomainStatus = "pending" | "verifying" | "active" | "failed" | "removed"
 type SSLStatus = "pending" | "active" | "error"
@@ -518,18 +507,18 @@ export default function CustomDomainPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="flex items-center justify-between p-4 rounded-lg bg-zinc-800/50 border border-zinc-700">
-                <div className="flex items-center gap-3">
-                  <Globe className="h-5 w-5 text-zinc-400" />
-                  <span className="text-white font-medium">{currentDomain.domain}</span>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 rounded-lg bg-zinc-800/50 border border-zinc-700 gap-3">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <Globe className="h-5 w-5 text-zinc-400 flex-shrink-0" />
+                  <span className="text-white font-medium break-all">{currentDomain.domain}</span>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                   {currentDomain.status === "active" && (
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => window.open(`https://${currentDomain.domain}`, "_blank")}
-                      className="border-zinc-700 hover:bg-zinc-800 bg-transparent"
+                      className="border-zinc-700 hover:bg-zinc-800 bg-transparent w-full sm:w-auto"
                     >
                       <ExternalLink className="h-4 w-4 mr-2" />
                       Visit
@@ -541,7 +530,7 @@ export default function CustomDomainPage() {
                       size="sm"
                       onClick={handleReactivateDomain}
                       disabled={reactivating}
-                      className="border-emerald-700 hover:bg-emerald-900/20 bg-transparent text-emerald-400"
+                      className="border-emerald-700 hover:bg-emerald-900/20 bg-transparent text-emerald-400 w-full sm:w-auto"
                     >
                       {reactivating ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -558,7 +547,7 @@ export default function CustomDomainPage() {
                     size="sm"
                     onClick={handleRemoveDomain}
                     disabled={removing}
-                    className="border-red-700 hover:bg-red-900/20 bg-transparent text-red-400"
+                    className="border-red-700 hover:bg-red-900/20 bg-transparent text-red-400 w-full sm:w-auto"
                   >
                     {removing ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -632,30 +621,30 @@ export default function CustomDomainPage() {
                     <div className="space-y-3">
                       {/* TXT Record */}
                       <div className="p-4 rounded-lg bg-zinc-800/30 border border-zinc-700/50 space-y-3">
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                           <span className="text-xs font-medium text-zinc-400">TXT Record (Verification)</span>
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => copyToClipboard(currentDomain.verificationToken)}
-                            className="h-7 text-xs"
+                            className="h-7 text-xs w-full sm:w-auto"
                           >
                             <Copy className="h-3 w-3 mr-1" />
                             Copy Value
                           </Button>
                         </div>
-                        <div className="grid grid-cols-3 gap-4 text-sm">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
                           <div>
                             <span className="text-zinc-500 text-xs">Type</span>
-                            <p className="text-white font-mono">TXT</p>
+                            <p className="text-white font-mono break-all">TXT</p>
                           </div>
                           <div>
                             <span className="text-zinc-500 text-xs">Name</span>
-                            <p className="text-white font-mono">_vercel-challenge</p>
+                            <p className="text-white font-mono break-all">_vercel-challenge</p>
                           </div>
                           <div>
                             <span className="text-zinc-500 text-xs">Value</span>
-                            <p className="text-white font-mono truncate">{currentDomain.verificationToken}</p>
+                            <p className="text-white font-mono break-all">{currentDomain.verificationToken}</p>
                           </div>
                         </div>
                       </div>
@@ -671,30 +660,30 @@ export default function CustomDomainPage() {
 
                         return (
                           <div className="p-4 rounded-lg bg-zinc-800/30 border border-zinc-700/50 space-y-3">
-                            <div className="flex items-center justify-between">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                               <span className="text-xs font-medium text-zinc-400">{recordType} Record (Routing)</span>
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => copyToClipboard(recordValue)}
-                                className="h-7 text-xs"
+                                className="h-7 text-xs w-full sm:w-auto"
                               >
                                 <Copy className="h-3 w-3 mr-1" />
                                 Copy Value
                               </Button>
                             </div>
-                            <div className="grid grid-cols-3 gap-4 text-sm">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
                               <div>
                                 <span className="text-zinc-500 text-xs">Type</span>
-                                <p className="text-white font-mono">{recordType}</p>
+                                <p className="text-white font-mono break-all">{recordType}</p>
                               </div>
                               <div>
                                 <span className="text-zinc-500 text-xs">Name</span>
-                                <p className="text-white font-mono">{recordName}</p>
+                                <p className="text-white font-mono break-all">{recordName}</p>
                               </div>
                               <div>
                                 <span className="text-zinc-500 text-xs">Value</span>
-                                <p className="text-white font-mono">{recordValue}</p>
+                                <p className="text-white font-mono break-all">{recordValue}</p>
                               </div>
                             </div>
                           </div>

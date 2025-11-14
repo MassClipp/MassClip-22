@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect } from "react"
+import { useRouter } from 'next/navigation'
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -14,15 +14,44 @@ import {
 } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/auth-context"
-import { AlertTriangle } from "lucide-react"
+import { AlertTriangle } from 'lucide-react'
+import { doc, getDoc } from "firebase/firestore"
+import { db } from "@/lib/firebase"
 
 export function CancelSubscriptionButton() {
   const [isLoading, setIsLoading] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
+  const [planName, setPlanName] = useState("your plan")
   const { toast } = useToast()
   const router = useRouter()
   const { user } = useAuth()
-  const planName = "Creator VIP" // Assuming planName is a variable that holds the current plan name
+
+  useEffect(() => {
+    const fetchPlanName = async () => {
+      if (!user) return
+
+      try {
+        const membershipDoc = await getDoc(doc(db, "memberships", user.uid))
+        if (membershipDoc.exists()) {
+          const data = membershipDoc.data()
+          const plan = data.plan
+          
+          // Map plan names to display names
+          if (plan === "facelessprenuer") {
+            setPlanName("Facelessprenuer")
+          } else if (plan === "faceless_pro") {
+            setPlanName("Faceless Pro")
+          } else {
+            setPlanName("your plan")
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching plan name:", error)
+      }
+    }
+
+    fetchPlanName()
+  }, [user])
 
   const handleCancel = async () => {
     if (!user) {

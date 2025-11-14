@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState, useRef } from "react"
-import { Play, Pause, Download, Lock } from "lucide-react"
+import { Play, Pause, Download, Lock } from 'lucide-react'
 import { formatFileSize } from "@/lib/utils"
 import Image from "next/image"
 
@@ -121,12 +121,12 @@ export default function PremiumVideoCard({
           <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
             <button
               onClick={togglePlay}
-              className="w-12 h-12 sm:w-10 sm:h-10 rounded-full bg-black/70 backdrop-blur-sm hover:bg-black/80 flex items-center justify-center transition-colors shadow-lg"
+              className="w-10 h-10 sm:w-8 sm:h-8 rounded-full bg-black/70 backdrop-blur-sm hover:bg-black/80 flex items-center justify-center transition-colors shadow-lg"
             >
               {isPlaying ? (
-                <Pause className="h-5 w-5 sm:h-4 sm:w-4 text-white" strokeWidth={1.5} />
+                <Pause className="h-4 w-4 sm:h-3.5 sm:w-3.5 text-white" strokeWidth={1.5} />
               ) : (
-                <Play className="h-5 w-5 sm:h-4 sm:w-4 text-white ml-0.5" strokeWidth={1.5} />
+                <Play className="h-4 w-4 sm:h-3.5 sm:w-3.5 text-white ml-0.5" strokeWidth={1.5} />
               )}
             </button>
           </div>

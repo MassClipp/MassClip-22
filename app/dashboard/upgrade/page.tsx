@@ -311,6 +311,7 @@ export default function UpgradePage() {
                 { text: "5 bundles max on storefront", highlight: false },
                 { text: "25 videos per bundle limit", highlight: false },
                 { text: "Basic Vex AI - file metadata & folder organization", highlight: false },
+                { text: "Basic customization", highlight: false },
                 { text: "15% platform fee on sales", highlight: false },
               ].map((feature, index) => (
                 <div key={index} className="flex items-center gap-2">
@@ -400,7 +401,7 @@ export default function UpgradePage() {
               <Button
                 onClick={() => handleUpgradeClick("facelessprenuer")}
                 disabled={checkingOut}
-                className="w-full bg-white hover:bg-gray-200 text-black disabled:opacity-50"
+                className="w-full bg-gradient-to-r from-blue-400 via-cyan-400 to-blue-500 hover:from-blue-500 hover:via-cyan-500 hover:to-blue-600 text-white font-medium shadow-lg shadow-blue-500/30 disabled:opacity-50"
               >
                 {checkingOut ? "Processing..." : "Upgrade to Facelessprenuer"}
               </Button>
