@@ -16,7 +16,33 @@ const FACELESSPRENUER_TRIAL_PRICE_ID = "price_1SPShFDheyb0pkWF6K9XzlpE" // $39/m
 
 async function hasEverPurchasedFacelessprenuer(userId: string): Promise<boolean> {
   try {
-    console.log("[v0] Checking users collection for hasUsedFacelessprenuerTrial flag")
+    console.log("[v0] Checking trial eligibility for user:", userId.substring(0, 8) + "...")
+    
+    const membershipDoc = await adminDb.collection("memberships").doc(userId).get()
+    
+    if (membershipDoc.exists) {
+      const membershipData = membershipDoc.data()
+      
+      // If they have ANY record of Facelessprenuer (even canceled), they've used the trial
+      if (membershipData?.plan === "facelessprenuer") {
+        console.log("[v0] Found Facelessprenuer membership record (status: " + membershipData.status + ") - trial already used")
+        
+        // Set the flag in users collection for faster future lookups
+        await adminDb.collection("users").doc(userId).set(
+          { hasUsedFacelessprenuerTrial: true },
+          { merge: true }
+        )
+        
+        return true
+      }
+      
+      // Check hasUsedFreeTrial field on membership document
+      if (membershipData?.hasUsedFreeTrial === true) {
+        console.log("[v0] hasUsedFreeTrial flag is true on membership - trial already used")
+        return true
+      }
+    }
+    
     const userDoc = await adminDb.collection("users").doc(userId).get()
     
     if (!userDoc.exists) {
@@ -35,7 +61,7 @@ async function hasEverPurchasedFacelessprenuer(userId: string): Promise<boolean>
 
     return hasUsedTrial
   } catch (error) {
-    console.error("[v0] Error checking users collection:", error)
+    console.error("[v0] Error checking trial eligibility:", error)
     // On error, default to false (allow trial) to not block purchases
     return false
   }
@@ -103,6 +129,14 @@ export async function POST(request: NextRequest) {
       console.log(
         `💲 [Membership Checkout] Facelessprenuer - ${!hasEverPurchased ? "3-day FREE trial then $39/month (first-time buyer)" : "$39/month (returning buyer, no trial)"}`,
       )
+      
+      if (!hasEverPurchased) {
+        await adminDb.collection("users").doc(uid).set(
+          { hasUsedFacelessprenuerTrial: true },
+          { merge: true }
+        )
+        console.log("[v0] Set hasUsedFacelessprenuerTrial flag for user")
+      }
     } else {
       console.error("❌ [Membership Checkout] Invalid plan:", plan)
       return NextResponse.json({ error: "Invalid plan selected." }, { status: 400 })

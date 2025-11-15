@@ -78,8 +78,8 @@ export async function GET(request: NextRequest) {
           status: "inactive",
           isActive: false,
           trialActive: false,
-          trialEndDate: trialEndDate,
-          updatedAt: new Date(),
+          trialExpiredAt: trialEndDate,
+          // Remove updatedAt to prevent constant writes
         })
       }
     })
@@ -186,8 +186,8 @@ export async function POST(request: NextRequest) {
           status: "inactive",
           isActive: false,
           trialActive: false,
-          trialEndDate: trialEndDate,
-          updatedAt: new Date(),
+          trialExpiredAt: trialEndDate,
+          // Remove updatedAt to prevent constant writes
         })
       }
     })

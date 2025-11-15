@@ -126,7 +126,6 @@ export async function getMembership(uid: string): Promise<MembershipDoc | null> 
             isActive: false,
             trialActive: false,
             trialExpiredAt: now,
-            updatedAt: FieldValue.serverTimestamp(),
           })
 
           console.log("✅ User downgraded to free plan due to expired trial (membership preserved)")
@@ -142,7 +141,12 @@ export async function getMembership(uid: string): Promise<MembershipDoc | null> 
         return data
       }
 
-      // For non-trial memberships, validate with Stripe
+      if (data.status === "canceled" || data.status === "inactive") {
+        console.log("ℹ️ Membership is " + data.status + " - user is free tier")
+        return null
+      }
+
+      // For non-trial active memberships, validate with Stripe
       const { getStripeSubscriptionStatus } = await import("./stripe-subscription-service")
       const stripeStatus = await getStripeSubscriptionStatus(uid)
 
@@ -323,8 +327,17 @@ export async function setFacelessprenuer(
 ) {
   console.log("🔄 Creating Facelessprenuer membership for:", uid.substring(0, 8) + "...")
 
-  const freeUserDoc = await adminDb.collection("freeUsers").doc(uid).get()
-  const preservedTrialFlag = freeUserDoc.data()?.preservedTrialFlag === true
+  const existingMembershipDoc = await adminDb.collection("memberships").doc(uid).get()
+  let hasUsedFreeTrial = false
+  
+  if (existingMembershipDoc.exists) {
+    const existingData = existingMembershipDoc.data()
+    // If they're re-subscribing to Facelessprenuer, they've used the trial
+    if (existingData?.plan === "facelessprenuer") {
+      hasUsedFreeTrial = true
+      console.log("🔄 User is re-subscribing to Facelessprenuer - marking trial as used")
+    }
+  }
 
   const membershipData: Partial<MembershipDoc> = {
     uid,
@@ -340,13 +353,19 @@ export async function setFacelessprenuer(
     downloadsUsed: 0,
     bundlesCreated: 0,
     features: { ...FACELESSPRENUER_FEATURES },
-    hasUsedFreeTrial: preservedTrialFlag || false,
+    hasUsedFreeTrial: hasUsedFreeTrial,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   }
 
   await adminDb.collection("memberships").doc(uid).set(membershipData)
-  console.log("✅ Facelessprenuer membership created successfully with trial flag:", preservedTrialFlag)
+  
+  await adminDb.collection("users").doc(uid).set(
+    { hasUsedFacelessprenuerTrial: true },
+    { merge: true }
+  )
+  
+  console.log("✅ Facelessprenuer membership created successfully with trial flag:", hasUsedFreeTrial)
 }
 
 export async function setCreatorProStatus(uid: string, status: MembershipStatus, updates?: Partial<MembershipDoc>) {
