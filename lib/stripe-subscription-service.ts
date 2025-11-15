@@ -87,16 +87,25 @@ export async function getStripeSubscriptionStatus(userId: string): Promise<Strip
           : "free"
       : "free"
 
-    await adminDb.collection("memberships").doc(userId).update({
-      isActive: isActive,
-      status: subscription.status,
-      plan: determinedPlan,
-      cancelAtPeriodEnd: subscription.cancel_at_period_end,
-      currentPeriodEnd: currentPeriodEnd.toISOString(),
-      updatedAt: new Date().toISOString(),
-    })
+    const hasDataChanged =
+      membershipData.isActive !== isActive ||
+      membershipData.status !== subscription.status ||
+      membershipData.plan !== determinedPlan ||
+      membershipData.cancelAtPeriodEnd !== subscription.cancel_at_period_end ||
+      membershipData.currentPeriodEnd !== currentPeriodEnd.toISOString()
 
-    if (!isActive) {
+    if (hasDataChanged) {
+      await adminDb.collection("memberships").doc(userId).update({
+        isActive: isActive,
+        status: subscription.status,
+        plan: determinedPlan,
+        cancelAtPeriodEnd: subscription.cancel_at_period_end,
+        currentPeriodEnd: currentPeriodEnd.toISOString(),
+        updatedAt: new Date().toISOString(),
+      })
+    }
+
+    if (!isActive && hasDataChanged) {
       await adminDb.collection("freeUsers").doc(userId).set({
         uid: userId,
         plan: "free",
