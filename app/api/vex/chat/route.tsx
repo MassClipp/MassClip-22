@@ -391,9 +391,9 @@ ${
 **FACELESS PRO PLAN ($29/month):**${trialStatus?.isOnTrial ? ` (FREE TRIAL - ${trialStatus.daysRemaining} days remaining)` : ""}
 • 3 folders with subfolders
 • 5 bundles max on storefront
-• 15 videos per bundle limit
+• 25 videos per bundle limit
 • Basic Vex AI - file metadata & folder organization only
-• 20% platform fee on sales
+• 15% platform fee on sales
 
 ❌ YOU CANNOT:
 • Analyze or read video transcripts (Facelessprenuer only)
@@ -413,17 +413,22 @@ ${trialStatus?.isOnTrial ? `⏰ Trial ends in ${trialStatus.daysRemaining} days.
     : userPlan === "facelessprenuer"
       ? `
 **FACELESSPRENUER PLAN ($39/month):**${trialStatus?.isOnTrial ? ` (FREE TRIAL - ${trialStatus.daysRemaining} days remaining)` : ""}
+• Custom domains
+• Create custom storefront tabs & products
+• Fully customizable storefront
 • Unlimited folders with subfolders
 • Unlimited bundles on storefront
 • Unlimited videos per bundle
 • Full Vex AI - bundle creation & transcript analysis
-• 10% platform fee on sales
+• Only 10% platform fee on sales
 
 ✅ YOU HAVE FULL ACCESS TO:
 • Analyze and read video transcripts
 • Create bundles for users
 • Reference transcript content
 • All file organization features
+• Custom domain configuration
+• Storefront customization
 
 ${trialStatus?.isOnTrial ? `⏰ Trial ends in ${trialStatus.daysRemaining} days.` : ""}
 `
