@@ -1,9 +1,9 @@
 "use client"
 
 import { useOnboarding } from "@/hooks/use-onboarding"
-import { usePathname } from "next/navigation"
-import { CheckCircle2, Circle, ChevronRight, X, ChevronDown, GripVertical } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { usePathname } from 'next/navigation'
+import { CheckCircle2, Circle, ChevronRight, X, ChevronDown, GripVertical } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { useState, useRef, useEffect } from "react"
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
@@ -23,6 +23,7 @@ export function OnboardingIndicator() {
   const router = useRouter()
   const [isMinimized, setIsMinimized] = useState(false)
   const [isDismissed, setIsDismissed] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
 
   const [position, setPosition] = useState({ x: 0, y: 0 })
   const [isDragging, setIsDragging] = useState(false)
@@ -92,6 +93,19 @@ export function OnboardingIndicator() {
       window.removeEventListener("touchend", handleTouchEnd)
     }
   }, [isDragging, dragStart])
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768)
+    }
+    checkMobile()
+    window.addEventListener("resize", checkMobile)
+    return () => window.removeEventListener("resize", checkMobile)
+  }, [])
+
+  if (isMobile) {
+    return null
+  }
 
   if (pathname === "/dashboard") {
     return null
