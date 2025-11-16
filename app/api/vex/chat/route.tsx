@@ -329,7 +329,7 @@ export async function POST(request: Request) {
     let bundleLimitsContext = ""
     let folderContext = ""
     let planPermissionsContext = ""
-    let userPlan = "starter" // Changed default from "free" to "starter"
+    let userPlan = "free" // Changed default from "free" to "starter"
     let subscriptionData: any = {} // Initialize subscriptionData
     let trialStatus: any = null
     // </CHANGE>
@@ -350,7 +350,7 @@ export async function POST(request: Request) {
             console.log("[v0] User authenticated:", userId)
 
             const tierInfoData = await getUserTierInfo(userId)
-            userPlan = tierInfoData.tier || "starter" // Changed default from "free" to "starter"
+            userPlan = tierInfoData.tier || "free" // Changed default from "free" to "starter"
             subscriptionData = await checkSubscription(userId)
 
             try {
@@ -383,7 +383,7 @@ export async function POST(request: Request) {
 
 ===== YOUR PLAN PERMISSIONS =====
 
-Current Plan: ${userPlan === "faceless_pro" ? "Faceless Pro ($29/month)" : userPlan === "facelessprenuer" ? "Facelessprenuer ($39/month)" : userPlan === "creator_pro" || userPlan === "creator_vip" ? "Creator VIP ($15/month)" : userPlan === "starter" ? "Starter Plan ($3/month)" : "Free Plan (Builder Mode)"}${trialStatus?.isOnTrial ? ` (FREE TRIAL - ${trialStatus.daysRemaining} days remaining)` : ""}
+Current Plan: ${userPlan === "faceless_pro" ? "Faceless Pro ($29/month)" : userPlan === "facelessprenuer" ? "Facelessprenuer ($39/month)" : "Free Plan (Builder Mode)"}${trialStatus?.isOnTrial ? ` (FREE TRIAL - ${trialStatus.daysRemaining} days remaining)` : ""}
 
 ${
   userPlan === "free"
@@ -405,8 +405,8 @@ You're currently on the free plan, which gives you full access to build and orga
 
 Think of the free plan as your setup workspace - build everything first, then upgrade to start earning.
 `
-    : userPlan === "faceless_pro"
-      ? `
+      : userPlan === "faceless_pro"
+        ? `
 **FACELESS PRO PLAN ($29/month):**${trialStatus?.isOnTrial ? ` (FREE TRIAL - ${trialStatus.daysRemaining} days remaining)` : ""}
 • 3 folders with subfolders
 • 5 bundles max on storefront
@@ -429,8 +429,8 @@ Think of the free plan as your setup workspace - build everything first, then up
 
 ${trialStatus?.isOnTrial ? `⏰ Trial ends in ${trialStatus.daysRemaining} days.` : ""}
 `
-      : userPlan === "facelessprenuer"
-        ? `
+        : userPlan === "facelessprenuer"
+          ? `
 **FACELESSPRENUER PLAN ($39/month):**${trialStatus?.isOnTrial ? ` (FREE TRIAL - ${trialStatus.daysRemaining} days remaining)` : ""}
 • Custom domains
 • Create custom storefront tabs & products
@@ -451,7 +451,7 @@ ${trialStatus?.isOnTrial ? `⏰ Trial ends in ${trialStatus.daysRemaining} days.
 
 ${trialStatus?.isOnTrial ? `⏰ Trial ends in ${trialStatus.daysRemaining} days.` : ""}
 `
-        : `
+          : `
 **FREE PLAN:**
 • No paid features
 • Upgrade to Faceless Pro ($29/month) for Basic Vex AI + manual bundle creation
@@ -956,6 +956,7 @@ ${
         ? `⚠️ FACELESS PRO & FACELESSPRENUER PLANS: You have UNLIMITED folders. Create as many as you need!`
         : userPlan === "starter"
           ? `⚠️ STARTER PLAN: User can create ${subscriptionData.features.maxFolders} folders with subfolders.
+
 Check folder count before creating. If at limit, tell them to upgrade to Faceless Pro ($29/month) or Facelessprenuer ($39/month).
 
 `
@@ -1176,11 +1177,11 @@ You: "What's the outcome you want with this bundle? Views? Conversions? Vibe che
         console.log("[v0] Validating CREATE_BUNDLE action...")
 
         const tierInfo = await getUserTierInfo(userId)
-        const userPlan = tierInfo.tier || "starter"
+        const userPlan = tierInfo.tier || "free"
         const subscriptionData = await checkSubscription(userId)
 
         if (!subscriptionData.features.canCreateBundles) {
-          const errorMessage = `❌ Bundle creation via Vex is only available with Full Vex AI on the Facelessprenuer plan ($39/month). You're currently on the ${userPlan === "faceless_pro" ? "Faceless Pro plan with Basic Vex AI (file organization only)" : userPlan === "free" ? "Free plan (builder mode)" : "Starter Plan ($3/month)"}. Upgrade to Facelessprenuer to unlock Vex bundle creation and transcript analysis.`
+          const errorMessage = `❌ Bundle creation via Vex is only available with Full Vex AI on the Facelessprenuer plan ($39/month). You're currently on the ${userPlan === "faceless_pro" ? "Faceless Pro plan with Basic Vex AI (file organization only)" : "Free plan (builder mode)"}. Upgrade to Facelessprenuer to unlock Vex bundle creation and transcript analysis.`
           assistantMessage = assistantMessage.replace(/CREATE_BUNDLE:\s*{.*?}/s, errorMessage)
 
           return NextResponse.json({
@@ -1466,7 +1467,7 @@ async function createBundleDirectly(userId: string, bundleData: any) {
     console.log("[v0] Checking bundle limits...")
     const tierInfo = await getUserTierInfo(userId)
     const subscriptionData = await checkSubscription(userId)
-    const userPlan = tierInfo.tier || "starter"
+    const userPlan = tierInfo.tier || "free"
 
     if (tierInfo.reachedBundleLimit && userPlan !== "faceless_pro" && userPlan !== "facelessprenuer") {
       return {

@@ -1405,7 +1405,7 @@ export default function ViewStorefrontPage() {
                   )}
                 </div>
 
-                {/* Status toggle - More compact on mobile */}
+                {/* Status toggle - Text buttons on mobile, switch on desktop */}
                 <div className="flex items-center gap-2 sm:gap-3 bg-zinc-900/80 backdrop-blur-sm border border-zinc-800 rounded-lg px-3 sm:px-4 py-2 w-full sm:w-auto justify-center sm:justify-start">
                   <div className="flex flex-col items-end">
                     <span className="text-[10px] sm:text-xs font-medium text-white whitespace-nowrap">
@@ -1419,22 +1419,51 @@ export default function ViewStorefrontPage() {
                     )}
                   </div>
 
-                  <Switch
-                    checked={storefrontActive}
-                    onCheckedChange={handleToggleStorefront}
-                    disabled={!isFacelessProActive || updating}
-                    className="data-[state=checked]:bg-white data-[state=unchecked]:bg-zinc-700 flex-shrink-0"
-                  />
-
-                  {storefrontActive ? (
-                    <Badge className="bg-green-500/10 text-green-400 border-green-500/20 text-[10px] sm:text-xs whitespace-nowrap">
+                  {/* Mobile: Text buttons */}
+                  <div className="flex sm:hidden items-center gap-1">
+                    <button
+                      onClick={handleToggleStorefront}
+                      disabled={!isFacelessProActive || updating}
+                      className={`px-2.5 py-1 rounded text-[10px] font-medium transition-all ${
+                        storefrontActive
+                          ? "bg-white text-black"
+                          : "bg-transparent text-zinc-500 hover:text-zinc-400 disabled:opacity-50"
+                      }`}
+                    >
                       Live
-                    </Badge>
-                  ) : (
-                    <Badge variant="secondary" className="bg-zinc-700 text-zinc-300 text-[10px] sm:text-xs whitespace-nowrap">
-                      {!isFacelessProActive ? "Preview" : "Offline"}
-                    </Badge>
-                  )}
+                    </button>
+                    <button
+                      onClick={handleToggleStorefront}
+                      disabled={!isFacelessProActive || updating}
+                      className={`px-2.5 py-1 rounded text-[10px] font-medium transition-all ${
+                        !storefrontActive
+                          ? "bg-zinc-700 text-white"
+                          : "bg-transparent text-zinc-500 hover:text-zinc-400"
+                      }`}
+                    >
+                      Not Live
+                    </button>
+                  </div>
+
+                  {/* Desktop: Switch */}
+                  <div className="hidden sm:flex items-center gap-3">
+                    <Switch
+                      checked={storefrontActive}
+                      onCheckedChange={handleToggleStorefront}
+                      disabled={!isFacelessProActive || updating}
+                      className="data-[state=checked]:bg-white data-[state=unchecked]:bg-zinc-700 flex-shrink-0"
+                    />
+
+                    {storefrontActive ? (
+                      <Badge className="bg-green-500/10 text-green-400 border-green-500/20 text-xs whitespace-nowrap">
+                        Live
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary" className="bg-zinc-700 text-zinc-300 text-xs whitespace-nowrap">
+                        {!isFacelessProActive ? "Preview" : "Offline"}
+                      </Badge>
+                    )}
+                  </div>
                 </div>
 
                 {!isFacelessProActive && (
@@ -1952,6 +1981,14 @@ function EBookCard({ item, username }: { item: ContentItem; username: string | n
               creatorId={user?.uid}
               variant="default"
               className="flex-1 bg-white text-black hover:bg-zinc-100 rounded-md font-medium text-sm px-4 py-2.5 transition-colors"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+.5 transition-colors"
             />
           </div>
         </div>

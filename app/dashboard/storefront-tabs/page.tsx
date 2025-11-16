@@ -410,12 +410,38 @@ export default function StorefrontTabsPage() {
                             )}
                           </Button>
                         )}
-                        {/* CHANGE: Updated Switch to use white checked color */}
+                        {/* Mobile: On/Off buttons */}
+                        <div className="flex sm:hidden items-center gap-1">
+                          <button
+                            onClick={() => toggleTab(tab.id)}
+                            disabled={isDefaultTab}
+                            className={`px-2 py-1 rounded text-[10px] font-medium transition-all ${
+                              tab.enabled
+                                ? "bg-white text-black"
+                                : "bg-transparent text-zinc-500 hover:text-zinc-400 disabled:opacity-50"
+                            }`}
+                          >
+                            On
+                          </button>
+                          <button
+                            onClick={() => toggleTab(tab.id)}
+                            disabled={isDefaultTab}
+                            className={`px-2 py-1 rounded text-[10px] font-medium transition-all ${
+                              !tab.enabled
+                                ? "bg-zinc-700 text-white"
+                                : "bg-transparent text-zinc-500 hover:text-zinc-400"
+                            }`}
+                          >
+                            Off
+                          </button>
+                        </div>
+
+                        {/* Desktop: Switch */}
                         <Switch
                           checked={tab.enabled}
                           onCheckedChange={() => toggleTab(tab.id)}
                           disabled={isDefaultTab}
-                          className="data-[state=checked]:bg-white data-[state=unchecked]:bg-zinc-700 flex-shrink-0"
+                          className="data-[state=checked]:bg-white data-[state=unchecked]:bg-zinc-700 flex-shrink-0 hidden sm:inline-flex"
                         />
                       </div>
                     </div>
@@ -689,7 +715,7 @@ export default function StorefrontTabsPage() {
                               </>
                             )}
                           </Button>
-                          <Switch checked={tab.enabled} onCheckedChange={() => toggleTab(tab.id)} className="flex-shrink-0" />
+                          <Switch checked={tab.enabled} onCheckedChange={() => toggleTab(tab.id)} className="flex-shrink-0 data-[state=checked]:bg-white data-[state=unchecked]:bg-zinc-700" />
                         </div>
                       </div>
 

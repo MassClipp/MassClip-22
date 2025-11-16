@@ -1079,10 +1079,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                   </div>
 
                   <div className="flex-1 px-3 py-4">
-                    <div className="mb-4 md:hidden">
-                      <OnboardingChecklist />
-                    </div>
-
+                    {/* Removed duplicate onboarding checklist */}
                     <div className="mb-6">
                       <div className="mb-3 px-3">
                         <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">
@@ -1225,7 +1222,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                           >
                             <Settings className="h-4 w-4 mr-2" />
                             Security
-                          </DropdownMenuItem>
+                          </DropdownMenu>
                           <DropdownMenuSeparator className="bg-white/10" />
                           <DropdownMenuItem
                             onClick={handleLogout}
@@ -1233,7 +1230,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                           >
                             <LogOut className="h-4 w-4 mr-2" />
                             Sign Out
-                          </DropdownMenuItem>
+                          </DropdownMenu>
                         </DropdownMenuContent>
                       </DropdownMenu>
 
@@ -1517,7 +1514,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                         >
                           <LogOut className="h-4 w-4 mr-2" />
                           Sign Out
-                        </DropdownMenuItem>
+                        </DropdownMenu>
                       </DropdownMenuContent>
                     </DropdownMenu>
 
