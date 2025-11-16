@@ -10,14 +10,15 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
-import { Upload, X, Loader2, FileText, ArrowLeft } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { Upload, X, Loader2, FileText, ArrowLeft } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { motion } from "framer-motion"
 
 interface PageFile {
   id: string
   file: File
   preview: string
+  title?: string // Added title field to store page titles/chapters
 }
 
 export default function CreateEBookPage() {
@@ -96,8 +97,13 @@ export default function CreateEBookPage() {
       id: Math.random().toString(36).substr(2, 9),
       file,
       preview: file.type.startsWith("image/") ? URL.createObjectURL(file) : "",
+      title: "", // Initialize empty title
     }))
     setPageFiles((prev) => [...prev, ...newPages])
+  }
+
+  const updatePageTitle = (id: string, title: string) => {
+    setPageFiles((prev) => prev.map((page) => (page.id === id ? { ...page, title } : page)))
   }
 
   const removePage = (id: string) => {
@@ -205,6 +211,9 @@ export default function CreateEBookPage() {
         pageFormData.append("file", pageFiles[i].file)
         pageFormData.append("ebookId", ebookId)
         pageFormData.append("pageNumber", (i + 1).toString())
+        if (pageFiles[i].title) {
+          pageFormData.append("title", pageFiles[i].title)
+        }
 
         const pageResponse = await fetch("/api/upload/ebook-page", {
           method: "POST",
@@ -404,33 +413,47 @@ export default function CreateEBookPage() {
                         key={page.id}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="flex items-center gap-3 p-3 bg-zinc-900 rounded-lg border border-zinc-800"
+                        className="space-y-2"
                       >
-                        <div className="flex-shrink-0 w-12 h-16 bg-zinc-800 rounded overflow-hidden">
-                          {page.preview ? (
-                            <img
-                              src={page.preview || "/placeholder.svg"}
-                              alt={`Page ${index + 1}`}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center">
-                              <FileText className="h-6 w-6 text-zinc-600" />
-                            </div>
-                          )}
+                        <div className="flex items-start gap-3 p-3 bg-zinc-900 rounded-lg border border-zinc-800">
+                          <div className="flex-shrink-0 w-12 h-16 bg-zinc-800 rounded overflow-hidden">
+                            {page.preview ? (
+                              <img
+                                src={page.preview || "/placeholder.svg"}
+                                alt={`Page ${index + 1}`}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <FileText className="h-6 w-6 text-zinc-600" />
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-white truncate">Page {index + 1}</p>
+                            <p className="text-xs text-zinc-500 truncate">{page.file.name}</p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => removePage(page.id)}
+                            className="flex-shrink-0 text-zinc-400 hover:text-white"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm text-white truncate">Page {index + 1}</p>
-                          <p className="text-xs text-zinc-500 truncate">{page.file.name}</p>
+                        <div className="px-3">
+                          <Label htmlFor={`page-title-${page.id}`} className="text-zinc-400 text-xs">
+                            Page Title / Chapter (Optional)
+                          </Label>
+                          <Input
+                            id={`page-title-${page.id}`}
+                            value={page.title || ""}
+                            onChange={(e) => updatePageTitle(page.id, e.target.value)}
+                            placeholder={`e.g., "Chapter ${index + 1}: Introduction"`}
+                            className="bg-zinc-900 border-zinc-800 text-white text-sm mt-1"
+                          />
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => removePage(page.id)}
-                          className="flex-shrink-0 text-zinc-400 hover:text-white"
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
                       </motion.div>
                     ))}
                   </div>
