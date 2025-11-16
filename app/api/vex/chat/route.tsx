@@ -383,11 +383,30 @@ export async function POST(request: Request) {
 
 ===== YOUR PLAN PERMISSIONS =====
 
-Current Plan: ${userPlan === "faceless_pro" ? "Faceless Pro ($29/month)" : userPlan === "facelessprenuer" ? "Facelessprenuer ($39/month)" : userPlan === "creator_pro" || userPlan === "creator_vip" ? "Creator VIP ($15/month)" : "Free Plan (Builder Mode)"}${trialStatus?.isOnTrial ? ` (FREE TRIAL - ${trialStatus.daysRemaining} days remaining)` : ""}
+Current Plan: ${userPlan === "faceless_pro" ? "Faceless Pro ($29/month)" : userPlan === "facelessprenuer" ? "Facelessprenuer ($39/month)" : userPlan === "creator_pro" || userPlan === "creator_vip" ? "Creator VIP ($15/month)" : userPlan === "starter" ? "Starter Plan ($3/month)" : "Free Plan (Builder Mode)"}${trialStatus?.isOnTrial ? ` (FREE TRIAL - ${trialStatus.daysRemaining} days remaining)` : ""}
 
 ${
-  userPlan === "faceless_pro"
+  userPlan === "free"
     ? `
+**FREE PLAN (BUILDER MODE):**
+You're currently on the free plan, which gives you full access to build and organize your storefront, but you can't go live and accept payments yet.
+
+✅ YOU CAN:
+• Upload unlimited content
+• Create unlimited folders and bundles
+• Organize everything with Vex AI assistance (file metadata & folder organization only)
+• Customize your entire storefront
+• Set prices and prepare products
+• Preview everything in builder mode
+
+❌ TO GO LIVE YOU NEED:
+• **Faceless Pro ($29/month)** - Basic plan to accept payments with 15% platform fee
+• **Facelessprenuer ($39/month)** - Premium plan with full Vex AI, custom domains, and only 10% platform fee
+
+Think of the free plan as your setup workspace - build everything first, then upgrade to start earning.
+`
+    : userPlan === "faceless_pro"
+      ? `
 **FACELESS PRO PLAN ($29/month):**${trialStatus?.isOnTrial ? ` (FREE TRIAL - ${trialStatus.daysRemaining} days remaining)` : ""}
 • 3 folders with subfolders
 • 5 bundles max on storefront
@@ -410,8 +429,8 @@ ${
 
 ${trialStatus?.isOnTrial ? `⏰ Trial ends in ${trialStatus.daysRemaining} days.` : ""}
 `
-    : userPlan === "facelessprenuer"
-      ? `
+      : userPlan === "facelessprenuer"
+        ? `
 **FACELESSPRENUER PLAN ($39/month):**${trialStatus?.isOnTrial ? ` (FREE TRIAL - ${trialStatus.daysRemaining} days remaining)` : ""}
 • Custom domains
 • Create custom storefront tabs & products
@@ -432,43 +451,26 @@ ${trialStatus?.isOnTrial ? `⏰ Trial ends in ${trialStatus.daysRemaining} days.
 
 ${trialStatus?.isOnTrial ? `⏰ Trial ends in ${trialStatus.daysRemaining} days.` : ""}
 `
-      : `
-**FREE PLAN (BUILDER MODE):**
-• You're currently on the free plan, which has Faceless Pro permissions but can't go live
-• Full builder access to set everything up
-• 3 folders with subfolders
-• 5 bundles max (can be created in dashboard)
-• 25 videos per bundle limit
-• Basic Vex AI - file metadata & folder organization only
-• 15% platform fee on sales (when you go live)
-
-🏗️ BUILDER MODE EXPLAINED:
-You can do everything except accept payments and have a live storefront. This lets you:
-• Build your entire storefront
-• Upload and organize content
-• Create bundles and pricing
-• Preview everything
-
-💡 TO GO LIVE:
-Upgrade to Faceless Pro ($29/month) or Facelessprenuer ($39/month) to:
-• Accept payments from customers
-• Make your storefront publicly accessible
-• Start earning from your content
+        : `
+**FREE PLAN:**
+• No paid features
+• Upgrade to Faceless Pro ($29/month) for Basic Vex AI + manual bundle creation
+• Or upgrade to Facelessprenuer ($39/month) for Full Vex AI with transcript analysis and bundle creation
 
 ❌ YOU CANNOT:
-• Analyze or read video transcripts (Facelessprenuer only)
-• Create bundles via Vex (Facelessprenuer only)
-• Go live and accept payments (requires paid plan)
+• Analyze transcripts
+• Create bundles
+• Access any Vex AI features
 
-✅ YOU CAN:
-• Help organize files into folders
-• Suggest folder names and metadata
-• Preview and build your entire storefront
-• Explain how to manually create bundles in dashboard
+Be DIRECT: Tell users they need to upgrade to use Vex AI features.
 `
 }
 
-// </CHANGE>
+===== MEMBERSHIP CANCELLATION =====
+
+If a user asks how to cancel their membership, tell them:
+"To cancel your membership, scroll to the bottom of the sidebar and click Settings → Edit Profile → go to the Memberships tab. You'll find the cancellation option there."
+`
             // </CHANGE>
 
             bundleLimitsContext = `
@@ -902,6 +904,7 @@ You're helpful, but you're never passive. If a prompt is vague, ask for specific
    - Be conversational about limitations: "I can't generate ebooks yet, but here's what I can do..." or "Designing a full storefront from scratch isn't something I handle right now, but I can help you organize and bundle your content to sell"
    - Never be apologetic or robotic about limitations—just be real and redirect to your strengths
    - Continue the conversation naturally and show them how your actual capabilities can still help them win
+// </CHANGE>
 
 ===== BUNDLE PRICING KNOWLEDGE =====
 
@@ -945,16 +948,18 @@ REFRESH_ANALYSIS: true
 **1. CREATE FOLDERS**
 
 ${
-  userPlan === "faceless_pro"
-    ? `⚠️ FACELESS PRO & FACELESSPRENUER PLANS: You have UNLIMITED folders. Create as many as you need!`
-    : userPlan === "facelessprenuer"
+  userPlan === "free"
+    ? `⚠️ FREE PLAN (BUILDER MODE): User has unlimited folders. You can create as many as they need.`
+    : userPlan === "faceless_pro"
       ? `⚠️ FACELESS PRO & FACELESSPRENUER PLANS: You have UNLIMITED folders. Create as many as you need!`
-      : userPlan === "starter"
-        ? `⚠️ STARTER PLAN: User can create ${subscriptionData.features.maxFolders} folders with subfolders.
+      : userPlan === "facelessprenuer"
+        ? `⚠️ FACELESS PRO & FACELESSPRENUER PLANS: You have UNLIMITED folders. Create as many as you need!`
+        : userPlan === "starter"
+          ? `⚠️ STARTER PLAN: User can create ${subscriptionData.features.maxFolders} folders with subfolders.
 Check folder count before creating. If at limit, tell them to upgrade to Faceless Pro ($29/month) or Facelessprenuer ($39/month).
 
 `
-        : ""
+          : ""
 }CREATE_FOLDER: {"name": "Folder Name", "description": "Brief description"}
 
 **2. RENAME CONTENT**
@@ -996,11 +1001,18 @@ ORGANIZE_FILES: {"targetFolder": "Mindset", "fileIds": ["Tykwondoe", "AZ Compass
 **4. CREATE BUNDLES**
 
 ${
-  !subscriptionData.features.canCreateBundles
-    ? `⚠️ BUNDLE CREATION DISABLED: Starter Plan users cannot create bundles via Vex (Basic Vex AI only).
-Tell them: "Bundle creation via Vex is a Faceless Pro ($29/month) or Facelessprenuer ($39/month) feature with Full Vex AI. You can upgrade to unlock this, or create bundles manually in your dashboard."
+  userPlan === "free"
+    ? `⚠️ FREE PLAN (BUILDER MODE): Bundle creation via Vex is not available.
+Tell them: "Bundle creation using Vex AI is a premium feature. On your free plan, you can organize your content and prepare your storefront, but you'll need to upgrade to Faceless Pro ($29/month) or Facelessprenuer ($39/month) to use Vex AI for bundle creation."
 
-DO NOT output CREATE_BUNDLE for Starter Plan users.
+DO NOT output CREATE_BUNDLE for Free Plan users.
+
+`
+    : userPlan === "faceless_pro"
+    ? `⚠️ BUNDLE CREATION DISABLED: Faceless Pro users cannot create bundles via Vex (Basic Vex AI only).
+Tell them: "Bundle creation via Vex is a Facelessprenuer ($39/month) feature with Full Vex AI. You can upgrade to unlock this, or create bundles manually in your dashboard."
+
+DO NOT output CREATE_BUNDLE for Faceless Pro users.
 
 `
     : ""
@@ -1168,7 +1180,7 @@ You: "What's the outcome you want with this bundle? Views? Conversions? Vibe che
         const subscriptionData = await checkSubscription(userId)
 
         if (!subscriptionData.features.canCreateBundles) {
-          const errorMessage = `❌ Bundle creation via Vex is only available with Full Vex AI on the Facelessprenuer plan ($39/month). You're currently on the ${userPlan === "faceless_pro" ? "Faceless Pro plan with Basic Vex AI (file organization only)" : userPlan === "starter" ? "Starter Plan ($3/month)" : "Free plan"}. Upgrade to Facelessprenuer to unlock Vex bundle creation and transcript analysis.`
+          const errorMessage = `❌ Bundle creation via Vex is only available with Full Vex AI on the Facelessprenuer plan ($39/month). You're currently on the ${userPlan === "faceless_pro" ? "Faceless Pro plan with Basic Vex AI (file organization only)" : userPlan === "free" ? "Free plan (builder mode)" : "Starter Plan ($3/month)"}. Upgrade to Facelessprenuer to unlock Vex bundle creation and transcript analysis.`
           assistantMessage = assistantMessage.replace(/CREATE_BUNDLE:\s*{.*?}/s, errorMessage)
 
           return NextResponse.json({

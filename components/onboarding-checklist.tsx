@@ -5,10 +5,10 @@ import type React from "react"
 import { useOnboarding } from "@/hooks/use-onboarding"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { CheckCircle2, Circle, ChevronRight, X } from 'lucide-react'
+import { CheckCircle2, Circle, ChevronRight, X, ChevronDown } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { cn } from "@/lib/utils"
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 
 const STEP_ROUTES: Record<string, string> = {
   setup_storefront: "/dashboard/view-storefront",
@@ -22,6 +22,7 @@ const STEP_ROUTES: Record<string, string> = {
 export function OnboardingChecklist() {
   const { progress, loading, dismiss, toggleStep } = useOnboarding()
   const router = useRouter()
+  const [isCollapsed, setIsCollapsed] = useState(false)
 
   useEffect(() => {
     console.log("[v0] OnboardingChecklist - Render state:", {
@@ -37,12 +38,7 @@ export function OnboardingChecklist() {
     return null
   }
 
-  if (!progress || progress.dismissed) {
-    return null
-  }
-
-  if (progress.isComplete) {
-    console.log("[v0] OnboardingChecklist - Showing completion state")
+  if (!progress || progress.dismissed || progress.isComplete) {
     return null
   }
 
@@ -58,7 +54,6 @@ export function OnboardingChecklist() {
   })
 
   const handleStepClick = async (stepId: string, completed: boolean, e: React.MouseEvent) => {
-    // Check if the click was on the circle icon area (left side)
     const target = e.target as HTMLElement
     const isCircleClick = target.closest(".step-circle")
 
@@ -70,7 +65,6 @@ export function OnboardingChecklist() {
         console.error("[v0] OnboardingChecklist - Error toggling step:", err)
       }
     } else {
-      // Navigate to the route if clicking elsewhere
       const route = STEP_ROUTES[stepId]
       if (route) {
         router.push(route)
@@ -78,19 +72,54 @@ export function OnboardingChecklist() {
     }
   }
 
+  if (isCollapsed) {
+    return (
+      <button
+        onClick={() => setIsCollapsed(false)}
+        className="w-full flex items-center justify-between p-3 rounded-lg bg-zinc-900/50 border border-zinc-800 hover:bg-zinc-900/70 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <Badge variant="secondary" className="bg-blue-500/20 text-blue-400 border-blue-500/30">
+            {Math.round(progressPercent)}%
+          </Badge>
+          <span className="text-sm text-white font-medium">Getting Started</span>
+        </div>
+        <ChevronDown className="h-4 w-4 text-zinc-400" />
+      </button>
+    )
+  }
+
   return (
     <Card className="border-zinc-800 bg-zinc-900/50">
       <CardHeader>
         <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="text-white">Getting Started</CardTitle>
-            <CardDescription>
-              {completedCount} of {totalCount} steps completed
-            </CardDescription>
+          <div className="flex items-center gap-3">
+            <div>
+              <CardTitle className="text-white text-base">Getting Started</CardTitle>
+              <CardDescription className="text-sm">
+                {completedCount} of {totalCount} steps completed
+              </CardDescription>
+            </div>
+            <Badge variant="secondary" className="bg-blue-500/20 text-blue-400 border-blue-500/30">
+              {Math.round(progressPercent)}%
+            </Badge>
           </div>
-          <Badge variant="secondary" className="bg-blue-500/20 text-blue-400 border-blue-500/30">
-            {Math.round(progressPercent)}%
-          </Badge>
+          <div className="flex gap-1">
+            <button
+              onClick={() => setIsCollapsed(true)}
+              className="p-1.5 hover:bg-zinc-800 rounded-md transition-colors md:hidden"
+              title="Collapse"
+            >
+              <ChevronDown className="h-4 w-4 text-zinc-500" />
+            </button>
+            <button
+              onClick={dismiss}
+              className="p-1.5 hover:bg-zinc-800 rounded-md transition-colors"
+              title="Dismiss"
+            >
+              <X className="h-4 w-4 text-zinc-500" />
+            </button>
+          </div>
         </div>
         <div className="mt-4 h-2 bg-zinc-800 rounded-full overflow-hidden">
           <div
@@ -125,8 +154,8 @@ export function OnboardingChecklist() {
                 )}
               </div>
               <div className="flex-1 text-left">
-                <div className={cn("font-medium", step.completed ? "text-zinc-400" : "text-white")}>{step.title}</div>
-                <div className="text-sm text-zinc-500">{step.description}</div>
+                <div className={cn("font-medium text-sm", step.completed ? "text-zinc-400" : "text-white")}>{step.title}</div>
+                <div className="text-xs text-zinc-500">{step.description}</div>
               </div>
               {isActive && !step.completed && <ChevronRight className="h-5 w-5 text-blue-400" />}
             </button>
