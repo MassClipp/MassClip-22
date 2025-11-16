@@ -101,28 +101,23 @@ const LandingPage = () => {
           {/* Review Section */}
           <LandingReview />
 
+          {/* Headquarters Section */}
           <section className="py-24 px-6 border-t border-white/10">
             <div className="max-w-7xl mx-auto">
               <div className="grid md:grid-cols-2 gap-12 items-center">
                 <div>
                   <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
-                    Vex Organizes Your Content In Seconds
+                    A Headquarters For Your Faceless Brand Monetization
                   </h2>
-                  <p className="text-white/60 text-lg leading-relaxed mb-6">
-                    No more selling messy zip files. Every piece of content is delivered through a beautiful, HD
-                    interface that your customers will love. Professional folder organization that makes browsing and
-                    downloading seamless.
-                  </p>
                   <p className="text-white/60 text-lg leading-relaxed">
-                    VEX automatically structures your content with smart naming conventions and logical groupings. Your
-                    customers get a premium experience, not a confusing file dump.
+                    You need a home, a storefront, a headquarters where all your digital products for your faceless brand live. Whether you have content packs, ebooks, communities, or brand merch, all of it should be taken seriously in one manageable space. This is where your audience comes to discover, explore, and buy everything you create.
                   </p>
                 </div>
                 <div className="relative">
                   <div className="bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 shadow-2xl hover:shadow-white/10 transition-all">
                     <img
-                      src="/images/7d123c64-c36b-4acb-83ed.png"
-                      alt="HD Organized Folders Interface"
+                      src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/ChatGPT%20Image%20Nov%2015%2C%202025%20at%2010_22_45%20PM-tXxENDb7CClHvXBHyr1rzZQWwBPR5I.png"
+                      alt="MRR Growth Dashboard"
                       className="w-full rounded-lg shadow-lg"
                     />
                   </div>

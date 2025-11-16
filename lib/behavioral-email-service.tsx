@@ -14,6 +14,9 @@ export interface BehavioralEmailUser {
   lastContentEmailSent?: Date
   lastFirstUploadEmailSent?: Date
   lastGettingStartedEmailSent?: Date
+  lastMembershipPurchasedEmailSent?: Date
+  lastMembershipCanceledEmailSent?: Date
+  lastEbookPurchasedEmailSent?: Date
   unsubscribed: boolean
 }
 
@@ -28,6 +31,9 @@ export interface BehavioralEmailTemplate {
     | "bundle-sold"
     | "first-upload"
     | "getting-started"
+    | "membership-purchased"
+    | "membership-canceled"
+    | "ebook-purchased"
   subject: string
   html: string
   resendAfterDays?: number // Optional for one-time emails
@@ -305,6 +311,95 @@ const BEHAVIORAL_EMAIL_TEMPLATES: BehavioralEmailTemplate[] = [
       </html>
     `,
   },
+  {
+    type: "membership-purchased",
+    subject: "Welcome to your new plan! Your monetization journey just leveled up",
+    html: `
+      <!DOCTYPE html>
+      <html lang="en">
+        <head>
+          <meta charset="UTF-8" />
+          <title>Welcome to your new plan!</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; font-size: 16px; line-height: 1.5; color: #000;">
+          <p>Hey there!</p>
+          <p>Your membership is now active, and you just unlocked everything you need to scale your faceless brand monetization. No limits, no hesitation, just pure growth potential.</p>
+          <p><strong>Here's what you now have access to:</strong></p>
+          <ul style="line-height: 1.8;">
+            <li>Unlimited bundles to package and sell your content</li>
+            <li>Advanced Vex AI to organize, price, and optimize everything</li>
+            <li>Lower platform fees so you keep more of what you earn</li>
+            <li>Custom storefront features to stand out from the crowd</li>
+          </ul>
+          <p>This is where real creators separate themselves from the ones who just talk about it. You invested in yourself, and now it's time to see the returns.</p>
+          <p><a href="https://www.massclip.pro/dashboard" style="display: inline-block; background-color: #000; color: #fff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; margin: 20px 0;">Go to Your Dashboard</a></p>
+          <p>Let's turn this into something big.</p>
+          <p>Best,<br>The MassClip Team</p>
+          <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;" />
+          <p style="font-size: 12px; color: #999; text-align: center;">
+            If you no longer want to receive emails from MassClip, you can 
+            <a href="${process.env.NEXT_PUBLIC_SITE_URL || "https://www.massclip.pro"}/api/unsubscribe?email=${encodeURIComponent("{{EMAIL}}")}" style="color: #999;">unsubscribe here</a>.
+          </p>
+        </body>
+      </html>
+    `,
+  },
+  {
+    type: "membership-canceled",
+    subject: "We hate to see you go, but we understand",
+    html: `
+      <!DOCTYPE html>
+      <html lang="en">
+        <head>
+          <meta charset="UTF-8" />
+          <title>Membership Canceled</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; font-size: 16px; line-height: 1.5; color: #000;">
+          <p>Hey there,</p>
+          <p>We noticed you canceled your membership. We're sad to see you go, but we totally get it. Sometimes things change, and that's okay.</p>
+          <p>You'll continue to have access to your membership features until the end of your billing period, so you can keep using everything you paid for. After that, you'll still have a free account where you can access your content and storefronts, you just won't be able to accept payments or create new bundles.</p>
+          <p><strong>Before you go, we'd love to know:</strong></p>
+          <p>What made you cancel? Was it the price, missing features, or something else? Your feedback helps us build a better product, and we genuinely want to know what would've made you stay.</p>
+          <p>Just reply to this email and let us know. We read every response.</p>
+          <p>If you change your mind, you can reactivate anytime from your dashboard. No judgment, no hassle.</p>
+          <p><a href="https://www.massclip.pro/dashboard/upgrade" style="display: inline-block; background-color: #000; color: #fff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; margin: 20px 0;">Reactivate Your Membership</a></p>
+          <p>Thanks for giving MassClip a shot. We hope to see you back soon.</p>
+          <p>Best,<br>The MassClip Team</p>
+          <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;" />
+          <p style="font-size: 12px; color: #999; text-align: center;">
+            If you no longer want to receive emails from MassClip, you can 
+            <a href="${process.env.NEXT_PUBLIC_SITE_URL || "https://www.massclip.pro"}/api/unsubscribe?email=${encodeURIComponent("{{EMAIL}}")}" style="color: #999;">unsubscribe here</a>.
+          </p>
+        </body>
+      </html>
+    `,
+  },
+  {
+    type: "ebook-purchased",
+    subject: "Your eBook is ready to read!",
+    html: `
+      <!DOCTYPE html>
+      <html lang="en">
+        <head>
+          <meta charset="UTF-8" />
+          <title>Your eBook is ready!</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; font-size: 16px; line-height: 1.5; color: #000;">
+          <p>Hey there!</p>
+          <p>Thanks for your purchase! Your eBook is ready to read, and we think you're going to love it.</p>
+          <p>The creator put serious work into crafting this for people like you, someone who values knowledge and is willing to invest in learning. You're not just reading an eBook, you're investing in yourself.</p>
+          <p><a href="https://www.massclip.pro/dashboard/purchases" style="display: inline-block; background-color: #000; color: #fff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; margin: 20px 0;">Read Your eBook Now</a></p>
+          <p>Enjoy the read, and let us know what you think!</p>
+          <p>Best,<br>The MassClip Team</p>
+          <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;" />
+          <p style="font-size: 12px; color: #999; text-align: center;">
+            If you no longer want to receive emails from MassClip, you can 
+            <a href="${process.env.NEXT_PUBLIC_SITE_URL || "https://www.massclip.pro"}/api/unsubscribe?email=${encodeURIComponent("{{EMAIL}}")}" style="color: #999;">unsubscribe here</a>.
+          </p>
+        </body>
+      </html>
+    `,
+  },
 ]
 
 export class BehavioralEmailService {
@@ -515,6 +610,15 @@ export class BehavioralEmailService {
         case "content":
           updateField = "lastContentEmailSent"
           break
+        case "membership-purchased":
+          updateField = "lastMembershipPurchasedEmailSent"
+          break
+        case "membership-canceled":
+          updateField = "lastMembershipCanceledEmailSent"
+          break
+        case "ebook-purchased":
+          updateField = "lastEbookPurchasedEmailSent"
+          break
         default:
           updateField = `last${emailType.charAt(0).toUpperCase() + emailType.slice(1).replace("-", "")}EmailSent`
       }
@@ -578,6 +682,36 @@ export class BehavioralEmailService {
       console.log(`✅ Sent bundle sold email to ${sellerEmail}`)
     } catch (error) {
       console.error(`❌ Failed to send bundle sold email to ${sellerEmail}:`, error)
+    }
+  }
+
+  static async sendMembershipPurchasedEmail(uid: string, email: string, planName: string): Promise<void> {
+    try {
+      const user: BehavioralEmailUser = { uid, email, unsubscribed: false }
+      await this.sendBehavioralEmail(user, "membership-purchased")
+      console.log(`✅ Sent membership purchased email to ${email} for plan: ${planName}`)
+    } catch (error) {
+      console.error(`❌ Failed to send membership purchased email to ${email}:`, error)
+    }
+  }
+
+  static async sendMembershipCanceledEmail(uid: string, email: string, planName: string): Promise<void> {
+    try {
+      const user: BehavioralEmailUser = { uid, email, unsubscribed: false }
+      await this.sendBehavioralEmail(user, "membership-canceled")
+      console.log(`✅ Sent membership canceled email to ${email} for plan: ${planName}`)
+    } catch (error) {
+      console.error(`❌ Failed to send membership canceled email to ${email}:`, error)
+    }
+  }
+
+  static async sendEbookPurchasedEmail(buyerEmail: string, ebookTitle: string): Promise<void> {
+    try {
+      const user: BehavioralEmailUser = { uid: "", email: buyerEmail, unsubscribed: false }
+      await this.sendBehavioralEmail(user, "ebook-purchased")
+      console.log(`✅ Sent eBook purchased email to ${buyerEmail} for: ${ebookTitle}`)
+    } catch (error) {
+      console.error(`❌ Failed to send eBook purchased email to ${buyerEmail}:`, error)
     }
   }
 }
