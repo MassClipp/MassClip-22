@@ -116,8 +116,8 @@ const LandingPage = () => {
                 <div className="relative">
                   <div className="bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 shadow-2xl hover:shadow-white/10 transition-all">
                     <img
-                      src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/ChatGPT%20Image%20Nov%2015%2C%202025%20at%2010_22_45%20PM-tXxENDb7CClHvXBHyr1rzZQWwBPR5I.png"
-                      alt="MRR Growth Dashboard"
+                      src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Screenshot%202025-11-16%20at%202.35.22%20PM-lfX2NIXUhBysfJ4aU0t4pYT5UvtPwz.png"
+                      alt="eBook Product Display"
                       className="w-full rounded-lg shadow-lg"
                     />
                   </div>
@@ -126,96 +126,26 @@ const LandingPage = () => {
             </div>
           </section>
 
-          <section id="features" className="py-24 px-6 border-t border-white/10">
-            <div className="max-w-7xl mx-auto">
-              <div className="text-center mb-16">
-                <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">Everything you need to sell content</h2>
-                <p className="text-white/60 text-lg max-w-2xl mx-auto">
-                  VEX AI handles the heavy lifting so you can focus on creating
-                </p>
-              </div>
-
-              <div className="grid md:grid-cols-3 gap-8">
-                <div className="bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 hover:bg-white/10 hover:border-white/30 transition-all shadow-xl hover:shadow-2xl hover:shadow-white/10">
-                  <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center mb-6 shadow-lg shadow-white/30">
-                    <Sparkles className="w-6 h-6 text-black" />
-                  </div>
-                  <h3 className="text-xl font-semibold text-white mb-3">AI-Powered Organization</h3>
-                  <p className="text-white/60">
-                    VEX analyzes your content and automatically suggests the best way to organize and bundle your files
-                  </p>
-                </div>
-
-                <div className="bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 hover:bg-white/10 hover:border-white/30 transition-all shadow-xl hover:shadow-2xl hover:shadow-white/10">
-                  <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center mb-6 shadow-lg shadow-white/30">
-                    <Package className="w-6 h-6 text-black" />
-                  </div>
-                  <h3 className="text-xl font-semibold text-white mb-3">Smart Bundling</h3>
-                  <p className="text-white/60">
-                    Create sellable bundles in seconds with AI recommendations for pricing and packaging
-                  </p>
-                </div>
-
-                <div className="bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 hover:bg-white/10 hover:border-white/30 transition-all shadow-xl hover:shadow-2xl hover:shadow-white/10">
-                  <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center mb-6 shadow-lg shadow-white/30">
-                    <TrendingUp className="w-6 h-6 text-black" />
-                  </div>
-                  <h3 className="text-xl font-semibold text-white mb-3">Instant Storefront</h3>
-                  <p className="text-white/60">
-                    Get a professional storefront automatically generated for your content with zero setup
-                  </p>
-                </div>
-              </div>
-            </div>
-          </section>
-
+          {/* Ready To Take Scaling Seriously Section */}
           <section id="how-it-works" className="py-24 px-6 border-t border-white/10">
             <div className="max-w-7xl mx-auto">
-              <div className="text-center mb-16">
-                <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">How VEX Works</h2>
-                <p className="text-white/60 text-lg max-w-2xl mx-auto">Organization and sellable bundles in seconds</p>
-              </div>
-
-              <div className="mb-16 max-w-4xl mx-auto">
-                <div className="bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 shadow-2xl">
-                  <img
-                    src="/images/copy-acad5c9d-0800-434f-bc27.jpeg"
-                    alt="VEX Chat Interface Example"
-                    className="w-full rounded-lg shadow-lg"
-                  />
-                </div>
-              </div>
-
-              <div className="grid md:grid-cols-3 gap-12">
-                <div className="text-center bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 hover:bg-white/10 hover:border-white/30 transition-all shadow-xl">
-                  <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center mx-auto mb-6 text-2xl font-bold text-black shadow-lg shadow-white/30">
-                    1
-                  </div>
-                  <h3 className="text-xl font-semibold text-white mb-3">Upload Your Content</h3>
-                  <p className="text-white/60">
-                    Drop your videos, audio, or files into VEX. No limits on what you can upload.
+              <div className="grid md:grid-cols-2 gap-12 items-center">
+                <div>
+                  <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
+                    Ready To Take Scaling Seriously?
+                  </h2>
+                  <p className="text-white/60 text-lg leading-relaxed">
+                    You're only one commitment, one decision, one investment away from your faceless brand doing numbers you couldn't imagine financially, and socially. Anyone can do it, the difference is are you willing to bet on yourself? We'll be waiting on the other side for you when you're ready.
                   </p>
                 </div>
-
-                <div className="text-center bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 hover:bg-white/10 hover:border-white/30 transition-all shadow-xl">
-                  <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center mx-auto mb-6 text-2xl font-bold text-black shadow-lg shadow-white/30">
-                    2
+                <div className="relative">
+                  <div className="bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 shadow-2xl hover:shadow-white/10 transition-all">
+                    <img
+                      src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/ChatGPT%20Image%20Nov%2015%2C%202025%20at%2010_22_45%20PM-tXxENDb7CClHvXBHyr1rzZQWwBPR5I.png"
+                      alt="MRR Growth Dashboard"
+                      className="w-full rounded-lg shadow-lg"
+                    />
                   </div>
-                  <h3 className="text-xl font-semibold text-white mb-3">Let VEX Analyze</h3>
-                  <p className="text-white/60">
-                    VEX AI analyzes your content and suggests the best organization and bundle strategies.
-                  </p>
-                </div>
-
-                <div className="text-center bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 hover:bg-white/10 hover:border-white/30 transition-all shadow-xl">
-                  <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center mx-auto mb-6 text-2xl font-bold text-black shadow-lg shadow-white/30">
-                    3
-                  </div>
-                  <h3 className="text-xl font-semibold text-white mb-3">Start Selling</h3>
-                  <p className="text-white/60">
-                    Vex does everything for you. Create bundles, set prices, and share your storefront. Get paid
-                    instantly via Stripe.
-                  </p>
                 </div>
               </div>
             </div>
