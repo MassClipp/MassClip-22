@@ -1988,11 +1988,3 @@ function EBookCard({ item, username }: { item: ContentItem; username: string | n
     </div>
   )
 }
-.5 transition-colors"
-            />
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
