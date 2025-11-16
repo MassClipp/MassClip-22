@@ -50,9 +50,9 @@ const LandingPage = () => {
             </div>
 
             <div className="absolute left-1/2 transform -translate-x-1/2 hidden md:flex items-center gap-6">
-              <a href="#features" className="text-white/80 hover:text-white transition-colors font-light text-sm">
-                Features
-              </a>
+              <Link href="/signup" className="text-white/80 hover:text-white transition-colors font-light text-sm">
+                Start Selling
+              </Link>
               <a href="#how-it-works" className="text-white/80 hover:text-white transition-colors font-light text-sm">
                 How It Works
               </a>
