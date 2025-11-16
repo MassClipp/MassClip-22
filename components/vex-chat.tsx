@@ -1222,7 +1222,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                           >
                             <Settings className="h-4 w-4 mr-2" />
                             Security
-                          </DropdownMenu>
+                          </DropdownMenuItem>
                           <DropdownMenuSeparator className="bg-white/10" />
                           <DropdownMenuItem
                             onClick={handleLogout}
@@ -1230,7 +1230,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                           >
                             <LogOut className="h-4 w-4 mr-2" />
                             Sign Out
-                          </DropdownMenu>
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
 
@@ -1514,7 +1514,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                         >
                           <LogOut className="h-4 w-4 mr-2" />
                           Sign Out
-                        </DropdownMenu>
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
 
