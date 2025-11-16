@@ -2499,8 +2499,3 @@ function findBestMatch(
 
   return { upload: null, confidence: 0, matchReason: "No confident match found" }
 }
- upload: bestMatch, confidence: bestConfidence, matchReason: bestReason }
-  }
-
-  return { upload: null, confidence: 0, matchReason: "No confident match found" }
-}
