@@ -383,7 +383,7 @@ export async function POST(request: Request) {
 
 ===== YOUR PLAN PERMISSIONS =====
 
-Current Plan: ${userPlan === "faceless_pro" ? "Faceless Pro ($29/month)" : userPlan === "facelessprenuer" ? "Facelessprenuer ($39/month)" : userPlan === "creator_pro" || userPlan === "creator_vip" ? "Creator VIP ($15/month)" : userPlan === "starter" ? "Starter Plan ($3/month)" : "Free Plan"}${trialStatus?.isOnTrial ? ` (FREE TRIAL - ${trialStatus.daysRemaining} days remaining)` : ""}
+Current Plan: ${userPlan === "faceless_pro" ? "Faceless Pro ($29/month)" : userPlan === "facelessprenuer" ? "Facelessprenuer ($39/month)" : userPlan === "creator_pro" || userPlan === "creator_vip" ? "Creator VIP ($15/month)" : "Free Plan (Builder Mode)"}${trialStatus?.isOnTrial ? ` (FREE TRIAL - ${trialStatus.daysRemaining} days remaining)` : ""}
 
 ${
   userPlan === "faceless_pro"
@@ -432,59 +432,43 @@ ${trialStatus?.isOnTrial ? `⏰ Trial ends in ${trialStatus.daysRemaining} days.
 
 ${trialStatus?.isOnTrial ? `⏰ Trial ends in ${trialStatus.daysRemaining} days.` : ""}
 `
-      : userPlan === "starter"
-        ? `
-**STARTER PLAN ($3/month):**
-• ${subscriptionData.features.maxFolders} folders with subfolders
-• ${subscriptionData.features.maxBundles} bundles maximum
-• ${subscriptionData.features.maxVideosPerBundle} videos per bundle
+      : `
+**FREE PLAN (BUILDER MODE):**
+• You're currently on the free plan, which has Faceless Pro permissions but can't go live
+• Full builder access to set everything up
+• 3 folders with subfolders
+• 5 bundles max (can be created in dashboard)
+• 25 videos per bundle limit
 • Basic Vex AI - file metadata & folder organization only
-• ${subscriptionData.features.platformFeePercentage}% platform fee on sales
+• 15% platform fee on sales (when you go live)
+
+🏗️ BUILDER MODE EXPLAINED:
+You can do everything except accept payments and have a live storefront. This lets you:
+• Build your entire storefront
+• Upload and organize content
+• Create bundles and pricing
+• Preview everything
+
+💡 TO GO LIVE:
+Upgrade to Faceless Pro ($29/month) or Facelessprenuer ($39/month) to:
+• Accept payments from customers
+• Make your storefront publicly accessible
+• Start earning from your content
 
 ❌ YOU CANNOT:
 • Analyze or read video transcripts (Facelessprenuer only)
-• Create bundles for the user (Facelessprenuer only)
+• Create bundles via Vex (Facelessprenuer only)
+• Go live and accept payments (requires paid plan)
 
 ✅ YOU CAN:
 • Help organize files into folders
 • Suggest folder names and metadata
-`
-        : userPlan === "creator_pro" || userPlan === "creator_vip"
-          ? `
-**CREATOR VIP PLAN ($15/month):**${trialStatus?.isOnTrial ? ` (FREE TRIAL - ${trialStatus.daysRemaining} days remaining)` : ""}
-• Unlimited folders with subfolders
-• Unlimited bundles on storefront
-• Unlimited videos per bundle
-• Full Vex AI - bundle creation & transcript analysis
-• ${subscriptionData.features.platformFeePercentage}% platform fee on sales
-
-✅ YOU HAVE FULL ACCESS TO:
-• Analyze and read video transcripts
-• Create bundles for users
-• All file organization features
-
-${trialStatus?.isOnTrial ? `⏰ Trial ends in ${trialStatus.daysRemaining} days.` : ""}
-`
-          : `
-**FREE PLAN:**
-• No paid features
-• Upgrade to Faceless Pro ($29/month) for Basic Vex AI + manual bundle creation
-• Or upgrade to Facelessprenuer ($39/month) for Full Vex AI with transcript analysis and bundle creation
-
-❌ YOU CANNOT:
-• Analyze transcripts
-• Create bundles
-• Access any Vex AI features
-
-Be DIRECT: Tell users they need to upgrade to use Vex AI features.
+• Preview and build your entire storefront
+• Explain how to manually create bundles in dashboard
 `
 }
 
-===== MEMBERSHIP CANCELLATION =====
-
-If a user asks how to cancel their membership, tell them:
-"To cancel your membership, scroll to the bottom of the sidebar and click Settings → Edit Profile → go to the Memberships tab. You'll find the cancellation option there."
-`
+// </CHANGE>
             // </CHANGE>
 
             bundleLimitsContext = `
@@ -2511,6 +2495,11 @@ function findBestMatch(
 
   if (bestConfidence >= 30) {
     return { upload: bestMatch, confidence: bestConfidence, matchReason: bestReason }
+  }
+
+  return { upload: null, confidence: 0, matchReason: "No confident match found" }
+}
+ upload: bestMatch, confidence: bestConfidence, matchReason: bestReason }
   }
 
   return { upload: null, confidence: 0, matchReason: "No confident match found" }

@@ -1365,49 +1365,10 @@ export default function ViewStorefrontPage() {
                 </div>
               </div>
 
-              <div className="flex flex-col items-center sm:items-end gap-2 sm:gap-3 w-full sm:w-auto">
-                {/* Action buttons row - Compact on mobile */}
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <StorefrontDesignPanel
-                    userId={user.uid}
-                    userPlan={
-                      planData?.plan === "faceless_pro"
-                        ? "faceless_pro"
-                        : planData?.plan === "facelessprenuer"
-                          ? "facelessprenuer"
-                          : planData?.plan === "starter"
-                            ? "starter"
-                            : "free"
-                    }
-                    currentDesign={storefrontDesign}
-                    onSave={async () => {
-                      const userDocRef = doc(db, "users", user.uid)
-                      const userDocSnap = await getDoc(userDocRef)
-                      if (userDocSnap.exists()) {
-                        setStorefrontDesign(userDocSnap.data().storefrontDesign || null)
-                      }
-                    }}
-                  />
-
-                  {storefrontUrl && (
-                    <Button
-                      onClick={() => window.open(storefrontUrl, "_blank")}
-                      variant="outline"
-                      size="sm"
-                      className="border-zinc-700 hover:bg-zinc-800 text-zinc-300 hover:text-white flex-1 sm:flex-none text-xs sm:text-sm h-8 sm:h-9"
-                    >
-                      <ExternalLink className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" />
-                      <span className="hidden sm:inline">
-                        {storefrontActive ? "View Live Storefront" : "Preview Storefront"}
-                      </span>
-                      <span className="sm:hidden">Preview</span>
-                    </Button>
-                  )}
-                </div>
-
-                {/* Status toggle - More compact on mobile */}
-                <div className="flex items-center gap-2 sm:gap-3 bg-zinc-900/80 backdrop-blur-sm border border-zinc-800 rounded-lg px-3 sm:px-4 py-2 w-full sm:w-auto justify-center sm:justify-start">
-                  <div className="flex flex-col items-end">
+              {/* Status toggle - Full width row on mobile for better pill shape, inline on desktop */}
+              <div className="w-full sm:w-auto sm:flex sm:flex-col sm:items-end sm:gap-3">
+                <div className="flex items-center gap-2 sm:gap-3 bg-zinc-900/80 backdrop-blur-sm border border-zinc-800 rounded-lg px-3 sm:px-4 py-2 w-full sm:w-auto justify-between sm:justify-start">
+                  <div className="flex flex-col items-start sm:items-end">
                     <span className="text-[10px] sm:text-xs font-medium text-white whitespace-nowrap">
                       {!isFacelessProActive ? "Builder Mode" : "Storefront Status"}
                     </span>
@@ -1419,22 +1380,24 @@ export default function ViewStorefrontPage() {
                     )}
                   </div>
 
-                  <Switch
-                    checked={storefrontActive}
-                    onCheckedChange={handleToggleStorefront}
-                    disabled={!isFacelessProActive || updating}
-                    className="data-[state=checked]:bg-white data-[state=unchecked]:bg-zinc-700 flex-shrink-0"
-                  />
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={storefrontActive}
+                      onCheckedChange={handleToggleStorefront}
+                      disabled={!isFacelessProActive || updating}
+                      className="data-[state=checked]:bg-white data-[state=unchecked]:bg-zinc-700 flex-shrink-0"
+                    />
 
-                  {storefrontActive ? (
-                    <Badge className="bg-green-500/10 text-green-400 border-green-500/20 text-[10px] sm:text-xs whitespace-nowrap">
-                      Live
-                    </Badge>
-                  ) : (
-                    <Badge variant="secondary" className="bg-zinc-700 text-zinc-300 text-[10px] sm:text-xs whitespace-nowrap">
-                      {!isFacelessProActive ? "Preview" : "Offline"}
-                    </Badge>
-                  )}
+                    {storefrontActive ? (
+                      <Badge className="bg-green-500/10 text-green-400 border-green-500/20 text-[10px] sm:text-xs whitespace-nowrap">
+                        Live
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary" className="bg-zinc-700 text-zinc-300 text-[10px] sm:text-xs whitespace-nowrap">
+                        {!isFacelessProActive ? "Preview" : "Offline"}
+                      </Badge>
+                    )}
+                  </div>
                 </div>
 
                 {!isFacelessProActive && (
