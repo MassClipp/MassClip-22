@@ -131,6 +131,14 @@ export default function CustomDomainPage() {
       const data = await response.json()
 
       if (!response.ok) {
+        if (response.status === 409) {
+          toast({
+            title: "Domain Already Exists",
+            description: data.error || "This domain is already in use. Please choose a different domain or remove your existing domain first.",
+            variant: "destructive",
+          })
+          return
+        }
         throw new Error(data.error || "Failed to add domain")
       }
 

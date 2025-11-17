@@ -889,10 +889,10 @@ export default function UploadPage() {
       {!isVexSidebarOpen && (
         <button
           onClick={toggleVexSidebar}
-          className="hidden lg:block fixed right-0 top-1/2 -translate-y-1/2 z-30 bg-zinc-900 border border-zinc-800 rounded-l-lg p-2 hover:bg-zinc-800 transition-colors"
+          className="hidden lg:block fixed right-0 top-1/2 -translate-y-1/2 z-30 bg-zinc-900 border border-l-0 border-zinc-800 rounded-l-lg p-2 hover:bg-zinc-800 transition-colors shadow-lg"
           aria-label="Open Vex chat sidebar"
         >
-          <ChevronRight className="h-4 w-4 text-zinc-400 rotate-180" />
+          <ChevronRight className="h-5 w-5 text-zinc-400 rotate-180" />
         </button>
       )}
 
