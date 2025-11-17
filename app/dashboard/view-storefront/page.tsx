@@ -421,7 +421,7 @@ export default function ViewStorefrontPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.JSON.stringify({
+        body: JSON.stringify({
           idToken,
           plan: "facelessprenuer",
         }),
