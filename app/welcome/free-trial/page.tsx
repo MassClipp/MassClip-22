@@ -126,10 +126,10 @@ export default function FreeTrialPage() {
             <span className="text-sm text-cyan-300 font-medium">Limited Time Offer</span>
           </div>
           <h1 className="text-5xl md:text-6xl font-thin bg-gradient-to-br from-slate-300 via-cyan-200 via-blue-100 to-white bg-clip-text text-transparent">
-            Choose Your Plan
+            Your Faceless Business Journey Starts Today
           </h1>
           <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-            Start selling your content today with our flexible pricing options
+            Get your storefront <span className="text-cyan-400 font-semibold">LIVE</span> with these plans and start earning
           </p>
         </div>
 
