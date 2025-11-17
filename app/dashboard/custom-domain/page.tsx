@@ -90,6 +90,7 @@ export default function CustomDomainPage() {
           setCurrentDomain({
             ...data.domain,
             domainId: data.domain.id || data.domainId,
+            sslStatus: data.domain.sslStatus || "pending", // Use actual SSL status from Vercel
           })
         } else {
           console.log("[v0] No active domain found")
@@ -199,12 +200,14 @@ export default function CustomDomainPage() {
           ...currentDomain,
           status: "active",
           verified: true,
-          sslStatus: "active",
+          sslStatus: data.sslStatus || "pending", // Use actual SSL status
         })
         toast({
           title: "Domain verified!",
-          description: "Your custom domain is now active",
+          description: "Your custom domain is now active. SSL certificate may take up to 24 hours to provision.",
         })
+        
+        pollForSSLStatus()
       } else {
         toast({
           title: "Verification pending",
@@ -393,6 +396,54 @@ export default function CustomDomainPage() {
       default:
         return null
     }
+  }
+
+  const pollForSSLStatus = async () => {
+    if (!user || !currentDomain) return
+    
+    const maxAttempts = 60 // Poll for up to 5 minutes
+    let attempts = 0
+    
+    const pollInterval = setInterval(async () => {
+      attempts++
+      
+      try {
+        const token = await user.getIdToken()
+        const response = await fetch("/api/custom-domain/status", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+        
+        if (response.ok) {
+          const data = await response.json()
+          if (data.domain?.sslStatus === "active") {
+            setCurrentDomain((prev: any) => ({
+              ...prev,
+              sslStatus: "active",
+            }))
+            toast({
+              title: "SSL Certificate Active",
+              description: "Your domain is now fully secured with HTTPS.",
+            })
+            clearInterval(pollInterval)
+          } else if (data.domain?.sslStatus === "error") {
+            setCurrentDomain((prev: any) => ({
+              ...prev,
+              sslStatus: "error",
+              sslError: data.domain.sslError,
+            }))
+            clearInterval(pollInterval)
+          }
+        }
+        
+        if (attempts >= maxAttempts) {
+          clearInterval(pollInterval)
+        }
+      } catch (error) {
+        console.error("[v0] Error polling SSL status:", error)
+      }
+    }, 5000) // Poll every 5 seconds
   }
 
   if (loading) {
