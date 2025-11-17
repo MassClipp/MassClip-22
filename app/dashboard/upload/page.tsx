@@ -8,32 +8,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/components/ui/use-toast"
-import { Clock } from "lucide-react"
-import {
-  Upload,
-  Search,
-  Grid3X3,
-  List,
-  Trash2,
-  Edit2,
-  Film,
-  Music,
-  ImageIcon,
-  File,
-  RefreshCw,
-  MoreVertical,
-  Eye,
-  Copy,
-  Loader2,
-  PlusCircle,
-  Pause,
-  Play,
-  X,
-  CheckCircle,
-  AlertCircle,
-  Download,
-  Menu,
-} from "lucide-react"
+import { Clock } from 'lucide-react'
+import { Upload, Search, Grid3X3, List, Trash2, Edit2, Film, Music, ImageIcon, File, RefreshCw, MoreVertical, Eye, Copy, Loader2, PlusCircle, Pause, Play, X, CheckCircle, AlertCircle, Download, Menu, ChevronRight } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Progress } from "@/components/ui/progress"
@@ -894,6 +870,16 @@ export default function UploadPage() {
 
       {/* Overlay when sidebar is open */}
       {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setIsSidebarOpen(false)} />}
+
+      {!isSidebarOpen && (
+        <button
+          onClick={() => setIsSidebarOpen(true)}
+          className="fixed left-0 top-1/2 -translate-y-1/2 z-30 bg-zinc-900 border border-zinc-800 rounded-r-lg p-2 hover:bg-zinc-800 transition-colors"
+          aria-label="Open folder sidebar"
+        >
+          <ChevronRight className="h-4 w-4 text-zinc-400" />
+        </button>
+      )}
 
       {/* Index Setup Helper */}
       {hasIndexError && <FirestoreIndexHelper />}

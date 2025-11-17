@@ -39,8 +39,8 @@ export interface ChunkedUploadSession {
 }
 
 export class ChunkedUploadService {
-  private static readonly CHUNK_SIZE = 5 * 1024 * 1024 // 5MB chunks
-  private static readonly MAX_CONCURRENT_CHUNKS = 3
+  private static readonly CHUNK_SIZE = 10 * 1024 * 1024 // 10MB chunks (was 5MB)
+  private static readonly MAX_CONCURRENT_CHUNKS = 6 // Was 3
   private static readonly MAX_RETRIES = 3
   private static readonly RETRY_DELAY = 1000 // 1 second
 

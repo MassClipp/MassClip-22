@@ -122,25 +122,30 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Check if domain already exists (active domains)
-    const existingDomainQuery = await db.collection("customDomains").where("domain", "==", domain.toLowerCase()).get()
+    // Check if domain already exists (active domains only, not removed)
+    const existingDomainQuery = await db
+      .collection("customDomains")
+      .where("domain", "==", domain.toLowerCase())
+      .where("status", "!=", "removed") // <-- Added explicit check
+      .get()
 
-    // Filter out removed domains in memory to avoid complex composite index
-    const activeDomains = existingDomainQuery.docs.filter((doc) => doc.data().status !== "removed")
-    console.log("[v0] Existing domain check:", { found: activeDomains.length })
+    console.log("[v0] Existing domain check:", { found: existingDomainQuery.docs.length })
 
-    if (activeDomains.length > 0) {
+    if (existingDomainQuery.docs.length > 0) {
       console.log("[v0] Domain already in use - returning 409")
       return NextResponse.json({ error: "Domain already in use" }, { status: 409 })
     }
 
-    const userDomainQuery = await db.collection("customDomains").where("userId", "==", userId).get()
+    // Check if user already has an active domain
+    const userDomainQuery = await db
+      .collection("customDomains")
+      .where("userId", "==", userId)
+      .where("status", "!=", "removed") // <-- Added explicit check
+      .get()
 
-    // Filter out removed domains in memory
-    const activeUserDomains = userDomainQuery.docs.filter((doc) => doc.data().status !== "removed")
-    console.log("[v0] User domain check:", { found: activeUserDomains.length })
+    console.log("[v0] User domain check:", { found: userDomainQuery.docs.length })
 
-    if (activeUserDomains.length > 0) {
+    if (userDomainQuery.docs.length > 0) {
       console.log("[v0] User already has domain - returning 409")
       return NextResponse.json(
         { error: "You already have a custom domain. Remove it first to add a new one." },

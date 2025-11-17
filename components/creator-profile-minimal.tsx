@@ -4,20 +4,7 @@ import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import {
-  Share2,
-  Play,
-  Calendar,
-  Users,
-  Heart,
-  Check,
-  Package,
-  Download,
-  Pause,
-  Lock,
-  ChevronDown,
-  BookOpen,
-} from "lucide-react"
+import { Share2, Play, Calendar, Users, Heart, Check, Package, Download, Pause, Lock, ChevronDown, BookOpen } from 'lucide-react'
 import { useAuthState } from "react-firebase-hooks/auth"
 import { auth, db } from "@/lib/firebase"
 import { doc, updateDoc, increment, getDoc } from "firebase/firestore"
@@ -250,18 +237,18 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
           console.error("Failed to fetch eBooks:", ebooksResponse.status)
         }
 
-        const userDocRef = doc(db, "users", creator.uid)
-        const userDocSnap = await getDoc(userDocRef)
-        if (userDocSnap.exists()) {
-          const userData = userDocSnap.data()
-          setStorefrontDesign(userData.storefrontDesign || null)
-        }
-
-        const membershipResponse = await fetch(`/api/membership-status?userId=${creator.uid}`)
-        if (membershipResponse.ok) {
-          const membershipData = await membershipResponse.json()
-          setCreatorPlan(membershipData.plan || "free")
-          console.log("[v0] Creator plan:", membershipData.plan)
+        try {
+          const userDocRef = doc(db, "users", creator.uid)
+          const userDocSnap = await getDoc(userDocRef)
+          if (userDocSnap.exists()) {
+            const userData = userDocSnap.data()
+            const membershipTier = userData.membershipTier || userData.plan || "free"
+            setCreatorPlan(membershipTier)
+            console.log("[v0] Creator plan from users collection:", membershipTier)
+            setStorefrontDesign(userData.storefrontDesign || null)
+          }
+        } catch (error) {
+          console.error("[v0] Failed to fetch user data:", error)
         }
       } catch (error) {
         console.error("Error fetching content:", error)
