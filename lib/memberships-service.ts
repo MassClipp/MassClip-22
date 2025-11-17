@@ -51,7 +51,7 @@ const STARTER_FEATURES: MembershipFeatures = {
   noWatermark: false,
   prioritySupport: false,
   platformFeePercentage: 20,
-  maxVideosPerBundle: 15,
+  maxVideosPerBundle: 25,
   maxBundles: 5,
   maxFolders: 3,
 }

@@ -23,7 +23,7 @@ export interface SubscriptionData {
 
 const STARTER_DEFAULTS = {
   platformFeePercentage: 20,
-  maxVideosPerBundle: 15,
+  maxVideosPerBundle: 25,
   maxBundles: 5,
   maxFolders: 3,
   canCreateSubfolders: true,

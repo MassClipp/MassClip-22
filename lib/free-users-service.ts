@@ -9,7 +9,7 @@ export interface FreeUserDoc {
   bundlesCreated: number
   downloadsLimit: number
   bundlesLimit: number // 5 bundles for Starter
-  maxVideosPerBundle: number // 15 videos per bundle for Starter
+  maxVideosPerBundle: number // 25 videos per bundle for Starter
   platformFeePercentage: number // 20% for Starter
   maxFolders: number // 3 folders for Starter
   canCreateSubfolders: boolean // true for Starter
@@ -42,7 +42,7 @@ export interface FreeUserDoc {
 const STARTER_TIER_DEFAULTS = {
   downloadsLimit: 15,
   bundlesLimit: 5, // Changed from 2 to 5
-  maxVideosPerBundle: 15, // Changed from 10 to 15
+  maxVideosPerBundle: 25, // Changed from 10 to 15, now 25
   platformFeePercentage: 20,
   maxFolders: 3, // Changed from 2 to 3
   canCreateSubfolders: true, // Changed from false to true
@@ -413,7 +413,7 @@ export async function downgradeFreeUserFromTrial(uid: string): Promise<void> {
         maxFolders: 3, // Starter tier
         canCreateSubfolders: true, // Starter tier
         bundlesLimit: 5, // Starter tier
-        maxVideosPerBundle: 15, // Starter tier
+        maxVideosPerBundle: 25, // Starter tier
         platformFeePercentage: 20,
         updatedAt: FieldValue.serverTimestamp(),
       })
