@@ -130,14 +130,6 @@ const LandingPage = () => {
           <section id="how-it-works" className="py-24 px-6 border-t border-white/10">
             <div className="max-w-7xl mx-auto">
               <div className="grid md:grid-cols-2 gap-12 items-center">
-                <div>
-                  <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
-                    Ready To Take Scaling Seriously?
-                  </h2>
-                  <p className="text-white/60 text-lg leading-relaxed">
-                    You're only one commitment, one decision, one investment away from your faceless brand doing numbers you couldn't imagine financially, and socially. Anyone can do it, the difference is are you willing to bet on yourself? We'll be waiting on the other side for you when you're ready.
-                  </p>
-                </div>
                 <div className="relative">
                   <div className="bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 shadow-2xl hover:shadow-white/10 transition-all">
                     <img
@@ -146,6 +138,14 @@ const LandingPage = () => {
                       className="w-full rounded-lg shadow-lg"
                     />
                   </div>
+                </div>
+                <div>
+                  <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
+                    Ready To Take Scaling Seriously?
+                  </h2>
+                  <p className="text-white/60 text-lg leading-relaxed">
+                    You're only one commitment, one decision, one investment away from your faceless brand doing numbers you couldn't imagine financially, and socially. Anyone can do it, the difference is are you willing to bet on yourself? We'll be waiting on the other side for you when you're ready.
+                  </p>
                 </div>
               </div>
             </div>
