@@ -6,20 +6,7 @@ import { useRef } from "react"
 
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import {
-  Plus,
-  Edit,
-  Eye,
-  EyeOff,
-  Loader2,
-  AlertCircle,
-  Upload,
-  X,
-  Check,
-  Trash2,
-  ImageIcon,
-  ArrowRight,
-} from "lucide-react"
+import { Plus, Edit, Eye, EyeOff, Loader2, AlertCircle, Upload, X, Check, Trash2, ImageIcon, ArrowRight } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -33,7 +20,7 @@ import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, onSnapsho
 import { db } from "@/lib/firebase"
 import { useAuth } from "@/contexts/auth-context"
 import { useUserPlan } from "@/hooks/use-user-plan"
-import { useRouter } from "next/navigation"
+import { useRouter } from 'next/navigation'
 import { useFreeTierLimits } from "@/hooks/use-free-tier-limits"
 import NewFolderSelector from "@/components/new-folder-selector"
 
@@ -116,7 +103,7 @@ export default function BundlesPage() {
   const videosPerBundleLimit =
     isProUser || planData?.plan === "facelessprenuer"
       ? Number.POSITIVE_INFINITY
-      : freeTierLimits?.maxVideosPerBundle || 15
+      : freeTierLimits?.maxVideosPerBundle || 25
 
   const tierName = planData?.plan || freeTierLimits?.tier || "starter"
 

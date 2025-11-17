@@ -81,9 +81,8 @@ async function getTierInfoSafe(uid: string): Promise<{ maxVideosPerBundle: numbe
     }
   } catch (e) {
     console.error("[v0] ❌ Error getting tier info:", e)
-    // Fallback to starter limits (not free limits)
-    console.log("[v0] 📝 Fallback to Starter tier limits - 15 videos per bundle, 5 bundles max")
-    return { maxVideosPerBundle: 15, maxBundles: 5 }
+    console.log("[v0] 📝 Fallback to Starter tier limits - 25 videos per bundle, 5 bundles max")
+    return { maxVideosPerBundle: 25, maxBundles: 5 }
   }
 }
 
@@ -483,7 +482,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       durationMs: Date.now() - startedAt,
       debug: {
         uid,
-        membershipFound: tier.maxVideosPerBundle !== 15, // If not 15, membership was found
+        membershipFound: tier.maxVideosPerBundle !== 25, // If not 25, membership was found
         isUnlimited: tier.maxVideosPerBundle === null,
         tierInfo: tier,
         validationErrors: validationErrors.length > 0 ? validationErrors : undefined, // Include validation errors in debug

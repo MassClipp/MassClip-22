@@ -74,7 +74,7 @@ export async function GET(request: NextRequest) {
       baseBundleLimit, // Base Starter tier limit (5) or null for pro
       extraBundleSlots, // Additional purchased slots
       bundlesRemaining,
-      maxVideosPerBundle: tierInfo.maxVideosPerBundle || (tierInfo.tier === "starter" ? 15 : null), // Changed from 10 to 15 for Starter
+      maxVideosPerBundle: tierInfo.maxVideosPerBundle || (tierInfo.tier === "starter" ? 25 : null), // Changed from 15 to 25 for Starter
       reachedBundleLimit: tierInfo.reachedBundleLimit || false,
       tier: tierInfo.tier,
       canCreateBundle: !tierInfo.reachedBundleLimit,
