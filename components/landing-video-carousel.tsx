@@ -11,6 +11,7 @@ export function LandingVideoCarousel({ videos }: LandingVideoCarouselProps) {
   const scrollPositionRef = useRef(0)
   const animationFrameRef = useRef<number>()
   const [loadedCount, setLoadedCount] = useState(0)
+  const videoRefs = useRef<(HTMLVideoElement | null)[]>([])
 
   const defaultVideos = [
     {
@@ -118,6 +119,25 @@ export function LandingVideoCarousel({ videos }: LandingVideoCarouselProps) {
     }
   }, [videoList.length])
 
+  useEffect(() => {
+    // Safari sometimes needs a manual play() call after component mount
+    const playVideos = async () => {
+      for (const video of videoRefs.current) {
+        if (video) {
+          try {
+            await video.play()
+          } catch (error) {
+            console.log("[v0] Video autoplay prevented, user interaction may be required")
+          }
+        }
+      }
+    }
+
+    // Small delay to ensure videos are loaded
+    const timer = setTimeout(playVideos, 100)
+    return () => clearTimeout(timer)
+  }, [])
+
   return (
     <div className="w-full overflow-hidden py-12 relative">
       {/* Gradient overlays for fade effect */}
@@ -131,16 +151,21 @@ export function LandingVideoCarousel({ videos }: LandingVideoCarouselProps) {
             className="flex-shrink-0 w-[200px] h-[355px] rounded-xl overflow-hidden bg-black border border-white/10"
           >
             <video
+              ref={(el) => {
+                videoRefs.current[index] = el
+              }}
               src={video.url}
               poster={video.poster}
               autoPlay
               loop
               muted
               playsInline
-              preload="none"
+              preload="metadata"
               className="w-full h-full object-cover"
               onLoadedData={() => setLoadedCount(prev => prev + 1)}
               onError={(e) => console.error(`[v0] Video ${index} failed to load:`, e)}
+              webkit-playsinline="true"
+              x-webkit-airplay="allow"
             />
           </div>
         ))}
