@@ -28,10 +28,10 @@ async function hasEverPurchasedFacelessprenuer(userId: string): Promise<boolean>
         console.log("[v0] Found Facelessprenuer membership record (status: " + membershipData.status + ") - trial already used")
         
         // Set the flag in users collection for faster future lookups
-        await adminDb.collection("users").doc(userId).set(
-          { hasUsedFacelessprenuerTrial: true },
-          { merge: true }
-        )
+        // await adminDb.collection("users").doc(userId).set(
+        //   { hasUsedFacelessprenuerTrial: true },
+        //   { merge: true }
+        // )
         
         return true
       }
@@ -129,14 +129,6 @@ export async function POST(request: NextRequest) {
       console.log(
         `💲 [Membership Checkout] Facelessprenuer - ${!hasEverPurchased ? "3-day FREE trial then $39/month (first-time buyer)" : "$39/month (returning buyer, no trial)"}`,
       )
-      
-      if (!hasEverPurchased) {
-        await adminDb.collection("users").doc(uid).set(
-          { hasUsedFacelessprenuerTrial: true },
-          { merge: true }
-        )
-        console.log("[v0] Set hasUsedFacelessprenuerTrial flag for user")
-      }
     } else {
       console.error("❌ [Membership Checkout] Invalid plan:", plan)
       return NextResponse.json({ error: "Invalid plan selected." }, { status: 400 })
