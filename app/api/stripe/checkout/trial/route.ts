@@ -65,6 +65,11 @@ export async function POST(req: NextRequest) {
         isTrial: "true",
         buyerUid: userId,
       },
+      discounts: [
+        {
+          promotion_code: "promo_1SShryDheyb0pkWF4iiAvi7o",
+        },
+      ],
     })
 
     // Mark onboarding as complete
