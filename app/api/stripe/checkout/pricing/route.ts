@@ -171,13 +171,6 @@ export async function POST(request: NextRequest) {
         metadata: metadata,
         ...(shouldApplyTrial && { trial_period_days: 3 }),
       },
-      ...(plan === "faceless_pro" && {
-        discounts: [
-          {
-            promotion_code: "promo_1SShryDheyb0pkWF4iiAvi7o",
-          },
-        ],
-      }),
     }
 
     const session = await stripe.checkout.sessions.create(sessionParams)
