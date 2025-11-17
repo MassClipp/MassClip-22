@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/components/ui/use-toast"
-import { Clock } from 'lucide-react'
-import { Upload, Search, Grid3X3, List, Trash2, Edit2, Film, Music, ImageIcon, File, RefreshCw, MoreVertical, Eye, Copy, Loader2, PlusCircle, Pause, Play, X, CheckCircle, AlertCircle, Download, Menu, ChevronRight } from 'lucide-react'
+import { Clock, ChevronRight } from 'lucide-react'
+import { Upload, Search, Grid3X3, List, Trash2, Edit2, Film, Music, ImageIcon, File, RefreshCw, MoreVertical, Eye, Copy, Loader2, PlusCircle, Pause, Play, X, CheckCircle, AlertCircle, Download, Menu } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Progress } from "@/components/ui/progress"
@@ -85,6 +85,7 @@ export default function UploadPage() {
   const { toast } = useToast()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false) // Declare isSidebarOpen
+  const [isVexSidebarOpen, setIsVexSidebarOpen] = useState(true)
 
   const { refetch: refetchOnboarding } = useOnboarding()
 
@@ -856,6 +857,20 @@ export default function UploadPage() {
     )
   }
 
+  const toggleVexSidebar = () => {
+    const vexSidebar = document.getElementById("vex-sidebar")
+    if (vexSidebar) {
+      const isCurrentlyOpen = !vexSidebar.classList.contains("translate-x-full")
+      if (isCurrentlyOpen) {
+        vexSidebar.classList.add("translate-x-full")
+        setIsVexSidebarOpen(false)
+      } else {
+        vexSidebar.classList.remove("translate-x-full")
+        setIsVexSidebarOpen(true)
+      }
+    }
+  }
+
   return (
     // <PaywallWrapper>
     <div className="space-y-6">
@@ -878,6 +893,16 @@ export default function UploadPage() {
           aria-label="Open folder sidebar"
         >
           <ChevronRight className="h-4 w-4 text-zinc-400" />
+        </button>
+      )}
+
+      {!isVexSidebarOpen && (
+        <button
+          onClick={toggleVexSidebar}
+          className="hidden lg:block fixed right-0 top-1/2 -translate-y-1/2 z-30 bg-zinc-900 border border-zinc-800 rounded-l-lg p-2 hover:bg-zinc-800 transition-colors"
+          aria-label="Open Vex chat sidebar"
+        >
+          <ChevronRight className="h-4 w-4 text-zinc-400 rotate-180" />
         </button>
       )}
 

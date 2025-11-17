@@ -246,9 +246,13 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
             setCreatorPlan(membershipTier)
             console.log("[v0] Creator plan from users collection:", membershipTier)
             setStorefrontDesign(userData.storefrontDesign || null)
+          } else {
+            console.warn("[v0] User document not found, setting plan to free")
+            setCreatorPlan("free")
           }
         } catch (error) {
           console.error("[v0] Failed to fetch user data:", error)
+          setCreatorPlan("free")
         }
       } catch (error) {
         console.error("Error fetching content:", error)
@@ -819,30 +823,24 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
               {storefrontTabs
                 .filter((tab) => {
                   const isStandardTab = ["free_content", "premium_content", "ebooks"].includes(tab.type)
-                  const isCustomTab = !isStandardTab
-                  const hasAccess = creatorPlan === "facelessprenuer"
-
-                  // Only show custom tabs if creator has Facelessprenuer access
-                  if (isCustomTab && !hasAccess) {
-                    console.log(`[v0] Hiding custom tab ${tab.name} - creator does not have Facelessprenuer plan`)
-                    return false
-                  }
-
                   return !isStandardTab && tab.enabled
                 })
                 .sort((a, b) => a.order - b.order)
-                .map((tab) => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.type)}
-                    className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
-                      activeTab === tab.type ? "text-white" : "text-zinc-400 hover:text-zinc-300"
-                    }`}
-                  >
-                    {tab.name}
-                    {activeTab === tab.type && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
-                  </button>
-                ))}
+                .map((tab) => {
+                  console.log(`[v0] Rendering tab: ${tab.name} (${tab.type})`)
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.type)}
+                      className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
+                        activeTab === tab.type ? "text-white" : "text-zinc-400 hover:text-zinc-300"
+                      }`}
+                    >
+                      {tab.name}
+                      {activeTab === tab.type && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
+                    </button>
+                  )
+                })}
 
               {console.log("[v0] === END RENDERING TABS ===\n")}
             </div>
@@ -907,7 +905,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
                     const currentTab = storefrontTabs.find((tab) => tab.type === activeTab)
                     const tabProducts = externalProducts.filter((p) => p.tabId === currentTab?.id)
 
-                    console.log(`[v0] === RENDERING CUSTOM TAB CONTENT: ${activeTab} ===`)
+                    console.log(`[v0] ===RENDERING CUSTOM TAB CONTENT: ${activeTab} ===`)
                     console.log(`[v0] Current tab:`, currentTab)
                     console.log(`[v0] Matching products:`, tabProducts)
                     console.log(`[v0] === END CUSTOM TAB CONTENT ===`)
