@@ -1,9 +1,9 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter } from 'next/navigation'
 import { Button } from "@/components/ui/button"
-import { Check, Crown, Shield } from "lucide-react"
+import { Check, Crown, Shield } from 'lucide-react'
 import { useAuth } from "@/hooks/use-auth"
 
 export default function FreeTrialPage() {
@@ -62,12 +62,15 @@ export default function FreeTrialPage() {
     try {
       setUpgradingTo(plan)
       const idToken = await user?.getIdToken?.()
+      
+      const apiPlan = plan === "starter" ? "faceless_pro" : "facelessprenuer"
+      
       const res = await fetch("/api/stripe/checkout/pricing", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           idToken,
-          plan,
+          plan: apiPlan,
         }),
       })
 
@@ -167,6 +170,10 @@ export default function FreeTrialPage() {
               <li className="flex items-start gap-3">
                 <Check className="w-5 h-5 text-gray-400 mt-0.5 flex-shrink-0" />
                 <span className="text-gray-300">Basic Vex AI - file metadata & folder organization</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <Check className="w-5 h-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                <span className="text-gray-300">Basic customization</span>
               </li>
               <li className="flex items-start gap-3">
                 <Check className="w-5 h-5 text-gray-400 mt-0.5 flex-shrink-0" />
