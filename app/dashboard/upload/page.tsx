@@ -886,16 +886,6 @@ export default function UploadPage() {
       {/* Overlay when sidebar is open */}
       {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setIsSidebarOpen(false)} />}
 
-      {!isSidebarOpen && (
-        <button
-          onClick={() => setIsSidebarOpen(true)}
-          className="fixed left-0 top-1/2 -translate-y-1/2 z-30 bg-zinc-900 border border-zinc-800 rounded-r-lg p-2 hover:bg-zinc-800 transition-colors"
-          aria-label="Open folder sidebar"
-        >
-          <ChevronRight className="h-4 w-4 text-zinc-400" />
-        </button>
-      )}
-
       {!isVexSidebarOpen && (
         <button
           onClick={toggleVexSidebar}

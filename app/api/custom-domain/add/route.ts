@@ -123,17 +123,20 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if domain already exists (active domains only, not removed)
-    const existingDomainQuery = await db
+    const existingDomainSnapshot = await db
       .collection("customDomains")
       .where("domain", "==", domain.toLowerCase())
       .get()
 
-    // Filter out removed domains in application code instead of query
-    const activeDomains = existingDomainQuery.docs.filter((doc) => doc.data().status !== "removed")
+    const activeDomains = existingDomainSnapshot.docs.filter((doc) => {
+      const data = doc.data()
+      return data.status !== "removed"
+    })
 
     console.log("[v0] Existing domain check:", {
-      total: existingDomainQuery.docs.length,
+      total: existingDomainSnapshot.docs.length,
       active: activeDomains.length,
+      domains: existingDomainSnapshot.docs.map(d => ({ id: d.id, domain: d.data().domain, status: d.data().status }))
     })
 
     if (activeDomains.length > 0) {
@@ -142,14 +145,20 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user already has an active domain
-    const userDomainQuery = await db.collection("customDomains").where("userId", "==", userId).get()
+    const userDomainSnapshot = await db
+      .collection("customDomains")
+      .where("userId", "==", userId)
+      .get()
 
-    // Filter out removed domains in application code
-    const activeUserDomains = userDomainQuery.docs.filter((doc) => doc.data().status !== "removed")
+    const activeUserDomains = userDomainSnapshot.docs.filter((doc) => {
+      const data = doc.data()
+      return data.status !== "removed"
+    })
 
     console.log("[v0] User domain check:", {
-      total: userDomainQuery.docs.length,
+      total: userDomainSnapshot.docs.length,
       active: activeUserDomains.length,
+      domains: userDomainSnapshot.docs.map(d => ({ id: d.id, domain: d.data().domain, status: d.data().status }))
     })
 
     if (activeUserDomains.length > 0) {
