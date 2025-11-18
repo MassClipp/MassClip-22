@@ -1,35 +1,11 @@
-"use client"
 import Link from "next/link"
-import { useRouter } from 'next/navigation'
 import { Button } from "@/components/ui/button"
-import { useEffect, useState } from "react"
 import { LandingVexInterface } from "@/components/landing-vex-interface"
 import { LandingReview } from "@/components/landing-review"
 import { LandingVideoCarousel } from "@/components/landing-video-carousel"
-import { Sparkles, Package, TrendingUp } from 'lucide-react'
+import Image from "next/image"
 
-const LandingPage = () => {
-  const router = useRouter()
-  const [scrolled, setScrolled] = useState(false)
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      router.prefetch("/signup")
-      router.prefetch("/login")
-    }, 100)
-
-    return () => clearTimeout(timer)
-  }, [router])
-
-  useEffect(() => {
-    const handleScroll = () => {
-      setScrolled(window.scrollY > 100)
-    }
-
-    window.addEventListener("scroll", handleScroll)
-    return () => window.removeEventListener("scroll", handleScroll)
-  }, [])
-
+export default function LandingPage() {
   return (
     <div className="min-h-screen flex flex-col relative overflow-hidden bg-black">
       <div className="fixed inset-0 z-0">
@@ -65,12 +41,11 @@ const LandingPage = () => {
               <Link href="/login" className="text-white/80 hover:text-white transition-colors font-light text-sm">
                 Login
               </Link>
-              <Button
-                onClick={() => router.push("/signup")}
-                className="bg-white text-black hover:bg-gray-200 font-light rounded-full px-6 py-2 text-sm shadow-lg shadow-white/20"
-              >
-                Sign Up Free
-              </Button>
+              <Link href="/signup">
+                <Button className="bg-white text-black hover:bg-gray-200 font-light rounded-full px-6 py-2 text-sm shadow-lg shadow-white/20">
+                  Sign Up Free
+                </Button>
+              </Link>
             </div>
           </nav>
         </header>
@@ -115,10 +90,14 @@ const LandingPage = () => {
                 </div>
                 <div className="relative">
                   <div className="bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 shadow-2xl hover:shadow-white/10 transition-all">
-                    <img
+                    <Image
                       src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Screenshot%202025-11-16%20at%202.35.22%20PM-lfX2NIXUhBysfJ4aU0t4pYT5UvtPwz.png"
                       alt="eBook Product Display"
+                      width={800}
+                      height={600}
                       className="w-full rounded-lg shadow-lg"
+                      loading="lazy"
+                      quality={85}
                     />
                   </div>
                 </div>
@@ -132,10 +111,14 @@ const LandingPage = () => {
               <div className="grid md:grid-cols-2 gap-12 items-center">
                 <div className="relative">
                   <div className="bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 shadow-2xl hover:shadow-white/10 transition-all">
-                    <img
+                    <Image
                       src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/ChatGPT%20Image%20Nov%2015%2C%202025%20at%2010_22_45%20PM-tXxENDb7CClHvXBHyr1rzZQWwBPR5I.png"
                       alt="MRR Growth Dashboard"
+                      width={800}
+                      height={600}
                       className="w-full rounded-lg shadow-lg"
+                      loading="lazy"
+                      quality={85}
                     />
                   </div>
                 </div>
@@ -157,13 +140,11 @@ const LandingPage = () => {
               <p className="text-white/60 text-lg mb-8">
                 Try VEX for free. Upload your content and see what VEX can do for you.
               </p>
-              <Button
-                onClick={() => router.push("/signup")}
-                size="lg"
-                className="bg-white text-black hover:bg-gray-200 font-light rounded-full px-8 py-6 text-lg shadow-xl shadow-white/30 hover:shadow-2xl hover:shadow-white/40 transition-all"
-              >
-                Get Started For Free
-              </Button>
+              <Link href="/signup">
+                <Button size="lg" className="bg-white text-black hover:bg-gray-200 font-light rounded-full px-8 py-6 text-lg shadow-xl shadow-white/30 hover:shadow-2xl hover:shadow-white/40 transition-all">
+                  Get Started For Free
+                </Button>
+              </Link>
             </div>
           </section>
         </main>
@@ -191,5 +172,3 @@ const LandingPage = () => {
     </div>
   )
 }
-
-export default LandingPage

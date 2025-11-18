@@ -10,7 +10,7 @@ export function LandingVideoCarousel({ videos }: LandingVideoCarouselProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const scrollPositionRef = useRef(0)
   const animationFrameRef = useRef<number>()
-  const [loadedCount, setLoadedCount] = useState(0)
+  const [isInView, setIsInView] = useState(false)
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([])
 
   const defaultVideos = [
@@ -38,50 +38,6 @@ export function LandingVideoCarousel({ videos }: LandingVideoCarouselProps) {
       url: "https://pub-93cabcf58da344dea3d33ba1e4be2ef2.r2.dev/creators/stack/1761516660802-Kai_cenat_._Find_Your_People.mov",
       poster: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='355'%3E%3Crect width='200' height='355' fill='%23000000'/%3E%3C/svg%3E",
     },
-    {
-      url: "https://pub-93cabcf58da344dea3d33ba1e4be2ef2.r2.dev/creators/stacksavvy8/1759800861066-Damii_._Daddy_s_Money.mov",
-      poster: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='355'%3E%3Crect width='200' height='355' fill='%23000000'/%3E%3C/svg%3E",
-    },
-    {
-      url: "https://pub-93cabcf58da344dea3d33ba1e4be2ef2.r2.dev/creators/stack/1761523453342-copy_28A05EB0-CF35-4117-AD82-0C4A513E4D7F.MOV",
-      poster: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='355'%3E%3Crect width='200' height='355' fill='%23000000'/%3E%3C/svg%3E",
-    },
-    {
-      url: "https://pub-93cabcf58da344dea3d33ba1e4be2ef2.r2.dev/creators/stack/1761518373402-copy_50F95DCD-C28B-4F19-8C09-4A861A5900D4.MOV",
-      poster: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='355'%3E%3Crect width='200' height='355' fill='%23000000'/%3E%3C/svg%3E",
-    },
-    {
-      url: "https://pub-93cabcf58da344dea3d33ba1e4be2ef2.r2.dev/creators/stack/1761523440509-copy_24358EA8-1EE2-4843-B48B-968BE49D7A5C.MOV",
-      poster: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='355'%3E%3Crect width='200' height='355' fill='%23000000'/%3E%3C/svg%3E",
-    },
-    {
-      url: "https://pub-93cabcf58da344dea3d33ba1e4be2ef2.r2.dev/creators/stack/1761516709035-Kendall_Jenner__Words_of_Affirmation__4_.mp4",
-      poster: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='355'%3E%3Crect width='200' height='355' fill='%23000000'/%3E%3C/svg%3E",
-    },
-    {
-      url: "https://pub-93cabcf58da344dea3d33ba1e4be2ef2.r2.dev/creators/stack/1761523414889-copy_F5579482-B1ED-4F76-96D5-AA0FD07451C1.MOV",
-      poster: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='355'%3E%3Crect width='200' height='355' fill='%23000000'/%3E%3C/svg%3E",
-    },
-    {
-      url: "https://pub-93cabcf58da344dea3d33ba1e4be2ef2.r2.dev/creators/stack/1761518457191-Kobe_._Fear_of_Failure.mov",
-      poster: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='355'%3E%3Crect width='200' height='355' fill='%23000000'/%3E%3C/svg%3E",
-    },
-    {
-      url: "https://pub-93cabcf58da344dea3d33ba1e4be2ef2.r2.dev/creators/stack/1761523412296-copy_FE237F99-7EBF-430E-ABE0-2A472F2B6324.MOV",
-      poster: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='355'%3E%3Crect width='200' height='355' fill='%23000000'/%3E%3C/svg%3E",
-    },
-    {
-      url: "https://pub-93cabcf58da344dea3d33ba1e4be2ef2.r2.dev/creators/stack/1761518397253-copy_20C7EB0F-9989-4FC6-A8EB-E991FFB2FCB9.MOV",
-      poster: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='355'%3E%3Crect width='200' height='355' fill='%23000000'/%3E%3C/svg%3E",
-    },
-    {
-      url: "https://pub-93cabcf58da344dea3d33ba1e4be2ef2.r2.dev/creators/stack/1761516755340-micheal_b___jordan_._don_t_quit__1080p_.mp4",
-      poster: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='355'%3E%3Crect width='200' height='355' fill='%23000000'/%3E%3C/svg%3E",
-    },
-    {
-      url: "https://pub-93cabcf58da344dea3d33ba1e4be2ef2.r2.dev/creators/stack/Motivation/1761518902497-copy_7CA7D980-2ACC-4AF7-A6CA-FCC94537E1CA.MOV",
-      poster: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='355'%3E%3Crect width='200' height='355' fill='%23000000'/%3E%3C/svg%3E",
-    },
   ]
 
   const videoList = videos 
@@ -90,8 +46,31 @@ export function LandingVideoCarousel({ videos }: LandingVideoCarouselProps) {
   const duplicatedVideos = [...videoList, ...videoList]
 
   useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setIsInView(true)
+          }
+        })
+      },
+      { threshold: 0.1 }
+    )
+
+    if (containerRef.current) {
+      observer.observe(containerRef.current)
+    }
+
+    return () => {
+      if (containerRef.current) {
+        observer.unobserve(containerRef.current)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
     const container = containerRef.current
-    if (!container) return
+    if (!container || !isInView) return
 
     const videoCardWidth = 216
     const totalVideos = videoList.length
@@ -117,10 +96,11 @@ export function LandingVideoCarousel({ videos }: LandingVideoCarouselProps) {
         cancelAnimationFrame(animationFrameRef.current)
       }
     }
-  }, [videoList.length])
+  }, [videoList.length, isInView])
 
   useEffect(() => {
-    // Safari sometimes needs a manual play() call after component mount
+    if (!isInView) return
+
     const playVideos = async () => {
       for (const video of videoRefs.current) {
         if (video) {
@@ -133,19 +113,17 @@ export function LandingVideoCarousel({ videos }: LandingVideoCarouselProps) {
       }
     }
 
-    // Small delay to ensure videos are loaded
     const timer = setTimeout(playVideos, 100)
     return () => clearTimeout(timer)
-  }, [])
+  }, [isInView])
 
   return (
     <div className="w-full overflow-hidden py-12 relative">
-      {/* Gradient overlays for fade effect */}
       <div className="absolute left-0 top-0 bottom-0 w-32 bg-gradient-to-r from-black to-transparent z-10" />
       <div className="absolute right-0 top-0 bottom-0 w-32 bg-gradient-to-l from-black to-transparent z-10" />
 
       <div ref={containerRef} className="flex gap-4 will-change-transform">
-        {duplicatedVideos.map((video, index) => (
+        {isInView && duplicatedVideos.map((video, index) => (
           <div
             key={index}
             className="flex-shrink-0 w-[200px] h-[355px] rounded-xl overflow-hidden bg-black border border-white/10"
@@ -160,9 +138,8 @@ export function LandingVideoCarousel({ videos }: LandingVideoCarouselProps) {
               loop
               muted
               playsInline
-              preload="metadata"
+              preload="none"
               className="w-full h-full object-cover"
-              onLoadedData={() => setLoadedCount(prev => prev + 1)}
               onError={(e) => console.error(`[v0] Video ${index} failed to load:`, e)}
               webkit-playsinline="true"
               x-webkit-airplay="allow"
