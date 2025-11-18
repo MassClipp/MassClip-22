@@ -30,6 +30,42 @@ class UploadQueueManager {
   private maxConcurrentUploads = 2
   private progressCallbacks = new Map<string, (upload: QueuedUpload) => void>()
   private globalProgressCallback?: (queue: QueuedUpload[]) => void
+  private readonly STORAGE_KEY = "upload-queue-persistence"
+
+  constructor() {
+    if (typeof window !== "undefined") {
+      this.restoreQueue()
+    }
+  }
+
+  private restoreQueue() {
+    try {
+      const stored = localStorage.getItem(this.STORAGE_KEY)
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        this.queue = parsed.filter((item: QueuedUpload) => 
+          item.status === "queued" || item.status === "error"
+        )
+        console.log(`📦 [Queue] Restored ${this.queue.length} queued items from localStorage`)
+      }
+    } catch (error) {
+      console.error("Failed to restore upload queue:", error)
+    }
+  }
+
+  private saveQueue() {
+    if (typeof window !== "undefined") {
+      try {
+        const toSave = this.queue.map(item => ({
+          ...item,
+          file: undefined,
+        }))
+        localStorage.setItem(this.STORAGE_KEY, JSON.stringify(toSave))
+      } catch (error) {
+        console.error("Failed to save upload queue:", error)
+      }
+    }
+  }
 
   addToQueue(file: File, priority = 0, folderId?: string, folderPath?: string): string {
     const queueId = `queue_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
@@ -52,6 +88,7 @@ class UploadQueueManager {
 
     this.queue.push(queuedUpload)
     this.sortQueue()
+    this.saveQueue()
     this.processQueue()
     this.notifyGlobalProgress()
 
@@ -60,7 +97,6 @@ class UploadQueueManager {
 
   private sortQueue() {
     this.queue.sort((a, b) => {
-      // Sort by priority (higher first), then by creation time (older first)
       if (a.priority !== b.priority) {
         return b.priority - a.priority
       }
@@ -69,7 +105,6 @@ class UploadQueueManager {
   }
 
   private async processQueue() {
-    // Find queued items that can be started
     const queuedItems = this.queue.filter((item) => item.status === "queued")
     const availableSlots = this.maxConcurrentUploads - this.activeUploads.size
 
@@ -77,7 +112,6 @@ class UploadQueueManager {
       return
     }
 
-    // Start uploads for available slots
     const itemsToStart = queuedItems.slice(0, availableSlots)
 
     for (const item of itemsToStart) {
@@ -98,7 +132,6 @@ class UploadQueueManager {
       console.log(`   Folder ID: ${queuedUpload.folderId}`)
       console.log(`   Folder Path: ${queuedUpload.folderPath}`)
 
-      // Start chunked upload
       const uploadId = await chunkedUploadService.initializeUpload(
         queuedUpload.file,
         (progress) => {
@@ -133,10 +166,10 @@ class UploadQueueManager {
   private completeUpload(queuedUpload: QueuedUpload) {
     queuedUpload.status = "completed"
     this.activeUploads.delete(queuedUpload.id)
+    this.saveQueue()
     this.notifyProgress(queuedUpload)
     this.notifyGlobalProgress()
 
-    // Process next items in queue
     setTimeout(() => this.processQueue(), 100)
   }
 
@@ -144,10 +177,10 @@ class UploadQueueManager {
     queuedUpload.status = "error"
     queuedUpload.error = error
     this.activeUploads.delete(queuedUpload.id)
+    this.saveQueue()
     this.notifyProgress(queuedUpload)
     this.notifyGlobalProgress()
 
-    // Process next items in queue
     setTimeout(() => this.processQueue(), 100)
   }
 
@@ -163,6 +196,7 @@ class UploadQueueManager {
 
       this.notifyProgress(item)
       this.notifyGlobalProgress()
+      this.saveQueue()
       this.processQueue()
     }
   }
@@ -173,6 +207,7 @@ class UploadQueueManager {
       item.status = "queued"
       this.notifyProgress(item)
       this.notifyGlobalProgress()
+      this.saveQueue()
       this.processQueue()
     }
   }
@@ -188,6 +223,7 @@ class UploadQueueManager {
       item.firestoreDocId = undefined
       this.notifyProgress(item)
       this.notifyGlobalProgress()
+      this.saveQueue()
       this.processQueue()
     }
   }
@@ -197,7 +233,6 @@ class UploadQueueManager {
     if (index !== -1) {
       const item = this.queue[index]
 
-      // Cancel active upload if needed
       if (item.status === "uploading" && item.uploadId) {
         chunkedUploadService.cancelUpload(item.uploadId)
         this.activeUploads.delete(queueId)
@@ -205,6 +240,7 @@ class UploadQueueManager {
 
       this.queue.splice(index, 1)
       this.progressCallbacks.delete(queueId)
+      this.saveQueue()
       this.notifyGlobalProgress()
       this.processQueue()
     }
@@ -216,6 +252,7 @@ class UploadQueueManager {
 
   clearCompleted() {
     this.queue = this.queue.filter((item) => item.status !== "completed")
+    this.saveQueue()
     this.notifyGlobalProgress()
   }
 

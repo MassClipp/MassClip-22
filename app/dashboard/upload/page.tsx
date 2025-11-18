@@ -119,6 +119,7 @@ export default function UploadPage() {
   const userToken = useState<string>("")[0] // Access token from state
 
   const [isDownloadingZip, setIsDownloadingZip] = useState(false)
+  const [transcribingUploads, setTranscribingUploads] = useState<Set<string>>(new Set())
 
   // Initialize upload services
   useEffect(() => {
@@ -435,6 +436,13 @@ export default function UploadPage() {
                 `[v0] Video upload completed, triggering transcription for Firestore doc: ${queuedUpload.firestoreDocId}`,
               )
 
+              setTranscribingUploads(prev => new Set(prev).add(queuedUpload.firestoreDocId!))
+
+              toast({
+                title: "Transcription Started",
+                description: `${queuedUpload.file.name} is being transcribed in the background.`,
+              })
+
               try {
                 const token = await user.getIdToken()
                 const transcribeResponse = await fetch("/api/uploads/auto-transcribe", {
@@ -454,16 +462,22 @@ export default function UploadPage() {
                   console.log(
                     `[v0] Transcription started successfully for Firestore doc: ${queuedUpload.firestoreDocId}`,
                   )
-                  toast({
-                    title: "Transcription Started",
-                    description: "Your video is being transcribed in the background.",
-                  })
                 } else {
                   const error = await transcribeResponse.json()
                   console.error(`[v0] Transcription failed:`, error)
+                  setTranscribingUploads(prev => {
+                    const next = new Set(prev)
+                    next.delete(queuedUpload.firestoreDocId!)
+                    return next
+                  })
                 }
               } catch (error) {
                 console.error(`[v0] Failed to trigger transcription:`, error)
+                setTranscribingUploads(prev => {
+                  const next = new Set(prev)
+                  next.delete(queuedUpload.firestoreDocId!)
+                  return next
+                })
               }
             }
 
@@ -1420,6 +1434,22 @@ export default function UploadPage() {
             </div>
           )}
         </AnimatePresence>
+      )}
+
+      {transcribingUploads.size > 0 && (
+        <div className="bg-cyan-950/20 border border-cyan-900/50 rounded-lg p-4">
+          <div className="flex items-center gap-3">
+            <Loader2 className="h-5 w-5 text-cyan-400 animate-spin" />
+            <div>
+              <h3 className="font-medium text-cyan-300 text-sm">
+                Transcribing {transcribingUploads.size} video{transcribingUploads.size > 1 ? 's' : ''}
+              </h3>
+              <p className="text-xs text-cyan-400/70 mt-1">
+                Transcription is happening in the background. You can continue working.
+              </p>
+            </div>
+          </div>
+        </div>
       )}
 
       <Dialog open={isRenameDialogOpen} onOpenChange={setIsRenameDialogOpen}>
