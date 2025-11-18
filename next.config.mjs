@@ -54,6 +54,7 @@ const nextConfig = {
       "firebasestorage.googleapis.com",
       "storage.googleapis.com",
       "pub-3626123a908346a7a8be8d9295f44e26.r2.dev",
+      "hebbkx1anhila5yf.public.blob.vercel-storage.com",
     ],
     unoptimized: false,
     formats: ['image/webp', 'image/avif'],
