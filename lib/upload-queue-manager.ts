@@ -24,47 +24,17 @@ export interface QueueStats {
   paused: number
 }
 
+const STORAGE_KEY = "massclip_upload_queue"
+
 class UploadQueueManager {
   private queue: QueuedUpload[] = []
   private activeUploads = new Set<string>()
   private maxConcurrentUploads = 2
   private progressCallbacks = new Map<string, (upload: QueuedUpload) => void>()
   private globalProgressCallback?: (queue: QueuedUpload[]) => void
-  private readonly STORAGE_KEY = "upload-queue-persistence"
 
   constructor() {
-    if (typeof window !== "undefined") {
-      this.restoreQueue()
-    }
-  }
-
-  private restoreQueue() {
-    try {
-      const stored = localStorage.getItem(this.STORAGE_KEY)
-      if (stored) {
-        const parsed = JSON.parse(stored)
-        this.queue = parsed.filter((item: QueuedUpload) => 
-          item.status === "queued" || item.status === "error"
-        )
-        console.log(`📦 [Queue] Restored ${this.queue.length} queued items from localStorage`)
-      }
-    } catch (error) {
-      console.error("Failed to restore upload queue:", error)
-    }
-  }
-
-  private saveQueue() {
-    if (typeof window !== "undefined") {
-      try {
-        const toSave = this.queue.map(item => ({
-          ...item,
-          file: undefined,
-        }))
-        localStorage.setItem(this.STORAGE_KEY, JSON.stringify(toSave))
-      } catch (error) {
-        console.error("Failed to save upload queue:", error)
-      }
-    }
+    this.loadQueueFromStorage()
   }
 
   addToQueue(file: File, priority = 0, folderId?: string, folderPath?: string): string {
@@ -88,15 +58,16 @@ class UploadQueueManager {
 
     this.queue.push(queuedUpload)
     this.sortQueue()
-    this.saveQueue()
     this.processQueue()
     this.notifyGlobalProgress()
+    this.saveQueueToStorage()
 
     return queueId
   }
 
   private sortQueue() {
     this.queue.sort((a, b) => {
+      // Sort by priority (higher first), then by creation time (older first)
       if (a.priority !== b.priority) {
         return b.priority - a.priority
       }
@@ -105,6 +76,7 @@ class UploadQueueManager {
   }
 
   private async processQueue() {
+    // Find queued items that can be started
     const queuedItems = this.queue.filter((item) => item.status === "queued")
     const availableSlots = this.maxConcurrentUploads - this.activeUploads.size
 
@@ -112,6 +84,7 @@ class UploadQueueManager {
       return
     }
 
+    // Start uploads for available slots
     const itemsToStart = queuedItems.slice(0, availableSlots)
 
     for (const item of itemsToStart) {
@@ -132,6 +105,7 @@ class UploadQueueManager {
       console.log(`   Folder ID: ${queuedUpload.folderId}`)
       console.log(`   Folder Path: ${queuedUpload.folderPath}`)
 
+      // Start chunked upload
       const uploadId = await chunkedUploadService.initializeUpload(
         queuedUpload.file,
         (progress) => {
@@ -166,10 +140,11 @@ class UploadQueueManager {
   private completeUpload(queuedUpload: QueuedUpload) {
     queuedUpload.status = "completed"
     this.activeUploads.delete(queuedUpload.id)
-    this.saveQueue()
+    this.saveQueueToStorage()
     this.notifyProgress(queuedUpload)
     this.notifyGlobalProgress()
 
+    // Process next items in queue
     setTimeout(() => this.processQueue(), 100)
   }
 
@@ -177,10 +152,11 @@ class UploadQueueManager {
     queuedUpload.status = "error"
     queuedUpload.error = error
     this.activeUploads.delete(queuedUpload.id)
-    this.saveQueue()
+    this.saveQueueToStorage()
     this.notifyProgress(queuedUpload)
     this.notifyGlobalProgress()
 
+    // Process next items in queue
     setTimeout(() => this.processQueue(), 100)
   }
 
@@ -194,9 +170,9 @@ class UploadQueueManager {
         chunkedUploadService.pauseUpload(item.uploadId)
       }
 
+      this.saveQueueToStorage()
       this.notifyProgress(item)
       this.notifyGlobalProgress()
-      this.saveQueue()
       this.processQueue()
     }
   }
@@ -207,7 +183,6 @@ class UploadQueueManager {
       item.status = "queued"
       this.notifyProgress(item)
       this.notifyGlobalProgress()
-      this.saveQueue()
       this.processQueue()
     }
   }
@@ -223,7 +198,6 @@ class UploadQueueManager {
       item.firestoreDocId = undefined
       this.notifyProgress(item)
       this.notifyGlobalProgress()
-      this.saveQueue()
       this.processQueue()
     }
   }
@@ -233,6 +207,7 @@ class UploadQueueManager {
     if (index !== -1) {
       const item = this.queue[index]
 
+      // Cancel active upload if needed
       if (item.status === "uploading" && item.uploadId) {
         chunkedUploadService.cancelUpload(item.uploadId)
         this.activeUploads.delete(queueId)
@@ -240,7 +215,7 @@ class UploadQueueManager {
 
       this.queue.splice(index, 1)
       this.progressCallbacks.delete(queueId)
-      this.saveQueue()
+      this.saveQueueToStorage()
       this.notifyGlobalProgress()
       this.processQueue()
     }
@@ -252,7 +227,7 @@ class UploadQueueManager {
 
   clearCompleted() {
     this.queue = this.queue.filter((item) => item.status !== "completed")
-    this.saveQueue()
+    this.saveQueueToStorage()
     this.notifyGlobalProgress()
   }
 
@@ -296,6 +271,49 @@ class UploadQueueManager {
 
   getQueue(): QueuedUpload[] {
     return [...this.queue]
+  }
+
+  private saveQueueToStorage() {
+    try {
+      const serializableQueue = this.queue.map((item) => ({
+        id: item.id,
+        fileName: item.file.name,
+        fileSize: item.file.size,
+        fileType: item.file.type,
+        status: item.status,
+        priority: item.priority,
+        error: item.error,
+        createdAt: item.createdAt,
+        folderId: item.folderId,
+        folderPath: item.folderPath,
+        progress: item.progress,
+      }))
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(serializableQueue))
+    } catch (error) {
+      console.error("[v0] Failed to save queue to localStorage:", error)
+    }
+  }
+
+  loadQueueFromStorage(): { fileName: string; status: string; progress?: any }[] {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY)
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        console.log("[v0] Loaded queue from storage:", parsed.length, "items")
+        return parsed
+      }
+    } catch (error) {
+      console.error("[v0] Failed to load queue from localStorage:", error)
+    }
+    return []
+  }
+
+  clearStoredQueue() {
+    try {
+      localStorage.removeItem(STORAGE_KEY)
+    } catch (error) {
+      console.error("[v0] Failed to clear stored queue:", error)
+    }
   }
 }
 

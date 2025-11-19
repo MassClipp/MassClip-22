@@ -119,7 +119,26 @@ export default function UploadPage() {
   const userToken = useState<string>("")[0] // Access token from state
 
   const [isDownloadingZip, setIsDownloadingZip] = useState(false)
-  const [transcribingUploads, setTranscribingUploads] = useState<Set<string>>(new Set())
+
+  const [transcribingVideos, setTranscribingVideos] = useState<Set<string>>(new Set())
+  const [previousQueueSnapshot, setPreviousQueueSnapshot] = useState<any[]>([])
+
+  useEffect(() => {
+    const storedQueue = uploadQueueManager.loadQueueFromStorage()
+    if (storedQueue.length > 0) {
+      const incompleteUploads = storedQueue.filter((item) => item.status !== "completed" && item.status !== "error")
+      if (incompleteUploads.length > 0) {
+        toast({
+          title: "Upload Queue Restored",
+          description: `Found ${incompleteUploads.length} incomplete upload(s) from previous session. Note: You'll need to re-add these files.`,
+          duration: 6000,
+        })
+      }
+      setPreviousQueueSnapshot(storedQueue)
+      uploadQueueManager.clearStoredQueue()
+    }
+  }, [toast])
+
 
   // Initialize upload services
   useEffect(() => {
@@ -436,11 +455,12 @@ export default function UploadPage() {
                 `[v0] Video upload completed, triggering transcription for Firestore doc: ${queuedUpload.firestoreDocId}`,
               )
 
-              setTranscribingUploads(prev => new Set(prev).add(queuedUpload.firestoreDocId!))
+              setTranscribingVideos((prev) => new Set(prev).add(queuedUpload.firestoreDocId!))
 
               toast({
                 title: "Transcription Started",
-                description: `${queuedUpload.file.name} is being transcribed in the background.`,
+                description: `Vex is transcribing "${queuedUpload.file.name}" in the background. This may take a few minutes.`,
+                duration: 5000,
               })
 
               try {
@@ -459,24 +479,52 @@ export default function UploadPage() {
                 })
 
                 if (transcribeResponse.ok) {
+                  const result = await transcribeResponse.json()
                   console.log(
-                    `[v0] Transcription started successfully for Firestore doc: ${queuedUpload.firestoreDocId}`,
+                    `[v0] Transcription completed successfully for Firestore doc: ${queuedUpload.firestoreDocId}`,
                   )
+
+                  setTranscribingVideos((prev) => {
+                    const newSet = new Set(prev)
+                    newSet.delete(queuedUpload.firestoreDocId!)
+                    return newSet
+                  })
+
+                  toast({
+                    title: "Transcription Complete",
+                    description: `"${queuedUpload.file.name}" has been transcribed successfully.`,
+                  })
+
+                  fetchUploads()
                 } else {
                   const error = await transcribeResponse.json()
                   console.error(`[v0] Transcription failed:`, error)
-                  setTranscribingUploads(prev => {
-                    const next = new Set(prev)
-                    next.delete(queuedUpload.firestoreDocId!)
-                    return next
+
+                  setTranscribingVideos((prev) => {
+                    const newSet = new Set(prev)
+                    newSet.delete(queuedUpload.firestoreDocId!)
+                    return newSet
+                  })
+
+                  toast({
+                    title: "Transcription Failed",
+                    description: `Failed to transcribe "${queuedUpload.file.name}". ${error.error || ""}`,
+                    variant: "destructive",
                   })
                 }
               } catch (error) {
                 console.error(`[v0] Failed to trigger transcription:`, error)
-                setTranscribingUploads(prev => {
-                  const next = new Set(prev)
-                  next.delete(queuedUpload.firestoreDocId!)
-                  return next
+
+                setTranscribingVideos((prev) => {
+                  const newSet = new Set(prev)
+                  newSet.delete(queuedUpload.firestoreDocId!)
+                  return newSet
+                })
+
+                toast({
+                  title: "Transcription Error",
+                  description: `An error occurred while transcribing "${queuedUpload.file.name}".`,
+                  variant: "destructive",
                 })
               }
             }
@@ -1066,6 +1114,21 @@ export default function UploadPage() {
         </div>
       )}
 
+      {transcribingVideos.size > 0 && (
+        <div className="bg-cyan-950/20 border border-cyan-800/30 rounded-lg p-4">
+          <div className="flex items-center gap-3">
+            <Loader2 className="h-5 w-5 text-cyan-400 animate-spin flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <h3 className="font-medium text-cyan-100 text-sm">Transcribing Videos</h3>
+              <p className="text-xs text-cyan-300/70 mt-0.5">
+                {transcribingVideos.size} video{transcribingVideos.size > 1 ? "s" : ""} being transcribed by Vex in the
+                background...
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div
         className="border-2 border-dashed border-zinc-700/50 rounded-lg bg-zinc-900/20 hover:border-zinc-600/50 hover:bg-zinc-900/30 transition-all duration-200 cursor-pointer"
         onDragOver={handleDragOver}
@@ -1434,22 +1497,6 @@ export default function UploadPage() {
             </div>
           )}
         </AnimatePresence>
-      )}
-
-      {transcribingUploads.size > 0 && (
-        <div className="bg-cyan-950/20 border border-cyan-900/50 rounded-lg p-4">
-          <div className="flex items-center gap-3">
-            <Loader2 className="h-5 w-5 text-cyan-400 animate-spin" />
-            <div>
-              <h3 className="font-medium text-cyan-300 text-sm">
-                Transcribing {transcribingUploads.size} video{transcribingUploads.size > 1 ? 's' : ''}
-              </h3>
-              <p className="text-xs text-cyan-400/70 mt-1">
-                Transcription is happening in the background. You can continue working.
-              </p>
-            </div>
-          </div>
-        </div>
       )}
 
       <Dialog open={isRenameDialogOpen} onOpenChange={setIsRenameDialogOpen}>
