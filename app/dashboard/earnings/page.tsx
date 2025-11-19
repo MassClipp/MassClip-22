@@ -3,17 +3,7 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import {
-  DollarSign,
-  CreditCard,
-  AlertCircle,
-  CheckCircle,
-  Info,
-  Loader2,
-  ExternalLink,
-  Globe,
-  Shield,
-} from "lucide-react"
+import { DollarSign, CreditCard, AlertCircle, CheckCircle, Info, Loader2, ExternalLink, Globe, Shield } from 'lucide-react'
 import { useAuthState } from "react-firebase-hooks/auth"
 import { auth } from "@/lib/firebase"
 import EarningsContent from "./earnings-content"
@@ -125,6 +115,11 @@ function EarningsPage() {
   if (!stripeStatus?.connected || !stripeStatus?.chargesEnabled || !stripeStatus?.detailsSubmitted) {
     return (
       <div className="space-y-8">
+        <div className="flex items-center justify-center gap-2 p-3 bg-cyan-500/10 border border-cyan-500/30 rounded-lg">
+          <Info className="w-5 h-5 text-cyan-400 flex-shrink-0" />
+          <p className="text-cyan-400 text-sm font-medium">Setup may take 5 minutes</p>
+        </div>
+
         {/* Header */}
         <div className="text-center space-y-3">
           <div className="inline-flex items-center justify-center w-12 h-12 bg-gradient-to-br from-blue-500 via-purple-600 to-purple-700 rounded-full shadow-lg">
