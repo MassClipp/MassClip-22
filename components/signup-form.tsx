@@ -117,14 +117,8 @@ export function SignupForm() {
 
       createServerSideRecords(userCredential.user)
 
-      console.log("[v0] Should redirect to trial?", shouldRedirectToTrial)
-      if (shouldRedirectToTrial) {
-        console.log("[v0] Redirecting to free trial page...")
-        window.location.href = "/dashboard/upload"
-      } else {
-        console.log("[v0] User already used trial or has Creator Pro, redirecting to dashboard...")
-        window.location.href = "/dashboard"
-      }
+      console.log("[v0] Redirecting to upload page...")
+      window.location.href = "/dashboard/upload"
     } catch (error: any) {
       console.error("[v0] Email signup error:", error)
       if (error.code === "auth/email-already-in-use") {
@@ -196,14 +190,8 @@ export function SignupForm() {
 
       createServerSideRecords(result.user)
 
-      console.log("[v0] Google - Should redirect to trial?", shouldRedirectToTrial)
-      if (shouldRedirectToTrial) {
-        console.log("[v0] Redirecting to free trial page...")
-        window.location.href = "/dashboard/upload"
-      } else {
-        console.log("[v0] User already used trial or has Creator Pro, redirecting to dashboard...")
-        window.location.href = "/dashboard"
-      }
+      console.log("[v0] Redirecting to upload page...")
+      window.location.href = "/dashboard/upload"
     } catch (error: any) {
       console.error("[v0] Google signup error:", error)
       if (error.code === "auth/popup-closed-by-user") {

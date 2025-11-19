@@ -217,21 +217,8 @@ export default function ViewStorefrontPage() {
             }
           }
 
-          console.log("[v0] Starting parallel data fetch for user:", user.uid)
-
-          const [tabsResponse, freeResponse, premiumResponse, ebooksResponse, trialResponse] = await Promise.all([
-            fetch(`/api/storefront-tabs/${user.uid}`),
-            fetch(`/api/creator/${user.uid}/free-content`),
-            fetch(`/api/creator/${user.uid}/premium-content`),
-            fetch(`/api/creator/${user.uid}/published-ebooks`),
-            user.getIdToken().then((token) =>
-              fetch("/api/user/trial-status", {
-                headers: { Authorization: `Bearer ${token}` },
-              }),
-            ),
-          ])
-
-          // Process Tabs
+          console.log("[v0] Fetching storefront tabs for user:", user.uid)
+          const tabsResponse = await fetch(`/api/storefront-tabs/${user.uid}`)
           if (tabsResponse.ok) {
             const tabsData = await tabsResponse.json()
             console.log("[v0] Storefront tabs data:", tabsData)
@@ -241,34 +228,34 @@ export default function ViewStorefrontPage() {
             console.error("[v0] Failed to fetch storefront tabs:", await tabsResponse.text())
           }
 
-          // Process Content
+          // Fetch content data
+          const freeResponse = await fetch(`/api/creator/${user.uid}/free-content`)
           if (freeResponse.ok) {
             const freeData = await freeResponse.json()
             setFreeContent(freeData.content || [])
-          } else {
-            console.error("[v0] Failed to fetch free content:", await freeResponse.text())
           }
 
+          const premiumResponse = await fetch(`/api/creator/${user.uid}/premium-content`)
           if (premiumResponse.ok) {
             const premiumData = await premiumResponse.json()
             setPremiumContent(premiumData.content || [])
-          } else {
-            console.error("[v0] Failed to fetch premium content:", await premiumResponse.text())
           }
 
+          const ebooksResponse = await fetch(`/api/creator/${user.uid}/published-ebooks`)
           if (ebooksResponse.ok) {
             const ebooksData = await ebooksResponse.json()
             setEbooksContent(ebooksData.content || [])
-          } else {
-            console.error("[v0] Failed to fetch ebooks:", await ebooksResponse.text())
           }
 
-          // Process Trial Status
+          const token = await user.getIdToken()
+          const trialResponse = await fetch("/api/user/trial-status", {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          })
           if (trialResponse.ok) {
             const trialData = await trialResponse.json()
             setTrialEligible(!trialData.hasUsedFreeTrial && !trialData.hasActiveCreatorVIP)
-          } else {
-            console.error("[v0] Failed to fetch trial status:", await trialResponse.text())
           }
         }
       } catch (error) {

@@ -5,10 +5,29 @@ import { useState, useEffect, useRef, type FormEvent } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Send, MessageSquare, Trash2, Loader2, Upload, Package, DollarSign, Heart, User, Settings, Gift, CreditCard, LogOut, ChevronRight, ChevronLeft, ArrowDown, Target, BookOpen } from 'lucide-react'
+import {
+  Send,
+  MessageSquare,
+  Trash2,
+  Loader2,
+  Upload,
+  Package,
+  DollarSign,
+  Heart,
+  User,
+  Settings,
+  Gift,
+  CreditCard,
+  LogOut,
+  ChevronRight,
+  ChevronLeft,
+  ArrowDown,
+  Target,
+  BookOpen,
+} from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { useIsMobile } from "@/hooks/use-mobile"
-import { useRouter, usePathname } from 'next/navigation'
+import { useRouter, usePathname } from "next/navigation"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   DropdownMenu,
@@ -21,7 +40,7 @@ import { doc, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { TopHeader } from "@/components/top-header"
 import { Badge } from "@/components/ui/badge"
-import { Clock } from 'lucide-react'
+import { Clock } from "lucide-react"
 import { OnboardingChecklist } from "@/components/onboarding-checklist"
 
 interface Message {
@@ -379,6 +398,8 @@ function VexChat({ children }: VexChatProps) {
     const analyzeUserContent = async () => {
       if (!user || hasAnalyzed) return
 
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+
       console.log("[v0] Starting auto-analysis of user content...")
 
       try {
@@ -573,7 +594,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
           })
 
           if (titleResponse.ok) {
-            const titleData = await response.json()
+            const titleData = await titleResponse.json()
             chatTitle = titleData.title || chatTitle
           }
         } catch (titleError) {
@@ -727,6 +748,8 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
         return
       }
 
+      await new Promise((resolve) => setTimeout(resolve, 500))
+
       setIsLoadingTrialStatus(true)
       try {
         const token = await user.getIdToken()
@@ -770,6 +793,8 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
         setIsLoadingMembershipStatus(false) // Ensure loading state is false if no user
         return
       }
+
+      await new Promise((resolve) => setTimeout(resolve, 800))
 
       setIsLoadingMembershipStatus(true)
       try {
@@ -1410,7 +1435,7 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                   </nav>
                 </div>
 
-                {/* ... existing profile section code ... */}
+                {/* Profile Section */}
                 <div className="px-3 py-4 border-t border-white/5 space-y-3">
                   {!isLoadingTrialStatus && !isLoadingMembershipStatus && (
                     <>
@@ -1424,7 +1449,8 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
                             } text-white border-0 px-3 py-2 shadow-lg`}
                           >
                             <Clock className="h-3 w-3 mr-1.5" />
-                            Free Trial: {trialStatus.daysRemaining} {trialStatus.daysRemaining === 1 ? "day" : "days"} {/* Added space */} left
+                            Free Trial: {trialStatus.daysRemaining} {trialStatus.daysRemaining === 1 ? "day" : "days"}{" "}
+                            {/* Added space */} left
                           </Badge>
                         </div>
                       ) : shouldShowTrialButton ? (
