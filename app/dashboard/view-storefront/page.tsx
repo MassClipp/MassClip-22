@@ -10,9 +10,25 @@ import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, Plus, Edit2, Check, X, Calendar, Users, Heart, Package, Play, UploadIcon, Download, Pause, ExternalLink, Lock } from 'lucide-react'
+import {
+  Loader2,
+  Plus,
+  Edit2,
+  Check,
+  X,
+  Calendar,
+  Users,
+  Heart,
+  Package,
+  Play,
+  UploadIcon,
+  Download,
+  Pause,
+  ExternalLink,
+  Lock,
+} from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
-import { useRouter } from 'next/navigation'
+import { useRouter } from "next/navigation"
 import { doc, updateDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import BundleCard from "@/components/bundle-card"
@@ -201,8 +217,21 @@ export default function ViewStorefrontPage() {
             }
           }
 
-          console.log("[v0] Fetching storefront tabs for user:", user.uid)
-          const tabsResponse = await fetch(`/api/storefront-tabs/${user.uid}`)
+          console.log("[v0] Starting parallel data fetch for user:", user.uid)
+
+          const [tabsResponse, freeResponse, premiumResponse, ebooksResponse, trialResponse] = await Promise.all([
+            fetch(`/api/storefront-tabs/${user.uid}`),
+            fetch(`/api/creator/${user.uid}/free-content`),
+            fetch(`/api/creator/${user.uid}/premium-content`),
+            fetch(`/api/creator/${user.uid}/published-ebooks`),
+            user.getIdToken().then((token) =>
+              fetch("/api/user/trial-status", {
+                headers: { Authorization: `Bearer ${token}` },
+              }),
+            ),
+          ])
+
+          // Process Tabs
           if (tabsResponse.ok) {
             const tabsData = await tabsResponse.json()
             console.log("[v0] Storefront tabs data:", tabsData)
@@ -212,34 +241,34 @@ export default function ViewStorefrontPage() {
             console.error("[v0] Failed to fetch storefront tabs:", await tabsResponse.text())
           }
 
-          // Fetch content data
-          const freeResponse = await fetch(`/api/creator/${user.uid}/free-content`)
+          // Process Content
           if (freeResponse.ok) {
             const freeData = await freeResponse.json()
             setFreeContent(freeData.content || [])
+          } else {
+            console.error("[v0] Failed to fetch free content:", await freeResponse.text())
           }
 
-          const premiumResponse = await fetch(`/api/creator/${user.uid}/premium-content`)
           if (premiumResponse.ok) {
             const premiumData = await premiumResponse.json()
             setPremiumContent(premiumData.content || [])
+          } else {
+            console.error("[v0] Failed to fetch premium content:", await premiumResponse.text())
           }
 
-          const ebooksResponse = await fetch(`/api/creator/${user.uid}/published-ebooks`)
           if (ebooksResponse.ok) {
             const ebooksData = await ebooksResponse.json()
             setEbooksContent(ebooksData.content || [])
+          } else {
+            console.error("[v0] Failed to fetch ebooks:", await ebooksResponse.text())
           }
 
-          const token = await user.getIdToken()
-          const trialResponse = await fetch("/api/user/trial-status", {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          })
+          // Process Trial Status
           if (trialResponse.ok) {
             const trialData = await trialResponse.json()
             setTrialEligible(!trialData.hasUsedFreeTrial && !trialData.hasActiveCreatorVIP)
+          } else {
+            console.error("[v0] Failed to fetch trial status:", await trialResponse.text())
           }
         }
       } catch (error) {
@@ -517,7 +546,7 @@ export default function ViewStorefrontPage() {
   return (
     <>
       {/* Fixed fullscreen positioning to remove top cutoff and ensure background extends to all edges */}
-      <div className="fixed inset-0 overflow-auto" style={getStorefrontBackground()}>
+      <div className="fixed inset-0 overflow-auto pt-20" style={getStorefrontBackground()}>
         <div className="min-h-full">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
             {!isFacelessProActive && <BuilderModeBanner onUpgrade={handleGoLiveClick} />}

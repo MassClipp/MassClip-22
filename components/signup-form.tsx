@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState } from "react"
-import { useRouter } from 'next/navigation'
+import { useRouter } from "next/navigation"
 import {
   createUserWithEmailAndPassword,
   signInWithPopup,
@@ -13,7 +13,7 @@ import { auth } from "@/lib/firebase-safe"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2 } from 'lucide-react'
+import { Loader2 } from "lucide-react"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
 
@@ -120,7 +120,7 @@ export function SignupForm() {
       console.log("[v0] Should redirect to trial?", shouldRedirectToTrial)
       if (shouldRedirectToTrial) {
         console.log("[v0] Redirecting to free trial page...")
-        window.location.href = "/welcome/free-trial"
+        window.location.href = "/dashboard/upload"
       } else {
         console.log("[v0] User already used trial or has Creator Pro, redirecting to dashboard...")
         window.location.href = "/dashboard"
@@ -199,7 +199,7 @@ export function SignupForm() {
       console.log("[v0] Google - Should redirect to trial?", shouldRedirectToTrial)
       if (shouldRedirectToTrial) {
         console.log("[v0] Redirecting to free trial page...")
-        window.location.href = "/welcome/free-trial"
+        window.location.href = "/dashboard/upload"
       } else {
         console.log("[v0] User already used trial or has Creator Pro, redirecting to dashboard...")
         window.location.href = "/dashboard"
