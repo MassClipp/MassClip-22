@@ -115,10 +115,7 @@ function EarningsPage() {
   if (!stripeStatus?.connected || !stripeStatus?.chargesEnabled || !stripeStatus?.detailsSubmitted) {
     return (
       <div className="space-y-8">
-        <div className="flex items-center justify-center gap-2 p-3 bg-cyan-500/10 border border-cyan-500/30 rounded-lg">
-          <Info className="w-5 h-5 text-cyan-400 flex-shrink-0" />
-          <p className="text-cyan-400 text-sm font-medium">Setup may take 5 minutes</p>
-        </div>
+        <p className="text-center text-sm text-gray-400">Setup may take 5 minutes</p>
 
         {/* Header */}
         <div className="text-center space-y-3">
