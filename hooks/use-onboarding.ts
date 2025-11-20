@@ -21,6 +21,15 @@ export interface OnboardingProgress {
   dismissed?: boolean
 }
 
+const STEP_ORDER = [
+  "upload_content",
+  "add_free_content",
+  "setup_stripe",
+  "create_bundle",
+  "setup_storefront",
+  "go_live",
+]
+
 export function useOnboarding() {
   const { user } = useAuth()
   const [progress, setProgress] = useState<OnboardingProgress | null>(null)
@@ -273,6 +282,16 @@ export function useOnboarding() {
             totalSteps: data.steps?.length,
             dismissed: data.dismissed,
           })
+
+          if (data.steps) {
+            data.steps.sort((a, b) => {
+              const indexA = STEP_ORDER.indexOf(a.id)
+              const indexB = STEP_ORDER.indexOf(b.id)
+              // If id not found in order array, put it at the end
+              return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB)
+            })
+          }
+
           setProgress(data)
           hasRunAutoDetection.current = false
           setLoading(false)
