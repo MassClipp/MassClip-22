@@ -1,9 +1,8 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useRef, useEffect } from "react"
-import { Play, Pause } from "lucide-react"
+import { Play, Pause, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface VideoPreviewPlayerProps {
@@ -16,6 +15,7 @@ interface VideoPreviewPlayerProps {
 export function VideoPreviewPlayer({ videoUrl, thumbnailUrl, title, className }: VideoPreviewPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
 
   // Toggle play/pause
@@ -27,7 +27,6 @@ export function VideoPreviewPlayer({ videoUrl, thumbnailUrl, title, className }:
 
     if (isPlaying) {
       videoRef.current.pause()
-      videoRef.current.currentTime = 0
       setIsPlaying(false)
     } else {
       // Pause all other videos first
@@ -38,14 +37,18 @@ export function VideoPreviewPlayer({ videoUrl, thumbnailUrl, title, className }:
         }
       })
 
-      videoRef.current
-        .play()
-        .then(() => {
-          setIsPlaying(true)
-        })
-        .catch((error) => {
-          console.error("Error playing video:", error)
-        })
+      const playPromise = videoRef.current.play()
+
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            setIsPlaying(true)
+          })
+          .catch((error) => {
+            console.error("Error playing video:", error)
+            setIsPlaying(false)
+          })
+      }
     }
   }
 
@@ -64,15 +67,24 @@ export function VideoPreviewPlayer({ videoUrl, thumbnailUrl, title, className }:
 
     const handlePlay = () => setIsPlaying(true)
     const handlePause = () => setIsPlaying(false)
+    const handleWaiting = () => setIsLoading(true)
+    const handlePlaying = () => setIsLoading(false)
+    const handleCanPlay = () => setIsLoading(false)
 
     videoElement.addEventListener("play", handlePlay)
     videoElement.addEventListener("pause", handlePause)
     videoElement.addEventListener("ended", handleVideoEnd)
+    videoElement.addEventListener("waiting", handleWaiting)
+    videoElement.addEventListener("playing", handlePlaying)
+    videoElement.addEventListener("canplay", handleCanPlay)
 
     return () => {
       videoElement.removeEventListener("play", handlePlay)
       videoElement.removeEventListener("pause", handlePause)
       videoElement.removeEventListener("ended", handleVideoEnd)
+      videoElement.removeEventListener("waiting", handleWaiting)
+      videoElement.removeEventListener("playing", handlePlaying)
+      videoElement.removeEventListener("canplay", handleCanPlay)
     }
   }, [])
 
@@ -104,7 +116,7 @@ export function VideoPreviewPlayer({ videoUrl, thumbnailUrl, title, className }:
       <div
         className={cn(
           "absolute inset-0 flex items-center justify-center bg-black/30 transition-opacity duration-300",
-          isHovered || !isPlaying ? "opacity-100" : "opacity-0",
+          isHovered || !isPlaying || isLoading ? "opacity-100" : "opacity-0",
         )}
         onClick={togglePlay}
       >
@@ -112,7 +124,13 @@ export function VideoPreviewPlayer({ videoUrl, thumbnailUrl, title, className }:
           className="bg-white/20 backdrop-blur-sm rounded-full p-2 transition-transform duration-300 hover:scale-110"
           aria-label={isPlaying ? "Pause video" : "Play video"}
         >
-          {isPlaying ? <Pause className="h-4 w-4 text-white" /> : <Play className="h-4 w-4 text-white ml-0.5" />}
+          {isLoading ? (
+            <Loader2 className="h-4 w-4 text-white animate-spin" />
+          ) : isPlaying ? (
+            <Pause className="h-4 w-4 text-white" />
+          ) : (
+            <Play className="h-4 w-4 text-white ml-0.5" />
+          )}
         </button>
       </div>
 
