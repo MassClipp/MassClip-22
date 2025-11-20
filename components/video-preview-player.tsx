@@ -16,6 +16,7 @@ export function VideoPreviewPlayer({ videoUrl, thumbnailUrl, title, className }:
   const [isPlaying, setIsPlaying] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [preloadStrategy, setPreloadStrategy] = useState<"metadata" | "auto">("metadata")
   const videoRef = useRef<HTMLVideoElement>(null)
 
   // Toggle play/pause
@@ -33,7 +34,7 @@ export function VideoPreviewPlayer({ videoUrl, thumbnailUrl, title, className }:
       document.querySelectorAll("video").forEach((v) => {
         if (v !== videoRef.current) {
           v.pause()
-          v.currentTime = 0
+          // We don't reset other videos to 0 either, to be consistent
         }
       })
 
@@ -58,6 +59,12 @@ export function VideoPreviewPlayer({ videoUrl, thumbnailUrl, title, className }:
     if (videoRef.current) {
       videoRef.current.currentTime = 0
     }
+  }
+
+  const handleMouseEnter = () => {
+    setIsHovered(true)
+    // When user hovers, switch to auto preload to start buffering
+    setPreloadStrategy("auto")
   }
 
   // Update state when video plays/pauses
@@ -94,7 +101,7 @@ export function VideoPreviewPlayer({ videoUrl, thumbnailUrl, title, className }:
         "relative w-full max-w-[200px] mx-auto aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900 shadow-md transition-all duration-300 group",
         className,
       )}
-      onMouseEnter={() => setIsHovered(true)}
+      onMouseEnter={handleMouseEnter} // Use new handler
       onMouseLeave={() => setIsHovered(false)}
     >
       {/* Video element */}
@@ -102,7 +109,7 @@ export function VideoPreviewPlayer({ videoUrl, thumbnailUrl, title, className }:
         ref={videoRef}
         className="w-full h-full object-cover cursor-pointer"
         poster={thumbnailUrl}
-        preload="metadata"
+        preload={preloadStrategy} // Use dynamic preload strategy
         muted={false}
         playsInline
         onClick={togglePlay}
