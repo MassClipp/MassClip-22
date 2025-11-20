@@ -198,20 +198,27 @@ export async function POST(req: NextRequest) {
       const data = onboardingDoc.data() as OnboardingProgress
       const isCurrentlyCompleted = data.completedSteps.includes(stepId)
 
-      // Toggle the step
-      const updatedSteps = data.steps.map((step) =>
-        step.id === stepId
-          ? {
-              ...step,
-              completed: !isCurrentlyCompleted,
-              completedAt: !isCurrentlyCompleted ? new Date() : undefined,
-            }
-          : step,
-      )
-
+      // Update completedSteps list
       const completedSteps = isCurrentlyCompleted
         ? data.completedSteps.filter((id) => id !== stepId)
         : [...new Set([...data.completedSteps, stepId])]
+
+      const updatedSteps = DEFAULT_STEPS.map((defaultStep) => {
+        const existingStep = data.steps.find((s) => s.id === defaultStep.id)
+        const isCompleted = completedSteps.includes(defaultStep.id)
+
+        let completedAt = existingStep?.completedAt
+        // If this is the step being toggled
+        if (defaultStep.id === stepId) {
+          completedAt = !isCurrentlyCompleted ? new Date() : undefined
+        }
+
+        return {
+          ...defaultStep,
+          completed: isCompleted,
+          completedAt,
+        }
+      })
 
       const currentStepIndex = updatedSteps.findIndex((s) => !s.completed)
       const currentStep =
