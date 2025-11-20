@@ -19,11 +19,6 @@ export interface OnboardingProgress {
 
 const DEFAULT_STEPS: Omit<OnboardingStep, "completed" | "completedAt">[] = [
   {
-    id: "setup_storefront",
-    title: "Set up Storefront",
-    description: "Customize your profile with a username and bio",
-  },
-  {
     id: "upload_content",
     title: "Upload First Content",
     description: "Upload your first video or content piece",
@@ -42,6 +37,11 @@ const DEFAULT_STEPS: Omit<OnboardingStep, "completed" | "completedAt">[] = [
     id: "create_bundle",
     title: "Make a Bundle",
     description: "Create your first premium content bundle",
+  },
+  {
+    id: "setup_storefront",
+    title: "Set up Storefront",
+    description: "Customize your profile with a username and bio",
   },
   {
     id: "go_live",

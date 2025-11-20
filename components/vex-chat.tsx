@@ -907,6 +907,18 @@ ${job.retryCount >= job.maxRetries ? "Maximum retries reached. " : ""}You can tr
         </Button>
       )}
 
+      {!isMobile && isUploadPage && isSidebarCollapsed && (
+        <Button
+          onClick={() => setIsSidebarCollapsed(false)}
+          variant="ghost"
+          size="sm"
+          className="fixed left-0 top-1/2 -translate-y-1/2 z-50 h-12 w-6 p-0 bg-zinc-900/80 backdrop-blur-xl border border-l-0 border-zinc-800 rounded-r-lg hover:bg-zinc-800/80 hover:border-zinc-700 shadow-lg transition-all duration-200 flex items-center justify-center group"
+          title="Expand sidebar"
+        >
+          <ChevronRight className="h-4 w-4 text-zinc-400 group-hover:text-white" />
+        </Button>
+      )}
+
       {!isMobile && !(isUploadPage && isSidebarCollapsed) && (
         <div
           className={`fixed left-0 top-16 h-[calc(100vh-4rem)] z-40 transition-all duration-300 ${
