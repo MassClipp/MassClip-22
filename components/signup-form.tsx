@@ -115,7 +115,9 @@ export function SignupForm() {
         console.log("[v0] Trial check failed, response not ok")
       }
 
-      createServerSideRecords(userCredential.user)
+      console.log("[v0] Creating server-side records...")
+      await createServerSideRecords(userCredential.user)
+      console.log("[v0] Server-side records created, redirecting...")
 
       console.log("[v0] Redirecting to upload page...")
       window.location.href = "/dashboard/upload"
@@ -188,7 +190,9 @@ export function SignupForm() {
         console.log("[v0] Google - Trial check failed, response not ok")
       }
 
-      createServerSideRecords(result.user)
+      console.log("[v0] Creating server-side records...")
+      await createServerSideRecords(result.user)
+      console.log("[v0] Server-side records created, redirecting...")
 
       console.log("[v0] Redirecting to upload page...")
       window.location.href = "/dashboard/upload"
