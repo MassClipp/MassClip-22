@@ -98,7 +98,7 @@ export default function LandingPage() {
                 <div className="relative">
                   <div className="bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 shadow-2xl hover:shadow-white/10 transition-all">
                     <Image
-                      src="/images/screenshot-202025-11-16-20at-202.png"
+                      src="/placeholder.svg?height=600&width=800"
                       alt="eBook Product Display"
                       width={800}
                       height={600}
@@ -119,7 +119,7 @@ export default function LandingPage() {
                 <div className="relative">
                   <div className="bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 shadow-2xl hover:shadow-white/10 transition-all">
                     <Image
-                      src="/images/chatgpt-20image-20nov-2015-2c-202025-20at-2010-22-45-20pm.png"
+                      src="/placeholder.svg?height=600&width=800"
                       alt="MRR Growth Dashboard"
                       width={800}
                       height={600}
