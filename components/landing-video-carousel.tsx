@@ -16,32 +16,42 @@ export function LandingVideoCarousel({ videos }: LandingVideoCarouselProps) {
   const defaultVideos = [
     {
       url: "https://pub-93cabcf58da344dea3d33ba1e4be2ef2.r2.dev/creators/stack/1761523559750-David_Goggins-3.mov",
-      poster: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='355'%3E%3Crect width='200' height='355' fill='%23000000'/%3E%3C/svg%3E",
+      poster:
+        "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='355'%3E%3Crect width='200' height='355' fill='%23000000'/%3E%3C/svg%3E",
     },
     {
       url: "https://pub-93cabcf58da344dea3d33ba1e4be2ef2.r2.dev/creators/stack/1761516695694-meme_template_.mp4",
-      poster: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='355'%3E%3Crect width='200' height='355' fill='%23000000'/%3E%3C/svg%3E",
+      poster:
+        "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='355'%3E%3Crect width='200' height='355' fill='%23000000'/%3E%3C/svg%3E",
     },
     {
       url: "https://pub-93cabcf58da344dea3d33ba1e4be2ef2.r2.dev/creators/stack/1761523546935-Kendrick_Lamar-3.mov",
-      poster: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='355'%3E%3Crect width='200' height='355' fill='%23000000'/%3E%3C/svg%3E",
+      poster:
+        "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='355'%3E%3Crect width='200' height='355' fill='%23000000'/%3E%3C/svg%3E",
     },
     {
       url: "https://pub-93cabcf58da344dea3d33ba1e4be2ef2.r2.dev/creators/stack/1761518381535-copy_5355E028-F224-40D3-8C19-2910957C4177.MOV",
-      poster: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='355'%3E%3Crect width='200' height='355' fill='%23000000'/%3E%3C/svg%3E",
+      poster:
+        "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='355'%3E%3Crect width='200' height='355' fill='%23000000'/%3E%3C/svg%3E",
     },
     {
       url: "https://pub-93cabcf58da344dea3d33ba1e4be2ef2.r2.dev/creators/stack/1761523501219-Duke_Dennis_._Just_Keep_Going.mov",
-      poster: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='355'%3E%3Crect width='200' height='355' fill='%23000000'/%3E%3C/svg%3E",
+      poster:
+        "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='355'%3E%3Crect width='200' height='355' fill='%23000000'/%3E%3C/svg%3E",
     },
     {
       url: "https://pub-93cabcf58da344dea3d33ba1e4be2ef2.r2.dev/creators/stack/1761516660802-Kai_cenat_._Find_Your_People.mov",
-      poster: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='355'%3E%3Crect width='200' height='355' fill='%23000000'/%3E%3C/svg%3E",
+      poster:
+        "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='355'%3E%3Crect width='200' height='355' fill='%23000000'/%3E%3C/svg%3E",
     },
   ]
 
-  const videoList = videos 
-    ? videos.map(url => ({ url, poster: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='355'%3E%3Crect width='200' height='355' fill='%23000000'/%3E%3C/svg%3E" }))
+  const videoList = videos
+    ? videos.map((url) => ({
+        url,
+        poster:
+          "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='355'%3E%3Crect width='200' height='355' fill='%23000000'/%3E%3C/svg%3E",
+      }))
     : defaultVideos
   const duplicatedVideos = [...videoList, ...videoList]
 
@@ -54,7 +64,7 @@ export function LandingVideoCarousel({ videos }: LandingVideoCarouselProps) {
           }
         })
       },
-      { threshold: 0.1 }
+      { threshold: 0.1 },
     )
 
     if (containerRef.current) {
@@ -99,11 +109,22 @@ export function LandingVideoCarousel({ videos }: LandingVideoCarouselProps) {
   }, [videoList.length, isInView])
 
   useEffect(() => {
+    videoRefs.current.forEach((video) => {
+      if (video) {
+        video.muted = true
+        video.volume = 0
+      }
+    })
+  }, [])
+
+  useEffect(() => {
     if (!isInView) return
 
     const playVideos = async () => {
       for (const video of videoRefs.current) {
         if (video) {
+          video.muted = true
+          video.volume = 0
           try {
             await video.play()
           } catch (error) {
@@ -123,29 +144,32 @@ export function LandingVideoCarousel({ videos }: LandingVideoCarouselProps) {
       <div className="absolute right-0 top-0 bottom-0 w-32 bg-gradient-to-l from-black to-transparent z-10" />
 
       <div ref={containerRef} className="flex gap-4 will-change-transform">
-        {isInView && duplicatedVideos.map((video, index) => (
-          <div
-            key={index}
-            className="flex-shrink-0 w-[200px] h-[355px] rounded-xl overflow-hidden bg-black border border-white/10"
-          >
-            <video
-              ref={(el) => {
-                videoRefs.current[index] = el
-              }}
-              src={video.url}
-              poster={video.poster}
-              autoPlay
-              loop
-              muted
-              playsInline
-              preload="none"
-              className="w-full h-full object-cover"
-              onError={(e) => console.error(`[v0] Video ${index} failed to load:`, e)}
-              webkit-playsinline="true"
-              x-webkit-airplay="allow"
-            />
-          </div>
-        ))}
+        {isInView &&
+          duplicatedVideos.map((video, index) => (
+            <div
+              key={index}
+              className="flex-shrink-0 w-[200px] h-[355px] rounded-xl overflow-hidden bg-black border border-white/10"
+            >
+              <video
+                ref={(el) => {
+                  videoRefs.current[index] = el
+                  if (el) {
+                    el.muted = true
+                    el.volume = 0
+                  }
+                }}
+                src={video.url}
+                poster={video.poster}
+                autoPlay
+                loop
+                muted
+                playsInline
+                preload="none"
+                className="w-full h-full object-cover"
+                onError={(e) => console.error(`[v0] Video ${index} failed to load:`, e)}
+              />
+            </div>
+          ))}
       </div>
     </div>
   )
