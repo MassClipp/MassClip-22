@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button"
 import { LandingVexInterface } from "@/components/landing-vex-interface"
 import { LandingReview } from "@/components/landing-review"
 import { LandingVideoCarousel } from "@/components/landing-video-carousel"
+import { LandingContentPack } from "@/components/landing-content-pack" // Import new component
 import Image from "next/image"
 
 export default function LandingPage() {
@@ -54,6 +55,8 @@ export default function LandingPage() {
           {/* VEX Interface Hero Section */}
           <LandingVexInterface />
 
+          <LandingContentPack />
+
           <section className="py-16 px-6">
             <div className="max-w-4xl mx-auto text-center">
               <p className="text-white font-semibold text-lg md:text-xl leading-relaxed">
@@ -85,13 +88,16 @@ export default function LandingPage() {
                     A Headquarters For Your Faceless Brand Monetization
                   </h2>
                   <p className="text-white/60 text-lg leading-relaxed">
-                    You need a home, a storefront, a headquarters where all your digital products for your faceless brand live. Whether you have content packs, ebooks, communities, or brand merch, all of it should be taken seriously in one manageable space. This is where your audience comes to discover, explore, and buy everything you create.
+                    You need a home, a storefront, a headquarters where all your digital products for your faceless
+                    brand live. Whether you have content packs, ebooks, communities, or brand merch, all of it should be
+                    taken seriously in one manageable space. This is where your audience comes to discover, explore, and
+                    buy everything you create.
                   </p>
                 </div>
                 <div className="relative">
                   <div className="bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 shadow-2xl hover:shadow-white/10 transition-all">
                     <Image
-                      src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Screenshot%202025-11-16%20at%202.35.22%20PM-lfX2NIXUhBysfJ4aU0t4pYT5UvtPwz.png"
+                      src="/images/screenshot-202025-11-16-20at-202.png"
                       alt="eBook Product Display"
                       width={800}
                       height={600}
@@ -112,7 +118,7 @@ export default function LandingPage() {
                 <div className="relative">
                   <div className="bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 shadow-2xl hover:shadow-white/10 transition-all">
                     <Image
-                      src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/ChatGPT%20Image%20Nov%2015%2C%202025%20at%2010_22_45%20PM-tXxENDb7CClHvXBHyr1rzZQWwBPR5I.png"
+                      src="/images/chatgpt-20image-20nov-2015-2c-202025-20at-2010-22-45-20pm.png"
                       alt="MRR Growth Dashboard"
                       width={800}
                       height={600}
@@ -123,11 +129,11 @@ export default function LandingPage() {
                   </div>
                 </div>
                 <div>
-                  <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
-                    Ready To Take Scaling Seriously?
-                  </h2>
+                  <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">Ready To Take Scaling Seriously?</h2>
                   <p className="text-white/60 text-lg leading-relaxed">
-                    You're only one commitment, one decision, one investment away from your faceless brand doing numbers you couldn't imagine financially, and socially. Anyone can do it, the difference is are you willing to bet on yourself? We'll be waiting on the other side for you when you're ready.
+                    You're only one commitment, one decision, one investment away from your faceless brand doing numbers
+                    you couldn't imagine financially, and socially. Anyone can do it, the difference is are you willing
+                    to bet on yourself? We'll be waiting on the other side for you when you're ready.
                   </p>
                 </div>
               </div>
@@ -141,7 +147,10 @@ export default function LandingPage() {
                 Try VEX for free. Upload your content and see what VEX can do for you.
               </p>
               <Link href="/signup">
-                <Button size="lg" className="bg-white text-black hover:bg-gray-200 font-light rounded-full px-8 py-6 text-lg shadow-xl shadow-white/30 hover:shadow-2xl hover:shadow-white/40 transition-all">
+                <Button
+                  size="lg"
+                  className="bg-white text-black hover:bg-gray-200 font-light rounded-full px-8 py-6 text-lg shadow-xl shadow-white/30 hover:shadow-2xl hover:shadow-white/40 transition-all"
+                >
                   Get Started For Free
                 </Button>
               </Link>
