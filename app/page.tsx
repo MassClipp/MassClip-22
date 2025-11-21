@@ -27,9 +27,9 @@ export default function LandingPage() {
             </div>
 
             <div className="absolute left-1/2 transform -translate-x-1/2 hidden md:flex items-center gap-6">
-              <Link href="/signup" className="text-white/80 hover:text-white transition-colors font-light text-sm">
+              <a href="#content-pack" className="text-white/80 hover:text-white transition-colors font-light text-sm">
                 Start Selling
-              </Link>
+              </a>
               <a href="#how-it-works" className="text-white/80 hover:text-white transition-colors font-light text-sm">
                 How It Works
               </a>
@@ -56,7 +56,9 @@ export default function LandingPage() {
           <LandingVexInterface />
 
           {/* Content Pack Product Section */}
-          <LandingContentPack />
+          <div id="content-pack">
+            <LandingContentPack />
+          </div>
 
           <section className="py-16 px-6">
             <div className="max-w-4xl mx-auto text-center">
