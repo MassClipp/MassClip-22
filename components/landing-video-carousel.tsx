@@ -13,6 +13,29 @@ export function LandingVideoCarousel({ videos }: LandingVideoCarouselProps) {
   const [isInView, setIsInView] = useState(false)
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([])
 
+  useEffect(() => {
+    const forceAllVideosMute = () => {
+      videoRefs.current.forEach((video) => {
+        if (video) {
+          video.muted = true
+          video.volume = 0
+          // Remove audio tracks completely
+          if (video.audioTracks) {
+            for (let i = 0; i < video.audioTracks.length; i++) {
+              video.audioTracks[i].enabled = false
+            }
+          }
+        }
+      })
+    }
+
+    // Force mute immediately and continuously
+    const interval = setInterval(forceAllVideosMute, 100)
+    forceAllVideosMute()
+
+    return () => clearInterval(interval)
+  }, [])
+
   const defaultVideos = [
     {
       url: "https://pub-93cabcf58da344dea3d33ba1e4be2ef2.r2.dev/creators/stack/1761523559750-David_Goggins-3.mov",
@@ -109,15 +132,6 @@ export function LandingVideoCarousel({ videos }: LandingVideoCarouselProps) {
   }, [videoList.length, isInView])
 
   useEffect(() => {
-    videoRefs.current.forEach((video) => {
-      if (video) {
-        video.muted = true
-        video.volume = 0
-      }
-    })
-  }, [])
-
-  useEffect(() => {
     if (!isInView) return
 
     const playVideos = async () => {
@@ -125,10 +139,15 @@ export function LandingVideoCarousel({ videos }: LandingVideoCarouselProps) {
         if (video) {
           video.muted = true
           video.volume = 0
+          if (video.audioTracks) {
+            for (let i = 0; i < video.audioTracks.length; i++) {
+              video.audioTracks[i].enabled = false
+            }
+          }
           try {
             await video.play()
           } catch (error) {
-            console.log("[v0] Video autoplay prevented, user interaction may be required")
+            // Silently handle autoplay prevention
           }
         }
       }
@@ -137,6 +156,16 @@ export function LandingVideoCarousel({ videos }: LandingVideoCarouselProps) {
     const timer = setTimeout(playVideos, 100)
     return () => clearTimeout(timer)
   }, [isInView])
+
+  const nukeSound = (video: HTMLVideoElement) => {
+    video.muted = true
+    video.volume = 0
+    if (video.audioTracks) {
+      for (let i = 0; i < video.audioTracks.length; i++) {
+        video.audioTracks[i].enabled = false
+      }
+    }
+  }
 
   return (
     <div className="w-full overflow-hidden py-12 relative">
@@ -154,8 +183,7 @@ export function LandingVideoCarousel({ videos }: LandingVideoCarouselProps) {
                 ref={(el) => {
                   videoRefs.current[index] = el
                   if (el) {
-                    el.muted = true
-                    el.volume = 0
+                    nukeSound(el)
                   }
                 }}
                 src={video.url}
@@ -166,6 +194,14 @@ export function LandingVideoCarousel({ videos }: LandingVideoCarouselProps) {
                 playsInline
                 preload="none"
                 className="w-full h-full object-cover"
+                onLoadedMetadata={(e) => nukeSound(e.currentTarget)}
+                onPlay={(e) => nukeSound(e.currentTarget)}
+                onVolumeChange={(e) => {
+                  const video = e.currentTarget
+                  if (video.volume > 0 || !video.muted) {
+                    nukeSound(video)
+                  }
+                }}
                 onError={(e) => console.error(`[v0] Video ${index} failed to load:`, e)}
               />
             </div>
