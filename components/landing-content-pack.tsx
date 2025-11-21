@@ -40,7 +40,7 @@ export function LandingContentPack() {
             <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-2xl blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200" />
             <div className="relative bg-black border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
               <Image
-                src="/images/150-2b.png"
+                src="/images/150-clips.png"
                 alt="150+ High Quality Motivational Clips"
                 width={800}
                 height={800}
