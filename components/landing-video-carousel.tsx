@@ -14,26 +14,74 @@ export function LandingVideoCarousel({ videos }: LandingVideoCarouselProps) {
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([])
 
   useEffect(() => {
-    const forceAllVideosMute = () => {
+    if (typeof window !== "undefined" && window.AudioContext) {
+      try {
+        const audioContext = new AudioContext()
+        const gainNode = audioContext.createGain()
+        gainNode.gain.value = 0
+        gainNode.connect(audioContext.destination)
+      } catch (e) {
+        console.log("[v0] AudioContext initialization skipped")
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    const nukeAllSound = () => {
       videoRefs.current.forEach((video) => {
         if (video) {
+          // Strategy 1: Basic muting
           video.muted = true
           video.volume = 0
-          // Remove audio tracks completely
+
+          // Strategy 2: Disable audio output
+          if ((video as any).setSinkId) {
+            try {
+              ;(video as any).setSinkId("")
+            } catch (e) {
+              // Silently fail
+            }
+          }
+
+          // Strategy 3: Remove all audio tracks
           if (video.audioTracks) {
             for (let i = 0; i < video.audioTracks.length; i++) {
               video.audioTracks[i].enabled = false
             }
           }
+
+          // Strategy 4: Create muted media stream (Desktop Safari specific)
+          if (video.srcObject) {
+            const stream = video.srcObject as MediaStream
+            stream.getAudioTracks().forEach((track) => (track.enabled = false))
+          }
+
+          // Strategy 5: Override volume property
+          Object.defineProperty(video, "volume", {
+            get: () => 0,
+            set: () => {},
+            configurable: true,
+          })
         }
       })
     }
 
-    // Force mute immediately and continuously
-    const interval = setInterval(forceAllVideosMute, 100)
-    forceAllVideosMute()
+    // Run every 50ms for ultra-aggressive enforcement
+    const interval = setInterval(nukeAllSound, 50)
+    nukeAllSound()
 
-    return () => clearInterval(interval)
+    // Also run on any user interaction
+    const handleInteraction = () => nukeAllSound()
+    document.addEventListener("click", handleInteraction)
+    document.addEventListener("touchstart", handleInteraction)
+    document.addEventListener("scroll", handleInteraction)
+
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener("click", handleInteraction)
+      document.removeEventListener("touchstart", handleInteraction)
+      document.removeEventListener("scroll", handleInteraction)
+    }
   }, [])
 
   const defaultVideos = [
@@ -160,9 +208,21 @@ export function LandingVideoCarousel({ videos }: LandingVideoCarouselProps) {
   const nukeSound = (video: HTMLVideoElement) => {
     video.muted = true
     video.volume = 0
+    video.defaultMuted = true
+
+    // Desktop Safari specific: Remove audio tracks
     if (video.audioTracks) {
       for (let i = 0; i < video.audioTracks.length; i++) {
         video.audioTracks[i].enabled = false
+      }
+    }
+
+    // Try to set empty audio sink (supported in some browsers)
+    if ((video as any).setSinkId) {
+      try {
+        ;(video as any).setSinkId("")
+      } catch (e) {
+        // Silently fail
       }
     }
   }
@@ -193,9 +253,18 @@ export function LandingVideoCarousel({ videos }: LandingVideoCarouselProps) {
                 muted
                 playsInline
                 preload="none"
+                defaultMuted
                 className="w-full h-full object-cover"
                 onLoadedMetadata={(e) => nukeSound(e.currentTarget)}
+                onLoadedData={(e) => nukeSound(e.currentTarget)}
+                onCanPlay={(e) => nukeSound(e.currentTarget)}
                 onPlay={(e) => nukeSound(e.currentTarget)}
+                onPlaying={(e) => nukeSound(e.currentTarget)}
+                onTimeUpdate={(e) => {
+                  const vid = e.currentTarget
+                  if (vid.volume > 0) vid.volume = 0
+                  if (!vid.muted) vid.muted = true
+                }}
                 onVolumeChange={(e) => {
                   const video = e.currentTarget
                   if (video.volume > 0 || !video.muted) {
