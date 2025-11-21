@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button"
 import { LandingVexInterface } from "@/components/landing-vex-interface"
 import { LandingReview } from "@/components/landing-review"
 import { LandingVideoCarousel } from "@/components/landing-video-carousel"
-import { LandingContentPack } from "@/components/landing-content-pack" // Import new component
+import { LandingContentPack } from "@/components/landing-content-pack"
 import Image from "next/image"
 
 export default function LandingPage() {
@@ -55,6 +55,7 @@ export default function LandingPage() {
           {/* VEX Interface Hero Section */}
           <LandingVexInterface />
 
+          {/* Content Pack Product Section */}
           <LandingContentPack />
 
           <section className="py-16 px-6">

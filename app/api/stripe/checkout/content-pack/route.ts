@@ -27,13 +27,18 @@ export async function POST(request: NextRequest) {
           quantity: 1,
         },
       ],
-      success_url: `${siteUrl}/payment-success?session_id={CHECKOUT_SESSION_ID}&type=content_pack`,
+      success_url: `${siteUrl}/dashboard?purchase_success=true`, // Redirect to dashboard or a thank you page
       cancel_url: `${siteUrl}/`,
+      metadata: {
+        contentType: "content_pack",
+        productName: "150+ High Quality Motivational Clips",
+      },
+      allow_promotion_codes: true,
     })
 
     return NextResponse.json({ url: session.url })
   } catch (error: any) {
-    console.error("Error creating content pack checkout session:", error)
-    return NextResponse.json({ error: "Failed to create checkout session" }, { status: 500 })
+    console.error("❌ [Content Pack Checkout] Error:", error)
+    return NextResponse.json({ error: "Failed to create checkout session." }, { status: 500 })
   }
 }
