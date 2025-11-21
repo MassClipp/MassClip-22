@@ -249,16 +249,19 @@ export async function processSubscriptionUpdated(subscription: Stripe.Subscripti
       canceledAt: new Date(),
       updatedAt: FieldValue.serverTimestamp(),
     })
-    
+
     // Move to free tier
-    await db.collection("freeUsers").doc(userId).set({
-      uid: userId,
-      plan: "free",
-      downloadsUsed: 0,
-      bundlesCreated: 0,
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true })
+    await db.collection("freeUsers").doc(userId).set(
+      {
+        uid: userId,
+        plan: "free",
+        downloadsUsed: 0,
+        bundlesCreated: 0,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    )
 
     if (previousPlan === "facelessprenuer") {
       try {
@@ -367,16 +370,19 @@ export async function processSubscriptionDeleted(subscription: Stripe.Subscripti
     canceledAt: new Date(),
     updatedAt: FieldValue.serverTimestamp(),
   })
-  
+
   // Move to free tier
-  await db.collection("freeUsers").doc(userId).set({
-    uid: userId,
-    plan: "free",
-    downloadsUsed: 0,
-    bundlesCreated: 0,
-    createdAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true })
+  await db.collection("freeUsers").doc(userId).set(
+    {
+      uid: userId,
+      plan: "free",
+      downloadsUsed: 0,
+      bundlesCreated: 0,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  )
 
   if (previousPlan === "facelessprenuer") {
     try {
@@ -445,4 +451,92 @@ export async function processPaymentIntentSucceeded(paymentIntent: Stripe.Paymen
 
   await purchaseRef.set(purchaseData)
   console.log(`Successfully created purchase record for paymentIntentId: ${paymentIntent.id}`)
+}
+
+export async function processContentPackPurchase(session: Stripe.Checkout.Session) {
+  console.log(`📦 [Content Pack Webhook] Processing content pack purchase: ${session.id}`)
+
+  const metadata = session.metadata || {}
+  const { buyerUid, buyerEmail, buyerName } = metadata
+
+  let finalBuyerUid = buyerUid
+  let finalBuyerEmail = buyerEmail
+  let finalBuyerName = buyerName
+
+  if (!buyerUid || buyerUid === "anonymous") {
+    console.log(`📦 [Content Pack Webhook] Guest checkout detected, extracting customer info from session`)
+
+    const customerId = typeof session.customer === "string" ? session.customer : null
+
+    if (customerId) {
+      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!)
+      try {
+        const customer = await stripe.customers.retrieve(customerId)
+        if (!("deleted" in customer)) {
+          finalBuyerEmail = customer.email || session.customer_details?.email || buyerEmail
+          finalBuyerName = customer.name || session.customer_details?.name || buyerName || "Guest User"
+          finalBuyerUid = `guest_${customerId}`
+          console.log(`📦 [Content Pack Webhook] Guest user info: ${finalBuyerEmail}, ${finalBuyerName}`)
+        }
+      } catch (error) {
+        console.error(`📦 [Content Pack Webhook] Failed to retrieve customer:`, error)
+      }
+    }
+
+    if (!finalBuyerEmail) {
+      finalBuyerEmail = session.customer_details?.email || "unknown@guest.com"
+      finalBuyerName = session.customer_details?.name || "Guest User"
+      finalBuyerUid = `guest_${session.id}`
+    }
+
+    console.log(`📦 [Content Pack Webhook] Final guest info - UID: ${finalBuyerUid}, Email: ${finalBuyerEmail}`)
+  }
+
+  const amount = session.amount_total ? session.amount_total / 100 : 0
+
+  const purchaseData = {
+    id: session.id,
+    contentType: "content_pack",
+    productName: metadata.productName || "150+ High Quality Motivational Clips",
+
+    // Buyer info
+    buyerUid: finalBuyerUid,
+    userId: finalBuyerUid,
+    buyerEmail: finalBuyerEmail,
+    buyerName: finalBuyerName,
+    buyerDisplayName: finalBuyerName,
+    isAuthenticated: buyerUid !== "anonymous" && !finalBuyerUid.startsWith("guest_"),
+
+    // Payment details
+    price: amount,
+    amount: amount,
+    purchaseAmount: amount * 100,
+    currency: session.currency || "usd",
+    status: "completed",
+
+    // Stripe details
+    sessionId: session.id,
+    paymentIntentId: session.payment_intent,
+    stripeCustomerId: session.customer,
+
+    // Access details
+    googleDriveLink: "https://drive.google.com/drive/folders/1Wj8nRzOzVcxd377N0_qYSdJDI6LsX72h?usp=sharing",
+    accessToken: `content_pack_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+
+    // Timestamps
+    createdAt: new Date().toISOString(),
+    completedAt: new Date().toISOString(),
+    purchasedAt: new Date().toISOString(),
+    timestamp: new Date(),
+
+    // Metadata
+    source: "stripe_webhook",
+    webhookProcessed: true,
+  }
+
+  await db.collection("contentPackPurchases").doc(session.id).set(purchaseData)
+
+  console.log(
+    `✅ [Content Pack Webhook] Content pack purchase created: ${session.id} for user ${finalBuyerUid} at $${amount}`,
+  )
 }

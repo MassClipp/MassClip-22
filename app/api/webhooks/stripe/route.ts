@@ -6,6 +6,7 @@ import {
   processCheckoutSessionCompleted,
   processSubscriptionDeleted,
   processSubscriptionUpdated,
+  processContentPackPurchase, // Import content pack processor
 } from "@/lib/stripe/webhook-processor"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -516,7 +517,9 @@ export async function POST(request: Request) {
           debugTrace.push(`Processing membership checkout with metadata plan: ${metadata.plan || "not specified"}`)
         }
 
-        if (contentType === "download_purchase") {
+        if (contentType === "content_pack") {
+          await processContentPackPurchase(session)
+        } else if (contentType === "download_purchase") {
           await processDownloadPurchase(session)
         } else if (contentType === "ebook" || ebookId) {
           await processEbookPurchase(session)
