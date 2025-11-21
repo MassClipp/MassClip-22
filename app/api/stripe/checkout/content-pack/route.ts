@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
           quantity: 1,
         },
       ],
-      success_url: `${siteUrl}/dashboard?purchase_success=true`, // Redirect to dashboard or a thank you page
+      success_url: `${siteUrl}/content-pack/success`,
       cancel_url: `${siteUrl}/`,
       metadata: {
         contentType: "content_pack",
