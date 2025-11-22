@@ -44,6 +44,7 @@ export async function POST(request: Request) {
         await processContentPackPurchase(session)
 
         console.log(`[v0] ✅ Content pack purchase processed successfully`)
+        console.log(`[v0] ✅ Email should have been sent to: ${session.customer_details?.email}`)
         break
 
       default:

@@ -542,12 +542,30 @@ export async function processContentPackPurchase(session: Stripe.Checkout.Sessio
     `✅ [Content Pack Webhook] Content pack purchase created: ${session.id} for user ${finalBuyerUid} at $${amount}`,
   )
 
+  console.log(`\n========== SENDING CONTENT PACK EMAIL ==========`)
+  console.log(`📧 [v0] Recipient: ${finalBuyerEmail}`)
+  console.log(`📧 [v0] Name: ${finalBuyerName}`)
+  console.log(`📧 [v0] Drive Link: ${googleDriveLink}`)
+  console.log(`📧 [v0] Amount: $${amount}`)
+  console.log(`==========================================\n`)
+
   if (finalBuyerEmail && finalBuyerEmail !== "unknown@guest.com") {
-    await sendContentPackEmail({
+    const emailResult = await sendContentPackEmail({
       email: finalBuyerEmail,
       name: finalBuyerName || "there",
       googleDriveLink,
       purchaseAmount: amount,
     })
+
+    console.log(`\n========== EMAIL SEND RESULT ==========`)
+    console.log(`📧 [v0] Success: ${emailResult.success}`)
+    if (emailResult.success) {
+      console.log(`📧 [v0] Email ID: ${JSON.stringify(emailResult.data)}`)
+    } else {
+      console.error(`📧 [v0] Error: ${JSON.stringify(emailResult.error)}`)
+    }
+    console.log(`==========================================\n`)
+  } else {
+    console.warn(`⚠️ [v0] Skipping email send - invalid email: ${finalBuyerEmail}`)
   }
 }
