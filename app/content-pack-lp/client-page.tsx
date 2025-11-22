@@ -70,19 +70,16 @@ function VideoPreview({ src, index }: { src: string; index: number }) {
         loop
       />
 
-      {/* <CHANGE> Custom play/pause button overlay */}
       <div
         className={`absolute inset-0 flex items-center justify-center transition-opacity duration-200 ${
           isPlaying && !isHovered ? "opacity-0" : "opacity-100"
         }`}
       >
-        <div className="w-16 h-16 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center shadow-2xl group-hover:scale-110 transition-transform duration-200">
-          {isPlaying ? (
-            <Pause className="w-7 h-7 text-black fill-black" />
-          ) : (
-            <Play className="w-7 h-7 text-black fill-black ml-1" />
-          )}
-        </div>
+        {isPlaying ? (
+          <Pause className="w-8 h-8 text-white drop-shadow-2xl group-hover:scale-110 transition-transform duration-200" />
+        ) : (
+          <Play className="w-8 h-8 text-white drop-shadow-2xl group-hover:scale-110 transition-transform duration-200 fill-white" />
+        )}
       </div>
 
       {/* Dark overlay when not playing */}
@@ -99,7 +96,7 @@ export default function ClientContentPackPage() {
       <div className="w-full">
         <LandingContentPack />
 
-        {/* <CHANGE> Custom video preview section with play button controls */}
+        {/* Custom video preview section with play button controls */}
         <section className="py-16 px-6 border-t border-white/10">
           <div className="max-w-6xl mx-auto">
             <h3 className="text-3xl font-bold mb-10 text-center text-white">Preview</h3>

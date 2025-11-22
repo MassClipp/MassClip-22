@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
-import { Loader2, Mail, Tag } from "lucide-react"
+import { Loader2, Mail } from "lucide-react"
 import { toast } from "sonner"
 
 export function LandingContentPack() {
@@ -70,11 +70,6 @@ export function LandingContentPack() {
                 Whether your starting your theme page today or just need a boost in content inventory, this pack gives
                 you everything you need to post right now and/or to start selling on your storefront!
               </p>
-            </div>
-
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm font-medium">
-              <Tag className="w-4 h-4" />
-              <span>Use promo code at checkout for discount</span>
             </div>
 
             <div className="flex items-center gap-6 pt-4">
