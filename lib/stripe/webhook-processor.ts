@@ -1,6 +1,7 @@
 import Stripe from "stripe"
 import { adminDb as db } from "@/lib/firebase-admin"
 import { FieldValue } from "firebase-admin/firestore"
+import { sendContentPackEmail } from "@/lib/content-pack-email-service"
 
 // --- Types ---
 type MembershipPlan = "free" | "creator_pro" | "starter" | "facelessprenuer" | "faceless_pro"
@@ -341,7 +342,7 @@ export async function processSubscriptionUpdated(subscription: Stripe.Subscripti
         `[v0] 🔍 Verification: hasEverPurchasedFacelessprenuer = ${userData?.hasEverPurchasedFacelessprenuer}`,
       )
     } catch (error) {
-      console.error("[v0] ❌ CRITICAL ERROR: Failed to set hasEverPurchasedFacelessprenuer flag:", error)
+      console.error("[v0] Failed to auto-disable custom tabs:", error)
     }
   }
 
@@ -493,6 +494,7 @@ export async function processContentPackPurchase(session: Stripe.Checkout.Sessio
   }
 
   const amount = session.amount_total ? session.amount_total / 100 : 0
+  const googleDriveLink = "https://drive.google.com/drive/folders/1Wj8nRzOzVcxd377N0_qYSdJDI6LsX72h?usp=sharing"
 
   const purchaseData = {
     id: session.id,
@@ -520,7 +522,7 @@ export async function processContentPackPurchase(session: Stripe.Checkout.Sessio
     stripeCustomerId: session.customer,
 
     // Access details
-    googleDriveLink: "https://drive.google.com/drive/folders/1Wj8nRzOzVcxd377N0_qYSdJDI6LsX72h?usp=sharing",
+    googleDriveLink,
     accessToken: `content_pack_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
 
     // Timestamps
@@ -539,4 +541,13 @@ export async function processContentPackPurchase(session: Stripe.Checkout.Sessio
   console.log(
     `✅ [Content Pack Webhook] Content pack purchase created: ${session.id} for user ${finalBuyerUid} at $${amount}`,
   )
+
+  if (finalBuyerEmail && finalBuyerEmail !== "unknown@guest.com") {
+    await sendContentPackEmail({
+      email: finalBuyerEmail,
+      name: finalBuyerName || "there",
+      googleDriveLink,
+      purchaseAmount: amount,
+    })
+  }
 }
