@@ -60,15 +60,7 @@ function VideoPreview({ src, index }: { src: string; index: number }) {
       onMouseLeave={() => setIsHovered(false)}
       onClick={togglePlay}
     >
-      <video
-        ref={videoRef}
-        src={src}
-        className="w-full h-full object-cover"
-        preload="metadata"
-        playsInline
-        muted
-        loop
-      />
+      <video ref={videoRef} src={src} className="w-full h-full object-cover" preload="metadata" playsInline loop />
 
       <div
         className={`absolute inset-0 flex items-center justify-center transition-opacity duration-200 ${
