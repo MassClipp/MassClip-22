@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
-import { Loader2, Zap } from "lucide-react"
+import { Loader2, Users } from "lucide-react"
 import { toast } from "sonner"
 
 export function LandingContentPack() {
@@ -56,8 +56,8 @@ export function LandingContentPack() {
           <div className="space-y-8">
             <div className="space-y-2">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-white text-sm font-medium">
-                <Zap className="w-4 h-4" />
-                <span>Instant Access</span>
+                <Users className="w-4 h-4" />
+                <span>420+ creators bought</span>
               </div>
               <h2 className="text-3xl md:text-4xl font-bold text-white">Need a Quick Content Boost?</h2>
             </div>
