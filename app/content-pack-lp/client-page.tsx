@@ -14,51 +14,29 @@ const VIDEO_URLS = [
 function VideoPreview({ src, index }: { src: string; index: number }) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
 
-  const togglePlay = async () => {
-    if (!videoRef.current) return
+  const togglePlay = () => {
+    const video = videoRef.current
+    if (!video) return
 
-    try {
-      if (isPlaying) {
-        videoRef.current.pause()
-        setIsPlaying(false)
-        console.log("[v0] Video paused:", index)
-      } else {
-        // Pause all other videos
-        const allVideos = document.querySelectorAll("video")
-        allVideos.forEach((video) => {
-          if (video !== videoRef.current && !video.paused) {
-            video.pause()
-          }
-        })
+    if (isPlaying) {
+      video.pause()
+    } else {
+      // Pause all other videos
+      document.querySelectorAll("video").forEach((v) => {
+        if (v !== video) v.pause()
+      })
 
-        // Ensure video is ready to play
-        if (videoRef.current.readyState < 2) {
-          console.log("[v0] Video not ready, loading:", index)
-          await new Promise((resolve) => {
-            const handleCanPlay = () => {
-              videoRef.current?.removeEventListener("canplay", handleCanPlay)
-              resolve(true)
-            }
-            videoRef.current?.addEventListener("canplay", handleCanPlay)
-          })
-        }
-
-        console.log("[v0] Attempting to play video:", index)
-        const playPromise = videoRef.current.play()
-
-        if (playPromise !== undefined) {
-          await playPromise
-          setIsPlaying(true)
-          console.log("[v0] Video playing successfully:", index)
-        }
+      // Load video if needed before playing (Safari requirement)
+      if (video.readyState < 2) {
+        video.load()
       }
-    } catch (err) {
-      console.error("[v0] Video playback error:", err, "video index:", index)
-      setError(err instanceof Error ? err.message : "Playback failed")
-      setIsPlaying(false)
+
+      // Direct play call - Safari needs synchronous user gesture handling
+      video.play().catch((err) => {
+        console.error("Playback error:", err)
+      })
     }
   }
 
@@ -66,43 +44,20 @@ function VideoPreview({ src, index }: { src: string; index: number }) {
     const video = videoRef.current
     if (!video) return
 
-    const handlePlay = () => {
-      setIsPlaying(true)
-      setError(null)
-      console.log("[v0] Video started playing:", index)
-    }
-    const handlePause = () => {
-      setIsPlaying(false)
-      console.log("[v0] Video paused:", index)
-    }
-    const handleEnded = () => {
-      setIsPlaying(false)
-      console.log("[v0] Video ended:", index)
-    }
-    const handleError = (e: Event) => {
-      const errorMessage = (e.target as HTMLVideoElement)?.error?.message || "Video load error"
-      console.error("[v0] Video error:", errorMessage, "video index:", index)
-      setError(errorMessage)
-      setIsPlaying(false)
-    }
-    const handleLoadedData = () => {
-      console.log("[v0] Video loaded and ready:", index)
-    }
+    const handlePlay = () => setIsPlaying(true)
+    const handlePause = () => setIsPlaying(false)
+    const handleEnded = () => setIsPlaying(false)
 
     video.addEventListener("play", handlePlay)
     video.addEventListener("pause", handlePause)
     video.addEventListener("ended", handleEnded)
-    video.addEventListener("error", handleError)
-    video.addEventListener("loadeddata", handleLoadedData)
 
     return () => {
       video.removeEventListener("play", handlePlay)
       video.removeEventListener("pause", handlePause)
       video.removeEventListener("ended", handleEnded)
-      video.removeEventListener("error", handleError)
-      video.removeEventListener("loadeddata", handleLoadedData)
     }
-  }, [index])
+  }, [])
 
   return (
     <div
@@ -117,8 +72,7 @@ function VideoPreview({ src, index }: { src: string; index: number }) {
         className="w-full h-full object-cover"
         preload="metadata"
         playsInline
-        // @ts-ignore - webkit-playsinline for older iOS
-        webkit-playsinline="true"
+        x-webkit-airplay="allow"
         loop
       />
 
@@ -134,15 +88,8 @@ function VideoPreview({ src, index }: { src: string; index: number }) {
         )}
       </div>
 
-      {/* Dark overlay when not playing */}
       {!isPlaying && (
         <div className="absolute inset-0 bg-black/20 transition-opacity duration-200 group-hover:bg-black/10" />
-      )}
-
-      {error && (
-        <div className="absolute bottom-2 left-2 right-2 text-xs text-red-400 bg-black/80 p-2 rounded">
-          Error: {error}
-        </div>
       )}
     </div>
   )
