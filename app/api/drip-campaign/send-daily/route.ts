@@ -2,6 +2,13 @@ import { type NextRequest, NextResponse } from "next/server"
 import { DripCampaignService } from "@/lib/drip-campaign-service"
 
 export async function POST(request: NextRequest) {
+  // All automated emails disabled
+  return NextResponse.json({
+    success: true,
+    message: "Drip campaign emails are disabled",
+    disabled: true,
+  })
+
   try {
     const { day } = await request.json()
 

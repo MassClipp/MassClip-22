@@ -2,6 +2,13 @@ import { type NextRequest, NextResponse } from "next/server"
 import { BehavioralEmailService } from "@/lib/behavioral-email-service"
 
 export async function POST(request: NextRequest) {
+  // All automated emails disabled
+  return NextResponse.json({
+    success: true,
+    message: "Behavioral emails are disabled",
+    disabled: true,
+  })
+
   try {
     console.log("🔄 Starting behavioral email check...")
 

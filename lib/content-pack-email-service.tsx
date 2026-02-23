@@ -12,6 +12,10 @@ interface ContentPackEmailData {
 export async function sendContentPackEmail(data: ContentPackEmailData) {
   const { email, name, googleDriveLink, purchaseAmount } = data
 
+  // All automated emails disabled
+  console.log(`⏸️ Automated emails disabled - skipping content pack email to ${email}`)
+  return { success: true, data: null }
+
   console.log(`📧 [Content Pack Email] Sending email to ${email}`)
 
   try {

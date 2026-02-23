@@ -467,6 +467,9 @@ export class BehavioralEmailService {
   }
 
   static async checkAndSendBehavioralEmails(): Promise<void> {
+    // All automated emails disabled
+    console.log("⏸️ Automated emails disabled - skipping behavioral email check")
+    return
     try {
       const behavioralSnapshot = await adminDb.collection("behavioralEmails").where("unsubscribed", "==", false).get()
 
@@ -655,63 +658,28 @@ export class BehavioralEmailService {
     }
   }
 
+  // All automated emails disabled - methods kept as no-ops to avoid breaking callers
   static async sendStripeConnectedEmail(uid: string, email: string, displayName?: string): Promise<void> {
-    try {
-      const user: BehavioralEmailUser = { uid, email, displayName, unsubscribed: false }
-      await this.sendBehavioralEmail(user, "stripe-connected")
-      console.log(`✅ Sent Stripe connected email to ${email}`)
-    } catch (error) {
-      console.error(`❌ Failed to send Stripe connected email to ${email}:`, error)
-    }
+    console.log(`⏸️ Automated emails disabled - skipping Stripe connected email to ${email}`)
   }
 
   static async sendBundlePurchasedEmail(buyerEmail: string, bundleTitle: string): Promise<void> {
-    try {
-      const user: BehavioralEmailUser = { uid: "", email: buyerEmail, unsubscribed: false }
-      await this.sendBehavioralEmail(user, "bundle-purchased")
-      console.log(`✅ Sent bundle purchased email to ${buyerEmail}`)
-    } catch (error) {
-      console.error(`❌ Failed to send bundle purchased email to ${buyerEmail}:`, error)
-    }
+    console.log(`⏸️ Automated emails disabled - skipping bundle purchased email to ${buyerEmail}`)
   }
 
   static async sendBundleSoldEmail(sellerUid: string, sellerEmail: string, bundleTitle: string): Promise<void> {
-    try {
-      const user: BehavioralEmailUser = { uid: sellerUid, email: sellerEmail, unsubscribed: false }
-      await this.sendBehavioralEmail(user, "bundle-sold")
-      console.log(`✅ Sent bundle sold email to ${sellerEmail}`)
-    } catch (error) {
-      console.error(`❌ Failed to send bundle sold email to ${sellerEmail}:`, error)
-    }
+    console.log(`⏸️ Automated emails disabled - skipping bundle sold email to ${sellerEmail}`)
   }
 
   static async sendMembershipPurchasedEmail(uid: string, email: string, planName: string): Promise<void> {
-    try {
-      const user: BehavioralEmailUser = { uid, email, unsubscribed: false }
-      await this.sendBehavioralEmail(user, "membership-purchased")
-      console.log(`✅ Sent membership purchased email to ${email} for plan: ${planName}`)
-    } catch (error) {
-      console.error(`❌ Failed to send membership purchased email to ${email}:`, error)
-    }
+    console.log(`⏸️ Automated emails disabled - skipping membership purchased email to ${email}`)
   }
 
   static async sendMembershipCanceledEmail(uid: string, email: string, planName: string): Promise<void> {
-    try {
-      const user: BehavioralEmailUser = { uid, email, unsubscribed: false }
-      await this.sendBehavioralEmail(user, "membership-canceled")
-      console.log(`✅ Sent membership canceled email to ${email} for plan: ${planName}`)
-    } catch (error) {
-      console.error(`❌ Failed to send membership canceled email to ${email}:`, error)
-    }
+    console.log(`⏸️ Automated emails disabled - skipping membership canceled email to ${email}`)
   }
 
   static async sendEbookPurchasedEmail(buyerEmail: string, ebookTitle: string): Promise<void> {
-    try {
-      const user: BehavioralEmailUser = { uid: "", email: buyerEmail, unsubscribed: false }
-      await this.sendBehavioralEmail(user, "ebook-purchased")
-      console.log(`✅ Sent eBook purchased email to ${buyerEmail} for: ${ebookTitle}`)
-    } catch (error) {
-      console.error(`❌ Failed to send eBook purchased email to ${buyerEmail}:`, error)
-    }
+    console.log(`⏸️ Automated emails disabled - skipping eBook purchased email to ${buyerEmail}`)
   }
 }

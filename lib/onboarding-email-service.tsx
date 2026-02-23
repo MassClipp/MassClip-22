@@ -275,6 +275,9 @@ export class OnboardingEmailService {
 
   // Check and send onboarding/sales objective emails
   static async checkAndSendEmails(): Promise<void> {
+    // All automated emails disabled
+    console.log("⏸️ Automated emails disabled - skipping onboarding/sales objective email check")
+    return
     try {
       console.log("🔄 Starting onboarding/sales objective email check...")
 

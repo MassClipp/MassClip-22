@@ -2,11 +2,14 @@ import { Resend } from "resend"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
+// All automated emails disabled
 export async function sendDomainVerificationSuccessEmail(
   email: string,
   domain: string,
   displayName?: string,
 ): Promise<boolean> {
+  console.log(`⏸️ Automated emails disabled - skipping domain verification success email to ${email}`)
+  return true
   try {
     await resend.emails.send({
       from: "MassClip <noreply@massclip.pro>",
@@ -61,6 +64,8 @@ export async function sendDomainVerificationFailedEmail(
   reason: string,
   displayName?: string,
 ): Promise<boolean> {
+  console.log(`⏸️ Automated emails disabled - skipping domain verification failed email to ${email}`)
+  return true
   try {
     await resend.emails.send({
       from: "MassClip <noreply@massclip.pro>",
@@ -115,6 +120,8 @@ export async function sendDomainVerificationFailedEmail(
 }
 
 export async function sendSSLProvisionedEmail(email: string, domain: string, displayName?: string): Promise<boolean> {
+  console.log(`⏸️ Automated emails disabled - skipping SSL provisioned email to ${email}`)
+  return true
   try {
     await resend.emails.send({
       from: "MassClip <noreply@massclip.pro>",
@@ -173,6 +180,8 @@ export async function sendDomainHealthAlertEmail(
   issue: string,
   displayName?: string,
 ): Promise<boolean> {
+  console.log(`⏸️ Automated emails disabled - skipping domain health alert email to ${email}`)
+  return true
   try {
     await resend.emails.send({
       from: "MassClip <noreply@massclip.pro>",
