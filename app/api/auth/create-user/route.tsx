@@ -94,7 +94,8 @@ export async function POST(request: NextRequest) {
           contactId: result.data?.id,
         })
 
-        // Send welcome email after successful contact creation
+        // Welcome email disabled - all automated emails turned off
+        /*
         try {
           console.log("[v0] Sending welcome email...")
 
@@ -156,6 +157,7 @@ export async function POST(request: NextRequest) {
           // Don't fail the entire request if welcome email fails
           console.warn("⚠️ Continuing despite welcome email error since user creation was successful")
         }
+        */
       }
     } catch (error) {
       console.error("[v0] Failed to add user to Resend contacts:", error)
@@ -163,6 +165,8 @@ export async function POST(request: NextRequest) {
       console.warn("⚠️ Continuing despite Resend error since core user creation was successful")
     }
 
+    // Drip campaign and behavioral email initialization disabled - all automated emails turned off
+    /*
     try {
       console.log("[v0] Initializing drip campaign...")
       await DripCampaignService.initializeCampaign(uid, email, displayName)
@@ -182,6 +186,7 @@ export async function POST(request: NextRequest) {
       // Don't fail the entire request if behavioral emails fail
       console.warn("⚠️ Continuing despite behavioral email error since user creation was successful")
     }
+    */
 
     console.log("[v0] Server-side user creation completed successfully, isNewUser:", isNewUser)
 

@@ -175,6 +175,9 @@ export class DripCampaignService {
   }
 
   static async sendDayEmail(user: DripCampaignUser, day: number): Promise<boolean> {
+    // All automated emails disabled
+    console.log(`⏸️ Automated emails disabled - skipping drip campaign day ${day} email to ${user.email}`)
+    return true
     try {
       const template = EMAIL_TEMPLATES.find((t) => t.day === day)
       if (!template) {

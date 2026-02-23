@@ -5,6 +5,13 @@ export const dynamic = "force-dynamic"
 export const maxDuration = 300 // 5 minutes for cron job
 
 export async function GET() {
+  // All automated emails disabled
+  return NextResponse.json({
+    success: true,
+    message: "Onboarding emails are disabled",
+    disabled: true,
+  })
+
   try {
     console.log("🔄 Onboarding/Sales Objective Email Cron Job Started")
 
